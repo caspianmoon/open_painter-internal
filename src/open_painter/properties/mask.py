@@ -17,9 +17,46 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("BAKED", "Baked Map", "Use a mesh map"),
             ("GENERATOR", "Generator", "Procedural mesh-aware mask"),
             ("NOISE", "Noise", "Procedural noise"),
+            ("FILL", "Fill", "Project a grayscale texture onto the mesh"),
         ],
         update=changed,
     )
+    projection: bpy.props.EnumProperty(
+        name="Projection",
+        items=[
+            ("UV", "UV", ""),
+            ("TRIPLANAR", "Triplanar", "World-space projection rasterized through mesh UVs"),
+        ],
+        update=changed,
+    )
+    filtering: bpy.props.EnumProperty(
+        name="Filtering",
+        update=changed,
+        items=[
+            ("BILINEAR", "Bilinear", "Interpolate adjacent pixels"),
+            ("NEAREST", "Nearest", "Keep hard pixel edges"),
+        ],
+    )
+    tiling: bpy.props.EnumProperty(
+        name="UV Wrap",
+        update=changed,
+        items=[
+            ("REPEAT", "Repeat", "Repeat the texture outside its tile"),
+            ("NONE", "None", "Transparent outside the original tile"),
+        ],
+    )
+    triplanar_hardness: bpy.props.FloatProperty(
+        name="Triplanar Hardness",
+        default=4,
+        min=1,
+        max=64,
+        update=changed,
+    )
+    scale: bpy.props.FloatVectorProperty(
+        name="Scale", size=2, default=(1, 1), min=0.001, update=changed
+    )
+    rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=changed)
+    offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=changed)
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=changed)
     map_type: bpy.props.EnumProperty(
         name="Map",

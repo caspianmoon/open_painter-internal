@@ -16,7 +16,7 @@ def map_pixels(ts, kind, cache):
     return cache[key]
 
 
-def evaluate_masks(ts, layer, n, y0, y1, cache):
+def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
     u, v = np.meshgrid(
         (np.arange(n, dtype=np.float32) + 0.5) / n, (np.arange(y0, y1, dtype=np.float32) + 0.5) / n
     )
@@ -24,7 +24,14 @@ def evaluate_masks(ts, layer, n, y0, y1, cache):
     for mask in layer.masks:
         if not mask.enabled:
             continue
-        if mask.source == "PAINT":
+        if mask.source == "FILL":
+            if not mask.image:
+                raise ValueError(f"Fill mask image is missing on {layer.name}.")
+            from .channel_eval import source
+
+            value = source(mask, "FILL", n, y0, y1, cache, ts,
+                           geometry_cache if geometry_cache is not None else {})[..., 0]
+        elif mask.source == "PAINT":
             if not mask.image:
                 raise ValueError(f"Painted mask image is missing on {layer.name}.")
             key = mask.image.as_pointer()

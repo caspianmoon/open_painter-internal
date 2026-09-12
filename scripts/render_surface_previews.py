@@ -42,8 +42,11 @@ path.mkdir(parents=True,exist_ok=True)
 for name in ['Painted Steel','Dirty Plastic',*surface_presets.SURFACES,'Fine Wood','Weathered Paint']:
  ts=sets.create(scene,name,512)
  # Each preview uses its own material without altering the sphere topology/UVs.
+ for previous in scene.open_painter.texture_sets:
+  while previous.assignments:
+   sets.unassign(previous, 0)
  sphere.data.materials.clear()
- sphere.data.materials.append(ts.material)
+ sets.assign(scene, ts, sphere)
  surface_presets.apply(ts,name)
  LayerEvaluator(scene).evaluate_texture_set(ts.id)
  scene.render.filepath=str(path/(name.replace(' ','_')+'.png'))

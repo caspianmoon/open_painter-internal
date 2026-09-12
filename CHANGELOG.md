@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.11
+
+- Separate projected fill masks from hand-painted UV masks. Painted Steel and Dirty Plastic now project coating coverage onto mesh positions through its render UVs rather than stamping a fixed mask across the atlas.
+- Expose mask projection, filtering, wrap and transform controls. Existing painted masks retain their data and behavior; they can explicitly be switched to Fill in mask settings.
+- Align projection rasterization with Blender’s render UV layer, even when another map is selected for editing. Regenerate previews with actual texture-set mesh assignments.
+- Regression: identical surface positions in disjoint UV islands receive identical projected coverage; UV fills and painted masks retain atlas-based behavior.
+
 ## 0.1.10
 
 - Insert paint/fill layers and empty folders above the selection. Duplicate adjacent to the original and keep the duplicated folder selected, with independent child IDs and paint images.

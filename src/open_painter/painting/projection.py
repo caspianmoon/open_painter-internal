@@ -16,7 +16,11 @@ def geometry(ts, n):
             raise ValueError(f"No UV map found on {obj.name}.")
         slots = {r.slot_index for r in ts.assignments if r.object == obj}
         mesh.calc_loop_triangles()
-        uv = mesh.uv_layers.active.data
+        # Unconnected image texture nodes use the render UV layer, which may
+        # differ from the layer currently selected in the UV editor.
+        uv_layer = next((layer for layer in mesh.uv_layers if layer.active_render),
+                        mesh.uv_layers.active)
+        uv = uv_layer.data
         world = obj.matrix_world
         normal_matrix = world.to_3x3().inverted_safe().transposed()
         for triangle in mesh.loop_triangles:

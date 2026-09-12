@@ -15,7 +15,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN")]
     )
     source: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("PAINT", "BAKED", "GENERATOR", "NOISE")]
+        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE")]
     )
 
     def run(self, context):
@@ -27,9 +27,10 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             mask = layer.masks.add()
             mask.id, mask.source = new_id(), self.source
             mask.name = self.source.title() + " Mask"
-            if self.source == "PAINT":
+            if self.source in {"PAINT", "FILL"}:
                 mask.image = create(
-                    f"{ts.name}_{layer.name}_Mask", int(ts.resolution), (1, 1, 1, 1)
+                    f"{ts.name}_{layer.name}_Mask",
+                    int(ts.resolution) if self.source == "PAINT" else 32, (1, 1, 1, 1)
                 )
                 mask.image.pack()
             layer.active_mask = len(layer.masks) - 1
@@ -75,7 +76,7 @@ class OP_PT_masks(bpy.types.Panel):
             layout.label(text="Select a layer to add a mask.")
             return
         row = layout.row(align=True)
-        for source in ("PAINT", "BAKED", "GENERATOR", "NOISE"):
+        for source in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE"):
             op = row.operator("open_painter.mask", text=source.title())
             op.action, op.source = "ADD", source
         layout.template_list("OP_UL_masks", "", layer, "masks", layer, "active_mask", rows=2)
@@ -85,7 +86,14 @@ class OP_PT_masks(bpy.types.Panel):
         if not layer.masks:
             return
         mask = layer.masks[min(layer.active_mask, len(layer.masks) - 1)]
-        if mask.source == "PAINT":
+        layout.prop(mask, "source", text="Source")
+        if mask.source == "FILL":
+            layout.template_ID(mask, "image")
+            for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
+                layout.prop(mask, name)
+            if mask.projection == "TRIPLANAR":
+                layout.prop(mask, "triplanar_hardness")
+        elif mask.source == "PAINT":
             layout.template_ID(mask, "image")
             if hasattr(bpy.types, "OP_OT_paint"):
                 layout.operator(

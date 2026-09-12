@@ -91,7 +91,7 @@ class OP_OT_dock_popup(SafeOperator, bpy.types.Operator):
         if self.section == "NAME":
             layout.prop(layer, "name", text="Name")
         elif self.section == "ADD_MASK":
-            for source in ("PAINT", "BAKED", "GENERATOR", "NOISE"):
+            for source in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE"):
                 op = layout.operator(
                     "open_painter.mask", text=source.title() + " Mask", icon="MOD_MASK"
                 )

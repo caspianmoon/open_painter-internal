@@ -116,7 +116,8 @@ def layered(ts, name):
         else np.clip((pattern - 0.58) * 1.4, 0, 0.35)
     )
     mask = coat.masks.add()
-    mask.id, mask.name, mask.source = new_id(), "Coating coverage", "PAINT"
+    mask.id, mask.name, mask.source = new_id(), "Coating coverage", "FILL"
+    mask.projection = "TRIPLANAR"
     mask.image = image_manager.create(name + "_Coverage", n)
     rgba = np.ones((n, n, 4), dtype=np.float32)
     rgba[..., :3] = coverage[..., None]

@@ -27,7 +27,7 @@ def validate(ts) -> list[str]:
         for mask in layer.masks:
             if not mask.enabled:
                 continue
-            if mask.source == "PAINT" and not mask.image:
+            if mask.source in {"PAINT", "FILL"} and not mask.image:
                 issues.append(f"Painted mask image missing on {layer.name}.")
             required = (
                 {mask.map_type}

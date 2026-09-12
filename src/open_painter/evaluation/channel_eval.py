@@ -7,7 +7,7 @@ from .blend_modes import sample_uv
 
 
 def source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
-    if prop.image_name and not prop.image:
+    if getattr(prop, "image_name", "") and not prop.image:
         raise ValueError(
             f"Texture image is missing: {prop.image_name}. Reload or clear the channel texture."
         )

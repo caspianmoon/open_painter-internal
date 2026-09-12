@@ -91,7 +91,7 @@ class LayerEvaluator:
                 if layer.masks:
                     from .mask_eval import evaluate_masks
 
-                    amount = amount * evaluate_masks(ts, layer, n, y0, y1, cache)[..., None]
+                    amount = amount * evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)[..., None]
                 if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
                     # Evaluate against the actual backdrop, then attenuate the whole
                     # group's change once. Child opacity must not be applied twice.

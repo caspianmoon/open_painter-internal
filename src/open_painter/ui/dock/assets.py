@@ -61,6 +61,10 @@ BRUSHES = [
 def items(context, state):
     if state.tab == "BRUSHES":
         values = BRUSHES
+    elif state.tab == "MASKS":
+        from ...smart_masks.library import PRESETS
+
+        values = [(p[0], "SMART_MASK", p[0], (.5, .5, .5), .7, "dirt") for p in PRESETS]
     elif state.tab == "ALPHAS":
         import bpy
 
@@ -94,6 +98,10 @@ def apply(context, entry):
     from ...smart_materials.loader import apply as load
 
     name, kind, value, *_ = entry
+    if kind == "SMART_MASK":
+        from ...smart_masks.library import apply as apply_mask
+        apply_mask(require_set(context), name)
+        return
     if (
         name
         in {

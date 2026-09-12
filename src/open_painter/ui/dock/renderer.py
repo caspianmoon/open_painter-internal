@@ -101,7 +101,7 @@ class Canvas:
         fraction = max(0, min(1, (value - minimum) / (maximum - minimum)))
         self.rect(x + 3, y + 2, (w - 6) * fraction, 18, d.ACCENT)
         self.text(label, x + 8, y + 7, 11)
-        number = f"{value:.3f}" if maximum <= 1 else f"{value:.0f}"
+        number = f"{value * 100:.0f}" if payload[0] == "ROW_CHANNEL" else f"{value:.3f}" if maximum <= 1 else f"{value:.0f}"
         self.text(number, x + w - 54, y + 7, 11)
         self.hit(x, y, w, 22, action, data)
 
@@ -206,12 +206,12 @@ def browser(c):
     x0, width, top = c.left, c.w - c.left - c.right, c.bottom
     c.rect(x0, 22, width, top - 22, d.BG)
     c.panel(x0 + 4, 25, width - 8, top - 28)
-    c.header("ASSETS", x0, top - 31, width)
-    search_width = min(220, width * .30)
+    c.header("ASSETS · SMART MASKS" if s.tab == "MASKS" else "ASSETS", x0, top - 31, width)
+    search_width = max(70, min(220, width - 340))
     c.widget(x0 + 12, top - 58, search_width, 20, "text", selected=s.search)
     c.text(s.query or "Search assets", x0 + 20, top - 53, width=search_width - 16)
     c.hit(x0 + 12, top - 60, search_width, 24, "SEARCH")
-    for i, (label, key) in enumerate([("Mat", "MATERIALS"), ("Smart", "SMART"), ("Brushes", "BRUSHES"), ("Alphas", "ALPHAS")]):
+    for i, (label, key) in enumerate([("Mat", "MATERIALS"), ("Smart", "SMART"), ("Masks", "MASKS"), ("Brushes", "BRUSHES"), ("Alphas", "ALPHAS")]):
         c.button(label, x0 + search_width + 22 + i * 61, top - 60, 58, 24, "ASSET_TAB", key, s.tab == key)
     entries = assets.items(c.context, s)
     gap, card = 8, min(70, max(36, top - 150))
@@ -323,28 +323,28 @@ def right_docks(c):
     c.button("Folder", x + 142, y, 60, 25, "LAYER", "FOLDER")
     c.button("Mask", x + 208, y, 52, 25, "POPUP", "ADD_MASK")
     list_top = y - 10
-    list_height = min(220, max(100, min(h * 0.235, len(ts.layers) * 32 + 6 if ts else 100)))
+    list_height = min(220, max(100, min(h * 0.235, len(ts.layers) * 48 + 6 if ts else 100)))
     c.rect(x + 7, list_top - list_height, w - 14, list_height, d.HEADER)
     if ts and ts.layers:
         entries = visible_rows(ts)
-        capacity = max(1, int(list_height / 32))
+        capacity = max(1, int(list_height / 48))
         c.state.layer_scroll = max(0, min(c.state.layer_scroll, max(0, len(entries) - capacity)))
         for row, (index, depth) in enumerate(
             entries[c.state.layer_scroll : c.state.layer_scroll + capacity]
         ):
             layer = ts.layers[index]
-            ly = list_top - (row + 1) * 32
+            ly = list_top - (row + 1) * 48
             selected = layer.id in c.state.selected_layers or index == ts.active_layer
             c.widget(
                 x + 8,
                 ly,
                 w - 16,
-                31,
+                47,
                 "list_item",
                 selected=selected,
                 hover=c.state.hover == ("SELECT_LAYER", index),
             )
-            c.hit(x + 8, ly, w - 16, 31, "SELECT_LAYER", index)
+            c.hit(x + 8, ly, w - 16, 47, "SELECT_LAYER", index)
             c.text(
                 "●" if layer.visible else "○",
                 x + 15,
@@ -352,7 +352,7 @@ def right_docks(c):
                 11,
                 d.TEXT if layer.visible else d.MUTED,
             )
-            c.hit(x + 9, ly, 25, 31, "VISIBILITY", index)
+            c.hit(x + 9, ly, 25, 47, "VISIBILITY", index)
             indent = min(depth * 16, w - 185)
             color = channel_for(layer, project.blend_channel)
             swatch = (
@@ -375,22 +375,25 @@ def right_docks(c):
                 ly + 11,
                 11,
                 d.WIDGETS["list_item"]["text_sel" if selected else "text"],
-                w - 152 - indent,
+                w - 208 - indent,
             )
             if layer.masks:
                 c.rect(
-                    x + w - 69,
+                    x + w - 113,
                     ly + 5,
                     20,
                     22,
                     d.TEXT if not (selected and c.state.mask_selected) else d.ACCENT,
                 )
-                d.circle((x + w - 59) * c.scale, (ly + 16) * c.scale, 6 * c.scale, d.HEADER)
-                c.hit(x + w - 72, ly + 2, 27, 28, "SELECT_MASK", index)
+                d.circle((x + w - 103) * c.scale, (ly + 16) * c.scale, 6 * c.scale, d.HEADER)
+                c.hit(x + w - 116, ly + 2, 27, 28, "SELECT_MASK", index)
             channel = channel_for(layer, project.blend_channel)
             opacity = channel.opacity if channel else 1.0
-            c.text(f"{opacity * 100:.0f}", x + w - 35, ly + 11, 10, d.TEXT)
-            c.hit(x + w - 43, ly, 35, 31, "ROW_BLEND", index)
+            mode = channel.blend_mode if channel and channel.blend_mode != "INHERIT" else layer.blend_mode
+            label = "Pass" if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH" else mode.title()
+            c.button(label + " ▾", x + w - 83, ly + 25, 73, 20, "ROW_BLEND", index)
+            if channel:
+                c.slider("", x + w - 83, ly + 2, 73, opacity, "SLIDER", ("ROW_CHANNEL", layer.id))
         c.hit(x, list_top - list_height, w, list_height, "SCROLL_LAYERS")
         # Scroll target must not shadow row clicks; event routing handles wheel separately.
     else:
@@ -456,8 +459,6 @@ def property_fields(c, ts, layer, x, top, w):
     c.button(mode, x + 14, y, w - 28, 22, "POPUP", "BLEND")
     y -= 28
     c.slider("Opacity", x + 14, y, w - 28, layer.opacity, "SLIDER", ("LAYER", "opacity"))
-    y -= 28
-    c.button("Channel Blending…", x + 14, y, w - 28, 22, "POPUP", "CHANNEL_BLEND")
     y -= 28
     if layer.type == "FOLDER":
         c.text("Masks and opacity affect all children.", x + 14, y, 10, d.MUTED, w - 26)
@@ -633,14 +634,14 @@ def mask_fields(c, layer, x, y, w):
 def status(c):
     project = c.context.scene.open_painter
     c.rect(0, 0, c.w, 22, d.HEADER)
-    c.text(c.state.message or project.status or "Ready", 13, 7, 10, d.MUTED, c.left - 22)
+    c.text("●", 13, 7, 10, d.MUTED)
     ts = active_set(c.context)
     detail = (
         f"{ts.resolution} × {ts.resolution}  |  {len(ts.layers)} layers  |  Linear PBR"
         if ts
         else "Create a texture set and assign your mesh"
     )
-    c.text(detail, c.left + 16, 7, 10, d.MUTED, c.w - c.left - c.right - 25)
+    c.text(c.state.message or detail, c.left + 16, 7, 10, d.MUTED, c.w - c.left - 160)
     c.text("Open Painter " + VERSION, c.w - 130, 7, 10, d.MUTED)
 
 

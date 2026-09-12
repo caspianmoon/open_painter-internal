@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.12
+
+- Put per-channel blend selection and draggable opacity percentages directly in layer rows; remove the generic Channel Blending button from the main dock.
+- Add Assets > Masks: six original editable edge/dirt smart-mask presets, baked-map preflight, and thumbnails rendered from their actual output on a baked preview mesh. Applying a mask selects mask properties without adding a material layer.
+- Show actionable status messages across the footer instead of clipping them to the narrow tool rail.
+- Verify distinct mask evaluation, missing-map atomicity, per-row channel targeting, GPU-drawn controls and T/N behavior.
+
 ## 0.1.11
 
 - Separate projected fill masks from hand-painted UV masks. Painted Steel and Dirty Plastic now project coating coverage onto mesh positions through its render UVs rather than stamping a fixed mask across the atlas.

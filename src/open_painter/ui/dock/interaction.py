@@ -39,6 +39,13 @@ class OP_OT_dock_popup(SafeOperator, bpy.types.Operator):
             owner, key = slider_owner(context, (self.owner_kind, self.property_key))
             layout.prop(owner, key)
             return
+        if self.section == "ROW_BLEND":
+            layer = active(require_set(context))
+            if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
+                layout.prop(layer, "group_mode", expand=True)
+            else:
+                layout.prop(channel_for(layer, context.scene.open_painter.blend_channel), "blend_mode", expand=True)
+            return
         layout.label(text=self.section.replace("_", " ").title(), icon="PREFERENCES")
         layout.separator()
         if self.section == "STACK_CHANNEL":
@@ -177,6 +184,8 @@ def _route(context, ui, action, payload):
         return
     if action == "ASSET":
         assets.apply(context, payload)
+        ui.mask_selected = payload[1] == "SMART_MASK"
+        ui.properties_scroll = 0
         ts = active_set(context)
         if ts and active(ts):
             ui.selected_layers = {active(ts).id}
@@ -210,7 +219,7 @@ def _route(context, ui, action, payload):
     if action == "ROW_BLEND":
         ts.active_layer = payload
         ui.selected_layers = {ts.layers[payload].id}
-        bpy.ops.open_painter.dock_popup("INVOKE_DEFAULT", section="CHANNEL_BLEND")
+        bpy.ops.open_painter.dock_popup("INVOKE_DEFAULT", section="ROW_BLEND")
         return
     if action == "SELECT_LAYER":
         ts.active_layer = payload
@@ -328,6 +337,9 @@ def slider_owner(context, payload):
     if kind == "PROJECT":
         return context.scene.open_painter, key
     layer = active(require_set(context))
+    if kind == "ROW_CHANNEL":
+        layer = next(item for item in require_set(context).layers if item.id == key)
+        return channel_for(layer, context.scene.open_painter.blend_channel), "opacity"
     if kind == "LAYER":
         return layer, key
     if kind == "CHANNEL":

@@ -19,6 +19,7 @@ def setup():
         bpy.context.scene.open_painter.texture_sets[0].resolution='512'
         bpy.ops.open_painter.layer(action='PAINT')
         bpy.ops.open_painter.paint()
+        state.get(area).tab = "MASKS"
     bpy.app.timers.register(check,first_interval=3)
 
 def check():
@@ -27,6 +28,10 @@ def check():
         assets=[h for h in ui.hits if h[4]=='ASSET']
         assert assets and all(h[1]+h[3]<=ui.bottom for h in assets)
         assert all(h[1] >= 50 * ui.ui_scale for h in assets), 'Shelf captions overlap footer'
+        assert len(assets) == 6 and all(h[5][1] == "SMART_MASK" for h in assets)
+        assert any(h[4] == "ROW_BLEND" for h in ui.hits)
+        assert any(h[4] == "SLIDER" and h[5][0][0] == "ROW_CHANNEL" for h in ui.hits)
+        assert not any(h[4] == "POPUP" and h[5] == "CHANNEL_BLEND" for h in ui.hits)
         assert ui.left<=40*ui.ui_scale
         assert any(h[4]=='SCROLL_ASSETS' for h in ui.hits)
         assert any(h[4]=='POPUP' and h[5]=='EXPORT' for h in ui.hits)

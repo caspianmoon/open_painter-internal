@@ -40,12 +40,24 @@ def mount(window, area):
     _spaces[key] = area.spaces.active.as_pointer()
     area.spaces.active.shading.type = "MATERIAL"
     area.spaces.active.overlay.show_overlays = False
-    from .dock.interaction import configure
+    from .native import prepare_assets, request_focus
+
+    prepare_assets()
+    request_focus(area)
 
     region = next((r for r in area.regions if r.type == "WINDOW"), None)
     if region:
         with bpy.context.temp_override(window=window, area=area, region=region):
-            configure(area)
+            for prop in (
+                "show_region_ui",
+                "show_region_toolbar",
+                "show_region_tool_header",
+                "show_region_asset_shelf",
+            ):
+                if hasattr(area.spaces.active, prop):
+                    setattr(area.spaces.active, prop, True)
+
+    window.screen["open_painter_native_ui"] = True
     persist(window.screen)
 
 
@@ -135,12 +147,32 @@ def load(_):
                     _active[area.as_pointer()] = area.type
                     _previous[area.as_pointer()] = "VIEW_3D"
                     _spaces[area.as_pointer()] = area.spaces.active.as_pointer()
+                    if not bpy.app.background:
+                        from .native import prepare_assets, request_focus
+
+                        prepare_assets()
+                        request_focus(area)
+                        if not screen.get("open_painter_native_ui"):
+                            for prop in (
+                                "show_region_ui",
+                                "show_region_toolbar",
+                                "show_region_tool_header",
+                                "show_region_asset_shelf",
+                            ):
+                                if hasattr(area.spaces.active, prop):
+                                    setattr(area.spaces.active, prop, True)
+
+        if not bpy.app.background:
+            screen["open_painter_native_ui"] = True
 
 
 def header(self, context):
     if is_area(context.area):
         self.layout.label(text="Open Painter", icon="BRUSH_DATA")
-        self.layout.operator("open_painter.close_editor", text="", icon="X")
+        for backend, label in (("VIEW_3D", "3D"), ("IMAGE_EDITOR", "2D")):
+            self.layout.operator(
+                "open_painter.native_view", text=label, depress=context.area.type == backend
+            ).view = backend
 
 
 class OP_OT_open_editor(bpy.types.Operator):

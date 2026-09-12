@@ -23,6 +23,11 @@ class OP_PT_main(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = "Open Painter"
 
+    @classmethod
+    def poll(cls, context):
+        from . import editor
+        return not editor.is_area(context.area)
+
     def draw(self, context):
         layout = self.layout
         if context.workspace.name != "Open Painter":

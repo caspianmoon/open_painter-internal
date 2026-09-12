@@ -72,7 +72,13 @@ class OP_Mask(bpy.types.PropertyGroup):
         update=changed,
     )
     operation: bpy.props.EnumProperty(
-        name="Combine", items=[("MULTIPLY", "Multiply", ""), ("ADD", "Add", "")], update=changed
+        name="Combine",
+        items=[
+            ("MULTIPLY", "Multiply", ""),
+            ("ADD", "Add", ""),
+            ("NORMAL", "Normal", "Replace previous mask coverage according to strength"),
+        ],
+        update=changed,
     )
     invert: bpy.props.BoolProperty(name="Invert", update=changed)
     black: bpy.props.FloatProperty(name="Black Level", min=0, max=1, update=changed)

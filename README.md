@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.9.zip`](dist/open_painter-0.1.9.zip).
+1. Download or build [`dist/open_painter-0.1.13.zip`](dist/open_painter-0.1.13.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -22,7 +22,7 @@ other platforms and newer versions have not been tested.
 4. Choose **Open Painter**. It opens in that same area with Assets along the bottom, the paint viewport
    in the center, and Texture Sets, Layers and Properties on the right. It does not create a workspace
    or rearrange your screen. Use Blender's usual **Ctrl+Space** to maximize the area if desired.
-5. Use the × beside Open Painter in the header to return to the standard 3D Viewport.
+5. Use Blender’s Editor Type selector to switch to another editor.
 
 The entry is a supported Python editor subtype adapter. Blender registers it through its NodeTree
 subtype API; when selected, it mounts the native 3D/Image Editor painting backend in that area.
@@ -37,47 +37,45 @@ No online account, network connection, or separate Python installation is needed
 1. Select your low-poly mesh. It needs a UV map in the 0–1 tile. A new texture set immediately creates and assigns a Principled material with all six initialized texture images connected.
 2. Click **+ New** in Texture Set List. A selected UV-unwrapped mesh is assigned automatically; use **Assign** for additional meshes. For a mesh with multiple materials,
    choose the intended active material slot before assigning. Repeat for additional objects/slots.
-3. Click **Settings** in Texture Set List to choose resolution (default 2048).
-4. Click **Bake Mesh Maps** in the top bar, select high-poly objects and click **Add Selected High Poly**.
+3. Set **Size** in Texture Set List to choose resolution (default 2048).
+4. Expand **Bake Mesh Maps** or open its top-bar popover. Select high-poly objects and click **Add Selected High Poly**.
    Set ray distance and bake Normal, AO, and Curvature. For self-bakes, disable **Bake from High Poly**.
-5. Add a **Fill** layer. Set Base Color, Roughness and Metallic. Add another fill and a
-   **Generator** mask; select **Edge Wear**. It uses the baked curvature map.
+5. Use the paint, fill and folder icons beside the stack channel selector to add layers.
+   Select layer content by clicking its name; the adjacent mask icon selects its mask effects.
 6. Click **Use Baked Normal + AO in Stack** to add those mesh maps to the material.
-7. Add a **Paint** layer. Click **R** (Roughness) in Properties to target roughness, then **Paint** in the top bar. Choose a brush from **Assets → Brushes**; size, strength, and spacing are in Properties.
-   The composite refreshes after the stroke ends. The brush follows paint-layer and channel selection; selecting a fill, folder or non-painted mask ends the session. Click **Finish** to leave painting.
-8. Click a material thumbnail in **Assets** to apply it. **Save Material** saves the stack; **Import Assets** imports portable materials. Search and the Mat/Smart/Brushes/Alphas tabs filter the asset browser.
-9. Click **Export Textures** in the top bar, choose a directory and **Unreal Engine 5**, then export.
+7. Select a Paint layer, choose its paint channel in Properties, then click **Paint**.
+   Use Blender’s brush selector and native brush settings. The composite refreshes after the stroke ends.
+   Selecting a fill, folder or non-painted mask ends the session; **Finish** also ends painting.
+8. Click a material thumbnail in the bottom native Asset Shelf to apply it. The **Assets** selector in
+   the tool header filters **Materials** and **Smart Masks**. Search and thumbnail size use Blender’s shelf controls.
+   **Asset Library** in the sidebar contains portable smart-material import, save and library commands.
+9. Expand **Export Textures**, choose a directory and an export preset, then export.
 
-Bottom layers are evaluated first; the UI displays the top layer at the top. **Group** or
-**Ctrl+G** groups the selected layers in place. Ctrl-click adds/removes a selection; Shift-click
-selects a range. Groups have collapse arrows and nested children. Drag layers onto a group to
-move them inside, onto another layer to reorder, or onto the **Layers** header to move them out.
-**Ctrl+Alt+G** ungroups the selected group. Delete removes the group and its descendants; Undo
-restores them. New groups use passthrough composition. Group opacity and masks affect the result
-once, and group duplication copies descendants and their paint images.
+Layers are displayed top-first and evaluated bottom-first. Use disclosure arrows for folders and
+native arrow buttons to reorder layers. The Parent button moves the selected layer into a folder;
+Delete removes a folder and its descendants. Undo restores them. Folder duplication copies children
+and their paint images. The native panel currently uses single selection and operator-based parenting.
 
-**T** toggles the bottom Assets shelf and **N** toggles Texture Sets/Layers/Properties. These keys act on
-Open Painter's panels while the mouse is over its viewport; they do not toggle other editors.
+**T** toggles Blender’s native left toolbar. **N** toggles the right sidebar containing Painter’s
+Texture Set List, Layers and Properties. These are Blender’s standard shortcuts, with no custom
+modal interception. Toggle **Asset Shelf** through Blender’s View menu. Resize the sidebar and shelf
+using their native borders. No surrounding editor areas are rearranged.
 
-Painted masks start white. Click a layer’s mask thumbnail to inspect it, then **Paint mask**, and paint black to hide content.
-Multiple mask entries are evaluated in list order, with invert, levels, multiply/add and strength.
-Fill textures support UV transforms and world-space triplanar sampling; use **Edit** in Properties
-and assign an image to reveal projection, scale, rotation, offset, **Nearest/Bilinear** filtering,
-**Repeat/None** wrapping and **Triplanar Hardness**. None makes pixels outside the original tile
-transparent so lower layers show through. Scroll individual docks to reach more assets, layers, texture sets or properties.
+The mask menu offers white/black painted masks, projected fill masks, generators and baked maps.
+Select **Assets → Smart Masks**, select the target layer, then click a preset. Normal application
+adds an editable effect; **Ctrl-click / Cmd-click** replaces the target’s effect stack. Required mesh
+maps are checked before modifying the stack. The six bundled presets are original edge/dirt masks.
 
-**Channel Blending…** in Properties opens native controls for the chosen channel’s opacity and
-blend mode. This selection is separate from the brush target. Overall layer opacity multiplies
-channel opacity; **Use Layer Blend** preserves the layer-wide setting. Twenty blend choices
-include Screen, Min/Max, Difference, Exclusion, Burn/Dodge and light modes. The complete PDF blend
-set is not implemented yet. Existing projects keep their previous defaults; editing an old folder
-initializes neutral per-channel settings. See [the controls](docs/channel_blending.png).
+A mask on a **folder affects every child**, including the metal substrate in Painted Steel. For
+chipped paint over metal, select **Paint coat** before applying a smart mask. Properties identifies
+the target and exposes generator, invert, levels, strength and **Normal / Multiply / Add** combination.
+New smart-mask effects use Normal; saved effects keep their previous combination. This is an editable
+mask-effect workflow, not complete Substance Painter generator parity.
 
-Docks follow your current Blender theme and interface font size. Hover over abbreviated channel
-buttons for their full names. Numeric fields support dragging, **Shift** for precision and **Esc**
-to cancel a drag. Double-click or right-click a numeric field to edit its value in a native Blender
-property popup. Double-click a layer name or use **F2** over the right dock to rename it.
-Blender viewport shading and overlay changes remain in effect while the editor is open.
+Fill channels expose native color/image and UV/triplanar transform controls. Per-channel blend and
+opacity are editable directly in layer rows, independently of the paint channel. **Use Layer Blend**
+keeps the layer-wide setting. Blender draws the controls, handles numeric editing and scrolling,
+and applies its current theme and interface scale.
 
 Brush Properties exposes color or scalar value, size, strength, spacing, erase and alpha controls.
 Scroll the Properties dock to reach all controls. **Import Alpha** loads a grayscale image and packs
@@ -152,7 +150,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
   Baking is synchronous and uses Cycles CPU for predictable behavior.
 - Shared mesh datablocks require an explicit single-user copy. Material slot insertion/reordering after
   assignment can invalidate references; use Validate Project and reassign the affected slots.
-- The selected editor area uses GPU-drawn docks around Blender’s native painting viewport. Dock controls call real project operators; detailed bake/export/color controls use native popovers. It follows Substance Painter’s standard layout but does not reproduce every Adobe feature. The original N-panel interface remains available in other workspaces. Groups support collapse, multi-selection and drag/drop. Detailed properties use native Blender popups.
+- Painter uses native Blender panels, properties, menus and an Asset Shelf, arranged around the native viewport. Asset activation is click-based; layer drag/drop and multi-selection are not implemented in this native interface. The original N-panel remains available outside Painter.
 - Smart-material import is limited to 512 MiB and 256 layers. External paint textures are bundled as EXR;
   missing generator maps must be baked in the destination texture set.
 
@@ -169,18 +167,18 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 
 ## Screenshots
 
-![Open Painter with Blender theme controls](docs/workspace.png)
+![Open Painter with native Blender controls](docs/native-painter.png)
 
 ![Mask stack and generator controls](docs/mask_controls.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.6.
+See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.13.
 
 
 
 
 ## 0.1.9: bottom shelf, painting memory, and materials
 
-The reference layout now places a compact tool strip on the left, contextual brush controls above the viewport, assets across the bottom, and texture sets/layers/properties on the right. Controls continue reading Blender's current theme and font settings. T toggles the shelf; N toggles the right docks.
+The reference layout now places a compact tool strip on the left, contextual brush controls above the viewport, assets across the bottom, and texture sets/layers/properties on the right. Controls continue reading Blender's current theme and font settings. That custom overlay was replaced by native regions in 0.1.13; T now toggles the native toolbar.
 
 The library bundles CC0 Poly Haven maps for Rough Wood, Fine Wood, and Weathered Paint. Base color uses sRGB; roughness and OpenGL normal maps use Non-Color. Applied maps are packed into the project. The other original presets have regenerated material previews; Copper and Dirty Plastic were adjusted. No material downloads occur during use. See [research and sources](docs/research/improvements-0.1.9.md).
 

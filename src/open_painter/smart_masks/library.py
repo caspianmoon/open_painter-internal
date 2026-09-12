@@ -13,7 +13,7 @@ PRESETS = (
 )
 
 
-def apply(ts, name):
+def apply(ts, name, replace=False):
     preset = next(p for p in PRESETS if p[0] == name)
     layer = active(ts)
     if layer is None:
@@ -23,8 +23,11 @@ def apply(ts, name):
     missing = sorted(required - available)
     if missing:
         raise ValueError('Bake Mesh Maps first: ' + ', '.join(missing) + ' required for ' + name + '.')
+    if replace:
+        layer.masks.clear()
     mask = layer.masks.add()
     mask.id, mask.name, mask.source = new_id(), name, 'GENERATOR'
+    mask.operation = 'NORMAL'
     mask.generator, mask.amount, mask.contrast, mask.noise_strength, mask.noise_scale, mask.seed = preset[1:]
     layer.active_mask = len(layer.masks) - 1
     return mask

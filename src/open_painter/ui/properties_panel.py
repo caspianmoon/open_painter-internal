@@ -14,6 +14,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     action: bpy.props.EnumProperty(
         items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN")]
     )
+    black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
         items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE")]
     )
@@ -30,7 +31,8 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             if self.source in {"PAINT", "FILL"}:
                 mask.image = create(
                     f"{ts.name}_{layer.name}_Mask",
-                    int(ts.resolution) if self.source == "PAINT" else 32, (1, 1, 1, 1)
+                    int(ts.resolution) if self.source == "PAINT" else 32,
+                    (0, 0, 0, 1) if self.black else (1, 1, 1, 1),
                 )
                 mask.image.pack()
             layer.active_mask = len(layer.masks) - 1

@@ -5,7 +5,7 @@ Validated on Blender 5.2.1 LTS, macOS Apple Silicon, using the Blender applicati
 ## Automated acceptance
 
 `python3 scripts/run_tests.py` runs each phase in a fresh background Blender process, then the
-pure NumPy/format unit tests. All pass. Covered behavior:
+pure NumPy/format unit tests. Historical phase coverage is listed below; current release-specific results are in docs/research/native-ui-0.1.13.md. Covered behavior:
 
 - Repeated registration/unregistration, persistent UUIDs and object/material assignments.
 - Ten-layer stacks, reorder, folder parenting, cycle rejection, descendant duplication, save/reload.
@@ -25,10 +25,10 @@ pure NumPy/format unit tests. All pass. Covered behavior:
 texture-paint brush, issues a real viewport stroke, verifies painted pixels and final roughness,
 and saves the resulting `.blend`. This verifies the brush engine, beyond simulated raster writes.
 
-`tests/integration/dock_workflow.py` uses Blender's `--enable-event-simulate` facility to click the
-Substance-style editor dock's Fill/Delete buttons, select a layer, drag its opacity, switch between 2D and
-3D, and capture `docs/workspace.png`. Its saved demo retains the editor in the selected area. Original Layout
-preservation is asserted. GPU draw callbacks and operator errors are checked in the process log.
+`python3 scripts/run_tests.py --gui-only` runs `native_ui.py`: actual native Panel draw callbacks,
+AssetShelf mouse activation, one mask per click, native T/N controls and 3D/2D switching. It captures
+`docs/native-painter.png`. Historical GPU dock tests no longer describe the active interface.
+`native_registration.py` verifies register/unregister cycles without changing surrounding areas.
 
 ## Packaging
 

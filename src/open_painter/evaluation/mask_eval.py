@@ -49,6 +49,8 @@ def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
             value = 1 - value
         if result is None:
             result = 1 - mask.strength + value * mask.strength
+        elif mask.operation == "NORMAL":
+            result = result * (1 - mask.strength) + value * mask.strength
         elif mask.operation == "MULTIPLY":
             result *= 1 - mask.strength + value * mask.strength
         else:

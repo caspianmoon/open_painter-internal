@@ -1,11 +1,11 @@
-"""Draw handlers and input lifecycle, removable without modifying other workspaces."""
+"""Synchronize native Painter regions and paint targets without drawing overlays."""
 
 from time import monotonic
 
 import bpy
 from bpy.app.handlers import persistent
 
-from . import renderer, state
+from . import state
 
 _handlers = []
 _display = {}
@@ -13,20 +13,10 @@ _display = {}
 
 def tick():
     from .. import editor
-    from .interaction import configure
+    from ..native import focus_area
 
     for window in bpy.context.window_manager.windows:
         editor.scan(window)
-        # Blender can remove an area-bound modal handler when the editor changes
-        # or a screen is replaced. A Python set is not proof it is still alive.
-        running = any(
-            operator.bl_idname == "OPEN_PAINTER_OT_dock_events"
-            for operator in window.modal_operators
-        )
-        if running:
-            state.windows.add(window.as_pointer())
-        else:
-            state.windows.discard(window.as_pointer())
         if window.scene.open_painter.paint_image:
             from ...painting.paint_session import finish, synchronize
             from ...utils.logging import logger
@@ -40,6 +30,7 @@ def tick():
                     logger.error("Paint target: %s", exc)
         for area in window.screen.areas:
             if editor.is_area(area):
+                focus_area(window, area)
                 ui = state.get(area)
                 project = window.scene.open_painter
                 signature = (
@@ -56,15 +47,6 @@ def tick():
                 ):
                     _display[key] = signature
                     area.tag_redraw()
-                region = next((r for r in area.regions if r.type == "WINDOW"), None)
-                if region:
-                    with bpy.context.temp_override(window=window, area=area, region=region):
-                        # Native regions must never cover our docks. configure
-                        # only writes changed flags; custom dock visibility lives
-                        # separately and is not reset here.
-                        configure(area)
-                        if window.as_pointer() not in state.windows:
-                            bpy.ops.open_painter.dock_events("INVOKE_DEFAULT")
     return 0.15
 
 
@@ -73,6 +55,8 @@ def on_load(_):
     from .assets import clear_cache
 
     clear_cache()
+    from ..native import _focus_pending
+    _focus_pending.clear()
     _display.clear()
     state.reset()
 
@@ -80,8 +64,6 @@ def on_load(_):
 def register():
     if bpy.app.background:
         return
-    for space in (bpy.types.SpaceView3D, bpy.types.SpaceImageEditor):
-        _handlers.append((space, space.draw_handler_add(renderer.draw, (), "WINDOW", "POST_PIXEL")))
     bpy.app.timers.register(tick, first_interval=0.5, persistent=True)
     bpy.app.handlers.load_post.append(on_load)
 
@@ -102,5 +84,7 @@ def unregister():
         bpy.app.timers.unregister(tick)
     if on_load in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(on_load)
+    from ..native import _focus_pending
+    _focus_pending.clear()
     _display.clear()
     state.reset()

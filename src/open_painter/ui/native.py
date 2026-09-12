@@ -1,0 +1,470 @@
+"""Painter arrangement using Blender panels, RNA widgets and its native asset shelf."""
+
+from pathlib import Path
+
+import bpy
+
+from ..core.layer_stack import active, channel_for, visible_rows
+from ..core.project_manager import active_set, require_set
+from . import editor
+from .dock import assets, state
+from .operators import SafeOperator
+
+ASSET_KEY = "open_painter_catalog_entry"
+
+
+def catalog():
+    from ..smart_masks.library import PRESETS
+
+    return assets.MATERIALS + [
+        (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
+    ]
+
+
+def prepare_assets():
+    # Images are asset handles only; activation always routes through Painter.
+    for entry in catalog():
+        image = assets.preview(entry[0])
+        if not image:
+            continue
+        image[ASSET_KEY] = entry[0]
+        image.name = entry[0]
+        if not image.asset_data:
+            image.asset_mark()
+        image.asset_data.description = (
+            "Smart mask: apply to the selected layer or folder"
+            if entry[1] == "SMART_MASK"
+            else "Open Painter material"
+        )
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "assets/previews"
+            / (entry[0].replace(" ", "_") + ".png")
+        )
+        if image.preview is None or not image.preview.image_size[0]:
+            with bpy.context.temp_override(id=image):
+                bpy.ops.ed.lib_id_load_custom_preview(filepath=str(path))
+
+
+class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
+    bl_idname = "open_painter.native_asset"
+    bl_label = "Apply Painter Asset"
+    bl_options = {"UNDO"}
+    asset_library_type: bpy.props.EnumProperty(
+        items=[
+            ("LOCAL", "Local", "", 1),
+            ("ALL", "All", "", 2),
+            ("CUSTOM", "Custom", "", 100),
+            ("ESSENTIALS", "Essentials", "", 3),
+        ],
+        default="LOCAL",
+    )
+    asset_library_identifier: bpy.props.StringProperty()
+    relative_asset_identifier: bpy.props.StringProperty()
+    replace_masks: bpy.props.BoolProperty(options={"HIDDEN"})
+
+    def invoke(self, context, event):
+        # Native shelf activation can fire on both press and release.
+        if event.type == "LEFTMOUSE" and event.value == "RELEASE":
+            return {"CANCELLED"}
+        self.replace_masks = event.ctrl or event.oskey
+        return self.execute(context)
+
+    # Blender's shelf invokes this with the active AssetRepresentation in context.
+    def run(self, context):
+        handle = context.asset.local_id if context.asset else None
+        if handle is None and self.asset_library_type == "LOCAL":
+            handle = bpy.data.images.get(self.relative_asset_identifier.split("/", 1)[-1])
+        if not handle or ASSET_KEY not in handle:
+            raise ValueError("Select an Open Painter asset.")
+        entry = next(e for e in catalog() if e[0] == handle[ASSET_KEY])
+        if entry[1] == "SMART_MASK":
+            from ..smart_masks.library import apply
+
+            apply(require_set(context), entry[0], replace=self.replace_masks)
+        else:
+            assets.apply(context, entry)
+        ui = state.get(context.area)
+        ui.mask_selected = entry[1] == "SMART_MASK"
+        ui.selected_layers = {active(require_set(context)).id}
+        context.area.tag_redraw()
+
+
+class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
+    bl_space_type = "VIEW_3D"
+    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG"}
+    bl_default_preview_size = 80
+    bl_activate_operator = "OPEN_PAINTER_OT_native_asset"
+
+    @classmethod
+    def poll(cls, context):
+        return editor.is_area(context.area)
+
+    @classmethod
+    def asset_poll(cls, asset):
+        handle = asset.local_id
+        if not handle or ASSET_KEY not in handle:
+            return False
+        category = bpy.context.scene.open_painter.asset_category
+        entry = next((e for e in catalog() if e[0] == handle[ASSET_KEY]), None)
+        return bool(
+            entry and (category == "ALL" or (entry[1] == "SMART_MASK") == (category == "MASKS"))
+        )
+
+
+class OP_OT_native_view(SafeOperator, bpy.types.Operator):
+    bl_idname = "open_painter.native_view"
+    bl_label = "Painter View"
+    view: bpy.props.EnumProperty(items=[("VIEW_3D", "3D", ""), ("IMAGE_EDITOR", "2D", "")])
+
+    def run(self, context):
+        area = context.area
+        editor.set_view(area, self.view)
+        area.type = self.view
+        space = area.spaces.active
+        if self.view == "IMAGE_EDITOR":
+            ts = active_set(context)
+            project = context.scene.open_painter
+            space.ui_mode = "PAINT" if project.paint_image else "VIEW"
+            space.image = project.paint_image or (
+                next((o.image for o in ts.outputs if o.channel == project.blend_channel), None)
+                if ts
+                else None
+            )
+        else:
+            space.shading.type = "MATERIAL"
+        for prop in (
+            "show_region_ui",
+            "show_region_toolbar",
+            "show_region_tool_header",
+            "show_region_asset_shelf",
+        ):
+            if hasattr(space, prop):
+                setattr(space, prop, True)
+        request_focus(area)
+        editor.persist(context.screen)
+        area.tag_redraw()
+
+
+class OP_OT_native_select(SafeOperator, bpy.types.Operator):
+    bl_idname = "open_painter.native_select"
+    bl_label = "Select Layer Content or Mask"
+    layer_id: bpy.props.StringProperty()
+    mask: bpy.props.BoolProperty()
+
+    def run(self, context):
+        ts = require_set(context)
+        ts.active_layer = next(i for i, layer in enumerate(ts.layers) if layer.id == self.layer_id)
+        ui = state.get(context.area)
+        ui.mask_selected = self.mask
+        ui.selected_layers = {self.layer_id}
+        from ..painting.paint_session import synchronize
+
+        synchronize(context, mask=self.mask)
+
+
+class PainterPanel:
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Painter"
+
+    @classmethod
+    def poll(cls, context):
+        return editor.is_area(context.area)
+
+
+class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
+    bl_label = "Texture Set List"
+    bl_order = 0
+
+    def draw(self, context):
+        layout = self.layout
+        project = context.scene.open_painter
+        layout.template_list(
+            "OP_UL_texture_sets",
+            "native",
+            project,
+            "texture_sets",
+            project,
+            "active_texture_set",
+            rows=2,
+        )
+        row = layout.row(align=True)
+        for action, label in [("ADD", "New"), ("ASSIGN", "Assign"), ("DUPLICATE", "Copy")]:
+            row.operator("open_painter.texture_set", text=label).action = action
+        ts = active_set(context)
+        if ts:
+            layout.prop(ts, "resolution", text="Size")
+
+
+class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
+    bl_label = "Layers"
+    bl_order = 1
+
+    def draw(self, context):
+        layout = self.layout
+        ts = active_set(context)
+        if not ts:
+            return
+        channel_id = context.scene.open_painter.blend_channel
+        row = layout.row(align=True)
+        row.prop(context.scene.open_painter, "blend_channel", text="")
+        for action, icon in [
+            ("PAINT", "BRUSH_DATA"),
+            ("FILL", "SHADING_RENDERED"),
+            ("FOLDER", "FILE_FOLDER"),
+        ]:
+            row.operator("open_painter.layer", text="", icon=icon).action = action
+        row.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
+        for index, depth in visible_rows(ts):
+            layer = ts.layers[index]
+            channel = channel_for(layer, channel_id)
+            row = layout.row(align=True)
+            row.prop(
+                layer,
+                "visible",
+                text="",
+                icon="HIDE_OFF" if layer.visible else "HIDE_ON",
+                emboss=False,
+            )
+            for _ in range(depth):
+                row.separator(factor=0.5)
+            if layer.type == "FOLDER":
+                row.prop(
+                    layer,
+                    "expanded",
+                    text="",
+                    icon="TRIA_DOWN" if layer.expanded else "TRIA_RIGHT",
+                    emboss=False,
+                )
+            op = row.operator(
+                "open_painter.native_select",
+                text=layer.name,
+                icon="FILE_FOLDER" if layer.type == "FOLDER" else "MATERIAL",
+                depress=index == ts.active_layer and not state.get(context.area).mask_selected,
+            )
+            op.layer_id = layer.id
+            if layer.masks:
+                op = row.operator(
+                    "open_painter.native_select",
+                    text="",
+                    icon="MOD_MASK",
+                    depress=index == ts.active_layer and state.get(context.area).mask_selected,
+                )
+                op.layer_id, op.mask = layer.id, True
+            col = row.column(align=True)
+            if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
+                col.prop(layer, "group_mode", text="")
+            elif channel:
+                col.prop(channel, "blend_mode", text="")
+            if channel:
+                col.prop(channel, "opacity", text="", slider=True)
+        row = layout.row(align=True)
+        for action, icon in [
+            ("UP", "TRIA_UP"),
+            ("DOWN", "TRIA_DOWN"),
+            ("DUPLICATE", "DUPLICATE"),
+            ("DELETE", "TRASH"),
+            ("PARENT", "FILE_FOLDER"),
+        ]:
+            row.operator("open_painter.layer", text="", icon=icon).action = action
+
+
+class OP_MT_native_masks(bpy.types.Menu):
+    bl_label = "Add Mask"
+
+    def draw(self, context):
+        for source, label in [
+            ("PAINT", "Add White Mask"),
+            ("BLACK", "Add Black Mask"),
+            ("FILL", "Add Fill Mask"),
+            ("GENERATOR", "Add Generator"),
+            ("BAKED", "Add Mesh Map Mask"),
+        ]:
+            op = self.layout.operator("open_painter.mask", text=label)
+            op.action, op.source = "ADD", "PAINT" if source == "BLACK" else source
+            op.black = source == "BLACK"
+        self.layout.separator()
+        self.layout.prop(context.scene.open_painter, "asset_category", text="Library")
+
+
+class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
+    bl_label = "Properties"
+    bl_order = 2
+
+    def draw(self, context):
+        layout = self.layout
+        ts = active_set(context)
+        layer = active(ts) if ts else None
+        if not layer:
+            return
+        layout.prop(layer, "name", text="Target")
+        if state.get(context.area).mask_selected and layer.masks:
+            layout.label(text="Mask on " + layer.name, icon="MOD_MASK")
+            from .properties_panel import OP_PT_masks
+
+            OP_PT_masks.draw(self, context)
+            return
+        layout.prop(layer, "opacity", slider=True)
+        if layer.type != "FOLDER":
+            layout.prop(layer, "blend_mode", text="Layer Blend")
+        if layer.type == "FOLDER":
+            layout.prop(layer, "group_mode", text="Blend")
+            layout.label(text="Folder masks affect all child layers.")
+            return
+        if layer.type == "PAINT":
+            from ..painting.brush_bridge import draw
+
+            layout.prop(context.scene.open_painter, "paint_channel")
+            layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
+            draw(layout, context)
+            return
+        for channel in layer.channels:
+            box = layout.box()
+            box.prop(channel, "enabled", text=channel.channel.replace("_", " ").title())
+            if not channel.enabled:
+                continue
+            box.prop(
+                channel,
+                "color" if channel.channel in {"BASE_COLOR", "NORMAL"} else "value",
+                text="",
+            )
+            box.template_ID(channel, "image", open="image.open")
+            if channel.image:
+                for key in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
+                    box.prop(channel, key)
+                if channel.projection == "TRIPLANAR":
+                    box.prop(channel, "triplanar_hardness")
+
+
+class OP_PT_native_library(PainterPanel, bpy.types.Panel):
+    bl_label = "Asset Library"
+    bl_options = {"DEFAULT_CLOSED"}
+    bl_order = 5
+
+    def draw(self, context):
+        self.layout.prop(context.scene.open_painter, "asset_category", text="Show")
+        from .assets_panel import OP_PT_assets
+
+        OP_PT_assets.draw(self, context)
+
+
+def toolbar(self, context):
+    if not editor.is_area(context.area):
+        return
+    row = self.layout.row(align=True)
+    row.prop(context.scene.open_painter, "asset_category", text="Assets")
+    row.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
+    row.operator("open_painter.paint", text="Finish").stop = True
+    row.popover(panel="OP_PT_native_bake", text="Bake Mesh Maps")
+    row.popover(panel="OP_PT_native_export", text="Export Textures")
+
+
+class OP_PT_native_bake(PainterPanel, bpy.types.Panel):
+    bl_label = "Bake Mesh Maps"
+    bl_options = {"DEFAULT_CLOSED"}
+    bl_order = 3
+
+    def draw(self, context):
+        from .baking_panel import OP_PT_bake
+
+        OP_PT_bake.draw(self, context)
+
+
+class OP_PT_native_export(PainterPanel, bpy.types.Panel):
+    bl_label = "Export Textures"
+    bl_options = {"DEFAULT_CLOSED"}
+    bl_order = 4
+
+    def draw(self, context):
+        from .export_panel import OP_PT_export
+
+        OP_PT_export.draw(self, context)
+
+
+CLASSES = (
+    OP_OT_native_view,
+    OP_OT_native_asset,
+    VIEW3D_AST_open_painter,
+    OP_OT_native_select,
+    OP_PT_native_sets,
+    OP_PT_native_layers,
+    OP_MT_native_masks,
+    OP_PT_native_properties,
+    OP_PT_native_library,
+    OP_PT_native_bake,
+    OP_PT_native_export,
+)
+
+
+_focus_pending = set()
+
+
+def request_focus(area):
+    _focus_pending.add(area.as_pointer())
+
+
+def focus_area(window, area):
+    if area.as_pointer() not in _focus_pending:
+        return
+    region = next((r for r in area.regions if r.type == "UI" and r.width > 10), None)
+    if not region:
+        return
+    try:
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            # Categories are writable only after Blender has built this region.
+            region.active_panel_category = "Painter"
+        shelf_region = next((r for r in area.regions if r.type == "ASSET_SHELF"), region)
+        with bpy.context.temp_override(window=window, area=area, region=shelf_region):
+            shelf = bpy.context.asset_shelf
+            if shelf:
+                shelf.asset_library_reference = "LOCAL"
+                shelf.show_names = True
+        region.tag_redraw()
+        area.tag_redraw()
+        _focus_pending.discard(area.as_pointer())
+    except (AttributeError, TypeError, ValueError):
+        pass
+
+
+# The same native controls also serve the 2D painting editor.
+IMAGE_CLASSES = tuple(
+    type(
+        cls.__name__.replace("native_", "image_"),
+        (PainterPanel, bpy.types.Panel),
+        {
+            "__module__": __name__,
+            "bl_space_type": "IMAGE_EDITOR",
+            "bl_label": cls.bl_label,
+            "bl_order": cls.bl_order,
+            "bl_idname": cls.__name__.replace("native_", "image_"),
+            "draw": cls.draw,
+        },
+    )
+    for cls in (
+        OP_PT_native_sets,
+        OP_PT_native_layers,
+        OP_PT_native_properties,
+        OP_PT_native_bake,
+        OP_PT_native_export,
+        OP_PT_native_library,
+    )
+)
+
+
+class IMAGE_AST_open_painter(bpy.types.AssetShelf):
+    bl_space_type = "IMAGE_EDITOR"
+    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG"}
+    bl_default_preview_size = 80
+    bl_activate_operator = "OPEN_PAINTER_OT_native_asset"
+
+    @classmethod
+    def poll(cls, context):
+        return editor.is_area(context.area)
+
+    @classmethod
+    def asset_poll(cls, asset):
+        return VIEW3D_AST_open_painter.asset_poll(asset)
+
+
+CLASSES += IMAGE_CLASSES + (IMAGE_AST_open_painter,)

@@ -14,6 +14,11 @@ class OP_Project(bpy.types.PropertyGroup):
     paint_image: bpy.props.PointerProperty(type=bpy.types.Image)
     paint_set_id: bpy.props.StringProperty()
     paint_layer_id: bpy.props.StringProperty()
+    asset_category: bpy.props.EnumProperty(
+        name="Assets",
+        items=[("ALL", "All", ""), ("MATERIALS", "Materials", ""), ("MASKS", "Smart Masks", "")],
+        default="ALL",
+    )
     paint_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="ROUGHNESS")
     blend_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR")
     paint_mask: bpy.props.BoolProperty()

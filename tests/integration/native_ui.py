@@ -1,5 +1,6 @@
-"""Verify theme adaptation, viewport preferences and cancellable property input."""
+"""Verify actual native regions without overlay handlers or custom input interception."""
 
+import json
 import sys
 import traceback
 from pathlib import Path
@@ -8,126 +9,191 @@ import bpy
 
 root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / "src"))
-import open_painter
-from open_painter.ui.dock import drawing, interaction, state
+import open_painter  # noqa: E402
+from open_painter.ui import native  # noqa: E402
+from open_painter.ui.dock import lifecycle  # noqa: E402
 
+drawn = set()
+
+
+def traced(original, name):
+    def draw(self, context):
+        drawn.add(name)
+        original(self, context)
+
+    return draw
+
+
+for cls in [native.OP_PT_native_sets, native.OP_PT_native_layers, native.OP_PT_native_properties]:
+    cls.draw = traced(cls.draw, cls.__name__)
 open_painter.register()
-bpy.ops.wm.open_mainfile(filepath=str(root / "examples/open_painter_demo.blend"))
-result = root / ".blender-test/native_ui_result.txt"
-result.write_text("RUNNING")
+bpy.context.preferences.view.show_splash = False
+result = root / ".blender-test/native-ui.json"
+result.unlink(missing_ok=True)
 area = None
-original = None
-mouse = None
-popup_sections = []
-original_draw = interaction.OP_OT_dock_popup.draw
 
 
-def record_popup(self, context):
-    popup_sections.append(self.section)
-    original_draw(self, context)
-
-
-interaction.OP_OT_dock_popup.draw = record_popup
-
-
-def step(fn):
-    def wrapped():
-        try:
-            fn()
-        except Exception:
-            result.write_text(traceback.format_exc())
-            traceback.print_exc()
-            bpy.ops.wm.quit_blender()
-        return None
-
-    return wrapped
-
-
-def layer():
-    return bpy.context.scene.open_painter.texture_sets[0].layers[1]
-
-
-def event(kind, value="PRESS", x=None, shift=False):
-    bpy.context.window.event_simulate(
-        type=kind, value=value, x=int(mouse[0] if x is None else x), y=int(mouse[1]), shift=shift
-    )
-
-
-@step
 def setup():
-    global area, original
-    bpy.ops.open_painter.open_editor(view_mode="SINGLE")
-    area = next(a for a in bpy.context.screen.areas if a.type == "VIEW_3D")
-    theme = bpy.context.preferences.themes[0]
-    saved = tuple(theme.user_interface.wcol_regular.inner)
-    theme.user_interface.wcol_regular.inner = (0.2, 0.35, 0.5, 1)
-    drawing.sync_theme(bpy.context)
-    assert drawing.CARD == tuple(theme.user_interface.wcol_regular.inner)
-    assert drawing.CARD != saved, "Theme override not reflected"
-    theme.user_interface.wcol_regular.inner = saved
-    drawing.sync_theme(bpy.context)
-    area.spaces.active.shading.type = "SOLID"
-    area.spaces.active.overlay.show_overlays = True
-    interaction.configure(area)
-    assert area.spaces.active.shading.type == "SOLID"
-    assert area.spaces.active.overlay.show_overlays
-    ts = bpy.context.scene.open_painter.texture_sets[0]
-    ts.active_layer = 1
-    original = layer().opacity = 0.5
-    bpy.app.timers.register(start_drag, first_interval=3)
+    global area
+    try:
+        area = max(
+            (a for a in bpy.context.screen.areas if a.type == "VIEW_3D"),
+            key=lambda a: a.width * a.height,
+        )
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(area=area, region=region):
+            bpy.ops.open_painter.open_editor()
+            bpy.ops.open_painter.texture_set(action="ADD")
+            ts = bpy.context.scene.open_painter.texture_sets[0]
+            ts.resolution = "512"
+            from open_painter.core.surface_presets import apply
+
+            group = apply(ts, "Painted Steel")
+            coat = next(layer for layer in ts.layers if layer.parent_id == group.id and layer.masks)
+            bpy.ops.open_painter.native_select(layer_id=coat.id)
+            from open_painter.core import image_manager
+
+            for kind in ("AO", "CURVATURE"):
+                m = ts.baked_maps.add()
+                m.kind = kind
+                m.image = image_manager.create("Test " + kind, 32, (0.5, 0.5, 0.5, 1))
+            bpy.context.scene.open_painter.asset_category = "MASKS"
+        bpy.app.timers.register(check, first_interval=4)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
 
 
-@step
-def start_drag():
-    global mouse
-    ui = state.get(area)
-    hit = next(h for h in ui.hits if h[4] == "SLIDER" and h[5][0] == ("LAYER", "opacity"))
-    region = next(r for r in area.regions if r.type == "WINDOW")
-    mouse = (region.x + hit[0] + hit[2] * 0.5, region.y + hit[1] + hit[3] * 0.5)
-    event("MOUSEMOVE", "NOTHING")
-    event("LEFTMOUSE")
-    event("MOUSEMOVE", "NOTHING", x=mouse[0] + hit[2] * 0.25)
-    bpy.app.timers.register(cancel_drag, first_interval=0.5)
+def check():
+    try:
+        assert "OP_PT_native_layers" in drawn
+        assert not lifecycle._handlers
+        assert not any(
+            o.bl_idname == "OPEN_PAINTER_OT_dock_events" for o in bpy.context.window.modal_operators
+        )
+        assert any(r.type == "UI" and r.width > 10 for r in area.regions)
+        assert any(r.type == "ASSET_SHELF" and r.height > 10 for r in area.regions)
+        result.write_text(json.dumps({"native_regions": "PASS", "custom_handlers": 0}))
+        shelf = next(r for r in area.regions if r.type == "ASSET_SHELF")
+        bpy.context.window.cursor_warp(shelf.x + 60, shelf.y + 60)
+        bpy.context.window.event_simulate(
+            type="MOUSEMOVE", value="NOTHING", x=shelf.x + 60, y=shelf.y + 60
+        )
+        bpy.app.timers.register(click_asset, first_interval=1)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
 
 
-@step
-def cancel_drag():
-    assert 0.70 < layer().opacity < 0.80, layer().opacity
-    event("ESC")
-    event("LEFTMOUSE", "RELEASE")
-    bpy.app.timers.register(precision_drag, first_interval=0.5)
-
-
-@step
-def precision_drag():
-    assert abs(layer().opacity - original) < 1e-5, "Escape failed to restore value"
-    event("MOUSEMOVE", "NOTHING")
-    event("LEFTMOUSE")
-    event("MOUSEMOVE", "NOTHING", x=mouse[0] + 100, shift=True)
-    event("LEFTMOUSE", "RELEASE", x=mouse[0] + 100)
-    bpy.app.timers.register(native_popup, first_interval=0.5)
-
-
-@step
-def native_popup():
-    assert 0.50 < layer().opacity < 0.53, layer().opacity
-    event("MOUSEMOVE", "NOTHING")
-    event("RIGHTMOUSE")
-    event("RIGHTMOUSE", "RELEASE")
-    bpy.app.timers.register(edit_number, first_interval=1)
-
-
-@step
-def edit_number():
-    # Popup contains a real RNA property field, with native text entry/undo.
-    assert "NUMBER" in popup_sections, "Native numeric popup did not draw"
-    event("ESC")
-    layer().opacity = original
-    result.write_text(
-        "PASS: live Blender theme, preserved shading/overlays, Escape cancellation, Shift precision, native numeric popup"
+def click_asset():
+    shelf = next(r for r in area.regions if r.type == "ASSET_SHELF")
+    bpy.context.window.event_simulate(
+        type="LEFTMOUSE", value="PRESS", x=shelf.x + 60, y=shelf.y + 60
     )
-    print(result.read_text())
+    bpy.app.timers.register(release_asset, first_interval=0.2)
+
+
+def release_asset():
+    shelf = next(r for r in area.regions if r.type == "ASSET_SHELF")
+    bpy.context.window.event_simulate(
+        type="LEFTMOUSE", value="RELEASE", x=shelf.x + 60, y=shelf.y + 60
+    )
+    bpy.app.timers.register(applied, first_interval=1)
+
+
+def applied():
+    try:
+        from open_painter.core.layer_stack import active
+
+        ts = bpy.context.scene.open_painter.texture_sets[0]
+        layer = active(ts)
+        assert layer.name == "Paint coat"
+        assert len(layer.masks) == 2 and layer.masks[-1].source == "GENERATOR", [
+            (m.name, m.source) for m in layer.masks
+        ]
+        assert layer.masks[-1].operation == "NORMAL"
+        data = json.loads(result.read_text())
+        data["native_asset_click"] = "PASS"
+        result.write_text(json.dumps(data))
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        for key in ["T", "N"]:
+            for value in ["PRESS", "RELEASE"]:
+                bpy.context.window.event_simulate(
+                    type=key,
+                    value=value,
+                    x=region.x + region.width // 2,
+                    y=region.y + region.height // 2,
+                )
+        bpy.app.timers.register(hidden, first_interval=1)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
+
+
+def hidden():
+    try:
+        assert not area.spaces.active.show_region_ui
+        assert not area.spaces.active.show_region_toolbar
+        data = json.loads(result.read_text())
+        data["native_T_N"] = "PASS"
+        result.write_text(json.dumps(data))
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(area=area, region=region):
+            assert bpy.ops.open_painter.native_view(view="IMAGE_EDITOR") == {"FINISHED"}
+        bpy.app.timers.register(check_2d, first_interval=1)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
+
+
+def check_2d():
+    try:
+        assert area.type == "IMAGE_EDITOR"
+        assert any(r.type == "ASSET_SHELF" and r.height > 10 for r in area.regions)
+        assert next(r for r in area.regions if r.type == "UI").active_panel_category == "Painter"
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(area=area, region=region):
+            assert bpy.ops.open_painter.native_view(view="VIEW_3D") == {"FINISHED"}
+        bpy.app.timers.register(check_3d, first_interval=1)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
+
+
+def check_3d():
+    try:
+        assert area.type == "VIEW_3D"
+        assert next(r for r in area.regions if r.type == "UI").active_panel_category == "Painter"
+        ts = bpy.context.scene.open_painter.texture_sets[0]
+        assert len(ts.layers[ts.active_layer].masks) == 2
+        data = json.loads(result.read_text())
+        data["native_2d_3d"] = "PASS"
+        result.write_text(json.dumps(data))
+        area.tag_redraw()
+        bpy.app.timers.register(capture, first_interval=2)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
+
+
+def capture():
+    bpy.ops.wm.redraw_timer(type="DRAW_WIN", iterations=2)
+    bpy.app.timers.register(screenshot, first_interval=1)
+
+
+def screenshot():
+    bpy.ops.screen.screenshot(filepath=str(root / "docs/native-painter.png"))
+    bpy.app.timers.register(quit_test, first_interval=1)
+
+
+def quit_test():
     bpy.ops.wm.quit_blender()
 
 
-bpy.app.timers.register(setup, first_interval=2)
+bpy.app.timers.register(setup, first_interval=1)

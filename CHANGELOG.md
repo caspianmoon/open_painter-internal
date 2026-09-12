@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.13
+
+- Replace the active GPU overlay and modal input handler with Blender Panel/UILayout controls and native Asset Shelves in both 3D and 2D. Keep assets below the viewport and texture sets/layers/properties on the right.
+- Use native T/N behavior, inline channel blending, explicit content/mask selection, and named mask targets. Remove the visible Close control.
+- Add white/black mask actions and Normal mask-effect blending. Smart-mask clicks accumulate editable effects; Ctrl/Cmd-click replaces them after required-map validation. Existing saved effects retain their operation.
+- Verify real shelf clicks, native panel drawing, T/N, 2D/3D switching, save/reopen, UV projection, materials and incremental compositing.
+
 ## 0.1.12
 
 - Put per-channel blend selection and draggable opacity percentages directly in layer rows; remove the generic Channel Blending button from the main dock.

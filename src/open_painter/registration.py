@@ -23,6 +23,8 @@ from .ui.panels import OP_PT_main, OP_PT_texture_set, OP_UL_assignments, OP_UL_t
 from .ui.properties_panel import OP_OT_mask, OP_PT_masks, OP_UL_masks
 from .ui.workspace import OP_OT_workspace
 
+from .ui.native import CLASSES as NATIVE_CLASSES
+
 CLASSES = (
     OP_EditorType,
     OP_OT_open_editor,
@@ -66,7 +68,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-)
+) + NATIVE_CLASSES
 
 
 def register():
@@ -82,12 +84,16 @@ def register():
     from .ui import editor
 
     editor.register()
+    from .ui.native import toolbar
+    bpy.types.VIEW3D_HT_tool_header.append(toolbar)
 
 
 def unregister():
     from .ui import editor, workspace
     from .ui.dock import lifecycle
 
+    from .ui.native import toolbar
+    bpy.types.VIEW3D_HT_tool_header.remove(toolbar)
     editor.unregister()
     lifecycle.unregister()
     workspace.unregister()

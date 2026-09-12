@@ -1,3 +1,4 @@
+<!-- Active target: Blender add-on; native/ and prototypes/ are retained experiments. -->
 # Blender Open Painter
 
 A Blender extension for non-destructive PBR texturing: texture sets, paint and fill layers,
@@ -13,12 +14,12 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.6.zip`](dist/open_painter-0.1.6.zip).
+1. Download or build [`dist/open_painter-0.1.9.zip`](dist/open_painter-0.1.9.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
    containing 3D Viewport, Image Editor, Shader Editor, and the other editors.
-4. Choose **Open Painter**. It opens in that same area with Assets on the left, the paint viewport
+4. Choose **Open Painter**. It opens in that same area with Assets along the bottom, the paint viewport
    in the center, and Texture Sets, Layers and Properties on the right. It does not create a workspace
    or rearrange your screen. Use Blender's usual **Ctrl+Space** to maximize the area if desired.
 5. Use the × beside Open Painter in the header to return to the standard 3D Viewport.
@@ -55,7 +56,7 @@ move them inside, onto another layer to reorder, or onto the **Layers** header t
 restores them. New groups use passthrough composition. Group opacity and masks affect the result
 once, and group duplication copies descendants and their paint images.
 
-**T** toggles the Assets panel and **N** toggles Texture Sets/Layers/Properties. These keys act on
+**T** toggles the bottom Assets shelf and **N** toggles Texture Sets/Layers/Properties. These keys act on
 Open Painter's panels while the mouse is over its viewport; they do not toggle other editors.
 
 Painted masks start white. Click a layer’s mask thumbnail to inspect it, then **Paint mask**, and paint black to hide content.
@@ -175,3 +176,12 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.6.
 
 
+
+
+## 0.1.9: bottom shelf, painting memory, and materials
+
+The reference layout now places a compact tool strip on the left, contextual brush controls above the viewport, assets across the bottom, and texture sets/layers/properties on the right. Controls continue reading Blender's current theme and font settings. T toggles the shelf; N toggles the right docks.
+
+The library bundles CC0 Poly Haven maps for Rough Wood, Fine Wood, and Weathered Paint. Base color uses sRGB; roughness and OpenGL normal maps use Non-Color. Applied maps are packed into the project. The other original presets have regenerated material previews; Copper and Dirty Plastic were adjusted. No material downloads occur during use. See [research and sources](docs/research/improvements-0.1.9.md).
+
+Paint detection reuses raster buffers and bounds temporary comparison storage. Rectangle and tool geometry are cached between UI redraws. These changes reduce allocations; they do not eliminate Python's full image upload cost or establish a guaranteed painting frame rate.

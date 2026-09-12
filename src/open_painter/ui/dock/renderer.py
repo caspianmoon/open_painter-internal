@@ -25,10 +25,9 @@ class Canvas:
             if r.type in {"HEADER", "TOOL_HEADER"} and r.height > 1
         )
         self.h = (context.region.height - inset) / self.scale
-        self.left = min(248, max(190, self.w * 0.19))
+        self.left = 38
+        self.bottom = min(260, max(170, self.h * 0.30)) if self.state.show_assets else 22
         self.right = min(346, max(286, self.w * 0.25))
-        if not self.state.show_assets:
-            self.left = 0
         if not self.state.show_properties:
             self.right = 0
         self.state.hits = []
@@ -37,6 +36,7 @@ class Canvas:
         self.state.height = self.h * self.scale
         self.state.left = self.left * self.scale
         self.state.right = self.right * self.scale
+        self.state.bottom = self.bottom * self.scale
         self.state.ui_scale = self.scale
 
     def rect(self, x, y, w, h, color):
@@ -114,6 +114,7 @@ def draw():
     gpu.state.blend_set("ALPHA")
     try:
         toolbar(canvas)
+        tools(canvas)
         if canvas.state.show_assets:
             browser(canvas)
         if canvas.state.show_properties:
@@ -128,11 +129,20 @@ def toolbar(c):
     w, h = c.w, c.h
     ts = active_set(c.context)
     c.rect(0, h - 43, w, 43, d.HEADER)
-    c.text("Open Painter", 15, h - 26, 11)
-    x = max(c.left, 125) + 16
-    c.button("Paint", x, h - 34, 57, 25, "PAINT")
-    c.button("Mask", x + 63, h - 34, 54, 25, "PAINT_MASK")
-    c.button("Finish", x + 123, h - 34, 56, 25, "FINISH")
+
+    x = c.left + 6
+    paint = c.context.scene.tool_settings.image_paint
+    brush = paint.brush
+    if brush:
+        unified = paint.unified_paint_settings
+        for i, (key, label, maximum) in enumerate((("size", "Size", 500), ("strength", "Flow", 1), ("spacing", "Spacing", 100))):
+            owner = unified if getattr(unified, "use_unified_" + key, False) else brush
+            c.slider(label, x + i * 112, h - 33, 106, getattr(owner, key), "SLIDER", ("BRUSH", key), 0 if key == "strength" else 1, maximum)
+        x += 150
+    else:
+        c.button("Paint", x, h - 34, 57, 25, "PAINT")
+        c.button("Mask", x + 63, h - 34, 54, 25, "PAINT_MASK")
+        c.button("Finish", x + 123, h - 34, 56, 25, "FINISH")
     c.button("3D", x + 194, h - 34, 35, 25, "VIEW", "VIEW_3D", c.context.area.type == "VIEW_3D")
     c.button(
         "2D", x + 233, h - 34, 35, 25, "VIEW", "IMAGE_EDITOR", c.context.area.type == "IMAGE_EDITOR"
@@ -165,7 +175,7 @@ def toolbar(c):
         c.text(
             "3D VIEW",
             c.left + 18,
-            40,
+            c.bottom + 12,
             10,
             d.rgba(c.context.preferences.themes[0].view_3d.space.text),
         )
@@ -173,51 +183,48 @@ def toolbar(c):
         c.text(
             "2D TEXTURE VIEW",
             c.left + 18,
-            40,
+            c.bottom + 12,
             10,
             d.rgba(c.context.preferences.themes[0].view_3d.space.text),
         )
 
 
+def tools(c):
+    c.rect(0, 22, c.left, c.h - 65, d.HEADER)
+    for i, (label, action, payload) in enumerate([
+        ("P", "PAINT", None), ("E", "BRUSH_ACTION", "ERASE"),
+        ("M", "PAINT_MASK", None), ("F", "FINISH", None),
+        ("3D", "VIEW", "VIEW_3D"), ("2D", "VIEW", "IMAGE_EDITOR"),
+    ]):
+        y = c.h - 79 - i * 32
+        c.button("", 5, y, 28, 27, action, payload)
+        d.tool_icon(10 * c.scale, (y + 5) * c.scale, 18 * c.scale, label)
+
+
 def browser(c):
-    left, h = c.left, c.h
     s = c.state
-    c.rect(0, 22, left, h - 65, d.BG)
-    c.rect(left - 1, 22, 1, h - 65, d.LINE)
-    c.panel(6, 28, left - 12, h - 77)
-    c.header("ASSETS", 0, h - 73, left, "LIBRARY")
-    c.widget(12, h - 107.5, left - 24, 20, "text", selected=s.search)
-    c.text(
-        s.query or ("Type to search…" if s.search else "Search assets"),
-        22,
-        h - 102,
-        11,
-        d.WIDGETS["text"]["text_sel" if s.search else "text"],
-        left - 45,
-    )
-    c.hit(12, h - 110, left - 24, 25, "SEARCH")
-    names = [
-        ("Mat", "MATERIALS"),
-        ("Smart", "SMART"),
-        ("Brushes", "BRUSHES"),
-        ("Alphas", "ALPHAS"),
-    ]
-    tab_width = (left - 24) / 4
-    for i, (label, key) in enumerate(names):
-        c.button(
-            label, 12 + i * tab_width, h - 144, tab_width - 2, 24, "ASSET_TAB", key, s.tab == key
-        )
+    x0, width, top = c.left, c.w - c.left - c.right, c.bottom
+    c.rect(x0, 22, width, top - 22, d.BG)
+    c.panel(x0 + 4, 25, width - 8, top - 28)
+    c.header("ASSETS", x0, top - 31, width)
+    search_width = min(220, width * .30)
+    c.widget(x0 + 12, top - 58, search_width, 20, "text", selected=s.search)
+    c.text(s.query or "Search assets", x0 + 20, top - 53, width=search_width - 16)
+    c.hit(x0 + 12, top - 60, search_width, 24, "SEARCH")
+    for i, (label, key) in enumerate([("Mat", "MATERIALS"), ("Smart", "SMART"), ("Brushes", "BRUSHES"), ("Alphas", "ALPHAS")]):
+        c.button(label, x0 + search_width + 22 + i * 61, top - 60, 58, 24, "ASSET_TAB", key, s.tab == key)
     entries = assets.items(c.context, s)
-    gap = 8
-    card = (left - 34) / 2
-    top = h - 158
-    capacity = max(0, int((top - 99) / (card + 27)) * 2)
+    gap, card = 8, min(70, max(36, top - 150))
+    columns = max(1, int((width - 24) / (card + gap)))
+    rows = max(1, int((top - 97) / (card + 27)))
+    capacity = columns * rows
+    s.asset_columns = columns
     s.asset_scroll = max(0, min(s.asset_scroll, max(0, len(entries) - capacity)))
-    for index, entry in enumerate(entries[s.asset_scroll : s.asset_scroll + capacity]):
-        col = index % 2
-        row = index // 2
-        x = 12 + col * (card + gap)
-        y = top - (row + 1) * (card + 27)
+    c.hit(x0, 52, width, top - 116, "SCROLL_ASSETS")
+    for index, entry in enumerate(entries[s.asset_scroll:s.asset_scroll + capacity]):
+        col, row = index % columns, index // columns
+        x = x0 + 12 + col * (card + gap)
+        y = top - 68 - (row + 1) * (card + 27)
         c.widget(x, y + 23, card, card, "text", hover=s.hover == ("ASSET", entry))
         texture = bpy.data.textures.get(entry[2]) if entry[1] == "ALPHA" and entry[2] else None
         if texture and texture.type == "IMAGE" and texture.image and texture.image.has_data:
@@ -251,17 +258,10 @@ def browser(c):
                 c.rect(x + 8, y + 31, card - 16, card - 16, (*entry[3], 1))
         c.text(entry[0], x + 2, y + 6, 10, d.TEXT, card)
         c.hit(x, y, card, card + 24, "ASSET", entry)
-    c.text(f"{len(entries)} assets", 13, 79, 10, d.MUTED)
-    c.button("Library", left - 77, 75, 65, 21, "POPUP", "LIBRARY")
-    c.button(
-        "Import Alpha" if s.tab == "ALPHAS" else "Import Assets",
-        12,
-        46,
-        left / 2 - 17,
-        25,
-        "IMPORT_ALPHA" if s.tab == "ALPHAS" else "IMPORT",
-    )
-    c.button("Save Material", left / 2 + 2, 46, left / 2 - 14, 25, "SAVE")
+    c.text(f"{len(entries)} assets", x0 + 12, 36, 10, d.MUTED)
+    c.button("Library", x0 + width - 300, 29, 70, 24, "POPUP", "LIBRARY")
+    c.button("Import Alpha" if s.tab == "ALPHAS" else "Import Assets", x0 + width - 225, 29, 108, 24, "IMPORT_ALPHA" if s.tab == "ALPHAS" else "IMPORT")
+    c.button("Save Material", x0 + width - 112, 29, 100, 24, "SAVE")
 
 
 def right_docks(c):
@@ -315,10 +315,12 @@ def right_docks(c):
     y -= 37
     c.header("LAYERS", x, y, w, "STACK")
     c.hit(x, y, w, 29, "GROUP_ROOT")
-    y -= 33
+    y -= 25
+    c.button(CHANNEL_LABELS[project.blend_channel] + " ▾", x + 10, y, w - 20, 22, "POPUP", "STACK_CHANNEL")
+    y -= 30
     c.button("+ Paint", x + 10, y, 65, 25, "LAYER", "PAINT")
     c.button("+ Fill", x + 81, y, 55, 25, "LAYER", "FILL")
-    c.button("Group", x + 142, y, 60, 25, "LAYER", "GROUP")
+    c.button("Folder", x + 142, y, 60, 25, "LAYER", "FOLDER")
     c.button("Mask", x + 208, y, 52, 25, "POPUP", "ADD_MASK")
     list_top = y - 10
     list_height = min(220, max(100, min(h * 0.235, len(ts.layers) * 32 + 6 if ts else 100)))
@@ -352,8 +354,11 @@ def right_docks(c):
             )
             c.hit(x + 9, ly, 25, 31, "VISIBILITY", index)
             indent = min(depth * 16, w - 185)
-            color = channel_for(layer, "BASE_COLOR")
-            swatch = tuple(color.color[:3]) + (1,) if color else d.CARD
+            color = channel_for(layer, project.blend_channel)
+            swatch = (
+                (tuple(color.color[:3]) if project.blend_channel in {"BASE_COLOR", "EMISSION", "NORMAL"}
+                 else (color.value,) * 3) + (1,) if color else d.CARD
+            )
             c.rect(x + 39 + indent, ly + 5, 22, 22, swatch if layer.type == "FILL" else d.CARD)
             if layer.type != "FILL":
                 c.text(
@@ -382,7 +387,10 @@ def right_docks(c):
                 )
                 d.circle((x + w - 59) * c.scale, (ly + 16) * c.scale, 6 * c.scale, d.HEADER)
                 c.hit(x + w - 72, ly + 2, 27, 28, "SELECT_MASK", index)
-            c.text(f"{layer.opacity * 100:.0f}", x + w - 35, ly + 11, 10, d.TEXT)
+            channel = channel_for(layer, project.blend_channel)
+            opacity = channel.opacity if channel else 1.0
+            c.text(f"{opacity * 100:.0f}", x + w - 35, ly + 11, 10, d.TEXT)
+            c.hit(x + w - 43, ly, 35, 31, "ROW_BLEND", index)
         c.hit(x, list_top - list_height, w, list_height, "SCROLL_LAYERS")
         # Scroll target must not shadow row clicks; event routing handles wheel separately.
     else:
@@ -661,6 +669,10 @@ def tooltip(c):
     label = HELP.get(action)
     if action == "CHANNEL":
         label = CHANNEL_LABELS[payload]
+    elif action == "BRUSH_ACTION":
+        label = "Toggle eraser" if payload == "ERASE" else str(payload).title()
+    elif action == "VIEW":
+        label = "3D viewport" if payload == "VIEW_3D" else "2D texture view"
     elif action == "ASSET":
         label = "Apply " + payload[0]
     elif action == "POPUP":

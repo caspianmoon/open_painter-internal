@@ -1,0 +1,24 @@
+{
+  "paint_scan": {
+    "restored_scan": {
+      "median_ms": 10.23985400024685,
+      "peak_transient_mib": 80.00355625152588
+    },
+    "bounded_scan": {
+      "median_ms": 10.558312499597378,
+      "peak_transient_mib": 2.004166603088379
+    },
+    "resolution": 2048
+  },
+  "rectangle_cpu_ms_per_100": {
+    "uncached": 1.2226669996380224,
+    "cached": 0.1495000005888869
+  },
+  "ui": {
+    "status": "PASS",
+    "assets_visible": 10,
+    "bottom": 393.59999999999997,
+    "rectangle_cache": "CacheInfo(hits=513, misses=19, maxsize=2048, currsize=19)",
+    "T_N": "PASS"
+  }
+}

@@ -1,4 +1,4 @@
-"""Open the restored 0.1.6 interface in stock Blender's current 3D area.
+"""Open the current add-on interface in stock Blender's current 3D area.
 
 Run: /Applications/Blender.app/Contents/MacOS/Blender --python scripts/launch_blender.py
 Does not save a project, startup file, or preferences.
@@ -13,7 +13,7 @@ def open_painter():
     if not addon_utils.check(module)[1]:
         addon_utils.enable(module,default_set=False)
     version=importlib.import_module(module+'.constants').VERSION
-    assert version=='0.1.6',version
+    assert version=='0.1.10',version
     window=bpy.context.window or next(iter(bpy.context.window_manager.windows),None)
     if window is None:return .25
     area=max((a for a in window.screen.areas if a.type=='VIEW_3D'),key=lambda a:a.width*a.height,default=None)
@@ -23,7 +23,7 @@ def open_painter():
         result=bpy.ops.open_painter.open_editor()
         assert result=={'FINISHED'},result
     assert importlib.import_module(module+'.ui.editor').is_area(area)
-    print('RESTORED_OPEN_PAINTER_0_1_6_VISIBLE',flush=True)
+    print('OPEN_PAINTER_0_1_10_VISIBLE',flush=True)
     return None
 
 bpy.app.timers.register(open_painter,first_interval=1)

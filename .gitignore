@@ -3,3 +3,6 @@ __pycache__/
 .blender-test/
 *.blend1
 .venv/
+
+# Local Blender preferences and installation snapshots are private.
+backups/blender-profile-before-update-*/

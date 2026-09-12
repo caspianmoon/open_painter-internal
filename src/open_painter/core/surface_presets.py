@@ -1,6 +1,10 @@
 """Original PBR surface presets with consistent color, roughness and microheight maps."""
 
 import numpy as np
+import json
+from pathlib import Path
+from functools import lru_cache
+import bpy
 
 from ..generators.noise import noise
 from . import image_manager, layer_stack
@@ -8,7 +12,7 @@ from . import image_manager, layer_stack
 # Linear reflectance values; metalness separates conductor and dielectric behavior.
 SURFACES = {
     "Brushed Steel": ((0.56, 0.57, 0.58), 0.29, 1.0),
-    "Copper": ((0.7, 0.32, 0.15), 0.24, 1.0),
+    "Copper": ((0.90, 0.48, 0.28), 0.27, 1.0),
     "Matte Rubber": ((0.012, 0.014, 0.016), 0.74, 0.0),
     "Porcelain": ((0.72, 0.70, 0.65), 0.15, 0.0),
     "Red Paint": ((0.32, 0.012, 0.008), 0.29, 0.0),
@@ -17,6 +21,8 @@ SURFACES = {
 
 
 def apply(ts, name):
+    if name in {"Rough Wood", "Fine Wood", "Weathered Paint"}:
+        return scanned(ts, name)
     if name in {"Painted Steel", "Dirty Plastic"}:
         return layered(ts, name)
     color, roughness, metal = SURFACES[name]
@@ -95,7 +101,7 @@ def layered(ts, name):
     base.name = "Metal substrate" if name == "Painted Steel" else "Plastic substrate"
     coat = layer_stack.add(ts, "FILL", "Paint coat" if name == "Painted Steel" else "Surface dust")
     coat.parent_id = identifier
-    color = (0.018, 0.12, 0.24, 1) if name == "Painted Steel" else (0.12, 0.09, 0.055, 1)
+    color = (0.018, 0.12, 0.24, 1) if name == "Painted Steel" else (0.075, 0.068, 0.057, 1)
     layer_stack.channel_for(coat, "BASE_COLOR").color = color
     layer_stack.channel_for(coat, "ROUGHNESS").value = 0.32 if name == "Painted Steel" else 0.76
     layer_stack.channel_for(coat, "METALLIC").value = 0
@@ -107,7 +113,7 @@ def layered(ts, name):
     coverage = (
         np.clip((pattern - 0.24) * 18, 0, 1)
         if name == "Painted Steel"
-        else np.clip((pattern - 0.48) * 2.2, 0, 0.8)
+        else np.clip((pattern - 0.58) * 1.4, 0, 0.35)
     )
     mask = coat.masks.add()
     mask.id, mask.name, mask.source = new_id(), "Coating coverage", "PAINT"
@@ -117,3 +123,27 @@ def layered(ts, name):
     image_manager.write(mask.image, rgba)
     ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == identifier)
     return ts.layers[ts.active_layer]
+
+
+@lru_cache(maxsize=1)
+def surface_catalog():
+    root = Path(__file__).resolve().parents[1] / "assets/surfaces"
+    return {entry["name"]: entry for entry in json.loads((root / "catalog.json").read_text())}
+
+
+def scanned(ts, name):
+    """CC0 maps, bundled offline and packed into the artist's project on use."""
+    root = Path(__file__).resolve().parents[1] / "assets/surfaces"
+    entry = surface_catalog()[name]
+    previous = layer_stack.active(ts)
+    parent = previous.id if previous and previous.type == "FOLDER" else previous.parent_id if previous else ""
+    layer = layer_stack.add(ts, "FILL", name, parent_id=parent)
+    for channel in layer.channels:
+        channel.enabled = True
+    for key, record in entry["maps"].items():
+        image = bpy.data.images.load(str(root / record["file"]), check_existing=True)
+        image.colorspace_settings.name = "sRGB" if key == "BASE_COLOR" else "Non-Color"
+        if not image.packed_file:image.pack()
+        layer_stack.channel_for(layer, key).image = image
+    layer_stack.channel_for(layer, "METALLIC").value = 0
+    return layer

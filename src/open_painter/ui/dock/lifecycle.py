@@ -90,6 +90,8 @@ def unregister():
     from . import assets, drawing
 
     assets.clear_cache()
+    drawing.rectangle_batch.cache_clear()
+    drawing.tool_batch.cache_clear()
     drawing.rounded_batch.cache_clear()
     drawing.shaded_batch.cache_clear()
     drawing.image_batch.cache_clear()

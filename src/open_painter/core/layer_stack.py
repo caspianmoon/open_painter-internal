@@ -17,6 +17,7 @@ def invalidate(ts) -> None:
 def add(ts, kind="FILL", name=None, parent_id=""):
     # Initializing RNA defaults fires change callbacks. An empty paint layer or
     # folder has no visual contribution, so preserve the existing output state.
+    position = min(len(ts.layers), max(0, ts.active_layer + 1))
     was_dirty, serial = ts.dirty, ts.edit_serial
     output_dirty = {out.channel: out.dirty for out in ts.outputs}
     layer = ts.layers.add()
@@ -24,8 +25,12 @@ def add(ts, kind="FILL", name=None, parent_id=""):
     layer.name = name or {"FILL": "Fill Layer", "PAINT": "Paint Layer", "FOLDER": "Folder"}[kind]
     ensure_channels(layer)
     layer.parent_id = parent_id
-    layer.order = len(ts.layers) - 1
-    ts.active_layer = len(ts.layers) - 1
+    identifier = layer.id
+    ts.layers.move(len(ts.layers) - 1, position)
+    for i, item in enumerate(ts.layers):
+        item.order = i
+    ts.active_layer = position
+    layer = next(item for item in ts.layers if item.id == identifier)
     affected = (
         {prop.channel for prop in layer.channels if prop.enabled} if kind == "FILL" else set()
     )
@@ -128,7 +133,8 @@ def copy_properties(source, target):
 
 
 def duplicate(ts, index):
-    ids = {ts.layers[index].id}
+    root_id = ts.layers[index].id
+    ids = {root_id}
     while True:
         expanded = ids | {item.id for item in ts.layers if item.parent_id in ids}
         if expanded == ids:
@@ -136,7 +142,6 @@ def duplicate(ts, index):
         ids = expanded
     sources = [snapshot(item) for item in ts.layers if item.id in ids]
     mapping = {item["id"]: new_id() for item in sources}
-    first = len(ts.layers)
     for source in sources:
         target = ts.layers.add()
         restore(source, target)
@@ -151,9 +156,14 @@ def duplicate(ts, index):
             channel.layer_id = target.id
             if target.type == "PAINT" and channel.image:
                 channel.image = channel.image.copy()
-    ts.active_layer = first
+    # Move the copied subtree immediately above the original root. Stable IDs
+    # preserve parent links even when children precede their folder in storage.
+    for offset, source in enumerate(sources):
+        source_index = next(i for i, item in enumerate(ts.layers) if item.id == mapping[source["id"]])
+        ts.layers.move(source_index, index + 1 + offset)
+    ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == mapping[root_id])
     invalidate(ts)
-    return ts.layers[first]
+    return ts.layers[ts.active_layer]
 
 
 def visible_rows(ts):
@@ -215,14 +225,14 @@ def group(ts, identifiers, name="Group"):
     parents = {item.parent_id for item in ts.layers if item.id in roots}
     parent_id = next(iter(parents)) if len(parents) == 1 else ""
     position = max(
-        (i + 1 for i, item in enumerate(ts.layers) if item.id in roots), default=len(ts.layers)
+        (i + 1 for i, item in enumerate(ts.layers) if item.id in roots), default=min(len(ts.layers), max(0, ts.active_layer + 1))
     )
     folder = add(ts, "FOLDER", name)
     folder_id = folder.id
     folder.parent_id = parent_id
     folder.group_mode = "PASSTHROUGH"
     reparent_many(ts, roots, folder_id)
-    ts.layers.move(len(ts.layers) - 1, position)
+    ts.layers.move(next(i for i, item in enumerate(ts.layers) if item.id == folder_id), position)
     ts.active_layer = position
     invalidate(ts)
     return next(item for item in ts.layers if item.id == folder_id)

@@ -166,15 +166,18 @@ def text_width(value, size):
     return blf.dimensions(0, str(value))[0]
 
 
-def rect(x, y, w, h, color):
+@lru_cache(maxsize=2048)
+def rectangle_batch(x, y, w, h):
     global _shader
-    if w <= 0 or h <= 0:
-        return
     if _shader is None:
         _shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-    batch = batch_for_shader(
-        _shader, "TRI_FAN", {"pos": [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]}
-    )
+    return batch_for_shader(_shader, "TRI_FAN", {"pos": [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]})
+
+
+def rect(x, y, w, h, color):
+    if w <= 0 or h <= 0:
+        return
+    batch = rectangle_batch(x, y, w, h)
     _shader.bind()
     _shader.uniform_float("color", color)
     batch.draw(_shader)
@@ -268,3 +271,28 @@ def image_preview(image, x, y, w, h):
     shader.bind()
     shader.uniform_sampler("image", gpu.texture.from_image(image))
     batch.draw(shader)
+
+
+@lru_cache(maxsize=64)
+def tool_batch(x, y, size, name):
+    global _shader
+    if _shader is None:_shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+    shapes = {
+        "P": [[(.2,.2),(.35,.48),(.77,.88),(.9,.75),(.48,.34),(.2,.2)],[(.4,.43),(.55,.3)]],
+        "E": [[(.12,.4),(.55,.87),(.9,.56),(.49,.13),(.3,.13),(.12,.4)],[(.3,.58),(.66,.3)]],
+        "M": [[(.15,.15),(.85,.15),(.85,.85),(.15,.85),(.15,.15)],[(.5,.15),(.5,.85)]],
+        "F": [[(.16,.5),(.4,.25),(.87,.8)]],
+        "3D": [[(.15,.28),(.5,.1),(.86,.28),(.86,.72),(.5,.92),(.15,.72),(.15,.28)],[(.15,.72),(.5,.5),(.86,.72)],[(.5,.5),(.5,.1)]],
+        "2D": [[(.15,.15),(.85,.15),(.85,.85),(.15,.85),(.15,.15)],[(.15,.15),(.85,.85)]],
+    }
+    vertices=[]
+    for path in shapes[name]:
+        for a,b in zip(path,path[1:]):vertices.extend([(x+a[0]*size,y+a[1]*size),(x+b[0]*size,y+b[1]*size)])
+    return batch_for_shader(_shader,"LINES",{"pos":vertices})
+
+
+def tool_icon(x,y,size,name):
+    batch=tool_batch(x,y,size,name)
+    _shader.bind();_shader.uniform_float("color",TEXT);gpu.state.line_width_set(1.5)
+    try:batch.draw(_shader)
+    finally:gpu.state.line_width_set(1)

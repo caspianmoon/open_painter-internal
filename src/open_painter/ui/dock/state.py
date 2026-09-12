@@ -26,6 +26,8 @@ class DockState:
     height: int = 0
     left: int = 248
     right: int = 338
+    bottom: float = 22
+    asset_columns: int = 2
     ui_scale: float = 1
     show_assets: bool = True
     show_properties: bool = True

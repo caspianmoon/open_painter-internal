@@ -19,10 +19,10 @@ repo = next(
 )
 if repo is None:
     repo = bpy.context.preferences.extensions.repos.new(name="User Default", module="user_default")
-# Preserve the installed extension and preferences before the requested rollback.
+# Preserve the installed extension and preferences before the requested update.
 import shutil
 from datetime import datetime
-backup = root / "backups" / ("blender-profile-before-016-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+backup = root / "backups" / ("blender-profile-before-update-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 backup.mkdir(parents=True, exist_ok=True)
 existing = Path(repo.directory) / "open_painter"
 if existing.exists():
@@ -44,7 +44,7 @@ if not addon_utils.check(module)[1]:
 installed_version = importlib.import_module(module + ".constants").VERSION
 if installed_version != version:
     raise RuntimeError(f"Loaded version {installed_version}, expected {version}. Restart Blender to finish updating.")
-# Restored Blender editor adapter from the 0.1.6 release.
+# Verify the Blender editor adapter is registered.
 editor = importlib.import_module(module + ".ui.editor")
 assert "bl_rna" in editor.OP_EditorType.__dict__
 bpy.ops.wm.save_userpref()

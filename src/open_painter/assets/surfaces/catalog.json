@@ -1,0 +1,71 @@
+[
+  {
+    "name": "Rough Wood",
+    "id": "rough_wood",
+    "source": "https://polyhaven.com/a/rough_wood",
+    "license": "CC0-1.0",
+    "maps": {
+      "BASE_COLOR": {
+        "file": "rough_wood/rough_wood_diff_1k.jpg",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rough_wood/rough_wood_diff_1k.jpg",
+        "sha256": "abc46d8e3163d911220f4ec3a4043b68d2b0c6d750513f80871211acfefb2a98"
+      },
+      "ROUGHNESS": {
+        "file": "rough_wood/rough_wood_rough_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/rough_wood/rough_wood_rough_1k.png",
+        "sha256": "0ea5fac374fa836ed284ddad6b9efa42b9677acaf9d2769b0263c00c5fe5ae67"
+      },
+      "NORMAL": {
+        "file": "rough_wood/rough_wood_nor_gl_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/rough_wood/rough_wood_nor_gl_1k.png",
+        "sha256": "acd7cfd9ebb63baed0a31e144ee60bb98d4f2b244121a0836c4dc2b7829608c8"
+      }
+    }
+  },
+  {
+    "name": "Fine Wood",
+    "id": "fine_grained_wood",
+    "source": "https://polyhaven.com/a/fine_grained_wood",
+    "license": "CC0-1.0",
+    "maps": {
+      "BASE_COLOR": {
+        "file": "fine_grained_wood/fine_grained_wood_col_1k.jpg",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/fine_grained_wood/fine_grained_wood_col_1k.jpg",
+        "sha256": "d171f45ef01bc6e239b00dfaa4961bcd27f7d8e93e3962da3bd3d0ce703d802c"
+      },
+      "ROUGHNESS": {
+        "file": "fine_grained_wood/fine_grained_wood_rough_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/fine_grained_wood/fine_grained_wood_rough_1k.png",
+        "sha256": "0e8cd8d6f16e7a05278ed45f11b51fb6e5d227e71c71d5a556f1a939d513694d"
+      },
+      "NORMAL": {
+        "file": "fine_grained_wood/fine_grained_wood_nor_gl_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/fine_grained_wood/fine_grained_wood_nor_gl_1k.png",
+        "sha256": "ed173765ea09b3f19ddb2ab71e8d205815b980263c3dcb71695c13f704663514"
+      }
+    }
+  },
+  {
+    "name": "Weathered Paint",
+    "id": "rusty_painted_metal",
+    "source": "https://polyhaven.com/a/rusty_painted_metal",
+    "license": "CC0-1.0",
+    "maps": {
+      "BASE_COLOR": {
+        "file": "rusty_painted_metal/rusty_painted_metal_diff_1k.jpg",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rusty_painted_metal/rusty_painted_metal_diff_1k.jpg",
+        "sha256": "b086937b45c3628116a838363364a29bd3c5d2542cff906ec1d92d681ee80e15"
+      },
+      "ROUGHNESS": {
+        "file": "rusty_painted_metal/rusty_painted_metal_rough_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/rusty_painted_metal/rusty_painted_metal_rough_1k.png",
+        "sha256": "0351394eb4b2c88be2d21a97d803fffdc6fbba76e0739062d4b0364e415adaec"
+      },
+      "NORMAL": {
+        "file": "rusty_painted_metal/rusty_painted_metal_nor_gl_1k.png",
+        "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/rusty_painted_metal/rusty_painted_metal_nor_gl_1k.png",
+        "sha256": "e91a169e37f3dd56e700f1bf99514af1b79c8cb92b58728ace9d309b7aa491cc"
+      }
+    }
+  }
+]

@@ -62,7 +62,7 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
         if self.action in {"FILL", "PAINT", "FOLDER"}:
             previous = layer_stack.active(ts)
             parent_id = (
-                (previous.id if previous.type == "FOLDER" else previous.parent_id)
+                previous.parent_id
                 if previous
                 else ""
             )

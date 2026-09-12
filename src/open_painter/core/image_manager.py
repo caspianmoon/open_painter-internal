@@ -17,10 +17,11 @@ def create(name: str, resolution: int, color=(0, 0, 0, 0), color_data=False):
     return image
 
 
-def pixels(image) -> np.ndarray:
+def pixels(image, out=None) -> np.ndarray:
     if not image or not image.size[0] or not len(image.pixels):
         raise ValueError("Texture image is missing or has no pixel data. Reload it first.")
-    result = np.empty(image.size[0] * image.size[1] * 4, dtype=np.float32)
+    shape = (image.size[1], image.size[0], 4)
+    result = out.reshape(-1) if out is not None and out.shape == shape else np.empty(image.size[0] * image.size[1] * 4, dtype=np.float32)
     image.pixels.foreach_get(result)
     return result.reshape(image.size[1], image.size[0], 4)
 

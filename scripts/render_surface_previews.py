@@ -39,7 +39,7 @@ for location,energy,size,color in [((-3,-4,4),700,3.5,(1,0.95,0.9)),((4,-1,2),50
  light.rotation_euler=(-light.location).to_track_quat('-Z','Y').to_euler()
 path=root/'src/open_painter/assets/previews'
 path.mkdir(parents=True,exist_ok=True)
-for name in ['Painted Steel','Dirty Plastic',*surface_presets.SURFACES]:
+for name in ['Painted Steel','Dirty Plastic',*surface_presets.SURFACES,'Fine Wood','Weathered Paint']:
  ts=sets.create(scene,name,512)
  # Each preview uses its own material without altering the sphere topology/UVs.
  sphere.data.materials.clear()

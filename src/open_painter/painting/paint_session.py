@@ -13,6 +13,7 @@ from .channel_paint import mark_changed, target
 
 _checks = {}
 _rasters = {}
+_scratch = {}
 
 
 def restore_faces(project) -> None:
@@ -148,6 +149,7 @@ def finish(context, evaluate: bool = True) -> None:
     project.paint_mask = False
     _checks.pop(scene.as_pointer(), None)
     _rasters.pop(scene.as_pointer(), None)
+    _scratch.pop(scene.as_pointer(), None)
     if evaluate and any(s.id == identifier for s in project.texture_sets):
         from ..evaluation.evaluator import LayerEvaluator
 
@@ -206,13 +208,21 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
     last, _ = _checks.get(key, (0, None))
     if not force and (now - last < 0.75 or not image.is_dirty):
         return False
-    raster = pixels(image)
+    raster = pixels(image, _scratch.pop(key, None))
     previous = _rasters.get(key)
+    if previous and previous[0] == image.as_pointer():
+        _scratch[key] = previous[1]
     _rasters[key] = (image.as_pointer(), raster)
     _checks[key] = (now, None)
     rows = None
     if previous and previous[0] == image.as_pointer() and previous[1].shape == raster.shape:
-        rows = np.flatnonzero(np.any(raster != previous[1], axis=(1, 2)))
+        # Bound temporary comparison storage to 256 rows rather than another
+        # full-resolution RGBA raster on every live paint check.
+        changed = np.zeros(raster.shape[0], dtype=bool)
+        for start in range(0, raster.shape[0], 256):
+            stop = start + 256
+            changed[start:stop] = np.any(raster[start:stop] != previous[1][start:stop], axis=(1, 2))
+        rows = np.flatnonzero(changed)
         if not len(rows):
             return False
     ts = next((s for s in project.texture_sets if s.id == project.paint_set_id), None)
@@ -259,3 +269,4 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
 def reset():
     _checks.clear()
     _rasters.clear()
+    _scratch.clear()

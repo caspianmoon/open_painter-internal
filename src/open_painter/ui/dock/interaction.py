@@ -41,6 +41,9 @@ class OP_OT_dock_popup(SafeOperator, bpy.types.Operator):
             return
         layout.label(text=self.section.replace("_", " ").title(), icon="PREFERENCES")
         layout.separator()
+        if self.section == "STACK_CHANNEL":
+            layout.prop(context.scene.open_painter, "blend_channel", text="View channel")
+            return
         if self.section == "BRUSH":
             from ...painting.brush_bridge import draw
 
@@ -203,6 +206,11 @@ def _route(context, ui, action, payload):
         ui.layer_scroll = 0
         if ts and active(ts):
             ui.selected_layers = {active(ts).id}
+        return
+    if action == "ROW_BLEND":
+        ts.active_layer = payload
+        ui.selected_layers = {ts.layers[payload].id}
+        bpy.ops.open_painter.dock_popup("INVOKE_DEFAULT", section="CHANNEL_BLEND")
         return
     if action == "SELECT_LAYER":
         ts.active_layer = payload
@@ -400,7 +408,7 @@ class OP_OT_dock_events(bpy.types.Operator):
             x < ui.left
             or x > ui.width - ui.right
             or y > ui.height - 43 * ui.ui_scale
-            or y < 22 * ui.ui_scale
+            or (y < ui.bottom and x < ui.width - ui.right)
         )
         matches = [
             hit
@@ -424,8 +432,8 @@ class OP_OT_dock_events(bpy.types.Operator):
                 ui.properties_scroll = max(
                     0, min(ui.properties_limit, ui.properties_scroll + delta * 25)
                 )
-            elif x < ui.left:
-                ui.asset_scroll = max(0, ui.asset_scroll + delta * 2)
+            elif any(hit[4] == "SCROLL_ASSETS" for hit in matches) or y < ui.bottom:
+                ui.asset_scroll = max(0, ui.asset_scroll + delta * ui.asset_columns)
             area.tag_redraw()
             return {"RUNNING_MODAL"}
         hit = next((item for item in matches if not item[4].startswith("SCROLL_")), None)

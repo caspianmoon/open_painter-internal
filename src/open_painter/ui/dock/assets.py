@@ -37,6 +37,8 @@ def preview(name):
 
 
 MATERIALS = [
+    ("Fine Wood", "FILL", None, (0.4, 0.2, 0.08), 0.5, "wood"),
+    ("Weathered Paint", "FILL", None, (0.2, 0.25, 0.2), 0.7, "plain"),
     ("Painted Steel", "SMART", "Painted_Steel", (0.08, 0.35, 0.6), 0.3, "steel"),
     ("Dirty Plastic", "SMART", "Dirty_Plastic", (0.36, 0.16, 0.055), 0.7, "dirt"),
     ("Rough Wood", "SMART", "Rough_Wood", (0.45, 0.23, 0.08), 0.9, "wood"),
@@ -98,6 +100,8 @@ def apply(context, entry):
             "Painted Steel",
             "Dirty Plastic",
             "Rough Wood",
+            "Fine Wood",
+            "Weathered Paint",
             "Brushed Steel",
             "Copper",
             "Matte Rubber",

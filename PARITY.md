@@ -1,5 +1,7 @@
 # Substance Painter PDF parity
 
+**Historical inventory:** the table below includes experimental branches predating the restored 0.1.6 base; it is not proof of current capabilities. Current behavior changes and validation are recorded in [the workflow audit](docs/research/workflows-0.1.10.md). The latest Adobe documentation is now also a behavior reference.
+
 **Full parity is not achieved.** This inventory targets the user-supplied June 26, 2018 documentation (2018.1), not the latest Adobe release.
 
 Reference: `ilide.info-substance-painter-documentation-pdf-pr_9e869e70283095faeec1a38fa7c5486f.pdf` (281 pages). Page references below use **1-based PDF pages**, which may differ from printed footers.

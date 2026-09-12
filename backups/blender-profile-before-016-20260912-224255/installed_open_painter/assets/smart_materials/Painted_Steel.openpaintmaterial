@@ -1,0 +1,71 @@
+{
+  "format_version": 1,
+  "name": "Painted Steel",
+  "layers": [
+    {
+      "id": "steel",
+      "type": "FILL",
+      "name": "Steel",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.12,
+            0.15,
+            0.18,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.28
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "paint",
+      "type": "FILL",
+      "name": "Blue Paint",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.015,
+            0.12,
+            0.32,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.4
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 0
+        }
+      ],
+      "masks": [
+        {
+          "source": "GENERATOR",
+          "generator": "EDGE_WEAR",
+          "invert": true,
+          "amount": 0.5,
+          "noise_scale": 30
+        }
+      ]
+    }
+  ]
+}

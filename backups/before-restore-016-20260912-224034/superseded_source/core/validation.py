@@ -1,0 +1,70 @@
+"""Actionable validation of persistent references."""
+
+
+def validate(ts) -> list[str]:
+    issues = hierarchy_issues(ts)
+    if not ts.material:
+        issues.append("Managed material is missing. Use Repair Material.")
+    if not ts.assignments:
+        issues.append("No mesh slots assigned. Select a UV-unwrapped mesh and assign it.")
+    for ref in ts.assignments:
+        obj = ref.object
+        if not obj:
+            issues.append(f"Missing object: {ref.object_name}.")
+        elif ref.slot_index >= len(obj.material_slots):
+            issues.append(f"Material slot missing on {obj.name}.")
+        elif obj.material_slots[ref.slot_index].material != ts.material:
+            issues.append(f"Material assignment changed on {obj.name}.")
+        elif not obj.data.uv_layers:
+            issues.append(f"No UV map found on {obj.name}.")
+    ids = {item.id for item in ts.layers}
+    for layer in ts.layers:
+        if layer.parent_id and layer.parent_id not in ids:
+            issues.append(f"Parent folder missing on {layer.name}.")
+        for channel in layer.channels:
+            if channel.enabled and channel.image_name and not channel.image:
+                issues.append(f"Texture image missing on {layer.name}: {channel.image_name}.")
+        for mask in layer.masks:
+            if not mask.enabled:
+                continue
+            if mask.source == "PAINT" and not mask.image:
+                issues.append(f"Painted mask image missing on {layer.name}.")
+            required = (
+                {mask.map_type}
+                if mask.source == "BAKED"
+                else {"CURVATURE"}
+                if mask.source == "GENERATOR" and mask.generator == "EDGE_WEAR"
+                else {"AO", "CURVATURE"}
+                if mask.source == "GENERATOR" and mask.generator == "DIRT"
+                else {"NORMAL"}
+                if mask.source == "GENERATOR"
+                else set()
+            )
+            for kind in required:
+                if not any(m.kind == kind and m.image for m in ts.baked_maps):
+                    issues.append(f"{layer.name} requires a baked {kind} map.")
+    return issues
+
+
+def hierarchy_issues(ts) -> list[str]:
+    """Detect unreachable layers and invalid hierarchy before writing outputs."""
+    issues = []
+    by_id = {item.id: item for item in ts.layers}
+    if len(by_id) != len(ts.layers) or "" in by_id:
+        issues.append("Layer IDs are missing or duplicated. Restore a valid project copy.")
+    for layer in ts.layers:
+        cursor = layer.parent_id
+        seen = {layer.id}
+        while cursor:
+            if cursor in seen:
+                issues.append(f"Folder cycle on {layer.name}. Reparent the layer.")
+                break
+            seen.add(cursor)
+            parent = by_id.get(cursor)
+            if parent is None or parent.type != "FOLDER":
+                issues.append(
+                    f"Parent folder is missing or invalid on {layer.name}. Reparent the layer."
+                )
+                break
+            cursor = parent.parent_id
+    return issues

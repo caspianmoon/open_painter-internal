@@ -1,0 +1,8 @@
+{
+  "add_paint_layer_ms": 5.141375004313886,
+  "painted_pixels_while_held": 6178,
+  "timer_gap_max_ms": 334.65145801892504,
+  "timer_gap_median_ms": 16.65437500923872,
+  "status": "PASS",
+  "scope": "Native 3D shader preview and active-image 2D view; two Base Color layers; no Python compositing or draw handler; heartbeat gaps are not display latency."
+}

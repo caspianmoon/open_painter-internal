@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+id = "open_painter_bridge"
+version = "0.0.1"
+name = "Open Painter External Window Prototype"
+tagline = "Custom window connected to Blender EEVEE"
+maintainer = "Open Painter"
+type = "add-on"
+tags = ["Paint", "Material"]
+blender_version_min = "5.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+[permissions]
+network = "Authenticated loopback connection to the local Open Painter window"
+files = "Launch the configured local UI runtime and store a temporary session token"

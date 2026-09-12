@@ -1,0 +1,12 @@
+schema_version = "1.0.0"
+id = "open_painter"
+version = "0.1.6"
+name = "Open Painter"
+tagline = "Layer, bake, paint and export PBR texture sets"
+maintainer = "Open Painter contributors"
+type = "add-on"
+tags = ["Material", "Paint"]
+blender_version_min = "5.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+[permissions]
+files = "Save smart materials and export textures to a chosen folder"

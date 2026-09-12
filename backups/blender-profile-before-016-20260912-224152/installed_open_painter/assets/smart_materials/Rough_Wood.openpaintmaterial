@@ -1,0 +1,70 @@
+{
+  "format_version": 1,
+  "name": "Rough Wood",
+  "layers": [
+    {
+      "id": "wood",
+      "type": "FILL",
+      "name": "Wood Base",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.24,
+            0.095,
+            0.025,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.85
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "grain",
+      "type": "FILL",
+      "name": "Wood Variation",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.07,
+            0.025,
+            0.008,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.95
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 0
+        }
+      ],
+      "masks": [
+        {
+          "source": "NOISE",
+          "noise_scale": 48,
+          "black": 0.3,
+          "white": 0.8
+        }
+      ]
+    }
+  ]
+}

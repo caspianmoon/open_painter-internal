@@ -1,0 +1,98 @@
+import bpy
+
+from ..constants import BLEND_ITEMS, CHANNEL_ITEMS
+
+
+def changed(self, context):
+    self.dirty = True
+    # Resolve by stable ID, without coupling properties to UI selection.
+    for ts in self.id_data.open_painter.texture_sets:
+        for layer in ts.layers:
+            if layer.id == self.layer_id:
+                layer.dirty = True
+                ts.dirty = True
+                ts.edit_serial += 1
+                for output in ts.outputs:
+                    if output.channel == self.channel:
+                        output.dirty = True
+                return
+
+
+def image_changed(self, context):
+    self.image_name = self.image.name if self.image else ""
+    changed(self, context)
+
+
+class OP_Channel(bpy.types.PropertyGroup):
+    channel: bpy.props.EnumProperty(items=CHANNEL_ITEMS)
+    layer_id: bpy.props.StringProperty()
+    enabled: bpy.props.BoolProperty(default=True, update=changed)
+    opacity: bpy.props.FloatProperty(
+        name="Channel Opacity",
+        default=1,
+        min=0,
+        max=1,
+        update=changed,
+        description="Multiplied by the layer's overall opacity",
+    )
+    blend_mode: bpy.props.EnumProperty(
+        name="Channel Blend",
+        update=changed,
+        items=[("INHERIT", "Use Layer Blend", "Preserve the layer's blend mode")] + BLEND_ITEMS,
+    )
+    color: bpy.props.FloatVectorProperty(
+        name="Color",
+        size=4,
+        subtype="COLOR",
+        min=0,
+        max=1,
+        default=(0.5, 0.5, 0.5, 1),
+        update=changed,
+    )
+    value: bpy.props.FloatProperty(name="Value", default=0.5, min=0, max=1, update=changed)
+    image_name: bpy.props.StringProperty()
+    image: bpy.props.PointerProperty(name="Texture", type=bpy.types.Image, update=image_changed)
+    projection: bpy.props.EnumProperty(
+        name="Projection",
+        items=[
+            ("UV", "UV", ""),
+            ("TRIPLANAR", "Triplanar", "World-space projection rasterized through mesh UVs"),
+        ],
+        update=changed,
+    )
+    filtering: bpy.props.EnumProperty(
+        name="Filtering",
+        update=changed,
+        items=[
+            ("BILINEAR", "Bilinear", "Interpolate adjacent pixels"),
+            ("NEAREST", "Nearest", "Keep hard pixel edges"),
+        ],
+    )
+    tiling: bpy.props.EnumProperty(
+        name="UV Wrap",
+        update=changed,
+        items=[
+            ("REPEAT", "Repeat", "Repeat the texture outside its tile"),
+            ("NONE", "None", "Transparent outside the original tile"),
+        ],
+    )
+    triplanar_hardness: bpy.props.FloatProperty(
+        name="Triplanar Hardness",
+        default=4,
+        min=1,
+        max=64,
+        update=changed,
+    )
+    scale: bpy.props.FloatVectorProperty(
+        name="Scale", size=2, default=(1, 1), min=0.001, update=changed
+    )
+    rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=changed)
+    offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=changed)
+    dirty: bpy.props.BoolProperty(default=True)
+
+
+class OP_Output(bpy.types.PropertyGroup):
+    channel: bpy.props.EnumProperty(items=CHANNEL_ITEMS)
+    image: bpy.props.PointerProperty(type=bpy.types.Image)
+    dirty: bpy.props.BoolProperty(default=True)
+    revision: bpy.props.IntProperty(default=0)

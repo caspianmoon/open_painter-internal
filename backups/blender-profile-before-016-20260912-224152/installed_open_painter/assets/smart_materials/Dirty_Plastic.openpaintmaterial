@@ -1,0 +1,70 @@
+{
+  "format_version": 1,
+  "name": "Dirty Plastic",
+  "layers": [
+    {
+      "id": "plastic",
+      "type": "FILL",
+      "name": "Plastic",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.15,
+            0.045,
+            0.012,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.36
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": "dirt",
+      "type": "FILL",
+      "name": "Embedded Dirt",
+      "channels": [
+        {
+          "channel": "BASE_COLOR",
+          "enabled": true,
+          "value": 0.5,
+          "color": [
+            0.035,
+            0.025,
+            0.012,
+            1
+          ]
+        },
+        {
+          "channel": "ROUGHNESS",
+          "enabled": true,
+          "value": 0.9
+        },
+        {
+          "channel": "METALLIC",
+          "enabled": true,
+          "value": 0
+        }
+      ],
+      "masks": [
+        {
+          "source": "GENERATOR",
+          "generator": "DIRT",
+          "amount": 0.6,
+          "noise_scale": 20
+        }
+      ]
+    }
+  ]
+}

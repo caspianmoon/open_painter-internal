@@ -1,0 +1,531 @@
+diff --git a/build_files/cmake/platform/platform_apple.cmake b/build_files/cmake/platform/platform_apple.cmake
+index 99f766b7..28cdfd64 100644
+--- a/build_files/cmake/platform/platform_apple.cmake
++++ b/build_files/cmake/platform/platform_apple.cmake
+@@ -501,7 +501,7 @@ if(PLATFORM_BUNDLED_LIBRARIES)
+   list(JOIN PLATFORM_BUNDLED_LIBRARY_DIRS ":" _library_paths)
+   # Intentionally double "$$" which expands into "$" when instantiated.
+   set(PLATFORM_ENV_BUILD "DYLD_LIBRARY_PATH=\"${_library_paths}:$$DYLD_LIBRARY_PATH\"")
+-  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/Blender.app/Contents/Resources/lib/:$$DYLD_LIBRARY_PATH")
++  set(PLATFORM_ENV_INSTALL "DYLD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/OpenPainter.app/Contents/Resources/lib/:$$DYLD_LIBRARY_PATH")
+   unset(_library_paths)
+ endif()
+ 
+diff --git a/build_files/cmake/testing.cmake b/build_files/cmake/testing.cmake
+index 6df52dc0..b0a15c21 100644
+--- a/build_files/cmake/testing.cmake
++++ b/build_files/cmake/testing.cmake
+@@ -139,7 +139,7 @@ function(blender_add_ctests)
+   # Figure out the release dir, as some tests need files from there.
+   get_blender_test_install_dir(TEST_INSTALL_DIR)
+   if(APPLE)
+-    set(_test_release_dir ${TEST_INSTALL_DIR}/Blender.app/Contents/Resources/${BLENDER_VERSION})
++    set(_test_release_dir ${TEST_INSTALL_DIR}/OpenPainter.app/Contents/Resources/${BLENDER_VERSION})
+   else()
+     if(WIN32 OR WITH_INSTALL_PORTABLE)
+       set(_test_release_dir ${TEST_INSTALL_DIR}/${BLENDER_VERSION})
+diff --git a/build_files/utils/make_update.py b/build_files/utils/make_update.py
+index 15845317..251902d7 100755
+--- a/build_files/utils/make_update.py
++++ b/build_files/utils/make_update.py
+@@ -157,7 +157,7 @@ def get_submodule_directories(args: argparse.Namespace) -> "tuple[Path, ...]":
+ def ensure_git_lfs(args: argparse.Namespace) -> None:
+     # Use `--skip-repo` to avoid creating git hooks.
+     # This is called from the `blender.git` checkout, so we don't need to install hooks there.
+-    call((args.git_command, "lfs", "install", "--skip-repo"), exit_on_error=True)
++    call((args.git_command, "lfs", "install", "--local", "--skip-repo"), exit_on_error=True)
+ 
+ 
+ def switch_blender_git_remotes(args: argparse.Namespace) -> None:
+diff --git a/intern/ghost/intern/GHOST_SystemPathsCocoa.mm b/intern/ghost/intern/GHOST_SystemPathsCocoa.mm
+index 762e0726..1dbd39f8 100644
+--- a/intern/ghost/intern/GHOST_SystemPathsCocoa.mm
++++ b/intern/ghost/intern/GHOST_SystemPathsCocoa.mm
+@@ -30,7 +30,7 @@ static const char *GetApplicationSupportDir(const char *versionstr,
+ 
+     snprintf(tempPath,
+              len_tempPath,
+-             "%s/Blender/%s",
++             "%s/OpenPainter/%s",
+              [basePath cStringUsingEncoding:NSASCIIStringEncoding],
+              versionstr);
+   }
+diff --git a/release/darwin/Blender.app/Contents/Info.plist b/release/darwin/Blender.app/Contents/Info.plist
+index 12bb271d..767ca81d 100644
+--- a/release/darwin/Blender.app/Contents/Info.plist
++++ b/release/darwin/Blender.app/Contents/Info.plist
+@@ -12,7 +12,7 @@
+ 				<string>blend</string>
+ 			</array>
+ 			<key>CFBundleTypeIconFile</key>
+-			<string>Blender_Legacy_Document_Icon.icns</string>
++			<string>OpenPainterDocument.icns</string>
+ 			<key>CFBundleTypeName</key>
+ 			<string>Blender File</string>
+ 			<key>CFBundleTypeOSTypes</key>
+@@ -22,31 +22,27 @@
+ 			<key>CFBundleTypeRole</key>
+ 			<string>Editor</string>
+ 			<key>LSIsAppleDefaultForType</key>
+-			<true/>
++			<false/>
+ 			<key>LSItemContentTypes</key>
+ 			<array>
+ 				<string>org.blenderfoundation.blender.file</string>
+ 			</array>
+ 			<key>CFBundleTypeIconSystemGenerated</key>
+-			<true/>
++			<false/>
+ 		</dict>
+ 	</array>
+ 	<key>CFBundleExecutable</key>
+-	<string>Blender</string>
++	<string>OpenPainter</string>
+ 	<key>CFBundleGetInfoString</key>
+-	<string>${MACOSX_BUNDLE_LONG_VERSION_STRING}, Blender Foundation</string>
+-	<!-- Legacy, non-Liquid Glass icon, used on pre-Tahoe / 26 macOS versions. -->
++	<string>Open Painter — includes EEVEE from Blender ${MACOSX_BUNDLE_SHORT_VERSION_STRING}</string>
+ 	<key>CFBundleIconFile</key>
+-	<string>blender_icon_legacy.icns</string>
+-	<!-- Modern Liquid Glass icon, the app bundle Asset.car file needs to be regenerated in Xcode on modification -->
+-	<key>CFBundleIconName</key>
+-	<string>blender_liquid_glass</string>
++	<string>OpenPainter.icns</string>
+ 	<key>CFBundleIdentifier</key>
+-	<string>org.blenderfoundation.blender</string>
++	<string>org.openpainter.application</string>
+ 	<key>CFBundleInfoDictionaryVersion</key>
+ 	<string>6.0</string>
+ 	<key>CFBundleName</key>
+-	<string>Blender</string>
++	<string>Open Painter</string>
+ 	<key>CFBundlePackageType</key>
+ 	<string>APPL</string>
+ 	<key>CFBundleShortVersionString</key>
+@@ -60,11 +56,11 @@
+ 	<key>NSHighResolutionCapable</key>
+ 	<true/>
+ 	<key>NSMicrophoneUsageDescription</key>
+-	<string>A Blender extension wants to access your microphone.</string>
++	<string>An Open Painter extension wants to access your microphone.</string>
+ 	<key>NSCameraUsageDescription</key>
+-	<string>A Blender extension wants to access your camera.</string>
++	<string>An Open Painter extension wants to access your camera.</string>
+ 	<key>NSAudioCaptureUsageDescription</key>
+-	<string>A Blender extension wants to capture your system audio.</string>
++	<string>An Open Painter extension wants to capture your system audio.</string>
+ 	<key>UTExportedTypeDeclarations</key>
+ 	<array>
+ 		<dict>
+@@ -92,5 +88,7 @@
+ 			</dict>
+ 		</dict>
+ 	</array>
++	<key>CFBundleDisplayName</key>
++	<string>Open Painter</string>
+ </dict>
+ </plist>
+diff --git a/scripts/startup/bl_ui/space_image.py b/scripts/startup/bl_ui/space_image.py
+index baad66cb..a03e125f 100644
+--- a/scripts/startup/bl_ui/space_image.py
++++ b/scripts/startup/bl_ui/space_image.py
+@@ -855,6 +855,10 @@ class IMAGE_HT_header(Header):
+             )
+ 
+     def draw(self, context):
++        if context.workspace.name == "Open Painter":
++            self.layout.label(text="2D VIEW", icon='IMAGE')
++            self.layout.template_ID(context.space_data, "image", open="image.open")
++            return
+         layout = self.layout
+ 
+         sima = context.space_data
+diff --git a/scripts/startup/bl_ui/space_topbar.py b/scripts/startup/bl_ui/space_topbar.py
+index 9be93c38..e98f9229 100644
+--- a/scripts/startup/bl_ui/space_topbar.py
++++ b/scripts/startup/bl_ui/space_topbar.py
+@@ -23,6 +23,14 @@ class TOPBAR_HT_upper_bar(Header):
+             self.draw_left(context)
+ 
+     def draw_left(self, context):
++        if context.workspace.name == "Open Painter":
++            layout = self.layout
++            layout.label(text="Open Painter", icon='BRUSH_DATA')
++            layout.menu("TOPBAR_MT_file")
++            layout.menu("TOPBAR_MT_edit")
++            layout.menu("TOPBAR_MT_window")
++            layout.menu("TOPBAR_MT_help")
++            return
+         layout = self.layout
+ 
+         window = context.window
+@@ -38,6 +46,9 @@ class TOPBAR_HT_upper_bar(Header):
+             layout.operator("screen.back_to_previous", icon='SCREEN_BACK', text="Back to Previous")
+ 
+     def draw_right(self, context):
++        if context.workspace.name == "Open Painter":
++            self.layout.label(text=context.object.name if context.object else "No selected mesh")
++            return
+         layout = self.layout
+ 
+         window = context.window
+diff --git a/scripts/startup/bl_ui/space_view3d.py b/scripts/startup/bl_ui/space_view3d.py
+index 685797c3..3135087d 100644
+--- a/scripts/startup/bl_ui/space_view3d.py
++++ b/scripts/startup/bl_ui/space_view3d.py
+@@ -817,6 +817,10 @@ class VIEW3D_HT_header(Header):
+             draw_topbar_grease_pencil_layer_panel(context, layout)
+ 
+     def draw(self, context):
++        if context.workspace.name == "Open Painter":
++            self.layout.label(text="3D VIEW", icon='VIEW3D')
++            self.layout.prop(context.space_data.shading, "type", text="")
++            return
+         layout = self.layout
+ 
+         tool_settings = context.tool_settings
+diff --git a/source/blender/draw/intern/draw_context.cc b/source/blender/draw/intern/draw_context.cc
+index dd557ae4..6f80452d 100644
+--- a/source/blender/draw/intern/draw_context.cc
++++ b/source/blender/draw/intern/draw_context.cc
+@@ -1674,12 +1674,14 @@ void DRW_draw_render_loop_offscreen(Depsgraph *depsgraph,
+   /* Just here to avoid an assert but shouldn't be required in practice. */
+   GPU_framebuffer_restore();
+ 
+-  /* TODO(fclem): We might want to differentiate between render preview and offscreen render in the
+-   * future. The later can do progressive rendering. */
+-  BLI_assert(is_xr_surface == !is_image_render);
+-  UNUSED_VARS_NDEBUG(is_image_render);
+-  DRWContext::Mode mode = is_xr_surface ? DRWContext::VIEWPORT_XR : DRWContext::VIEWPORT_RENDER;
++  /* Open Painter's persistent offscreen surface is interactive. Honor the caller's
++   * render flag rather than completing all EEVEE samples in a single input frame. */
++  DRWContext::Mode mode = is_xr_surface ? DRWContext::VIEWPORT_XR :
++      (is_image_render ? DRWContext::VIEWPORT_RENDER : DRWContext::VIEWPORT_OFFSCREEN);
+ 
++  if (!is_image_render && !is_xr_surface) {
++    GPU_viewport_do_update(render_viewport);
++  }
+   DRWContext draw_ctx(mode, depsgraph, render_viewport, context, region, v3d);
+   draw_ctx.acquire_data();
+   draw_ctx.options.draw_background = draw_background;
+diff --git a/source/blender/editors/animation/anim_filter.cc b/source/blender/editors/animation/anim_filter.cc
+index a4c77040..5718273d 100644
+--- a/source/blender/editors/animation/anim_filter.cc
++++ b/source/blender/editors/animation/anim_filter.cc
+@@ -387,6 +387,8 @@ bool ANIM_animdata_context_getdata(bAnimContext *ac)
+       case SPACE_PROPERTIES:
+       case SPACE_FILE:
+       case SPACE_IMAGE:
++      case SPACE_PAINTER_ASSETS:
++      case SPACE_PAINTER_LAYERS:
+       case SPACE_INFO:
+       case SPACE_SEQ:
+       case SPACE_TEXT:
+diff --git a/source/blender/editors/interface/resources.cc b/source/blender/editors/interface/resources.cc
+index 86a3cf77..38b94ad0 100644
+--- a/source/blender/editors/interface/resources.cc
++++ b/source/blender/editors/interface/resources.cc
+@@ -128,6 +128,8 @@ const uchar *get_color_ptr(bTheme *btheme, int spacetype, int colorid)
+     else {
+ 
+       switch (spacetype) {
++        case SPACE_PAINTER_ASSETS:
++        case SPACE_PAINTER_LAYERS:
+         case SPACE_PROPERTIES:
+           ts = &btheme->space_properties;
+           break;
+diff --git a/source/blender/editors/interface/templates/interface_template_search_menu.cc b/source/blender/editors/interface/templates/interface_template_search_menu.cc
+index fb33e8c2..414618ed 100644
+--- a/source/blender/editors/interface/templates/interface_template_search_menu.cc
++++ b/source/blender/editors/interface/templates/interface_template_search_menu.cc
+@@ -627,6 +627,8 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
+           SPACE_MENU_MAP(SPACE_GRAPH, "GRAPH_MT_editor_menus");
+           SPACE_MENU_MAP(SPACE_OUTLINER, "OUTLINER_MT_editor_menus");
+           SPACE_MENU_NOP(SPACE_PROPERTIES);
++          SPACE_MENU_NOP(SPACE_PAINTER_ASSETS);
++          SPACE_MENU_NOP(SPACE_PAINTER_LAYERS);
+           SPACE_MENU_MAP(SPACE_FILE, "FILEBROWSER_MT_editor_menus");
+           SPACE_MENU_MAP(SPACE_IMAGE, "IMAGE_MT_editor_menus");
+           SPACE_MENU_MAP(SPACE_INFO, "INFO_MT_editor_menus");
+diff --git a/source/blender/editors/space_info/space_info.cc b/source/blender/editors/space_info/space_info.cc
+index a464ed42..6daa9ce7 100644
+--- a/source/blender/editors/space_info/space_info.cc
++++ b/source/blender/editors/space_info/space_info.cc
+@@ -251,8 +251,58 @@ static void info_space_blend_write(BlendWriter *writer, SpaceLink *sl)
+   writer->write_struct_cast<SpaceInfo>(sl);
+ }
+ 
++// Open Painter native dock editors share only the simple SpaceInfo storage layout.
++// They own their region drawing; no viewport draw handler or image streaming is used.
++static SpaceLink *painter_assets_create(const ScrArea *area, const Scene *scene)
++{
++  SpaceLink *sl = info_create(area, scene);
++  sl->spacetype = SPACE_PAINTER_ASSETS;
++  static_cast<ARegion *>(sl->regionbase.first)->flag |= RGN_FLAG_HIDDEN;
++  return sl;
++}
++static SpaceLink *painter_layers_create(const ScrArea *area, const Scene *scene)
++{
++  SpaceLink *sl = info_create(area, scene);
++  sl->spacetype = SPACE_PAINTER_LAYERS;
++  static_cast<ARegion *>(sl->regionbase.first)->flag |= RGN_FLAG_HIDDEN;
++  return sl;
++}
++static void painter_listener(const wmRegionListenerParams *params)
++{
++  ED_region_tag_redraw(params->region);
++}
++static void painter_register(const bool assets)
++{
++  auto st = std::make_unique<SpaceType>();
++  st->spaceid = assets ? SPACE_PAINTER_ASSETS : SPACE_PAINTER_LAYERS;
++  STRNCPY_UTF8(st->name, assets ? "Painter Assets" : "Painter Layers");
++  st->create = assets ? painter_assets_create : painter_layers_create;
++  st->free = info_free;
++  st->init = info_init;
++  st->duplicate = info_duplicate;
++  st->blend_write = info_space_blend_write;
++  auto *art = MEM_new_zeroed<ARegionType>("painter panels");
++  art->regionid = RGN_TYPE_WINDOW;
++  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D;
++  art->init = ED_region_panels_init;
++  art->layout = ED_region_panels_layout;
++  art->draw = ED_region_panels;
++  art->listener = painter_listener;
++  BLI_addhead(&st->regiontypes, art);
++  art = MEM_new_zeroed<ARegionType>("painter header");
++  art->regionid = RGN_TYPE_HEADER;
++  art->prefsizey = HEADERY;
++  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_HEADER;
++  art->init = info_header_region_init;
++  art->draw = info_header_region_draw;
++  BLI_addhead(&st->regiontypes, art);
++  BKE_spacetype_register(std::move(st));
++}
++
+ void ED_spacetype_info()
+ {
++  painter_register(true);
++  painter_register(false);
+   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
+   ARegionType *art;
+ 
+diff --git a/source/blender/makesdna/DNA_space_enums.h b/source/blender/makesdna/DNA_space_enums.h
+index bb3995cb..c41b8ffa 100644
+--- a/source/blender/makesdna/DNA_space_enums.h
++++ b/source/blender/makesdna/DNA_space_enums.h
+@@ -1179,9 +1179,11 @@ enum eSpace_Type : char {
+   SPACE_CLIP = 20,
+   SPACE_TOPBAR = 21,
+   SPACE_STATUSBAR = 22,
+-  SPACE_SPREADSHEET = 23
++  SPACE_SPREADSHEET = 23,
++  SPACE_PAINTER_ASSETS = 24,
++  SPACE_PAINTER_LAYERS = 25
+ 
+-#define SPACE_TYPE_NUM (SPACE_SPREADSHEET + 1)
++#define SPACE_TYPE_NUM (SPACE_PAINTER_LAYERS + 1)
+ };
+ 
+ /* use for function args */
+diff --git a/source/blender/makesrna/intern/rna_space.cc b/source/blender/makesrna/intern/rna_space.cc
+index ef6c3a80..1533bca7 100644
+--- a/source/blender/makesrna/intern/rna_space.cc
++++ b/source/blender/makesrna/intern/rna_space.cc
+@@ -91,6 +91,8 @@ const EnumPropertyItem rna_enum_space_type_items[] = {
+     /* empty must be here for python, is skipped for UI */
+     {SPACE_EMPTY, "EMPTY", ICON_NONE, "Empty", ""},
+ 
++    {SPACE_PAINTER_ASSETS, "PAINTER_ASSETS", ICON_ASSET_MANAGER, "Painter Assets", "Open Painter asset library"},
++    {SPACE_PAINTER_LAYERS, "PAINTER_LAYERS", ICON_TEXTURE, "Painter Layers", "Open Painter layer and material controls"},
+     /* General. */
+     RNA_ENUM_ITEM_HEADING(N_("General"), nullptr),
+     {SPACE_VIEW3D,
+@@ -773,6 +775,8 @@ static StructRNA *rna_Space_refine(PointerRNA *ptr)
+       return RNA_SpaceFileBrowser;
+     case SPACE_IMAGE:
+       return RNA_SpaceImageEditor;
++    case SPACE_PAINTER_ASSETS:
++    case SPACE_PAINTER_LAYERS:
+     case SPACE_INFO:
+       return RNA_SpaceInfo;
+     case SPACE_SEQ:
+diff --git a/source/blender/windowmanager/intern/wm_draw.cc b/source/blender/windowmanager/intern/wm_draw.cc
+index 82fb6307..a1b4c045 100644
+--- a/source/blender/windowmanager/intern/wm_draw.cc
++++ b/source/blender/windowmanager/intern/wm_draw.cc
+@@ -602,6 +602,8 @@ static const char *wm_area_name(const ScrArea *area)
+     SPACE_NAME(SPACE_FILE);
+     SPACE_NAME(SPACE_IMAGE);
+     SPACE_NAME(SPACE_INFO);
++    SPACE_NAME(SPACE_PAINTER_ASSETS);
++    SPACE_NAME(SPACE_PAINTER_LAYERS);
+     SPACE_NAME(SPACE_SEQ);
+     SPACE_NAME(SPACE_TEXT);
+     SPACE_NAME(SPACE_ACTION);
+diff --git a/source/blender/windowmanager/intern/wm_window.cc b/source/blender/windowmanager/intern/wm_window.cc
+index 4c0aa2cd..27784221 100644
+--- a/source/blender/windowmanager/intern/wm_window.cc
++++ b/source/blender/windowmanager/intern/wm_window.cc
+@@ -607,7 +607,7 @@ static std::string wm_window_title_text(
+     if (is_single && area && area->spacetype != SPACE_EMPTY) {
+       return IFACE_(ED_area_name(area).c_str());
+     }
+-    return "Blender";
++    return "Open Painter";
+   }
+ 
+   /* This path may contain invalid UTF8 byte sequences on UNIX systems,
+@@ -690,7 +690,7 @@ static std::string wm_window_title_text(
+     }
+   }
+ 
+-  win_title.append(fmt::format(" - Blender {}", BKE_blender_version_string()));
++  win_title.append(fmt::format(" - Open Painter (Blender {})", BKE_blender_version_string()));
+ 
+   return win_title;
+ }
+diff --git a/source/creator/CMakeLists.txt b/source/creator/CMakeLists.txt
+index 985b969e..695219c9 100644
+--- a/source/creator/CMakeLists.txt
++++ b/source/creator/CMakeLists.txt
+@@ -97,7 +97,7 @@ if(WITH_USD)
+ endif()
+ 
+ if(WITH_PYTHON)
+-  list(APPEND INC ../blender/python)
++  list(APPEND INC ../blender/python ../blender/imbuf)
+   add_definitions(-DWITH_PYTHON)
+ 
+   if(WITH_PYTHON_SECURITY)
+@@ -149,6 +149,11 @@ set(SRC
+   creator_intern.h
+ )
+ 
++if(APPLE)
++  list(APPEND SRC painter_shell.mm)
++  list(APPEND INC ../blender/draw ../blender/gpu/intern ../blender/gpu/metal ../blender/depsgraph ../blender/python ../blender/imbuf)
++endif()
++
+ if(CMAKE_GENERATOR MATCHES "^Visual Studio.+")
+   # This helps visual studio find the debugger visualizers
+   list(APPEND SRC ${CMAKE_SOURCE_DIR}/tools/utils_ide/natvis/Blender.natvis)
+@@ -434,9 +439,9 @@ elseif(APPLE)
+       set(TARGETDIR_LIB ${PYTHON_SITE_PACKAGES}/bpy/lib)
+     endif()
+   else()
+-    set(TARGETDIR_VER "Blender.app/Contents/Resources/${BLENDER_VERSION}")
+-    set(TARGETDIR_LIB "Blender.app/Contents/Resources/lib")
+-    set(TARGETDIR_TEXT "Blender.app/Contents/Resources/text")
++    set(TARGETDIR_VER "OpenPainter.app/Contents/Resources/${BLENDER_VERSION}")
++    set(TARGETDIR_LIB "OpenPainter.app/Contents/Resources/lib")
++    set(TARGETDIR_TEXT "OpenPainter.app/Contents/Resources/text")
+   endif()
+   set(TARGETDIR_SITE_PACKAGES "${TARGETDIR_VER}/python/lib/python${PYTHON_VERSION}/site-packages")
+   # Skip re-linking on CPACK / install.
+@@ -1697,7 +1702,7 @@ elseif(WIN32)
+ elseif(APPLE)
+   if(NOT WITH_PYTHON_MODULE)
+     # Uppercase name for app bundle.
+-    set_target_properties(blender PROPERTIES OUTPUT_NAME Blender)
++    set_target_properties(blender PROPERTIES OUTPUT_NAME OpenPainter)
+   endif()
+ 
+   set(OSX_APP_SOURCEDIR ${CMAKE_SOURCE_DIR}/release/darwin/Blender.app)
+@@ -1741,11 +1746,11 @@ elseif(APPLE)
+   # Give the bundle actual creation/modification date.
+   #
+   # Note that the directory might not yet exist, which happens when CMAKE is first run.
+-  if(NOT EXISTS ${EXECUTABLE_OUTPUT_PATH}/Blender.app)
+-    file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/Blender.app)
++  if(NOT EXISTS ${EXECUTABLE_OUTPUT_PATH}/OpenPainter.app)
++    file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/OpenPainter.app)
+   endif()
+   execute_process(
+-    COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/Blender.app
++    COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/OpenPainter.app
+   )
+ 
+   set(BLENDER_BIN "bin/blender")
+@@ -1756,18 +1761,20 @@ elseif(APPLE)
+ 
+   install(
+     FILES ${OSX_APP_SOURCEDIR}/Contents/PkgInfo
+-    DESTINATION "Blender.app/Contents"
++    DESTINATION "OpenPainter.app/Contents"
+   )
+ 
+-  install_dir(
+-    ${OSX_APP_SOURCEDIR}/Contents/Resources
+-    "Blender.app/Contents"
++  install(
++    FILES
++      ${OSX_APP_SOURCEDIR}/Contents/Resources/OpenPainter.icns
++      ${OSX_APP_SOURCEDIR}/Contents/Resources/OpenPainterDocument.icns
++    DESTINATION "OpenPainter.app/Contents/Resources"
+   )
+ 
+   if(WITH_BLENDER_THUMBNAILER)
+     install(
+       TARGETS blender-thumbnailer
+-      DESTINATION "./Blender.app/Contents/PlugIns"
++      DESTINATION "./OpenPainter.app/Contents/PlugIns"
+     )
+   endif()
+ 
+@@ -1826,7 +1833,7 @@ elseif(APPLE)
+     unset(PYTHON_EXECUTABLE_NAME_ONLY)
+     install(
+       PROGRAMS ${CMAKE_BINARY_DIR}/release/darwin/scripts/blender-system-info.sh
+-      DESTINATION "Blender.app/Contents/Resources"
++      DESTINATION "OpenPainter.app/Contents/Resources"
+     )
+   endif()
+ 
+diff --git a/source/creator/creator.cc b/source/creator/creator.cc
+index b1692910..b68a9978 100644
+--- a/source/creator/creator.cc
++++ b/source/creator/creator.cc
+@@ -329,6 +329,10 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[]);
+  * - run #WM_main() event loop,
+  *   or exit immediately when running in background-mode.
+  */
++#ifdef __APPLE__
++namespace blender { void painter_shell_run(bContext *context); }
++#endif
++
+ int main(int argc,
+ #ifdef USE_WIN32_UNICODE_ARGS
+          const char ** /*argv_c*/
+@@ -340,6 +344,7 @@ int main(int argc,
+   using namespace blender;
+ 
+   bContext *C;
++  bool painter_shell = false;
+ #ifndef WITH_PYTHON_MODULE
+   bArgs *ba;
+ #endif
+@@ -541,6 +546,10 @@ int main(int argc,
+    * - All the `--debug-*` flags.
+    */
+   BLI_args_parse(ba, ARG_PASS_SETTINGS, nullptr, nullptr);
++#ifdef __APPLE__
++  painter_shell = !G.background;
++  if (painter_shell) G.background = true;
++#endif
+ 
+   main_signal_setup();
+ #endif
+@@ -641,6 +650,12 @@ int main(int argc,
+ #endif
+ 
+ #ifndef WITH_PYTHON_MODULE
++#ifdef __APPLE__
++  if (painter_shell) {
++    painter_shell_run(C);
++    WM_exit(C, EXIT_SUCCESS);
++  }
++#endif
+   if (G.background) {
+     int exit_code;
+     if (app_state.main_arg_deferred != nullptr) {

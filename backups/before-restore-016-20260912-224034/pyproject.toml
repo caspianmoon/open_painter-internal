@@ -1,0 +1,11 @@
+[project]
+name = "blender-open-painter"
+version = "0.1.8"
+description = "A Blender-native non-destructive PBR painting extension"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

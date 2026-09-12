@@ -1,0 +1,193 @@
+"""Editor Type selector entry and per-area native painting adapter.
+
+Blender exposes Python editor subtypes through NodeTree registration. Selecting
+this subtype mounts the native paint viewport in the same area; no workspace or
+screen layout is replaced. Native brush behavior and document data are retained.
+"""
+
+import bpy
+from bpy.app.handlers import persistent
+
+EDITOR_ID = "OpenPainterEditor"
+_active = {}
+_previous = {}
+_spaces = {}
+
+
+class OP_EditorType(bpy.types.NodeTree):
+    """Open the Open Painter PBR texturing interface in this editor area."""
+
+    bl_idname = EDITOR_ID
+    bl_label = "Open Painter"
+    bl_icon = "BRUSH_DATA"
+
+
+def is_area(area):
+    return (
+        area is not None
+        and area.as_pointer() in _active
+        and area.type in {"VIEW_3D", "IMAGE_EDITOR"}
+    )
+
+
+def mount(window, area):
+    """Adapt only the chosen area to Blender's native painting backend."""
+    key = area.as_pointer()
+    if key not in _active:
+        _active[key] = "VIEW_3D"
+        _previous[key] = "VIEW_3D"
+    area.type = "VIEW_3D"
+    _spaces[key] = area.spaces.active.as_pointer()
+    area.spaces.active.shading.type = "MATERIAL"
+    area.spaces.active.overlay.show_overlays = False
+    from .dock.interaction import configure
+
+    region = next((r for r in area.regions if r.type == "WINDOW"), None)
+    if region:
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            configure(area)
+    persist(window.screen)
+
+
+def close(context):
+    from ..painting.paint_session import finish
+
+    if context.scene.open_painter.paint_image:
+        finish(context)
+    area = context.area
+    key = area.as_pointer()
+    _active.pop(key, None)
+    _spaces.pop(key, None)
+    area.type = _previous.pop(key, "VIEW_3D")
+    space = area.spaces.active
+    for prop in ("show_region_header", "show_region_toolbar"):
+        if hasattr(space, prop):
+            setattr(space, prop, True)
+    persist(context.screen)
+    area.tag_redraw()
+
+
+def set_view(area, backend):
+    _active[area.as_pointer()] = backend
+    # set_view is called before the area changes; scan records the new space.
+    _spaces.pop(area.as_pointer(), None)
+
+
+def persist(screen):
+    screen["open_painter_areas"] = [
+        {"index": index, "backend": _active[area.as_pointer()]}
+        for index, area in enumerate(screen.areas)
+        if area.as_pointer() in _active
+    ]
+
+
+def scan(window):
+    from .dock import state
+
+    # Maximizing swaps the native Space into another Area. Follow the Space,
+    # carrying panel state, rather than abandoning the editor at the old pointer.
+    for area in window.screen.areas:
+        key = area.as_pointer()
+        owner = next(
+            (
+                old
+                for old, space in _spaces.items()
+                if space == area.spaces.active.as_pointer() and old != key
+            ),
+            None,
+        )
+        if owner is not None:
+            _active[key] = _active.pop(owner)
+            _previous[key] = _previous.pop(owner, "VIEW_3D")
+            _spaces[key] = _spaces.pop(owner)
+            if owner in state.states:
+                state.states[key] = state.states.pop(owner)
+    for area in window.screen.areas:
+        if area.type == "NODE_EDITOR" and area.spaces.active.tree_type == EDITOR_ID:
+            mount(window, area)
+        key = area.as_pointer()
+        if key in _active and area.type != _active[key]:
+            _active.pop(key, None)
+            _previous.pop(key, None)
+            _spaces.pop(key, None)
+            persist(window.screen)
+        elif key in _active:
+            _spaces[key] = area.spaces.active.as_pointer()
+
+
+@persistent
+def save(_):
+    for screen in bpy.data.screens:
+        persist(screen)
+
+
+@persistent
+def load(_):
+    _active.clear()
+    _previous.clear()
+    _spaces.clear()
+    for screen in bpy.data.screens:
+        for record in screen.get("open_painter_areas", []):
+            index = record.get("index", -1)
+            if 0 <= index < len(screen.areas):
+                area = screen.areas[index]
+                if area.type == record.get("backend"):
+                    _active[area.as_pointer()] = area.type
+                    _previous[area.as_pointer()] = "VIEW_3D"
+                    _spaces[area.as_pointer()] = area.spaces.active.as_pointer()
+
+
+def header(self, context):
+    if is_area(context.area):
+        self.layout.label(text="Open Painter", icon="BRUSH_DATA")
+        self.layout.operator("open_painter.close_editor", text="", icon="X")
+
+
+class OP_OT_open_editor(bpy.types.Operator):
+    bl_idname = "open_painter.open_editor"
+    bl_label = "Open Painter"
+    bl_description = "Open Open Painter in this editor area"
+
+    def execute(self, context):
+        area = context.area or next((a for a in context.screen.areas if a.type == "VIEW_3D"), None)
+        if area is None:
+            self.report({"ERROR"}, "Choose an editor area first.")
+            return {"CANCELLED"}
+        mount(context.window, area)
+        return {"FINISHED"}
+
+
+class OP_OT_close_editor(bpy.types.Operator):
+    bl_idname = "open_painter.close_editor"
+    bl_label = "Close Open Painter"
+    bl_description = "Return this area to the standard 3D Viewport"
+
+    def execute(self, context):
+        close(context)
+        return {"FINISHED"}
+
+
+def register():
+    bpy.app.handlers.load_post.append(load)
+    bpy.app.handlers.save_pre.append(save)
+    bpy.types.VIEW3D_HT_header.prepend(header)
+    bpy.types.IMAGE_HT_header.prepend(header)
+    bpy.app.timers.register(restore_initial, first_interval=0.1)
+
+
+def restore_initial():
+    load(None)
+    return None
+
+
+def unregister():
+    if bpy.app.timers.is_registered(restore_initial):
+        bpy.app.timers.unregister(restore_initial)
+    for handlers, fn in ((bpy.app.handlers.load_post, load), (bpy.app.handlers.save_pre, save)):
+        if fn in handlers:
+            handlers.remove(fn)
+    bpy.types.VIEW3D_HT_header.remove(header)
+    bpy.types.IMAGE_HT_header.remove(header)
+    _active.clear()
+    _previous.clear()
+    _spaces.clear()

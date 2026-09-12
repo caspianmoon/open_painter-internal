@@ -21,6 +21,9 @@ class OP_Project(bpy.types.PropertyGroup):
     )
     paint_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="ROUGHNESS")
     blend_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR")
+    properties_channel: bpy.props.EnumProperty(
+        name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR"
+    )
     paint_mask: bpy.props.BoolProperty()
     paint_mask_id: bpy.props.StringProperty()
     paint_target_channel: bpy.props.StringProperty()

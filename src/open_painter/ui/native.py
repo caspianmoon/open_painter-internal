@@ -141,6 +141,8 @@ class OP_OT_native_view(SafeOperator, bpy.types.Operator):
         ):
             if hasattr(space, prop):
                 setattr(space, prop, True)
+        if self.view == "VIEW_3D" and context.mode == "OBJECT":
+            space.show_region_toolbar = False
         request_focus(area)
         editor.persist(context.screen)
         area.tag_redraw()
@@ -161,6 +163,7 @@ class OP_OT_native_select(SafeOperator, bpy.types.Operator):
         from ..painting.paint_session import synchronize
 
         synchronize(context, mask=self.mask)
+        context.area.tag_redraw()
 
 
 class PainterPanel:
@@ -187,14 +190,73 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
             "texture_sets",
             project,
             "active_texture_set",
-            rows=2,
+            rows=1,
+            maxrows=2,
+            sort_lock=True,
         )
         row = layout.row(align=True)
-        for action, label in [("ADD", "New"), ("ASSIGN", "Assign"), ("DUPLICATE", "Copy")]:
-            row.operator("open_painter.texture_set", text=label).action = action
+        for action, icon in [("ADD", "ADD"), ("ASSIGN", "LINKED"), ("DUPLICATE", "DUPLICATE")]:
+            row.operator("open_painter.texture_set", text="", icon=icon).action = action
         ts = active_set(context)
         if ts:
-            layout.prop(ts, "resolution", text="Size")
+            row.prop(ts, "resolution", text="")
+
+
+class OP_UL_native_layers(bpy.types.UIList):
+    def filter_items(self, context, data, propname):
+        rows = visible_rows(data)
+        visible = {index for index, _ in rows}
+        ordered = [index for index, _ in rows] + [
+            i for i in range(len(data.layers)) if i not in visible
+        ]
+        ranks = {index: rank for rank, index in enumerate(ordered)}
+        return (
+            [self.bitflag_filter_item if i in visible else 0 for i in range(len(data.layers))],
+            [ranks[i] for i in range(len(data.layers))],
+        )
+
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        layer = item
+        channel = channel_for(layer, context.scene.open_painter.blend_channel)
+        depth = dict(visible_rows(data)).get(index, 0)
+        split = layout.split(factor=0.72, align=True)
+        row = split.row(align=True)
+        row.prop(
+            layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
+        )
+        for _ in range(depth):
+            row.separator(factor=0.5)
+        if layer.type == "FOLDER":
+            row.prop(
+                layer,
+                "expanded",
+                text="",
+                icon="TRIA_DOWN" if layer.expanded else "TRIA_RIGHT",
+                emboss=False,
+            )
+        op = row.operator(
+            "open_painter.native_select",
+            text=layer.name,
+            icon="FILE_FOLDER" if layer.type == "FOLDER" else "MATERIAL",
+            emboss=False,
+        )
+        op.layer_id, op.mask = layer.id, False
+        if layer.masks:
+            op = row.operator(
+                "open_painter.native_select",
+                text="",
+                icon="MOD_MASK",
+                depress=index == data.active_layer and state.get(context.area).mask_selected,
+            )
+            op.layer_id, op.mask = layer.id, True
+        col = split.column(align=True)
+        if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
+            col.prop_menu_enum(layer, "group_mode", text="Pass")
+        elif channel:
+            blend = layer.blend_mode if channel.blend_mode == "INHERIT" else channel.blend_mode
+            col.prop_menu_enum(channel, "blend_mode", text=blend.replace("_", " ").title())
+        if channel:
+            col.prop(channel, "opacity_percent", text="", slider=True)
 
 
 class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
@@ -205,69 +267,38 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         layout = self.layout
         ts = active_set(context)
         if not ts:
+            layout.label(text="Create a texture set to start painting.")
             return
-        channel_id = context.scene.open_painter.blend_channel
         row = layout.row(align=True)
         row.prop(context.scene.open_painter, "blend_channel", text="")
-        for action, icon in [
-            ("PAINT", "BRUSH_DATA"),
-            ("FILL", "SHADING_RENDERED"),
-            ("FOLDER", "FILE_FOLDER"),
-        ]:
-            row.operator("open_painter.layer", text="", icon=icon).action = action
-        row.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
-        for index, depth in visible_rows(ts):
-            layer = ts.layers[index]
-            channel = channel_for(layer, channel_id)
-            row = layout.row(align=True)
-            row.prop(
-                layer,
-                "visible",
-                text="",
-                icon="HIDE_OFF" if layer.visible else "HIDE_ON",
-                emboss=False,
-            )
-            for _ in range(depth):
-                row.separator(factor=0.5)
-            if layer.type == "FOLDER":
-                row.prop(
-                    layer,
-                    "expanded",
-                    text="",
-                    icon="TRIA_DOWN" if layer.expanded else "TRIA_RIGHT",
-                    emboss=False,
-                )
-            op = row.operator(
-                "open_painter.native_select",
-                text=layer.name,
-                icon="FILE_FOLDER" if layer.type == "FOLDER" else "MATERIAL",
-                depress=index == ts.active_layer and not state.get(context.area).mask_selected,
-            )
-            op.layer_id = layer.id
-            if layer.masks:
-                op = row.operator(
-                    "open_painter.native_select",
-                    text="",
-                    icon="MOD_MASK",
-                    depress=index == ts.active_layer and state.get(context.area).mask_selected,
-                )
-                op.layer_id, op.mask = layer.id, True
-            col = row.column(align=True)
-            if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
-                col.prop(layer, "group_mode", text="")
-            elif channel:
-                col.prop(channel, "blend_mode", text="")
-            if channel:
-                col.prop(channel, "opacity", text="", slider=True)
         row = layout.row(align=True)
-        for action, icon in [
-            ("UP", "TRIA_UP"),
-            ("DOWN", "TRIA_DOWN"),
-            ("DUPLICATE", "DUPLICATE"),
-            ("DELETE", "TRASH"),
-            ("PARENT", "FILE_FOLDER"),
+        for action, label, icon in [
+            ("PAINT", "Paint", "BRUSH_DATA"),
+            ("FILL", "Fill", "SHADING_RENDERED"),
+            ("FOLDER", "Folder", "FILE_FOLDER"),
         ]:
-            row.operator("open_painter.layer", text="", icon=icon).action = action
+            row.operator("open_painter.layer", text=label, icon=icon).action = action
+        row.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
+        row.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
+        layout.template_list(
+            "OP_UL_native_layers",
+            "stack",
+            ts,
+            "layers",
+            ts,
+            "active_layer",
+            rows=3,
+            maxrows=3,
+            sort_lock=True,
+        )
+        row = layout.row(align=True)
+        for action, label, icon in [
+            ("UP", "", "TRIA_UP"),
+            ("DOWN", "", "TRIA_DOWN"),
+            ("DUPLICATE", "Duplicate", "DUPLICATE"),
+            ("PARENT", "Parent", "FILE_FOLDER"),
+        ]:
+            row.operator("open_painter.layer", text=label, icon=icon).action = action
 
 
 class OP_MT_native_masks(bpy.types.Menu):
@@ -298,7 +329,9 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
         layer = active(ts) if ts else None
         if not layer:
             return
-        layout.prop(layer, "name", text="Target")
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(layer, "name", text="Name")
         if state.get(context.area).mask_selected and layer.masks:
             layout.label(text="Mask on " + layer.name, icon="MOD_MASK")
             from .properties_panel import OP_PT_masks
@@ -319,22 +352,32 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
             draw(layout, context)
             return
-        for channel in layer.channels:
-            box = layout.box()
-            box.prop(channel, "enabled", text=channel.channel.replace("_", " ").title())
-            if not channel.enabled:
-                continue
-            box.prop(
+        layout.separator()
+        layout.label(text="MATERIAL", icon="MATERIAL")
+        row = layout.row(align=True)
+        row.prop(context.scene.open_painter, "properties_channel", text="Channel")
+        channel = channel_for(layer, context.scene.open_painter.properties_channel)
+        if channel:
+            layout.prop(channel, "enabled", text="Enabled")
+            body = layout.column()
+            body.enabled = channel.enabled
+            body.prop(
                 channel,
                 "color" if channel.channel in {"BASE_COLOR", "NORMAL"} else "value",
-                text="",
+                text="Color" if channel.channel in {"BASE_COLOR", "NORMAL"} else "Value",
             )
-            box.template_ID(channel, "image", open="image.open")
+            body.template_ID(channel, "image", open="image.open")
             if channel.image:
-                for key in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
-                    box.prop(channel, key)
+                body.separator()
+                body.label(text="FILL", icon="TEXTURE")
+                for key in ("projection", "filtering", "tiling"):
+                    body.prop(channel, key)
+                body.separator()
+                body.label(text="UV TRANSFORM")
+                for key in ("scale", "rotation", "offset"):
+                    body.prop(channel, key)
                 if channel.projection == "TRIPLANAR":
-                    box.prop(channel, "triplanar_hardness")
+                    body.prop(channel, "triplanar_hardness")
 
 
 class OP_PT_native_library(PainterPanel, bpy.types.Panel):
@@ -383,6 +426,7 @@ class OP_PT_native_export(PainterPanel, bpy.types.Panel):
 
 
 CLASSES = (
+    OP_UL_native_layers,
     OP_OT_native_view,
     OP_OT_native_asset,
     VIEW3D_AST_open_painter,

@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.13.zip`](dist/open_painter-0.1.13.zip).
+1. Download or build [`dist/open_painter-0.1.14.zip`](dist/open_painter-0.1.14.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -35,9 +35,9 @@ No online account, network connection, or separate Python installation is needed
 ## First use
 
 1. Select your low-poly mesh. It needs a UV map in the 0–1 tile. A new texture set immediately creates and assigns a Principled material with all six initialized texture images connected.
-2. Click **+ New** in Texture Set List. A selected UV-unwrapped mesh is assigned automatically; use **Assign** for additional meshes. For a mesh with multiple materials,
+2. Click **+** in Texture Set List. A selected UV-unwrapped mesh is assigned automatically; use the link icon for additional meshes. For a mesh with multiple materials,
    choose the intended active material slot before assigning. Repeat for additional objects/slots.
-3. Set **Size** in Texture Set List to choose resolution (default 2048).
+3. Use the resolution dropdown in Texture Set List to choose resolution (default 2048).
 4. Expand **Bake Mesh Maps** or open its top-bar popover. Select high-poly objects and click **Add Selected High Poly**.
    Set ray distance and bake Normal, AO, and Curvature. For self-bakes, disable **Bake from High Poly**.
 5. Use the paint, fill and folder icons beside the stack channel selector to add layers.
@@ -72,7 +72,7 @@ the target and exposes generator, invert, levels, strength and **Normal / Multip
 New smart-mask effects use Normal; saved effects keep their previous combination. This is an editable
 mask-effect workflow, not complete Substance Painter generator parity.
 
-Fill channels expose native color/image and UV/triplanar transform controls. Per-channel blend and
+Properties shows one selected material channel at a time, with native color/image and UV/triplanar transform controls. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. Per-channel blend and
 opacity are editable directly in layer rows, independently of the paint channel. **Use Layer Blend**
 keeps the layer-wide setting. Blender draws the controls, handles numeric editing and scrolling,
 and applies its current theme and interface scale.
@@ -171,7 +171,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 
 ![Mask stack and generator controls](docs/mask_controls.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.13.
+See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.14.
 
 
 

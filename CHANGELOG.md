@@ -1,5 +1,11 @@
 # Changes
 
+## 0.1.14
+
+- Give Layers a native scrollable list with a stable name column, separate action toolbar, compact blend labels and percentage opacity.
+- Compact Texture Set controls and show one selected material channel in Properties, with labeled Fill and UV Transform sections.
+- Start with the modeling toolbar hidden outside painting; T still toggles the native toolbar. Preserve assets below the viewport and native Blender theme controls.
+
 ## 0.1.13
 
 - Replace the active GPU overlay and modal input handler with Blender Panel/UILayout controls and native Asset Shelves in both 3D and 2D. Keep assets below the viewport and texture sets/layers/properties on the right.

@@ -51,6 +51,11 @@ def setup():
             group = apply(ts, "Painted Steel")
             coat = next(layer for layer in ts.layers if layer.parent_id == group.id and layer.masks)
             bpy.ops.open_painter.native_select(layer_id=coat.id)
+            from open_painter.core.layer_stack import channel_for
+            channel = channel_for(coat, 'BASE_COLOR')
+            channel.opacity_percent = 50
+            assert abs(channel.opacity - .5) < 1e-6 and ts.dirty
+            channel.opacity_percent = 100
             from open_painter.core import image_manager
 
             for kind in ("AO", "CURVATURE"):
@@ -136,7 +141,7 @@ def applied():
 def hidden():
     try:
         assert not area.spaces.active.show_region_ui
-        assert not area.spaces.active.show_region_toolbar
+        assert area.spaces.active.show_region_toolbar
         data = json.loads(result.read_text())
         data["native_T_N"] = "PASS"
         result.write_text(json.dumps(data))
@@ -183,6 +188,15 @@ def check_3d():
 
 
 def capture():
+    ts = bpy.context.scene.open_painter.texture_sets[0]
+    region = next(r for r in area.regions if r.type == 'WINDOW')
+    with bpy.context.temp_override(area=area, region=region):
+        bpy.ops.open_painter.native_select(layer_id=ts.layers[ts.active_layer].id, mask=False)
+        from open_painter.ui.dock import state
+        assert not state.get(area).mask_selected
+    bpy.app.timers.register(redraw_capture, first_interval=1)
+
+def redraw_capture():
     bpy.ops.wm.redraw_timer(type="DRAW_WIN", iterations=2)
     bpy.app.timers.register(screenshot, first_interval=1)
 

@@ -57,6 +57,9 @@ def mount(window, area):
                 if hasattr(area.spaces.active, prop):
                     setattr(area.spaces.active, prop, True)
 
+    if window.scene.open_painter.paint_image is None:
+        area.spaces.active.show_region_toolbar = False
+    window.screen["open_painter_ui_revision"] = 14
     window.screen["open_painter_native_ui"] = True
     persist(window.screen)
 
@@ -152,6 +155,12 @@ def load(_):
 
                         prepare_assets()
                         request_focus(area)
+                        if (
+                            screen.get("open_painter_ui_revision", 0) < 14
+                            and area.type == "VIEW_3D"
+                            and not bpy.context.scene.open_painter.paint_image
+                        ):
+                            area.spaces.active.show_region_toolbar = False
                         if not screen.get("open_painter_native_ui"):
                             for prop in (
                                 "show_region_ui",
@@ -164,6 +173,7 @@ def load(_):
 
         if not bpy.app.background:
             screen["open_painter_native_ui"] = True
+            screen["open_painter_ui_revision"] = 14
 
 
 def header(self, context):

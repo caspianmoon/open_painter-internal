@@ -35,6 +35,14 @@ class OP_Channel(bpy.types.PropertyGroup):
         update=changed,
         description="Multiplied by the layer's overall opacity",
     )
+    opacity_percent: bpy.props.FloatProperty(
+        name="Opacity",
+        min=0,
+        max=100,
+        subtype="PERCENTAGE",
+        get=lambda self: self.opacity * 100,
+        set=lambda self, value: setattr(self, "opacity", value / 100),
+    )
     blend_mode: bpy.props.EnumProperty(
         name="Channel Blend",
         update=changed,

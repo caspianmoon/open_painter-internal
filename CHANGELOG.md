@@ -1,5 +1,10 @@
 # Changes
 
+## 0.2.2
+
+- Place blend mode and channel opacity side by side in native layer rows. Use an editable numeric percentage field instead of a slider; click the value, type a number and press Enter.
+- Verify actual mouse/keyboard entry of 37.5% and native 3D/2D controls.
+
 ## 0.2.1
 
 - Restore all seven asset types as labeled native toolbar buttons in 3D and 2D, filtering the bottom shelf. Separate Materials from Smart Materials.

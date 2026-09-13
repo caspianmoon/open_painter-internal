@@ -344,7 +344,7 @@ class OP_UL_native_layers(bpy.types.UIList):
         layer = item
         channel = channel_for(layer, context.scene.open_painter.blend_channel)
         depth = dict(visible_rows(data)).get(index, 0)
-        split = layout.split(factor=0.72, align=True)
+        split = layout.split(factor=0.42, align=True)
         row = split.row(align=True)
         row.prop(
             layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
@@ -374,14 +374,16 @@ class OP_UL_native_layers(bpy.types.UIList):
                 depress=index == data.active_layer and state.get(context.area).mask_selected,
             )
             op.layer_id, op.mask = layer.id, True
-        col = split.column(align=True)
+        controls = split.split(factor=0.5, align=True)
+        blend_control = controls.row(align=True)
+        opacity_control = controls.row(align=True)
         if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
-            col.prop_menu_enum(layer, "group_mode", text="Pass")
+            blend_control.prop_menu_enum(layer, "group_mode", text="Pass")
         elif channel:
             blend = layer.blend_mode if channel.blend_mode == "INHERIT" else channel.blend_mode
-            col.prop_menu_enum(channel, "blend_mode", text=blend.replace("_", " ").title())
+            blend_control.prop_menu_enum(channel, "blend_mode", text=blend.replace("_", " ").title())
         if channel:
-            col.prop(channel, "opacity_percent", text="", slider=True)
+            opacity_control.prop(channel, "opacity_percent", text="", slider=False)
 
 
 class OP_PT_native_layers(PainterPanel, bpy.types.Panel):

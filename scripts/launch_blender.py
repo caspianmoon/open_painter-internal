@@ -13,7 +13,7 @@ def open_painter():
     if not addon_utils.check(module)[1]:
         addon_utils.enable(module,default_set=False)
     version=importlib.import_module(module+'.constants').VERSION
-    assert version=='0.2.1',version
+    assert version=='0.2.2',version
     window=bpy.context.window or next(iter(bpy.context.window_manager.windows),None)
     if window is None:return .25
     area=max((a for a in window.screen.areas if a.type=='VIEW_3D'),key=lambda a:a.width*a.height,default=None)

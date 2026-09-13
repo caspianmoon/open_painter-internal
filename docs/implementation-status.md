@@ -1,5 +1,25 @@
 # Roadmap implementation status
 
+## Licensed library sourcing — 2026-09-14
+
+Research completed on `task/licensed-library-research`, preserving 0.2.4 commit
+`25368daac46f6df9885e74deca692b10f6686390`. Checked publisher licenses specifically
+for redistribution inside a **paid** add-on/library. Curated 18 CC0 candidates
+across PBR surfaces, mask inputs and procedural source graphs; distinguished
+source resale from permission to sell renders and documented excluded licenses.
+
+Downloaded seven sample files from four assets, recorded SHA-256, verified four
+publisher checksums and ZIP integrity, inspected supplied pixel formats and
+viewed representative images. No new native smart material or runtime quality
+claim follows from those source checks. No Blender tests or performance
+measurements were run for this research-only task; the installed 0.2.4 release
+is unchanged. The [research, concrete assets and licensing evidence](research/licensed-library-sourcing.md),
+[candidate manifest](research/licensed-library-candidates.json) and
+[sample record](research/licensed-library-sample-verification.json) document
+integration requirements and actual verification.
+
+---
+
 ## Bake queue hotfix — 2026-09-14
 
 Version **0.2.4**, on `task/bake-queue-timer-fix`, preserves base

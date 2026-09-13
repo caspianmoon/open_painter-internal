@@ -1,0 +1,131 @@
+{
+  "reviewed_on": "2026-09-14",
+  "local_directory": ".blender-test/asset-research",
+  "downloaded_assets": [
+    {
+      "file": "grunge_sharp_scratches-color.png",
+      "source_url": "https://download.blender.org/demo-files/archives/textures/grunge/grunge_sharp_scratches/grunge_sharp_scratches-color.png",
+      "download_url": "https://download.blender.org/demo-files/archives/textures/grunge/grunge_sharp_scratches/grunge_sharp_scratches-color.png",
+      "bytes": 2697586,
+      "sha256": "9943334cb1584f1c863397ba1afae100b80098f69994debd09166b0780bf8ca0",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "png_color_type": 0
+    },
+    {
+      "file": "grunge_plaster_peeling-color.png",
+      "source_url": "https://download.blender.org/demo-files/archives/textures/grunge/grunge_plaster_peeling/grunge_plaster_peeling-color.png",
+      "download_url": "https://download.blender.org/demo-files/archives/textures/grunge/grunge_plaster_peeling/grunge_plaster_peeling-color.png",
+      "bytes": 710252,
+      "sha256": "29e43a439122fc0f442c45230637911df9cccfa0a100782b510b87ff96fc39df",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "png_color_type": 0
+    },
+    {
+      "file": "SurfaceImperfections007_2K-PNG.zip",
+      "source_url": "https://ambientcg.com/get?file=SurfaceImperfections007_2K-PNG.zip",
+      "download_url": "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/SurfaceImperfections007_z4Fy9VDI/SurfaceImperfections007_2K-PNG.zip",
+      "bytes": 29444169,
+      "sha256": "d491b4baf9cd1cef5ef81bc6ba899046c3fffc3970415d47a619f1089f08123b"
+    },
+    {
+      "file": "rusty_metal_02_diff_2k.png",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/rusty_metal_02/rusty_metal_02_diff_2k.png",
+      "bytes": 6323414,
+      "sha256": "7e99c3c2d94712a6b04de2100729907f91d2feb841da7e97c50229df097bd302",
+      "publisher_md5_verified": true,
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "png_color_type": 2
+    },
+    {
+      "file": "rusty_metal_02_rough_2k.png",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/rusty_metal_02/rusty_metal_02_rough_2k.png",
+      "bytes": 6671402,
+      "sha256": "f1b9144e6b4142f715fecd36d4e5364f8ecec5d43ecb87bd8b02a5dceb583f5d",
+      "publisher_md5_verified": true,
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 16,
+      "png_color_type": 0
+    },
+    {
+      "file": "rusty_metal_02_nor_gl_2k.png",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/rusty_metal_02/rusty_metal_02_nor_gl_2k.png",
+      "bytes": 3897537,
+      "sha256": "6ad252152bc4baecfe3553e0a5472d96e895d39c4f77f9ef059be5ba22ae0e6f",
+      "publisher_md5_verified": true,
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "png_color_type": 2
+    },
+    {
+      "file": "rusty_metal_02_disp_2k.png",
+      "source_url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/2k/rusty_metal_02/rusty_metal_02_disp_2k.png",
+      "bytes": 7813121,
+      "sha256": "a0f551c9b91471d158e15edf16c8ffbfe96f51898fd51af81d538963274fd9de",
+      "publisher_md5_verified": true,
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 16,
+      "png_color_type": 4
+    }
+  ],
+  "archive_png_members": [
+    {
+      "file": "SurfaceImperfections007_2K-PNG_Color.png",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "color_type": 0
+    },
+    {
+      "file": "SurfaceImperfections007_2K-PNG_NormalDX.png",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 16,
+      "color_type": 2
+    },
+    {
+      "file": "SurfaceImperfections007_2K-PNG_NormalGL.png",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 16,
+      "color_type": 2
+    },
+    {
+      "file": "SurfaceImperfections007_2K-PNG_Opacity.png",
+      "width": 2048,
+      "height": 2048,
+      "bit_depth": 8,
+      "color_type": 0
+    },
+    {
+      "file": "SurfaceImperfections007.png",
+      "width": 512,
+      "height": 512,
+      "bit_depth": 8,
+      "color_type": 6
+    }
+  ],
+  "zip_crc_check": "PASS",
+  "visual_inspection": [
+    "grunge_sharp_scratches-color.png",
+    "grunge_plaster_peeling-color.png",
+    "SurfaceImperfections007_2K-PNG_Opacity.png",
+    "rusty_metal_02_diff_2k.png"
+  ],
+  "blender_render_or_import_tested": false,
+  "installed_into_addon": false,
+  "notes": [
+    "Blender archive PNGs are native 2048 square, 8-bit grayscale.",
+    "SurfaceImperfections007 includes Color, Opacity and 16-bit DX/GL normals; no roughness file in inspected archive.",
+    "Poly Haven sample PNGs match all four publisher MD5 digests.",
+    "Source images have not been resampled or converted."
+  ]
+}

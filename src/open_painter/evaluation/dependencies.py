@@ -1,0 +1,171 @@
+"""Geometry lifetimes independent of material edits; handlers only mark candidates.
+
+The reference projection still reads the base mesh. Hash its bulk data only after
+Blender reports a geometry update, never on each tile/timer tick. No evaluated
+mesh is retained. Modifier-aware projection is a separate M5 change.
+"""
+import hashlib
+import bpy
+import numpy as np
+from bpy.app.handlers import persistent
+from .resource_keys import key_for
+from .metrics import measured
+
+_mesh_epochs = {}
+_mesh_fingerprints = {}
+_known = {}
+_candidates = set()
+
+
+def uses_geometry(ts):
+    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
+
+
+@measured('geometry_signature')
+def mesh_signature(mesh):
+    pointer = mesh.as_pointer()
+    epoch = _mesh_epochs.get(pointer, 0)
+    cached = _mesh_fingerprints.get(pointer)
+    if cached and cached[0] == epoch:
+        return cached[1]
+    h = hashlib.sha256()
+    for collection, prop, width, dtype in (
+        (mesh.vertices, 'co', 3, np.float32), (mesh.vertices, 'normal', 3, np.float32),
+        (mesh.loops, 'vertex_index', 1, np.int32),
+        (mesh.polygons, 'loop_start', 1, np.int32), (mesh.polygons, 'loop_total', 1, np.int32),
+        (mesh.polygons, 'material_index', 1, np.int32), (mesh.polygons, 'use_smooth', 1, np.bool_),
+    ):
+        values = np.empty(len(collection)*width, dtype=dtype)
+        collection.foreach_get(prop, values)
+        h.update(str((prop, len(collection))).encode()); h.update(values.tobytes())
+    for uv in mesh.uv_layers:
+        h.update(str((uv.name, uv.active_render, uv == mesh.uv_layers.active)).encode())
+        values = np.empty(len(uv.data)*2, np.float32)
+        uv.data.foreach_get('uv', values); h.update(values.tobytes())
+    signature = h.hexdigest()
+    _mesh_fingerprints[pointer] = epoch, signature
+    return signature
+
+
+def modifier_signature(obj):
+    # Core RNA values capture ordinary modifier edits without retaining modifiers.
+    result = []
+    for modifier in obj.modifiers:
+        values = []
+        for prop in modifier.bl_rna.properties:
+            if prop.identifier == 'rna_type' or prop.is_readonly:
+                continue
+            value = getattr(modifier, prop.identifier, None)
+            if prop.type in {'BOOLEAN','INT','FLOAT','STRING','ENUM'}:
+                values.append((prop.identifier, tuple(value) if getattr(prop, "is_array", False) else value))
+            elif prop.type == 'POINTER':
+                values.append((prop.identifier, value.as_pointer() if value else None))
+        result.append((modifier.type, tuple(values)))
+    return tuple(result)
+
+
+def geometry_key(scene, ts):
+    if not uses_geometry(ts):
+        return None
+    objects = []
+    for ref in ts.assignments:
+        obj = ref.object
+        if obj is None or obj.type != 'MESH':
+            objects.append((None, ref.slot_index))
+            continue
+        mesh = obj.data
+        objects.append((obj.as_pointer(), mesh.as_pointer(), ref.slot_index,
+                        tuple(v for row in obj.matrix_world for v in row),
+                        mesh_signature(mesh), modifier_signature(obj)))
+    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects))
+
+
+def remember(scene, ts, signature):
+    _known[key_for(scene, ts)] = signature
+
+
+@persistent
+def on_depsgraph(scene, depsgraph):
+    relevant = False
+    for update in depsgraph.updates:
+        item = update.id.original
+        if isinstance(item, bpy.types.Mesh) and update.is_updated_geometry:
+            pointer = item.as_pointer()
+            _mesh_epochs[pointer] = _mesh_epochs.get(pointer, 0)+1
+            relevant = True
+        elif isinstance(item, bpy.types.Object) and (update.is_updated_geometry or update.is_updated_transform):
+            relevant = True
+    if relevant:
+        _candidates.add(scene.as_pointer())
+
+
+@persistent
+def on_frame(scene, *args):
+    _candidates.add(scene.as_pointer())
+
+
+def refresh(scene):
+    if scene.as_pointer() not in _candidates:
+        return
+    _candidates.discard(scene.as_pointer())
+    from ..core.layer_stack import invalidate
+    for ts in scene.open_painter.texture_sets:
+        key = key_for(scene, ts)
+        if key in _known and uses_geometry(ts):
+            current = geometry_key(scene, ts)
+            if current != _known[key]:
+                invalidate(ts)
+                _known[key] = current
+
+
+def map_dependencies(mask):
+    if mask.source == 'BAKED':
+        return {mask.map_type}
+    if mask.source == 'NOISE':
+        return set()
+    if mask.source != 'GENERATOR':
+        return set()
+    from ..generators.base import REQUIRED_MAPS
+    maps = REQUIRED_MAPS.get(mask.generator)
+    if maps is None:
+        return None  # Unknown/custom generators conservatively depend on all maps.
+    return set(maps) | ({'AO'} if mask.generator in {'EDGE_WEAR', 'CHIPS'} else set())
+
+
+def image_written(image):
+    """Managed writes dirty consuming channels, never unrelated display outputs."""
+    pointer = image.as_pointer()
+    for scene in bpy.data.scenes:
+        if not hasattr(scene, 'open_painter'):
+            continue
+        for ts in scene.open_painter.texture_sets:
+            kinds = {m.kind for m in ts.baked_maps if m.image and m.image.as_pointer() == pointer}
+            channels = set()
+            for layer in ts.layers:
+                channels.update(p.channel for p in layer.channels
+                                if p.image == image or any(e.image == image for e in p.effects))
+                masks = any(m.enabled and (m.image == image or m.effect.image == image or
+                            (kinds and (map_dependencies(m) is None or kinds & map_dependencies(m))))
+                            for m in layer.masks)
+                if masks:
+                    channels.update(o.channel for o in ts.outputs)
+                    break
+            if channels:
+                ts.dirty = True
+                ts.edit_serial += 1
+                for output in ts.outputs:
+                    if output.channel in channels:
+                        output.dirty = True
+
+
+def clear():
+    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _known.clear(); _candidates.clear()
+
+
+def prune(live):
+    for key in set(_known)-set(live):
+        _known.pop(key, None)
+    meshes = {m.as_pointer() for m in bpy.data.meshes}
+    for values in (_mesh_epochs, _mesh_fingerprints):
+        for key in set(values)-meshes:
+            values.pop(key, None)

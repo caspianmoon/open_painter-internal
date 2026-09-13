@@ -1,0 +1,35 @@
+{
+  "blender": "5.2.1 LTS",
+  "build_hash": "9e2066aef7ef",
+  "background": true,
+  "capabilities": {
+    "image_full_transfer": {
+      "status": "PASS",
+      "details": "Float RGBA full-buffer foreach_set/get round-trip; no subrectangle upload proven."
+    },
+    "evaluated_geometry_and_corner_normals": {
+      "status": "PASS",
+      "details": {
+        "base_vertices": 8,
+        "evaluated_vertices": 24,
+        "corner_normals": 96
+      }
+    },
+    "geometry_nodes_attribute": {
+      "status": "PASS",
+      "details": "Named float POINT attribute survives evaluated snapshot."
+    },
+    "gpu_context_shader_texture_readback": {
+      "status": "UNAVAILABLE",
+      "reason": "No window GPU context: GPU calls intentionally skipped in background process."
+    },
+    "native_udim_paint_bake_addressing": {
+      "status": "NOT_TESTED",
+      "reason": "Creating a tiled Image would not prove brush/bake tile addressing. No UDIM path is enabled by this increment."
+    },
+    "partial_image_upload": {
+      "status": "NOT_PROVEN",
+      "reason": "Only full-buffer Image transfer tested."
+    }
+  }
+}

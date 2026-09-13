@@ -99,7 +99,7 @@ for item in bpy.context.scene.open_painter.texture_sets:
         output.dirty = False
 before = {output.channel: output.revision for output in ts.outputs}
 ts.layers[0].opacity = 0.4
-cache._pending[ts.id] = (ts.edit_serial, monotonic() - 1)
+cache._pending[cache.key_for(bpy.context.scene, ts)] = (ts.edit_serial, monotonic() - 1)
 cache.tick()
 assert sum(output.revision > before[output.channel] for output in ts.outputs) <= 1
 assert ts.dirty
@@ -107,7 +107,7 @@ for _ in range(1000):
     cache.tick()
     if not ts.dirty:
         break
-assert not ts.dirty and ts.id not in cache._evaluators
+assert not ts.dirty and cache.key_for(bpy.context.scene, ts) not in cache._evaluators
 # Delete a group removes its subtree; ordinary ungrouping retains its children.
 ids = {item.id for item in ts.layers if item.parent_id == group_id}
 stack.remove_tree(ts, group_id)

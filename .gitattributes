@@ -1,0 +1,2 @@
+# Unified-diff context uses a literal space on otherwise empty lines.
+docs/performance/baseline-instrumentation.patch -whitespace

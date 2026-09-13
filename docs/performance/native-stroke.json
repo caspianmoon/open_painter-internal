@@ -1,0 +1,11 @@
+{
+  "blender": "5.2.1 LTS",
+  "resolution": 512,
+  "channel": "ROUGHNESS",
+  "fixture": "5-point native bpy.ops.paint.image_paint stroke on cube",
+  "stroke_wall_s": 0.03349054199497914,
+  "stroke_to_complete_output_wall_s": 0.06408933399507077,
+  "stroke_to_complete_output_cpu_s": 0.08694500000000005,
+  "displayed_frame_latency_s": null,
+  "limitation": "Real native brush engine and output pixels; not OS input latency or display frame time."
+}

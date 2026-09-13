@@ -1,20 +1,29 @@
 """Bound transient texture memoization without changing texture resolution."""
 from collections import OrderedDict
+from . import metrics
+from .resource_keys import key_for
 
 _shared = {}
 
 
 def for_texture_set(scene, texture_set, force=False):
     """Keep reusable CPU textures between edits, with independent per-set budgets."""
-    key = (scene.as_pointer(), texture_set.id)
+    from . import dependencies
+    key = key_for(scene, texture_set)
     cache = _shared.setdefault(key, RasterCache())
     if force:
         cache.clear()
-    stamp = (texture_set.edit_serial, int(texture_set.resolution))
+    geometry_stamp = dependencies.geometry_key(scene, texture_set)
+    if getattr(cache, "geometry_stamp", None) != geometry_stamp:
+        if hasattr(cache, "geometry_stamp"):
+            from ..core.layer_stack import invalidate
+            invalidate(texture_set)
+        cache.pop("geometry", None)
+        cache.geometry_stamp = geometry_stamp
+    dependencies.remember(scene, texture_set, geometry_stamp)
+    stamp = (texture_set.edit_serial, int(texture_set.resolution), geometry_stamp)
     if getattr(cache, 'stamp', None) != stamp:
-        # Geometry still depends on edit state. Pure UV noise and generator masks
-        # carry their own parameter signatures and remain valid across color edits.
-        cache.pop('geometry', None)
+        # Authoring edits invalidate memoized parameter lookups, not geometry.
         cache.signatures = {}
         cache.stamp = stamp
     return cache
@@ -50,6 +59,11 @@ class RasterCache(OrderedDict):
         self.budget = budget
         self.used = 0
 
+    def __contains__(self, key):
+        found = super().__contains__(key)
+        metrics.count("cache_hits" if found else "cache_misses")
+        return found
+
     def __getitem__(self, key):
         value = super().__getitem__(key)
         self.move_to_end(key)
@@ -66,8 +80,12 @@ class RasterCache(OrderedDict):
                 break
             self.used -= byte_size(super().__getitem__(victim))
             super().__delitem__(victim)
+            metrics.count("cache_evictions")
+        metrics.count("cache_insert_bytes", cost)
         super().__setitem__(key,value)
         self.used += cost
+        metrics.gauge("cache_scalar_bytes", sum(c.used for c in _shared.values()))
+        metrics.gauge("cache_geometry_bytes", sum(byte_size(OrderedDict.get(c, "geometry")) for c in _shared.values()))
 
     def clear(self):
         super().clear()

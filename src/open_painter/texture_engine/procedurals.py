@@ -8,6 +8,8 @@ https://mrl.cs.nyu.edu/~perlin/noise/ . The integer hash and 2D implementations
 here are original and do not use the reference permutation table.
 """
 
+from ..evaluation.metrics import measured
+
 import numpy as np
 
 
@@ -222,6 +224,7 @@ def _pores(x, y, seed, radius=0.2, density=0.55):
     return (1 - _smooth(radius * 0.3, radius, f1)) * (identity < density)
 
 
+@measured('source_generation')
 def evaluate(kind, u, v, seed=1, scale=8, **params):
     """Evaluate one catalog source as finite float32 grayscale in [0, 1].
 

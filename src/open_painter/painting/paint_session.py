@@ -236,7 +236,7 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
 
         channel = project.paint_target_channel or project.paint_channel
         output = next((out for out in ts.outputs if out.channel == channel), None)
-        old_region = cache._regions.get(ts.id)
+        old_region = cache._regions.get(cache.key_for(scene, ts))
         regional = (
             rows is not None
             and image.colorspace_settings.name != "sRGB"
@@ -259,9 +259,9 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
             low, high = int(rows[0]), int(rows[-1]) + 1
             if old_region and old_region[1] == channel:
                 low, high = min(low, old_region[2]), max(high, old_region[3])
-            cache._regions[ts.id] = (ts.edit_serial, channel, low, high, image.as_pointer(), raster)
+            cache._regions[cache.key_for(scene, ts)] = (ts.edit_serial, channel, low, high, image.as_pointer(), raster)
         else:
-            cache._regions.pop(ts.id, None)
+            cache._regions.pop(cache.key_for(scene, ts), None)
         return True
     return False
 

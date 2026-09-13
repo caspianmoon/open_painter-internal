@@ -1,0 +1,108 @@
+{
+  "base_commit": "15ef25ec532f466eff18a7265fa7d7ef5019e8ef",
+  "task_branch": "task/m0-m1-evaluation-correctness",
+  "tested_source_sha256": "b69710ba04597df660be2560bae1063da783ea65370a5d2e1c53214ca1df3505",
+  "blender": "5.2.1 LTS",
+  "blender_build": "9e2066aef7ef",
+  "changed_files": [
+    ".gitattributes",
+    ".github/workflows/tests.yml",
+    "TESTING.md",
+    "docs/implementation-status.md",
+    "docs/performance/after-m1-initial.json",
+    "docs/performance/after-m1.json",
+    "docs/performance/baseline-instrumentation.patch",
+    "docs/performance/baseline.json",
+    "docs/performance/capabilities-background.json",
+    "docs/performance/capabilities-gui.json",
+    "docs/performance/native-stroke.json",
+    "docs/performance/original-fixture-reproduction.json",
+    "docs/performance/paired-control.json",
+    "docs/performance/regressions-before.json",
+    "docs/performance/validation-results.json",
+    "docs/performance/workloads.json",
+    "scripts/benchmark_comparison.py",
+    "scripts/benchmark_textures.py",
+    "scripts/build_extension.py",
+    "scripts/probe_blender_capabilities.py",
+    "scripts/run_pure_tests.py",
+    "scripts/run_tests.py",
+    "src/open_painter/core/image_manager.py",
+    "src/open_painter/evaluation/blend_modes.py",
+    "src/open_painter/evaluation/cache.py",
+    "src/open_painter/evaluation/channel_eval.py",
+    "src/open_painter/evaluation/dependencies.py",
+    "src/open_painter/evaluation/evaluator.py",
+    "src/open_painter/evaluation/mask_eval.py",
+    "src/open_painter/evaluation/metrics.py",
+    "src/open_painter/evaluation/raster_cache.py",
+    "src/open_painter/evaluation/resource_keys.py",
+    "src/open_painter/painting/paint_session.py",
+    "src/open_painter/painting/projection.py",
+    "src/open_painter/texture_engine/filters.py",
+    "src/open_painter/texture_engine/procedurals.py",
+    "tests/integration/failed_evaluation.py",
+    "tests/integration/gui_workflow.py",
+    "tests/integration/install_extension.py",
+    "tests/integration/multi_scene_scheduling.py",
+    "tests/integration/native_registration.py",
+    "tests/integration/phase13.py",
+    "tests/integration/phase14.py",
+    "tests/integration/resource_invalidation.py",
+    "tests/integration/scan_regression.py",
+    "tests/performance/fixtures.py"
+  ],
+  "validations": [
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender",
+      "stage": "before M1 behavior changes",
+      "result": "PASS",
+      "integration_suites": 27,
+      "unit_tests": 28
+    },
+    {
+      "command": "python3 scripts/build_extension.py --output /private/tmp/open-painter-m0-m1.zip",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-m0-m1.zip",
+      "result": "PASS",
+      "integration_suites": 31,
+      "unit_tests": 28,
+      "package_validation": true,
+      "isolated_real_install": true
+    },
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gui-only",
+      "result": "PASS",
+      "suites": [
+        "native_ui.py",
+        "texture_operations_ui.py",
+        "gui_workflow.py"
+      ]
+    },
+    {
+      "command": "/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py",
+      "result": "PASS",
+      "tests": 23
+    },
+    {
+      "command": "python3 -m compileall -q src/open_painter scripts tests",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 /private/tmp/op-m0-paired-control.py",
+      "result": "PASS: six fresh measured subprocesses; no speedup claimed",
+      "report": "docs/performance/paired-control.json"
+    }
+  ],
+  "limits": [
+    "Remote CI not executed; Blender background CI requires a provisioned runner.",
+    "Packaged installation and tests use isolated resources, not the artist profile.",
+    "Archived registration_lifecycle.py targets an obsolete implementation and fails double-register. It remains inactive and audited in implementation-status.md."
+  ]
+}

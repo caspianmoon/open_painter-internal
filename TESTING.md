@@ -127,3 +127,30 @@ rate. Complex masks/projections and 4K/8K performance remain unverified.
 ## Registration lifecycle repair
 
 `registration_lifecycle.py` checks duplicate registration, repeated teardown, partial-failure rollback, recovery and unchanged area layout during registration. `reference_layout_ui.py` verifies the preserved dock layout, real settings-tab clicks, T/N and paired-view save/reload. These checks validate the existing subtype adapter, not creation of a native custom SpaceType.
+
+
+## M0/M1 reproducible validation
+
+The current task adds scene-scoped scheduling, geometry/source invalidation and
+failed-job regressions to the active runner, along with the regional paint scan
+regression. The GUI runner also executes the actual native brush-engine stroke
+fixture, migrated to the current editor API. Candidate packaging can be tested
+without replacing a published ZIP:
+
+```sh
+python3 scripts/build_extension.py --output .blender-test/candidate.zip
+python3 scripts/run_tests.py --package .blender-test/candidate.zip
+python3 scripts/run_tests.py --gui-only
+```
+
+The runner restores the bundled example files and tracked UI screenshot after
+runs. `scripts/run_pure_tests.py` runs 23 bpy-independent tests with a NumPy Python;
+the complete unit suite still runs inside Blender. CI definitions are in
+`.github/workflows/tests.yml`; background Blender CI requires an explicitly
+provisioned runner and dispatch. GUI/Metal validation is a separate local run.
+
+See [implementation status](docs/implementation-status.md) for exact commands,
+measured before/after results, capability reports, the historical-test audit and
+unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
+fixtures at 512/2048. It reports image transfers and process RSS; it does not
+measure displayed frames or silently use lower-resolution previews.

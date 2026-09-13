@@ -1,0 +1,42 @@
+{
+  "blender_version": "5.2.1 LTS",
+  "resolution": 2048,
+  "layers": 6,
+  "material": "Worn Painted Metal",
+  "author_seconds": 0.004041542000777554,
+  "initial_seconds": 22.040820916001394,
+  "initial_cpu_seconds": 21.695503,
+  "channel_seconds": {
+    "BASE_COLOR": 17.86525833300402,
+    "ROUGHNESS": 2.04500433299836,
+    "METALLIC": 0.9067349160031881,
+    "NORMAL": 0.04057716699753655,
+    "HEIGHT": 1.0706150830010301,
+    "AO": 0.03573379199951887,
+    "EMISSION": 0.03783879199909279,
+    "OPACITY": 0.038443833000201266
+  },
+  "channel_cpu_seconds": {
+    "BASE_COLOR": 17.590641,
+    "ROUGHNESS": 1.9960149999999999,
+    "METALLIC": 0.8889829999999996,
+    "NORMAL": 0.04034799999999805,
+    "HEIGHT": 1.0672250000000005,
+    "AO": 0.03567299999999918,
+    "EMISSION": 0.037700000000000955,
+    "OPACITY": 0.03831700000000282
+  },
+  "roughness_edit_seconds": 2.0918968330006464,
+  "roughness_edit_cpu_seconds": 2.018923000000001,
+  "max_cooperative_step_cpu_ms": 37.12499999999963,
+  "max_cooperative_step_ms": 44.06666700378992,
+  "scalar_cache_mib": 144.0,
+  "max_rss_mib": 968.0,
+  "context": "CPU texture composition with synthetic AO/curvature; excludes mesh baking and viewport rendering.",
+  "provenance": {
+    "commit": "15ef25ec532f466eff18a7265fa7d7ef5019e8ef",
+    "instrumentation": "original committed scripts/benchmark_texture_material.py",
+    "concurrent_activity": "Initial repository acceptance suite was also running. Not used for before/after comparisons.",
+    "command": "BLENDER_USER_RESOURCES=/private/tmp/op-m0-benchmark-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python scripts/benchmark_texture_material.py -- --resolution 2048 --report /private/tmp/op-m0-original-2k.json"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "geometry": {
+    "exit_expected": 1,
+    "observed_assertion": "AssertionError: Roughness edit rebuilt unchanged geometry"
+  },
+  "scene_identity": {
+    "exit_expected": 1,
+    "observed_assertion": "AssertionError: Copied scenes collide in scheduler pending identity"
+  },
+  "failed_job": {
+    "exit_expected": 1,
+    "observed_assertion": "AssertionError: Failed evaluation was marked clean"
+  }
+}

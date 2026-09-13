@@ -166,7 +166,7 @@ def _coordinates(prop, n, y0, y1):
 def _procedural_block(prop, n, y0, y1, ts, geometry_cache):
     """Cache source scalar by coordinates, excluding the destination channel."""
     key = ("procedural", getattr(ts, "id", ""),
-           getattr(ts, "edit_serial", 0) if prop.projection == "TRIPLANAR" else None,
+           getattr(geometry_cache, "geometry_stamp", None) if prop.projection == "TRIPLANAR" else None,
            n, y0, y1, prop.procedural, prop.procedural_scale, prop.procedural_seed,
            prop.projection, tuple(prop.scale), prop.rotation, tuple(prop.offset),
            prop.triplanar_hardness)

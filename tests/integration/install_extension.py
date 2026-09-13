@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import tomllib
+import os
 import bpy, addon_utils, importlib
 
 root = Path(__file__).resolve().parents[2]
@@ -13,7 +14,7 @@ repo = bpy.context.preferences.extensions.repos.new(
 )
 print("INSTALL_REPO", repo.module, repo.directory)
 result = bpy.ops.extensions.package_install_files(
-    filepath=str(root / "dist" / f"open_painter-{version}.zip"),
+    filepath=os.environ.get("OPEN_PAINTER_TEST_ZIP", str(root / "dist" / f"open_painter-{version}.zip")),
     repo=repo.module,
     enable_on_install=True,
 )

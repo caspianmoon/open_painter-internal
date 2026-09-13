@@ -1,0 +1,30 @@
+name: CPU reference and Blender acceptance
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      blender_binary:
+        description: Absolute Blender 5.2+ executable on the labelled isolated runner
+        required: true
+        default: /usr/local/bin/blender
+jobs:
+  pure-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install numpy==2.2.6
+      - run: python scripts/run_pure_tests.py
+  blender-background:
+    # Explicit trusted dispatch: never run arbitrary PR code on a workstation.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, blender-5.2]
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build_extension.py --output .blender-test/candidate.zip
+      - run: python3 scripts/run_tests.py --blender "$BLENDER_BIN" --package .blender-test/candidate.zip
+        env:
+          BLENDER_BIN: ${{ inputs.blender_binary }}

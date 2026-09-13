@@ -1,0 +1,272 @@
+--- a/src/open_painter/core/image_manager.py
++++ b/src/open_painter/core/image_manager.py
+@@ -1,4 +1,6 @@
+ """Managed image creation, linear pixel access and packing."""
++
++from ..evaluation.metrics import measured, count
+ 
+ import bpy
+ import numpy as np
+@@ -17,20 +19,24 @@
+     return image
+ 
+ 
++@measured('image_read')
+ def pixels(image, out=None) -> np.ndarray:
+     if not image or not image.size[0] or not len(image.pixels):
+         raise ValueError("Texture image is missing or has no pixel data. Reload it first.")
+     shape = (image.size[1], image.size[0], 4)
+     result = out.reshape(-1) if out is not None and out.shape == shape else np.empty(image.size[0] * image.size[1] * 4, dtype=np.float32)
++    count("image_read_bytes", result.nbytes)
+     image.pixels.foreach_get(result)
+     return result.reshape(image.size[1], image.size[0], 4)
+ 
+ 
++@measured('image_write')
+ def write(image, values: np.ndarray, pack=True):
++    count("image_write_bytes", values.size * 4)
+     image.pixels.foreach_set(np.ascontiguousarray(values, dtype=np.float32).ravel())
+     image.update()
+     if pack:
+-        image.pack()
++        pack_image(image)
+ 
+ 
+ def output(ts, channel):
+@@ -52,3 +58,9 @@
+         prop.image.scale(n, n)
+         prop.dirty = True
+     return prop
++
++
++@measured("packing")
++def pack_image(image):
++    count("pack_calls")
++    image.pack()
+--- a/src/open_painter/evaluation/blend_modes.py
++++ b/src/open_painter/evaluation/blend_modes.py
+@@ -1,4 +1,6 @@
+ """Pure NumPy blend operations in linear space."""
++
++from .metrics import measured
+ 
+ import numpy as np
+ 
+@@ -41,6 +43,7 @@
+     return np.where(delta>1e-8,(c-low)*_divide(saturation,delta),0)
+ 
+ 
++@measured('blending')
+ def blend(base, source, alpha, mode="NORMAL"):
+     """Linear RGB. Standard separable modes follow W3C Compositing Level 1.
+ 
+--- a/src/open_painter/evaluation/evaluator.py
++++ b/src/open_painter/evaluation/evaluator.py
+@@ -9,6 +9,7 @@
+ from ..core.layer_stack import channel_for
+ from ..utils.logging import logger
+ from .blend_modes import blend
++from . import metrics
+ from .channel_eval import source, TILE_ROWS, _procedural_tile
+ from .raster_cache import RasterCache, for_texture_set
+ 
+@@ -66,6 +67,8 @@
+             region = None
+         if region is None:
+             result = np.empty((n, n, 4), dtype=np.float32)
++            metrics.count("output_buffer_allocated_bytes", result.nbytes)
++            metrics.gauge("output_buffer_bytes", result.nbytes)
+             low, high, cache = 0, n, {}
+         else:
+             # Unchanged rows retain their last authoritative composite. A paint
+--- a/src/open_painter/evaluation/mask_eval.py
++++ b/src/open_painter/evaluation/mask_eval.py
+@@ -1,4 +1,6 @@
+ """Resolve sequential grayscale mask sources with levels and arithmetic."""
++
++from .metrics import measured
+ 
+ import numpy as np
+ 
+@@ -84,6 +86,7 @@
+     return geometry_cache[key][y0:y1] if full else geometry_cache[key]
+ 
+ 
++@measured('masking')
+ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
+     u, v = np.meshgrid(
+         (np.arange(n, dtype=np.float32) + 0.5) / n, (np.arange(y0, y1, dtype=np.float32) + 0.5) / n
+--- /dev/null
++++ b/src/open_painter/evaluation/metrics.py
+@@ -0,0 +1,83 @@
++"""Opt-in CPU phase counters. No timers, threads or image reads when disabled.
++
++Times are nested inclusive/exclusive CPU and wall durations, not frame latency.
++Allocation counters cover explicitly observed buffers, not every NumPy temporary.
++RSS is the process lifetime high-water mark (including Blender).
++"""
++from collections import defaultdict
++from contextlib import contextmanager
++from functools import wraps
++from time import perf_counter, process_time
++import sys
++
++_active = None
++
++
++def count(name, amount=1):
++    if _active is not None:
++        _active.counts[name] += amount
++
++
++def gauge(name, value):
++    if _active is not None:
++        _active.gauges[name] = value
++        _active.peaks[name] = max(value, _active.peaks[name])
++
++
++def measured(name):
++    def decorate(fn):
++        @wraps(fn)
++        def wrapped(*args, **kwargs):
++            if _active is None:
++                return fn(*args, **kwargs)
++            with _active.phase(name):
++                return fn(*args, **kwargs)
++        return wrapped
++    return decorate
++
++
++class Metrics:
++    def __init__(self):
++        self.counts = defaultdict(int)
++        self.gauges = {}
++        self.peaks = defaultdict(int)
++        self.phases = {}
++        self.stack = []
++
++    def __enter__(self):
++        global _active
++        self.previous, _active = _active, self
++        return self
++
++    def __exit__(self, *exc):
++        global _active
++        _active = self.previous
++
++    @contextmanager
++    def phase(self, name):
++        start = perf_counter(), process_time()
++        child = [0., 0.]
++        self.stack.append(child)
++        try:
++            yield
++        finally:
++            wall, cpu = perf_counter() - start[0], process_time() - start[1]
++            self.stack.pop()
++            if self.stack:
++                self.stack[-1][0] += wall
++                self.stack[-1][1] += cpu
++            entry = self.phases.setdefault(name, dict(calls=0, wall_s=0., cpu_s=0., exclusive_wall_s=0., exclusive_cpu_s=0.))
++            entry['calls'] += 1
++            entry['wall_s'] += wall
++            entry['cpu_s'] += cpu
++            entry['exclusive_wall_s'] += wall - child[0]
++            entry['exclusive_cpu_s'] += cpu - child[1]
++
++    def report(self):
++        try:
++            import resource
++            rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
++        except ImportError:
++            rss = None
++        return dict(phases=self.phases, counters=dict(self.counts), current_bytes=self.gauges,
++                    peak_observed_bytes=dict(self.peaks), process_peak_rss_bytes=rss)
+--- a/src/open_painter/evaluation/raster_cache.py
++++ b/src/open_painter/evaluation/raster_cache.py
+@@ -1,5 +1,6 @@
+ """Bound transient texture memoization without changing texture resolution."""
+ from collections import OrderedDict
++from . import metrics
+ 
+ _shared = {}
+ 
+@@ -50,6 +51,11 @@
+         self.budget = budget
+         self.used = 0
+ 
++    def __contains__(self, key):
++        found = super().__contains__(key)
++        metrics.count("cache_hits" if found else "cache_misses")
++        return found
++
+     def __getitem__(self, key):
+         value = super().__getitem__(key)
+         self.move_to_end(key)
+@@ -66,8 +72,12 @@
+                 break
+             self.used -= byte_size(super().__getitem__(victim))
+             super().__delitem__(victim)
++            metrics.count("cache_evictions")
++        metrics.count("cache_insert_bytes", cost)
+         super().__setitem__(key,value)
+         self.used += cost
++        metrics.gauge("cache_scalar_bytes", sum(c.used for c in _shared.values()))
++        metrics.gauge("cache_geometry_bytes", sum(byte_size(OrderedDict.get(c, "geometry")) for c in _shared.values()))
+ 
+     def clear(self):
+         super().clear()
+--- a/src/open_painter/painting/projection.py
++++ b/src/open_painter/painting/projection.py
+@@ -1,10 +1,13 @@
+ """UV-space geometry rasterization for CPU triplanar texture fills."""
++
++from ..evaluation.metrics import measured
+ 
+ import numpy as np
+ 
+ from ..evaluation.blend_modes import sample_uv
+ 
+ 
++@measured('geometry')
+ def geometry(ts, n):
+     """Rasterize assigned faces to world position and world normal maps."""
+     positions = np.zeros((n, n, 3), dtype=np.float32)
+--- a/src/open_painter/texture_engine/filters.py
++++ b/src/open_painter/texture_engine/filters.py
+@@ -5,6 +5,8 @@
+ Color-only operations preserve alpha. Gradient map and height-to-normal expand
+ grayscale into RGB. Other operations work on grayscale or multi-channel arrays.
+ """
++
++from ..evaluation.metrics import measured
+ 
+ import numpy as np
+ 
+@@ -265,6 +267,7 @@
+     return out
+ 
+ 
++@measured('filters')
+ def apply(data, kind, **params):
+     """Apply a named filter without mutating input; extra parameters are ignored.
+ 
+--- a/src/open_painter/texture_engine/procedurals.py
++++ b/src/open_painter/texture_engine/procedurals.py
+@@ -7,6 +7,8 @@
+ https://mrl.cs.nyu.edu/~perlin/noise/ . The integer hash and 2D implementations
+ here are original and do not use the reference permutation table.
+ """
++
++from ..evaluation.metrics import measured
+ 
+ import numpy as np
+ 
+@@ -222,6 +224,7 @@
+     return (1 - _smooth(radius * 0.3, radius, f1)) * (identity < density)
+ 
+ 
++@measured('source_generation')
+ def evaluate(kind, u, v, seed=1, scale=8, **params):
+     """Evaluate one catalog source as finite float32 grayscale in [0, 1].
+ 

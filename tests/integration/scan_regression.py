@@ -14,15 +14,17 @@ evaluator=LayerEvaluator(scene);evaluator.evaluate_texture_set(ts.id)
 project=scene.open_painter;project.paint_image=image;project.paint_set_id=ts.id;project.paint_layer_id=layer.id;project.paint_target_channel='BASE_COLOR';project.paint_channel='BASE_COLOR'
 paint._rasters[scene.as_pointer()]=(image.as_pointer(),images.pixels(image))
 for row in [50,100,200]:
-    data=images.pixels(image);data[row:row+2,100:120]=(.2,.4,.6,1);images.write(image,data,pack=False)
+    data=images.pixels(image);data[row:row+2,100:120]=(.2,.4,.6,1)
+    # Native Blender brush writes bypass the managed Python writer.
+    image.pixels.foreach_set(data.ravel()); image.update()
     assert paint.detect(scene,force=True)
-    region=cache._regions[ts.id];assert region[2:4]==(row,row+2),region[2:4]
+    region=cache._regions[cache.key_for(scene, ts)];assert region[2:4]==(row,row+2),region[2:4]
     job=evaluator.channel_steps(ts.id,'BASE_COLOR',region)
     for _ in job:pass
     regional=images.pixels(images.output(ts,'BASE_COLOR').image)
     evaluator.evaluate_texture_set(ts.id,force=True)
     np.testing.assert_array_equal(regional,images.pixels(images.output(ts,'BASE_COLOR').image))
-    cache._regions.pop(ts.id,None)
+    cache._regions.pop(cache.key_for(scene, ts),None)
     assert not paint.detect(scene,force=True)
 project.paint_image=None
 for name in ['Fine Wood','Weathered Paint']:

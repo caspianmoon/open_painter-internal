@@ -6,6 +6,8 @@ import bpy
 from bpy.app.handlers import persistent
 
 from ..constants import OWNER
+from .resource_keys import key_for
+from . import dependencies
 from ..utils.logging import logger
 
 _pending = {}
@@ -14,6 +16,45 @@ _evaluators = {}
 _jobs = {}
 _live_checks = {}
 _regions = {}
+_states = {}
+
+
+
+def job_state(scene, ts):
+    key = key_for(scene, ts)
+    state = _states.get(key)
+    if state and state['serial'] == ts.edit_serial:
+        return dict(state)
+    return dict(state='QUEUED' if ts.dirty else 'READY', serial=ts.edit_serial, error='')
+
+
+def set_state(scene, ts, state, error=''):
+    _states[key_for(scene, ts)] = dict(state=state, serial=ts.edit_serial, error=error)
+
+
+
+def failure_message(scene):
+    return ' | '.join(f"{ts.name}: {state['error']}" for ts in scene.open_painter.texture_sets
+                      if (state := job_state(scene, ts))['state'] == 'FAILED')
+
+
+def retry(scene, ts):
+    _states.pop(key_for(scene, ts), None)
+    _pending.pop(key_for(scene, ts), None)
+    ts.dirty = True
+
+
+def discard(key):
+    entry = _jobs.pop(key, None)
+    if entry:
+        entry[1].close()
+    _evaluators.pop(key, None)
+
+
+def cancel_all():
+    for key in list(_jobs):
+        discard(key)
+    _evaluators.clear()
 
 
 def paint_input(scene, pressed):
@@ -24,23 +65,23 @@ def tick():
     from .evaluator import LayerEvaluator
     from .raster_cache import prune
 
-    prune((scene.as_pointer(), ts.id) for scene in bpy.data.scenes
-          if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets)
-
-    live = {
-        ts.id
-        for scene in bpy.data.scenes
-        if hasattr(scene, "open_painter")
-        for ts in scene.open_painter.texture_sets
-    }
-    for identifier in set(_evaluators) - live:
-        _evaluators.pop(identifier, None)
+    live = {key_for(scene, ts) for scene in bpy.data.scenes
+            if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets}
+    prune(live)
+    dependencies.prune(live)
+    live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
+    for table in (_paint_input, _live_checks):
+        for key in set(table) - live_scenes:
+            table.pop(key, None)
+    for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
+        discard(identifier)
         _pending.pop(identifier, None)
-        _jobs.pop(identifier, None)
         _regions.pop(identifier, None)
+        _states.pop(identifier, None)
     for scene in bpy.data.scenes:
         if not hasattr(scene, "open_painter"):
             continue
+        dependencies.refresh(scene)
         from ..painting.paint_session import detect
 
         activity = _paint_input.get(scene.as_pointer())
@@ -49,7 +90,7 @@ def tick():
             op.bl_idname == "PAINT_OT_image_paint" for w in windows for op in w.modal_operators
         )
         scene_key = scene.as_pointer()
-        busy = any(ts.id in _jobs for ts in scene.open_painter.texture_sets)
+        busy = any(key_for(scene, ts) in _jobs for ts in scene.open_painter.texture_sets)
         if painting:
             # Composite snapshots during a stroke, not only after mouse release.
             # Never invalidate a partially completed snapshot with another scan.
@@ -68,21 +109,26 @@ def tick():
             if not any(is_area(area) for w in windows for area in w.screen.areas):
                 detect(scene)
         for ts in scene.open_painter.texture_sets:
+            key = key_for(scene, ts)
             if not ts.dirty:
-                _pending.pop(ts.id, None)
-                _evaluators.pop(ts.id, None)
-                _jobs.pop(ts.id, None)
-                _regions.pop(ts.id, None)
+                set_state(scene, ts, "READY")
+                _pending.pop(key, None)
+                discard(key)
+                _regions.pop(key, None)
+                continue
+            state = job_state(scene, ts)
+            if state["state"] == "FAILED":
                 continue
             now = monotonic()
-            serial, since = _pending.setdefault(ts.id, (ts.edit_serial, now))
+            serial, since = _pending.setdefault(key, (ts.edit_serial, now))
             if serial != ts.edit_serial:
-                _pending[ts.id] = (ts.edit_serial, now)
-                _evaluators.pop(ts.id, None)
-                _jobs.pop(ts.id, None)
+                _pending[key] = (ts.edit_serial, now)
+                discard(key)
+                set_state(scene, ts, "STALE")
                 if not painting:
                     continue
-            if ts.id not in _jobs and not painting and now - since < 0.08:
+            if key not in _jobs and not painting and now - since < 0.08:
+                set_state(scene, ts, "QUEUED")
                 continue
             try:
                 from ..constants import CHANNELS
@@ -92,31 +138,32 @@ def tick():
                 issues = hierarchy_issues(ts)
                 if issues:
                     raise ValueError(" | ".join(issues))
-                evaluator = _evaluators.get(ts.id)
+                evaluator = _evaluators.get(key)
                 if evaluator is None:
-                    evaluator = _evaluators[ts.id] = LayerEvaluator(scene)
+                    evaluator = _evaluators[key] = LayerEvaluator(scene)
                 outputs = [image_manager.output(ts, channel) for channel in CHANNELS]
                 dirty = next((output for output in outputs if output.dirty), None)
                 if dirty:
                     scene.open_painter.status = "Updating textures…"
-                    entry = _jobs.get(ts.id)
+                    set_state(scene, ts, "RUNNING")
+                    entry = _jobs.get(key)
                     if entry is None or entry[0] != dirty.channel:
-                        region = _regions.get(ts.id)
+                        region = _regions.get(key)
                         if region and (region[0], region[1]) != (ts.edit_serial, dirty.channel):
                             region = None
                         entry = (
                             dirty.channel,
                             evaluator.channel_steps(ts.id, dirty.channel, region),
                         )
-                        _jobs[ts.id] = entry
+                        _jobs[key] = entry
                     job = entry[1]
                     deadline = monotonic() + 0.006
                     while True:
                         try:
                             next(job)
                         except StopIteration:
-                            _jobs.pop(ts.id, None)
-                            _regions.pop(ts.id, None)
+                            _jobs.pop(key, None)
+                            _regions.pop(key, None)
                             break
                         if monotonic() >= deadline:
                             return 0.001
@@ -128,14 +175,17 @@ def tick():
                     layer.dirty = False
                     for channel in layer.channels:
                         channel.dirty = False
-                scene.open_painter.status = ""
+                set_state(scene, ts, "READY")
+                scene.open_painter.status = failure_message(scene)
             except Exception as exc:
                 scene.open_painter.status = str(exc)
                 logger.error("Evaluation: %s", exc)
-                ts.dirty = False
-            _pending.pop(ts.id, None)
-            _evaluators.pop(ts.id, None)
-            _jobs.pop(ts.id, None)
+                # Keep unresolved outputs and their last complete pixels. The same
+                # failed revision stays parked until an edit or explicit retry.
+                ts.dirty = True
+                set_state(scene, ts, "FAILED", str(exc))
+            _pending.pop(key, None)
+            discard(key)
             return 0.001
     return (
         0.016
@@ -155,10 +205,11 @@ def on_load(_):
 
     reset()
     clear_shared()
+    dependencies.clear()
+    _states.clear()
     _pending.clear()
     _paint_input.clear()
-    _evaluators.clear()
-    _jobs.clear()
+    cancel_all()
     _live_checks.clear()
     _regions.clear()
     for scene in bpy.data.scenes:
@@ -175,8 +226,7 @@ def on_load(_):
 @persistent
 def on_save(_):
     # A save performs a complete authoritative flush; discard older preview jobs.
-    _jobs.clear()
-    _evaluators.clear()
+    cancel_all()
     _regions.clear()
     from ..painting.paint_session import detect
     from .evaluator import LayerEvaluator
@@ -189,15 +239,20 @@ def on_save(_):
             if ts.dirty:
                 try:
                     LayerEvaluator(scene).evaluate_texture_set(ts.id)
+                    set_state(scene, ts, "READY")
                 except Exception as exc:
                     scene.open_painter.status = f"Saved project; preview needs attention: {exc}"
+                    set_state(scene, ts, "FAILED", str(exc))
                     logger.error("Save preview: %s", exc)
     for image in bpy.data.images:
         if image.get(OWNER) and image.has_data:
-            image.pack()
+            from ..core.image_manager import pack_image
+            pack_image(image)
 
 
 def register():
+    bpy.app.handlers.depsgraph_update_post.append(dependencies.on_depsgraph)
+    bpy.app.handlers.frame_change_post.append(dependencies.on_frame)
     bpy.app.handlers.load_post.append(on_load)
     bpy.app.handlers.undo_post.append(on_load)
     bpy.app.handlers.redo_post.append(on_load)
@@ -211,11 +266,15 @@ def unregister():
     from .raster_cache import clear_shared
 
     clear_shared()
+    dependencies.clear()
+    _states.clear()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             restore_faces(scene.open_painter)
     for handlers, fn in (
+        (bpy.app.handlers.depsgraph_update_post, dependencies.on_depsgraph),
+        (bpy.app.handlers.frame_change_post, dependencies.on_frame),
         (bpy.app.handlers.load_post, on_load),
         (bpy.app.handlers.undo_post, on_load),
         (bpy.app.handlers.redo_post, on_load),
@@ -230,7 +289,6 @@ def unregister():
     reset()
     _pending.clear()
     _paint_input.clear()
-    _evaluators.clear()
-    _jobs.clear()
+    cancel_all()
     _live_checks.clear()
     _regions.clear()

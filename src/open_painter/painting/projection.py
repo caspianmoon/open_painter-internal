@@ -1,10 +1,13 @@
 """UV-space geometry rasterization for CPU triplanar texture fills."""
 
+from ..evaluation.metrics import measured
+
 import numpy as np
 
 from ..evaluation.blend_modes import sample_uv
 
 
+@measured('geometry')
 def geometry(ts, n):
     """Rasterize assigned faces to world position and world normal maps."""
     positions = np.zeros((n, n, 3), dtype=np.float32)

@@ -9,6 +9,7 @@ from ..core import image_manager, material_manager
 from ..core.layer_stack import channel_for
 from ..utils.logging import logger
 from .blend_modes import blend
+from . import metrics
 from .channel_eval import source, TILE_ROWS, _procedural_tile
 from .raster_cache import RasterCache, for_texture_set
 
@@ -21,6 +22,18 @@ class LayerEvaluator:
         self.geometry_cache = RasterCache()
 
     def evaluate_texture_set(self, texture_set_id: str, force=False):
+        from . import cache as scheduler
+        ts = next((s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id), None)
+        try:
+            return self._evaluate_texture_set(texture_set_id, force)
+        except Exception as exc:
+            if ts is not None:
+                ts.dirty = True
+                scheduler.set_state(self.scene, ts, "FAILED", str(exc))
+                self.scene.open_painter.status = scheduler.failure_message(self.scene)
+            raise
+
+    def _evaluate_texture_set(self, texture_set_id, force=False):
         ts = next((s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id), None)
         if ts is None:
             raise ValueError("No active texture set.")
@@ -29,6 +42,9 @@ class LayerEvaluator:
         issues = hierarchy_issues(ts)
         if issues:
             raise ValueError(" | ".join(issues))
+        from . import dependencies, cache as scheduler
+        dependencies.refresh(self.scene)
+        scheduler.discard(scheduler.key_for(self.scene, ts))
         self.geometry_cache = for_texture_set(self.scene, ts, force=force)
         started = perf_counter()
         for channel in CHANNELS:
@@ -41,6 +57,8 @@ class LayerEvaluator:
             for prop in layer.channels:
                 prop.dirty = False
         material_manager.repair(ts)
+        scheduler.set_state(self.scene, ts, "READY")
+        self.scene.open_painter.status = scheduler.failure_message(self.scene)
         logger.debug("Evaluated %s in %.3fs", ts.name, perf_counter() - started)
 
     def evaluate_channel(self, texture_set_id: str, channel: str):
@@ -55,6 +73,7 @@ class LayerEvaluator:
         """Cooperative preview job; callers may yield to Blender between row tiles."""
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
         self.geometry_cache = for_texture_set(self.scene, ts)
+        serial = ts.edit_serial
         n = int(ts.resolution)
         if region is not None and any(
             any(effect.enabled for effect in prop.effects)
@@ -66,6 +85,8 @@ class LayerEvaluator:
             region = None
         if region is None:
             result = np.empty((n, n, 4), dtype=np.float32)
+            metrics.count("output_buffer_allocated_bytes", result.nbytes)
+            metrics.gauge("output_buffer_bytes", result.nbytes)
             low, high, cache = 0, n, {}
         else:
             # Unchanged rows retain their last authoritative composite. A paint
@@ -168,12 +189,16 @@ class LayerEvaluator:
                     from .mask_eval import evaluate_masks
                     mask = evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)
                     yield
+                    if ts.edit_serial != serial:
+                        return None
                     if not np.any(mask):
                         skipped.add(layer.id)
                         continue
                 if layer.type == "FILL" and prop and prop.procedural:
                     _procedural_tile(prop, n, y0, y1, ts, self.geometry_cache)
                     yield
+                    if ts.edit_serial != serial:
+                        return None
             rgb, _ = compose("", y0, y1, DEFAULTS[channel][:3], set(), 1)
             if channel == "NORMAL":
                 vectors = rgb * 2 - 1
@@ -185,6 +210,11 @@ class LayerEvaluator:
             result[y0:y1, :, :3] = np.clip(rgb, 0, 1)
             result[y0:y1, :, 3] = 1
             yield
+            if ts.edit_serial != serial:
+                return None
+        if ts.edit_serial != serial:
+            # Main-thread edits between yields cannot publish an older raster.
+            return None
         out = image_manager.output(ts, channel)
         image_manager.write(out.image, result, pack=False)
         out.dirty = False

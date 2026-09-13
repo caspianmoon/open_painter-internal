@@ -1,5 +1,7 @@
 """Pure NumPy blend operations in linear space."""
 
+from .metrics import measured
+
 import numpy as np
 
 
@@ -41,6 +43,7 @@ def _set_sat(c, saturation):
     return np.where(delta>1e-8,(c-low)*_divide(saturation,delta),0)
 
 
+@measured('blending')
 def blend(base, source, alpha, mode="NORMAL"):
     """Linear RGB. Standard separable modes follow W3C Compositing Level 1.
 

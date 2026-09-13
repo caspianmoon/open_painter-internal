@@ -1,5 +1,7 @@
 """Managed image creation, linear pixel access and packing."""
 
+from ..evaluation.metrics import measured, count
+
 import bpy
 import numpy as np
 
@@ -17,20 +19,29 @@ def create(name: str, resolution: int, color=(0, 0, 0, 0), color_data=False):
     return image
 
 
+@measured('image_read')
 def pixels(image, out=None) -> np.ndarray:
     if not image or not image.size[0] or not len(image.pixels):
         raise ValueError("Texture image is missing or has no pixel data. Reload it first.")
     shape = (image.size[1], image.size[0], 4)
     result = out.reshape(-1) if out is not None and out.shape == shape else np.empty(image.size[0] * image.size[1] * 4, dtype=np.float32)
+    count("image_read_bytes", result.nbytes)
+    if out is None or out.shape != shape:
+        count("image_read_allocated_bytes", result.nbytes)
     image.pixels.foreach_get(result)
     return result.reshape(image.size[1], image.size[0], 4)
 
 
+@measured('image_write')
 def write(image, values: np.ndarray, pack=True):
+    count("image_write_bytes", values.size * 4)
     image.pixels.foreach_set(np.ascontiguousarray(values, dtype=np.float32).ravel())
     image.update()
+    image["open_painter_pixel_revision"] = image.get("open_painter_pixel_revision", 0) + 1
+    from ..evaluation.dependencies import image_written
+    image_written(image)
     if pack:
-        image.pack()
+        pack_image(image)
 
 
 def output(ts, channel):
@@ -52,3 +63,9 @@ def output(ts, channel):
         prop.image.scale(n, n)
         prop.dirty = True
     return prop
+
+
+@measured("packing")
+def pack_image(image):
+    count("pack_calls")
+    image.pack()

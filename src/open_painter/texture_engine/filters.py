@@ -6,6 +6,8 @@ Color-only operations preserve alpha. Gradient map and height-to-normal expand
 grayscale into RGB. Other operations work on grayscale or multi-channel arrays.
 """
 
+from ..evaluation.metrics import measured
+
 import numpy as np
 
 
@@ -265,6 +267,7 @@ def _color_apply(data, key, params):
     return out
 
 
+@measured('filters')
 def apply(data, kind, **params):
     """Apply a named filter without mutating input; extra parameters are ignored.
 

@@ -1,5 +1,9 @@
 """Resolve sequential grayscale mask sources with levels and arithmetic."""
 
+from .metrics import measured
+from .resource_keys import image_key
+from .dependencies import map_dependencies
+
 import numpy as np
 
 from ..core.image_manager import pixels
@@ -17,7 +21,7 @@ def map_pixels(ts, kind, cache):
 
 
 def _image_identity(image):
-    return (image.as_pointer(), tuple(image.size)) if image else None
+    return image_key(image)
 
 
 def _effect_signature(effect):
@@ -34,20 +38,23 @@ def _effect_signature(effect):
 def _stack_signature(ts, layer, geometry_cache):
     """Parameter identities keep mesh-aware masks reusable across color edits.
 
-    Painted/fill pixels and triplanar geometry use the set edit serial. Baked
-    sources use image identities; rebaking replaces those images. Explicit force
+    Painted/fill pixels retain conservative edit-serial invalidation. Geometry
+    and baked sources have independent resource identities. Explicit force
     evaluation clears shared caches for external in-place pixel modifications.
     """
     memo = getattr(geometry_cache, "signatures", None)
     lookup = (layer.id, ts.edit_serial)
     if memo is not None and lookup in memo:
         return memo[lookup]
-    maps = tuple((item.kind, _image_identity(item.image)) for item in ts.baked_maps if item.image)
+
     result = []
     for mask in layer.masks:
         if not mask.enabled:
             result.append((False,))
             continue
+        required = map_dependencies(mask)
+        maps = tuple((item.kind, _image_identity(item.image)) for item in ts.baked_maps
+                     if item.image and (required is None or item.kind in required))
         common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength)
         if mask.source in {"GENERATOR", "NOISE"}:
             extra = (mask.generator, mask.amount, mask.contrast, mask.noise_scale,
@@ -56,7 +63,7 @@ def _stack_signature(ts, layer, geometry_cache):
             extra = (mask.procedural, mask.noise_scale, mask.seed, mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
                      mask.triplanar_hardness,
-                     ts.edit_serial if mask.projection == "TRIPLANAR" else None)
+                     getattr(geometry_cache, "geometry_stamp", None) if mask.projection == "TRIPLANAR" else None)
         elif mask.source == "BAKED":
             extra = (mask.map_type, maps)
         elif mask.source == "FILTER":
@@ -84,6 +91,7 @@ def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
     return geometry_cache[key][y0:y1] if full else geometry_cache[key]
 
 
+@measured('masking')
 def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
     u, v = np.meshgrid(
         (np.arange(n, dtype=np.float32) + 0.5) / n, (np.arange(y0, y1, dtype=np.float32) + 0.5) / n

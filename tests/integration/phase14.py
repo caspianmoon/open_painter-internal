@@ -37,12 +37,12 @@ images.write(image, values, pack=False)
 # Inject a paused real job, then edit the stack. The timer must discard it.
 job = LayerEvaluator(scene).channel_steps(ts.id, "BASE_COLOR")
 next(job)
-cache._jobs[ts.id] = ("BASE_COLOR", job)
-cache._pending[ts.id] = (ts.edit_serial, monotonic() - 1)
+cache._jobs[cache.key_for(scene, ts)] = ("BASE_COLOR", job)
+cache._pending[cache.key_for(scene, ts)] = (ts.edit_serial, monotonic() - 1)
 paint.opacity = 0.3
 cache.tick()
-assert ts.id not in cache._jobs
-cache._pending[ts.id] = (ts.edit_serial, monotonic() - 1)
+assert cache.key_for(scene, ts) not in cache._jobs
+cache._pending[cache.key_for(scene, ts)] = (ts.edit_serial, monotonic() - 1)
 for _ in range(2000):
     cache.tick()
     if not ts.dirty:
@@ -65,8 +65,8 @@ images.write(image, values, pack=False)
 from open_painter.painting.channel_paint import mark_changed
 
 mark_changed(ts, paint, "BASE_COLOR")
-cache._regions[ts.id] = (ts.edit_serial, "BASE_COLOR", 300, 302, image.as_pointer(), values)
-cache._pending[ts.id] = (ts.edit_serial, monotonic() - 1)
+cache._regions[cache.key_for(scene, ts)] = (ts.edit_serial, "BASE_COLOR", 300, 302, image.as_pointer(), values)
+cache._pending[cache.key_for(scene, ts)] = (ts.edit_serial, monotonic() - 1)
 for _ in range(1000):
     cache.tick()
     if not ts.dirty:

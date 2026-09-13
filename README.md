@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.2.0.zip`](dist/open_painter-0.2.0.zip).
+1. Download or build [`dist/open_painter-0.2.1.zip`](dist/open_painter-0.2.1.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -37,6 +37,8 @@ No online account, network connection, or separate Python installation is needed
 Version 0.2.0 adds all **50 requested smart materials**, **16 stackable effects**, **18 smart masks**,
 **65 procedural sources** and **52 texture filters**. They form editable texture stacks rather than shader effects.
 See the [v1 workflow and controls](docs/texture-workflow-v1.md) and the [material catalog with required maps](docs/material-catalog.md).
+
+The native Painter toolbar has **Materials, Smart Materials, Smart Masks, Filters, Brushes, Alphas, and Textures** buttons that filter the bottom shelf. **All Types** clears that type filter. See [asset category controls](docs/asset-categories.md) for activation and import behavior.
 
 ## First use
 

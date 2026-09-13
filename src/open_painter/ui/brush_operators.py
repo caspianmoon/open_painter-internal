@@ -18,6 +18,7 @@ class OP_OT_import_alpha(SafeOperator, bpy.types.Operator, ImportHelper):
 
     def run(self, context):
         texture = alphas.import_alpha(context, self.filepath)
+        context.scene.open_painter.asset_category = "ALPHAS"
         self.report({"INFO"}, f"Brush alpha: {texture.name}")
 
 

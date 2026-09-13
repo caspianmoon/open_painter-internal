@@ -14,6 +14,17 @@ from open_painter.ui import native  # noqa: E402
 from open_painter.ui.dock import lifecycle  # noqa: E402
 
 drawn = set()
+asset_headers = set()
+original_asset_buttons = native.asset_type_buttons
+
+
+def asset_buttons(self, context):
+    if native.editor.is_area(context.area):
+        asset_headers.add(context.area.type)
+    original_asset_buttons(self, context)
+
+
+native.asset_type_buttons = asset_buttons
 
 
 def traced(original, name):
@@ -73,6 +84,7 @@ def setup():
 def check():
     try:
         assert "OP_PT_native_layers" in drawn
+        assert "VIEW_3D" in asset_headers
         assert not lifecycle._handlers
         assert not any(
             o.bl_idname == "OPEN_PAINTER_OT_dock_events" for o in bpy.context.window.modal_operators
@@ -158,6 +170,7 @@ def hidden():
 def check_2d():
     try:
         assert area.type == "IMAGE_EDITOR"
+        assert "IMAGE_EDITOR" in asset_headers
         assert any(r.type == "ASSET_SHELF" and r.height > 10 for r in area.regions)
         assert next(r for r in area.regions if r.type == "UI").active_panel_category == "Painter"
         region = next(r for r in area.regions if r.type == "WINDOW")

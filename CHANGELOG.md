@@ -1,5 +1,11 @@
 # Changes
 
+## 0.2.1
+
+- Restore all seven asset types as labeled native toolbar buttons in 3D and 2D, filtering the bottom shelf. Separate Materials from Smart Materials.
+- Populate Filters, Brushes, Alphas and Textures with working assets; route filter/procedural/image clicks to the selected channel or mask. Add texture import and library refresh.
+- Cache generated previews outside drawing; preserve imported source images and reuse their handles after renaming. Verify category isolation, actual activation and native UI lifecycle.
+
 ## 0.2.0
 
 - Add 50 original smart materials with 229 editable layers, 16 stackable effects and 18 smart masks, with actual rendered previews.

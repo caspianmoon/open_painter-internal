@@ -4,12 +4,14 @@ from pathlib import Path
 from textwrap import wrap
 
 import bpy
+from bpy_extras.io_utils import ImportHelper
 
 from ..core.layer_stack import active, channel_for, visible_rows
 from ..core.project_manager import active_set, require_set
 from . import editor
 from .dock import assets, state
 from .operators import SafeOperator
+from . import library_categories as categories
 
 ASSET_KEY = "open_painter_catalog_entry"
 
@@ -23,21 +25,32 @@ def catalog():
         for name, data in CATALOG.items()
     ] + [
         (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
-    ]
+    ] + categories.extras()
 
 
-def prepare_assets():
+def prepare_assets(*, refresh_sources=False):
     # Images are asset handles only; activation always routes through Painter.
     from ..smart_materials.catalog import CATALOG
     from ..constants import VERSION
     handles = {image.get(ASSET_KEY): image for image in bpy.data.images if ASSET_KEY in image}
-    for entry in catalog():
+    entries = catalog()
+    for entry in entries:
+        entry_key = categories.key(entry)
+        category = categories.KIND_CATEGORY[entry[1]]
         path = (
             Path(__file__).resolve().parents[1]
             / "assets/previews"
             / (entry[0].replace(" ", "_") + ".png")
         )
-        image = assets.preview(entry[0]) if path.exists() else handles.get(entry[0])
+        if category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}:
+            path = Path("/__open_painter_no_preview__")
+        source = (bpy.data.images.get(entry[2]) if entry[1] == "TEXTURE" else
+                  bpy.data.textures.get(entry[2]) if entry[1] == "ALPHA" and entry[2] else None)
+        image = assets.preview(entry[0]) if path.exists() else handles.get(entry_key)
+        if image is None and source:
+            image = next((handle for handle in handles.values()
+                          if handle.get(categories.SOURCE_KEY) == source
+                          and handle.get(categories.ASSET_CATEGORY_KEY) == category), None)
         if not image:
             # Library entries remain usable while a rendered preview is absent.
             # This is explicitly a color swatch, never a claimed material render.
@@ -45,32 +58,62 @@ def prepare_assets():
             image.generated_color = (*entry[3], 1)
             image.use_fake_user = True
             image["open_painter_preview_kind"] = "COLOR_SWATCH"
-            preview = image.preview_ensure()
-            preview.image_size = (32, 32)
-            preview.image_pixels_float = list((*entry[3], 1)) * (32 * 32)
-        image[ASSET_KEY] = entry[0]
-        old_handle = handles.get(entry[0])
+        image[ASSET_KEY] = entry_key
+        image[categories.ASSET_CATEGORY_KEY] = category
+        if source:
+            image[categories.SOURCE_KEY] = source
+        old_handle = handles.get(entry_key)
         if old_handle and old_handle != image and old_handle.asset_data:
             old_handle.asset_clear()
             del old_handle[ASSET_KEY]
-        image.name = entry[0]
+        image.name = entry[0] if source is None else entry[0] + " · Painter Asset"
         if not image.asset_data:
             image.asset_mark()
         description = (
             "Smart mask: apply to the selected layer or folder"
             if entry[1] == "SMART_MASK"
             else CATALOG[entry[0]]["description"] if entry[1] == "SMART_RECIPE"
+            else "Apply to the selected channel or mask" if entry[1] in {"FILTER", "PROCEDURAL", "TEXTURE"}
+            else "Texture painting brush" if entry[1] == "BRUSH"
+            else "Brush alpha" if entry[1] == "ALPHA"
             else "Open Painter material"
         )
-        if path.exists() and "open_painter_preview_kind" in image:
+        if (path.exists() or category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}) and "open_painter_preview_kind" in image:
             del image["open_painter_preview_kind"]
         image.asset_data.description = description + (
             " (Color swatch preview)" if image.get("open_painter_preview_kind") == "COLOR_SWATCH" else ""
         )
+        if not path.exists() and ((source and refresh_sources) or image.get("open_painter_preview_version") != VERSION or image.preview is None or not image.preview.image_size[0]):
+            import numpy as np
+            source_image = source.image if isinstance(source, bpy.types.Texture) else source
+            if source_image:
+                source_path = bpy.path.abspath(source_image.filepath)
+                if source_path and not source_image.is_dirty and Path(source_path).is_file():
+                    # Use Blender's native thumbnail loader for file textures;
+                    # avoid copying their full raster into Python just to browse.
+                    with bpy.context.temp_override(id=image):
+                        bpy.ops.ed.lib_id_load_custom_preview(filepath=source_path)
+                    image["open_painter_preview_version"] = VERSION
+                    continue
+                from ..core.image_manager import pixels
+                rgba = pixels(source_image)
+                ys = np.linspace(0, rgba.shape[0] - 1, 48).astype(int)
+                xs = np.linspace(0, rgba.shape[1] - 1, 48).astype(int)
+                rgba = rgba[ys[:, None], xs]
+            else:
+                rgba = categories.make_preview(entry)
+            preview = image.preview_ensure()
+            preview.image_size = (rgba.shape[1], rgba.shape[0])
+            preview.image_pixels_float = rgba.ravel()
+            image["open_painter_preview_version"] = VERSION
         if path.exists() and (image.get("open_painter_preview_version") != VERSION or image.preview is None or not image.preview.image_size[0]):
             with bpy.context.temp_override(id=image):
                 bpy.ops.ed.lib_id_load_custom_preview(filepath=str(path))
             image["open_painter_preview_version"] = VERSION
+    valid = {categories.key(entry) for entry in entries}
+    for handle in handles.values():
+        if handle.get(ASSET_KEY) not in valid and handle.asset_data:
+            handle.asset_clear()
 
 
 class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
@@ -104,7 +147,17 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
             handle = bpy.data.images.get(self.relative_asset_identifier.split("/", 1)[-1])
         if not handle or ASSET_KEY not in handle:
             raise ValueError("Select an Open Painter asset.")
-        entry = next(e for e in catalog() if e[0] == handle[ASSET_KEY])
+        entry = next((e for e in catalog() if categories.key(e) == handle[ASSET_KEY]), None)
+        if entry is None:
+            raise ValueError("This asset is no longer available. Refresh the library.")
+        region = next(r for r in context.area.regions if r.type == "WINDOW")
+        with context.temp_override(region=region):
+            self.apply_entry(context, entry, handle.get(categories.SOURCE_KEY))
+        context.area.tag_redraw()
+
+    def apply_entry(self, context, entry, source):
+        if categories.activate(context, entry, source):
+            return
         if entry[1] == "SMART_MASK":
             from ..smart_masks.library import apply
 
@@ -136,10 +189,52 @@ class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
         if not handle or ASSET_KEY not in handle:
             return False
         category = bpy.context.scene.open_painter.asset_category
-        entry = next((e for e in catalog() if e[0] == handle[ASSET_KEY]), None)
-        return bool(
-            entry and (category == "ALL" or (entry[1] == "SMART_MASK") == (category == "MASKS"))
-        )
+        return category == "ALL" or handle.get(categories.ASSET_CATEGORY_KEY) == category
+
+
+def asset_type_buttons(self, context):
+    if not editor.is_area(context.area):
+        return
+    row = self.layout.row(align=True)
+    row.label(text="Assets:")
+    for identifier, label, _description, _value in categories.CATEGORY_ITEMS:
+        row.prop_enum(context.scene.open_painter, "asset_category", identifier, text=label)
+    row.operator("open_painter.refresh_assets", text="", icon="FILE_REFRESH")
+    category = context.scene.open_painter.asset_category
+    if category == "ALPHAS":
+        row.operator("open_painter.import_alpha", text="Import Alpha", icon="IMPORT")
+    elif category == "TEXTURES":
+        row.operator("open_painter.import_texture", text="Import Texture", icon="IMPORT")
+    self.layout.separator()
+
+
+class OP_OT_refresh_assets(SafeOperator, bpy.types.Operator):
+    bl_idname = "open_painter.refresh_assets"
+    bl_label = "Refresh Painter Assets"
+
+    def run(self, context):
+        categories.refresh(None, context, refresh_sources=True)
+
+
+class OP_OT_import_texture(SafeOperator, bpy.types.Operator, ImportHelper):
+    bl_idname = "open_painter.import_texture"
+    bl_label = "Import Texture to Painter Library"
+    bl_options = {"UNDO"}
+    filter_glob: bpy.props.StringProperty(default="*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.exr;*.bmp", options={"HIDDEN"})
+
+    def run(self, context):
+        image = bpy.data.images.load(self.filepath, check_existing=False)
+        try:
+            if not image.size[0]:
+                raise ValueError("The texture image could not be read.")
+            image.pack()
+            image.use_fake_user = True
+            image["open_painter_library_texture"] = True
+        except Exception:
+            bpy.data.images.remove(image)
+            raise
+        context.scene.open_painter.asset_category = "TEXTURES"
+        self.report({"INFO"}, "Texture imported. Click its thumbnail to assign it to the selected fill or mask.")
 
 
 class OP_OT_native_view(SafeOperator, bpy.types.Operator):
@@ -459,7 +554,6 @@ def toolbar(self, context):
     if not editor.is_area(context.area):
         return
     row = self.layout.row(align=True)
-    row.prop(context.scene.open_painter, "asset_category", text="Assets")
     row.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
     row.operator("open_painter.paint", text="Finish").stop = True
     row.popover(panel="OP_PT_native_bake", text="Bake Mesh Maps")
@@ -492,6 +586,8 @@ CLASSES = (
     OP_UL_native_layers,
     OP_OT_native_view,
     OP_OT_native_asset,
+    OP_OT_refresh_assets,
+    OP_OT_import_texture,
     VIEW3D_AST_open_painter,
     OP_OT_native_select,
     OP_PT_native_sets,

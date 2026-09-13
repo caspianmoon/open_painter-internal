@@ -3,6 +3,7 @@ import bpy
 from ..constants import CHANNEL_ITEMS
 from ..painting.brush_bridge import get_value, set_value
 from .texture_set import OP_TextureSet
+from ..ui.library_categories import CATEGORY_ITEMS, refresh
 
 
 class OP_Project(bpy.types.PropertyGroup):
@@ -16,8 +17,9 @@ class OP_Project(bpy.types.PropertyGroup):
     paint_layer_id: bpy.props.StringProperty()
     asset_category: bpy.props.EnumProperty(
         name="Assets",
-        items=[("ALL", "All", ""), ("MATERIALS", "Materials", ""), ("MASKS", "Smart Masks", "")],
+        items=CATEGORY_ITEMS,
         default="ALL",
+        update=refresh,
     )
     paint_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="ROUGHNESS")
     blend_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR")

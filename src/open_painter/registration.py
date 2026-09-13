@@ -88,7 +88,9 @@ def register():
     from .ui import editor
 
     editor.register()
-    from .ui.native import toolbar
+    from .ui.native import toolbar, asset_type_buttons
+    bpy.types.VIEW3D_HT_tool_header.prepend(asset_type_buttons)
+    bpy.types.IMAGE_HT_tool_header.prepend(asset_type_buttons)
     bpy.types.VIEW3D_HT_tool_header.append(toolbar)
 
 
@@ -96,7 +98,9 @@ def unregister():
     from .ui import editor, workspace
     from .ui.dock import lifecycle
 
-    from .ui.native import toolbar
+    from .ui.native import toolbar, asset_type_buttons
+    bpy.types.VIEW3D_HT_tool_header.remove(asset_type_buttons)
+    bpy.types.IMAGE_HT_tool_header.remove(asset_type_buttons)
     bpy.types.VIEW3D_HT_tool_header.remove(toolbar)
     editor.unregister()
     lifecycle.unregister()

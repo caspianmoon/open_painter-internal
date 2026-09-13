@@ -1,5 +1,42 @@
 # Roadmap implementation status
 
+## Live procedural preview follow-up — 2026-09-13
+
+Implemented on `task/live-procedural-preview`, preserving shared-checkout commit
+`00ccf773bae22ee5f82cf787de4c7dc0ca5bca9e` and the earlier bake integration. This
+follows the user's later authorization for a shader-like procedural backend.
+The fixed display material, native UI, CPU correctness reference, existing
+materials and version-1/version-2 material compatibility remain intact.
+
+The new backend composes cached, dependency-keyed texture inputs on the GPU.
+Unchanged channels are rejected by a pure signature pass before any texture
+work. Constant and opacity edits update shader parameters; complex procedural
+and filtered inputs keep exact CPU implementations. GPU-only full-precision
+display images include updated mipmaps. Native float painting can reuse the
+existing GPU canvas. Save, render and export flush the latest authoritative CPU
+textures; no settled-edit timer forces a CPU bake during live authoring.
+
+Actual Worn Painted Metal 2K completed-frame measurement: warm median
+**296.89 ms CPU → 138.14 ms live GPU (2.15×)**. Add-on preparation/submission
+was **200.90 ms → 5.97 ms**, with zero managed image transfers on warm GPU
+roughness edits. These are separate timings; 5.97 ms is not displayed-frame
+latency. Initial preparation still takes seconds and 60 FPS is not established.
+
+The [implementation, commands, measured context and limits](live-procedural-preview.md)
+and [raw completed-frame report](performance/live-viewport-2k.json) document this
+follow-up. GPU mathematical parity, dependency/lifecycle regressions, native UI,
+authoritative export and isolated packaging passed. Actual final acceptance:
+51 background integration scripts, 32 Blender unit tests, 27 NumPy tests, three
+native GUI workflows, 125 GPU math checks and the live workflow suite. All eight
+channels of the Worn Painted Metal 2K fixture matched the CPU reference within
+`1.193e-7` maximum absolute error. The
+[validation inventory](performance/live-preview-validation-inventory.json)
+records exact commands, results, changed files and source digest. The
+historical milestone measurements and disabled GPU experiment below describe
+the preceding implementation, not the new production live compositor.
+
+---
+
 ## Bake integration follow-up — 2026-09-13
 
 Compared the supplied G-Ready 2.1 source with Open Painter and integrated the
@@ -11,7 +48,9 @@ preserved on success and failure.
 
 The [comparison and validation report](gready-bake-comparison.md) contains source
 evidence, real pixel regressions, commands, usage and limits. No claim of a new
-bake engine or bake speedup is made. G-Ready source/icons are not redistributed.
+bake engine or bake speedup is made. G-Ready source/icons are not included in the
+extension package; the user's later `00ccf77` commit added the supplied comparison
+source to the repository separately.
 
 The roadmap implementation and Worn Painted Metal timings below describe the
 preceding `0f44580` continuation. They were not remeasured for this bake change.

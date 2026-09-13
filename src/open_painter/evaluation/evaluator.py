@@ -45,6 +45,9 @@ class LayerEvaluator:
         from . import dependencies, cache as scheduler
         dependencies.refresh(self.scene)
         scheduler.discard(scheduler.key_for(self.scene, ts))
+        from . import live_preview
+        if force:
+            live_preview.invalidate_inputs(self.scene, ts)
         self.geometry_cache = for_texture_set(self.scene, ts, force=force)
         started = perf_counter()
         for channel in CHANNELS:
@@ -56,6 +59,7 @@ class LayerEvaluator:
             layer.dirty = False
             for prop in layer.channels:
                 prop.dirty = False
+        live_preview.suspend(self.scene, ts)
         material_manager.repair(ts)
         scheduler.set_state(self.scene, ts, "READY")
         self.scene.open_painter.status = scheduler.failure_message(self.scene)

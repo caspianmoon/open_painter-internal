@@ -145,7 +145,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
 
 ## Current limitations
 
-- CPU evaluation; 2K is the default. Automatic updates yield between row tiles and reuse cached procedural/mask sources. First-time eight-channel generation, neighborhood filters, triplanar rasterization and image packing can still take noticeable time. See the [measured performance and memory limits](docs/texture-workflow-v1.md#geometry-and-performance); 4K/8K have high memory costs.
+- Live GPU evaluation is the default in a compatible Blender window. Edits compose cached texture inputs without rewriting final output images; save/export resolve the latest edits through the CPU reference. Cold procedural generation, filters and projection can still take noticeable time. See the [measured performance and memory limits](docs/live-procedural-preview.md); 4K/8K have high memory costs.
 - Painting is one channel at a time. The native brush engine writes the layer image; the compositor
   updates the composite after stroke completion. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
 - Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.
@@ -167,6 +167,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
 python3 scripts/build_extension.py
 python3 scripts/run_tests.py --blender /path/to/blender
 python3 scripts/run_tests.py --blender /path/to/blender --gui
+python3 scripts/run_tests.py --blender /path/to/blender --gpu-only
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),

@@ -19,7 +19,7 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
     for name in ("blender_manifest.toml", "LICENSE", "README.md", "ARCHITECTURE.md", "SMART_MATERIAL_FORMAT.md", "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md", "PARITY.md", "docs/substance_parity.json", "docs/channel_blending.png", "docs/reference_layout.png", "docs/repaired_workspace.png", "docs/bottom-shelf.png", "docs/research/improvements-0.1.9.md", "docs/research/performance-0.1.9.json", "docs/research/workflows-0.1.10.md", "docs/research/projection-0.1.11.md", "docs/research/smart-masks-0.1.12.md", "docs/research/native-ui-0.1.13.md", "docs/native-painter.png", "docs/texture-workflow-v1.md", "docs/material-catalog.md", "docs/asset-categories.md", "docs/research/utility-mesh-maps.md", "docs/research/texture-performance-0.2.0.json"):
         if (root / name).exists():
             archive.write(root / name, name)
-    for path in [root / "docs/implementation-status.md", *sorted((root / "docs/performance").glob("*"))]:
+    for path in [root / "docs/implementation-status.md", root / "docs/live-procedural-preview.md", *sorted((root / "docs/performance").glob("*"))]:
         if path.is_file():
             archive.write(path, path.relative_to(root))
 print(output)

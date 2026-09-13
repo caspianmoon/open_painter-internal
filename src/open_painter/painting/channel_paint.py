@@ -39,6 +39,8 @@ def mark_changed(ts, layer, channel, mask=False):
         layer.dirty = True
         ts.dirty = True
         ts.edit_serial += 1
+        from ..evaluation.references import dependent_channels
+        affected = dependent_channels(ts, layer.id, channel) | {channel}
         for out in ts.outputs:
-            if out.channel == channel:
+            if out.channel in affected:
                 out.dirty = True

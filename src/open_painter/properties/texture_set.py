@@ -20,6 +20,9 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Texture Set")
     resolution: bpy.props.EnumProperty(items=RESOLUTIONS, default="2048", update=changed)
+    preview_backend: bpy.props.EnumProperty(name="Evaluation", default="LIVE", update=changed,
+        items=[('LIVE', 'Live GPU', 'Compose cached texture inputs on the GPU; final textures update on save/export'),
+               ('CPU', 'CPU Reference', 'Evaluate and publish complete texture outputs after edits')])
     preview_quality: bpy.props.EnumProperty(name="Preview", default="FULL", update=changed,
         items=[('FULL', 'Full', 'Evaluate at authored resolution'),
                ('512', 'Interactive 512', 'Disposable 512 pixel preview, followed by full resolution'),

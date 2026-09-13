@@ -251,8 +251,9 @@ class OP_OT_native_view(SafeOperator, bpy.types.Operator):
             ts = active_set(context)
             project = context.scene.open_painter
             space.ui_mode = "PAINT" if project.paint_image else "VIEW"
+            from ..evaluation.live_display import displayed_image
             space.image = project.paint_image or (
-                next((o.image for o in ts.outputs if o.channel == project.blend_channel), None)
+                displayed_image(context.scene, ts, project.blend_channel)
                 if ts
                 else None
             )
@@ -325,7 +326,11 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         ts = active_set(context)
         if ts:
             row.prop(ts, "resolution", text="")
+            layout.prop(ts, 'preview_backend')
             layout.prop(ts, 'preview_quality')
+            if ts.preview_backend == 'LIVE':
+                from ..evaluation.live_preview import status
+                layout.label(text=status(context.scene, ts), icon='INFO')
             if ts.preview_quality != 'FULL' and ts.dirty:
                 layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
 

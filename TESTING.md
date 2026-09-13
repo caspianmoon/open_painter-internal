@@ -2,6 +2,15 @@
 
 Validated on Blender 5.2.1 LTS, macOS Apple Silicon, using the Blender application installed locally.
 
+The live texture backend passed 51 background integration scripts, 32 Blender unit
+tests, 27 independent NumPy tests and three native GUI workflows. The separate
+`--gpu-only` runner checks 125 GPU math cases plus live composition, dependency
+reuse, painting, failure recovery and authoritative save/export. A separate full
+2K Worn Painted Metal run compared all eight channels with the CPU reference.
+See the [live validation report](docs/live-procedural-preview.md) for commands,
+raw evidence and completed EEVEE frame measurements. All Blender runs use isolated
+user resources; GPU tests require an actual window and do not pass by skipping.
+
 ## Automated acceptance
 
 `python3 scripts/run_tests.py` runs phase tests and the current integration suites in fresh background
@@ -43,7 +52,7 @@ No existing user extension or preference file is replaced by these tests.
 
 ## Performance
 
-A 2K stack of 20 constant fill layers with six channels enabled measured approximately **0.67 seconds**
+The earlier CPU-only 2K stack of 20 constant fill layers with six channels enabled measured approximately **0.67 seconds**
 for a full rebuild and **0.05 seconds** for a roughness-only edit on this machine. This measures the
 constant-fill fast path; raster masks, image textures and triplanar geometry require more work.
 The benchmark is a diagnostic, not a timing assertion. 4K/8K, other operating systems, arbitrary

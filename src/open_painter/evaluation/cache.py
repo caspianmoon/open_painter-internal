@@ -41,6 +41,8 @@ def failure_message(scene):
 
 
 def retry(scene, ts):
+    from . import live_preview
+    live_preview.retry(scene, ts)
     _states.pop(key_for(scene, ts), None)
     _pending.pop(key_for(scene, ts), None)
     ts.dirty = True
@@ -74,6 +76,8 @@ def tick():
     prune(live)
     from . import preview_policy
     preview_policy.prune(live)
+    from . import live_preview
+    live_preview.prune(live)
     dependencies.prune(live)
     live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
     for table in (_paint_input, _live_checks, _set_cursors):
@@ -102,7 +106,8 @@ def tick():
             # Never invalidate a partially completed snapshot with another scan.
             _paint_input[scene_key] = (True, monotonic())
             if not busy and monotonic() - _live_checks.get(scene_key, 0) >= 0.033:
-                detect(scene, force=True)
+                if not live_preview.native_paint_input(scene):
+                    detect(scene, force=True)
                 _live_checks[scene_key] = monotonic()
         elif activity and not busy:
             pressed, when = activity
@@ -119,6 +124,11 @@ def tick():
         preferred = texture_sets[active].id if 0 <= active < len(texture_sets) else None
         for ts in fair_order(texture_sets, _set_cursors.get(scene_key), lambda item: item.id, preferred):
             key = key_for(scene, ts)
+            use_live = live_preview.available(scene, ts)
+            if use_live and live_preview.current(scene, ts):
+                set_state(scene, ts, 'LIVE')
+                _pending.pop(key, None)
+                continue
             if not ts.dirty:
                 set_state(scene, ts, "READY")
                 _pending.pop(key, None)
@@ -134,15 +144,45 @@ def tick():
                 _pending[key] = (ts.edit_serial, now)
                 discard(key)
                 set_state(scene, ts, "STALE")
-                if not painting:
+                if not painting and not use_live:
                     continue
-            if key not in _jobs and not painting and now - since < 0.08:
+            if key not in _jobs and not painting and not use_live and now - since < 0.08:
                 set_state(scene, ts, "QUEUED")
                 continue
             try:
                 from ..constants import CHANNELS
                 from ..core import image_manager, material_manager
                 from ..core.validation import hierarchy_issues
+
+                if use_live:
+                    try:
+                        entry = _jobs.get(key)
+                        if entry is None or entry[0] != 'live':
+                            discard(key)
+                            entry = ('live', live_preview.steps(scene, ts))
+                            _jobs[key] = entry
+                        deadline = monotonic() + .006
+                        set_state(scene, ts, 'RUNNING')
+                        scene.open_painter.status = 'Updating live textures…'
+                        while True:
+                            try:
+                                next(entry[1])
+                            except StopIteration:
+                                _jobs.pop(key, None)
+                                if live_preview.current(scene, ts):
+                                    set_state(scene, ts, 'LIVE')
+                                    scene.open_painter.status = live_preview.status(scene, ts)
+                                    _pending.pop(key, None)
+                                break
+                            if monotonic() >= deadline:
+                                break
+                        _scene_cursor = scene_key
+                        _set_cursors[scene_key] = ts.id
+                        return .001
+                    except Exception as exc:
+                        discard(key)
+                        live_preview.failed(scene, ts, exc)
+                        logger.warning('Live preview unavailable; using CPU: %s', exc)
 
                 issues = hierarchy_issues(ts)
                 if issues:
@@ -212,6 +252,7 @@ def tick():
                             return 0.001
                 if any(output.dirty for output in outputs):
                     return 0.001
+                live_preview.suspend(scene, ts)
                 material_manager.repair(ts)
                 ts.dirty = False
                 for layer in ts.layers:
@@ -233,7 +274,8 @@ def tick():
     return (
         0.016
         if any(
-            scene.open_painter.paint_image
+            scene.open_painter.paint_image or any(live_preview.requested(ts)
+                                                  for ts in scene.open_painter.texture_sets)
             for scene in bpy.data.scenes
             if hasattr(scene, "open_painter")
         )
@@ -247,6 +289,9 @@ def on_load(_):
     from .raster_cache import clear_shared
 
     reset()
+    cancel_all()
+    from .live_preview import clear as clear_live
+    clear_live()
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -273,6 +318,8 @@ def on_load(_):
 def on_save(_):
     # A save performs a complete authoritative flush; discard older preview jobs.
     cancel_all()
+    from .live_preview import clear as clear_live
+    clear_live()
     from .preview_policy import clear
     clear()
     _regions.clear()
@@ -318,6 +365,9 @@ def unregister():
     from ..painting.paint_session import restore_faces
     from .raster_cache import clear_shared
 
+    cancel_all()
+    from .live_preview import clear as clear_live
+    clear_live()
     from .preview_policy import clear
     clear()
     clear_shared()

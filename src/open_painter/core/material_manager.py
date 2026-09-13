@@ -5,7 +5,7 @@ import bpy
 from ..constants import CHANNELS, OWNER
 
 
-def repair(ts):
+def repair(ts, image_overrides=None):
     material = ts.material
     if not material or not material.get(OWNER):
         material = bpy.data.materials.new(f"OP · {ts.name}")
@@ -42,6 +42,8 @@ def repair(ts):
     for i, channel in enumerate(CHANNELS):
         tex[channel] = node(channel, "ShaderNodeTexImage", (-600, 400 - i * 250))
         image = next((o.image for o in ts.outputs if o.channel == channel), None)
+        if image_overrides and channel in image_overrides:
+            image = image_overrides[channel]
         if tex[channel].image != image:
             tex[channel].image = image
     connect(tex['EMISSION'].outputs['Color'], bsdf.inputs['Emission Color'])

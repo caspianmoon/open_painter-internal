@@ -1,0 +1,136 @@
+{
+  "status": "PASS",
+  "date": "2026-09-13",
+  "branch": "task/live-procedural-preview",
+  "preserved_base_commit": "00ccf773bae22ee5f82cf787de4c7dc0ca5bca9e",
+  "fetched_main_commit": "15ef25ec532f466eff18a7265fa7d7ef5019e8ef",
+  "production_source_sha256": "16f4a59b6c95a573c6720545a7d6b7628c1cb608aec1a4b921ebf5356205a91d",
+  "source_digest_algorithm": "SHA256 of sorted src/open_painter/**/*.py: repository-relative POSIX path bytes followed by file bytes",
+  "environment": {
+    "blender": "5.2.1 LTS",
+    "blender_build": "9e2066aef7ef",
+    "gpu": "Metal / Apple M3 Pro",
+    "ram_gib": 18,
+    "numpy": "2.3.4"
+  },
+  "checks": [
+    {
+      "command": "python3 scripts/build_extension.py --output /private/tmp/open-painter-live-preview.zip",
+      "result": "PASS"
+    },
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-live-preview.zip",
+      "result": "PASS",
+      "exit_code": 0,
+      "background_integration_scripts": 51,
+      "blender_unit_tests": 32,
+      "packaging": [
+        "Blender extension manifest validation",
+        "actual isolated ZIP installation and enable/disable under bl_ext namespace"
+      ],
+      "log": "/private/tmp/op-live-acceptance-final.log"
+    },
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gui-only",
+      "result": "PASS",
+      "exit_code": 0,
+      "gui_scripts": 3,
+      "checks": [
+        "native panels/assets/T/N/2D/3D",
+        "texture controls/mask filters/search",
+        "actual native viewport paint stroke and save"
+      ],
+      "log": "/private/tmp/op-live-gui-final.log",
+      "diagnostic": "Blender emitted five unfreed blocks totaling 0.000481 MB after texture_operations_ui.py; process and assertions passed."
+    },
+    {
+      "command": "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gpu-only",
+      "result": "PASS",
+      "exit_code": 0,
+      "math_checks": 125,
+      "workflow_resolution": 512,
+      "log": "/private/tmp/op-live-gpu-final.log",
+      "reports": [
+        "live-gpu-math.json",
+        "live-preview-validation.json"
+      ]
+    },
+    {
+      "command": "BLENDER_USER_RESOURCES=/private/tmp/op-live-parity-2k-user OP_LIVE_BENCHMARK=1 OP_LIVE_REPORT=/private/tmp/op-live-parity-2k.json /Applications/Blender.app/Contents/MacOS/Blender --factory-startup --python tests/integration/live_preview.py -- -ApplePersistenceIgnoreState YES",
+      "result": "PASS",
+      "exit_code": 0,
+      "channels": 8,
+      "resolution": 2048,
+      "report": "live-parity-2k.json",
+      "log": "/private/tmp/op-live-parity-2k.log"
+    },
+    {
+      "command": "/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py",
+      "result": "PASS",
+      "exit_code": 0,
+      "tests": 27,
+      "log": "/private/tmp/op-live-pure-final.log"
+    },
+    {
+      "command": "python3 -m compileall -q src/open_painter scripts tests",
+      "result": "PASS",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS",
+      "exit_code": 0
+    }
+  ],
+  "isolation": "All Blender tests use project-local .blender-test/user or explicit temporary BLENDER_USER_RESOURCES. Artist preferences and installed extension are unchanged. macOS GUI runs disable persistence restoration.",
+  "measurements": {
+    "new_pre_edit_cpu_sample": "live-cpu-before-00ccf77.json",
+    "completed_eevee_frames": "live-viewport-2k.json",
+    "cpu_warm_prepare_median_ms": 200.899125,
+    "gpu_warm_prepare_median_ms": 5.974583,
+    "cpu_warm_completed_frame_median_ms": 296.886542,
+    "gpu_warm_completed_frame_median_ms": 138.138958,
+    "warm_gpu_output_transfer_bytes": 0,
+    "context": "Six-layer Worn Painted Metal, eight authored 2048 x 2048 float32 channels, assigned cube, 512 x 512 EEVEE framebuffer. Three warm edits per backend. CPU first, GPU second. Other Blender PID 18835 activity not controlled. Completion includes a framebuffer fence, not physical presentation."
+  },
+  "limits": [
+    "Cold procedural/filter work still uses the exact CPU evaluator; 2K cold completed GPU frame was 16.81 s.",
+    "Reference masks conservatively invalidate by author revision.",
+    "Additional live resource preflight defaults to 4096 MiB, with separate 256 MiB leaf cache; this is not a process RSS cap. Full 8K exceeds the default; no authored resolution is silently changed.",
+    "Completed-frame measurement does not establish 60 FPS or physical tablet latency.",
+    "Other GPU/OS combinations and 4K/8K performance were not validated."
+  ],
+  "changed_files": [
+    "ARCHITECTURE.md",
+    "README.md",
+    "TESTING.md",
+    "docs/implementation-status.md",
+    "docs/live-procedural-preview.md",
+    "docs/performance/live-cpu-before-00ccf77.json",
+    "docs/performance/live-display-capability.json",
+    "docs/performance/live-gpu-math.json",
+    "docs/performance/live-parity-2k.json",
+    "docs/performance/live-preview-validation-inventory.json",
+    "docs/performance/live-preview-validation.json",
+    "docs/performance/live-viewport-2k.json",
+    "scripts/build_extension.py",
+    "scripts/run_tests.py",
+    "src/open_painter/core/material_manager.py",
+    "src/open_painter/evaluation/cache.py",
+    "src/open_painter/evaluation/evaluator.py",
+    "src/open_painter/evaluation/live_display.py",
+    "src/open_painter/evaluation/live_gpu.py",
+    "src/open_painter/evaluation/live_inputs.py",
+    "src/open_painter/evaluation/live_preview.py",
+    "src/open_painter/painting/channel_paint.py",
+    "src/open_painter/painting/paint_session.py",
+    "src/open_painter/preferences.py",
+    "src/open_painter/properties/texture_set.py",
+    "src/open_painter/ui/native.py",
+    "tests/integration/live_gpu_math.py",
+    "tests/integration/live_input_dependencies.py",
+    "tests/integration/live_preview.py",
+    "tests/performance/live_viewport.py"
+  ],
+  "commit_note": "The final commit is the task-branch commit containing this report; get it with git log -1 --format=%H -- docs/performance/live-preview-validation-inventory.json. A hash is not embedded recursively in its own commit."
+}

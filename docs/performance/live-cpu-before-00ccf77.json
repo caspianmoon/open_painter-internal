@@ -1,0 +1,317 @@
+{
+  "measured_at_utc": "2026-09-13T18:01:56Z",
+  "commit": "00ccf773bae22ee5f82cf787de4c7dc0ca5bca9e",
+  "source_sha256": "c41c0c8a46a2a843c9fd7ef003a8942a2abcd31e3093a7287065948653b3061e",
+  "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "cpu": "Apple M3 Pro",
+  "ram_bytes": 19327352832,
+  "blender": "5.2.1 LTS",
+  "blender_hash": "9e2066aef7ef",
+  "numpy": "2.3.4",
+  "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+  "renderer": "BLENDER_EEVEE",
+  "graphics_backend": "no active viewport/GPU context in background fixture",
+  "resolution": 2048,
+  "channels": [
+    "BASE_COLOR",
+    "ROUGHNESS",
+    "METALLIC",
+    "NORMAL",
+    "HEIGHT",
+    "AO",
+    "EMISSION",
+    "OPACITY"
+  ],
+  "fixture": "worn",
+  "material": "Worn Painted Metal",
+  "layer_records": 6,
+  "texture_sets": 1,
+  "mesh": {
+    "objects": 3,
+    "vertices": 8,
+    "assigned_objects": 0
+  },
+  "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+  "viewport_rendering_included": false,
+  "first_usable_preview_wall_s": null,
+  "first_channel_publication_wall_s": 17.126738457999863,
+  "final": {
+    "wall_s": 17.74794124999994,
+    "cpu_s": 17.676135,
+    "metrics": {
+      "phases": {
+        "source_generation": {
+          "calls": 1408,
+          "wall_s": 12.890025636000246,
+          "cpu_s": 12.830035999999977,
+          "exclusive_wall_s": 12.890025636000246,
+          "exclusive_cpu_s": 12.830035999999977
+        },
+        "masking": {
+          "calls": 512,
+          "wall_s": 7.7146486320039,
+          "cpu_s": 7.674848000000011,
+          "exclusive_wall_s": 2.0831866230053038,
+          "exclusive_cpu_s": 2.0790970000000284
+        },
+        "filters": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "blending": {
+          "calls": 3328,
+          "wall_s": 0.32292230199004734,
+          "cpu_s": 0.3226690000000101,
+          "exclusive_wall_s": 0.32292230199004734,
+          "exclusive_cpu_s": 0.3226690000000101
+        },
+        "geometry": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry_signature": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_read": {
+          "calls": 2,
+          "wall_s": 5.80419998641446e-05,
+          "cpu_s": 5.8000000000113516e-05,
+          "exclusive_wall_s": 5.80419998641446e-05,
+          "exclusive_cpu_s": 5.8000000000113516e-05
+        },
+        "image_write": {
+          "calls": 8,
+          "wall_s": 0.037277167000638656,
+          "cpu_s": 0.03709400000000329,
+          "exclusive_wall_s": 0.037277167000638656,
+          "exclusive_cpu_s": 0.03709400000000329
+        },
+        "packing": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        }
+      },
+      "counters": {
+        "output_buffer_allocated_bytes": 536870912,
+        "cache_misses": 1154,
+        "cache_insert_bytes": 218136576,
+        "image_read_bytes": 32768,
+        "image_read_allocated_bytes": 32768,
+        "decoded_image_bytes": 32768,
+        "cache_hits": 5760,
+        "image_write_bytes": 536870912
+      },
+      "distributions": {
+        "indivisible_compute_s": {
+          "samples": 4480,
+          "p50": 7.916499953353195e-06,
+          "p95": 0.015416572950050523,
+          "maximum": 0.061724416999823006
+        },
+        "cooperative_compute_s": {
+          "samples": 1409,
+          "p50": 0.011839374999908614,
+          "p95": 0.02540388340012214,
+          "maximum": 0.061724416999823006
+        }
+      },
+      "last_observed_bytes": {
+        "output_buffer_bytes": 67108864,
+        "cache_controlled_bytes": 218136576
+      },
+      "peak_observed_bytes": {
+        "output_buffer_bytes": 67108864,
+        "cache_controlled_bytes": 218136576
+      },
+      "process_peak_rss_bytes": 1047740416
+    }
+  },
+  "warm_roughness_edit": {
+    "wall_s": 0.18298091699989527,
+    "cpu_s": 0.1828240000000001,
+    "metrics": {
+      "phases": {
+        "source_generation": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "masking": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "filters": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "blending": {
+          "calls": 768,
+          "wall_s": 0.013785338002207936,
+          "cpu_s": 0.013758999999961219,
+          "exclusive_wall_s": 0.013785338002207936,
+          "exclusive_cpu_s": 0.013758999999961219
+        },
+        "geometry": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry_signature": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_read": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_write": {
+          "calls": 1,
+          "wall_s": 0.0027582909999637195,
+          "cpu_s": 0.002750999999999948,
+          "exclusive_wall_s": 0.0027582909999637195,
+          "exclusive_cpu_s": 0.002750999999999948
+        },
+        "packing": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        }
+      },
+      "counters": {
+        "output_buffer_allocated_bytes": 67108864,
+        "cache_hits": 2304,
+        "image_write_bytes": 67108864
+      },
+      "distributions": {
+        "indivisible_compute_s": {
+          "samples": 1280,
+          "p50": 6.395500008693489e-06,
+          "p95": 0.0012247255998772744,
+          "maximum": 0.0013661670000146842
+        },
+        "cooperative_compute_s": {
+          "samples": 35,
+          "p50": 0.005107461000534386,
+          "p95": 0.005209250399457232,
+          "maximum": 0.005274375999306358
+        }
+      },
+      "last_observed_bytes": {
+        "output_buffer_bytes": 67108864
+      },
+      "peak_observed_bytes": {
+        "output_buffer_bytes": 67108864
+      },
+      "process_peak_rss_bytes": 1047740416
+    }
+  },
+  "channels_measured": [
+    {
+      "channel": "BASE_COLOR",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 17.126738457999863,
+      "max_step_wall_s": 0.06175283299990042,
+      "max_step_cpu_s": 0.033044000000000295,
+      "step_p95_wall_s": 0.02549820799981717
+    },
+    {
+      "channel": "ROUGHNESS",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.20152008300010493,
+      "max_step_wall_s": 0.0100896249998641,
+      "max_step_cpu_s": 0.010091000000002737,
+      "step_p95_wall_s": 0.005664848250069098
+    },
+    {
+      "channel": "METALLIC",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.1525613329999942,
+      "max_step_wall_s": 0.005706916999997702,
+      "max_step_cpu_s": 0.005523000000000167,
+      "step_p95_wall_s": 0.004681483449894585
+    },
+    {
+      "channel": "NORMAL",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.0413314579998314,
+      "max_step_wall_s": 0.005840915999897334,
+      "max_step_cpu_s": 0.005841000000000207,
+      "step_p95_wall_s": 0.005160722549942418
+    },
+    {
+      "channel": "HEIGHT",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.11580483399984587,
+      "max_step_wall_s": 0.006302791000052821,
+      "max_step_cpu_s": 0.006302999999999059,
+      "step_p95_wall_s": 0.00504997949991548
+    },
+    {
+      "channel": "AO",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.02940945799991823,
+      "max_step_wall_s": 0.005916416999980356,
+      "max_step_cpu_s": 0.005891999999999342,
+      "step_p95_wall_s": 0.005410191899954952
+    },
+    {
+      "channel": "EMISSION",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.04012145800015787,
+      "max_step_wall_s": 0.00441141700002845,
+      "max_step_cpu_s": 0.004411999999998528,
+      "step_p95_wall_s": 0.004334354049933609
+    },
+    {
+      "channel": "OPACITY",
+      "set_id": "3e518fbf1bef4eacb2086a88bed62f2b",
+      "wall_s": 0.03005154099992069,
+      "max_step_wall_s": 0.006907834000003277,
+      "max_step_cpu_s": 0.006907999999999248,
+      "step_p95_wall_s": 0.006078033699986916
+    }
+  ],
+  "scalar_cache_bytes": 218136576,
+  "controlled_cache_bytes": 218136576,
+  "cache_accounting": "Legacy scalar_cache_bytes sums per-set ownership; controlled_cache_bytes deduplicates all admitted CPU arrays including geometry. Neither caps Blender process memory.",
+  "limitations": [
+    "CPU output publication is not displayed-frame latency.",
+    "Process RSS includes Blender and all previous work in this fresh process.",
+    "Triplanar uses shared evaluated mesh data; the Worn fixture has no assigned geometry or viewport rendering."
+  ],
+  "source_checkout": "/private/tmp/op-live-baseline-00ccf77",
+  "execution_context": "One fresh process; archived exact committed src/scripts/tests/performance. No concurrent Codex Blender workloads; agent GPU probe held until completion.",
+  "command": "BLENDER_USER_RESOURCES=/private/tmp/op-live-cpu-before-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python /private/tmp/op-live-baseline-00ccf77/scripts/benchmark_textures.py -- --worker --fixture worn --resolution 2048 --report /private/tmp/op-live-cpu-before.json"
+}

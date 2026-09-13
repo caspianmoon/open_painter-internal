@@ -1,0 +1,321 @@
+{
+  "measured_at_utc": "2026-09-13T18:20:54.030452+00:00",
+  "blender": "5.2.1 LTS",
+  "platform": "macOS Apple M3 Pro / Metal",
+  "purpose": "Capability verification of shared image GPU writes and EEVEE display, not a speed benchmark.",
+  "commands": [
+    "BLENDER_USER_RESOURCES=/private/tmp/op-shared-image-probe-user /Applications/Blender.app/Contents/MacOS/Blender --factory-startup --python /private/tmp/op-shared-image-probe.py",
+    "BLENDER_USER_RESOURCES=/private/tmp/op-live-display-lifecycle-user /Applications/Blender.app/Contents/MacOS/Blender --factory-startup --python /private/tmp/op-live-display-lifecycle.py",
+    "BLENDER_USER_RESOURCES=/private/tmp/op-mip-probe2-user /Applications/Blender.app/Contents/MacOS/Blender --factory-startup --python /private/tmp/op-mip-probe5.py > /private/tmp/op-mip-probe5.log 2>&1"
+  ],
+  "probe_source_sha256": {
+    "op-shared-image-probe.py": "fb5c9bc1a3a28ff7f483586c06a91241da45ba3a82be2003f8787929f183e647",
+    "op-live-display-lifecycle.py": "415bb3005cea332031890c59ac7caa262ea57271008e315cdc27b69995555060",
+    "op-mip-probe5.py": "58157a6a6ab1e2b705c20d22c844c8b6a3572d5334d9fcf34b3c6f4027d6fe36"
+  },
+  "shared_image_probe": {
+    "image_props": {
+      "use_generated_float": "True",
+      "is_float": "True",
+      "alpha_mode": "STRAIGHT",
+      "use_half_precision": "True"
+    },
+    "texture": {
+      "format": "RGBA32F",
+      "width": 32,
+      "height": 32,
+      "before": [
+        0.0,
+        0.0,
+        1.0,
+        1.0
+      ]
+    },
+    "viewport_before": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "gpu_after": [
+      1.0,
+      0.12345670163631439,
+      0.0,
+      1.0
+    ],
+    "cpu_after": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "viewport_after": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "mips": [
+      [
+        1,
+        "ok"
+      ],
+      [
+        2,
+        "ok"
+      ],
+      [
+        3,
+        "ok"
+      ],
+      [
+        4,
+        "ok"
+      ],
+      [
+        5,
+        "ok"
+      ]
+    ],
+    "viewport_after_mips": [
+      0.0,
+      0.0,
+      1.0,
+      1.0
+    ],
+    "viewport_after_tag": [
+      1.0,
+      0.1234130859375,
+      0.0,
+      1.0
+    ],
+    "viewport_after_nearest": [
+      1.0,
+      0.1234130859375,
+      0.0,
+      1.0
+    ],
+    "viewport_after_new_offscreen": [
+      1.0,
+      0.1234130859375,
+      0.0,
+      1.0
+    ],
+    "paint_STRAIGHT": {
+      "gpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ],
+      "cpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ]
+    },
+    "paint_PREMUL": {
+      "gpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ],
+      "cpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ]
+    },
+    "paint_CHANNEL_PACKED": {
+      "gpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ],
+      "cpu": [
+        0.10000000149011612,
+        0.20000000298023224,
+        0.30000001192092896,
+        0.5
+      ]
+    },
+    "tag_modes": {
+      "material": {
+        "expected": 0.125,
+        "pixel": [
+          0.125,
+          0.125,
+          0.0,
+          1.0
+        ]
+      },
+      "nodes": {
+        "expected": 0.25,
+        "pixel": [
+          0.25,
+          0.25,
+          0.0,
+          1.0
+        ]
+      },
+      "object": {
+        "expected": 0.375,
+        "pixel": [
+          0.375,
+          0.375,
+          0.0,
+          1.0
+        ]
+      },
+      "scene": {
+        "expected": 0.5,
+        "pixel": [
+          0.5,
+          0.5,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    "gpu_after_viewport": [
+      0.5,
+      0.5,
+      0.0,
+      1.0
+    ],
+    "status": "PASS"
+  },
+  "lifecycle_probe": {
+    "status": "PASS",
+    "blender": "5.2.1 LTS",
+    "checks": [
+      "RGBA32F",
+      "deferred publication",
+      "fixed-node rebind",
+      "VIEW editor binding",
+      "paint canvas protection",
+      "resolution retains last-good until publication",
+      "scene shared material rejection",
+      "restore",
+      "clear",
+      "prune",
+      "unrelated image preservation",
+      "explicit preview quality preserves authored resolution"
+    ]
+  },
+  "findings": [
+    "A generated float Image with use_half_precision=False and Non-Color data exposes RGBA32F through gpu.texture.from_image.",
+    "Framebuffer writes to each mip succeeded at 32 x 32 through GPUFrameBuffer(color_slots={texture: texture, mip: level}).",
+    "Framebuffer writes preserve stale CPU pixels; no Image.update or Image.pixels upload was used for GPU publication.",
+    "EEVEE offscreen sees GPU-only image edits after a material update tag is processed by the depsgraph. Redraw alone within one synchronous callback retains temporal history.",
+    "Material-only update_tag plus view_layer.update was sufficient; a node-tree update tag was unnecessary. Production tags the material and requests redraw, leaving normal UI depsgraph processing to Blender.",
+    "STRAIGHT, PREMUL and CHANNEL_PACKED Non-Color float images expose identical raw RGBA CPU and GPU samples. Float paint unpremultiplication remains an evaluator responsibility.",
+    "A separate probe wrote distinct constants 0.4 through 0.9 to mip levels 0 through 5. Sampling with textureLod returned the expected value and each expected level size, proving independent mip storage and writes.",
+    "The installed Metal framebuffer read_color and GLSL texelFetch paths returned mip-zero samples when testing nonzero mip levels. Mip validation therefore uses textureLod into a separate mip-zero readback texture."
+  ],
+  "limits": [
+    "Only the installed Blender 5.2.1 LTS Metal backend was measured; this is not cross-platform GPU certification.",
+    "EEVEE emission viewport output used its own lower precision: 0.12345670163631439 in RGBA32F became 0.1234130859375 in the viewport.",
+    "This probe does not measure compositor parity, shader/material throughput, input-to-display latency or a whole-material speed improvement.",
+    "Production preserves the user-selected preview resolution; its default FULL retains authored resolution. CPU final output remains the save/export correctness path.",
+    "The distinct-constant mip probe verifies storage and independent writes; general downsampling parity is covered by the live GPU math test."
+  ],
+  "mip_level_followup": {
+    "before": [
+      [
+        32.0,
+        32.0,
+        0.10000000149011612,
+        0.0
+      ],
+      [
+        16.0,
+        16.0,
+        0.10000000149011612,
+        1.0
+      ],
+      [
+        8.0,
+        8.0,
+        0.10000000149011612,
+        2.0
+      ],
+      [
+        4.0,
+        4.0,
+        0.10000000149011612,
+        3.0
+      ],
+      [
+        2.0,
+        2.0,
+        0.10000000149011612,
+        4.0
+      ],
+      [
+        1.0,
+        1.0,
+        0.10000000149011612,
+        5.0
+      ]
+    ],
+    "after": [
+      [
+        32.0,
+        32.0,
+        0.4000000059604645,
+        0.0
+      ],
+      [
+        16.0,
+        16.0,
+        0.5,
+        1.0
+      ],
+      [
+        8.0,
+        8.0,
+        0.6000000238418579,
+        2.0
+      ],
+      [
+        4.0,
+        4.0,
+        0.699999988079071,
+        3.0
+      ],
+      [
+        2.0,
+        2.0,
+        0.800000011920929,
+        4.0
+      ],
+      [
+        1.0,
+        1.0,
+        0.8999999761581421,
+        5.0
+      ]
+    ],
+    "base": [
+      0.4000000059604645,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "source_references": [
+    {
+      "url": "https://raw.githubusercontent.com/blender/blender/main/source/blender/gpu/metal/mtl_framebuffer.mm",
+      "finding": "The Metal framebuffer read implementation passes mip zero to read_internal; its render attachment descriptor separately uses the requested mip level."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/blender/blender/main/source/blender/blenkernel/intern/image_gpu.cc",
+      "finding": "The image texture acquisition path requests mipmaps."
+    }
+  ]
+}

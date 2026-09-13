@@ -152,14 +152,20 @@ def finish(context, evaluate: bool = True) -> None:
     _scratch.pop(scene.as_pointer(), None)
     if evaluate and any(s.id == identifier for s in project.texture_sets):
         from ..evaluation.evaluator import LayerEvaluator
+        from ..evaluation.live_preview import available
 
-        LayerEvaluator(scene).evaluate_texture_set(identifier)
+        target_set = next(s for s in project.texture_sets if s.id == identifier)
+        if not available(scene, target_set):
+            LayerEvaluator(scene).evaluate_texture_set(identifier)
     ts = active_set(context)
     preview = (
         next((out.image for out in ts.outputs if out.channel == project.paint_channel), None)
         if ts
         else None
     )
+    if ts:
+        from ..evaluation.live_display import displayed_image
+        preview = displayed_image(scene, ts, project.paint_channel)
     update_editors(context, preview, painting=False)
 
 
@@ -233,6 +239,11 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
     )
     if layer:
         from ..evaluation import cache
+
+        # Native brush writes bypass image_manager.write. Give procedural graph
+        # inputs their own pixel revision so unrelated material edits can reuse
+        # the painted texture without rereading or uploading it.
+        image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
 
         channel = project.paint_target_channel or project.paint_channel
         masking = bool(project.paint_mask_id) or project.paint_mask

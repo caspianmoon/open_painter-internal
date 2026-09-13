@@ -16,6 +16,16 @@ Blender user data directory or a user-chosen directory, never the installed exte
 
 ## Layer evaluation
 
+Interactive evaluation uses `evaluation/live_preview.py` to capture dependency
+signatures, resolve cached texture inputs and compose changed channels on the GPU.
+`live_inputs.py` retains exact CPU procedural/filter leaves; `live_gpu.py` implements
+the existing blend math in float32; `live_display.py` publishes disposable image
+views with GPU mipmaps to the fixed material and 2D editor. Unchanged dependencies
+do no source work. The `LIVE` scheduler state leaves authoritative outputs dirty;
+save, render and export complete them through the CPU evaluator described below.
+Headless or incompatible work falls back to CPU. See the
+[live backend design and limits](docs/live-procedural-preview.md).
+
 `LayerEvaluator` walks bottom to top into one float image per channel. Constant layers remain
 small broadcast arrays until a raster source requires full pixels. Raster operations use 16-row
 tiles. Blend math is independent of Blender. RGB values are linear; sRGB image inputs are decoded.
@@ -31,8 +41,10 @@ Output image alpha remains opaque; the separate OPACITY channel drives the displ
 
 Mask stacks resolve painted data, baked maps or generators, followed by levels, invert and
 normal/multiply/add operations. Procedural masks and ordered texture filters are also evaluated as grayscale pixels. Missing required maps produce an actionable message. Triplanar fills
-rasterize assigned base-mesh UV triangles into world position/normal images once per evaluation;
-three projected texture samples are weighted by normal components. Automatic updates run cooperative row-tile jobs with a 6 ms work budget, retaining the geometry cache for the same edit serial; saves/exports still finish synchronously.
+rasterize assigned mesh UV triangles into cached world position/normal images;
+three projected texture samples are weighted by normal components. CPU automatic
+updates run cooperative row-tile jobs with a 6 ms work budget. Geometry dependency
+signatures permit reuse after material-only edits; saves/exports finish synchronously.
 
 ## Image ownership
 
@@ -65,12 +77,16 @@ Baked map use in shading is explicit via a generated fill layer.
 
 Dirty flags live on texture sets, layers and channels/output records. Channel property edits only
 invalidate that channel in its owning texture set. Mask, folder and layer edits invalidate the
-owning set. Output revisions make scoped recomposition testable. An edit serial cancels stale work and restarts an 80 ms property-edit
-debounce. Active brush work bypasses that debounce. Transient geometry caches last one evaluation.
+owning set. Output revisions make scoped recomposition testable. An edit serial cancels stale work;
+CPU preview uses an 80 ms property-edit debounce. Live GPU and active brush work
+bypass that debounce. Geometry/source caches use their own dependency signatures,
+so material-only edits reuse unchanged geometry across evaluations.
 Saving packs images; load and undo/redo invalidate outputs. No critical state depends on module globals.
 
 The paint bridge activates a native essential brush and selects `image_paint.canvas`. Persistent
-paint references identify the layer/channel/mask. While a brush is active, raster snapshots are
+paint references identify the layer/channel/mask. Eligible unfiltered float paint
+uses the native GPU canvas and revision notifications without full CPU scans.
+For other paint paths, while a brush is active, raster snapshots are
 compared at most every 33 ms when no partial job is running. Changed rows drive regional evaluation
 only when earlier output data is valid; otherwise a full evaluation is scheduled. Snapshot comparison
 also detects erasing. Runtime snapshots and pending jobs are cleared on lifecycle changes. A future stroke-replication layer can reuse the explicit channel target and invalidation API.

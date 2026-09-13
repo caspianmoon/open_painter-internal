@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.14.zip`](dist/open_painter-0.1.14.zip).
+1. Download or build [`dist/open_painter-0.1.15.zip`](dist/open_painter-0.1.15.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -69,7 +69,8 @@ maps are checked before modifying the stack. The six bundled presets are origina
 A mask on a **folder affects every child**, including the metal substrate in Painted Steel. For
 chipped paint over metal, select **Paint coat** before applying a smart mask. Properties identifies
 the target and exposes generator, invert, levels, strength and **Normal / Multiply / Add** combination.
-New smart-mask effects use Normal; saved effects keep their previous combination. This is an editable
+New smart-mask effects use Normal; saved effects keep their previous combination.
+Edge Wear uses baked curvature coverage; noise only breaks up that coverage. **Bake Mask Stack to Texture** converts the selected layer’s mask effects into one packed, editable grayscale UV texture. The material node graph only displays channel textures; it does not implement edge-wear or grunge effects. This is an editable
 mask-effect workflow, not complete Substance Painter generator parity.
 
 Properties shows one selected material channel at a time, with native color/image and UV/triplanar transform controls. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. Per-channel blend and
@@ -171,7 +172,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 
 ![Mask stack and generator controls](docs/mask_controls.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.14.
+See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.15.
 
 
 

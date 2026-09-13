@@ -29,8 +29,16 @@ def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
                 raise ValueError(f"Fill mask image is missing on {layer.name}.")
             from .channel_eval import source
 
-            value = source(mask, "FILL", n, y0, y1, cache, ts,
-                           geometry_cache if geometry_cache is not None else {})[..., 0]
+            value = source(
+                mask,
+                "FILL",
+                n,
+                y0,
+                y1,
+                cache,
+                ts,
+                geometry_cache if geometry_cache is not None else {},
+            )[..., 0]
         elif mask.source == "PAINT":
             if not mask.image:
                 raise ValueError(f"Painted mask image is missing on {layer.name}.")
@@ -56,3 +64,19 @@ def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
         else:
             result = np.clip(result + value * mask.strength, 0, 1)
     return result if result is not None else np.ones((y1 - y0, n), dtype=np.float32)
+
+
+def bake_mask_texture(ts, layer):
+    """Bake the current grayscale effect stack into a packed, editable UV image."""
+    from ..core import image_manager as images
+
+    n = int(ts.resolution)
+    data = np.ones((n, n, 4), dtype=np.float32)
+    cache, geometry_cache = {}, {}
+    for y0 in range(0, n, 256):
+        y1 = min(n, y0 + 256)
+        coverage = evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache)
+        data[y0:y1, :, :3] = coverage[..., None]
+    image = images.create(f"{ts.name}_{layer.name}_BakedMask", n)
+    images.write(image, data)
+    return image

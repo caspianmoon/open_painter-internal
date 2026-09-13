@@ -1,5 +1,12 @@
 # Changes
 
+## 0.1.15
+
+- Fix edge wear producing grunge on zero-curvature pixels: noise now breaks up curvature coverage instead of adding new coverage across flat surfaces. Amount cannot introduce wear on zero-curvature pixels.
+- Add Bake Mask Stack to Texture: evaluate the effect stack into a packed grayscale UV image, then replace it with an editable painted mask. Evaluation succeeds before the stack is replaced; the operator supports Undo.
+- Regenerate smart-mask previews from actual evaluated texture pixels. Verify off-edge coverage is zero, baked/composited pixels match before and after conversion, saved masks reload intact, and shader node topology stays unchanged.
+- The existing normal-image curvature approximation remains; this change does not implement geometric convex/concave curvature baking.
+
 ## 0.1.14
 
 - Give Layers a native scrollable list with a stable name column, separate action toolbar, compact blend labels and percentage opacity.

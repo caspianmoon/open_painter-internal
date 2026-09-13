@@ -12,7 +12,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     bl_label = "Edit Mask"
     bl_options = {"REGISTER", "UNDO"}
     action: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN")]
+        items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE")]
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
@@ -24,7 +24,19 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         layer = active(ts)
         if layer is None:
             raise ValueError("Select a layer or folder first.")
-        if self.action == "ADD":
+        if self.action == "BAKE":
+            if not layer.masks:
+                raise ValueError("Select a layer with a mask first.")
+            from ..evaluation.mask_eval import bake_mask_texture
+
+            image = bake_mask_texture(ts, layer)
+            # Commit only after evaluation and packing have succeeded.
+            layer.masks.clear()
+            mask = layer.masks.add()
+            mask.id, mask.name, mask.source = new_id(), "Baked Mask", "PAINT"
+            mask.image = image
+            layer.active_mask = 0
+        elif self.action == "ADD":
             mask = layer.masks.add()
             mask.id, mask.source = new_id(), self.source
             mask.name = self.source.title() + " Mask"
@@ -88,6 +100,9 @@ class OP_PT_masks(bpy.types.Panel):
         if not layer.masks:
             return
         mask = layer.masks[min(layer.active_mask, len(layer.masks) - 1)]
+        layout.operator(
+            "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
+        ).action = "BAKE"
         layout.prop(mask, "source", text="Source")
         if mask.source == "FILL":
             layout.template_ID(mask, "image")

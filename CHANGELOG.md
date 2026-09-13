@@ -1,5 +1,11 @@
 # Changes
 
+## 0.2.4
+
+- Fix Bake Selected Maps failing on native timer events in Blender 5.2. Gate work on the queue timer without reading unsupported Event properties.
+- Ignore unrelated timer ticks and release queue resources on completion, cancellation and failed initialization. Retain completed maps if a later map fails.
+- Add real-window bake queue regressions for actual map output, cancellation and failure cleanup.
+
 ## 0.2.3
 
 - Generate supported procedural sources and mesh-aware masks directly into float32 GPU textures on Metal, with the CPU evaluator retained for other domains and final save/export.

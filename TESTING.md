@@ -6,7 +6,7 @@ The latency follow-up includes 52 background integration scripts, 42 Blender uni
 tests and 37 independent NumPy tests. The real-window `--gpu-only` runner covers
 183 compositing checks, 91 folder-cache checks, 38 procedural configurations,
 11 full-resolution mask cases plus unsupported-domain preflight checks, and the
-live painting/save/export workflow. `--gui-only` checks three native UI workflows.
+live painting/save/export workflow. `--gui-only` also checks the native bake queue, alongside the three existing UI workflows.
 See the [current validation report](docs/live-preview-latency.md) for the actual
 run results, exact commands, raw evidence and limits. GPU tests require an actual
 window and do not pass by skipping. All tests use isolated Blender resources.
@@ -42,6 +42,14 @@ AssetShelf mouse activation, one mask per click, native T/N controls and 3D/2D s
 `docs/native-painter.png`; the texture-operation suite checks native channel controls, mask filters
 and search selection. Historical GPU dock tests below no longer describe the active interface.
 `native_registration.py` verifies register/unregister cycles without changing surrounding areas.
+
+`bake_queue_ui.py` invokes the registered bake operator in a real window and receives
+native TIMER events. It bakes Position and World Normal at 512, checks unrelated timer
+routing, sends native Esc between maps, and injects a second-map failure. It verifies
+completed images, provenance, queue cleanup and unchanged author scene resources.
+The four `test_bake_queue.py` unit cases cover failed timer/handler initialization,
+generator-close failure and already-removed timers. See the
+[bake hotfix validation](docs/bake-queue-fix.md) for the reproduced error and exact runs.
 
 ## Packaging
 

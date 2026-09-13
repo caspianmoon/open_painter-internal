@@ -1,5 +1,29 @@
 # Roadmap implementation status
 
+## Bake queue hotfix — 2026-09-14
+
+Version **0.2.4**, on `task/bake-queue-timer-fix`, preserves base
+`02c88157681ea532a6a692fb35e3b5b4111775ba`. The UI bake queue attempted to access
+`Event.timer`, which does not exist in the installed Blender 5.2.1 LTS API.
+A real-window regression reproduced the exact exception before any map bake.
+The queue now advances using its owned timer's duration, ignoring unrelated
+TIMER events until that timer ticks. Cleanup also handles failed initialization
+and generator-close failures.
+
+Native-event tests now complete real utility maps, preserve completed maps on
+Esc or a later failure, and release the queue without changing artist geometry,
+materials, selection or scene settings. This changes neither map algorithms nor
+authored resolution. The native UI, GPU preview, CPU evaluator, materials and
+portable formats remain intact. Each individual map bake is still synchronous;
+this fixes the queue crash and does not claim a baking speedup. No performance
+benchmark was rerun for this hotfix.
+
+Fresh validation passed: 52 background integration scripts, 46 unit tests, four
+native GUI workflows and isolated archive validation/install.
+[Exact commands, before/after evidence and limits](bake-queue-fix.md).
+
+---
+
 ## Live latency follow-up — 2026-09-14
 
 Implemented incrementally on `task/live-preview-latency`, based on

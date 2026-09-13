@@ -21,6 +21,7 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
             archive.write(root / name, name)
     for path in [root / "docs/implementation-status.md", root / "docs/live-procedural-preview.md",
                  root / "docs/live-preview-latency.md", root / "docs/live-preview-latency-research.md",
+                 root / "docs/bake-queue-fix.md", *sorted((root / "docs/validation").glob("bake-queue-*.json")),
                  *sorted((root / "docs/performance").glob("*"))]:
         if path.is_file():
             archive.write(path, path.relative_to(root))

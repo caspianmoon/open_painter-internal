@@ -1,0 +1,38 @@
+{
+  "status": "FAIL",
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "cases": [
+    {
+      "name": "success",
+      "boundaries": [
+        "POSITION"
+      ],
+      "calls": [],
+      "resumes": [],
+      "event_samples": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        }
+      ],
+      "timer_events": 1,
+      "events_without_timer": 1,
+      "early_foreign_events": 1,
+      "repeated_duration_events": 0,
+      "generator_closed": true,
+      "cleanup_detached": false,
+      "finish_calls": 0,
+      "esc_sent": false,
+      "modal_done": true,
+      "initial_duration": 0.0,
+      "last_advanced_duration": 0.0
+    }
+  ],
+  "errors": [
+    "Traceback (most recent call last):\n  File \"/Volumes/SSD/projects/open_painter/tests/integration/bake_queue_ui.py\", line 108, in observed_modal\n    result = original['modal'](self, context, event)\n  File \"/Volumes/SSD/projects/open_painter/src/open_painter/baking/jobs.py\", line 47, in modal\n    if event.type != 'TIMER' or event.timer != self._timer:\n                                ^^^^^^^^^^^\nAttributeError: 'Event' object has no attribute 'timer'\n"
+  ],
+  "elapsed_s": 2.5381852080008684
+}

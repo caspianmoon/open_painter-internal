@@ -63,6 +63,7 @@ if args.gui or args.gui_only:
     for filename, result_name in [
         ("native_ui.py", "native-ui.json"),
         ("texture_operations_ui.py", "texture-operations-ui.json"),
+        ("bake_queue_ui.py", "bake-queue-ui.json"),
     ]:
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
@@ -76,11 +77,16 @@ if args.gui or args.gui_only:
                 *(["--", "-ApplePersistenceIgnoreState", "YES"] if os.sys.platform == "darwin" else []),
             ],
             cwd=root,
-            env=env,
+            env=(dict(env, OP_BAKE_QUEUE_REPORT=str(result_path))
+                 if filename == "bake_queue_ui.py" else env),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
+        if filename == "bake_queue_ui.py":
+            if report.get("status") != "PASS":
+                raise RuntimeError(result)
+            continue
         expected = {
             "native_regions": "PASS",
             "custom_handlers": 0,

@@ -1,0 +1,265 @@
+{
+  "status": "PASS",
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "cases": [
+    {
+      "name": "success",
+      "boundaries": [
+        "POSITION",
+        "WORLD_NORMAL"
+      ],
+      "calls": [
+        {
+          "kind": "POSITION",
+          "event": "TIMER"
+        },
+        {
+          "kind": "WORLD_NORMAL",
+          "event": "TIMER"
+        }
+      ],
+      "resumes": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.2070099115371704
+        }
+      ],
+      "event_samples": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.0
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.1000032052397728
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.2070099115371704
+        }
+      ],
+      "timer_events": 16,
+      "events_without_timer": 16,
+      "early_foreign_events": 10,
+      "repeated_duration_events": 4,
+      "generator_closed": true,
+      "cleanup_detached": true,
+      "finish_calls": 1,
+      "esc_sent": false,
+      "modal_done": true,
+      "initial_duration": 0.0,
+      "last_advanced_duration": 0.2070099115371704,
+      "terminal_result": [
+        "FINISHED"
+      ],
+      "status_message": "Mesh maps complete",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel",
+      "boundaries": [
+        "POSITION",
+        "WORLD_NORMAL"
+      ],
+      "calls": [
+        {
+          "kind": "POSITION",
+          "event": "TIMER"
+        }
+      ],
+      "resumes": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.10000787675380707
+        }
+      ],
+      "event_samples": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.10000787675380707
+        },
+        {
+          "type": "ESC",
+          "native": true,
+          "has_timer": false
+        }
+      ],
+      "timer_events": 1,
+      "events_without_timer": 1,
+      "early_foreign_events": 0,
+      "repeated_duration_events": 0,
+      "generator_closed": true,
+      "cleanup_detached": true,
+      "finish_calls": 1,
+      "esc_sent": true,
+      "modal_done": true,
+      "initial_duration": 0.0,
+      "last_advanced_duration": 0.10000787675380707,
+      "terminal_result": [
+        "FINISHED"
+      ],
+      "status_message": "Bake queue stopped; completed maps retained",
+      "result": "PASS"
+    },
+    {
+      "name": "failure",
+      "boundaries": [
+        "POSITION",
+        "WORLD_NORMAL"
+      ],
+      "calls": [
+        {
+          "kind": "POSITION",
+          "event": "TIMER"
+        },
+        {
+          "kind": "WORLD_NORMAL",
+          "event": "TIMER"
+        }
+      ],
+      "resumes": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.11168432980775833
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.21171145141124725
+        }
+      ],
+      "event_samples": [
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.11168432980775833
+        },
+        {
+          "type": "TIMER",
+          "native": true,
+          "has_timer": false,
+          "own_duration": 0.21171145141124725
+        }
+      ],
+      "timer_events": 2,
+      "events_without_timer": 2,
+      "early_foreign_events": 0,
+      "repeated_duration_events": 0,
+      "generator_closed": true,
+      "cleanup_detached": true,
+      "finish_calls": 1,
+      "esc_sent": false,
+      "modal_done": true,
+      "initial_duration": 0.0,
+      "last_advanced_duration": 0.21171145141124725,
+      "terminal_result": [
+        "FINISHED"
+      ],
+      "status_message": "Bake failed: Injected second-map queue failure",
+      "result": "PASS"
+    }
+  ],
+  "errors": [],
+  "elapsed_s": 3.524577459000284
+}

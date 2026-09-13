@@ -45,11 +45,15 @@ def bake_steps(context, ts):
     bake_objects = low | high if cycles_maps else low
     if any(o.name not in context.view_layer.objects for o in bake_objects):
         raise ValueError("All bake objects must be present in the active view layer.")
-    if cycles_maps and settings.cage_mode == "CUSTOM":
-        if len(low) != 1 or not settings.cage_object or settings.cage_object.type != "MESH":
-            raise ValueError("Custom cage requires one low-poly object and a mesh cage.")
-        if len(settings.cage_object.data.vertices) != len(next(iter(low)).data.vertices):
-            raise ValueError("Custom cage topology must match the low-poly mesh.")
+    if cycles_maps:
+        from .pairing import groups
+        from .cages import validate_topology
+        graph = context.evaluated_depsgraph_get()
+        for part in groups(ts):
+            if part.cage:
+                if part.cage.name not in context.view_layer.objects:
+                    raise ValueError('Custom cage must be present in the active view layer')
+                validate_topology(part.low, part.cage, graph)
     selected_utility = [kind for kind in UTILITY_KINDS if getattr(settings, kind.lower())]
     if not any((settings.normal, settings.ao, settings.curvature, selected_utility)):
         raise ValueError("Select at least one map to bake.")

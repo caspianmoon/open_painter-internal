@@ -20,12 +20,33 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
                 "Rebake Edge Map",
                 "Bake target-mesh geometric creases into UV texture pixels",
             ),
+            ('MATCH_SOURCES', 'Match Sources by Name', 'Match assigned _low objects with scene-local _high and _cage partners'),
+            ('CREATE_CAGES', 'Create Editable Cages', 'Create owned render-evaluated cage meshes without modifying source objects'),
         ]
     )
+    cage_offset: bpy.props.FloatProperty(name='World-Space Offset', default=.01, min=0, subtype='DISTANCE')
+
+    def invoke(self, context, event):
+        if self.action == 'CREATE_CAGES':
+            return context.window_manager.invoke_props_dialog(self)
+        return self.execute(context)
+
+    def draw(self, context):
+        if self.action == 'CREATE_CAGES':
+            self.layout.prop(self, 'cage_offset')
+            self.layout.label(text='Creates editable copies; originals stay unchanged')
 
     def run(self, context):
         ts = require_set(context)
-        if self.action == "CURVATURE":
+        if self.action == 'MATCH_SOURCES':
+            from ..baking.pairing import match_sources
+            parts = match_sources(ts, context.scene)
+            self.report({'INFO'}, f'Matched {len(parts)} target(s); {len(ts.bake.high_objects)} high-poly source(s)')
+        elif self.action == 'CREATE_CAGES':
+            from ..baking.cages import create
+            result = create(context, ts, self.cage_offset)
+            self.report({'INFO'}, f'Created {len(result)} editable cage(s)')
+        elif self.action == "CURVATURE":
             from ..baking.maps.curvature import bake_curvature
             from ..baking.bake_manager import register_map
             from ..core.layer_stack import invalidate
@@ -97,13 +118,30 @@ class OP_PT_bake(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("open_painter.bake", text="Add Selected High Poly").action = "ADD_HIGH"
         row.operator("open_painter.bake", text="", icon="REMOVE").action = "REMOVE_HIGH"
+        layout.prop(settings, 'source_mode')
+        layout.operator('open_painter.bake', text='Match Sources by Name', icon='LINKED').action = 'MATCH_SOURCES'
+        if settings.high_objects:
+            ref = settings.high_objects[min(settings.active_high, len(settings.high_objects)-1)]
+            layout.prop(ref, 'target')
+            if settings.cage_mode == 'CUSTOM' and len({r.object for r in ts.assignments if r.object}) > 1:
+                layout.prop(ref, 'cage')
         layout.prop(ts, "resolution")
-        for key in ("margin", "cage_mode", "ray_distance", "samples"):
+        for key in ("margin", "cage_mode", "ray_distance", "samples", "device"):
             layout.prop(settings, key)
+        if settings.cage_mode == 'AUTO':
+            layout.prop(settings, 'separate_cage_distance')
+            if settings.separate_cage_distance:
+                layout.prop(settings, 'cage_extrusion')
         if settings.cage_mode == "CUSTOM":
-            layout.prop(settings, "cage_object")
+            if len({ref.object for ref in ts.assignments if ref.object}) == 1:
+                layout.prop(settings, "cage_object")
+            else:
+                layout.label(text='Choose each cage on its high-poly source row')
+        layout.operator('open_painter.bake', text='Create Editable Cages', icon='MESH_CUBE').action = 'CREATE_CAGES'
         for key in ("normal", "ao", "curvature"):
             layout.prop(settings, key)
+        if settings.ao:
+            layout.prop(settings, 'ao_scope')
         if settings.curvature:
             layout.prop(settings, "curvature_angle")
             layout.prop(settings, "curvature_width")

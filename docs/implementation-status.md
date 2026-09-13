@@ -1,5 +1,23 @@
 # Roadmap implementation status
 
+## Bake integration follow-up — 2026-09-13
+
+Compared the supplied G-Ready 2.1 source with Open Painter and integrated the
+useful workflow improvements on `task/gready-bake-integration`: explicit/name
+source matching, isolated render-configured staging, assembly/part AO scopes,
+editable cages, evaluated topology validation and independent extrusion/device
+controls. Original materials, nodes, images, scene settings and transforms are
+preserved on success and failure.
+
+The [comparison and validation report](gready-bake-comparison.md) contains source
+evidence, real pixel regressions, commands, usage and limits. No claim of a new
+bake engine or bake speedup is made. G-Ready source/icons are not redistributed.
+
+The roadmap implementation and Worn Painted Metal timings below describe the
+preceding `0f44580` continuation. They were not remeasured for this bake change.
+
+---
+
 This continuation implements work across M0–M12 on
 `task/m0-m1-evaluation-correctness`. It preserves the newer main changes and
 shared-checkout commit `98a18e8ef0a90d3143d26445168c0cc981cb9ecd` (`latest updates`).

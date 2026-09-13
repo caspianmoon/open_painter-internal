@@ -32,18 +32,25 @@ def object_record(obj):
 
 def record(ts, kind):
     scene = ts.id_data
-    fields = {'NORMAL': ('margin','ray_distance','cage_mode','cage_object','selected_to_active','samples'),
-              'AO': ('margin','ray_distance','cage_mode','cage_object','selected_to_active','samples'),
+    shared_bake = ('margin','ray_distance','cage_mode','cage_object','selected_to_active','samples',
+                   'source_mode','device','separate_cage_distance','cage_extrusion')
+    fields = {'NORMAL': shared_bake,
+              'AO': (*shared_bake,'ao_scope'),
               'CURVATURE': ('curvature_angle','curvature_width'),
               'UV_BORDER': ('uv_border_width',),
               'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance')}
     settings = {key: identity(getattr(ts.bake,key)) if key == 'cage_object' else getattr(ts.bake,key)
                 for key in fields.get(kind, ())}
+    extra = {}
+    if kind in {'NORMAL','AO'}:
+        extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object),
+                     source_bindings=[(identity(ref.object), identity(ref.target), object_record(ref.cage))
+                                      for ref in ts.bake.high_objects])
     return json.dumps(dict(version=ALGORITHM_VERSION, kind=kind,
         resolution=int(ts.resolution), frame=(scene.frame_current, scene.frame_subframe),
         targets=[(object_record(ref.object), ref.slot_index) for ref in ts.assignments],
         sources=[object_record(ref.object) for ref in ts.bake.high_objects] if kind in {'NORMAL','AO'} else [],
-        settings=settings), sort_keys=True, separators=(',', ':'))
+        settings=settings, **extra), sort_keys=True, separators=(',', ':'))
 
 
 def status(ts, prop):

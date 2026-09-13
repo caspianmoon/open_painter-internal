@@ -1,5 +1,6 @@
 """Non-destructive bake diagnostics with explicit cost and severity."""
 from dataclasses import dataclass
+import bpy
 import numpy as np
 
 
@@ -20,7 +21,7 @@ def inspect(ts, evaluated=False):
         if obj is None or obj.type != 'MESH':
             issues.append(Issue('ERROR', 'Missing mesh target', ref.object_name))
             continue
-        if ref.slot_index >= len(obj.material_slots):
+        if ref.slot_index < 0 or ref.slot_index >= len(obj.material_slots):
             issues.append(Issue('ERROR', 'Assigned material slot is missing', obj.name))
         if not obj.data.uv_layers:
             issues.append(Issue('ERROR', 'Render UV map is missing', obj.name))
@@ -32,16 +33,19 @@ def inspect(ts, evaluated=False):
     settings = ts.bake
     if (settings.normal or settings.ao) and settings.selected_to_active and not any(r.object for r in settings.high_objects):
         issues.append(Issue('ERROR', 'High-poly source list is empty'))
-    if (settings.normal or settings.ao) and settings.cage_mode == 'CUSTOM':
-        low = {r.object for r in ts.assignments if r.object}
-        cage = settings.cage_object
-        if len(low) != 1 or not cage or cage.type != 'MESH':
-            issues.append(Issue('ERROR', 'Custom cage requires one target and a mesh cage'))
-        else:
-            mesh = next(iter(low)).data
-            topology = lambda m: (len(m.vertices), tuple(tuple(p.vertices) for p in m.polygons))
-            if topology(mesh) != topology(cage.data):
-                issues.append(Issue('ERROR', 'Custom cage polygon topology differs from target', cage.name))
+    if settings.normal or settings.ao:
+        from .pairing import groups
+        from .cages import validate_topology
+        try:
+            parts = groups(ts)
+            if evaluated:
+                with bpy.context.temp_override(scene=ts.id_data, view_layer=ts.id_data.view_layers[0]):
+                    graph = bpy.context.evaluated_depsgraph_get()
+                    for part in parts:
+                        if part.cage:
+                            validate_topology(part.low, part.cage, graph)
+        except ValueError as exc:
+            issues.append(Issue('ERROR', str(exc)))
     if not evaluated or any(i.severity == 'ERROR' for i in issues):
         return issues
     from ..geometry.snapshots import targets

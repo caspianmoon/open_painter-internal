@@ -4,6 +4,8 @@ import bpy
 class OP_ObjectRef(bpy.types.PropertyGroup):
     object: bpy.props.PointerProperty(type=bpy.types.Object)
     name: bpy.props.StringProperty()
+    target: bpy.props.PointerProperty(name="Low Poly Target", type=bpy.types.Object)
+    cage: bpy.props.PointerProperty(name="Target Cage", type=bpy.types.Object)
 
 
 def map_changed(self, context):
@@ -29,6 +31,21 @@ class OP_BakedMap(bpy.types.PropertyGroup):
 class OP_BakeSettings(bpy.types.PropertyGroup):
     high_objects: bpy.props.CollectionProperty(type=OP_ObjectRef)
     active_high: bpy.props.IntProperty()
+    source_mode: bpy.props.EnumProperty(name="Source Matching", items=[
+        ('ALL', 'All Sources', 'Project all listed high-poly objects onto each target (legacy behavior)'),
+        ('MATCHED', 'By Target / Name', 'Use explicit targets, otherwise matching _low / _high names; missing pairs are errors'),
+    ], default='ALL')
+    ao_scope: bpy.props.EnumProperty(name="AO Occluders", items=[
+        ('SET', 'Texture Set Assembly', 'Include other listed parts at their authored positions; exclude unrelated scene objects'),
+        ('PAIR', 'Individual Parts', 'Only the target and its matched high-poly sources contribute occlusion'),
+    ], default='SET')
+    device: bpy.props.EnumProperty(name="Bake Device", items=[
+        ('CPU', 'CPU', 'Use CPU without changing scene settings or device preferences'),
+        ('SCENE', 'Scene Device', 'Use the current scene Cycles device and existing device preferences'),
+    ], default='CPU')
+    separate_cage_distance: bpy.props.BoolProperty(name="Separate Cage Extrusion", default=False,
+        description="Use a separate ray-origin extrusion; older projects retain Ray Distance for both values")
+    cage_extrusion: bpy.props.FloatProperty(name="Cage Extrusion", default=.1, min=0, subtype='DISTANCE')
     normal: bpy.props.BoolProperty(name="Normal", default=True)
     ao: bpy.props.BoolProperty(name="Ambient Occlusion", default=True)
     curvature: bpy.props.BoolProperty(name="Curvature (Target Mesh Edges)", default=True)

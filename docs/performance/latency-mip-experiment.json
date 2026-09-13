@@ -1,0 +1,4490 @@
+{
+  "status": "PASS",
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "backend": "METAL",
+  "resolution": 2048,
+  "precision": "RGBA32F/R32F",
+  "fixture": "Worn Painted Metal, six records, synthetic 32x32 AO/curvature, no assigned mesh",
+  "candidate_mip_max_absolute_error": 0.0,
+  "repo_root": "/private/tmp/op-latency-base-df32483",
+  "scope": "Separately completed texture jobs; one dependent RGBA32F pixel read fences queued work. No EEVEE frame or UI latency claim. Cold preparation excluded.",
+  "samples": {
+    "fence_only": [
+      {
+        "submit_s": 5.4199972510105e-07,
+        "completion_fence_s": 0.00045791600041411584,
+        "total_s": 0.0004584580001392169,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 4.169996827840805e-07,
+        "completion_fence_s": 0.0004711660003522411,
+        "total_s": 0.0004715830000350252,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 2.5000008463393897e-07,
+        "completion_fence_s": 0.00044120900020061526,
+        "total_s": 0.0004414590002852492,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 4.579997039400041e-07,
+        "completion_fence_s": 0.0005326670006979839,
+        "total_s": 0.0005331250004019239,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 3.330005711177364e-07,
+        "completion_fence_s": 0.000480749999951513,
+        "total_s": 0.00048108300052263075,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 7.499993444071151e-07,
+        "completion_fence_s": 0.0009138330005953321,
+        "total_s": 0.0009145829999397392,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 3.749992174562067e-07,
+        "completion_fence_s": 0.0006116250006016344,
+        "total_s": 0.0006119999998190906,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 1.0839994502021e-06,
+        "completion_fence_s": 0.0008045000004130998,
+        "total_s": 0.0008055839998633019,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ],
+    "composition": [
+      {
+        "submit_s": 0.00020266699993953807,
+        "completion_fence_s": 0.011361250000845757,
+        "total_s": 0.011563917000785295,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00019116600014967844,
+              "cpu_s": 0.0001909999999973877,
+              "exclusive_wall_s": 0.00019116600014967844,
+              "exclusive_cpu_s": 0.0001909999999973877
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0002040409999608528,
+        "completion_fence_s": 0.010253874999762047,
+        "total_s": 0.0104579159997229,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00019549999979062704,
+              "cpu_s": 0.00019500000000149953,
+              "exclusive_wall_s": 0.00019549999979062704,
+              "exclusive_cpu_s": 0.00019500000000149953
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00016033399970183382,
+        "completion_fence_s": 0.010166666000259283,
+        "total_s": 0.010326999999961117,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00015391599936265266,
+              "cpu_s": 0.00015400000000198588,
+              "exclusive_wall_s": 0.00015391599936265266,
+              "exclusive_cpu_s": 0.00015400000000198588
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00024304099952132674,
+        "completion_fence_s": 0.010341209000216622,
+        "total_s": 0.010584249999737949,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00023404100011248374,
+              "cpu_s": 0.00023399999999895726,
+              "exclusive_wall_s": 0.00023404100011248374,
+              "exclusive_cpu_s": 0.00023399999999895726
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0002506660002836725,
+        "completion_fence_s": 0.010522624999794061,
+        "total_s": 0.010773291000077734,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00024087499969027704,
+              "cpu_s": 0.00024100000000260025,
+              "exclusive_wall_s": 0.00024087499969027704,
+              "exclusive_cpu_s": 0.00024100000000260025
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00041525000051478855,
+        "completion_fence_s": 0.011183165999682387,
+        "total_s": 0.011598416000197176,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00039150000066001667,
+              "cpu_s": 0.0003910000000004743,
+              "exclusive_wall_s": 0.00039150000066001667,
+              "exclusive_cpu_s": 0.0003910000000004743
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00034991700067621423,
+        "completion_fence_s": 0.011243291999562643,
+        "total_s": 0.011593209000238858,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00033166599951073295,
+              "cpu_s": 0.000332000000000221,
+              "exclusive_wall_s": 0.00033166599951073295,
+              "exclusive_cpu_s": 0.000332000000000221
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00035312500040163286,
+        "completion_fence_s": 0.010846583999409631,
+        "total_s": 0.011199708999811264,
+        "pixel": [
+          0.7754034399986267,
+          0.7754034399986267,
+          0.7754034399986267,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00033474999963800656,
+              "cpu_s": 0.0003340000000022769,
+              "exclusive_wall_s": 0.00033474999963800656,
+              "exclusive_cpu_s": 0.0003340000000022769
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 10,
+            "live_gpu_compositions": 1
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ],
+    "mips": [
+      {
+        "submit_s": 0.00032979200022964505,
+        "completion_fence_s": 0.0018691670002226601,
+        "total_s": 0.002198959000452305,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.00031908399978419766,
+              "cpu_s": 0.0003189999999975157,
+              "exclusive_wall_s": 0.00031908399978419766,
+              "exclusive_cpu_s": 0.0003189999999975157
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00031762500020704465,
+        "completion_fence_s": 0.0018311670000912272,
+        "total_s": 0.002148792000298272,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0003099169998677098,
+              "cpu_s": 0.0003109999999999502,
+              "exclusive_wall_s": 0.0003099169998677098,
+              "exclusive_cpu_s": 0.0003109999999999502
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00033037499997590203,
+        "completion_fence_s": 0.0018134579995603417,
+        "total_s": 0.0021438329995362437,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0003237920000174199,
+              "cpu_s": 0.00032300000000162754,
+              "exclusive_wall_s": 0.0003237920000174199,
+              "exclusive_cpu_s": 0.00032300000000162754
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0004955419999532751,
+        "completion_fence_s": 0.0018277919998581638,
+        "total_s": 0.002323333999811439,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0004865419996349374,
+              "cpu_s": 0.0004860000000022069,
+              "exclusive_wall_s": 0.0004865419996349374,
+              "exclusive_cpu_s": 0.0004860000000022069
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0006064580002203002,
+        "completion_fence_s": 0.0018602500003908062,
+        "total_s": 0.0024667080006111064,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0005958330002613366,
+              "cpu_s": 0.0005950000000005673,
+              "exclusive_wall_s": 0.0005958330002613366,
+              "exclusive_cpu_s": 0.0005950000000005673
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0009120000004259055,
+        "completion_fence_s": 0.002185000000281434,
+        "total_s": 0.0030970000007073395,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0008778749997873092,
+              "cpu_s": 0.0008459999999992363,
+              "exclusive_wall_s": 0.0008778749997873092,
+              "exclusive_cpu_s": 0.0008459999999992363
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0005893749994356767,
+        "completion_fence_s": 0.0019696250001288718,
+        "total_s": 0.0025589999995645485,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.000570125000194821,
+              "cpu_s": 0.0005699999999997374,
+              "exclusive_wall_s": 0.000570125000194821,
+              "exclusive_cpu_s": 0.0005699999999997374
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0006680410006083548,
+        "completion_fence_s": 0.002186916999562527,
+        "total_s": 0.002854958000170882,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0006423750000976725,
+              "cpu_s": 0.0006419999999991433,
+              "exclusive_wall_s": 0.0006423750000976725,
+              "exclusive_cpu_s": 0.0006419999999991433
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 23,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ],
+    "composition_and_mips": [
+      {
+        "submit_s": 0.00045754099937767023,
+        "completion_fence_s": 0.011802750000242668,
+        "total_s": 0.012260290999620338,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00015008299942564918,
+              "cpu_s": 0.00015000000000142677,
+              "exclusive_wall_s": 0.00015008299942564918,
+              "exclusive_cpu_s": 0.00015000000000142677
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.00029387499944277806,
+              "cpu_s": 0.0002940000000002385,
+              "exclusive_wall_s": 0.00029387499944277806,
+              "exclusive_cpu_s": 0.0002940000000002385
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00045083300028636586,
+        "completion_fence_s": 0.011700125000061234,
+        "total_s": 0.0121509580003476,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00015116700069484068,
+              "cpu_s": 0.00015199999999992997,
+              "exclusive_wall_s": 0.00015116700069484068,
+              "exclusive_cpu_s": 0.00015199999999992997
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0002883750003093155,
+              "cpu_s": 0.00028899999999865145,
+              "exclusive_wall_s": 0.0002883750003093155,
+              "exclusive_cpu_s": 0.00028899999999865145
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0004697089998444426,
+        "completion_fence_s": 0.01173425000069983,
+        "total_s": 0.012203959000544273,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00015133400029299082,
+              "cpu_s": 0.00015199999999992997,
+              "exclusive_wall_s": 0.00015133400029299082,
+              "exclusive_cpu_s": 0.00015199999999992997
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.00030741699993086513,
+              "cpu_s": 0.00030800000000041905,
+              "exclusive_wall_s": 0.00030741699993086513,
+              "exclusive_cpu_s": 0.00030800000000041905
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0005938750000495929,
+        "completion_fence_s": 0.011818207999567676,
+        "total_s": 0.012412082999617269,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0001940830006788019,
+              "cpu_s": 0.00019500000000149953,
+              "exclusive_wall_s": 0.0001940830006788019,
+              "exclusive_cpu_s": 0.00019500000000149953
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0003859590005959035,
+              "cpu_s": 0.00038600000000243995,
+              "exclusive_wall_s": 0.0003859590005959035,
+              "exclusive_cpu_s": 0.00038600000000243995
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0007129579998945701,
+        "completion_fence_s": 0.011589374999857682,
+        "total_s": 0.012302332999752252,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0002314590001333272,
+              "cpu_s": 0.0002309999999994261,
+              "exclusive_wall_s": 0.0002314590001333272,
+              "exclusive_cpu_s": 0.0002309999999994261
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0004660840004362399,
+              "cpu_s": 0.0004670000000004393,
+              "exclusive_wall_s": 0.0004660840004362399,
+              "exclusive_cpu_s": 0.0004670000000004393
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0008162500007529161,
+        "completion_fence_s": 0.012397499999678985,
+        "total_s": 0.0132137500004319,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0002606660000310512,
+              "cpu_s": 0.00026000000000081513,
+              "exclusive_wall_s": 0.0002606660000310512,
+              "exclusive_cpu_s": 0.00026000000000081513
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0005368329993871157,
+              "cpu_s": 0.0005369999999977892,
+              "exclusive_wall_s": 0.0005368329993871157,
+              "exclusive_cpu_s": 0.0005369999999977892
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0007228340000438038,
+        "completion_fence_s": 0.012022457999592007,
+        "total_s": 0.01274529199963581,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0002365830005146563,
+              "cpu_s": 0.00023699999999848842,
+              "exclusive_wall_s": 0.0002365830005146563,
+              "exclusive_cpu_s": 0.00023699999999848842
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0004693750006481423,
+              "cpu_s": 0.0004689999999989425,
+              "exclusive_wall_s": 0.0004693750006481423,
+              "exclusive_cpu_s": 0.0004689999999989425
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0010472920002939645,
+        "completion_fence_s": 0.012552332999803184,
+        "total_s": 0.013599625000097149,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00027720799971575616,
+              "cpu_s": 0.0002769999999969741,
+              "exclusive_wall_s": 0.00027720799971575616,
+              "exclusive_cpu_s": 0.0002769999999969741
+            },
+            "live_gpu_mipmaps": {
+              "calls": 1,
+              "wall_s": 0.0007388750000245636,
+              "cpu_s": 0.0007300000000007856,
+              "exclusive_wall_s": 0.0007388750000245636,
+              "exclusive_cpu_s": 0.0007300000000007856
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 32,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ],
+    "mips_mrt": [
+      {
+        "submit_s": 0.00016783299997769063,
+        "completion_fence_s": 0.0018720830003076117,
+        "total_s": 0.0020399160002853023,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00017895900055009406,
+        "completion_fence_s": 0.0019785829999818816,
+        "total_s": 0.0021575420005319756,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00020729199968627654,
+        "completion_fence_s": 0.0017528329999549896,
+        "total_s": 0.001960124999641266,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0002235000001746812,
+        "completion_fence_s": 0.0017925419997482095,
+        "total_s": 0.0020160419999228907,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00031054200007929467,
+        "completion_fence_s": 0.0020019160001538694,
+        "total_s": 0.002312458000233164,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0004346249997979612,
+        "completion_fence_s": 0.0017893750000439468,
+        "total_s": 0.002223999999841908,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00034354099989286624,
+        "completion_fence_s": 0.0017968749998544808,
+        "total_s": 0.002140415999747347,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0003095840002060868,
+        "completion_fence_s": 0.0017533330001242575,
+        "total_s": 0.0020629170003303443,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 13,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ],
+    "composition_and_mrt_mips": [
+      {
+        "submit_s": 0.00032345799991162494,
+        "completion_fence_s": 0.0116735419996985,
+        "total_s": 0.011996999999610125,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0001598329999978887,
+              "cpu_s": 0.0001600000000010482,
+              "exclusive_wall_s": 0.0001598329999978887,
+              "exclusive_cpu_s": 0.0001600000000010482
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00030612499995186226,
+        "completion_fence_s": 0.011918874999537366,
+        "total_s": 0.012224999999489228,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0001449999999749707,
+              "cpu_s": 0.0001449999999998397,
+              "exclusive_wall_s": 0.0001449999999749707,
+              "exclusive_cpu_s": 0.0001449999999998397
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00036616699981095735,
+        "completion_fence_s": 0.011427750000621018,
+        "total_s": 0.011793917000431975,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0001722920005704509,
+              "cpu_s": 0.00017099999999814486,
+              "exclusive_wall_s": 0.0001722920005704509,
+              "exclusive_cpu_s": 0.00017099999999814486
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.00041766699996514944,
+        "completion_fence_s": 0.011480500000288885,
+        "total_s": 0.011898167000254034,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00020333300017227884,
+              "cpu_s": 0.000204000000000093,
+              "exclusive_wall_s": 0.00020333300017227884,
+              "exclusive_cpu_s": 0.000204000000000093
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0005681249995177495,
+        "completion_fence_s": 0.011704833000294457,
+        "total_s": 0.012272957999812206,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00026279200028511696,
+              "cpu_s": 0.0002629999999967936,
+              "exclusive_wall_s": 0.00026279200028511696,
+              "exclusive_cpu_s": 0.0002629999999967936
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.000744541999665671,
+        "completion_fence_s": 0.01195604100030323,
+        "total_s": 0.012700582999968901,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.00043612500030576484,
+              "cpu_s": 0.00043600000000054706,
+              "exclusive_wall_s": 0.00043612500030576484,
+              "exclusive_cpu_s": 0.00043600000000054706
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.000489624999318039,
+        "completion_fence_s": 0.011565166000764293,
+        "total_s": 0.012054791000082332,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0002337080004508607,
+              "cpu_s": 0.0002329999999979293,
+              "exclusive_wall_s": 0.0002337080004508607,
+              "exclusive_cpu_s": 0.0002329999999979293
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      },
+      {
+        "submit_s": 0.0008677089999764576,
+        "completion_fence_s": 0.012088415999642166,
+        "total_s": 0.012956124999618623,
+        "pixel": [
+          0.7715189456939697,
+          0.7715189456939697,
+          0.7715189456939697,
+          1.0
+        ],
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "live_gpu_composition": {
+              "calls": 1,
+              "wall_s": 0.0005082500001662993,
+              "cpu_s": 0.00047999999999959186,
+              "exclusive_wall_s": 0.0005082500001662993,
+              "exclusive_cpu_s": 0.00047999999999959186
+            }
+          },
+          "counters": {
+            "live_gpu_passes": 22,
+            "live_gpu_compositions": 1,
+            "live_gpu_mip_levels": 11,
+            "probe_mrt_passes": 10
+          },
+          "distributions": {},
+          "last_observed_bytes": {},
+          "peak_observed_bytes": {},
+          "process_peak_rss_bytes": 1525809152
+        }
+      }
+    ]
+  },
+  "summary": {
+    "fence_only": {
+      "median_s": 0.0005071040004622773,
+      "minimum_s": 0.0004414590002852492,
+      "maximum_s": 0.0009145829999397392
+    },
+    "composition": {
+      "median_s": 0.010986499999944499,
+      "minimum_s": 0.010326999999961117,
+      "maximum_s": 0.011598416000197176
+    },
+    "mips": {
+      "median_s": 0.0023950210002112726,
+      "minimum_s": 0.0021438329995362437,
+      "maximum_s": 0.0030970000007073395
+    },
+    "composition_and_mips": {
+      "median_s": 0.01235720799968476,
+      "minimum_s": 0.0121509580003476,
+      "maximum_s": 0.013599625000097149
+    },
+    "mips_mrt": {
+      "median_s": 0.0021016665000388457,
+      "minimum_s": 0.001960124999641266,
+      "maximum_s": 0.002312458000233164
+    },
+    "composition_and_mrt_mips": {
+      "median_s": 0.01213989549978578,
+      "minimum_s": 0.011793917000431975,
+      "maximum_s": 0.012956124999618623
+    }
+  }
+}

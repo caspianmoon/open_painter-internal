@@ -99,6 +99,7 @@ def main():
     assert opacity['counters'].get('live_input_upload_bytes', 0) == 0
     assert opacity['phases']['source_generation']['calls'] == 0
     assert opacity['phases']['masking']['calls'] == 0
+    assert opacity['counters'].get('live_checkpoint_hits', 0) > 0, opacity
 
     if not benchmark:
         # Changing a mask input must rebuild it, not reuse an unrelated old leaf.
@@ -106,7 +107,8 @@ def main():
         mask = next(m for m in masked.masks if m.enabled)
         mask.strength *= .5
         changed_mask = live(scene, ts)
-        assert changed_mask['counters'].get('live_input_uploads', 0) > 0
+        assert (changed_mask['counters'].get('live_input_uploads', 0) > 0 or
+                changed_mask['counters'].get('live_gpu_mask_stacks', 0) > 0)
         # New edits between yields cannot publish an obsolete recipe revision.
         folder.opacity = .6
         pending = live_preview.steps(scene, ts)

@@ -2,14 +2,14 @@
 
 Validated on Blender 5.2.1 LTS, macOS Apple Silicon, using the Blender application installed locally.
 
-The live texture backend passed 51 background integration scripts, 32 Blender unit
-tests, 27 independent NumPy tests and three native GUI workflows. The separate
-`--gpu-only` runner checks 125 GPU math cases plus live composition, dependency
-reuse, painting, failure recovery and authoritative save/export. A separate full
-2K Worn Painted Metal run compared all eight channels with the CPU reference.
-See the [live validation report](docs/live-procedural-preview.md) for commands,
-raw evidence and completed EEVEE frame measurements. All Blender runs use isolated
-user resources; GPU tests require an actual window and do not pass by skipping.
+The latency follow-up includes 52 background integration scripts, 42 Blender unit
+tests and 37 independent NumPy tests. The real-window `--gpu-only` runner covers
+183 compositing checks, 91 folder-cache checks, 38 procedural configurations,
+11 full-resolution mask cases plus unsupported-domain preflight checks, and the
+live painting/save/export workflow. `--gui-only` checks three native UI workflows.
+See the [current validation report](docs/live-preview-latency.md) for the actual
+run results, exact commands, raw evidence and limits. GPU tests require an actual
+window and do not pass by skipping. All tests use isolated Blender resources.
 
 ## Automated acceptance
 

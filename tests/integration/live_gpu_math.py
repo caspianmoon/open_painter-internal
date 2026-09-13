@@ -131,6 +131,22 @@ def run():
         verify('empty-isolated-folders', [dict(children=[], opacity=.5), dict(children=[dict(children=[])])])
         verify('normal-zero-vector-fallback', [dict(source=dict(color=(.5, .5, .5, 1)))], 'NORMAL')
 
+        # Unmasked passthrough folders at full opacity are an organizational
+        # wrapper. Nested wrappers must not add full-size copies/composites.
+        for mode in MODES:
+            records = [leaf(mode), leaf('MULTIPLY')]
+            wrapped = [dict(children=[dict(children=records, passthrough=True)], passthrough=True)]
+            with Metrics() as flattened:
+                verify(f'{mode}:unit-passthrough-elision', wrapped)
+            with Metrics() as direct:
+                verify(f'{mode}:direct-passthrough-children', records)
+            assert flattened.counts['live_gpu_passes'] == direct.counts['live_gpu_passes']
+        # Fractional and masked groups still require the backdrop interpolation.
+        for wrapper in (dict(opacity=.999), dict(mask=device.upload(np.full((n,n), .6, np.float32)),
+                                                _mask=np.full((n,n), .6, np.float32))):
+            verify('retained-passthrough-interpolation', [dict(children=[leaf('OVERLAY')],
+                                                               passthrough=True, **wrapper)])
+
         # Invalid modes fail while output still contains the last complete edit.
         before = np.array(target.read(), dtype=np.float32)
         try:

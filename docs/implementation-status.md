@@ -1,5 +1,37 @@
 # Roadmap implementation status
 
+## Live latency follow-up — 2026-09-14
+
+Implemented incrementally on `task/live-preview-latency`, based on
+`df32483a158fb3852564654c6d10f5f2ff7673d4`. The new version is **0.2.3**.
+The CPU reference, native UI, fixed display material, all existing recipes and
+both portable material versions remain. Supported scalar fields and mesh-aware
+masks generate GPU textures directly on Metal; other inputs retain CPU
+semantics. Two independent 256 MiB caches bound source and completed first-root
+folder reuse. Isolated coverage and passthrough behavior remain distinct.
+
+Fresh Worn Painted Metal **2K float32** measurements with the **production
+update timer and first completed native frame**: cold 24.237 s → 0.808 s;
+mask strength 4.630 s → 76.45 ms; shared procedural scale 2.860 s → 59.64 ms;
+folder opacity 90.99 → 42.02 ms. Roughness did not improve: 25.00 → 28.66 ms.
+These are one-machine measurements, not a 60 FPS guarantee. Authored quality
+was not reduced. Older offscreen timings below complete all viewport samples
+and must not be interpreted as the first native interactive frame.
+
+The [implementation and measurement report](live-preview-latency.md),
+[primary-source research](live-preview-latency-research.md) and
+[validation inventory](performance/latency-validation.json) contain exact
+commands, results, hashes, changed files and limitations. Full 2K comparison
+of all eight channels passed within **2.861023e-6** maximum absolute error.
+Current automated coverage: 52 background integration scripts, 42 Blender unit
+tests, 37 independent CPU tests, 183 GPU compositing checks, 91 checkpoint
+checks, 38 scalar configurations, 11 full-2K mask cases plus 17 preflight checks,
+three native UI workflows and the live painting/save/export workflow.
+Save/render/export still finish the latest complete recipe through CPU; these
+operations and unsupported live source/filter domains can remain slow.
+
+---
+
 ## Live procedural preview follow-up — 2026-09-13
 
 Implemented on `task/live-procedural-preview`, preserving shared-checkout commit

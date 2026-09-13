@@ -1,0 +1,14 @@
+{
+  "commit": "df32483a158fb3852564654c6d10f5f2ff7673d4",
+  "purpose": "Frozen pre-optimization numerical reference. Loaded only by regression tests; never imported by the add-on.",
+  "files": {
+    "src/open_painter/texture_engine/procedurals.py": {
+      "reference": "tests/unit/reference_procedurals.py",
+      "sha256": "38e212b268a8db366da011c0d1eee1ee6091f767c01ffe81d9e2325456ed35e8"
+    },
+    "src/open_painter/generators/base.py": {
+      "reference": "tests/unit/reference_generators.py",
+      "sha256": "219428aaffa332de472f46633d958680b4c309aa6e015e6da0654f4ee9628253"
+    }
+  }
+}

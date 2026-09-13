@@ -1,0 +1,454 @@
+Running phase01.py
+00:01.238  blend            | Read blend: "/Volumes/SSD/projects/open_painter/examples/phase01.blend"
+Info: Saved as "phase01.blend"
+PHASE 0 + 1 PASS: registration, assignment, persistence, safe removal
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase02.py
+00:01.989  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/layers.blend"
+Info: Saved as "layers.blend"
+PHASE 2 PASS: ten layers, ordering, folder copy, cycle rejection, persistence
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase03.py
+PHASE 3 PASS: five blends, opacity, output pixels, per-channel dirtiness, node safety
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase04.py
+00:01.114  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/masks.blend"
+Info: Saved as "masks.blend"
+PHASE 4 PASS: painted mask, inversion, all-channel invalidation, packed persistence
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase05.py
+Open Painter: INFO: Baking NORMAL for Cube_LP from 1 source(s)
+Open Painter: INFO: Baking AO for Cube_LP from 1 source(s)
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Saved as "bake_cube.blend"
+PHASE 5 PASS: real Cycles HP/LP Normal + AO + Curvature; state restored
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase06.py
+00:00.519  blend            | Read blend: "/Volumes/SSD/projects/open_painter/examples/bake_cube.blend"
+PHASE 6 PASS: curvature edge selection, AO dirt, tile-stable noise, real baked generator evaluation
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase07.py
+PHASE 7 PASS: folder/parameter round trip, independent EXR assets, three demo materials
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase08.py
+PHASE 8 PASS: lazy channel images, native brush/canvas, changed raster detection, scoped output update
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase09.py
+PHASE 9 PASS: UE5 names + ORM pixels, sRGB Base Color, Unity packing, resampling, overwrite protection
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase10.py
+BENCHMARK 2K / 20 layers / 6 channels: full=1.163s; roughness edit=0.112s
+PHASE 10 PASS: triplanar, isolated duplication/dirty state, PNG/TIFF 8/16 RGBA, lifecycle, performance
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase11.py
+00:01.471  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/paint_resume.blend"
+Info: Saved as "paint_resume.blend"
+PHASE 11 PASS: paint target switching, channel dirty routing, mask switching, slot isolation, packed alpha, save/reload restoration, output and hierarchy recovery
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase12.py
+00:01.472  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/channel_composition.blend"
+Info: Saved as "channel_composition.blend"
+PHASE 12 PASS: independent channel blends/opacity, isolated and passthrough folder backdrops, masks, dirty routing, fill sampling/hardness, save/reload, duplication and smart-material roundtrip
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase13.py
+00:04.264  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/repair_groups.blend"
+Info: Saved as "repair_groups.blend"
+PHASE 13 PASS: immediate material/image wiring, stable shader links, nested/collapsible groups, atomic cycle rejection, all rendered surface presets, persistence
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase14.py
+PHASE 14 PASS: empty layers preserve output revisions, fill dirties only enabled channels, stale jobs cancel, cooperative pixels match full evaluation and premultiplied reference
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running phase15.py
+00:01.937  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/reference_effects.blend"
+Info: Saved as "reference_effects.blend"
+PHASE 15 PASS: native channel/filter order, black mask/filter inversion, independent duplication, bitmap masks, portable effect/procedural transforms and save/reload
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running native_registration.py
+NATIVE_REGISTRATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running smart_masks.py
+00:03.402  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/native-masks.blend"
+Info: Saved as "native-masks.blend"
+SMART_MASKS_AND_INLINE_OPACITY_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running projected_masks.py
+PROJECTED_MASKS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running edge_wear_textures.py
+00:01.138  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/edge-textures.blend"
+Info: Saved as "edge-textures.blend"
+EDGE_WEAR_TEXTURES_PASS: zero off-edge coverage, texture bake equivalence, no effect nodes, packed save/reopen
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running geometric_curvature.py
+GEOMETRIC_CURVATURE_PASS: 12 cube creases before/after triangulation; smooth sphere and flat triangulation stay black at maximum intensity; UV seams add no edges; packed texture bake
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running utility_maps.py
+00:01.045  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/utility-maps.blend"
+Info: Saved as "utility-maps.blend"
+UTILITY_MAPS_PASS: assigned bounds; render UVs; world/object normals; stable IDs; islands/borders; evaluated modifiers; true closed/open thickness; packed save/reopen; no shader effect nodes
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running catalog_materials.py
+CATALOG_RECIPE_PASS Clean Brushed Steel
+CATALOG_RECIPE_PASS Worn Brushed Steel
+CATALOG_RECIPE_PASS Machined Aluminum
+CATALOG_RECIPE_PASS Scratched Aluminum
+CATALOG_RECIPE_PASS Cast Iron
+CATALOG_RECIPE_PASS Raw Industrial Steel
+CATALOG_RECIPE_PASS Polished Chrome
+CATALOG_RECIPE_PASS Old Brass
+CATALOG_RECIPE_PASS Antique Bronze
+CATALOG_RECIPE_PASS Oxidized Copper
+CATALOG_RECIPE_PASS Worn Painted Metal
+CATALOG_RECIPE_PASS Heavy Chipped Paint
+CATALOG_RECIPE_PASS Factory Powder-Coated Metal
+CATALOG_RECIPE_PASS Military Painted Steel
+CATALOG_RECIPE_PASS Old Enamel Metal
+CATALOG_RECIPE_PASS Rusting Painted Steel
+CATALOG_RECIPE_PASS Automotive Painted Metal
+CATALOG_RECIPE_PASS Burned Painted Metal
+CATALOG_RECIPE_PASS Heavy Rust
+CATALOG_RECIPE_PASS Surface Rust
+CATALOG_RECIPE_PASS Wet Rust
+CATALOG_RECIPE_PASS Galvanized Steel
+CATALOG_RECIPE_PASS Welded Steel
+CATALOG_RECIPE_PASS Heat-Treated Metal
+CATALOG_RECIPE_PASS Greasy Machinery
+CATALOG_RECIPE_PASS Abandoned Machinery
+CATALOG_RECIPE_PASS Injection-Molded Plastic
+CATALOG_RECIPE_PASS Worn Hard Plastic
+CATALOG_RECIPE_PASS Soft-Touch Plastic
+CATALOG_RECIPE_PASS Sun-Damaged Plastic
+CATALOG_RECIPE_PASS Dirty Rubber
+CATALOG_RECIPE_PASS Cracked Old Rubber
+CATALOG_RECIPE_PASS Fresh Oak
+CATALOG_RECIPE_PASS Old Worn Wood
+CATALOG_RECIPE_PASS Painted Wood
+CATALOG_RECIPE_PASS Weathered Outdoor Wood
+CATALOG_RECIPE_PASS Burnt Wood
+CATALOG_RECIPE_PASS Oiled Dark Wood
+CATALOG_RECIPE_PASS Rough Concrete
+CATALOG_RECIPE_PASS Old Dirty Concrete
+CATALOG_RECIPE_PASS Painted Concrete
+CATALOG_RECIPE_PASS Polished Marble
+CATALOG_RECIPE_PASS Granite
+CATALOG_RECIPE_PASS Weathered Stone
+CATALOG_RECIPE_PASS Worn Leather
+CATALOG_RECIPE_PASS Cracked Old Leather
+CATALOG_RECIPE_PASS Denim Fabric
+CATALOG_RECIPE_PASS Canvas Fabric
+CATALOG_RECIPE_PASS Sci-Fi Panel Surface
+CATALOG_RECIPE_PASS Post-Apocalyptic Scrap Metal
+00:48.008  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/catalog-materials.blend"
+Info: Saved as "catalog-materials.blend"
+CATALOG_MATERIALS_PASS {"recipes": 50, "layers": 229, "effects": 16, "pixel_fingerprints": 50, "missing_map_preflight": "PASS", "rollback": "PASS", "save_reopen": "PASS"}
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running texture_operations.py
+TEXTURE_OPERATIONS_PASS: filter neighborhoods and order, mask luminance, eight texture channels, scalar surface persistence, large seeds
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running procedural_channels.py
+PROCEDURAL_CHANNELS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running native_texture_operations.py
+NATIVE_TEXTURE_OPERATIONS_PASS: all50 asset handles; reusable filter/procedural operators; ordered mask filters alter pixels; searchable catalog applies editable layers; named material/object/island IDs select baked pixels without changing source maps
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running persistent_texture_cache.py
+PERSISTENT_TEXTURE_CACHE_PASS: constant edits reuse, parameter/map/UV/paint invalidation, forced pixels, lifecycle cleanup
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running asset_categories.py
+Info: Texture imported. Click its thumbnail to assign it to the selected fill or mask.
+ASSET_CATEGORIES_PASS: seven disjoint categories; channel/mask filter and texture activation; brush/alpha activation; source rename/delete; idempotent refresh and lifecycle
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running resource_invalidation.py
+RESOURCE_INVALIDATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running multi_scene_scheduling.py
+MULTI_SCENE_SCHEDULING_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running failed_evaluation.py
+Open Painter: ERROR: Evaluation: Injected evaluation failure
+00:00.766  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-failure-save-u1m9ylu6/recovery.blend"
+Info: Saved as "recovery.blend"
+FAILED_EVALUATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running scan_regression.py
+SCAN_AND_LIBRARY_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running dirty_tiles.py
+DIRTY_TILES_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running memory_budget.py
+MEMORY_BUDGET_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running typed_buffers.py
+TYPED_BUFFERS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running preview_authority.py
+00:01.070  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/preview-authority.blend"
+Info: Saved as "preview-authority.blend"
+PREVIEW_AUTHORITY_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running save_during_evaluation.py
+00:00.632  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/packing-revision.blend"
+Info: Saved as "packing-revision.blend"
+SAVE_DURING_EVALUATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running evaluated_projection.py
+EVALUATED_PROJECTION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running immutable_jobs.py
+IMMUTABLE_JOBS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running interactive_preview.py
+00:00.981  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-interactive-save-xx2v30ju/final.blend"
+Info: Saved as "final.blend"
+INTERACTIVE_PREVIEW_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running bake_diagnostics.py
+BAKE_DIAGNOSTICS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running bake_pairing.py
+00:00.714  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-bake-pair-save-v3p4pxd4/pairs.blend"
+Info: Saved as "pairs.blend"
+BAKE_PAIRING_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running bake_isolation.py
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 2 source(s)
+Open Painter: INFO: Baking NORMAL for Cap_low from 2 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Cap_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Cap_low from 1 source(s)
+/Volumes/SSD/projects/open_painter/tests/integration/bake_isolation.py:81: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  for mat in material_ids if mat.use_nodes},
+/Volumes/SSD/projects/open_painter/tests/integration/bake_isolation.py:78: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  mat.use_nodes, mat.node_tree.nodes.active,
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Cap_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Cap_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Panel_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Render_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Render_low from 1 source(s)
+Open Painter: INFO: Baking NORMAL for Render_low from 1 source(s)
+Open Painter: INFO: Baking AO for AO floor from 0 source(s)
+Open Painter: INFO: Baking AO for AO floor from 0 source(s)
+Open Painter: INFO: Baking AO for AO floor from 0 source(s)
+Open Painter: INFO: Baking AO for AO roof from 0 source(s)
+Open Painter: INFO: Baking AO for AO floor from 0 source(s)
+Open Painter: INFO: Baking AO for AO roof from 0 source(s)
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+BAKE_ISOLATION_STATS {'unpaired_normal_max_error': 0.044954538345336914, 'matched_normal_max_error': 0.0, 'unrelated_ao': 1.0, 'set_contact_ao': 0.024958333000540733, 'pair_ao': 1.0}
+BAKE_ISOLATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running scene_masks.py
+00:01.314  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-scene-field-5fphkyc0/scene.blend"
+Info: Saved as "scene.blend"
+SCENE_MASKS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running reference_layers.py
+00:01.367  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-reference-5eg_ly_b/anchors.blend"
+Info: Saved as "anchors.blend"
+REFERENCE_LAYERS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running geometry_effects.py
+GEOMETRY_EFFECTS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running material_states.py
+MATERIAL_STATES_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running material_stamps.py
+00:01.006  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-stamp-save-uq25v9ec/stamp.blend"
+Info: Saved as "stamp.blend"
+MATERIAL_STAMPS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running production_export.py
+PRODUCTION_EXPORT_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running offline_analysis.py
+OFFLINE_ANALYSIS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running gpu_parity.py
+GPU_PARITY_PASS {"blender": "5.2.1 LTS", "build": "9e2066aef7ef", "background": true, "size": 512, "format": "RGBA32F", "operations": [{"kind": "FILL", "color": [0.1, 0.2, 0.3, 1]}, {"kind": "OVER", "opacity": 0.7}, {"kind": "LEVELS", "black": 0.03, "white": 0.9, "gamma": 1.3}, {"kind": "GAUSSIAN_BLUR", "radius": 2}], "cpu": {"compile_s": 0, "image_read_s": 0.001343334000921459, "backend": "CPU", "fallback": "Disabled or no window GPU context", "gpu_resource_bytes": 0, "image_write_s": 0.0007798749993526144, "end_to_end_s": 0.03919287499957136}, "cold": {"compile_s": 0, "image_read_s": 0.000586874999498832, "backend": "CPU", "fallback": "Disabled or no window GPU context", "gpu_resource_bytes": 0, "image_write_s": 0.0001916250002977904, "end_to_end_s": 0.0377034579996689}, "warm": {"compile_s": 0, "image_read_s": 0.0005162500001461012, "backend": "CPU", "fallback": "Disabled or no window GPU context", "gpu_resource_bytes": 0, "image_write_s": 0.0003578750001906883, "end_to_end_s": 0.037747958000181825}, "max_absolute_error": 0.0, "promotion": "DISABLED: isolated image chain, no verified interactive whole-material advantage"}
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running live_input_dependencies.py
+LIVE_INPUT_DEPENDENCIES_PASS: exact leaves, uniform/image/filter/geometry reuse, managed writes, scene identity, eviction safety, explicit preview resolution, references, failed leaves, immutable authoring revisions, scene analysis provenance, pure planning after eviction, native/fallback source identity
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+Running live_identity_planning.py
+LIVE_IDENTITY_PLANNING_PASS: Worn inactive channels, pure no-op signatures, latest-output dirty state, constant fills, nested passthrough, isolated coverage, retained changing inputs, missing images, CPU parity
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+test_all_modes_finite_and_zero_opacity (test_compositing.CompositionTests.test_all_modes_finite_and_zero_opacity) ... ok
+test_nearest_repeat_and_transparent_border (test_compositing.CompositionTests.test_nearest_repeat_and_transparent_border) ... ok
+test_nonseparable_and_normal_invariants (test_compositing.CompositionTests.test_nonseparable_and_normal_invariants) ... ok
+test_reference_pixels (test_compositing.CompositionTests.test_reference_pixels) ... ok
+test_shared_raster_cache_budget (test_compositing.CompositionTests.test_shared_raster_cache_budget) ... ok
+test_effect_opacity_alpha_and_source_unchanged (test_effects.EffectTests.test_effect_opacity_alpha_and_source_unchanged) ... ok
+test_filters_independent_expectations (test_effects.EffectTests.test_filters_independent_expectations) ... ok
+test_levels_known_values (test_effects.EffectTests.test_levels_known_values) ... ok
+test_order_bypass_and_pointwise_tile_equivalence (test_effects.EffectTests.test_order_bypass_and_pointwise_tile_equivalence) ... ok
+test_scalar_grayscale_and_rgba_invert (test_effects.EffectTests.test_scalar_grayscale_and_rgba_invert) ... ok
+test_cache_release_after_metrics_module_teardown (test_filter_footprints.Footprints.test_cache_release_after_metrics_module_teardown) ... ok
+test_composed_halos_and_unknown (test_filter_footprints.Footprints.test_composed_halos_and_unknown) ... ok
+test_shared_ownership_and_budget (test_filter_footprints.Footprints.test_shared_ownership_and_budget) ... ok
+test_strips_match_full_filters (test_filter_footprints.Footprints.test_strips_match_full_filters) ... ok
+test_invalid_hierarchy_rejected (test_math.MathTests.test_invalid_hierarchy_rejected) ... ok
+test_opacity_extremes (test_math.MathTests.test_opacity_extremes) ... ok
+test_overlay_both_branches (test_math.MathTests.test_overlay_both_branches) ... ok
+test_packing (test_math.MathTests.test_packing) ... ok
+test_uv_centers (test_math.MathTests.test_uv_centers) ... ok
+test_breakup_noise_is_computed_only_when_consumed (test_procedural_optimization.GeneratorOptimizationTests.test_breakup_noise_is_computed_only_when_consumed) ... ok
+test_every_generator_matches_frozen_math (test_procedural_optimization.GeneratorOptimizationTests.test_every_generator_matches_frozen_math) ... ok
+test_legacy_noise_source_keeps_its_existing_math (test_procedural_optimization.GeneratorOptimizationTests.test_legacy_noise_source_keeps_its_existing_math) ... ok
+test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles (test_procedural_optimization.ProceduralOptimizationTests.test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles) ... ok
+test_all_sources_match_frozen_math_across_strip_boundaries (test_procedural_optimization.ProceduralOptimizationTests.test_all_sources_match_frozen_math_across_strip_boundaries) ... ok
+test_cell_distance_ties_keep_first_winner (test_procedural_optimization.ProceduralOptimizationTests.test_cell_distance_ties_keep_first_winner) ... ok
+test_cell_output_selection_preserves_existing_values_and_dtypes (test_procedural_optimization.ProceduralOptimizationTests.test_cell_output_selection_preserves_existing_values_and_dtypes) ... ok
+test_frozen_sources_match_recorded_commit_hashes (test_procedural_optimization.ProceduralOptimizationTests.test_frozen_sources_match_recorded_commit_hashes) ... ok
+test_identity_is_hashed_only_for_the_winning_cell (test_procedural_optimization.ProceduralOptimizationTests.test_identity_is_hashed_only_for_the_winning_cell) ... ok
+test_scalar_broadcast_and_zero_angle_coordinate_extremes (test_procedural_optimization.ProceduralOptimizationTests.test_scalar_broadcast_and_zero_angle_coordinate_extremes) ... ok
+test_catalog_finite_and_immutable (test_texture_engine.FilterTests.test_catalog_finite_and_immutable) ... ok
+test_color_math_and_alpha_preservation (test_texture_engine.FilterTests.test_color_math_and_alpha_preservation) ... ok
+test_gaussian_impulse_no_wrap_and_halo_equivalence (test_texture_engine.FilterTests.test_gaussian_impulse_no_wrap_and_halo_equivalence) ... ok
+test_levels_threshold_gamma (test_texture_engine.FilterTests.test_levels_threshold_gamma) ... ok
+test_morphology_expected_area_and_constant (test_texture_engine.FilterTests.test_morphology_expected_area_and_constant) ... ok
+test_normal_math (test_texture_engine.FilterTests.test_normal_math) ... ok
+test_warp_sampling_and_slope_identity (test_texture_engine.FilterTests.test_warp_sampling_and_slope_identity) ... ok
+test_broadcasting_and_invalid_source (test_texture_engine.ProceduralTests.test_broadcasting_and_invalid_source) ... ok
+test_catalog_is_deterministic_bounded_and_partition_invariant (test_texture_engine.ProceduralTests.test_catalog_is_deterministic_bounded_and_partition_invariant) ... ok
+test_directionality (test_texture_engine.ProceduralTests.test_directionality) ... ok
+test_distinct_cellular_and_surface_patterns (test_texture_engine.ProceduralTests.test_distinct_cellular_and_surface_patterns) ... ok
+test_lattice_hash_matches_integer_reference (test_texture_engine.ProceduralTests.test_lattice_hash_matches_integer_reference) ... ok
+test_seed_and_lattice_gradient_behavior (test_texture_engine.ProceduralTests.test_seed_and_lattice_gradient_behavior) ... ok
+
+----------------------------------------------------------------------
+Ran 42 tests in 1.921s
+
+OK
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit
+ALL TESTS PASSED

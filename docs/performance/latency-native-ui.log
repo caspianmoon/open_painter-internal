@@ -1,0 +1,19 @@
+2026-09-14 00:09:45.326 Blender[42466:429985] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+00:17.994  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+Warning: 2 × Draw window: 4.3354 ms, average: 2.16770800 ms
+
+Blender quit
+2026-09-14 00:10:03.898 Blender[42507:431479] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+00:10.565  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+TEXTURE_OPERATIONS_UI_PASS
+
+Blender quit
+Error: Not freed memory blocks: 5, total unfreed memory 0.000481 MB
+2026-09-14 00:10:15.017 Blender[42537:432010] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+00:09.714  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+STROKE_RESULT {'FINISHED'}
+STROKE_RANGE 0.0 1.0 212
+Info: Saved as "viewport_painted.blend"
+
+Blender quit
+ALL TESTS PASSED

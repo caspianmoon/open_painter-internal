@@ -1,0 +1,42 @@
+test_invalid_hierarchy_rejected (test_math.MathTests.test_invalid_hierarchy_rejected) ... ok
+test_opacity_extremes (test_math.MathTests.test_opacity_extremes) ... ok
+test_overlay_both_branches (test_math.MathTests.test_overlay_both_branches) ... ok
+test_packing (test_math.MathTests.test_packing) ... ok
+test_uv_centers (test_math.MathTests.test_uv_centers) ... ok
+test_all_modes_finite_and_zero_opacity (test_compositing.CompositionTests.test_all_modes_finite_and_zero_opacity) ... ok
+test_nearest_repeat_and_transparent_border (test_compositing.CompositionTests.test_nearest_repeat_and_transparent_border) ... ok
+test_nonseparable_and_normal_invariants (test_compositing.CompositionTests.test_nonseparable_and_normal_invariants) ... ok
+test_reference_pixels (test_compositing.CompositionTests.test_reference_pixels) ... ok
+test_shared_raster_cache_budget (test_compositing.CompositionTests.test_shared_raster_cache_budget) ... ok
+test_catalog_finite_and_immutable (test_texture_engine.FilterTests.test_catalog_finite_and_immutable) ... ok
+test_color_math_and_alpha_preservation (test_texture_engine.FilterTests.test_color_math_and_alpha_preservation) ... ok
+test_gaussian_impulse_no_wrap_and_halo_equivalence (test_texture_engine.FilterTests.test_gaussian_impulse_no_wrap_and_halo_equivalence) ... ok
+test_levels_threshold_gamma (test_texture_engine.FilterTests.test_levels_threshold_gamma) ... ok
+test_morphology_expected_area_and_constant (test_texture_engine.FilterTests.test_morphology_expected_area_and_constant) ... ok
+test_normal_math (test_texture_engine.FilterTests.test_normal_math) ... ok
+test_warp_sampling_and_slope_identity (test_texture_engine.FilterTests.test_warp_sampling_and_slope_identity) ... ok
+test_broadcasting_and_invalid_source (test_texture_engine.ProceduralTests.test_broadcasting_and_invalid_source) ... ok
+test_catalog_is_deterministic_bounded_and_partition_invariant (test_texture_engine.ProceduralTests.test_catalog_is_deterministic_bounded_and_partition_invariant) ... ok
+test_directionality (test_texture_engine.ProceduralTests.test_directionality) ... ok
+test_distinct_cellular_and_surface_patterns (test_texture_engine.ProceduralTests.test_distinct_cellular_and_surface_patterns) ... ok
+test_lattice_hash_matches_integer_reference (test_texture_engine.ProceduralTests.test_lattice_hash_matches_integer_reference) ... ok
+test_seed_and_lattice_gradient_behavior (test_texture_engine.ProceduralTests.test_seed_and_lattice_gradient_behavior) ... ok
+test_cache_release_after_metrics_module_teardown (test_filter_footprints.Footprints.test_cache_release_after_metrics_module_teardown) ... ok
+test_composed_halos_and_unknown (test_filter_footprints.Footprints.test_composed_halos_and_unknown) ... ok
+test_shared_ownership_and_budget (test_filter_footprints.Footprints.test_shared_ownership_and_budget) ... ok
+test_strips_match_full_filters (test_filter_footprints.Footprints.test_strips_match_full_filters) ... ok
+test_breakup_noise_is_computed_only_when_consumed (test_procedural_optimization.GeneratorOptimizationTests.test_breakup_noise_is_computed_only_when_consumed) ... ok
+test_every_generator_matches_frozen_math (test_procedural_optimization.GeneratorOptimizationTests.test_every_generator_matches_frozen_math) ... ok
+test_legacy_noise_source_keeps_its_existing_math (test_procedural_optimization.GeneratorOptimizationTests.test_legacy_noise_source_keeps_its_existing_math) ... ok
+test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles (test_procedural_optimization.ProceduralOptimizationTests.test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles) ... ok
+test_all_sources_match_frozen_math_across_strip_boundaries (test_procedural_optimization.ProceduralOptimizationTests.test_all_sources_match_frozen_math_across_strip_boundaries) ... ok
+test_cell_distance_ties_keep_first_winner (test_procedural_optimization.ProceduralOptimizationTests.test_cell_distance_ties_keep_first_winner) ... ok
+test_cell_output_selection_preserves_existing_values_and_dtypes (test_procedural_optimization.ProceduralOptimizationTests.test_cell_output_selection_preserves_existing_values_and_dtypes) ... ok
+test_frozen_sources_match_recorded_commit_hashes (test_procedural_optimization.ProceduralOptimizationTests.test_frozen_sources_match_recorded_commit_hashes) ... ok
+test_identity_is_hashed_only_for_the_winning_cell (test_procedural_optimization.ProceduralOptimizationTests.test_identity_is_hashed_only_for_the_winning_cell) ... ok
+test_scalar_broadcast_and_zero_angle_coordinate_extremes (test_procedural_optimization.ProceduralOptimizationTests.test_scalar_broadcast_and_zero_angle_coordinate_extremes) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 2.393s
+
+OK

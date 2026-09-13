@@ -196,7 +196,9 @@ def resource_estimate(scene, ts, n):
                 components += 1 if simple else 4
         inputs = max(inputs, n * n * components * 4)
     scratch = n * n * 16 * (depth + 3 + 1/3)
-    return int(display + scratch + _leaves.allowance + inputs)
+    # Completed first-folder results have a separate, globally bounded cache.
+    checkpoints = _device._checkpoint_limit if _device is not None else 256 * 1048576
+    return int(display + scratch + _leaves.allowance + checkpoints + inputs)
 
 
 def check_resources(scene, ts, n):
@@ -290,6 +292,8 @@ def retry(scene, ts):
 
 def invalidate_inputs(scene, ts):
     key = key_for(scene, ts)
+    if _device is not None:
+        _device.discard_checkpoints(key)
     for token in list(_leaves.entries):
         if token[0] == key:
             _leaves.used -= _leaves.entries.pop(token)[1]
@@ -300,6 +304,8 @@ def prune(live):
     live_display.prune(live)
     if _window is not None and _window not in {window.as_pointer() for window in bpy.context.window_manager.windows}:
         clear()
+    if _device is not None:
+        _device.prune_checkpoints(live)
     for table in (_sessions, _fallbacks, _fallback_serials):
         for key in set(table) - live:
             table.pop(key, None)

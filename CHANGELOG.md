@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.3
+
+- Generate supported procedural sources and mesh-aware masks directly into float32 GPU textures on Metal, with the CPU evaluator retained for other domains and final save/export.
+- Reuse completed first-folder contents across opacity and mask edits with a bounded cache. Skip proven unchanged channel fills and redundant passthrough copies.
+- Avoid unused cellular-noise outputs and generator computations without changing CPU pixels. Preserve all existing materials, native controls and portable material formats.
+- Add native EEVEE frame benchmarks, GPU/CPU pixel regressions, cache lifecycle checks and documented research and limits.
+
 ## 0.2.2
 
 - Place blend mode and channel opacity side by side in native layer rows. Use an editable numeric percentage field instead of a slider; click the value, type a number and press Enter.

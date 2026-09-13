@@ -18,10 +18,17 @@ Blender user data directory or a user-chosen directory, never the installed exte
 
 Interactive evaluation uses `evaluation/live_preview.py` to capture dependency
 signatures, resolve cached texture inputs and compose changed channels on the GPU.
-`live_inputs.py` retains exact CPU procedural/filter leaves; `live_gpu.py` implements
+`live_inputs.py` selects validated GPU scalar/mask kernels or exact CPU inputs;
+`live_procedurals.py` and `live_masks.py` write disposable float32 textures on Metal,
+using CPU coordinate tables and explicitly sampled baked maps. Unsupported sources,
+transforms and filters keep the CPU path. `live_gpu.py` implements
 the existing blend math in float32; `live_display.py` publishes disposable image
 views with GPU mipmaps to the fixed material and 2D editor. Unchanged dependencies
-do no source work. The `LIVE` scheduler state leaves authoritative outputs dirty;
+do no source work. A 256 MiB leaf cache is separate from the 256 MiB completed-folder
+cache. The latter only caches the first root folder: passthrough children use a
+known default backdrop; isolated children retain transparent coverage. Child and
+group-mode signatures invalidate it, while its own opacity/mask can reuse it. Identity fills and unit passthrough groups avoid redundant passes.
+The `LIVE` scheduler state leaves authoritative outputs dirty;
 save, render and export complete them through the CPU evaluator described below.
 Headless or incompatible work falls back to CPU. See the
 [live backend design and limits](docs/live-procedural-preview.md).

@@ -180,23 +180,39 @@ def _fbm(x, y, seed, octaves=4, persistence=0.5, mode="FBM"):
     return result / total
 
 
-def _cells(x, y, seed):
-    """Nearest/second distances and cell value; 5x5 avoids F2 corner omissions."""
+def _cells(x, y, seed, *, need_first=True, need_second=True, need_identity=True):
+    """Requested nearest/second distances and cell value, or None when unused.
+
+    Keep the full 5x5 search and strict winner ordering, including distance ties.
+    Most sources only consume one output. Hash the winning cell's identity once
+    instead of hashing identities for all 25 candidates that will be discarded.
+    The default three-output API remains available to existing callers.
+    """
     ix, iy = np.floor(x), np.floor(y)
     first = np.full_like(x, np.inf)
-    second = first.copy()
-    identity = np.zeros_like(x)
+    second = first.copy() if need_second else None
+    if need_identity:
+        winner_x, winner_y = np.zeros_like(ix), np.zeros_like(iy)
+        selected = np.zeros_like(first, dtype=bool)
     for dy in range(-2, 3):
         for dx in range(-2, 3):
             cx, cy = ix + dx, iy + dy
             px = cx + _hash(cx, cy, seed)
             py = cy + _hash(cx, cy, seed + 79)
             dist = (x - px) ** 2 + (y - py) ** 2
-            closer = dist < first
-            second = np.where(closer, first, np.minimum(second, dist))
-            identity = np.where(closer, _hash(cx, cy, seed + 173), identity)
+            if need_second or need_identity:
+                closer = dist < first
+            if need_second:
+                second = np.where(closer, first, np.minimum(second, dist))
+            if need_identity:
+                winner_x = np.where(closer, cx, winner_x)
+                winner_y = np.where(closer, cy, winner_y)
+                selected = np.logical_or(selected, closer)
             first = np.minimum(first, dist)
-    return np.sqrt(first), np.sqrt(second), identity
+    identity = (np.where(selected, _hash(winner_x, winner_y, seed + 173),
+                         np.zeros_like(x)) if need_identity else None)
+    return (np.sqrt(first) if need_first else None,
+            np.sqrt(second) if need_second else None, identity)
 
 
 def _scratch(x, y, seed, width=0.025, density=0.55, directional=False):
@@ -220,7 +236,7 @@ def _scratch(x, y, seed, width=0.025, density=0.55, directional=False):
 
 
 def _pores(x, y, seed, radius=0.2, density=0.55):
-    f1, _, identity = _cells(x, y, seed)
+    f1, _, identity = _cells(x, y, seed, need_second=False)
     return (1 - _smooth(radius * 0.3, radius, f1)) * (identity < density)
 
 
@@ -243,8 +259,12 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
     if not np.isfinite(scale) or scale <= 0:
         raise ValueError("Procedural scale must be finite and positive")
     angle = np.deg2rad(float(params.get("angle", 0)))
-    x = (u * np.cos(angle) - v * np.sin(angle)).astype(np.float32) * scale
-    y = (u * np.sin(angle) + v * np.cos(angle)).astype(np.float32) * scale
+    if angle == 0:
+        # The default transform needs neither rotation nor float64 temporaries.
+        x, y = u * scale, v * scale
+    else:
+        x = (u * np.cos(angle) - v * np.sin(angle)).astype(np.float32) * scale
+        y = (u * np.sin(angle) + v * np.cos(angle)).astype(np.float32) * scale
     seed = int(seed)
     width = max(float(params.get("width", 0.04)), 1e-5)
     density = np.clip(float(params.get("density", 0.55)), 0, 1)
@@ -273,7 +293,8 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
             out *= 0.7 + 0.6 * _fbm(x * 2 ** i, y * 2 ** i, seed + i, 1)
         out = out * 0.5
     elif key in {"VORONOI", "CELLULAR", "WORLEY", "HAMMERED_METAL", "ORANGE_PEEL"}:
-        a, _, identity = _cells(x, y, seed)
+        a, _, identity = _cells(x, y, seed, need_first=key != "VORONOI",
+                                need_second=False, need_identity=key == "VORONOI")
         out = identity if key == "VORONOI" else a
         if key == "CELLULAR":
             out = 1 - _smooth(0, 0.85, a)
@@ -299,7 +320,8 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
     elif key in {"CRACKS", "GRUNGE_CRACKS", "LEATHER_GRAIN", "RUST_FLAKES"}:
         warp = float(params.get("warp", 0.4))
         a, b, identity = _cells(x + warp * _perlin(x * 1.7, y * 1.7, seed + 9),
-                                y + warp * _perlin(x * 1.7, y * 1.7, seed + 13), seed)
+                                y + warp * _perlin(x * 1.7, y * 1.7, seed + 13), seed,
+                                need_identity=key == "RUST_FLAKES")
         cracks = 1 - _smooth(width * 0.2, width, b - a)
         if key == "LEATHER_GRAIN":
             out = (1 - cracks) * 0.75 + _fbm(x * 9, y * 9, seed + 31, 2) * 0.25
@@ -329,7 +351,7 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
         elif key == "RUST_PITTING":
             out *= _smooth(0.25, 0.7, _fbm(x * 0.4, y * 0.4, seed + 71, 3))
     elif key in {"CONCRETE_AGGREGATE", "STONE_GRAIN", "SAND_GRAIN"}:
-        _, _, coarse = _cells(x, y, seed)
+        _, _, coarse = _cells(x, y, seed, need_first=False, need_second=False)
         fine = _value(x * 4, y * 4, seed + 17)
         out = coarse * 0.7 + fine * 0.3
         if key == "STONE_GRAIN":

@@ -1,9 +1,8 @@
-"""Exact, revisioned CPU leaves for the live GPU composition graph.
+"""Revisioned texture inputs for the live GPU composition graph.
 
-Only compositing and simple source modulation move to the GPU. Existing CPU
-procedurals, mesh-aware masks, image sampling and filters retain their authored
-resolution and numerical behavior. Their resulting textures are reusable leaves;
-changing opacity or a fill value does not regenerate an unchanged noise field.
+Validated scalar sources and mesh-aware masks can generate GPU texture inputs
+directly. Other sources retain the CPU reference at authored resolution. Both
+paths share content keys, so a composition edit reuses unchanged texture inputs.
 """
 
 from time import perf_counter
@@ -12,11 +11,11 @@ from types import SimpleNamespace
 import numpy as np
 
 from ..core.layer_stack import channel_for
-from ..constants import OWNER
+from ..constants import DEFAULTS, OWNER
 from . import metrics
 from .channel_eval import TILE_ROWS, _procedural_tile, source
 from .image_snapshots import ImageSnapshots
-from .mask_eval import _effect_signature, _stack_signature, evaluate_masks
+from .mask_eval import _effect_signature, _stack_signature, evaluate_masks, map_pixels
 from .preview_policy import SlicePolicy, resolution, resources as preview_resources
 from .raster_cache import for_texture_set
 from .resource_keys import image_key, key_for
@@ -33,6 +32,20 @@ def _color(prop, kind):
     if prop.channel in {'BASE_COLOR', 'NORMAL', 'EMISSION'}:
         return tuple(prop.color)
     return (prop.value, prop.value, prop.value, 1.)
+
+
+def _constant_identity(layer, prop, mode, backdrop):
+    """Prove a constant Normal fill leaves a known opaque backdrop unchanged.
+
+    Isolated folders have transparent coverage, so never supply their children
+    with this backdrop. Retained sources make subsequent backdrop values unknown;
+    this deliberately does not infer constants from textures, masks or filters.
+    """
+    if (backdrop is None or layer.type != 'FILL' or mode != 'NORMAL'
+            or prop.image or prop.image_name or prop.procedural or _effects(prop)):
+        return False
+    color = _color(prop, layer.type)
+    return all(np.isfinite(color)) and tuple(color[:3]) == backdrop
 
 
 class Builder:
@@ -65,10 +78,50 @@ class Builder:
         self.signatures = SimpleNamespace(signatures={}, geometry_stamp=self.geometry_stamp)
 
     def _field_key(self, prop):
+        if self._gpu_field_supported(prop):
+            return self._scalar_key(prop.procedural, prop.procedural_scale, prop.procedural_seed)
         return (*self.prefix, 'procedural', prop.procedural, prop.procedural_scale,
                 prop.procedural_seed, prop.projection, tuple(prop.scale), prop.rotation,
                 tuple(prop.offset), prop.triplanar_hardness,
                 self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
+
+    def _scalar_key(self, kind, scale, seed):
+        from ..texture_engine.procedurals import ALIASES
+        kind = kind.strip().upper().replace('-', '_').replace(' ', '_')
+        return (*self.prefix, 'scalar-v1', ALIASES.get(kind, kind), scale, seed)
+
+    def _gpu_field_supported(self, prop):
+        from .live_procedurals import supports
+        return (not (self.n & (self.n - 1)) and prop.projection == 'UV'
+                and tuple(prop.scale) == (1., 1.) and prop.rotation == 0
+                and tuple(prop.offset) == (0., 0.) and prop.tiling == 'REPEAT'
+                and supports(prop.procedural, self.n, scale=prop.procedural_scale,
+                             seed=prop.procedural_seed))
+
+    def _gpu_mask(self, layer, images):
+        def field(kind, n, *, scale, seed):
+            key = self._scalar_key(kind, scale, seed)
+            texture = self.cache.get(key)
+            if texture is None:
+                texture = self.device.generate_scalar(kind, n, scale=scale, seed=seed)
+                self.cache.put(key, texture, n*n*4)
+            return texture
+
+        def mesh_map(kind):
+            image = next(item.image for item in self.mask_ts.baked_maps
+                         if item.kind == kind and item.image)
+            key = (*self.prefix, 'baked-map', image_key(image))
+            texture = self.cache.get(key)
+            if texture is None:
+                raster = map_pixels(self.mask_ts, kind, images)
+                texture = self.device.upload(raster)
+                self.cache.put(key, texture, raster.nbytes)
+                metrics.count('live_input_uploads')
+                metrics.count('live_input_upload_bytes', raster.nbytes)
+            return texture
+
+        return self.device.generate_mask(self.mask_ts, layer, self.n,
+                                         field=field, mesh_map=mesh_map)
 
     def _source_key(self, prop, kind):
         return (*self.prefix, 'source', kind, prop.channel, image_key(prop.image),
@@ -80,7 +133,7 @@ class Builder:
                 tuple(_effect_signature(effect) for effect in _effects(prop)),
                 self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
 
-    def _texture(self, key, components, tile, resolve=True):
+    def _texture(self, key, components, tile, resolve=True, gpu_source=None):
         if not resolve:
             return None
         texture = self.cache.get(key)
@@ -88,6 +141,15 @@ class Builder:
             metrics.count('live_input_cache_hits')
             return texture
         metrics.count('live_input_cache_misses')
+        if gpu_source is not None:
+            from .live_procedurals import UnsupportedSource
+            try:
+                texture = gpu_source()
+            except UnsupportedSource:
+                metrics.count('live_cpu_source_fallbacks')
+            else:
+                self.cache.put(key, texture, self.n*self.n*components*4)
+                return texture
         shape = (self.n, self.n) if components == 1 else (self.n, self.n, components)
         raster = np.empty(shape, np.float32)
         metrics.count('live_input_allocated_bytes', raster.nbytes)
@@ -116,7 +178,8 @@ class Builder:
         signature = _stack_signature(parameters, layer, self.signatures)
         key = (*self.prefix, 'mask', signature)
         texture = yield from self._texture(key, 1, lambda low, high:
-            evaluate_masks(self.mask_ts, layer, self.n, low, high, images, self.resources), resolve)
+            evaluate_masks(self.mask_ts, layer, self.n, low, high, images, self.resources), resolve,
+            (lambda: self._gpu_mask(layer, images)) if hasattr(self.device, 'generate_mask') else None)
         return texture, key
 
     def _source(self, layer, prop, images, resolve):
@@ -148,7 +211,10 @@ class Builder:
                 and not prop.image and not effects and prop.tiling == 'REPEAT'):
             key = self._field_key(prop)
             texture = yield from self._texture(key, 1, lambda low, high:
-                _procedural_tile(prop, self.n, low, high, self.ts, self.resources), resolve)
+                _procedural_tile(prop, self.n, low, high, self.ts, self.resources), resolve,
+                (lambda: self.device.generate_scalar(prop.procedural, self.n,
+                    scale=prop.procedural_scale, seed=prop.procedural_seed))
+                if hasattr(self.device, 'generate_scalar') and self._gpu_field_supported(prop) else None)
             operation = (3 if prop.channel == 'HEIGHT' else
                          1 if prop.channel in {'BASE_COLOR', 'EMISSION'} else 2)
             result = dict(field=texture, color=color, procedural=operation,
@@ -190,7 +256,7 @@ class Builder:
         # parameter-only edits can reuse immutable decoded input pixels.
         images = ImageSnapshots(self.resources, 0)
 
-        def compose(parent, ancestry):
+        def compose(parent, ancestry, known_backdrop=None):
             layers, signatures = [], []
             for layer in self.children.get(parent, ()):
                 prop = channel_for(layer, channel)
@@ -204,21 +270,42 @@ class Builder:
                     raise ValueError('Layer hierarchy contains a cycle. Reparent the folder.')
                 if layer.type != 'FOLDER' and prop is None:
                     continue
-                mask, mask_signature = yield from self._mask(layer, images, resolve)
                 if layer.type == 'FOLDER':
-                    children, child_signature = yield from compose(layer.id, ancestry | {layer.id})
                     passthrough = layer.group_mode == 'PASSTHROUGH'
-                    layers.append(dict(mode=mode, opacity=opacity, mask=mask,
-                                       children=children, passthrough=passthrough))
+                    children, child_signature = yield from compose(
+                        layer.id, ancestry | {layer.id}, known_backdrop if passthrough else None)
+                    if not children:
+                        # Empty isolated groups have zero coverage; passthrough
+                        # groups with no remaining changes retain their backdrop.
+                        if resolve:
+                            metrics.count('live_identity_elisions')
+                        continue
+                    mask, mask_signature = yield from self._mask(layer, images, resolve)
+                    record = dict(mode=mode, opacity=opacity, mask=mask,
+                                  children=children, passthrough=passthrough)
+                    if not parent and not layers:
+                        # The first root starts from a known default backdrop in
+                        # passthrough mode, or transparent coverage when isolated.
+                        # Cache its children before the root opacity/mask/blend;
+                        # switching group mode changes that initial coverage.
+                        record['checkpoint_key'] = (
+                            *self.prefix, channel, layer.id, (passthrough, child_signature))
+                    layers.append(record)
                     signatures.append(('folder', mode, opacity, mask_signature, passthrough, child_signature))
                 else:
+                    if _constant_identity(layer, prop, mode, known_backdrop):
+                        if resolve:
+                            metrics.count('live_identity_elisions')
+                        continue
+                    mask, mask_signature = yield from self._mask(layer, images, resolve)
                     value, source_signature = yield from self._source(layer, prop, images, resolve)
                     layers.append(dict(mode=mode, opacity=opacity, mask=mask, source=value))
                     signatures.append(('layer', mode, opacity, mask_signature, source_signature))
+                known_backdrop = None
             return layers, tuple(signatures)
 
         try:
-            layers, signature = yield from compose('', set())
+            layers, signature = yield from compose('', set(), DEFAULTS[channel][:3])
             return layers, (self.n, channel, signature)
         finally:
             if resolve:

@@ -1,5 +1,11 @@
 # Live procedural texture preview
 
+This describes the initial live backend at `df32483`. See the newer
+[latency follow-up](live-preview-latency.md) for current measurements and GPU
+source/mask acceleration. Timings below are historical, not rerun results. The
+512² offscreen benchmark completes all viewport samples; it does not measure
+the first native interactive frame.
+
 Open Painter now separates its live display from final texture output. The
 editable layer stack remains the source of truth. Color, roughness, opacity and
 blend edits update a GPU texture compositor instead of composing and uploading
@@ -10,11 +16,11 @@ nodes on the measured fixture; no procedural material shader stack is generated.
 
 Ordinary edits already used `image_manager.write(..., pack=False)`. They did not
 save textures to disk. They still ran CPU composition and a full RGBA pixel
-transfer. A fresh, isolated measurement of commit
+transfer. The prior isolated measurement of commit
 `00ccf773bae22ee5f82cf787de4c7dc0ca5bca9e` reproduced the committed Worn Painted
 Metal 2048² fixture: 17.748 seconds cold and 182.981 ms for a warm roughness edit,
-including a 64 MiB output write. Packing was zero in both workloads. This is one
-new sample, not the older roadmap timing, and excludes a rendered viewport.
+including a 64 MiB output write. Packing was zero in both workloads. This was one
+sample recorded for that earlier change, not a new measurement here, and excludes a rendered viewport.
 Raw evidence: [CPU baseline](performance/live-cpu-before-00ccf77.json).
 
 ## Implementation

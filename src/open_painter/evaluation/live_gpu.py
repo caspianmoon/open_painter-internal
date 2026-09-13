@@ -5,6 +5,7 @@ mesh maps, creates shader nodes, reads a GPU texture, or writes/updates an Image
 The caller owns uploaded inputs and the output Image's shared GPU texture.
 Disposable intermediate textures are reused by depth, not retained per layer.
 """
+from collections import OrderedDict
 from contextlib import contextmanager
 
 import numpy as np
@@ -149,10 +150,11 @@ class Device:
 
     ``upload`` returns a caller-owned texture. The caller releases cached inputs
     by dropping those references; this device retains no uploaded layer images.
-    It owns only a one-pixel sampler fallback and a bounded intermediate pool.
+    It owns a one-pixel sampler fallback, a bounded intermediate pool and an
+    optional 256 MiB LRU of complete first-root groups, including their coverage.
     """
 
-    def __init__(self):
+    def __init__(self, *, checkpoint_bytes=256 * 1024 * 1024):
         import bpy
         import gpu
         from gpu_extras.batch import batch_for_shader
@@ -161,10 +163,14 @@ class Device:
             raise RuntimeError("Live GPU composition requires a Blender window context")
         self.window = bpy.context.window.as_pointer()
         self.shader = self.batch = self.dummy = None
+        self._scalar_device = self._mask_device = None
         self._pool = []
         self._mips = {}
         self._leased = set()
         self._pool_n = None
+        self._checkpoints = OrderedDict()
+        self._checkpoint_bytes = 0
+        self._checkpoint_limit = min(256 * 1024 * 1024, max(0, int(checkpoint_bytes)))
         info = gpu.types.GPUShaderCreateInfo()
         info.vertex_in(0, 'VEC2', 'position')
         info.fragment_out(0, 'VEC4', 'fragColor')
@@ -224,6 +230,94 @@ class Device:
     def _release(self, texture):
         self._leased.discard(id(texture))
 
+    def _drop_checkpoint(self, key, counter='live_checkpoint_evictions'):
+        _, size = self._checkpoints.pop(key)
+        self._checkpoint_bytes -= size
+        metrics.count(counter)
+        metrics.gauge('live_checkpoint_cache_bytes', self._checkpoint_bytes)
+
+    def discard_checkpoints(self, owner=None):
+        """Release disposable group results for one texture-set owner or all."""
+        for key in tuple(self._checkpoints):
+            if owner is None or key[0] == owner:
+                self._drop_checkpoint(key, 'live_checkpoint_invalidations')
+
+    def prune_checkpoints(self, active_owners):
+        """Remove deleted scene/texture-set owners without touching other sets."""
+        active = set(active_owners)
+        for key in tuple(self._checkpoints):
+            if key[0] not in active:
+                self._drop_checkpoint(key, 'live_checkpoint_invalidations')
+
+    def _checkpoint_key(self, layer, n, channel):
+        key = layer.get('checkpoint_key')
+        if (channel is None or not isinstance(key, tuple) or len(key) != 5
+                or key[1] != n or key[2] != channel):
+            return None
+        if (not isinstance(key[4], tuple) or len(key[4]) != 2
+                or key[4][0] is not bool(layer.get('passthrough', False))):
+            return None
+        try:
+            hash(key)
+        except TypeError:
+            return None
+        return key
+
+    def _checkpoint_get(self, key):
+        # The first root starts from the channel default or transparent coverage.
+        # Child edits, mode changes and replacement roots invalidate this owner/
+        # channel bucket; do not retain undo history as GPU textures.
+        for previous in tuple(self._checkpoints):
+            if previous[:3] == key[:3] and previous != key:
+                self._drop_checkpoint(previous, 'live_checkpoint_invalidations')
+        entry = self._checkpoints.get(key)
+        metrics.count('live_checkpoint_hits' if entry is not None else 'live_checkpoint_misses')
+        if entry is not None:
+            self._checkpoints.move_to_end(key)
+            return entry[0]
+        return None
+
+    def _checkpoint_put(self, key, texture, n):
+        size = n*n*16
+        if size > self._checkpoint_limit:
+            metrics.count('live_checkpoint_oversize_skips')
+            return
+        while self._checkpoints and self._checkpoint_bytes + size > self._checkpoint_limit:
+            self._drop_checkpoint(next(iter(self._checkpoints)))
+        # Adopt the completed leased texture. It can never be selected by the
+        # scratch allocator while retained as a checkpoint, and no copy pass is
+        # needed to keep it. The caller's subsequent release is harmless.
+        for index, candidate in enumerate(self._pool):
+            if candidate is texture:
+                self._pool.pop(index)
+                break
+        else:
+            raise RuntimeError('Checkpoint source does not belong to the scratch pool')
+        self._leased.discard(id(texture))
+        self._checkpoints[key] = (texture, size)
+        self._checkpoint_bytes += size
+        metrics.count('live_checkpoint_adoptions')
+        metrics.gauge('live_checkpoint_cache_bytes', self._checkpoint_bytes)
+        metrics.gauge('live_gpu_scratch_bytes', len(self._pool)*size)
+
+    def generate_scalar(self, kind, n, **parameters):
+        from .live_procedurals import ScalarDevice, _configuration
+        # Reject unsupported inputs before compiling or allocating GPU state.
+        _configuration(kind, n, parameters.get('scale', 8.), parameters.get('seed', 1),
+                       {k: v for k, v in parameters.items() if k not in {'scale', 'seed'}})
+        self._check()
+        if self._scalar_device is None:
+            self._scalar_device = ScalarDevice()
+        return self._scalar_device.generate(kind, n, **parameters)
+
+    def generate_mask(self, ts, layer, n, **inputs):
+        from .live_masks import MaskDevice, validate
+        validate(ts, layer, n)
+        self._check()
+        if self._mask_device is None:
+            self._mask_device = MaskDevice()
+        return self._mask_device.generate(ts, layer, n, **inputs)
+
     @contextmanager
     def _state(self):
         import gpu
@@ -269,8 +363,8 @@ class Device:
             self.batch.draw(self.shader)
         metrics.count('live_gpu_passes')
 
-    def _stack(self, layers, current, n, opaque):
-        for layer in layers:
+    def _stack(self, layers, current, n, opaque, checkpoint_channel=None):
+        for index, layer in enumerate(layers):
             mode = layer.get('mode', 'NORMAL')
             amount = layer.get('opacity', 1.)
             if mode == 'DISABLE' or amount == 0:
@@ -280,10 +374,23 @@ class Device:
             children = layer.get('children')
             mask = layer.get('mask')
             if children is not None:
-                group = self._acquire(n)
                 passthrough = layer.get('passthrough', False)
-                self._pass(group, n, opcode=4 if passthrough else 0, current=current)
-                group = self._stack(children, group, n, opaque if passthrough else False)
+                if passthrough and amount == 1 and mask is None:
+                    # No backdrop interpolation is needed for an organizational
+                    # folder. Evaluate its children on the current target, with
+                    # the same coverage mode; avoid a full-size copy and blend.
+                    current = self._stack(children, current, n, opaque)
+                    metrics.count('live_gpu_passthrough_elisions')
+                    continue
+                key = (self._checkpoint_key(layer, n, checkpoint_channel)
+                       if index == 0 else None)
+                group = self._checkpoint_get(key) if key is not None else None
+                if group is None:
+                    group = self._acquire(n)
+                    self._pass(group, n, opcode=4 if passthrough else 0, current=current)
+                    group = self._stack(children, group, n, opaque if passthrough else False)
+                    if key is not None:
+                        self._checkpoint_put(key, group, n)
                 result = self._acquire(n)
                 self._pass(result, n, opcode=2 if passthrough else 1,
                            current=current, source=group, mask=mask, mode=mode,
@@ -322,12 +429,13 @@ class Device:
         if self._pool_n != n:
             self._pool.clear()
             self._mips.clear()
+            self.discard_checkpoints()
             self._pool_n = n
         with self._state():
             try:
                 current = self._acquire(n)
                 self._pass(current, n, opcode=0, color=DEFAULTS[channel])
-                current = self._stack(layers, current, n, True)
+                current = self._stack(layers, current, n, True, checkpoint_channel=channel)
                 self._pass(target_gpu, n, opcode=3, current=current, normal=channel == 'NORMAL')
                 metrics.count('live_gpu_compositions')
             finally:
@@ -363,6 +471,10 @@ class Device:
                 metrics.count('live_gpu_mip_levels')
 
     def close(self):
+        for child in (self._scalar_device, self._mask_device):
+            if child is not None:
+                child.close()
+        self._scalar_device = self._mask_device = None
         if self.shader is not None:
             import gpu
             # Metal retains the currently bound program in context state.
@@ -374,6 +486,7 @@ class Device:
         self._leased.clear()
         self._pool.clear()
         self._mips.clear()
+        self.discard_checkpoints()
         self.dummy = self.batch = self.shader = None
         metrics.gauge('live_gpu_scratch_bytes', 0)
         metrics.gauge('live_gpu_mipmap_scratch_bytes', 0)

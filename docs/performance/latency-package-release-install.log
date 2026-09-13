@@ -1,0 +1,6 @@
+INSTALL_REPO open_painter_test /Volumes/SSD/projects/open_painter/.blender-test/extension-repository
+STATUS Reinstalled "open_painter"
+INSTALL PASS: real ZIP installation, extension namespace, enable/disable, material evaluation
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

@@ -39,10 +39,16 @@ class Generator:
     name: str
 
     def evaluate(self, texture_set, parameters, u, v, cache):
-        n = (noise(u,v,parameters.noise_scale,parameters.seed)
-             if parameters.source == "NOISE" else
-             procedural("FBM",u,v,scale=parameters.noise_scale,seed=parameters.seed))
+        n = None
         amount, contrast, strength = parameters.amount, parameters.contrast, parameters.noise_strength
+
+        def breakup_noise():
+            nonlocal n
+            if n is None:
+                n = (noise(u, v, parameters.noise_scale, parameters.seed)
+                     if parameters.source == 'NOISE' else
+                     procedural('FBM', u, v, scale=parameters.noise_scale, seed=parameters.seed))
+            return n
 
         def mesh_map(kind):
             return sample_uv(map_pixels(texture_set, kind, cache), u, v)
@@ -52,25 +58,26 @@ class Generator:
 
         def breakup(value):
             # Breakup can reduce eligible coverage, never invent new geometric edges.
-            return value * ((1 - strength) + strength * n)
+            return value * ((1 - strength) + strength * breakup_noise())
 
         if self.id == 'NOISE':
+            n = breakup_noise()
             return n if parameters.source == 'NOISE' else threshold(n)
         if self.id in {'EDGE_WEAR', 'CHIPS'}:
             ao = mesh_map('AO')[..., 0] if any(m.kind == 'AO' and m.image for m in texture_set.baked_maps) else None
-            edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, n, amount, contrast, strength)
+            edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, breakup_noise(), amount, contrast, strength)
             if self.id == 'CHIPS':
                 chips = procedural('VORONOI', u, v, seed=parameters.seed, scale=parameters.noise_scale)
                 edges *= .15 + .85 * threshold(chips)
             return edges
         if self.id == 'DIRT':
-            return dirt(mesh_map('AO')[..., 0], mesh_map('CURVATURE')[..., 0], n, amount, contrast, strength)
+            return dirt(mesh_map('AO')[..., 0], mesh_map('CURVATURE')[..., 0], breakup_noise(), amount, contrast, strength)
         if self.id in {'CAVITY_DIRT', 'RUST'}:
             cavity = np.clip(1 - mesh_map('AO')[..., 0], 0, 1)
             if self.id == 'CAVITY_DIRT':
                 return breakup(np.clip(cavity * (1 + amount * 8) * contrast, 0, 1))
             # Corrosion starts in occluded regions and grows onto exposed surfaces.
-            growth = threshold(n + cavity * .55)
+            growth = threshold(breakup_noise() + cavity * .55)
             return breakup(growth)
         if self.id in {'DUST', 'WORLD_NORMAL', 'OBJECT_NORMAL'}:
             kind = 'OBJECT_NORMAL' if self.id == 'OBJECT_NORMAL' else 'WORLD_NORMAL'

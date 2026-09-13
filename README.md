@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.2.2.zip`](dist/open_painter-0.2.2.zip).
+1. Download or build [`dist/open_painter-0.2.3.zip`](dist/open_painter-0.2.3.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -145,7 +145,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
 
 ## Current limitations
 
-- Live GPU evaluation is the default in a compatible Blender window. Edits compose cached texture inputs without rewriting final output images; save/export resolve the latest edits through the CPU reference. Cold procedural generation, filters and projection can still take noticeable time. See the [measured performance and memory limits](docs/live-procedural-preview.md); 4K/8K have high memory costs.
+- Live GPU evaluation is the default in a compatible Blender window. Supported procedural sources and mesh-aware masks generate GPU textures directly on Metal; folder opacity edits reuse completed children. Save/export resolve the latest edits through the CPU reference. Other generators, filters and projections keep CPU evaluation. See the [measured performance and memory limits](docs/live-preview-latency.md); 4K/8K have high memory costs.
 - Painting is one channel at a time. The native brush engine writes the layer image; the compositor
   updates the composite after stroke completion. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
 - Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.

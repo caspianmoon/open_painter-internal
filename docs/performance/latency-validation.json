@@ -1,0 +1,477 @@
+{
+  "status": "PASS",
+  "completed_at_utc": "2026-09-13T21:12:05.370083+00:00",
+  "branch": "task/live-preview-latency",
+  "base_commit": "df32483a158fb3852564654c6d10f5f2ff7673d4",
+  "origin_main_checked": "15ef25ec532f466eff18a7265fa7d7ef5019e8ef",
+  "preserved_user_commit": "00ccf773bae22ee5f82cf787de4c7dc0ca5bca9e",
+  "version": "0.2.3",
+  "source_sha256": "9bfcbce25d69ba51d1c62341385c2507fa13ad3ab95057d75c204f92f4edccdb",
+  "source_digest_method": "sorted src/open_painter/**/*.py repository-relative POSIX path bytes followed by file bytes",
+  "environment": {
+    "blender": "/Applications/Blender.app/Contents/MacOS/Blender",
+    "blender_version": "5.2.1 LTS",
+    "blender_build": "9e2066aef7ef",
+    "backend": "METAL",
+    "hardware": "Apple M3 Pro / 18 GiB",
+    "numpy": "2.3.4"
+  },
+  "changed_files": [
+    "ARCHITECTURE.md",
+    "CHANGELOG.md",
+    "README.md",
+    "TESTING.md",
+    "blender_manifest.toml",
+    "dist/open_painter-0.2.3.zip",
+    "docs/implementation-status.md",
+    "docs/live-preview-latency-research.md",
+    "docs/live-preview-latency.md",
+    "docs/live-procedural-preview.md",
+    "docs/performance/latency-background.log",
+    "docs/performance/latency-gpu-and-native.log",
+    "docs/performance/latency-gpu-checkpoints.json",
+    "docs/performance/latency-gpu-masks.json",
+    "docs/performance/latency-gpu-math.json",
+    "docs/performance/latency-gpu-procedurals.json",
+    "docs/performance/latency-live-workflow.json",
+    "docs/performance/latency-mip-experiment.json",
+    "docs/performance/latency-native-after.json",
+    "docs/performance/latency-native-before.json",
+    "docs/performance/latency-native-explicit-after.json",
+    "docs/performance/latency-native-explicit-before.json",
+    "docs/performance/latency-native-ui.json",
+    "docs/performance/latency-native-ui.log",
+    "docs/performance/latency-package-install.log",
+    "docs/performance/latency-package-release-install.log",
+    "docs/performance/latency-package-release-validate.log",
+    "docs/performance/latency-package-validate.log",
+    "docs/performance/latency-parity-2k.json",
+    "docs/performance/latency-pure.log",
+    "docs/performance/latency-texture-ui.json",
+    "docs/performance/latency-validation.json",
+    "pyproject.toml",
+    "scripts/build_extension.py",
+    "scripts/launch_blender.py",
+    "scripts/run_pure_tests.py",
+    "scripts/run_tests.py",
+    "src/open_painter/constants.py",
+    "src/open_painter/evaluation/live_gpu.py",
+    "src/open_painter/evaluation/live_inputs.py",
+    "src/open_painter/evaluation/live_masks.py",
+    "src/open_painter/evaluation/live_preview.py",
+    "src/open_painter/evaluation/live_procedurals.py",
+    "src/open_painter/generators/base.py",
+    "src/open_painter/texture_engine/procedurals.py",
+    "tests/integration/live_gpu_checkpoints.py",
+    "tests/integration/live_gpu_math.py",
+    "tests/integration/live_identity_planning.py",
+    "tests/integration/live_masks.py",
+    "tests/integration/live_preview.py",
+    "tests/integration/live_procedurals.py",
+    "tests/performance/live_native_frame.py",
+    "tests/unit/reference_generators.py",
+    "tests/unit/reference_noise_metadata.json",
+    "tests/unit/reference_procedurals.py",
+    "tests/unit/test_procedural_optimization.py"
+  ],
+  "tests": [
+    {
+      "command": "python3 scripts/run_tests.py",
+      "result": "PASS",
+      "integration_scripts": 52,
+      "unit_tests": 42,
+      "unit_wall_s": 1.921,
+      "integration_files": [
+        "phase01.py",
+        "phase02.py",
+        "phase03.py",
+        "phase04.py",
+        "phase05.py",
+        "phase06.py",
+        "phase07.py",
+        "phase08.py",
+        "phase09.py",
+        "phase10.py",
+        "phase11.py",
+        "phase12.py",
+        "phase13.py",
+        "phase14.py",
+        "phase15.py",
+        "native_registration.py",
+        "smart_masks.py",
+        "projected_masks.py",
+        "edge_wear_textures.py",
+        "geometric_curvature.py",
+        "utility_maps.py",
+        "catalog_materials.py",
+        "texture_operations.py",
+        "procedural_channels.py",
+        "native_texture_operations.py",
+        "persistent_texture_cache.py",
+        "asset_categories.py",
+        "resource_invalidation.py",
+        "multi_scene_scheduling.py",
+        "failed_evaluation.py",
+        "scan_regression.py",
+        "dirty_tiles.py",
+        "memory_budget.py",
+        "typed_buffers.py",
+        "preview_authority.py",
+        "save_during_evaluation.py",
+        "evaluated_projection.py",
+        "immutable_jobs.py",
+        "interactive_preview.py",
+        "bake_diagnostics.py",
+        "bake_pairing.py",
+        "bake_isolation.py",
+        "scene_masks.py",
+        "reference_layers.py",
+        "geometry_effects.py",
+        "material_states.py",
+        "material_stamps.py",
+        "production_export.py",
+        "offline_analysis.py",
+        "gpu_parity.py",
+        "live_input_dependencies.py",
+        "live_identity_planning.py"
+      ],
+      "log": "docs/performance/latency-background.log",
+      "environment": {
+        "BLENDER_USER_RESOURCES": "/Volumes/SSD/projects/open_painter/.blender-test/user"
+      },
+      "subprocess_template": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "<absolute tests/integration/file>"
+      ]
+    },
+    {
+      "command": "/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py",
+      "result": "PASS",
+      "tests": 37,
+      "wall_s": 2.393,
+      "log": "docs/performance/latency-pure.log"
+    },
+    {
+      "command": "python3 scripts/run_tests.py --gui-only",
+      "result": "PASS",
+      "workflows": [
+        "native_ui.py",
+        "texture_operations_ui.py",
+        "gui_workflow.py"
+      ],
+      "environment": {
+        "BLENDER_USER_RESOURCES": "/Volumes/SSD/projects/open_painter/.blender-test/user"
+      },
+      "log": "docs/performance/latency-native-ui.log",
+      "note": "Final-source run; tracked generated fixtures restored by runner."
+    },
+    {
+      "command": "python3 scripts/run_tests.py --gpu-only",
+      "result": "PASS",
+      "modules": [
+        "live_gpu_math.py",
+        "live_gpu_checkpoints.py",
+        "live_procedurals.py",
+        "live_masks.py",
+        "live_preview.py"
+      ],
+      "counts": {
+        "composition": 183,
+        "checkpoints": 91,
+        "procedurals": 38,
+        "masks_2k": 11,
+        "mask_preflight": 17
+      },
+      "environment": {
+        "BLENDER_USER_RESOURCES": "/Volumes/SSD/projects/open_painter/.blender-test/user"
+      },
+      "log": "docs/performance/latency-gpu-and-native.log"
+    },
+    {
+      "command": "OP_LIVE_BENCHMARK=1 OP_LIVE_REPORT=/private/tmp/op-latency-parity-final-2k.json BLENDER_USER_RESOURCES=/private/tmp/op-latency-parity-final-user /Applications/Blender.app/Contents/MacOS/Blender --factory-startup --python tests/integration/live_preview.py -- -ApplePersistenceIgnoreState YES",
+      "result": "PASS",
+      "channels": 8,
+      "resolution": 2048,
+      "precision": "float32",
+      "maximum_absolute_error": 2.86102294921875e-06,
+      "report": "docs/performance/latency-parity-2k.json"
+    }
+  ],
+  "benchmarks": [
+    {
+      "report": "docs/performance/latency-native-before.json",
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--factory-startup",
+        "--python",
+        "tests/performance/live_native_frame.py",
+        "--",
+        "--report",
+        "/private/tmp/op-latency-native-extended-before.json",
+        "--scheduled",
+        "--procedural-edits",
+        "-ApplePersistenceIgnoreState",
+        "YES"
+      ],
+      "environment": {
+        "OP_BENCH_REPO": "/private/tmp/op-latency-base-df32483",
+        "BLENDER_USER_RESOURCES": "/private/tmp/op-latency-native-extended-before-user"
+      },
+      "source_sha256": "16f4a59b6c95a573c6720545a7d6b7628c1cb608aec1a4b921ebf5356205a91d",
+      "harness_sha256": "294f69bf34dd2b2f6f65668c970a5ed4ffc71ef1ea1ecb291a9db086cc1614ce",
+      "summary": {
+        "cold": {
+          "samples": 1,
+          "median_edit_to_native_frame_s": 24.2369047079992,
+          "median_prepare_submit_s": 9.16600038181059e-06,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 24.23689554199882
+        },
+        "redraw_control": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.007331124999836902,
+          "median_prepare_submit_s": 1.5000005078036338e-06,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.007329833000767394
+        },
+        "roughness": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.025002166999911424,
+          "median_prepare_submit_s": 8.804200115264393e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.02491412499875878
+        },
+        "opacity": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.09099224999954458,
+          "median_prepare_submit_s": 5.395799962570891e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.09094395899955998
+        },
+        "mask_strength": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 4.629656790999434,
+          "median_prepare_submit_s": 8.120900020003319e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 4.629582124998706
+        },
+        "noise_scale": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 2.8602531670003373,
+          "median_prepare_submit_s": 0.00014937499872758053,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 2.860126833000322
+        }
+      }
+    },
+    {
+      "report": "docs/performance/latency-native-after.json",
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--factory-startup",
+        "--python",
+        "tests/performance/live_native_frame.py",
+        "--",
+        "--report",
+        "/private/tmp/op-latency-native-extended-after.json",
+        "--scheduled",
+        "--procedural-edits",
+        "-ApplePersistenceIgnoreState",
+        "YES"
+      ],
+      "environment": {
+        "OP_BENCH_REPO": "/Volumes/SSD/projects/open_painter",
+        "BLENDER_USER_RESOURCES": "/private/tmp/op-latency-native-extended-after-user"
+      },
+      "source_sha256": "9bfcbce25d69ba51d1c62341385c2507fa13ad3ab95057d75c204f92f4edccdb",
+      "harness_sha256": "294f69bf34dd2b2f6f65668c970a5ed4ffc71ef1ea1ecb291a9db086cc1614ce",
+      "summary": {
+        "cold": {
+          "samples": 1,
+          "median_edit_to_native_frame_s": 0.8082004579991917,
+          "median_prepare_submit_s": 2.6166999305132776e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.8081742909998866
+        },
+        "redraw_control": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.007760832999338163,
+          "median_prepare_submit_s": 1.958000211743638e-06,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.007758874999126419
+        },
+        "roughness": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.028658249999352847,
+          "median_prepare_submit_s": 8.83330012584338e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.028405499999280437
+        },
+        "opacity": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.04202020800039463,
+          "median_prepare_submit_s": 6.69999990350334e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.04198112499943818
+        },
+        "mask_strength": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.07645004200094263,
+          "median_prepare_submit_s": 8.53750007081544e-05,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.07631487500111689
+        },
+        "noise_scale": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.059641458001351566,
+          "median_prepare_submit_s": 0.0002492909989086911,
+          "median_dependency_update_s": null,
+          "median_wait_draw_and_fence_s": 0.05947333299991442
+        }
+      }
+    },
+    {
+      "report": "docs/performance/latency-native-explicit-before.json",
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--factory-startup",
+        "--python",
+        "/Volumes/SSD/projects/open_painter/tests/performance/live_native_frame.py",
+        "--",
+        "--report",
+        "/private/tmp/op-latency-native-explicit-before.json",
+        "-ApplePersistenceIgnoreState",
+        "YES"
+      ],
+      "environment": {
+        "OP_BENCH_REPO": "/private/tmp/op-latency-base-df32483",
+        "BLENDER_USER_RESOURCES": "/private/tmp/op-latency-native-explicit-before-user"
+      },
+      "source_sha256": "16f4a59b6c95a573c6720545a7d6b7628c1cb608aec1a4b921ebf5356205a91d",
+      "harness_sha256": "85fadd97e017e4a4dbed8927eb67076a3d0da1d1b15371fb98dd650b2b99d1a2",
+      "summary": {
+        "cold": {
+          "samples": 1,
+          "median_edit_to_native_frame_s": 16.454051542001253,
+          "median_prepare_submit_s": 16.017824624999776,
+          "median_dependency_update_s": 0.01680645800115599,
+          "median_wait_draw_and_fence_s": 0.419420459000321
+        },
+        "redraw_control": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.007296540999959689,
+          "median_prepare_submit_s": 5.830006557516754e-07,
+          "median_dependency_update_s": 3.1417001082445495e-05,
+          "median_wait_draw_and_fence_s": 0.007273207998878206
+        },
+        "roughness": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.026291709000361152,
+          "median_prepare_submit_s": 0.004473000000871252,
+          "median_dependency_update_s": 0.0004929579990857746,
+          "median_wait_draw_and_fence_s": 0.02125733299908461
+        },
+        "opacity": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.08609458299906692,
+          "median_prepare_submit_s": 0.009842707999268896,
+          "median_dependency_update_s": 0.00045200000022305176,
+          "median_wait_draw_and_fence_s": 0.07562891599991417
+        }
+      }
+    },
+    {
+      "report": "docs/performance/latency-native-explicit-after.json",
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--factory-startup",
+        "--python",
+        "tests/performance/live_native_frame.py",
+        "--",
+        "--report",
+        "/private/tmp/op-latency-native-final-explicit-after.json",
+        "-ApplePersistenceIgnoreState",
+        "YES"
+      ],
+      "environment": {
+        "OP_BENCH_REPO": "/Volumes/SSD/projects/open_painter",
+        "BLENDER_USER_RESOURCES": "/private/tmp/op-latency-native-final-explicit-after-user"
+      },
+      "source_sha256": "9bfcbce25d69ba51d1c62341385c2507fa13ad3ab95057d75c204f92f4edccdb",
+      "harness_sha256": "294f69bf34dd2b2f6f65668c970a5ed4ffc71ef1ea1ecb291a9db086cc1614ce",
+      "summary": {
+        "cold": {
+          "samples": 1,
+          "median_edit_to_native_frame_s": 0.5624879169990891,
+          "median_prepare_submit_s": 0.4443176669992681,
+          "median_dependency_update_s": 0.0027049580003222218,
+          "median_wait_draw_and_fence_s": 0.11546529199949873
+        },
+        "redraw_control": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.00772424999922805,
+          "median_prepare_submit_s": 1.625001459615305e-06,
+          "median_dependency_update_s": 5.108400000608526e-05,
+          "median_wait_draw_and_fence_s": 0.007698792000155663
+        },
+        "roughness": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.0275880839999445,
+          "median_prepare_submit_s": 0.005490708999786875,
+          "median_dependency_update_s": 0.0004763750002894085,
+          "median_wait_draw_and_fence_s": 0.021587666999039357
+        },
+        "opacity": {
+          "samples": 5,
+          "median_edit_to_native_frame_s": 0.036327666999568464,
+          "median_prepare_submit_s": 0.007852000000639237,
+          "median_dependency_update_s": 0.00044441599857236724,
+          "median_wait_draw_and_fence_s": 0.028070458000001963
+        }
+      }
+    }
+  ],
+  "packaging": {
+    "candidate": "/private/tmp/open-painter-latency-candidate.zip",
+    "release": "dist/open_painter-0.2.3.zip",
+    "candidate_result": "PASS",
+    "release_result": "PASS",
+    "commands": [
+      "python3 scripts/build_extension.py --output /private/tmp/open-painter-latency-candidate.zip",
+      "BLENDER_USER_RESOURCES=/private/tmp/op-latency-package-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --command extension validate /private/tmp/open-painter-latency-candidate.zip",
+      "OPEN_PAINTER_TEST_ZIP=/private/tmp/open-painter-latency-candidate.zip BLENDER_USER_RESOURCES=/private/tmp/op-latency-package-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python tests/integration/install_extension.py",
+      "python3 scripts/build_extension.py",
+      "BLENDER_USER_RESOURCES=/private/tmp/op-latency-release-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --command extension validate dist/open_painter-0.2.3.zip",
+      "OPEN_PAINTER_TEST_ZIP=/Volumes/SSD/projects/open_painter/dist/open_painter-0.2.3.zip BLENDER_USER_RESOURCES=/private/tmp/op-latency-release-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python tests/integration/install_extension.py"
+    ],
+    "checks": [
+      "official extension validator",
+      "real ZIP installation under bl_ext.open_painter_test",
+      "three enable/disable cycles",
+      "create/assign/evaluate material"
+    ],
+    "artist_resources_modified": false,
+    "payload_verified_files": 233,
+    "note": "Rebuilt to include this completed validation inventory; every packaged source/asset byte is checked against the installed, tested archive; the rebuilt container is revalidated."
+  },
+  "early_failures_excluded_from_acceptance": [
+    "First shader prototype used illegal Metal struct-scope FP pragmas; fixed to function scope.",
+    "Near-zero/reversed mask Levels failed parity; now CPU fallback before generation.",
+    "First GPU-suite process received SIGTERM after scalar checks; complete final rerun exited zero.",
+    "Initial native probe read transparent overlay framebuffer; replaced by captured native color framebuffer."
+  ],
+  "limits": [
+    "One Mac/Metal environment; 4K/8K/other platforms and physical tablets not certified.",
+    "Native frame timing includes readback synchronization but excludes physical display/OS input; later temporal refinement excluded.",
+    "Cold begins after fixture creation and does not purge OS/driver shader caches.",
+    "New GPU kernels are restricted; unsupported domains keep CPU evaluation.",
+    "CPU save/export and unsupported filters can remain slow.",
+    "Roughness median increased 25.00 to28.66ms; no overall 60FPS claim.",
+    "Caches are bounded independently; process RSS is not total GPU memory."
+  ]
+}

@@ -8,6 +8,7 @@ import numpy as np
 
 from ..core.image_manager import pixels
 from .blend_modes import sample_uv
+from .image_snapshots import read
 
 
 def map_pixels(ts, kind, cache):
@@ -16,7 +17,7 @@ def map_pixels(ts, kind, cache):
         raise ValueError(f"This mask requires a baked {kind.title()} map. Bake mesh maps first.")
     key = prop.image.as_pointer()
     if key not in cache:
-        cache[key] = pixels(prop.image)
+        cache[key] = read(cache, prop.image)
     return cache[key]
 
 
@@ -68,6 +69,13 @@ def _stack_signature(ts, layer, geometry_cache):
             extra = (mask.map_type, maps)
         elif mask.source == "FILTER":
             extra = (_effect_signature(mask.effect), ts.edit_serial if mask.effect.image else None)
+        elif mask.source == 'SCENE':
+            from ..generators.scene_fields import signature
+            extra = (signature(ts, mask.influence) if mask.influence.mode == 'LIVE' else
+                     (_image_identity(mask.influence.image), mask.influence.update_serial),)
+        elif mask.source == 'REFERENCE':
+            extra = (ts.edit_serial, mask.reference_layer, mask.reference_mask,
+                     mask.reference_channel, mask.reference_stage)
         else:
             extra = (ts.edit_serial, _image_identity(mask.image), mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
@@ -116,7 +124,13 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
                 value = 1-value
             result = result * (1-mask.strength) + value * mask.strength
             continue
-        if mask.source == "PROCEDURAL":
+        if mask.source == 'REFERENCE':
+            from .references import evaluate
+            value = evaluate(ts,mask,n,y0,y1,cache,geometry_cache)
+        elif mask.source == 'SCENE':
+            from ..generators.scene_fields import evaluate
+            value = evaluate(ts, mask, u, v, cache)
+        elif mask.source == "PROCEDURAL":
             from types import SimpleNamespace
             from .channel_eval import _procedural_tile, _coordinates
             prop = SimpleNamespace(procedural=mask.procedural,
@@ -147,7 +161,7 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
                 raise ValueError(f"Painted mask image is missing on {layer.name}.")
             key = mask.image.as_pointer()
             if key not in cache:
-                cache[key] = pixels(mask.image)
+                cache[key] = read(cache, mask.image)
             data = cache[key]
             value = data[y0:y1, :, 0] if data.shape[:2] == (n, n) else sample_uv(data, u, v)[..., 0]
         elif mask.source == "BAKED":
@@ -173,6 +187,10 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
 def bake_mask_texture(ts, layer):
     """Bake the current grayscale effect stack into a packed, editable UV image."""
     from ..core import image_manager as images
+    from .references import issues
+    errors = issues(ts)
+    if errors:
+        raise ValueError(' | '.join(errors))
 
     n = int(ts.resolution)
     data = np.ones((n, n, 4), dtype=np.float32)

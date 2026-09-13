@@ -13,8 +13,10 @@ def changed(self, context):
                 layer.dirty = True
                 ts.dirty = True
                 ts.edit_serial += 1
+                from ..evaluation.references import dependent_channels
+                affected = dependent_channels(ts,layer.id,self.channel) | {self.channel}
                 for output in ts.outputs:
-                    if output.channel == self.channel:
+                    if output.channel in affected:
                         output.dirty = True
                 return
 

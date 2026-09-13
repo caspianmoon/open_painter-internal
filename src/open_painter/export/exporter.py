@@ -13,6 +13,7 @@ from ..evaluation.evaluator import LayerEvaluator
 from .channel_pack import pack
 from .image_writer import write
 from .presets import blender, custom, unity, unreal
+from .presets import godot,gltf,unity_urp,unity_hdrp
 
 
 def safe_name(value: str) -> str:
@@ -30,7 +31,8 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
     definitions = (
         custom.outputs(settings)
         if settings.preset == "CUSTOM"
-        else {"BLENDER": blender, "UNREAL": unreal, "UNITY": unity}[settings.preset].outputs()
+        else {"BLENDER": blender, "UNREAL": unreal, "UNITY": unity, 'GODOT':godot,
+              'GLTF':gltf,'UNITY_URP':unity_urp,'UNITY_HDRP':unity_hdrp}[settings.preset].outputs()
     )
     extension = "png" if settings.file_format == "PNG" else "tif"
     destinations = [
@@ -76,6 +78,9 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
                         if key not in {"ZERO", "ONE"}:
                             channel(key)
                     values = pack(cache, definition)
+                elif definition == 'BASE_COLOR_OPACITY':
+                    values=channel('BASE_COLOR').copy()
+                    values[...,3]=channel('OPACITY')[...,0]
                 elif definition == "NORMAL_DX":
                     values = channel("NORMAL").copy()
                     values[..., 1] = 1 - values[..., 1]
@@ -88,7 +93,7 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
                     values[::-1],
                     settings.file_format,
                     int(settings.bit_depth),
-                    definition in {"BASE_COLOR","EMISSION"} if isinstance(definition,str) else False,
+                    definition in {"BASE_COLOR","EMISSION",'BASE_COLOR_OPACITY'} if isinstance(definition,str) else False,
                 )
                 staged.append(path)
                 cache.clear()

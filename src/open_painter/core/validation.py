@@ -40,7 +40,8 @@ def validate(ts) -> list[str]:
 
 def hierarchy_issues(ts) -> list[str]:
     """Detect unreachable layers and invalid hierarchy before writing outputs."""
-    issues = []
+    from ..evaluation.references import issues as reference_issues
+    issues = reference_issues(ts)
     by_id = {item.id: item for item in ts.layers}
     if len(by_id) != len(ts.layers) or "" in by_id:
         issues.append("Layer IDs are missing or duplicated. Restore a valid project copy.")

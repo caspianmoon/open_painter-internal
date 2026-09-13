@@ -3,6 +3,13 @@
 import bpy
 
 from .preferences import OP_Preferences
+from .baking.jobs import OP_OT_bake_queue
+from .properties.influencer import OP_Influencer
+from .ui.references import OP_OT_reference_source
+from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
+from .ui.material_states import OP_OT_material_state
+from .ui.material_stamp import OP_OT_material_stamp
+from .ui.production_export import OP_OT_production_export
 from .properties.bake import OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
@@ -36,6 +43,7 @@ CLASSES = (
     OP_Preferences,
     OP_Channel,
     OP_Output,
+    OP_Influencer,
     OP_Mask,
     OP_Layer,
     OP_Assignment,
@@ -54,9 +62,16 @@ CLASSES = (
     OP_UL_layers,
     OP_PT_layers,
     OP_OT_mask,
+    OP_OT_reference_source,
+    OP_OT_geometry_effect,
+    OP_PT_geometry_effects,
+    OP_OT_material_state,
+    OP_OT_material_stamp,
+    OP_OT_production_export,
     OP_UL_masks,
     OP_PT_masks,
     OP_OT_bake,
+    OP_OT_bake_queue,
     OP_UL_high,
     OP_PT_bake,
     OP_OT_save_material,
@@ -75,41 +90,65 @@ CLASSES = (
 ) + TEXTURE_UI_CLASSES + NATIVE_CLASSES
 
 
+_registered = False
+_registered_classes = []
+_cleanups = []
+
+
 def register():
-    for cls in CLASSES:
-        bpy.utils.register_class(cls)
-    bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
+    global _registered
+    if _registered:
+        return
+    if hasattr(bpy.types.Scene, 'open_painter'):
+        raise RuntimeError('Open Painter scene properties are already owned by another registration')
     from .evaluation import cache
-
-    cache.register()
     from .ui.dock import lifecycle
-
-    lifecycle.register()
-    from .ui import editor
-
-    editor.register()
+    from .ui import editor, workspace
     from .ui.native import toolbar, asset_type_buttons
-    bpy.types.VIEW3D_HT_tool_header.prepend(asset_type_buttons)
-    bpy.types.IMAGE_HT_tool_header.prepend(asset_type_buttons)
-    bpy.types.VIEW3D_HT_tool_header.append(toolbar)
+    try:
+        for cls in CLASSES:
+            bpy.utils.register_class(cls)
+            _registered_classes.append(cls)
+        bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
+        for initialize, cleanup in ((cache.register,cache.unregister),
+                                    (lifecycle.register,lifecycle.unregister),
+                                    (editor.register,editor.unregister)):
+            # Install rollback before initialization, including partial failures.
+            _cleanups.append(cleanup)
+            initialize()
+        _cleanups.append(workspace.unregister)
+        for owner, method, callback in ((bpy.types.VIEW3D_HT_tool_header,'prepend',asset_type_buttons),
+                                        (bpy.types.IMAGE_HT_tool_header,'prepend',asset_type_buttons),
+                                        (bpy.types.VIEW3D_HT_tool_header,'append',toolbar)):
+            getattr(owner,method)(callback)
+            _cleanups.append(lambda owner=owner,callback=callback: owner.remove(callback))
+        _registered = True
+    except Exception:
+        try:
+            unregister()
+        except Exception:
+            from .utils.logging import logger
+            logger.exception('Registration rollback encountered a cleanup error')
+        raise
 
 
 def unregister():
-    from .ui import editor, workspace
-    from .ui.dock import lifecycle
-
-    from .ui.native import toolbar, asset_type_buttons
-    bpy.types.VIEW3D_HT_tool_header.remove(asset_type_buttons)
-    bpy.types.IMAGE_HT_tool_header.remove(asset_type_buttons)
-    bpy.types.VIEW3D_HT_tool_header.remove(toolbar)
-    editor.unregister()
-    lifecycle.unregister()
-    workspace.unregister()
-    from .evaluation import cache
-
-    cache.unregister()
-    if hasattr(bpy.types.Scene, "open_painter"):
+    global _registered
+    errors=[]
+    while _cleanups:
+        try:
+            _cleanups.pop()()
+        except Exception as exc:
+            errors.append(str(exc))
+    if _registered_classes and hasattr(bpy.types.Scene, 'open_painter'):
         del bpy.types.Scene.open_painter
-    for cls in reversed(CLASSES):
-        if "bl_rna" in cls.__dict__:
-            bpy.utils.unregister_class(cls)
+    while _registered_classes:
+        cls=_registered_classes.pop()
+        try:
+            if 'bl_rna' in cls.__dict__:
+                bpy.utils.unregister_class(cls)
+        except Exception as exc:
+            errors.append(str(exc))
+    _registered=False
+    if errors:
+        raise RuntimeError('Open Painter cleanup failed: '+' | '.join(errors))

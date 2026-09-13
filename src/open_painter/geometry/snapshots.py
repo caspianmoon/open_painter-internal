@@ -21,7 +21,11 @@ def targets(ts):
     """Keep evaluated meshes alive only for the duration of this bake."""
     if not ts.assignments or any(not ref.object for ref in ts.assignments):
         raise ValueError("Assign valid target meshes before baking utility maps.")
-    depsgraph = bpy.context.evaluated_depsgraph_get()
+    scene = getattr(ts, 'id_data', bpy.context.scene)
+    if not isinstance(scene, bpy.types.Scene):
+        scene = bpy.context.scene
+    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
+        depsgraph = bpy.context.evaluated_depsgraph_get()
     temporary, targets = [], []
     try:
         objects = sorted({ref.object for ref in ts.assignments}, key=_object_key)

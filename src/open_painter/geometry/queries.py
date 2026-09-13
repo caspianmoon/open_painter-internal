@@ -1,0 +1,51 @@
+"""Bounded main-thread world-space BVH queries over explicit evaluated meshes.
+
+API contract: https://docs.blender.org/api/current/mathutils.bvhtree.html
+Temporary evaluated meshes and acceleration trees live only during one analysis.
+"""
+from contextlib import contextmanager
+import bpy
+import numpy as np
+from mathutils.bvhtree import BVHTree
+
+
+@contextmanager
+def acceleration(scene, objects):
+    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
+        graph = bpy.context.evaluated_depsgraph_get()
+    trees = []
+    try:
+        for obj in objects:
+            evaluated = obj.evaluated_get(graph)
+            mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=graph)
+            try:
+                mesh.calc_loop_triangles()
+                vertices = [evaluated.matrix_world @ vertex.co for vertex in mesh.vertices]
+                triangles = [tuple(tri.vertices) for tri in mesh.loop_triangles]
+                if triangles:
+                    trees.append(BVHTree.FromPolygons(vertices, triangles, all_triangles=True))
+            finally:
+                evaluated.to_mesh_clear()
+        yield trees
+    finally:
+        trees.clear()
+
+
+def distance(trees, points, maximum):
+    values = np.full(len(points), maximum, np.float32)
+    for index, point in enumerate(points):
+        for tree in trees:
+            _, _, _, value = tree.find_nearest(point, maximum)
+            if value is not None:
+                values[index] = min(values[index], value)
+    return values
+
+
+def exposure(trees, points, normals, direction, maximum):
+    values = np.ones(len(points), np.float32)
+    epsilon = max(maximum * 1e-5, 1e-6)
+    for index, (point, normal) in enumerate(zip(points, normals)):
+        origin = point + normal * epsilon
+        if any(tree.ray_cast(origin, direction, maximum)[0] is not None for tree in trees):
+            values[index] = 0
+    return values

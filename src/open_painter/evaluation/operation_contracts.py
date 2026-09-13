@@ -37,5 +37,7 @@ def stack_footprint(effects):
 
 
 def mask_footprint(masks):
+    if any(m.enabled and m.source == 'REFERENCE' for m in masks):
+        return None  # Source-stage filters may widen the dependency transitively.
     return stack_footprint(m.effect for m in masks
                            if m.enabled and m.strength > 0 and m.source == 'FILTER')

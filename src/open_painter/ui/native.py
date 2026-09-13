@@ -325,6 +325,9 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         ts = active_set(context)
         if ts:
             row.prop(ts, "resolution", text="")
+            layout.prop(ts, 'preview_quality')
+            if ts.preview_quality != 'FULL' and ts.dirty:
+                layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
 
 
 class OP_UL_native_layers(bpy.types.UIList):
@@ -441,6 +444,8 @@ class OP_MT_native_masks(bpy.types.Menu):
             ("FILL", "Add Fill Mask"),
             ("GENERATOR", "Add Generator"),
             ("BAKED", "Add Mesh Map Mask"),
+            ('SCENE', 'Add Scene Field'),
+            ('REFERENCE', 'Add Published Input'),
         ]:
             op = self.layout.operator("open_painter.mask", text=label)
             op.action, op.source = "ADD", "PAINT" if source == "BLACK" else source
@@ -492,12 +497,15 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
 
             layout.prop(context.scene.open_painter, "paint_channel")
             layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
+            layout.operator('open_painter.material_stamp',text='Material Stamp (4 Channels)',icon='BRUSH_DATA')
             draw(layout, context)
             from .texture_operations import draw_channel_effects
             draw_channel_effects(layout, context, layer)
             return
         layout.separator()
         layout.label(text="MATERIAL", icon="MATERIAL")
+        layout.prop(layer,'effect_semantic')
+        layout.operator('open_painter.material_state',text='Age / Environment State')
         row = layout.row(align=True)
         row.prop(context.scene.open_painter, "properties_channel", text="Channel")
         channel = channel_for(layer, context.scene.open_painter.properties_channel)

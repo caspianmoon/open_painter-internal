@@ -123,11 +123,13 @@ class OP_PT_bake(bpy.types.Panel):
             section.prop(settings, "thickness_max_distance")
             section.label(text="Closed surfaces; sampled inward rays.")
         section.label(text="Utility maps use evaluated target UVs.")
-        layout.operator("open_painter.bake", icon="RENDER_STILL").action = "BAKE"
+        layout.operator('open_painter.bake_queue', icon='RENDER_STILL')
+        layout.label(text='Esc stops between maps; Cycles maps block.')
         layout.operator(
             "open_painter.bake", text="Use Baked Normal + AO in Stack"
         ).action = "USE_MAPS"
         for prop in ts.baked_maps:
+            from ..geometry.provenance import status
             layout.label(
-                text=f"{prop.kind}: {'Ready' if prop.image else 'Missing'}", icon="IMAGE_DATA"
+                text=f"{prop.kind}: {status(ts, prop)}", icon="IMAGE_DATA"
             )

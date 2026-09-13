@@ -44,6 +44,15 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
     if None in ids or len(ids) != len(layers):
         raise ValueError("Layer IDs are missing or duplicated.")
     by_id = {item["id"]: item for item in layers}
+    state=data.get('authoring_state',{})
+    if not isinstance(state,dict) or (state and state.get('version') != 1):
+        raise ValueError('Unsupported material state metadata')
+    for key in ('baseline','resolved'):
+        values=state.get(key,{})
+        if not isinstance(values,dict) or any(k not in ids or not isinstance(v,(float,int)) or not 0<=v<=1 for k,v in values.items()):
+            raise ValueError('Invalid material state values')
+    if not isinstance(state.get('overrides',[]),list) or any(k not in ids for k in state.get('overrides',[])):
+        raise ValueError('Invalid material state overrides')
     for layer in layers:
         if layer.get("type") not in {"FILL", "PAINT", "FOLDER"}:
             raise ValueError("Unknown layer type.")
@@ -54,4 +63,28 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
                 raise ValueError("Invalid smart material folder hierarchy.")
             seen.add(parent)
             parent = by_id[parent].get("parent_id", "")
+    edges = {identifier: set() for identifier in by_id}
+    for layer in layers:
+        for mask in layer.get('masks',[]):
+            if mask.get('source') != 'REFERENCE':
+                continue
+            target = by_id.get(mask.get('reference_layer'))
+            if target is None:
+                raise ValueError('Published source layer is missing from material')
+            selected = mask.get('reference_mask')
+            if selected and not any(m.get('id') == selected for m in target.get('masks',[])):
+                raise ValueError('Published mask effect is missing from material')
+            edges[layer['id']].add(target['id'])
+    visiting, done = set(), set()
+    def visit(identifier):
+        if identifier in visiting:
+            raise ValueError('Material published inputs contain a reference cycle')
+        if identifier in done:
+            return
+        visiting.add(identifier)
+        for target in edges[identifier]:
+            visit(target)
+        visiting.remove(identifier); done.add(identifier)
+    for identifier in edges:
+        visit(identifier)
     return data, assets

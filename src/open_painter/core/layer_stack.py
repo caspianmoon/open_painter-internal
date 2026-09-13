@@ -146,6 +146,7 @@ def duplicate(ts, index):
         ids = expanded
     sources = [snapshot(item) for item in ts.layers if item.id in ids]
     mapping = {item["id"]: new_id() for item in sources}
+    mask_mapping = {m['id']: new_id() for item in sources for m in item['masks']}
     for source in sources:
         target = ts.layers.add()
         restore(source, target)
@@ -153,7 +154,10 @@ def duplicate(ts, index):
         target.name += " Copy"
         target.parent_id = mapping.get(source["parent_id"], source["parent_id"])
         for mask in target.masks:
-            mask.id = new_id()
+            mask.id = mask_mapping[mask.id]
+            if mask.source == 'REFERENCE':
+                mask.reference_layer = mapping.get(mask.reference_layer,mask.reference_layer)
+                mask.reference_mask = mask_mapping.get(mask.reference_mask,mask.reference_mask)
             if mask.source == "PAINT" and mask.image:
                 mask.image = mask.image.copy()
         for channel in target.channels:

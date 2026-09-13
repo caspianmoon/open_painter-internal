@@ -209,7 +209,11 @@ def _rollback(ts, before):
 
 def apply(ts, name, seed=1):
     """Insert an editable material folder above the active layer, transactionally."""
-    data = CATALOG[name]
+    return apply_document(ts,CATALOG[name],name,seed)
+
+
+def apply_document(ts,data,name='Declarative Material',seed=1):
+    """Apply validated data without installing code or modifying the catalog."""
     preflight(ts, data, name)
     before = _state(ts)
     active = stack.active(ts)

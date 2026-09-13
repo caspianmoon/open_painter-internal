@@ -51,3 +51,7 @@ class OP_PT_export(bpy.types.Panel):
         elif settings.preset == "UNITY":
             layout.label(text="MetallicSmoothness: R=Metal · A=Smooth")
         layout.operator("open_painter.export", icon="EXPORT")
+        layout.operator('open_painter.production_export',text='Export Evaluated Bundle').action='BUNDLE'
+        row=layout.row(align=True)
+        row.operator('open_painter.production_export',text='Measure Density').action='MEASURE'
+        row.operator('open_painter.production_export',text='Stage Atlas').action='ATLAS'

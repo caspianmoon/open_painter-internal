@@ -12,11 +12,11 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     bl_label = "Edit Mask"
     bl_options = {"REGISTER", "UNDO"}
     action: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE")]
+        items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE", 'ANALYZE', 'FREEZE')]
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER")]
+        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER", 'SCENE', 'REFERENCE')]
     )
 
     def run(self, context):
@@ -24,7 +24,17 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         layer = active(ts)
         if layer is None:
             raise ValueError("Select a layer or folder first.")
-        if self.action == "BAKE":
+        if self.action in {'ANALYZE','FREEZE'}:
+            mask = layer.masks[layer.active_mask]
+            from ..generators.scene_fields import update
+            if self.action == 'ANALYZE':
+                update(ts, mask)
+                mask.influence.update_serial += 1
+            else:
+                if not mask.influence.image:
+                    update(ts,mask)
+                mask.influence.mode = 'FROZEN'
+        elif self.action == "BAKE":
             if not layer.masks:
                 raise ValueError("Select a layer with a mask first.")
             from ..evaluation.mask_eval import bake_mask_texture
@@ -110,7 +120,23 @@ class OP_PT_masks(bpy.types.Panel):
             "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
         ).action = "BAKE"
         layout.prop(mask, "source", text="Source")
-        if mask.source == "FILL":
+        if mask.source == 'REFERENCE':
+            source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
+            layout.operator('open_painter.reference_source',text=source.name if source else 'Choose Source Layer',icon='LINKED')
+            layout.prop(mask,'reference_channel')
+            layout.prop(mask,'reference_stage')
+            layout.label(text='Source layer input, before stack blending')
+        elif mask.source == 'SCENE':
+            field = mask.influence
+            for name in ('kind','mode','resolution','object','collection','direction','distance','bounds','attribute'):
+                layout.prop(field,name)
+            row = layout.row(align=True)
+            row.operator('open_painter.mask',text='Update Analysis').action = 'ANALYZE'
+            row.operator('open_painter.mask',text='Freeze Analysis').action = 'FREEZE'
+            layout.label(text='Sampled UV field; authored textures unchanged')
+            if field.error:
+                layout.label(text=field.error,icon='ERROR')
+        elif mask.source == "FILL":
             layout.template_ID(mask, "image")
             for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
                 layout.prop(mask, name)

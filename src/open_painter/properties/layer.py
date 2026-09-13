@@ -22,6 +22,8 @@ def changed(self, context):
 
 
 class OP_Layer(bpy.types.PropertyGroup):
+    effect_semantic: bpy.props.EnumProperty(name='Age Response',items=[(k,k.replace('_',' ').title(),'Explicit artistic effect role')
+        for k in ('NONE','DIRT','DUST','FADE','SCRATCHES','OXIDATION','COATING_LOSS')])
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Layer")
     type: bpy.props.EnumProperty(

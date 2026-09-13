@@ -17,6 +17,7 @@ def map_changed(self, context):
 
 
 class OP_BakedMap(bpy.types.PropertyGroup):
+    provenance: bpy.props.StringProperty()
     # Append values: existing .blend enum indices must remain stable.
     kind: bpy.props.EnumProperty(items=[(x, x.replace("_", " ").title(), "") for x in (
         "NORMAL", "AO", "CURVATURE", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL",

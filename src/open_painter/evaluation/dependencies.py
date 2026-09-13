@@ -18,7 +18,8 @@ _candidates = set()
 
 
 def uses_geometry(ts):
-    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
+    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) or any(
+        m.source == 'SCENE' and m.influence.mode == 'LIVE' for l in ts.layers for m in l.masks)
 
 
 @measured('geometry_signature')
@@ -78,7 +79,10 @@ def geometry_key(scene, ts):
         objects.append((obj.as_pointer(), mesh.as_pointer(), ref.slot_index,
                         tuple(v for row in obj.matrix_world for v in row),
                         mesh_signature(mesh), modifier_signature(obj)))
-    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects))
+    from ..geometry.influencers import signature
+    fields = tuple(signature(ts, m.influence) for layer in ts.layers for m in layer.masks
+                   if m.source == 'SCENE' and m.influence.mode == 'LIVE')
+    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields)
 
 
 def remember(scene, ts, signature):

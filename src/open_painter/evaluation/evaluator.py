@@ -69,20 +69,27 @@ class LayerEvaluator:
             except StopIteration as done:
                 return done.value
 
-    def channel_steps(self, texture_set_id: str, channel: str, region=None):
+    def channel_steps(self, texture_set_id: str, channel: str, region=None, preview_resolution=None):
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
-        resources = for_texture_set(self.scene, ts)
+        if preview_resolution is None:
+            resources = for_texture_set(self.scene, ts)
+        else:
+            from .preview_policy import resources as preview_resources
+            resources = preview_resources(self.scene, ts, preview_resolution)
         try:
-            return (yield from self._channel_steps(texture_set_id, channel, region))
+            return (yield from self._channel_steps(texture_set_id, channel, region, preview_resolution, resources))
         finally:
             resources.release_required()
 
-    def _channel_steps(self, texture_set_id: str, channel: str, region=None):
+    def _channel_steps(self, texture_set_id: str, channel: str, region=None, preview_resolution=None, resources=None):
         """Cooperative preview job; callers may yield to Blender between row tiles."""
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
-        self.geometry_cache = for_texture_set(self.scene, ts)
-        serial = ts.edit_serial
-        n = int(ts.resolution)
+        self.geometry_cache = resources if resources is not None else for_texture_set(self.scene, ts)
+        author = ts
+        serial = author.edit_serial
+        from .snapshots import capture
+        n = preview_resolution or int(ts.resolution)
+        ts = capture(author, n / int(author.resolution)).replaced(resolution=str(n))
         if region is not None:
             from .operation_contracts import stack_footprint, mask_footprint
             from .tiles import expand
@@ -110,9 +117,18 @@ class LayerEvaluator:
         else:
             # Unchanged rows retain their last authoritative composite. A paint
             # raster uses the same UV grid, including inside masked/grouped layers.
-            result = image_manager.pixels(image_manager.output(ts, channel).image)
+            from .resource_keys import image_key
+            output_image = image_manager.output(author, channel).image
+            output_key = ('cpu_output', image_key(output_image))
+            if output_key in self.geometry_cache:
+                result = self.geometry_cache[output_key].copy()
+                metrics.count('output_readback_skips')
+            else:
+                result = image_manager.pixels(output_image)
             low, high = region[2], region[3]
             cache = {region[4]: region[5]}
+        from .image_snapshots import ImageSnapshots
+        cache = ImageSnapshots(self.geometry_cache, serial, cache)
         children = {}
         channel_properties = {}
         for layer in ts.layers:
@@ -216,7 +232,7 @@ class LayerEvaluator:
                     from .mask_eval import evaluate_masks
                     mask = evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)
                     yield
-                    if ts.edit_serial != serial:
+                    if author.edit_serial != serial:
                         return None
                     if not np.any(mask):
                         skipped.add(layer.id)
@@ -224,7 +240,7 @@ class LayerEvaluator:
                 if layer.type == "FILL" and prop and prop.procedural:
                     _procedural_tile(prop, n, y0, y1, ts, self.geometry_cache)
                     yield
-                    if ts.edit_serial != serial:
+                    if author.edit_serial != serial:
                         return None
             rgb, _ = compose("", y0, y1, DEFAULTS[channel][:components], set(), 1)
             if channel == "NORMAL":
@@ -237,13 +253,29 @@ class LayerEvaluator:
             result[y0:y1, :, :3] = np.clip(rgb, 0, 1)
             result[y0:y1, :, 3] = 1
             yield
-            if ts.edit_serial != serial:
+            if author.edit_serial != serial:
                 return None
-        if ts.edit_serial != serial:
+        if author.edit_serial != serial:
             # Main-thread edits between yields cannot publish an older raster.
             return None
-        out = image_manager.output(ts, channel)
+        if preview_resolution is not None:
+            from .preview_policy import publish
+            return publish(self.scene, author, channel, n, serial, result)
+        out = image_manager.output(author, channel)
         image_manager.write(out.image, result, pack=False)
+        from .resource_keys import image_key
+        result.flags.writeable = False
+        # Retain the active channel only, and never evict reusable sources to
+        # save a future output readback. Eight 2K RGBA outputs alone are 512 MiB.
+        manager = self.geometry_cache.manager
+        if channel == self.scene.open_painter.blend_channel and result.nbytes <= manager.allowance // 4:
+            for key in tuple(self.geometry_cache):
+                if isinstance(key,tuple) and key[0] == 'cpu_output':
+                    self.geometry_cache.pop(key)
+            if manager.used + result.nbytes <= manager.allowance:
+                self.geometry_cache[('cpu_output', image_key(out.image))] = result
+            else:
+                metrics.count('output_cache_capacity_skips')
         out.dirty = False
         out.revision += 1
         return out.image

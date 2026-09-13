@@ -16,9 +16,14 @@ class OP_Assignment(bpy.types.PropertyGroup):
 
 
 class OP_TextureSet(bpy.types.PropertyGroup):
+    material_state_data: bpy.props.StringProperty()
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Texture Set")
     resolution: bpy.props.EnumProperty(items=RESOLUTIONS, default="2048", update=changed)
+    preview_quality: bpy.props.EnumProperty(name="Preview", default="FULL", update=changed,
+        items=[('FULL', 'Full', 'Evaluate at authored resolution'),
+               ('512', 'Interactive 512', 'Disposable 512 pixel preview, followed by full resolution'),
+               ('1024', 'Interactive 1024', 'Disposable 1024 pixel preview, followed by full resolution')])
     assignments: bpy.props.CollectionProperty(type=OP_Assignment)
     active_assignment: bpy.props.IntProperty()
     material: bpy.props.PointerProperty(type=bpy.types.Material)

@@ -13,9 +13,16 @@ def register_map(ts, kind, image):
         prop = ts.baked_maps.add()
         prop.kind = kind
     prop.image = image
+    from ..geometry.provenance import record
+    prop.provenance = record(ts, kind)
 
 
-def bake_selected(context, ts):
+def bake_steps(context, ts):
+    """Yield between maps; each individual Cycles bake is still synchronous."""
+    from .diagnostics import inspect
+    errors = [i.message for i in inspect(ts) if i.severity == "ERROR"]
+    if errors:
+        raise ValueError(" | ".join(errors))
     issues = [
         issue
         for issue in validate(ts)
@@ -46,12 +53,29 @@ def bake_selected(context, ts):
     selected_utility = [kind for kind in UTILITY_KINDS if getattr(settings, kind.lower())]
     if not any((settings.normal, settings.ao, settings.curvature, selected_utility)):
         raise ValueError("Select at least one map to bake.")
+    tasks = []
     if settings.normal:
-        register_map(ts, "NORMAL", bake(context, ts, "NORMAL"))
+        tasks.append(("NORMAL", lambda: bake(context, ts, "NORMAL")))
     if settings.ao:
-        register_map(ts, "AO", bake(context, ts, "AO"))
+        tasks.append(("AO", lambda: bake(context, ts, "AO")))
     if settings.curvature:
-        register_map(ts, "CURVATURE", bake_curvature(ts))
-    for kind in selected_utility:
-        register_map(ts, kind, bake_utility(ts, kind))
+        tasks.append(("CURVATURE", lambda: bake_curvature(ts)))
+    tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)
+    from ..geometry.provenance import record
+    expected = {kind: record(ts, kind) for kind, _ in tasks}
+    for kind, run in tasks:
+        yield kind  # Cancellation boundary before allocating/baking the next map.
+        if record(ts, kind) != expected[kind]:
+            raise ValueError("Bake inputs changed; restart the bake queue")
+        image = run()
+        if record(ts, kind) != expected[kind]:
+            import bpy
+            bpy.data.images.remove(image)
+            raise ValueError("Bake inputs changed; discarded stale map")
+        register_map(ts, kind, image)
     invalidate(ts)
+
+
+def bake_selected(context, ts):
+    for _ in bake_steps(context, ts):
+        pass

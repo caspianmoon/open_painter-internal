@@ -12,6 +12,10 @@ from .format import VERSION
 
 
 def save(ts, path: str | Path) -> Path:
+    from ..evaluation.references import issues
+    errors = issues(ts)
+    if errors:
+        raise ValueError(' | '.join(errors))
     path = Path(path)
     if path.exists():
         raise ValueError("A material already exists at this path. Choose a new filename.")
@@ -33,11 +37,28 @@ def save(ts, path: str | Path) -> Path:
             return [encode(v) for v in value]
         return value
 
+    def layer_data(layer):
+        values = snapshot(layer)
+        for mask in values.get('masks', []):
+            if mask.get('source') == 'SCENE':
+                field = mask['influence']
+                if field['mode'] != 'FROZEN' or not field['image']:
+                    raise ValueError('Freeze scene-field analysis before saving a portable material; scene references are not portable')
+                field.update(object=None, collection=None, provenance='', error='')
+        return encode(values)
+
+    state=json.loads(ts.material_state_data or '{}')
+    live={layer.id for layer in ts.layers}
+    if state:
+        for key in ('baseline','resolved'):
+            state[key]={k:v for k,v in state.get(key,{}).items() if k in live}
+        state['overrides']=[k for k in state.get('overrides',[]) if k in live]
     data = {
         "format_version": VERSION,
         "name": ts.name,
-        "layers": [encode(snapshot(layer)) for layer in ts.layers],
+        "layers": [layer_data(layer) for layer in ts.layers],
         "surface": {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")},
+        'authoring_state': state,
     }
     temp_scene = bpy.data.scenes.new("OP Asset Encoding")
     try:

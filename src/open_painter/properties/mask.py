@@ -1,5 +1,7 @@
 import bpy
 from .effect import OP_TextureEffect
+from .influencer import OP_Influencer
+from ..constants import CHANNEL_ITEMS
 
 
 def changed(self, context):
@@ -9,6 +11,13 @@ def changed(self, context):
 
 
 class OP_Mask(bpy.types.PropertyGroup):
+    reference_layer: bpy.props.StringProperty(name='Source Layer ID', update=changed)
+    reference_mask: bpy.props.StringProperty(name='Through Mask Effect ID', update=changed)
+    reference_channel: bpy.props.EnumProperty(name='Published Output', update=changed,
+        items=[('MASK','Mask Stack','Source mask stack, independent of layer opacity')] + CHANNEL_ITEMS)
+    reference_stage: bpy.props.EnumProperty(name='Stage', default='POST_FILTER', update=changed,
+        items=[('PRE_FILTER','Before Filters','Omit source filters'),('POST_FILTER','After Filters','Include source filters')])
+    influence: bpy.props.PointerProperty(type=OP_Influencer)
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Mask")
     enabled: bpy.props.BoolProperty(default=True, update=changed)
@@ -21,6 +30,8 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("FILL", "Fill", "Project a grayscale texture onto the mesh"),
             ("PROCEDURAL", "Procedural", "Grayscale procedural texture"),
             ("FILTER", "Filter", "Filter the accumulated mask texture"),
+            ('SCENE', 'Scene Field', 'Bounded UV analysis of explicit scene inputs'),
+            ('REFERENCE', 'Published Input', 'Reference a layer mask or channel in this texture set'),
         ],
         update=changed,
     )

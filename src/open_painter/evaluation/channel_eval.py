@@ -282,14 +282,10 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
             f"Texture image is missing: {prop.image_name}. Reload or clear the channel texture."
         )
     if prop.image:
-        key = prop.image.as_pointer()
+        from .image_snapshots import read
+        key = (prop.image.as_pointer(), "linear")
         if key not in cache:
-            cache[key] = pixels(prop.image)
-            if prop.image.colorspace_settings.name == "sRGB":
-                rgb = cache[key][..., :3]
-                cache[key][..., :3] = np.where(
-                    rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4
-                )
+            cache[key] = read(cache, prop.image, linear=True)
         if kind == "PAINT" and cache[key].shape[:2] == (n, n):
             # Paint pixels already occupy the output UV grid. Resampling four
             # neighbours per pixel was the dominant cost of every brush update.

@@ -1,6 +1,7 @@
 """Apply validated stacks with fresh IDs and independent packed image assets."""
 
 from pathlib import Path
+import json
 from tempfile import TemporaryDirectory
 
 import bpy
@@ -14,6 +15,7 @@ from .format import read
 def apply(ts, path: str | Path) -> None:
     data, assets = read(Path(path))
     mapping = {layer["id"]: new_id() for layer in data["layers"]}
+    mask_mapping = {m['id']: new_id() for layer in data['layers'] for m in layer.get('masks',[]) if m.get('id')}
     loaded = []
     start = len(ts.layers)
     old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")}
@@ -47,7 +49,10 @@ def apply(ts, path: str | Path) -> None:
                 for channel in values.get("channels", []):
                     channel["layer_id"] = values["id"]
                 for mask in values.get("masks", []):
-                    mask["id"] = new_id()
+                    mask['id'] = mask_mapping.get(mask.get('id'), new_id())
+                    if mask.get('source') == 'REFERENCE':
+                        mask['reference_layer'] = mapping.get(mask.get('reference_layer'), '')
+                        mask['reference_mask'] = mask_mapping.get(mask.get('reference_mask'), '')
                 layer = ts.layers.add()
                 restore(values, layer)
                 if layer.type != "FOLDER":
@@ -64,6 +69,17 @@ def apply(ts, path: str | Path) -> None:
         for key, value in data.get("surface", {}).items():
             if key in old_surface:
                 setattr(ts,key,value)
+        state = data.get('authoring_state',{})
+        if state:
+            state = dict(state)
+            for key in ('baseline','resolved'):
+                state[key] = {mapping[k]:v for k,v in state.get(key,{}).items() if k in mapping}
+            state['overrides'] = [mapping[k] for k in state.get('overrides',[]) if k in mapping]
+            existing = json.loads(ts.material_state_data or '{}')
+            for key in ('baseline','resolved'):
+                state[key] = dict(existing.get(key,{}),**state[key])
+            state['overrides'] = list(set(existing.get('overrides',[])) | set(state['overrides']))
+            ts.material_state_data = json.dumps(state)
     except Exception:
         for key,value in old_surface.items():
             setattr(ts,key,value)

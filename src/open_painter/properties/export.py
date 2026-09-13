@@ -23,6 +23,10 @@ class OP_ExportSettings(bpy.types.PropertyGroup):
             ("UNREAL", "Unreal Engine 5", "DirectX normal and RGB=AO/Roughness/Metallic"),
             ("UNITY", "Unity Standard Metallic", "R=Metallic, A=Smoothness; OpenGL normal"),
             ("CUSTOM", "Custom RGBA", "Pack channel values into RGBA"),
+            ('GODOT','Godot 4 ORM','ORM texture inputs, OpenGL normals'),
+            ('GLTF','glTF 2 Metallic Roughness','Base color/opacity, ORM, OpenGL normals'),
+            ('UNITY_URP','Unity URP Lit Metallic','Metallic alpha smoothness workflow'),
+            ('UNITY_HDRP','Unity HDRP Lit','Metallic/AO/detail-mask/smoothness Mask Map'),
         ],
     )
     file_format: bpy.props.EnumProperty(

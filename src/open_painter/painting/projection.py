@@ -8,15 +8,16 @@ from ..evaluation.blend_modes import sample_uv
 
 
 @measured('geometry')
-def geometry(ts, n):
+def geometry(ts, n, coverage=False):
     """Rasterize assigned faces to world position and world normal maps."""
     positions = np.zeros((n, n, 3), dtype=np.float32)
     normals = np.zeros_like(positions)
     normals[..., 2] = 1
+    valid = np.zeros((n,n), dtype=np.bool_) if coverage else None
     if not ts.assignments:
         # Duplicated texture sets intentionally have no object assignments.
         # Preserve their neutral staging preview until the artist assigns one.
-        return positions, normals
+        return (positions, normals, valid) if coverage else (positions, normals)
     from ..geometry.snapshots import targets
     from ..geometry.uv_rasterizer import tiles
     with targets(ts) as objects:
@@ -28,7 +29,9 @@ def geometry(ts, n):
                 for region, inside, weights, *_ in tiles(target["uv"][loops], n):
                     positions[region][inside] = (weights @ points)[inside]
                     normals[region][inside] = (weights @ corner_normals)[inside]
-    return positions, normals
+                    if coverage:
+                        valid[region][inside] = True
+    return (positions, normals, valid) if coverage else (positions, normals)
 
 
 def triplanar(texture, positions, normals, prop):

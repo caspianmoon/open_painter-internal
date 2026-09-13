@@ -151,6 +151,35 @@ def tick():
                 outputs = [image_manager.output(ts, channel) for channel in CHANNELS]
                 active_channel = scene.open_painter.blend_channel
                 outputs.sort(key=lambda output: output.channel != active_channel)
+                from . import preview_policy
+                preview_size = preview_policy.resolution(ts)
+                if preview_size < int(ts.resolution):
+                    candidate = next((output for output in outputs if output.dirty and
+                                      not preview_policy.current(scene, ts, output.channel)), None)
+                    if candidate:
+                        name = 'preview:' + candidate.channel
+                        entry = _jobs.get(key)
+                        if entry is None or entry[0] != name:
+                            discard(key)
+                            entry = (name, evaluator.channel_steps(ts.id, candidate.channel,
+                                                                  preview_resolution=preview_size))
+                            _jobs[key] = entry
+                        set_state(scene, ts, 'RUNNING')
+                        scene.open_painter.status = f'Interactive {preview_size} · full {ts.resolution} pending'
+                        deadline = monotonic() + .006
+                        while True:
+                            try:
+                                next(entry[1])
+                            except StopIteration:
+                                _jobs.pop(key, None)
+                                break
+                            if monotonic() >= deadline:
+                                break
+                        _scene_cursor = scene_key
+                        _set_cursors[scene_key] = ts.id
+                        return .001
+                    if painting or now - since < .25:
+                        return .016
                 dirty = next((output for output in outputs if output.dirty), None)
                 if dirty:
                     _scene_cursor = scene_key
@@ -216,6 +245,8 @@ def on_load(_):
     from .raster_cache import clear_shared
 
     reset()
+    from .preview_policy import clear
+    clear()
     clear_shared()
     dependencies.clear()
     _states.clear()
@@ -240,6 +271,8 @@ def on_load(_):
 def on_save(_):
     # A save performs a complete authoritative flush; discard older preview jobs.
     cancel_all()
+    from .preview_policy import clear
+    clear()
     _regions.clear()
     from ..painting.paint_session import detect
     from .evaluator import LayerEvaluator
@@ -274,6 +307,7 @@ def register():
     bpy.app.handlers.undo_post.append(on_load)
     bpy.app.handlers.redo_post.append(on_load)
     bpy.app.handlers.save_pre.append(on_save)
+    bpy.app.handlers.render_pre.append(on_save)
     if not bpy.app.background:
         bpy.app.timers.register(tick, first_interval=0.5, persistent=True)
 
@@ -282,6 +316,8 @@ def unregister():
     from ..painting.paint_session import restore_faces
     from .raster_cache import clear_shared
 
+    from .preview_policy import clear
+    clear()
     clear_shared()
     dependencies.clear()
     _states.clear()
@@ -297,6 +333,7 @@ def unregister():
         (bpy.app.handlers.undo_post, on_load),
         (bpy.app.handlers.redo_post, on_load),
         (bpy.app.handlers.save_pre, on_save),
+        (bpy.app.handlers.render_pre, on_save),
     ):
         if fn in handlers:
             handlers.remove(fn)

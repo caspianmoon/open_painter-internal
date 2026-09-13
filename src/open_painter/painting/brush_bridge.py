@@ -54,6 +54,14 @@ def draw(layout, context):
     if not brush:
         layout.label(text="Enter Paint to load a brush.")
         return
+    layout.prop(brush, "image_brush_type", text="Tool")
+    if brush.image_brush_type == "SOFTEN":
+        layout.prop(brush, "direction", text="Soften / Sharpen")
+        layout.prop(brush, "blur_mode", text="Blur Kernel")
+    if brush.image_brush_type == "CLONE":
+        layout.prop(paint, "use_clone_layer", text="Clone from Paint Slot")
+        if context.area.type == "IMAGE_EDITOR":
+            layout.template_ID(paint, "clone_image", open="image.open")
     unified = paint.unified_paint_settings
     for key, toggle in (
         ("size", "use_unified_size"),
@@ -61,9 +69,18 @@ def draw(layout, context):
         ("color", "use_unified_color"),
     ):
         layout.prop(unified if getattr(unified, toggle, False) else brush, key)
+    row = layout.row(align=True)
+    row.prop(brush, "use_pressure_size", text="Pressure: Size")
+    row.prop(brush, "use_pressure_strength", text="Strength")
+    layout.prop(brush, "stroke_method", text="Stroke")
     layout.prop(brush, "spacing")
+    layout.prop(brush, "jitter", text="Position Jitter")
+    layout.prop(brush, "use_smooth_stroke", text="Stabilize Stroke")
+    if brush.use_smooth_stroke:
+        layout.prop(brush, "smooth_stroke_radius", text="Stabilization Radius")
+        layout.prop(brush, "smooth_stroke_factor", text="Stabilization Factor")
     project = context.scene.open_painter
-    if project.paint_mask or project.paint_channel not in {"BASE_COLOR", "NORMAL"}:
+    if project.paint_mask or project.paint_channel not in {"BASE_COLOR", "NORMAL", "EMISSION"}:
         layout.prop(project, "paint_value", text="Paint Value", slider=True)
     layout.prop(brush, "blend", text="Brush Blend")
     layout.template_ID(brush, "mask_texture", new="texture.new")
@@ -72,7 +89,15 @@ def draw(layout, context):
     row.operator("open_painter.brush_action", text="", icon="X").action = "CLEAR_ALPHA"
     if brush.mask_texture:
         layout.prop(brush.mask_texture_slot, "mask_map_mode", text="Alpha Mapping")
-        layout.prop(brush.mask_texture_slot, "angle", text="Alpha Rotation")
+        slot = brush.mask_texture_slot
+        layout.prop(slot, "angle", text="Alpha Rotation")
+        layout.prop(slot, "use_rake", text="Follow Stroke")
+        layout.prop(slot, "use_random", text="Random Alpha Rotation")
+        if slot.use_random:
+            layout.prop(slot, "random_angle", text="Angle Jitter")
+        if slot.mask_map_mode == "STENCIL":
+            layout.operator("brush.stencil_fit_image_aspect", text="Fit Stencil").mask = True
+            layout.operator("brush.stencil_reset_transform", text="Reset Stencil").mask = True
 
 
 def color_owner(scene):

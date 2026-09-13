@@ -1,4 +1,5 @@
 import bpy
+from .effect import OP_TextureEffect
 
 
 def changed(self, context):
@@ -18,9 +19,14 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("GENERATOR", "Generator", "Procedural mesh-aware mask"),
             ("NOISE", "Noise", "Procedural noise"),
             ("FILL", "Fill", "Project a grayscale texture onto the mesh"),
+            ("PROCEDURAL", "Procedural", "Grayscale procedural texture"),
+            ("FILTER", "Filter", "Filter the accumulated mask texture"),
         ],
         update=changed,
     )
+    procedural: bpy.props.StringProperty(default="FBM", update=changed)
+    effect: bpy.props.PointerProperty(type=OP_TextureEffect)
+    id_color: bpy.props.FloatVectorProperty(size=3, subtype="COLOR", default=(1,1,1), min=0,max=1, update=changed)
     projection: bpy.props.EnumProperty(
         name="Projection",
         items=[
@@ -60,14 +66,15 @@ class OP_Mask(bpy.types.PropertyGroup):
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=changed)
     map_type: bpy.props.EnumProperty(
         name="Map",
-        items=[(x, x.title(), "") for x in ("AO", "CURVATURE", "NORMAL")],
+        items=[(x, x.title(), "") for x in ("AO", "CURVATURE", "NORMAL", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL", "THICKNESS", "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER")],
         update=changed,
     )
     generator: bpy.props.EnumProperty(
         items=[
             ("EDGE_WEAR", "Edge Wear", "Requires Curvature"),
             ("DIRT", "Dirt", "Requires AO and Curvature"),
-            ("DUST", "Dust (Normal Approximation)", "Uses tangent normal Z; not world up"),
+            ("DUST", "Top Dust", "Requires baked World Normal"),
+        ] + [(x,x.replace("_"," ").title(),"Texture generator") for x in ("CAVITY_DIRT","RUST","CHIPS","SCRATCHES","DRIPS","NOISE","WORLD_NORMAL","POSITION","THICKNESS","OBJECT_NORMAL","MATERIAL_ID","OBJECT_ID","UV_ISLAND","UV_BORDER","CURVATURE","AO")
         ],
         update=changed,
     )

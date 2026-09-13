@@ -17,7 +17,7 @@ Blender user data directory or a user-chosen directory, never the installed exte
 ## Layer evaluation
 
 `LayerEvaluator` walks bottom to top into one float image per channel. Constant layers remain
-small broadcast arrays until a raster source requires full pixels. Raster operations use 32-row
+small broadcast arrays until a raster source requires full pixels. Raster operations use 16-row
 tiles. Blend math is independent of Blender. RGB values are linear; sRGB image inputs are decoded.
 Scalar channels use the red component. Paint images allocate lazily and use alpha for coverage.
 Normal results are normalized in signed vector space. Isolated folders use premultiplied
@@ -25,12 +25,12 @@ source-over composition with explicit backdrop coverage: blending only interacts
 content exists. Passthrough folders evaluate children against the current parent RGB and coverage,
 then interpolate the completed change by group opacity and mask. This also handles nested groups.
 Channel opacity multiplies layer opacity; channel blend overrides default to INHERIT for backwards
-compatibility. New folders have six enabled channel records; old folders without records retain
+compatibility. New folders have eight enabled channel records; old folders without records retain
 neutral behavior and initialize settings when edited. Disabled channels/layers/blends are skipped.
-Output alpha remains opaque; transparent output coverage and Replace blending are still pending.
+Output image alpha remains opaque; the separate OPACITY channel drives the display material alpha.
 
 Mask stacks resolve painted data, baked maps or generators, followed by levels, invert and
-multiply/add operations. Missing required maps produce an actionable message. Triplanar fills
+normal/multiply/add operations. Procedural masks and ordered texture filters are also evaluated as grayscale pixels. Missing required maps produce an actionable message. Triplanar fills
 rasterize assigned base-mesh UV triangles into world position/normal images once per evaluation;
 three projected texture samples are weighted by normal components. Automatic updates run cooperative row-tile jobs with a 6 ms work budget, retaining the geometry cache for the same edit serial; saves/exports still finish synchronously.
 
@@ -44,8 +44,9 @@ Removal deliberately leaves owned datablocks recoverable for manual orphan clean
 
 ## Material ownership
 
-Each texture set gets a managed material with a fixed-size graph: six output textures, Principled,
-Normal Map, Bump, AO multiply and Material Output. Nodes carry ownership plus stable role tags.
+Each texture set gets a managed material with a fixed-size graph: eight output textures, Principled,
+Normal Map, Bump, AO multiply, UV Tangent and Material Output. Emission and Opacity connect to the
+corresponding surface inputs; scalar anisotropy and clearcoat settings control display response. Nodes carry ownership plus stable role tags.
 Repair adds/reconnects missing managed nodes and retains unrelated nodes. Assigning a mesh preserves
 its prior material per slot. Unassignment restores it only if the slot still references this texture
 set's material. Slots are retained to avoid silently reindexing other assignments.
@@ -54,7 +55,8 @@ set's material. Slots are retained to avoid silently reindexing other assignment
 
 Explicit high/low lists are validated before Cycles work. Temporary per-slot materials own active
 bake image nodes. Unassigned slots use a scratch target. Normal and AO are Cycles CPU bakes; curvature
-is an isolated normal-gradient approximation. A `finally` block restores material slots, render engine,
+uses convex creases from the evaluated target mesh. Position, world/object normals, material/object
+IDs, UV islands/borders and raycast thickness use evaluated-mesh utility baking. A `finally` block restores material slots, render engine,
 Cycles device/samples, bake properties, visibility, selection, active object and mode. Temporary
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
@@ -77,8 +79,8 @@ also detects erasing. Runtime snapshots and pending jobs are cleared on lifecycl
 
 Smart materials contain versioned JSON and optional EXR assets in a ZIP container. Import validates
 size, version and folder hierarchy before applying, remaps all IDs, packs assets, and rolls back new
-layers/images if loading fails. Local library deletion verifies the chosen directory. Built-ins are
-read-only JSON materials. Filesystem writes are distinct from Blender undo.
+layers/images if loading fails. Local library deletion verifies the chosen directory. Legacy built-ins are read-only JSON materials; the 50 authored catalog recipes expand into editable
+layer stacks before serialization. The writer emits format version 2 and the reader also accepts version 1. Filesystem writes are distinct from Blender undo.
 
 Export evaluates dirty outputs, optionally resamples, and packs explicit channels. A small PNG/TIFF
 writer encodes unsigned 8/16-bit values directly: Blender's float render-save path unpremultiplies
@@ -94,30 +96,22 @@ node subtypes in its native Editor Type enum. A scoped adapter detects selection
 native View3D in the same area. This is a Python subtype entry backed by existing native editors,
 not a compiled SpaceType. It creates no workspace and never maximizes or rearranges the screen.
 Screen custom properties store active area indices/backends across saves; runtime area pointers
-are rebuilt on load. The header retains Blender's editor selector and adds Open Painter/close controls.
+are rebuilt on load. The header retains Blender's editor selector and adds Open Painter and 3D/2D controls.
 
-GPU draw handlers provide Assets, a toolbar, Texture Set List, Layers and Properties docks. The
-center remains the actual View3D or Image Editor. A modal input router consumes dock input and
-passes central viewport navigation and native brush strokes through. Buttons call the same project
-operators as the N-panel fallback; native popovers expose detailed color, bake, export and mask settings.
-Sliders have explicit RNA targets and undo boundaries. Scrolling and search are transient UI state.
+The active interface uses native Blender Panel, UIList, UILayout and AssetShelf widgets. Texture
+sets, layers and properties occupy the right sidebar; assets use the bottom shelf. Native T/N
+shortcuts control the toolbar/sidebar. The modeling toolbar starts hidden. Legacy GPU dock drawing
+and modal input routing remain historical code paths and do not render the active interface.
 
-Region visibility updates are spaced out to let Blender's hide animations finish; repeatedly setting
-them every frame restarts those animations. The native header is reserved above the custom toolbar.
-All draw handlers, menu-header callbacks and timers are removed on disable. Other areas and layouts
-are left alone. Selecting another editor type detaches the adapter. Closing returns to a standard viewport.
-
-Dock drawing reads theme widget colors, corner roundness and UI font size on each draw.
-It does not modify user preferences. Compact numeric fields route double-click/right-click to
-native RNA property popups; drag input supports Shift precision and Escape restoration.
-Viewport appearance defaults are applied when entering the editor; the lifecycle does not
-reapply shading or overlay defaults while the user works.
+Native widget styling follows Blender preferences. Region defaults are applied on entry, rather
+than continuously overriding the artist's visibility or shading choices. Selecting another editor
+type detaches the adapter; registration does not create workspaces or rearrange other areas.
 
 ## Paint-session ownership
 
 The scene stores the active target's set/layer/channel/mask identity separately from requested UI
-selection. A target switch flushes the old image before rebinding; the input router synchronizes
-before a new stroke and the lifecycle handles native panel selection changes. Non-paintable
+selection. A target switch flushes the old image before rebinding, and the lifecycle handles native
+panel selection changes. Non-paintable
 selection ends the session. Export and save explicitly flush pending raster edits.
 
 The session stores the paint object, original face selection and face-mask toggle in persistent
@@ -138,13 +132,13 @@ on the layer; transient multi-selection and drag state live on the area. Reparen
 entire destination chain before changing any selected roots. Group creation preserves the selected
 siblings' stack location. Delete removes a subtree; ungroup promotes children.
 
-New texture sets synchronously initialize six linear outputs and a connected material before
+New texture sets synchronously initialize eight linear outputs and a connected material before
 returning. Shader repair only changes links, locations and image pointers that differ, preventing
 unnecessary recompilation on each paint update.
 
-T/N change per-area dock visibility. Native regions are hidden without fade animation, independently
-of custom dock visibility; the lifecycle timer recovers lost input handlers. Widget batches and catalog discovery are cached. Shelf thumbnails are generated
-by `scripts/render_surface_previews.py` using the same surface implementation used by the editor.
+The current interface uses native T/N region visibility. Asset thumbnails are rendered from the
+same texture compositions used by the editor; `scripts/render_catalog_previews.py` bakes a recessed
+preview mesh and renders all 50 authored material recipes. See `docs/material-catalog.md`.
 
 Paint input and Blender's native modal-operator list identify stroke activity, including release
 events consumed by the brush operator. During a stroke, snapshot composition runs cooperatively;
@@ -153,6 +147,11 @@ scanned. Painting through the legacy N-panel retains periodic detection. Saves/e
 canvas check. Blender image transfers and triplanar geometry generation are still whole-buffer work;
 this is a CPU compositor, not a GPU tile engine, and large projects can still exceed the work budget.
 
-## Paired views and effects (0.1.7)
+## Texture procedures and filters (0.2.0)
 
-Two native areas share the scene document and paint image. Transient roles suppress duplicate docks; persisted pair IDs restore the layout. Explicit join operators restore one area. Levels and pointwise filters run inside the existing row evaluator on straight linear values; group effects recover straight values from coverage first. They do not add a GPU evaluator or a Substance runtime.
+Procedural fills and masks evaluate through `texture_engine/procedurals.py`; filters operate on
+texture arrays through `texture_engine/filters.py`. Per-channel effects and mask filter records are
+persistent RNA data. Spatial filters request their required texture neighborhood; unchanged
+procedural and mask rasters can be reused through the bounded raster cache. These are CPU texture
+operations, not a GPU compositor or shader-effect graph. Triplanar source projection currently
+uses assigned base-mesh geometry; utility mesh-map baking separately uses evaluated geometry.

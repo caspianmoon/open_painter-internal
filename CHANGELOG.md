@@ -1,5 +1,17 @@
 # Changes
 
+## 0.2.0
+
+- Add 50 original smart materials with 229 editable layers, 16 stackable effects and 18 smart masks, with actual rendered previews.
+- Add 65 reusable procedural sources and 52 texture filters in channel and mask stacks, with native searchable controls.
+- Add evaluated-mesh Position, World/Object Normal, Material/Object ID, UV Island/Border and raycast Thickness maps.
+- Add Emission/Opacity channels, nonseparable color blends and four normal blend modes; persist anisotropy/coat display settings in portable materials.
+- Reuse procedural/mask textures across channels with bounded LRU memoization; retain full-resolution filter neighborhoods without row seams.
+- Correct large-seed mask artifacts, low-amount rust coverage, nested mask filter serialization and UV tangent orientation; preserve geometric edge gating.
+- Expose native brush tool, pressure, jitter, stabilization and alpha/stencil controls.
+- See [v1 scope and validation](docs/texture-workflow-v1.md).
+
+
 ## 0.1.16
 
 - Replace tangent-normal image differentiation with a geometric convex-crease texture bake of the evaluated target mesh. Coplanar triangulation, UV seams and sub-threshold tessellation do not become edge coverage.

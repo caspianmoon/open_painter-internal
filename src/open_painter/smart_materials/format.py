@@ -3,7 +3,7 @@
 import json
 from zipfile import ZipFile, is_zipfile
 
-VERSION = 1
+VERSION = 2
 MAX_BYTES = 512 * 1024 * 1024
 
 
@@ -28,8 +28,15 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
         if path.stat().st_size > 4 * 1024 * 1024:
             raise ValueError("Smart material JSON is too large.")
         data = json.loads(path.read_text())
-    if data.get("format_version") != VERSION:
+    if data.get("format_version") not in {1, VERSION}:
         raise ValueError("Unsupported smart material version.")
+    surface = data.get("surface", {})
+    if not isinstance(surface, dict) or any(
+        key not in {"anisotropy","coat_weight","coat_roughness"}
+        or not isinstance(value,(float,int)) or not 0 <= value <= 1
+        for key,value in surface.items()
+    ):
+        raise ValueError("Invalid smart material surface values.")
     layers = data.get("layers")
     if not isinstance(layers, list) or len(layers) > 256:
         raise ValueError("Smart material must contain at most 256 layers.")

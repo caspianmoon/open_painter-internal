@@ -102,9 +102,13 @@ def snapshot(source) -> dict:
     result = {}
     for prop in source.bl_rna.properties:
         key = prop.identifier
-        if key == "rna_type" or prop.is_readonly and prop.type != "COLLECTION":
+        if key == "rna_type":
             continue
         value = getattr(source, key)
+        if prop.is_readonly and prop.type != "COLLECTION" and not (
+            prop.type == "POINTER" and isinstance(value,bpy.types.PropertyGroup)
+        ):
+            continue
         if prop.type == "COLLECTION":
             result[key] = [snapshot(item) for item in value]
         elif prop.type == "POINTER" and isinstance(value, bpy.types.PropertyGroup):

@@ -7,7 +7,7 @@ from .operators import SafeOperator
 class OP_OT_bake(SafeOperator, bpy.types.Operator):
     bl_idname = "open_painter.bake"
     bl_label = "Bake Selected Mesh Maps"
-    bl_description = "Bake explicit high/low meshes with Cycles, then restore scene settings"
+    bl_description = "Bake mesh information into packed UV textures"
     bl_options = {"REGISTER", "UNDO"}
     action: bpy.props.EnumProperty(
         items=[
@@ -111,6 +111,18 @@ class OP_PT_bake(bpy.types.Panel):
             layout.operator(
                 "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
             ).action = "CURVATURE"
+        section = layout.column(align=True)
+        section.label(text="Target Mesh Utility Maps")
+        for key in ("position", "world_normal", "object_normal", "material_id", "object_id", "uv_island", "uv_border", "thickness"):
+            section.prop(settings, key)
+        if settings.uv_border:
+            section.prop(settings, "uv_border_width")
+        if settings.thickness:
+            section.prop(settings, "thickness_resolution")
+            section.prop(settings, "thickness_samples")
+            section.prop(settings, "thickness_max_distance")
+            section.label(text="Closed surfaces; sampled inward rays.")
+        section.label(text="Utility maps use evaluated target UVs.")
         layout.operator("open_painter.bake", icon="RENDER_STILL").action = "BAKE"
         layout.operator(
             "open_painter.bake", text="Use Baked Normal + AO in Stack"

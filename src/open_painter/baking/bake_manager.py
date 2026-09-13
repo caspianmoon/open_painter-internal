@@ -1,9 +1,10 @@
-"""Preflight and register Normal, AO and derived Curvature maps."""
+"""Preflight and register texture mesh maps."""
 
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
 from .cycles_baker import bake
 from .maps.curvature import bake_curvature
+from .maps.utility import UTILITY_KINDS, bake_utility
 
 
 def register_map(ts, kind, image):
@@ -27,20 +28,23 @@ def bake_selected(context, ts):
     settings = ts.bake
     low = {ref.object for ref in ts.assignments}
     high = {ref.object for ref in settings.high_objects if ref.object}
-    if (settings.normal or settings.ao) and settings.selected_to_active and not high:
+    cycles_maps = settings.normal or settings.ao
+    if cycles_maps and settings.selected_to_active and not high:
         raise ValueError(
             "High-poly source list is empty. Add sources or disable Bake from High Poly."
         )
-    if low & high:
+    if cycles_maps and low & high:
         raise ValueError("High-poly sources must be separate from low-poly texture-set objects.")
-    if any(o.name not in context.view_layer.objects for o in low | high):
+    bake_objects = low | high if cycles_maps else low
+    if any(o.name not in context.view_layer.objects for o in bake_objects):
         raise ValueError("All bake objects must be present in the active view layer.")
-    if settings.cage_mode == "CUSTOM":
+    if cycles_maps and settings.cage_mode == "CUSTOM":
         if len(low) != 1 or not settings.cage_object or settings.cage_object.type != "MESH":
             raise ValueError("Custom cage requires one low-poly object and a mesh cage.")
         if len(settings.cage_object.data.vertices) != len(next(iter(low)).data.vertices):
             raise ValueError("Custom cage topology must match the low-poly mesh.")
-    if not any((settings.normal, settings.ao, settings.curvature)):
+    selected_utility = [kind for kind in UTILITY_KINDS if getattr(settings, kind.lower())]
+    if not any((settings.normal, settings.ao, settings.curvature, selected_utility)):
         raise ValueError("Select at least one map to bake.")
     if settings.normal:
         register_map(ts, "NORMAL", bake(context, ts, "NORMAL"))
@@ -48,4 +52,6 @@ def bake_selected(context, ts):
         register_map(ts, "AO", bake(context, ts, "AO"))
     if settings.curvature:
         register_map(ts, "CURVATURE", bake_curvature(ts))
+    for kind in selected_utility:
+        register_map(ts, kind, bake_utility(ts, kind))
     invalidate(ts)

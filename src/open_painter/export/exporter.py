@@ -88,7 +88,7 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
                     values[::-1],
                     settings.file_format,
                     int(settings.bit_depth),
-                    definition == "BASE_COLOR",
+                    definition in {"BASE_COLOR","EMISSION"} if isinstance(definition,str) else False,
                 )
                 staged.append(path)
                 cache.clear()

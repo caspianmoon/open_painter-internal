@@ -22,6 +22,10 @@ def paint_input(scene, pressed):
 
 def tick():
     from .evaluator import LayerEvaluator
+    from .raster_cache import prune
+
+    prune((scene.as_pointer(), ts.id) for scene in bpy.data.scenes
+          if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets)
 
     live = {
         ts.id
@@ -94,6 +98,7 @@ def tick():
                 outputs = [image_manager.output(ts, channel) for channel in CHANNELS]
                 dirty = next((output for output in outputs if output.dirty), None)
                 if dirty:
+                    scene.open_painter.status = "Updating textures…"
                     entry = _jobs.get(ts.id)
                     if entry is None or entry[0] != dirty.channel:
                         region = _regions.get(ts.id)
@@ -146,8 +151,10 @@ def tick():
 @persistent
 def on_load(_):
     from ..painting.paint_session import reset
+    from .raster_cache import clear_shared
 
     reset()
+    clear_shared()
     _pending.clear()
     _paint_input.clear()
     _evaluators.clear()
@@ -157,6 +164,9 @@ def on_load(_):
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             for ts in scene.open_painter.texture_sets:
+                from ..core.layer_stack import ensure_channels
+                for layer in ts.layers:
+                    ensure_channels(layer)
                 ts.dirty = True
                 for output in ts.outputs:
                     output.dirty = True
@@ -198,6 +208,9 @@ def register():
 
 def unregister():
     from ..painting.paint_session import restore_faces
+    from .raster_cache import clear_shared
+
+    clear_shared()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

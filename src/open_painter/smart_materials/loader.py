@@ -16,6 +16,7 @@ def apply(ts, path: str | Path) -> None:
     mapping = {layer["id"]: new_id() for layer in data["layers"]}
     loaded = []
     start = len(ts.layers)
+    old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")}
     try:
         with TemporaryDirectory(prefix="open-painter-import-") as directory:
 
@@ -60,7 +61,12 @@ def apply(ts, path: str | Path) -> None:
                             prop.enabled = False
                             prop.color = DEFAULTS[key]
                             prop.value = DEFAULTS[key][0]
+        for key, value in data.get("surface", {}).items():
+            if key in old_surface:
+                setattr(ts,key,value)
     except Exception:
+        for key,value in old_surface.items():
+            setattr(ts,key,value)
         while len(ts.layers) > start:
             ts.layers.remove(len(ts.layers) - 1)
         for image in loaded:

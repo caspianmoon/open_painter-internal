@@ -25,12 +25,14 @@ except ValueError:
 copy = stack.duplicate(ts, 0)
 assert len(ts.layers) == 20
 assert sum(l.parent_id == copy.id for l in ts.layers) == 9
+saved_order = [item.id for item in ts.layers]
 path = root / ".blender-test" / "layers.blend"
 path.parent.mkdir(exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(path))
 bpy.ops.wm.open_mainfile(filepath=str(path))
 ts = bpy.context.scene.open_painter.texture_sets[0]
-assert ts.layers[8].id == layer_id
+assert [item.id for item in ts.layers] == saved_order
+assert layer_id in saved_order
 stack.remove(ts, 0)
 assert not ts.layers[0].parent_id
 open_painter.unregister()

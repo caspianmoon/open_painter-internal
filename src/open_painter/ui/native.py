@@ -1,6 +1,7 @@
 """Painter arrangement using Blender panels, RNA widgets and its native asset shelf."""
 
 from pathlib import Path
+from textwrap import wrap
 
 import bpy
 
@@ -15,35 +16,61 @@ ASSET_KEY = "open_painter_catalog_entry"
 
 def catalog():
     from ..smart_masks.library import PRESETS
+    from ..smart_materials.catalog import CATALOG
 
     return assets.MATERIALS + [
+        (name, "SMART_RECIPE", name, data["layers"][0]["color"], data["layers"][0]["roughness"], "")
+        for name, data in CATALOG.items()
+    ] + [
         (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
     ]
 
 
 def prepare_assets():
     # Images are asset handles only; activation always routes through Painter.
+    from ..smart_materials.catalog import CATALOG
+    from ..constants import VERSION
+    handles = {image.get(ASSET_KEY): image for image in bpy.data.images if ASSET_KEY in image}
     for entry in catalog():
-        image = assets.preview(entry[0])
-        if not image:
-            continue
-        image[ASSET_KEY] = entry[0]
-        image.name = entry[0]
-        if not image.asset_data:
-            image.asset_mark()
-        image.asset_data.description = (
-            "Smart mask: apply to the selected layer or folder"
-            if entry[1] == "SMART_MASK"
-            else "Open Painter material"
-        )
         path = (
             Path(__file__).resolve().parents[1]
             / "assets/previews"
             / (entry[0].replace(" ", "_") + ".png")
         )
-        if image.preview is None or not image.preview.image_size[0]:
+        image = assets.preview(entry[0]) if path.exists() else handles.get(entry[0])
+        if not image:
+            # Library entries remain usable while a rendered preview is absent.
+            # This is explicitly a color swatch, never a claimed material render.
+            image = bpy.data.images.new(entry[0], width=32, height=32)
+            image.generated_color = (*entry[3], 1)
+            image.use_fake_user = True
+            image["open_painter_preview_kind"] = "COLOR_SWATCH"
+            preview = image.preview_ensure()
+            preview.image_size = (32, 32)
+            preview.image_pixels_float = list((*entry[3], 1)) * (32 * 32)
+        image[ASSET_KEY] = entry[0]
+        old_handle = handles.get(entry[0])
+        if old_handle and old_handle != image and old_handle.asset_data:
+            old_handle.asset_clear()
+            del old_handle[ASSET_KEY]
+        image.name = entry[0]
+        if not image.asset_data:
+            image.asset_mark()
+        description = (
+            "Smart mask: apply to the selected layer or folder"
+            if entry[1] == "SMART_MASK"
+            else CATALOG[entry[0]]["description"] if entry[1] == "SMART_RECIPE"
+            else "Open Painter material"
+        )
+        if path.exists() and "open_painter_preview_kind" in image:
+            del image["open_painter_preview_kind"]
+        image.asset_data.description = description + (
+            " (Color swatch preview)" if image.get("open_painter_preview_kind") == "COLOR_SWATCH" else ""
+        )
+        if path.exists() and (image.get("open_painter_preview_version") != VERSION or image.preview is None or not image.preview.image_size[0]):
             with bpy.context.temp_override(id=image):
                 bpy.ops.ed.lib_id_load_custom_preview(filepath=str(path))
+            image["open_painter_preview_version"] = VERSION
 
 
 class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
@@ -82,6 +109,9 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
             from ..smart_masks.library import apply
 
             apply(require_set(context), entry[0], replace=self.replace_masks)
+        elif entry[1] == "SMART_RECIPE":
+            from ..smart_materials.composer import apply
+            apply(require_set(context), entry[0])
         else:
             assets.apply(context, entry)
         ui = state.get(context.area)
@@ -280,6 +310,9 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
             row.operator("open_painter.layer", text=label, icon=icon).action = action
         row.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
         row.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
+        row = layout.row(align=True)
+        row.operator("open_painter.catalog_material", text="Material", icon="MATERIAL")
+        row.operator("open_painter.catalog_effect", text="Effect", icon="MODIFIER")
         layout.template_list(
             "OP_UL_native_layers",
             "stack",
@@ -316,6 +349,11 @@ class OP_MT_native_masks(bpy.types.Menu):
             op.action, op.source = "ADD", "PAINT" if source == "BLACK" else source
             op.black = source == "BLACK"
         self.layout.separator()
+        op = self.layout.operator("open_painter.choose_procedural", text="Add Procedural Fill", icon="TEXTURE")
+        op.target, op.create = "MASK", True
+        op = self.layout.operator("open_painter.choose_filter", text="Add Filter", icon="MODIFIER")
+        op.target, op.create = "MASK", True
+        self.layout.separator()
         self.layout.prop(context.scene.open_painter, "asset_category", text="Library")
 
 
@@ -325,6 +363,13 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        status = context.scene.open_painter.status.strip()
+        if status:
+            box = layout.box()
+            scale = max(.5, context.preferences.system.ui_scale)
+            width = max(20, min(70, int(context.region.width / (7.5 * scale)) - 5))
+            for index, line in enumerate(wrap(status, width=width)):
+                box.label(text=line, icon="INFO" if index == 0 else "BLANK1")
         ts = active_set(context)
         layer = active(ts) if ts else None
         if not layer:
@@ -351,6 +396,8 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             layout.prop(context.scene.open_painter, "paint_channel")
             layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
             draw(layout, context)
+            from .texture_operations import draw_channel_effects
+            draw_channel_effects(layout, context, layer)
             return
         layout.separator()
         layout.label(text="MATERIAL", icon="MATERIAL")
@@ -363,11 +410,19 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             body.enabled = channel.enabled
             body.prop(
                 channel,
-                "color" if channel.channel in {"BASE_COLOR", "NORMAL"} else "value",
-                text="Color" if channel.channel in {"BASE_COLOR", "NORMAL"} else "Value",
+                "color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "value",
+                text="Color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "Value",
             )
             body.template_ID(channel, "image", open="image.open")
-            if channel.image:
+            row = body.row(align=True)
+            row.operator("open_painter.choose_procedural", text=channel.procedural.replace("_", " ").title() if channel.procedural else "Choose Procedural", icon="TEXTURE")
+            if channel.procedural:
+                row.operator("open_painter.clear_procedural", text="", icon="X")
+                for key in ("procedural_scale", "procedural_seed", "procedural_detail"):
+                    body.prop(channel, key)
+                if channel.channel in {"HEIGHT", "NORMAL"}:
+                    body.prop(channel, "procedural_height")
+            if channel.image or channel.procedural:
                 body.separator()
                 body.label(text="FILL", icon="TEXTURE")
                 for key in ("projection", "filtering", "tiling"):
@@ -378,6 +433,14 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
                     body.prop(channel, key)
                 if channel.projection == "TRIPLANAR":
                     body.prop(channel, "triplanar_hardness")
+            from .texture_operations import draw_channel_effects
+            draw_channel_effects(body, context, layer)
+        layout.separator()
+        panel_header, panel = layout.panel("painter_material_surface", default_closed=True)
+        panel_header.label(text="Surface Response")
+        if panel:
+            for key in ("anisotropy", "coat_weight", "coat_roughness", "height_distance"):
+                panel.prop(ts, key)
 
 
 class OP_PT_native_library(PainterPanel, bpy.types.Panel):

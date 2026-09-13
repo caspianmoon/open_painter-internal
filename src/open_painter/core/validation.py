@@ -29,17 +29,9 @@ def validate(ts) -> list[str]:
                 continue
             if mask.source in {"PAINT", "FILL"} and not mask.image:
                 issues.append(f"Painted mask image missing on {layer.name}.")
-            required = (
-                {mask.map_type}
-                if mask.source == "BAKED"
-                else {"CURVATURE"}
-                if mask.source == "GENERATOR" and mask.generator == "EDGE_WEAR"
-                else {"AO", "CURVATURE"}
-                if mask.source == "GENERATOR" and mask.generator == "DIRT"
-                else {"NORMAL"}
-                if mask.source == "GENERATOR"
-                else set()
-            )
+            from ..generators.base import required_maps
+            required = ({mask.map_type} if mask.source == "BAKED" else
+                        required_maps(mask.generator) if mask.source == "GENERATOR" else set())
             for kind in required:
                 if not any(m.kind == kind and m.image for m in ts.baked_maps):
                     issues.append(f"{layer.name} requires a baked {kind} map.")

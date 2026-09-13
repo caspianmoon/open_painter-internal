@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.16.zip`](dist/open_painter-0.1.16.zip).
+1. Download or build [`dist/open_painter-0.2.0.zip`](dist/open_painter-0.2.0.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -32,9 +32,15 @@ backend's selector highlight can read 3D Viewport or Image Editor while Open Pai
 The ZIP follows Blender's [extension packaging format](https://docs.blender.org/manual/en/latest/advanced/extensions/getting_started.html).
 No online account, network connection, or separate Python installation is needed.
 
+## Texture library
+
+Version 0.2.0 adds all **50 requested smart materials**, **16 stackable effects**, **18 smart masks**,
+**65 procedural sources** and **52 texture filters**. They form editable texture stacks rather than shader effects.
+See the [v1 workflow and controls](docs/texture-workflow-v1.md) and the [material catalog with required maps](docs/material-catalog.md).
+
 ## First use
 
-1. Select your low-poly mesh. It needs a UV map in the 0–1 tile. A new texture set immediately creates and assigns a Principled material with all six initialized texture images connected.
+1. Select your low-poly mesh. It needs a UV map in the 0–1 tile. A new texture set immediately creates and assigns a Principled material with all eight initialized texture images connected.
 2. Click **+** in Texture Set List. A selected UV-unwrapped mesh is assigned automatically; use the link icon for additional meshes. For a mesh with multiple materials,
    choose the intended active material slot before assigning. Repeat for additional objects/slots.
 3. Use the resolution dropdown in Texture Set List to choose resolution (default 2048).
@@ -64,7 +70,7 @@ using their native borders. No surrounding editor areas are rearranged.
 The mask menu offers white/black painted masks, projected fill masks, generators and baked maps.
 Select **Assets → Smart Masks**, select the target layer, then click a preset. Normal application
 adds an editable effect; **Ctrl-click / Cmd-click** replaces the target’s effect stack. Required mesh
-maps are checked before modifying the stack. The six bundled presets are original edge/dirt masks.
+maps are checked before modifying the stack. The 18 bundled presets include edge, cavity, dust, rust, scratch and drip masks.
 
 A mask on a **folder affects every child**, including the metal substrate in Painted Steel. For
 chipped paint over metal, select **Paint coat** before applying a smart mask. Properties identifies
@@ -102,7 +108,7 @@ It contains explicit HP/LP assignments, baked maps, Painted Steel layers and an 
 roughness image. A portable smart material and example Unreal textures are in `examples/`.
 The high-poly source is hidden in the demo; baking temporarily makes it available and restores visibility.
 
-The Assets shelf includes **Painted Steel, Dirty Plastic, Rough Wood, Brushed Steel, Copper,
+Alongside the 50 new smart materials, the Assets shelf retains **Painted Steel, Dirty Plastic, Rough Wood, Brushed Steel, Copper,
 Matte Rubber, Porcelain and Red Paint**. These original PBR presets contain coordinated color,
 roughness and subtle height textures. Painted Steel and Dirty Plastic create editable groups.
 They work without a bake; they do not reproduce mesh-aware edge wear or physical dust deposition.
@@ -115,12 +121,12 @@ require their indicated mesh maps. Existing projects keep their authored layers 
 
 | Preset | Files / encoding |
 | --- | --- |
-| Blender | BaseColor, Roughness, Metallic, Normal, Height, AO |
+| Blender | BaseColor, Roughness, Metallic, Normal, Height, AO, Emission, Opacity |
 | Unreal Engine 5 | BaseColor, DirectX Normal (green inverted), ORM: R=AO, G=Roughness, B=Metallic |
 | Unity Standard Metallic | BaseColor, OpenGL Normal, MetallicSmoothness: R=Metallic, G=B=0, A=1−Roughness; separate Occlusion |
 | Custom | One RGBA image; assign scalar channels, smoothness, zero or one independently |
 
-BaseColor is encoded as sRGB; other maps contain linear data. PNG/TIFF support 8 or 16 bits.
+BaseColor and Emission are encoded as sRGB; other maps contain linear data. PNG/TIFF support 8 or 16 bits.
 Export resolution overrides resample the evaluated textures. Files use
 `{prefix}{texture_set}_{channel}{suffix}.{ext}` with filesystem-safe names. Existing files are
 never overwritten; choose a new folder, prefix or suffix. In Unreal/Unity import packed maps as
@@ -137,15 +143,13 @@ unused managed datablocks. Undo covers project edits; exported and library files
 
 ## Current limitations
 
-- CPU evaluation; 2K is the practical default. Full six-channel rebuilds, texture-heavy stacks,
-  triplanar rasterization and packing large projects can block Blender. Automatic updates yield between channels; an individual large channel can still take noticeable time. 4K/8K have high memory costs.
+- CPU evaluation; 2K is the default. Automatic updates yield between row tiles and reuse cached procedural/mask sources. First-time eight-channel generation, neighborhood filters, triplanar rasterization and image packing can still take noticeable time. See the [measured performance and memory limits](docs/texture-workflow-v1.md#geometry-and-performance); 4K/8K have high memory costs.
 - Painting is one channel at a time. The native brush engine writes the layer image; the compositor
   updates the composite after stroke completion. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
-- Tangent normal layers use normalized RGB blending, not reoriented normal-map blending.
+- Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.
 - Curvature is a convex-crease map of the evaluated target mesh, filtered by Minimum Edge Angle. Smooth continuous curvature and high-poly-only normal detail are not transferred.
-  Dust uses tangent-normal Z, not world-up. Position Gradient, UDIM authoring and world normals are deferred.
-- Triplanar uses the base mesh's UVs, world positions and interpolated vertex normals. Apply topology-changing
-  modifiers first; after moving geometry, use Refresh. UVs outside the first tile and overlapping islands
+  Dust uses baked world-normal Z; moving or deforming geometry requires rebaking affected mesh maps. UDIM authoring remains unsupported.
+- Triplanar uses the base mesh's world positions and interpolated vertex normals through the render UV layer. Apply topology-changing modifiers first; after moving geometry, use Refresh. UVs outside the first tile and overlapping islands
   are not a supported authoring workflow.
 - Automatic cages use a manual distance. Custom cage support is limited to one low-poly mesh with matching topology.
   Baking is synchronous and uses Cycles CPU for predictable behavior.
@@ -172,7 +176,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 
 ![Mask stack and generator controls](docs/mask_controls.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.16.
+See [CHANGELOG.md](CHANGELOG.md) for changes in 0.2.0.
 
 
 

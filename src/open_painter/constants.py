@@ -1,6 +1,6 @@
 """Stable on-disk identifiers and ownership markers."""
 
-VERSION = "0.1.16"
+VERSION = "0.2.0"
 # Keep the first five enum positions stable for existing .blend projects.
 BLEND_ITEMS = [
     (key, label, "")
@@ -25,12 +25,15 @@ BLEND_ITEMS = [
         ("LINEAR_LIGHT", "Linear Light"),
         ("PIN_LIGHT", "Pin Light"),
         ("DISABLE", "Disable"),
+        ("HUE", "Hue"), ("SATURATION", "Saturation"), ("COLOR", "Color"), ("LUMINOSITY", "Luminosity"),
+        ("NORMAL_COMBINE", "Normal Combine"), ("RNM", "Reoriented Normal Mapping"),
+        ("NORMAL_ADD", "Additive Normal"), ("NORMAL_REPLACE", "Replace Normal"),
     )
 ]
 OWNER = "open_painter_managed"
-CHANNELS = ("BASE_COLOR", "ROUGHNESS", "METALLIC", "NORMAL", "HEIGHT", "AO")
+CHANNELS = ("BASE_COLOR", "ROUGHNESS", "METALLIC", "NORMAL", "HEIGHT", "AO", "EMISSION", "OPACITY")
 CHANNEL_LABELS = dict(
-    zip(CHANNELS, ("BaseColor", "Roughness", "Metallic", "Normal", "Height", "AO"))
+    zip(CHANNELS, ("BaseColor", "Roughness", "Metallic", "Normal", "Height", "AO", "Emission", "Opacity"))
 )
 CHANNEL_ITEMS = [(c, CHANNEL_LABELS[c], "") for c in CHANNELS]
 RESOLUTIONS = [(str(n), str(n), f"{n} × {n} pixels") for n in (512, 1024, 2048, 4096, 8192)]
@@ -41,4 +44,6 @@ DEFAULTS = {
     "NORMAL": (0.5, 0.5, 1, 1),
     "HEIGHT": (0.5, 0.5, 0.5, 1),
     "AO": (1, 1, 1, 1),
+    "EMISSION": (0,0,0,1),
+    "OPACITY": (1,1,1,1),
 }

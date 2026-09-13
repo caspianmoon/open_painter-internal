@@ -29,6 +29,7 @@ stack.channel_for(bottom, "METALLIC").value = 0.2
 folder = stack.add(ts, "FOLDER")
 folder_id = folder.id
 child = stack.add(ts, "FILL")
+child_id = child.id
 stack.parent(ts, child, folder_id)
 rough = stack.channel_for(child, "ROUGHNESS")
 metal = stack.channel_for(child, "METALLIC")
@@ -74,6 +75,7 @@ rough.blend_mode = "MULTIPLY"
 # A non-repeating fill leaves the underlying pixels untouched outside its tile.
 folder.visible = False
 fill = stack.add(ts, "FILL")
+fill_id = fill.id
 p = stack.channel_for(fill, "ROUGHNESS")
 p.image = images.create("Fill sample", 2, (0.9, 0.9, 0.9, 1))
 p.offset = (1, 0)
@@ -102,7 +104,7 @@ assert stack.channel_for(ts.layers[2], "ROUGHNESS").opacity == 0.5
 assert stack.channel_for(ts.layers[2], "METALLIC").blend_mode == "SCREEN"
 assert stack.channel_for(ts.layers[3], "ROUGHNESS").triplanar_hardness == 64
 copy = stack.duplicate(ts, 1)
-assert copy.group_mode == "PASSTHROUGH" and len(copy.channels) == 6
+assert copy.group_mode == "PASSTHROUGH" and len(copy.channels) == 8
 # Legacy folder defaults remain isolated and can acquire neutral channel settings.
 legacy = ts.layers.add()
 legacy.id, legacy.type = "legacy", "FOLDER"
@@ -112,11 +114,15 @@ assert all(c.enabled and c.opacity == 1 and c.blend_mode == "INHERIT" for c in l
 material = root / ".blender-test/channel_composition.openpaintmaterial"
 material.unlink(missing_ok=True)
 serializer.save(ts, material)
+folder_index = next(i for i, item in enumerate(ts.layers) if item.id == folder_id)
+child_index = next(i for i, item in enumerate(ts.layers) if item.id == child_id)
+fill_index = next(i for i, item in enumerate(ts.layers) if item.id == fill_id)
 target = sets.create(scene, "Imported composition")
 loader.apply(target, material)
-assert target.layers[1].group_mode == "PASSTHROUGH"
-assert stack.channel_for(target.layers[2], "METALLIC").blend_mode == "SCREEN"
-assert stack.channel_for(target.layers[3], "ROUGHNESS").filtering == "NEAREST"
+assert target.layers[folder_index].group_mode == "PASSTHROUGH"
+assert target.layers[child_index].parent_id == target.layers[folder_index].id
+assert stack.channel_for(target.layers[child_index], "METALLIC").blend_mode == "SCREEN"
+assert stack.channel_for(target.layers[fill_index], "ROUGHNESS").filtering == "NEAREST"
 # Nested passthrough groups and an empty group preserve the correct backdrop.
 ts = sets.create(scene, "Nested composition")
 ts.resolution = "512"

@@ -1,0 +1,36 @@
+{
+  "blender_version": "5.2.1 LTS",
+  "resolution": 2048,
+  "layers": 6,
+  "material": "Worn Painted Metal",
+  "author_seconds": 0.004236000000673812,
+  "initial_seconds": 24.718167374998302,
+  "initial_cpu_seconds": 23.179089,
+  "channel_seconds": {
+    "BASE_COLOR": 19.91209237500152,
+    "ROUGHNESS": 2.510235499998089,
+    "METALLIC": 0.9672827909998887,
+    "NORMAL": 0.05942470800073352,
+    "HEIGHT": 1.137529583000287,
+    "AO": 0.04638429199985694,
+    "EMISSION": 0.04124166600013268,
+    "OPACITY": 0.04285945900119259
+  },
+  "channel_cpu_seconds": {
+    "BASE_COLOR": 18.715446,
+    "ROUGHNESS": 2.2538969999999985,
+    "METALLIC": 0.9269260000000017,
+    "NORMAL": 0.05179700000000054,
+    "HEIGHT": 1.1046590000000016,
+    "AO": 0.043943000000002286,
+    "EMISSION": 0.03945099999999968,
+    "OPACITY": 0.042089999999998184
+  },
+  "roughness_edit_seconds": 2.0775025420007296,
+  "roughness_edit_cpu_seconds": 2.015129999999999,
+  "max_cooperative_step_cpu_ms": 42.40400000000122,
+  "max_cooperative_step_ms": 189.68566699913936,
+  "scalar_cache_mib": 144.0,
+  "max_rss_mib": 919.328125,
+  "context": "CPU texture composition with synthetic AO/curvature; excludes mesh baking and viewport rendering."
+}

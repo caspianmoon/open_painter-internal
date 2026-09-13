@@ -1,4 +1,4 @@
-"""Bottom-to-top, isolated-folder composition into six controlled images."""
+"""Bottom-to-top, isolated-folder composition into controlled texture images."""
 
 from time import perf_counter
 
@@ -9,7 +9,8 @@ from ..core import image_manager, material_manager
 from ..core.layer_stack import channel_for
 from ..utils.logging import logger
 from .blend_modes import blend
-from .channel_eval import source
+from .channel_eval import source, TILE_ROWS, _procedural_tile
+from .raster_cache import RasterCache, for_texture_set
 
 
 class LayerEvaluator:
@@ -17,7 +18,7 @@ class LayerEvaluator:
 
     def __init__(self, scene):
         self.scene = scene
-        self.geometry_cache = {}
+        self.geometry_cache = RasterCache()
 
     def evaluate_texture_set(self, texture_set_id: str, force=False):
         ts = next((s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id), None)
@@ -28,13 +29,12 @@ class LayerEvaluator:
         issues = hierarchy_issues(ts)
         if issues:
             raise ValueError(" | ".join(issues))
-        self.geometry_cache.clear()
+        self.geometry_cache = for_texture_set(self.scene, ts, force=force)
         started = perf_counter()
         for channel in CHANNELS:
             out = image_manager.output(ts, channel)
             if force or out.dirty:
                 self.evaluate_channel(ts.id, channel)
-        self.geometry_cache.clear()
         ts.dirty = False
         for layer in ts.layers:
             layer.dirty = False
@@ -54,7 +54,16 @@ class LayerEvaluator:
     def channel_steps(self, texture_set_id: str, channel: str, region=None):
         """Cooperative preview job; callers may yield to Blender between row tiles."""
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
+        self.geometry_cache = for_texture_set(self.scene, ts)
         n = int(ts.resolution)
+        if region is not None and any(
+            any(effect.enabled for effect in prop.effects)
+            or any(mask.enabled and mask.source == "FILTER" for mask in layer.masks)
+            for layer in ts.layers
+            for prop in layer.channels if prop.channel == channel
+        ):
+            # Neighborhood filters affect pixels beyond the painted rows.
+            region = None
         if region is None:
             result = np.empty((n, n, 4), dtype=np.float32)
             low, high, cache = 0, n, {}
@@ -65,8 +74,26 @@ class LayerEvaluator:
             low, high = region[2], region[3]
             cache = {region[4]: region[5]}
         children = {}
+        channel_properties = {}
         for layer in ts.layers:
             children.setdefault(layer.parent_id, []).append(layer)
+            channel_properties[layer.id] = channel_for(layer, channel)
+
+        def visible_work(parent_id, ancestry):
+            for layer in children.get(parent_id, ()):
+                prop = channel_properties[layer.id]
+                if not layer.visible or (prop and not prop.enabled):
+                    continue
+                mode = prop.blend_mode if prop and prop.blend_mode != "INHERIT" else layer.blend_mode
+                if mode == "DISABLE" or layer.opacity == 0 or (prop and prop.opacity == 0):
+                    continue
+                if layer.id in ancestry:
+                    raise ValueError("Layer hierarchy contains a cycle. Reparent the folder.")
+                yield layer, prop
+                if layer.type == "FOLDER":
+                    yield from visible_work(layer.id, ancestry | {layer.id})
+
+        work = tuple(visible_work("", set()))
 
         def compose(parent_id, y0, y1, initial, ancestry, initial_coverage=0):
             rgb = np.array(initial, dtype=np.float32)
@@ -79,7 +106,7 @@ class LayerEvaluator:
                     continue
                 if layer.id in ancestry:
                     raise ValueError("Layer hierarchy contains a cycle. Reparent the folder.")
-                prop = channel_for(layer, channel)
+                prop = channel_properties[layer.id]
                 if prop and not prop.enabled:
                     continue
                 mode = (
@@ -92,6 +119,8 @@ class LayerEvaluator:
                     from .mask_eval import evaluate_masks
 
                     amount = amount * evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)[..., None]
+                if not np.any(amount):
+                    continue
                 if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
                     # Evaluate against the actual backdrop, then attenuate the whole
                     # group's change once. Child opacity must not be applied twice.
@@ -125,8 +154,26 @@ class LayerEvaluator:
                     coverage = alpha + coverage * (1 - alpha)
             return rgb, coverage
 
-        for y0 in range(low, high, 32):
-            y1 = min(high, y0 + 32)
+        for y0 in range(low, high, TILE_ROWS):
+            y1 = min(high, y0 + TILE_ROWS)
+            # A cold smart material can contain several expensive sources. Yield
+            # between those independent computations, before cheap composition,
+            # instead of blocking the UI for the sum of all sources in a tile.
+            skipped = set()
+            for layer, prop in work:
+                if layer.parent_id in skipped:
+                    skipped.add(layer.id)
+                    continue
+                if layer.masks:
+                    from .mask_eval import evaluate_masks
+                    mask = evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)
+                    yield
+                    if not np.any(mask):
+                        skipped.add(layer.id)
+                        continue
+                if layer.type == "FILL" and prop and prop.procedural:
+                    _procedural_tile(prop, n, y0, y1, ts, self.geometry_cache)
+                    yield
             rgb, _ = compose("", y0, y1, DEFAULTS[channel][:3], set(), 1)
             if channel == "NORMAL":
                 vectors = rgb * 2 - 1

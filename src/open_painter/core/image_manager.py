@@ -43,7 +43,7 @@ def output(ts, channel):
         from ..constants import CHANNEL_LABELS, DEFAULTS
 
         prop.image = create(
-            f"{ts.name}_{CHANNEL_LABELS[channel]}", n, DEFAULTS[channel], channel == "BASE_COLOR"
+            f"{ts.name}_{CHANNEL_LABELS[channel]}", n, DEFAULTS[channel], channel in {"BASE_COLOR", "EMISSION"}
         )
         prop.image["texture_set_id"] = ts.id
         prop.image["channel"] = channel

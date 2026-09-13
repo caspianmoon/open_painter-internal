@@ -1,6 +1,7 @@
 import bpy
 
 from ..constants import BLEND_ITEMS, CHANNEL_ITEMS
+from .effect import OP_TextureEffect
 
 
 def changed(self, context):
@@ -58,6 +59,13 @@ class OP_Channel(bpy.types.PropertyGroup):
         update=changed,
     )
     value: bpy.props.FloatProperty(name="Value", default=0.5, min=0, max=1, update=changed)
+    procedural: bpy.props.StringProperty(default='',update=changed)
+    procedural_scale: bpy.props.FloatProperty(name='Scale',default=8,min=.01,max=512,update=changed)
+    procedural_seed: bpy.props.IntProperty(name='Seed',default=1,min=0,update=changed)
+    procedural_detail: bpy.props.FloatProperty(name='Variation',default=.15,min=0,max=2,update=changed)
+    procedural_height: bpy.props.FloatProperty(name='Height Amplitude',default=.02,min=-1,max=1,update=changed)
+    effects: bpy.props.CollectionProperty(type=OP_TextureEffect)
+    active_effect: bpy.props.IntProperty()
     image_name: bpy.props.StringProperty()
     image: bpy.props.PointerProperty(name="Texture", type=bpy.types.Image, update=image_changed)
     projection: bpy.props.EnumProperty(

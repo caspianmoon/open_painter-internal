@@ -23,7 +23,7 @@ def target(ts, layer, channel, mask=False):
         prop.image = create(
             f"{ts.name}_{layer.name}_{channel}",
             int(ts.resolution),
-            color_data=channel == "BASE_COLOR",
+            color_data=channel in {"BASE_COLOR", "EMISSION"},
         )
         # Managed images are packed by the save handler, not on brush startup.
     return prop.image

@@ -42,7 +42,10 @@ uv_value = evaluate_masks(ts, layer, 512, 0, 512, {}, {})
 assert np.mean(abs(uv_value[:,:256] - uv_value[:,256:])) > .4
 # Existing hand-painted masks remain UV data even if projection fields are changed.
 mask.source = 'PAINT'; mask.projection = 'TRIPLANAR'
-np.testing.assert_allclose(evaluate_masks(ts, layer, 512, 0, 512, {}, {}), uv_value)
+# Fill coordinates pass through a centered UV transform; paint samples the UV
+# grid directly. Both now retain float32 interpolation weights, so allow two
+# float32 ULPs from the otherwise identical coordinate paths.
+np.testing.assert_allclose(evaluate_masks(ts, layer, 512, 0, 512, {}, {}), uv_value, atol=2e-7)
 group = surface_presets.apply(ts, 'Painted Steel')
 coat = next(l for l in ts.layers if l.parent_id == group.id and l.masks)
 assert coat.masks[0].source == 'FILL' and coat.masks[0].projection == 'TRIPLANAR'

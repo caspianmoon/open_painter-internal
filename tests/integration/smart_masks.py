@@ -23,12 +23,19 @@ try:
 except ValueError as e:
     assert "AO" in str(e) and "CURVATURE" in str(e)
 assert not layer.masks
-for kind in ["AO", "CURVATURE"]:
+for kind in ["AO", "CURVATURE", "WORLD_NORMAL", "POSITION"]:
     m = ts.baked_maps.add()
     m.kind = kind
     m.image = images.create(kind, 32)
     data = np.ones((32, 32, 4), np.float32)
     data[..., :3] = np.linspace(0, 1, 32)[None, :, None]
+    if kind == "WORLD_NORMAL":
+        z = np.linspace(-1, 1, 32, dtype=np.float32)[:, None]
+        data[..., 0] = .5 + .5 * np.sqrt(np.maximum(0, 1 - z * z))
+        data[..., 1], data[..., 2] = .5, (z + 1) * .5
+    elif kind == "POSITION":
+        data[..., 0] = np.linspace(0, 1, 32)[None, :]
+        data[..., 1] = data[..., 2] = np.linspace(0, 1, 32)[:, None]
     images.write(m.image, data)
 outputs = []
 for preset in PRESETS:

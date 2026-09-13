@@ -24,13 +24,44 @@ def _dodge(base, source):
     )
 
 
+def _lum(c):
+    return np.sum(c * np.array([.3,.59,.11],dtype=np.float32),axis=-1,keepdims=True)
+
+
+def _set_lum(c, luminosity):
+    c = np.asarray(c,dtype=np.float32) + luminosity - _lum(c)
+    low,high=c.min(axis=-1,keepdims=True),c.max(axis=-1,keepdims=True)
+    c=np.where(low<0,luminosity+(c-luminosity)*_divide(luminosity,luminosity-low),c)
+    return np.where(high>1,luminosity+(c-luminosity)*_divide(1-luminosity,high-luminosity),c)
+
+
+def _set_sat(c, saturation):
+    low=c.min(axis=-1,keepdims=True)
+    delta=c.max(axis=-1,keepdims=True)-low
+    return np.where(delta>1e-8,(c-low)*_divide(saturation,delta),0)
+
+
 def blend(base, source, alpha, mode="NORMAL"):
     """Linear RGB. Standard separable modes follow W3C Compositing Level 1.
 
     Additional arithmetic modes are bounded except legacy ADD/SUBTRACT.
     No claim of pixel-identical Substance engine behavior is made.
     """
-    if mode == "NORMAL":
+    if mode in {'HUE','SATURATION','COLOR','LUMINOSITY'}:
+        base,source=np.broadcast_arrays(np.asarray(base,dtype=np.float32),np.asarray(source,dtype=np.float32))
+        if mode == 'HUE':
+            result=_set_lum(_set_sat(source,base.max(axis=-1,keepdims=True)-base.min(axis=-1,keepdims=True)),_lum(base))
+        elif mode == 'SATURATION':
+            result=_set_lum(_set_sat(base,source.max(axis=-1,keepdims=True)-source.min(axis=-1,keepdims=True)),_lum(base))
+        elif mode == 'COLOR':
+            result=_set_lum(source,_lum(base))
+        else:
+            result=_set_lum(base,_lum(source))
+    elif mode in {'NORMAL_COMBINE','RNM','NORMAL_ADD','NORMAL_REPLACE'}:
+        from ..texture_engine.filters import normal_combine
+        kinds={'NORMAL_COMBINE':'WHITEOUT','RNM':'RNM','NORMAL_ADD':'ADD','NORMAL_REPLACE':'REPLACE'}
+        result=normal_combine(base,source,mode=kinds[mode])
+    elif mode == "NORMAL":
         result = source
     elif mode == "MULTIPLY":
         result = base * source
@@ -106,7 +137,9 @@ def sample_uv(texture, u, v, filtering="BILINEAR", tiling="REPEAT"):
         ).copy()
     else:
         ix, iy = np.floor(x).astype(np.int32), np.floor(y).astype(np.int32)
-        fx, fy = (x - ix)[..., None], (y - iy)[..., None]
+        # NumPy promotes float32 - int32 to float64. Retain texture precision to
+        # avoid doubling mask caches and all following compositing temporaries.
+        fx, fy = (x - ix.astype(x.dtype))[..., None], (y - iy.astype(y.dtype))[..., None]
         a = fetch(ix, iy) * (1 - fx) + fetch(ix + 1, iy) * fx
         b = fetch(ix, iy + 1) * (1 - fx) + fetch(ix + 1, iy + 1) * fx
         result = a * (1 - fy) + b * fy

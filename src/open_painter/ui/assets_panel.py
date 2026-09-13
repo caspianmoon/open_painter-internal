@@ -81,8 +81,11 @@ class OP_PT_assets(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.operator("open_painter.catalog_material", text="Add Smart Material", icon="ASSET_MANAGER")
+        layout.operator("open_painter.catalog_effect", text="Add Surface Effect", icon="MODIFIER")
+        layout.separator()
         layout.operator(
-            "open_painter.library", text="Apply Library Material", icon="ASSET_MANAGER"
+            "open_painter.library", text="Apply Saved Material", icon="ASSET_MANAGER"
         ).action = "APPLY"
         layout.operator("open_painter.save_material", icon="FILE_TICK")
         layout.operator("open_painter.import_material", icon="IMPORT")

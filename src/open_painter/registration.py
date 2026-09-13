@@ -24,8 +24,12 @@ from .ui.properties_panel import OP_OT_mask, OP_PT_masks, OP_UL_masks
 from .ui.workspace import OP_OT_workspace
 
 from .ui.native import CLASSES as NATIVE_CLASSES
+from .ui.texture_operations import CLASSES as TEXTURE_UI_CLASSES
+
+from .properties.effect import OP_TextureEffect
 
 CLASSES = (
+    OP_TextureEffect,
     OP_EditorType,
     OP_OT_open_editor,
     OP_OT_close_editor,
@@ -68,7 +72,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + NATIVE_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES
 
 
 def register():

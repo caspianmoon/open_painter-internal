@@ -44,6 +44,16 @@ def repair(ts):
         image = next((o.image for o in ts.outputs if o.channel == channel), None)
         if tex[channel].image != image:
             tex[channel].image = image
+    connect(tex['EMISSION'].outputs['Color'], bsdf.inputs['Emission Color'])
+    connect(tex['OPACITY'].outputs['Color'], bsdf.inputs['Alpha'])
+    for socket, value in (("Emission Strength",1),("Anisotropic",ts.anisotropy),
+                          ("Coat Weight",ts.coat_weight),("Coat Roughness",ts.coat_roughness)):
+        if bsdf.inputs[socket].default_value != value:
+            bsdf.inputs[socket].default_value = value
+    tangent = node("UV Tangent", "ShaderNodeTangent", (250, -450))
+    if tangent.direction_type != "UV_MAP":
+        tangent.direction_type = "UV_MAP"
+    connect(tangent.outputs["Tangent"], bsdf.inputs["Tangent"])
     ao = node("AO Preview", "ShaderNodeMixRGB", (0, 300))
     if ao.blend_type != "MULTIPLY":
         ao.blend_type = "MULTIPLY"

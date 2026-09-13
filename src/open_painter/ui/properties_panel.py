@@ -16,7 +16,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE")]
+        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER")]
     )
 
     def run(self, context):
@@ -40,6 +40,12 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             mask = layer.masks.add()
             mask.id, mask.source = new_id(), self.source
             mask.name = self.source.title() + " Mask"
+            if self.source == "FILTER":
+                mask.name = "Levels"
+                mask.effect.kind = "LEVELS"
+            elif self.source == "PROCEDURAL":
+                mask.procedural = "FBM"
+                mask.name = "FBM"
             if self.source in {"PAINT", "FILL"}:
                 mask.image = create(
                     f"{ts.name}_{layer.name}_Mask",
@@ -90,9 +96,9 @@ class OP_PT_masks(bpy.types.Panel):
             layout.label(text="Select a layer to add a mask.")
             return
         row = layout.row(align=True)
-        for source in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE"):
-            op = row.operator("open_painter.mask", text=source.title())
-            op.action, op.source = "ADD", source
+        row.menu("OP_MT_native_masks", text="Add Mask Effect", icon="ADD")
+        op = row.operator("open_painter.choose_filter", text="Filter", icon="MODIFIER")
+        op.target, op.create = "MASK", True
         layout.template_list("OP_UL_masks", "", layer, "masks", layer, "active_mask", rows=2)
         row = layout.row(align=True)
         for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ("DELETE", "TRASH")):
@@ -118,8 +124,28 @@ class OP_PT_masks(bpy.types.Panel):
                 ).mask = True
         elif mask.source == "BAKED":
             layout.prop(mask, "map_type")
+        elif mask.source == "PROCEDURAL":
+            op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
+            op.target, op.create = "MASK", False
+            for name in ("projection", "tiling", "noise_scale", "seed", "scale", "rotation", "offset"):
+                layout.prop(mask, name)
+            if mask.projection == "TRIPLANAR":
+                layout.prop(mask,"triplanar_hardness")
+        elif mask.source == "FILTER":
+            from .texture_operations import draw_effect_settings
+            op = layout.operator("open_painter.choose_filter", text=mask.effect.kind.replace("_", " ").title(), icon="MODIFIER")
+            op.target, op.create = "MASK", False
+            layout.prop(mask.effect, "enabled", text="Enabled")
+            draw_effect_settings(layout, mask.effect, "MASK")
+            for name in ("invert", "black", "white", "strength"):
+                layout.prop(mask, name)
+            return
         elif mask.source == "GENERATOR":
             layout.prop(mask, "generator")
+            if mask.generator in {"MATERIAL_ID","OBJECT_ID","UV_ISLAND"}:
+                row = layout.row(align=True)
+                row.prop(mask,"id_color",text="Selected ID Color")
+                row.operator("open_painter.choose_baked_id", text="", icon="VIEWZOOM")
             if mask.generator == "EDGE_WEAR":
                 from ..constants import OWNER
 

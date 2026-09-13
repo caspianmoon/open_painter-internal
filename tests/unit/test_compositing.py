@@ -47,14 +47,44 @@ class CompositionTests(unittest.TestCase):
         )
         with np.errstate(divide="raise", invalid="raise", over="raise"):
             for mode, _, _ in BLEND_ITEMS:
-                self.assertTrue(np.isfinite(blend(base, source, 1, mode)).all(), mode)
-                np.testing.assert_allclose(blend(base, source, 0, mode), base)
+                b, s = base, source
+                if mode in {"HUE","SATURATION","COLOR","LUMINOSITY","NORMAL_COMBINE","RNM","NORMAL_ADD","NORMAL_REPLACE"}:
+                    b, s = np.repeat(base[...,None],3,axis=-1), np.repeat(source[...,None],3,axis=-1)
+                self.assertTrue(np.isfinite(blend(b, s, 1, mode)).all(), mode)
+                np.testing.assert_allclose(blend(b, s, 0, mode), b)
         np.testing.assert_equal(
             blend(np.array([0.0, 1.0]), np.array([1.0, 0.0]), 1, "COLOR_DODGE"), [0, 1]
         )
         np.testing.assert_equal(
             blend(np.array([0.0, 1.0]), np.array([1.0, 0.0]), 1, "COLOR_BURN"), [0, 1]
         )
+
+    def test_shared_raster_cache_budget(self):
+        from open_painter.evaluation.raster_cache import RasterCache
+        cache=RasterCache(budget=128)
+        value=np.ones(16,dtype=np.float32)
+        cache["a"]=value;cache["b"]=value
+        _=cache["a"]
+        cache["c"]=value
+        self.assertIn("a",cache);self.assertNotIn("b",cache)
+        self.assertEqual(cache.used,128)
+        cache["geometry"]=(value,value)
+        cache["d"]=np.ones(64,dtype=np.float32)
+        self.assertEqual(set(cache),{"geometry","d"})
+        cache.clear();self.assertEqual(cache.used,0)
+
+    def test_nonseparable_and_normal_invariants(self):
+        base = np.array([.2,.45,.7],np.float32)
+        source = np.array([.8,.3,.1],np.float32)
+        lum = lambda rgb: np.dot(rgb,[.3,.59,.11])
+        for kind in ("HUE","SATURATION","COLOR"):
+            np.testing.assert_allclose(lum(blend(base,source,1,kind)),lum(base),atol=1e-6)
+        np.testing.assert_allclose(lum(blend(base,source,1,"LUMINOSITY")),lum(source),atol=1e-6)
+        flat = np.array([.5,.5,1],np.float32)
+        tilted = np.array([.8,.5,.9],np.float32)
+        for mode in ("RNM","NORMAL_COMBINE","NORMAL_ADD"):
+            np.testing.assert_allclose(blend(tilted,flat,1,mode),tilted,atol=1e-6)
+        np.testing.assert_allclose(blend(flat,tilted,1,"NORMAL_REPLACE"),tilted,atol=1e-6)
 
     def test_nearest_repeat_and_transparent_border(self):
         data = np.array([[[1, 0, 0, 1], [0, 1, 0, 1]]], dtype=np.float32)

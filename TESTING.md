@@ -4,16 +4,19 @@ Validated on Blender 5.2.1 LTS, macOS Apple Silicon, using the Blender applicati
 
 ## Automated acceptance
 
-`python3 scripts/run_tests.py` runs each phase in a fresh background Blender process, then the
-pure NumPy/format unit tests. Historical phase coverage is listed below; current release-specific results are in docs/research/native-ui-0.1.13.md. Covered behavior:
+`python3 scripts/run_tests.py` runs phase tests and the current integration suites in fresh background
+Blender processes, then runs the unit suite with Blender's bundled Python and NumPy. Test resources
+are isolated under `.blender-test/user`. Current suites include utility maps, the 50-material catalog,
+procedural channels, texture operations, native controls and persistent raster caching. Historical
+phase coverage is listed below. Covered behavior:
 
 - Repeated registration/unregistration, persistent UUIDs and object/material assignments.
 - Ten-layer stacks, reorder, folder parenting, cycle rejection, descendant duplication, save/reload.
-- Twenty blend choices, independent channel opacity, pixel values, per-channel and per-texture-set dirty scope, user-node preservation.
-- Painted masks, invert, packed-image reload, real Cycles high/low Normal/AO bakes, derived curvature,
+- Extended color/normal blend choices, eight channels, independent channel opacity, pixel values, per-channel and per-texture-set dirty scope, user-node preservation.
+- Painted masks, invert, packed-image reload, real Cycles high/low Normal/AO bakes, geometric curvature and utility maps,
   explicit map registration and restoration of render, selection and material state.
 - Edge Wear, Dirt and tile-stable procedural noise; actual baked-map generator composition.
-- Smart-material folder and parameter round trips, bundled EXR assets, three starter materials.
+- Smart-material folder and parameter round trips, bundled EXR assets, legacy starter materials and 50 authored texture-layer recipes.
 - Native brush activation, lazy paint images, raster-change detection and roughness output updates.
 - UE5 file naming and ORM bytes, BaseColor sRGB, Unity metallic/smoothness, resolution override,
   PNG/TIFF 8/16-bit independent RGBA (including zero alpha), collision protection.
@@ -25,9 +28,10 @@ pure NumPy/format unit tests. Historical phase coverage is listed below; current
 texture-paint brush, issues a real viewport stroke, verifies painted pixels and final roughness,
 and saves the resulting `.blend`. This verifies the brush engine, beyond simulated raster writes.
 
-`python3 scripts/run_tests.py --gui-only` runs `native_ui.py`: actual native Panel draw callbacks,
+`python3 scripts/run_tests.py --gui-only` runs `native_ui.py` and `texture_operations_ui.py`: actual native Panel draw callbacks,
 AssetShelf mouse activation, one mask per click, native T/N controls and 3D/2D switching. It captures
-`docs/native-painter.png`. Historical GPU dock tests no longer describe the active interface.
+`docs/native-painter.png`; the texture-operation suite checks native channel controls, mask filters
+and search selection. Historical GPU dock tests below no longer describe the active interface.
 `native_registration.py` verifies register/unregister cycles without changing surrounding areas.
 
 ## Packaging
@@ -48,15 +52,12 @@ production geometry and sustained tablet painting have not been comprehensively 
 Transient logs, generated test files and tool caches are under `.blender-test/` and ignored by Git.
 
 
-`tests/integration/editor_selector.py` verifies the registered Open Painter editor subtype, captures
-the native editor-type enum popup, activates it in the current area, asserts that workspace count and
-screen layout stay unchanged, and tests closing back to the standard viewport. It also checks that
-native sidebars are hidden while the native editor-type selector remains available.
+## Historical acceptance records
 
-`tests/integration/native_ui.py` verifies live theme adaptation, preservation of viewport
-shading and overlays, actual mouse drags with Escape cancellation and Shift precision,
-and a right-click opening the native numeric-property popup. It uses factory preferences
-and does not save them to the user profile.
+The versioned sections below describe earlier implementations and measurements. The active runner
+uses the native UI suites listed above; archived GPU-dock and close-button workflows are not current
+acceptance criteria. Old six-channel timing results should not be interpreted as eight-channel
+procedural-material performance results.
 
 ## 0.1.1 workflow regressions
 
@@ -88,7 +89,7 @@ renders against Substance Painter.
 
 ## Workspace repair regressions (0.1.3)
 
-`phase13.py` verifies automatic material assignment, all six connected images and their initial
+`phase13.py` verifies automatic material assignment, all eight connected images and their initial
 linear pixels, unchanged shader-link identities after repair, group order/collapse/parenting/cycle
 rejection, preset output values, persistence, deletion and one-channel-per-timer evaluation.
 

@@ -27,6 +27,9 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     dirty: bpy.props.BoolProperty(default=True)
     outputs: bpy.props.CollectionProperty(type=OP_Output)
     preview_ao: bpy.props.BoolProperty(name="AO in Preview", default=True, update=changed)
+    anisotropy: bpy.props.FloatProperty(name='Anisotropy',default=0,min=0,max=1,update=changed)
+    coat_weight: bpy.props.FloatProperty(name='Clear Coat',default=0,min=0,max=1,update=changed)
+    coat_roughness: bpy.props.FloatProperty(name='Coat Roughness',default=.03,min=0,max=1,update=changed)
     height_distance: bpy.props.FloatProperty(
         name="Height Distance", default=0.05, min=0, update=changed
     )

@@ -37,6 +37,7 @@ def save(ts, path: str | Path) -> Path:
         "format_version": VERSION,
         "name": ts.name,
         "layers": [encode(snapshot(layer)) for layer in ts.layers],
+        "surface": {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")},
     }
     temp_scene = bpy.data.scenes.new("OP Asset Encoding")
     try:

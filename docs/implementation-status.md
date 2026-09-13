@@ -1,3 +1,87 @@
+# Roadmap implementation status
+
+The requested scope is the full updated plan. M0 was the starting order, not
+completion of that scope. Work continues incrementally on
+`task/m0-m1-evaluation-correctness`; no main reset, user-profile installation,
+material replacement, authored-resolution reduction, or format migration.
+Upstream main was fetched again and remains `15ef25ec532f466eff18a7265fa7d7ef5019e8ef`.
+
+## Current continuation
+
+| Package | Implemented in this continuation | Remaining acceptance work |
+| --- | --- | --- |
+| M2 memory | One configurable process-wide disposable cache; geometry included; unique NumPy allocation ownership; LRU eviction across sets; oversized disposable entries are uncached. Oversized geometry is explicitly held once per running channel job and released on completion/cancellation, with a separate measured byte counter. Native preference exposes allowance/current bytes. | This bounds retained cache, not Blender RSS, editable images, decoded per-job images, or all filter temporaries. Full reservation/preflight and mandatory-memory accounting remain. |
+| M2 typed buffers | Proven scalar-compatible channels use float32 scalar composition and scalar procedural fills with separate coverage. Images, color-producing filters and nonseparable blends retain RGB reference behavior. | RGB sources still have existing RGBA boundaries; no global buffer pool or precision reduction. |
+| M2 spatial work | Pointwise and finite-footprint mask/channel filters use full-width strips with composed clamped halos. Native mask paint regions propagate to all dependent channels. Same-grid painted masks use direct slices. | Coordinate-dependent warps/unknown operations retain whole-image fallback. Sparse distant strokes use a conservative enclosing row interval. Regional publication still reads/writes a full Blender Image; no claim of sub-image transfers. |
+| M3 scheduling/save | Active set/channel first with fair rotation; pending jobs cannot starve other sets. Verified dirty-image state plus managed identity skips unchanged packing; native writes still pack. Save flushes latest authoritative edits. | Explicit Interactive proxy mode, adaptive compute slices, transfer-aware paint polling and displayed-frame latency gates remain. Full-resolution output is still the sole authority. |
+| M5 evaluated geometry | Utility baker's owned evaluated-mesh scope and UV rasterizer extracted into shared services; triplanar now uses evaluated render UVs/corner normals and transformed positions. Base corner-normal changes enter geometry keys. Empty duplicated sets retain neutral unassigned previews. | Map provenance/staleness UI, diagnostics, queued bake cancellation, full arbitrary modifier dependency tracking and scene-aware fields remain. |
+| M4 | Not promoted or advertised. | Conditional GPU experiment depends on the remaining M2/M3 work and end-to-end parity/performance gate. |
+| M6–M11 | Existing functionality is preserved; these roadmap packages are not claimed complete. | Scene fields; published references; owned geometry effects; coordinated material states; material stamps; UDIM/atlas and export extensions require their implementation and acceptance tests. |
+| M12 | Optional packages remain separate, as specified by the plan. | No AI, physical wear, inheritance or advanced geometry claims. |
+
+The original M0/M1 evidence below is historical to commit `36ece775`, not a
+new timing or a claim that the roadmap is complete. Continuation evidence:
+
+- Full background acceptance: 37 integration scripts and 32 Blender unit tests;
+  candidate extension validation/installation use isolated user resources.
+- Native GUI acceptance: native elements, T/N, asset and filter controls, an
+  actual paint stroke and save all passed (three scripts). Shutdown regression
+  was fixed and GUI rerun; Blender's pre-existing five-block / 0.000481 MiB
+  shutdown report remains, with no Python finalizer exception on the rerun.
+- 27 bpy-independent tests passed with Blender's NumPy Python. Compilation and
+  whitespace checks passed. No remote CI, 4K/8K, or physical-tablet latency claim.
+- Shared-budget regression covers three sets, skipped oversized entries,
+  exactly one geometry build per job under an intentionally tiny cache budget,
+  and release on cancellation. Scalar/RGB oracle comparison is pixel-exact at
+  512 on Worn Painted Metal with isolated and passthrough groups. Finite filter
+  strips match full reference within atol=1e-7, rtol=1e-6; existing exact
+  Gaussian mask partition assertions remain exact.
+
+Final-source paired measurements are in
+[`roadmap-paired-control.json`](performance/roadmap-paired-control.json).
+Three alternating fresh processes per variant on Apple M3 Pro / 18 GiB,
+Blender 5.2.1 LTS `9e2066aef7ef`, NumPy 2.3.4: Worn Painted Metal, six layer
+records, eight full 2048² float32 outputs, the unchanged synthetic 32² baked-map
+fixture, no viewport or bake time, no concurrent Blender test workload.
+
+| Median wall seconds | Reconstructed baseline | Continuation |
+| --- | ---: | ---: |
+| Cold full set | 22.3083 | 18.7846 |
+| Warm roughness constant edit | 1.9976 | 0.1844 |
+
+The warm edit is 10.83× faster; cold evaluation is 15.8% faster, **not** the 2×
+cold target. Warm edits regenerate zero sources/masks/geometry and still write
+one full 64 MiB image. The 512 MiB eight-output transfer is not elided in cold
+measurements. Cache allowance is not a process memory cap. Process peak RSS is
+recorded per run, including Blender and fixture setup; no large RSS reduction
+is claimed. The earlier M2-stage paired run is retained separately in
+`m2-paired-control.json`; historical timings below are not new measurements.
+
+The complete changed-file inventory and tested source hash are in
+[`continuation-validation.json`](performance/continuation-validation.json).
+
+Exact validation commands (from repository root):
+
+```sh
+python3 scripts/build_extension.py --output /private/tmp/open-painter-roadmap.zip
+python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-roadmap.zip
+python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gui-only
+/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py
+python3 scripts/benchmark_comparison.py --baseline-root /private/tmp/op-m0-baseline-control --report /private/tmp/op-roadmap-paired.json
+python3 -m compileall -q src/open_painter scripts tests
+git diff --check
+```
+
+The reconstructed baseline and patch provenance are documented in the original
+M0 section below. Every benchmark subprocess command and source hash is retained
+in the paired JSON. Two extracted geometry files had terminal blank lines
+removed after measurements; AST equality was checked, and both source hashes
+and the exact whitespace delta are recorded in the validation JSON. No release version or existing published ZIP was replaced.
+The full roadmap remains in progress; the table above states the remaining
+gates rather than treating M0 or this continuation as whole-plan completion.
+
+---
+
 # M0 baseline and initial M1 correctness work
 
 This is an incremental change on `task/m0-m1-evaluation-correctness`, based on

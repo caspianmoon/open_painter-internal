@@ -16,6 +16,10 @@ scene = bpy.context.scene
 ts = sets.create(scene, 'Geometry lifetime', 512)
 ref = ts.assignments.add()
 ref.object = bpy.context.object
+# Both assignment targets must contain real faces in the evaluated mesh.
+ref.object.data.materials.append(bpy.data.materials.new("Alternate slot"))
+ref.object.data.polygons[0].material_index = 1
+ref.object.data.update()
 layer = stack.add(ts, 'FILL')
 rough = stack.channel_for(layer, 'ROUGHNESS')
 rough.procedural, rough.projection = 'FBM', 'TRIPLANAR'
@@ -61,7 +65,7 @@ def changed_geometry(mutate, label, changes_pixels=True):
 
 changed_geometry(lambda: setattr(obj.location, 'x', obj.location.x+.31), 'transform')
 def edit_uv():
-    obj.data.uv_layers.active.data[0].uv.x += .1
+    obj.data.uv_layers.active.data[obj.data.polygons[1].loop_start].uv.x += .1
     obj.data.update()
 changed_geometry(edit_uv, 'UV')
 def edit_mesh():
@@ -76,7 +80,7 @@ changed_geometry(lambda: setattr(ref, 'slot_index', 0), 'assignment restore')
 def render_uv():
     uv = obj.data.uv_layers.new(name='Render lifetime UV')
     uv.active_render = True
-    uv.data[0].uv.x += .1
+    uv.data[obj.data.polygons[1].loop_start].uv.x += .1
     obj.data.update()
 changed_geometry(render_uv, 'render UV')
 

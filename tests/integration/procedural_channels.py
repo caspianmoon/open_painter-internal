@@ -55,8 +55,8 @@ whole = source(base, 'FILL', n, 0, n, {}, ts, {})
 tiled = np.concatenate([source(base, 'FILL', n, low, min(low + 32, n), {}, ts, {}) for low in range(0, n, 32)])
 np.testing.assert_array_equal(whole, tiled)
 
-# Full-raster Gaussian filtering has no repeated row-edge artifacts, is evaluated
-# once for successive tiles, and cannot modify layer coverage.
+# Bounded Gaussian filtering has no row-edge artifacts, uses a finite halo,
+# and cannot modify layer coverage.
 effect = base.effects.add()
 effect.kind = 'GAUSSIAN_BLUR'
 effect.radius = 3
@@ -68,7 +68,8 @@ assert {output.channel for output in ts.outputs if output.dirty} == {'BASE_COLOR
 channel_cache, geometry_cache = {}, {}
 with patch.object(filters, 'apply', wraps=filters.apply) as apply:
     filtered = np.concatenate([source(base, 'FILL', n, low, min(low + 32, n), channel_cache, ts, geometry_cache) for low in range(0, n, 32)])
-    assert apply.call_count == 1, 'The full filter reran for each requested row tile'
+    assert apply.call_count == 4
+    assert all(call.args[0].shape[0] <= 50 for call in apply.call_args_list), 'Unbounded filter temporary'
 reference = whole.copy()
 reference[..., :3] += (filters.apply(whole[..., :3], 'GAUSSIAN_BLUR', radius=3) - whole[..., :3]) * .65
 np.testing.assert_allclose(filtered, reference, atol=1e-7)

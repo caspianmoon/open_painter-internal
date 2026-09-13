@@ -1,0 +1,1608 @@
+{
+  "context": "Alternating-order fresh processes, reconstructed baseline instrumentation versus final task source; same 2K Worn inputs. No concurrent Codex Blender workload.",
+  "summary": {
+    "before": {
+      "final": 22.308275750001485,
+      "warm_roughness_edit": 1.9975845829976606
+    },
+    "after": {
+      "final": 18.784631666996574,
+      "warm_roughness_edit": 0.18436925000423798
+    }
+  },
+  "runs": [
+    {
+      "measured_at_utc": "2026-09-13T14:07:52Z",
+      "commit": null,
+      "source_sha256": "3d09b5a39fc376c6e4bb2e0dac7478c6c220a4f1fda7a5c73e4b57f075ca4d8d",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 19.277969541995844,
+      "final": {
+        "wall_s": 23.7155759160014,
+        "cpu_s": 22.575702,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 14.484182272834005,
+              "cpu_s": 13.748967999999966,
+              "exclusive_wall_s": 14.484182272834005,
+              "exclusive_cpu_s": 13.748967999999966
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 7.6915996032767e-05,
+              "cpu_s": 7.700000000032681e-05,
+              "exclusive_wall_s": 7.6915996032767e-05,
+              "exclusive_cpu_s": 7.700000000032681e-05
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 8.702344326942693,
+              "cpu_s": 8.209583000000023,
+              "exclusive_wall_s": 2.3271268100725138,
+              "exclusive_cpu_s": 2.204690000000023
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 1.0306117704094504,
+              "cpu_s": 0.9947319999999631,
+              "exclusive_wall_s": 1.0306117704094504,
+              "exclusive_cpu_s": 0.9947319999999631
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.14041199901112122,
+              "cpu_s": 0.1376460000000037,
+              "exclusive_wall_s": 0.14041199901112122,
+              "exclusive_cpu_s": 0.1376460000000037
+            }
+          },
+          "counters": {
+            "cache_misses": 2305,
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "process_peak_rss_bytes": 911966208
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 2.015594374999637,
+        "cpu_s": 1.9994950000000031,
+        "metrics": {
+          "phases": {
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.2926401549411821,
+              "cpu_s": 0.29048000000004137,
+              "exclusive_wall_s": 0.2926401549411821,
+              "exclusive_cpu_s": 0.29048000000004137
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.0028700420007226057,
+              "cpu_s": 0.0028690000000004545,
+              "exclusive_wall_s": 0.0028700420007226057,
+              "exclusive_cpu_s": 0.0028690000000004545
+            }
+          },
+          "counters": {
+            "cache_misses": 1,
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 912998400
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 19.277969541995844,
+          "max_step_wall_s": 0.13232908400095766,
+          "max_step_cpu_s": 0.044493000000000116,
+          "step_p95_wall_s": 0.027120124999783002
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 2.2591872080010944,
+          "max_step_wall_s": 0.035333915999217425,
+          "max_step_cpu_s": 0.020315000000000083,
+          "step_p95_wall_s": 0.016523874997801613
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 0.8737318749990663,
+          "max_step_wall_s": 0.028589249996002764,
+          "max_step_cpu_s": 0.028287000000002394,
+          "step_p95_wall_s": 0.006584375005331822
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 0.05756729199492838,
+          "max_step_wall_s": 0.021003041001677047,
+          "max_step_cpu_s": 0.020656999999999925,
+          "step_p95_wall_s": 0.00034421619930071753
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 1.0949417500014533,
+          "max_step_wall_s": 0.016826166996906977,
+          "max_step_cpu_s": 0.016694000000001097,
+          "step_p95_wall_s": 0.008383725000021514
+        },
+        {
+          "channel": "AO",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 0.043887042003916577,
+          "max_step_wall_s": 0.009463540998694953,
+          "max_step_cpu_s": 0.009429000000000798,
+          "step_p95_wall_s": 0.0003049247985472903
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 0.04708087499602698,
+          "max_step_wall_s": 0.013680207994184457,
+          "max_step_cpu_s": 0.013653999999998945,
+          "step_p95_wall_s": 0.00029548379825428123
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "61a3f9040b46469498f1867cfc8d2057",
+          "wall_s": 0.04508262500166893,
+          "max_step_wall_s": 0.011019791003491264,
+          "max_step_cpu_s": 0.010865000000002567,
+          "step_p95_wall_s": 0.0003158084029564634
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar retains existing base-mesh evaluation; modifiers are present but not evaluated by this path."
+      ],
+      "variant": "before",
+      "repeat": 1,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/private/tmp/op-m0-baseline-control/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/0-before.json"
+      ]
+    },
+    {
+      "measured_at_utc": "2026-09-13T14:08:12Z",
+      "commit": "36ece7752c3375ef5dea392bcc1d2412b7afa8a0",
+      "source_sha256": "7b8ce1ff5fe261c5b5519ceb56aeeb894e86a45db60b8eaa962f5c283299ed0b",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 18.043021167002735,
+      "final": {
+        "wall_s": 18.784631666996574,
+        "cpu_s": 18.492669,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 13.333248974886374,
+              "cpu_s": 13.121086000000055,
+              "exclusive_wall_s": 13.333248974886374,
+              "exclusive_cpu_s": 13.121086000000055
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 8.285453718039207,
+              "cpu_s": 8.142339,
+              "exclusive_wall_s": 2.441011289076414,
+              "exclusive_cpu_s": 2.413009999999982
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 0.3401697702211095,
+              "cpu_s": 0.3362989999999617,
+              "exclusive_wall_s": 0.3401697702211095,
+              "exclusive_cpu_s": 0.3362989999999617
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 5.858300573891029e-05,
+              "cpu_s": 5.9000000000253294e-05,
+              "exclusive_wall_s": 5.858300573891029e-05,
+              "exclusive_cpu_s": 5.9000000000253294e-05
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.13350245899346191,
+              "cpu_s": 0.122134999999993,
+              "exclusive_wall_s": 0.13350245899346191,
+              "exclusive_cpu_s": 0.122134999999993
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_misses": 1152,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "image_read_allocated_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "process_peak_rss_bytes": 977698816
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 0.18436925000423798,
+        "cpu_s": 0.18364500000000206,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.014011948980623856,
+              "cpu_s": 0.013940000000026487,
+              "exclusive_wall_s": 0.014011948980623856,
+              "exclusive_cpu_s": 0.013940000000026487
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.002966207997815218,
+              "cpu_s": 0.0029660000000006903,
+              "exclusive_wall_s": 0.002966207997815218,
+              "exclusive_cpu_s": 0.0029660000000006903
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 977698816
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 18.043021167002735,
+          "max_step_wall_s": 0.05085716699977638,
+          "max_step_cpu_s": 0.03371300000000055,
+          "step_p95_wall_s": 0.026702249997470062
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.2258808750048047,
+          "max_step_wall_s": 0.009580334000929724,
+          "max_step_cpu_s": 0.009484000000000492,
+          "step_p95_wall_s": 0.00141141600033734
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.16740816600213293,
+          "max_step_wall_s": 0.01780000000144355,
+          "max_step_cpu_s": 0.017721999999999127,
+          "step_p95_wall_s": 0.0010756659976323135
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.06608750000305008,
+          "max_step_wall_s": 0.026340125004935544,
+          "max_step_cpu_s": 0.025234999999998564,
+          "step_p95_wall_s": 0.0005457997962366787
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.1461461250000866,
+          "max_step_wall_s": 0.019824750001134817,
+          "max_step_cpu_s": 0.019404999999999006,
+          "step_p95_wall_s": 0.0008651500000269149
+        },
+        {
+          "channel": "AO",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.04225945800135378,
+          "max_step_wall_s": 0.01743483299651416,
+          "max_step_cpu_s": 0.012606999999999147,
+          "step_p95_wall_s": 0.0002582497982075438
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.044266750002861954,
+          "max_step_wall_s": 0.01038104200415546,
+          "max_step_cpu_s": 0.010319000000002632,
+          "step_p95_wall_s": 0.00031974959711078554
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "5bc4dc18b4b6427e9a39f1c37df427ee",
+          "wall_s": 0.0388000830062083,
+          "max_step_wall_s": 0.015103666999493726,
+          "max_step_cpu_s": 0.010466000000000975,
+          "step_p95_wall_s": 0.00021724120306316756
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "controlled_cache_bytes": 150994944,
+      "cache_accounting": "Legacy scalar_cache_bytes sums per-set ownership; controlled_cache_bytes deduplicates all admitted CPU arrays including geometry. Neither caps Blender process memory.",
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar uses shared evaluated mesh data; the Worn fixture has no assigned geometry or viewport rendering."
+      ],
+      "variant": "after",
+      "repeat": 1,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/Volumes/SSD/projects/open_painter/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/0-after.json"
+      ]
+    },
+    {
+      "measured_at_utc": "2026-09-13T14:08:32Z",
+      "commit": "36ece7752c3375ef5dea392bcc1d2412b7afa8a0",
+      "source_sha256": "7b8ce1ff5fe261c5b5519ceb56aeeb894e86a45db60b8eaa962f5c283299ed0b",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 17.229215958002897,
+      "final": {
+        "wall_s": 18.04243654199672,
+        "cpu_s": 17.886274,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 12.951258089022303,
+              "cpu_s": 12.861364999999978,
+              "exclusive_wall_s": 12.951258089022303,
+              "exclusive_cpu_s": 12.861364999999978
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 7.761257392034167,
+              "cpu_s": 7.712887999999995,
+              "exclusive_wall_s": 2.1109853569578263,
+              "exclusive_cpu_s": 2.0997910000000033
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 0.32914737217652146,
+              "cpu_s": 0.3252129999999085,
+              "exclusive_wall_s": 0.32914737217652146,
+              "exclusive_cpu_s": 0.3252129999999085
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 7.412500417558476e-05,
+              "cpu_s": 7.399999999990747e-05,
+              "exclusive_wall_s": 7.412500417558476e-05,
+              "exclusive_cpu_s": 7.399999999990747e-05
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.18475545800174586,
+              "cpu_s": 0.17211099999999746,
+              "exclusive_wall_s": 0.18475545800174586,
+              "exclusive_cpu_s": 0.17211099999999746
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_misses": 1152,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "image_read_allocated_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "process_peak_rss_bytes": 975290368
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 0.18279762499878416,
+        "cpu_s": 0.1821989999999971,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.013864344007743057,
+              "cpu_s": 0.013774999999998983,
+              "exclusive_wall_s": 0.013864344007743057,
+              "exclusive_cpu_s": 0.013774999999998983
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.002191583000239916,
+              "cpu_s": 0.002164000000000499,
+              "exclusive_wall_s": 0.002191583000239916,
+              "exclusive_cpu_s": 0.002164000000000499
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 975290368
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 17.229215958002897,
+          "max_step_wall_s": 0.03748183300194796,
+          "max_step_cpu_s": 0.028856000000001103,
+          "step_p95_wall_s": 0.025634249999711756
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.266390249998949,
+          "max_step_wall_s": 0.025288083001214545,
+          "max_step_cpu_s": 0.023644999999998362,
+          "step_p95_wall_s": 0.0013411250038188882
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.17839291600103024,
+          "max_step_wall_s": 0.027688166999723762,
+          "max_step_cpu_s": 0.02258499999999941,
+          "step_p95_wall_s": 0.0010842499978025444
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.06886270899849478,
+          "max_step_wall_s": 0.03273491700383602,
+          "max_step_cpu_s": 0.03198499999999882,
+          "step_p95_wall_s": 0.0003437084014876745
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.14214699999865843,
+          "max_step_wall_s": 0.025671666000562254,
+          "max_step_cpu_s": 0.025134999999998797,
+          "step_p95_wall_s": 0.0007979997986694798
+        },
+        {
+          "channel": "AO",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.05091766599798575,
+          "max_step_wall_s": 0.026420000001962762,
+          "max_step_cpu_s": 0.023572999999998956,
+          "step_p95_wall_s": 0.0002539497989346273
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.060288708002190106,
+          "max_step_wall_s": 0.02584079199732514,
+          "max_step_cpu_s": 0.024718000000000018,
+          "step_p95_wall_s": 0.0003054077969864011
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "2a8e74557f7f4324b5aa7bf3f6b52713",
+          "wall_s": 0.03723158299544593,
+          "max_step_wall_s": 0.013443499999993946,
+          "max_step_cpu_s": 0.012859999999999872,
+          "step_p95_wall_s": 0.00021035039826529096
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "controlled_cache_bytes": 150994944,
+      "cache_accounting": "Legacy scalar_cache_bytes sums per-set ownership; controlled_cache_bytes deduplicates all admitted CPU arrays including geometry. Neither caps Blender process memory.",
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar uses shared evaluated mesh data; the Worn fixture has no assigned geometry or viewport rendering."
+      ],
+      "variant": "after",
+      "repeat": 2,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/Volumes/SSD/projects/open_painter/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/1-after.json"
+      ]
+    },
+    {
+      "measured_at_utc": "2026-09-13T14:08:57Z",
+      "commit": null,
+      "source_sha256": "3d09b5a39fc376c6e4bb2e0dac7478c6c220a4f1fda7a5c73e4b57f075ca4d8d",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 17.40914049999992,
+      "final": {
+        "wall_s": 21.52445091700065,
+        "cpu_s": 21.29014,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 13.166184133959177,
+              "cpu_s": 12.99759199999999,
+              "exclusive_wall_s": 13.166184133959177,
+              "exclusive_cpu_s": 12.99759199999999
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 4.691600042860955e-05,
+              "cpu_s": 4.600000000021254e-05,
+              "exclusive_wall_s": 4.691600042860955e-05,
+              "exclusive_cpu_s": 4.600000000021254e-05
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 7.829917245966499,
+              "cpu_s": 7.717099999999978,
+              "exclusive_wall_s": 2.0579954929780797,
+              "exclusive_cpu_s": 2.032123999999996
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 0.9612047671544133,
+              "cpu_s": 0.955717000000007,
+              "exclusive_wall_s": 0.9612047671544133,
+              "exclusive_cpu_s": 0.955717000000007
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.09050045900221448,
+              "cpu_s": 0.08925199999999833,
+              "exclusive_wall_s": 0.09050045900221448,
+              "exclusive_cpu_s": 0.08925199999999833
+            }
+          },
+          "counters": {
+            "cache_misses": 2305,
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "process_peak_rss_bytes": 1018019840
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 1.9584409590024734,
+        "cpu_s": 1.948913000000001,
+        "metrics": {
+          "phases": {
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.2856747199912206,
+              "cpu_s": 0.284140000000054,
+              "exclusive_wall_s": 0.2856747199912206,
+              "exclusive_cpu_s": 0.284140000000054
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.0022345000033965334,
+              "cpu_s": 0.0022350000000024295,
+              "exclusive_wall_s": 0.0022345000033965334,
+              "exclusive_cpu_s": 0.0022350000000024295
+            }
+          },
+          "counters": {
+            "cache_misses": 1,
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 1018019840
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 17.40914049999992,
+          "max_step_wall_s": 0.05450816600205144,
+          "max_step_cpu_s": 0.04133099999999956,
+          "step_p95_wall_s": 0.02507737500127405
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 1.977926291001495,
+          "max_step_wall_s": 0.016245209000771865,
+          "max_step_cpu_s": 0.016107000000001648,
+          "step_p95_wall_s": 0.01513929099746747
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 0.8593379159938195,
+          "max_step_wall_s": 0.009961042000213638,
+          "max_step_cpu_s": 0.00994100000000131,
+          "step_p95_wall_s": 0.0066245420021004975
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 0.050728957998217084,
+          "max_step_wall_s": 0.014986207999754697,
+          "max_step_cpu_s": 0.014928000000001163,
+          "step_p95_wall_s": 0.00032590880000498145
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 1.082448208995629,
+          "max_step_wall_s": 0.014943042006052565,
+          "max_step_cpu_s": 0.014889000000000152,
+          "step_p95_wall_s": 0.008309516801091377
+        },
+        {
+          "channel": "AO",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 0.04448916699766414,
+          "max_step_wall_s": 0.010661249994882382,
+          "max_step_cpu_s": 0.010588999999999515,
+          "step_p95_wall_s": 0.00029598319524666296
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 0.0479733749962179,
+          "max_step_wall_s": 0.01418562500475673,
+          "max_step_cpu_s": 0.013745000000000118,
+          "step_p95_wall_s": 0.00029587500175694
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "5308c567432e4ee88dadf0a867c0a34f",
+          "wall_s": 0.04507700000249315,
+          "max_step_wall_s": 0.011414332999265753,
+          "max_step_cpu_s": 0.010972000000002424,
+          "step_p95_wall_s": 0.00029350000113481656
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar retains existing base-mesh evaluation; modifiers are present but not evaluated by this path."
+      ],
+      "variant": "before",
+      "repeat": 2,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/private/tmp/op-m0-baseline-control/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/1-before.json"
+      ]
+    },
+    {
+      "measured_at_utc": "2026-09-13T14:09:24Z",
+      "commit": null,
+      "source_sha256": "3d09b5a39fc376c6e4bb2e0dac7478c6c220a4f1fda7a5c73e4b57f075ca4d8d",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 18.076433625006757,
+      "final": {
+        "wall_s": 22.308275750001485,
+        "cpu_s": 21.808757,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 13.725274706986966,
+              "cpu_s": 13.439188000000017,
+              "exclusive_wall_s": 13.725274706986966,
+              "exclusive_cpu_s": 13.439188000000017
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 6.97089999448508e-05,
+              "cpu_s": 6.799999999995698e-05,
+              "exclusive_wall_s": 6.97089999448508e-05,
+              "exclusive_cpu_s": 6.799999999995698e-05
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 8.07055213105923,
+              "cpu_s": 7.867222999999984,
+              "exclusive_wall_s": 2.0504212239175104,
+              "exclusive_cpu_s": 1.987289999999935
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 1.00690451986884,
+              "cpu_s": 0.9922509999998341,
+              "exclusive_wall_s": 1.00690451986884,
+              "exclusive_cpu_s": 0.9922509999998341
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.08288083100342192,
+              "cpu_s": 0.06683299999999903,
+              "exclusive_wall_s": 0.08288083100342192,
+              "exclusive_cpu_s": 0.06683299999999903
+            }
+          },
+          "counters": {
+            "cache_misses": 2305,
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_scalar_bytes": 150994944,
+            "cache_geometry_bytes": 0
+          },
+          "process_peak_rss_bytes": 954220544
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 1.9975845829976606,
+        "cpu_s": 1.9794739999999997,
+        "metrics": {
+          "phases": {
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.29687312304304214,
+              "cpu_s": 0.2941440000000526,
+              "exclusive_wall_s": 0.29687312304304214,
+              "exclusive_cpu_s": 0.2941440000000526
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.0020334579967311583,
+              "cpu_s": 0.002032999999997287,
+              "exclusive_wall_s": 0.0020334579967311583,
+              "exclusive_cpu_s": 0.002032999999997287
+            }
+          },
+          "counters": {
+            "cache_misses": 1,
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "current_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 954220544
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 18.076433625006757,
+          "max_step_wall_s": 0.06540408300497802,
+          "max_step_cpu_s": 0.04142899999999994,
+          "step_p95_wall_s": 0.025536333996569738
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 2.0629215000008116,
+          "max_step_wall_s": 0.04570949999470031,
+          "max_step_cpu_s": 0.02142600000000172,
+          "step_p95_wall_s": 0.015430499996000435
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 0.9094637500020326,
+          "max_step_wall_s": 0.014299082999059465,
+          "max_step_cpu_s": 0.010038000000001546,
+          "step_p95_wall_s": 0.006827750003139954
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 0.04801062500337139,
+          "max_step_wall_s": 0.01310637499409495,
+          "max_step_cpu_s": 0.01171799999999834,
+          "step_p95_wall_s": 0.00034842519962694483
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 1.0749437920021592,
+          "max_step_wall_s": 0.008653666001919191,
+          "max_step_cpu_s": 0.00853000000000037,
+          "step_p95_wall_s": 0.008315400000719819
+        },
+        {
+          "channel": "AO",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 0.04763070800254354,
+          "max_step_wall_s": 0.01400541699695168,
+          "max_step_cpu_s": 0.00824400000000125,
+          "step_p95_wall_s": 0.00032820859778439607
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 0.044955208999454044,
+          "max_step_wall_s": 0.011414666994824074,
+          "max_step_cpu_s": 0.007744999999999891,
+          "step_p95_wall_s": 0.00032510839955648404
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "f2b122e0d61e432ea1143f3325b095f7",
+          "wall_s": 0.03753129200049443,
+          "max_step_wall_s": 0.003948416997445747,
+          "max_step_cpu_s": 0.0037869999999990966,
+          "step_p95_wall_s": 0.0003528417961206287
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar retains existing base-mesh evaluation; modifiers are present but not evaluated by this path."
+      ],
+      "variant": "before",
+      "repeat": 3,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/private/tmp/op-m0-baseline-control/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/2-before.json"
+      ]
+    },
+    {
+      "measured_at_utc": "2026-09-13T14:09:44Z",
+      "commit": "36ece7752c3375ef5dea392bcc1d2412b7afa8a0",
+      "source_sha256": "7b8ce1ff5fe261c5b5519ceb56aeeb894e86a45db60b8eaa962f5c283299ed0b",
+      "os": "macOS-26.6-arm64-arm-64bit-Mach-O",
+      "machine": "arm64",
+      "cpu": "Apple M3 Pro",
+      "ram_bytes": 19327352832,
+      "blender": "5.2.1 LTS",
+      "blender_hash": "9e2066aef7ef",
+      "numpy": "2.3.4",
+      "evaluator": "CPU NumPy float32, authored resolution; no proxy",
+      "renderer": "BLENDER_EEVEE",
+      "graphics_backend": "no active viewport/GPU context in background fixture",
+      "resolution": 2048,
+      "channels": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC",
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "fixture": "worn",
+      "material": "Worn Painted Metal",
+      "layer_records": 6,
+      "texture_sets": 1,
+      "mesh": {
+        "objects": 3,
+        "vertices": 8,
+        "assigned_objects": 0
+      },
+      "map_origin": "synthetic 32x32 AO/curvature (position/world-normal additionally for abandoned); no mesh baking",
+      "viewport_rendering_included": false,
+      "first_usable_preview_wall_s": null,
+      "first_channel_publication_wall_s": 18.138418707996607,
+      "final": {
+        "wall_s": 18.82854149999912,
+        "cpu_s": 18.401978,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 1408,
+              "wall_s": 13.658609696743952,
+              "cpu_s": 13.356038000000021,
+              "exclusive_wall_s": 13.658609696743952,
+              "exclusive_cpu_s": 13.356038000000021
+            },
+            "masking": {
+              "calls": 512,
+              "wall_s": 8.214984972029924,
+              "cpu_s": 7.9721420000000265,
+              "exclusive_wall_s": 2.209441974220681,
+              "exclusive_cpu_s": 2.132661000000014
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 3328,
+              "wall_s": 0.3323958079708973,
+              "cpu_s": 0.32789999999990704,
+              "exclusive_wall_s": 0.3323958079708973,
+              "exclusive_cpu_s": 0.32789999999990704
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 2,
+              "wall_s": 9.375000081490725e-05,
+              "cpu_s": 9.40000000000385e-05,
+              "exclusive_wall_s": 9.375000081490725e-05,
+              "exclusive_cpu_s": 9.40000000000385e-05
+            },
+            "image_write": {
+              "calls": 8,
+              "wall_s": 0.09588420800719177,
+              "cpu_s": 0.09475199999999973,
+              "exclusive_wall_s": 0.09588420800719177,
+              "exclusive_cpu_s": 0.09475199999999973
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 536870912,
+            "cache_misses": 1152,
+            "cache_insert_bytes": 150994944,
+            "image_read_bytes": 32768,
+            "image_read_allocated_bytes": 32768,
+            "cache_hits": 5760,
+            "image_write_bytes": 536870912
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864,
+            "cache_controlled_bytes": 150994944
+          },
+          "process_peak_rss_bytes": 914751488
+        }
+      },
+      "warm_roughness_edit": {
+        "wall_s": 0.19597837499895832,
+        "cpu_s": 0.19308899999999696,
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 768,
+              "wall_s": 0.014721843013830949,
+              "cpu_s": 0.014409999999983825,
+              "exclusive_wall_s": 0.014721843013830949,
+              "exclusive_cpu_s": 0.014409999999983825
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_read": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "image_write": {
+              "calls": 1,
+              "wall_s": 0.0029082090040901676,
+              "cpu_s": 0.002908000000001465,
+              "exclusive_wall_s": 0.0029082090040901676,
+              "exclusive_cpu_s": 0.002908000000001465
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "output_buffer_allocated_bytes": 67108864,
+            "cache_hits": 2304,
+            "image_write_bytes": 67108864
+          },
+          "last_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "peak_observed_bytes": {
+            "output_buffer_bytes": 67108864
+          },
+          "process_peak_rss_bytes": 915947520
+        }
+      },
+      "channels_measured": [
+        {
+          "channel": "BASE_COLOR",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 18.138418707996607,
+          "max_step_wall_s": 0.07003266700485256,
+          "max_step_cpu_s": 0.038935000000000386,
+          "step_p95_wall_s": 0.02611487499962095
+        },
+        {
+          "channel": "ROUGHNESS",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.2184869999982766,
+          "max_step_wall_s": 0.016287124999507796,
+          "max_step_cpu_s": 0.016214000000001505,
+          "step_p95_wall_s": 0.0013579169972217642
+        },
+        {
+          "channel": "METALLIC",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.17047079100302653,
+          "max_step_wall_s": 0.012793792004231364,
+          "max_step_cpu_s": 0.012608000000000175,
+          "step_p95_wall_s": 0.001138291001552716
+        },
+        {
+          "channel": "NORMAL",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.05261904199869605,
+          "max_step_wall_s": 0.016849708001245745,
+          "max_step_cpu_s": 0.016642000000000934,
+          "step_p95_wall_s": 0.00032903380197240033
+        },
+        {
+          "channel": "HEIGHT",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.13570979200449074,
+          "max_step_wall_s": 0.01673375000245869,
+          "max_step_cpu_s": 0.016206000000000387,
+          "step_p95_wall_s": 0.0008141499958583153
+        },
+        {
+          "channel": "AO",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.03290191700216383,
+          "max_step_wall_s": 0.008723166996787768,
+          "max_step_cpu_s": 0.008676000000001238,
+          "step_p95_wall_s": 0.00021999159653205422
+        },
+        {
+          "channel": "EMISSION",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.04145608299586456,
+          "max_step_wall_s": 0.006601208995562047,
+          "max_step_cpu_s": 0.0065629999999998745,
+          "step_p95_wall_s": 0.0003671999962534755
+        },
+        {
+          "channel": "OPACITY",
+          "set_id": "1e50b9ee0b8d4d8080a732b711d47fe7",
+          "wall_s": 0.028443457995308563,
+          "max_step_wall_s": 0.004252375001669861,
+          "max_step_cpu_s": 0.00423900000000188,
+          "step_p95_wall_s": 0.0002278083979035727
+        }
+      ],
+      "scalar_cache_bytes": 150994944,
+      "controlled_cache_bytes": 150994944,
+      "cache_accounting": "Legacy scalar_cache_bytes sums per-set ownership; controlled_cache_bytes deduplicates all admitted CPU arrays including geometry. Neither caps Blender process memory.",
+      "limitations": [
+        "CPU output publication is not displayed-frame latency.",
+        "Process RSS includes Blender and all previous work in this fresh process.",
+        "Triplanar uses shared evaluated mesh data; the Worn fixture has no assigned geometry or viewport rendering."
+      ],
+      "variant": "after",
+      "repeat": 3,
+      "command": [
+        "/Applications/Blender.app/Contents/MacOS/Blender",
+        "--background",
+        "--factory-startup",
+        "--python-exit-code",
+        "1",
+        "--python",
+        "/Volumes/SSD/projects/open_painter/scripts/benchmark_textures.py",
+        "--",
+        "--worker",
+        "--fixture",
+        "worn",
+        "--resolution",
+        "2048",
+        "--report",
+        "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-paired-control-vyquqevl/2-after.json"
+      ]
+    }
+  ]
+}

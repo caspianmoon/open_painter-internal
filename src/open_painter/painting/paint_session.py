@@ -235,18 +235,18 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
         from ..evaluation import cache
 
         channel = project.paint_target_channel or project.paint_channel
+        masking = bool(project.paint_mask_id) or project.paint_mask
+        region_channel = '*' if masking else channel
         output = next((out for out in ts.outputs if out.channel == channel), None)
         old_region = cache._regions.get(cache.key_for(scene, ts))
         regional = (
             rows is not None
             and image.colorspace_settings.name != "sRGB"
             and output
-            and not project.paint_mask_id
-            and not project.paint_mask
             and raster.shape[:2] == (int(ts.resolution), int(ts.resolution))
             and (
-                not output.dirty
-                or (old_region and old_region[0] == ts.edit_serial and old_region[1] == channel)
+                (not any(item.dirty for item in ts.outputs) if masking else not output.dirty)
+                or (old_region and old_region[0] == ts.edit_serial and old_region[1] == region_channel)
             )
         )
         mark_changed(
@@ -257,9 +257,9 @@ def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
         )
         if regional:
             low, high = int(rows[0]), int(rows[-1]) + 1
-            if old_region and old_region[1] == channel:
+            if old_region and old_region[1] == region_channel:
                 low, high = min(low, old_region[2]), max(high, old_region[3])
-            cache._regions[cache.key_for(scene, ts)] = (ts.edit_serial, channel, low, high, image.as_pointer(), raster)
+            cache._regions[cache.key_for(scene, ts)] = (ts.edit_serial, region_channel, low, high, image.as_pointer(), raster)
         else:
             cache._regions.pop(cache.key_for(scene, ts), None)
         return True

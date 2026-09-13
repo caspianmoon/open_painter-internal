@@ -67,5 +67,13 @@ def output(ts, channel):
 
 @measured("packing")
 def pack_image(image):
+    # On the supported Blender build, packing clears is_dirty and native pixel
+    # edits set it again. Require that flag as well as the managed revision.
+    identity = repr((image.get('open_painter_pixel_revision', 0), tuple(image.size),
+                     image.colorspace_settings.name, image.filepath))
+    if image.packed_file and not image.is_dirty and image.get('open_painter_packed_identity') == identity:
+        count('pack_unchanged_skips')
+        return
     count("pack_calls")
     image.pack()
+    image['open_painter_packed_identity'] = identity

@@ -13,54 +13,21 @@ def geometry(ts, n):
     positions = np.zeros((n, n, 3), dtype=np.float32)
     normals = np.zeros_like(positions)
     normals[..., 2] = 1
-    for obj in dict.fromkeys(r.object for r in ts.assignments if r.object):
-        mesh = obj.data
-        if not mesh.uv_layers.active:
-            raise ValueError(f"No UV map found on {obj.name}.")
-        slots = {r.slot_index for r in ts.assignments if r.object == obj}
-        mesh.calc_loop_triangles()
-        # Unconnected image texture nodes use the render UV layer, which may
-        # differ from the layer currently selected in the UV editor.
-        uv_layer = next((layer for layer in mesh.uv_layers if layer.active_render),
-                        mesh.uv_layers.active)
-        uv = uv_layer.data
-        world = obj.matrix_world
-        normal_matrix = world.to_3x3().inverted_safe().transposed()
-        for triangle in mesh.loop_triangles:
-            if triangle.material_index not in slots:
-                continue
-            coords = np.array([uv[i].uv[:] for i in triangle.loops], dtype=np.float32) * n - 0.5
-            points = np.array(
-                [(world @ mesh.vertices[i].co)[:] for i in triangle.vertices], dtype=np.float32
-            )
-            vertex_normals = np.array(
-                [
-                    (normal_matrix @ mesh.vertices[i].normal).normalized()[:]
-                    for i in triangle.vertices
-                ],
-                dtype=np.float32,
-            )
-            lo = np.maximum(np.ceil(coords.min(axis=0)).astype(int), 0)
-            hi = np.minimum(np.floor(coords.max(axis=0)).astype(int) + 1, n)
-            if np.any(hi <= lo):
-                continue
-            a, b, c = coords
-            det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
-            if abs(det) < 1e-8:
-                continue
-            for y0 in range(lo[1], hi[1], 128):
-                y1 = min(hi[1], y0 + 128)
-                x, y = np.meshgrid(
-                    np.arange(lo[0], hi[0], dtype=np.float32), np.arange(y0, y1, dtype=np.float32)
-                )
-                w0 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / det
-                w1 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / det
-                weights = np.stack((w0, w1, 1 - w0 - w1), axis=-1)
-                inside = np.all(weights >= -1e-5, axis=-1)
-                p = positions[y0:y1, lo[0] : hi[0]]
-                normal = normals[y0:y1, lo[0] : hi[0]]
-                p[inside] = (weights @ points)[inside]
-                normal[inside] = (weights @ vertex_normals)[inside]
+    if not ts.assignments:
+        # Duplicated texture sets intentionally have no object assignments.
+        # Preserve their neutral staging preview until the artist assigns one.
+        return positions, normals
+    from ..geometry.snapshots import targets
+    from ..geometry.uv_rasterizer import tiles
+    with targets(ts) as objects:
+        for target in objects:
+            for triangle in target["triangles"]:
+                loops = list(triangle.loops)
+                points = target["positions"][list(triangle.vertices)]
+                corner_normals = target["world_normals"][loops]
+                for region, inside, weights, *_ in tiles(target["uv"][loops], n):
+                    positions[region][inside] = (weights @ points)[inside]
+                    normals[region][inside] = (weights @ corner_normals)[inside]
     return positions, normals
 
 

@@ -1,0 +1,99 @@
+{
+  "base_commit": "36ece7752c3375ef5dea392bcc1d2412b7afa8a0",
+  "source_sha256": "7b8ce1ff5fe261c5b5519ceb56aeeb894e86a45db60b8eaa962f5c283299ed0b",
+  "branch": "task/m0-m1-evaluation-correctness",
+  "changed_files": [
+    "docs/implementation-status.md",
+    "docs/performance/continuation-validation.json",
+    "docs/performance/m2-paired-control.json",
+    "docs/performance/roadmap-paired-control.json",
+    "scripts/benchmark_textures.py",
+    "scripts/run_pure_tests.py",
+    "scripts/run_tests.py",
+    "src/open_painter/baking/maps/utility.py",
+    "src/open_painter/core/image_manager.py",
+    "src/open_painter/evaluation/buffers.py",
+    "src/open_painter/evaluation/cache.py",
+    "src/open_painter/evaluation/channel_eval.py",
+    "src/open_painter/evaluation/dependencies.py",
+    "src/open_painter/evaluation/evaluator.py",
+    "src/open_painter/evaluation/mask_eval.py",
+    "src/open_painter/evaluation/memory.py",
+    "src/open_painter/evaluation/operation_contracts.py",
+    "src/open_painter/evaluation/preview_policy.py",
+    "src/open_painter/evaluation/raster_cache.py",
+    "src/open_painter/evaluation/tiles.py",
+    "src/open_painter/geometry/__init__.py",
+    "src/open_painter/geometry/snapshots.py",
+    "src/open_painter/geometry/uv_rasterizer.py",
+    "src/open_painter/painting/paint_session.py",
+    "src/open_painter/painting/projection.py",
+    "src/open_painter/preferences.py",
+    "tests/integration/dirty_tiles.py",
+    "tests/integration/evaluated_projection.py",
+    "tests/integration/memory_budget.py",
+    "tests/integration/preview_authority.py",
+    "tests/integration/procedural_channels.py",
+    "tests/integration/resource_invalidation.py",
+    "tests/integration/save_during_evaluation.py",
+    "tests/integration/texture_operations.py",
+    "tests/integration/typed_buffers.py",
+    "tests/unit/test_compositing.py",
+    "tests/unit/test_filter_footprints.py"
+  ],
+  "commands": [
+    "python3 scripts/build_extension.py --output /private/tmp/open-painter-roadmap.zip",
+    "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-roadmap.zip",
+    "python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gui-only",
+    "/Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py",
+    "python3 scripts/benchmark_comparison.py --baseline-root /private/tmp/op-m0-baseline-control --report /private/tmp/op-roadmap-paired.json",
+    "python3 -m compileall -q src/open_painter scripts tests",
+    "git diff --check"
+  ],
+  "results": {
+    "integration_scripts": 37,
+    "blender_unit_tests": 32,
+    "pure_tests": 27,
+    "gui_scripts": 3,
+    "extension_validation": "PASS",
+    "isolated_install": "PASS",
+    "compile": "PASS",
+    "whitespace": "PASS"
+  },
+  "log_paths": [
+    "/tmp/op-roadmap-final-acceptance.log",
+    "/tmp/op-roadmap-final-gui.log",
+    "/tmp/op-roadmap-pure.log",
+    "/tmp/op-roadmap-paired.log"
+  ],
+  "benchmark": {
+    "before": {
+      "final": 22.308275750001485,
+      "warm_roughness_edit": 1.9975845829976606
+    },
+    "after": {
+      "final": 18.784631666996574,
+      "warm_roughness_edit": 0.18436925000423798
+    }
+  },
+  "limits": [
+    "Full roadmap remains in progress; see implementation-status.md.",
+    "Cold 2x target not reached.",
+    "No viewport FPS, physical-tablet latency, 4K/8K or remote CI claims.",
+    "Cache allowance excludes mandatory/Blender allocations.",
+    "Blender reports its pre-existing five small unfreed blocks at GUI shutdown; no Python cache-finalizer exception remains."
+  ],
+  "final_source_sha256": "ea158d7e33c4c63e69a41791254a9f393dfa6bf74dcac40d269dd685b443c94d",
+  "post_measurement_whitespace_cleanup": [
+    {
+      "path": "src/open_painter/geometry/snapshots.py",
+      "removed_terminal_newlines": 2,
+      "ast_identical": true
+    },
+    {
+      "path": "src/open_painter/geometry/uv_rasterizer.py",
+      "removed_terminal_newlines": 2,
+      "ast_identical": true
+    }
+  ]
+}

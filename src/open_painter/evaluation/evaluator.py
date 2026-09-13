@@ -70,19 +70,38 @@ class LayerEvaluator:
                 return done.value
 
     def channel_steps(self, texture_set_id: str, channel: str, region=None):
+        ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
+        resources = for_texture_set(self.scene, ts)
+        try:
+            return (yield from self._channel_steps(texture_set_id, channel, region))
+        finally:
+            resources.release_required()
+
+    def _channel_steps(self, texture_set_id: str, channel: str, region=None):
         """Cooperative preview job; callers may yield to Blender between row tiles."""
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
         self.geometry_cache = for_texture_set(self.scene, ts)
         serial = ts.edit_serial
         n = int(ts.resolution)
-        if region is not None and any(
-            any(effect.enabled for effect in prop.effects)
-            or any(mask.enabled and mask.source == "FILTER" for mask in layer.masks)
-            for layer in ts.layers
-            for prop in layer.channels if prop.channel == channel
-        ):
-            # Neighborhood filters affect pixels beyond the painted rows.
-            region = None
+        if region is not None:
+            from .operation_contracts import stack_footprint, mask_footprint
+            from .tiles import expand
+            halo = 0
+            for layer in ts.layers:
+                if not layer.visible:
+                    continue
+                prop = channel_for(layer, channel)
+                if prop and not prop.enabled:
+                    continue
+                footprints = [mask_footprint(layer.masks), stack_footprint(prop.effects) if prop else 0]
+                if None in footprints:
+                    region = None
+                    break
+                # Sum is conservative across nested folders and source effects.
+                halo += sum(footprints)
+            if region is not None:
+                low, high = expand(region[2], region[3], halo, n)
+                region = (*region[:2], low, high, *region[4:])
         if region is None:
             result = np.empty((n, n, 4), dtype=np.float32)
             metrics.count("output_buffer_allocated_bytes", result.nbytes)
@@ -99,6 +118,10 @@ class LayerEvaluator:
         for layer in ts.layers:
             children.setdefault(layer.parent_id, []).append(layer)
             channel_properties[layer.id] = channel_for(layer, channel)
+
+        from .buffers import scalar_compatible
+        scalar = scalar_compatible(channel, ts.layers, channel_properties)
+        components = 1 if scalar else 3
 
         def visible_work(parent_id, ancestry):
             for layer in children.get(parent_id, ()):
@@ -153,14 +176,18 @@ class LayerEvaluator:
                         coverage = coverage + amount * (grouped_coverage - coverage)
                     continue
                 if layer.type == "FOLDER":
-                    src, alpha = compose(layer.id, y0, y1, (0, 0, 0), ancestry | {layer.id})
+                    src, alpha = compose(layer.id, y0, y1, (0,) * components, ancestry | {layer.id})
                     # Child composition is premultiplied against black; recover straight color.
                     src = np.divide(src, alpha, out=np.zeros_like(src), where=alpha > 1e-8)
                 else:
                     if not prop or not prop.enabled:
                         continue
-                    rgba = source(prop, layer.type, n, y0, y1, cache, ts, self.geometry_cache)
-                    src, alpha = rgba[..., :3], rgba[..., 3:4]
+                    if scalar:
+                        from .buffers import scalar_source
+                        src, alpha = scalar_source(prop, layer.type, n, y0, y1, ts, self.geometry_cache)
+                    else:
+                        rgba = source(prop, layer.type, n, y0, y1, cache, ts, self.geometry_cache)
+                        src, alpha = rgba[..., :3], rgba[..., 3:4]
                 alpha = np.clip(alpha * amount, 0, 1)
                 if opaque:
                     rgb = blend(rgb, src, alpha, mode)
@@ -199,7 +226,7 @@ class LayerEvaluator:
                     yield
                     if ts.edit_serial != serial:
                         return None
-            rgb, _ = compose("", y0, y1, DEFAULTS[channel][:3], set(), 1)
+            rgb, _ = compose("", y0, y1, DEFAULTS[channel][:components], set(), 1)
             if channel == "NORMAL":
                 vectors = rgb * 2 - 1
                 lengths = np.linalg.norm(vectors, axis=-1, keepdims=True)

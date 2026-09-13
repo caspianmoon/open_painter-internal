@@ -173,9 +173,11 @@ def _procedural_block(prop, n, y0, y1, ts, geometry_cache):
     if key not in geometry_cache:
         if prop.projection == "TRIPLANAR":
             from ..painting.projection import geometry
-            if "geometry" not in geometry_cache:
-                geometry_cache["geometry"] = geometry(ts, n)
-            positions, normals = geometry_cache["geometry"]
+            if "geometry" in geometry_cache:
+                positions, normals = geometry_cache["geometry"]
+            else:
+                positions, normals = geometry(ts, n)
+                geometry_cache["geometry"] = (positions, normals)
             positions, normals = positions[y0:y1], normals[y0:y1]
             weights = np.abs(normals)
             weights = (weights / np.maximum(weights.max(axis=-1, keepdims=True), 1e-8)) ** prop.triplanar_hardness
@@ -194,6 +196,7 @@ def _procedural_block(prop, n, y0, y1, ts, geometry_cache):
             result = procedurals.evaluate(prop.procedural, u, v, seed=prop.procedural_seed,
                                            scale=prop.procedural_scale)
         geometry_cache[key] = result
+        return result
     return geometry_cache[key]
 
 
@@ -251,6 +254,16 @@ def source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         # neither a full-resolution temporary nor a second whole-image cache.
         rgba = _raw_source(prop, kind, n, y0, y1, cache, ts, geometry_cache)
         return apply_texture_effects(np.broadcast_to(rgba, (y1 - y0, n, 4)), effects)
+    from .operation_contracts import stack_footprint
+    from .tiles import expand
+    halo = stack_footprint(effects)
+    if halo is not None:
+        low, high = expand(y0, y1, halo, n)
+        raster = np.empty((high - low, n, 4), np.float32)
+        for start in range(low, high, TILE_ROWS):
+            stop = min(start + TILE_ROWS, high)
+            raster[start - low:stop - low] = _raw_source(prop, kind, n, start, stop, cache, ts, geometry_cache)
+        return apply_texture_effects(raster, effects)[y0 - low:y1 - low]
     # The pixel cache belongs to the current channel evaluation; keep filtered
     # RGBA here rather than retaining every layer/channel result in geometry cache.
     key = ("filtered_channel", prop.as_pointer(), n, getattr(ts, "edit_serial", 0))
@@ -290,9 +303,11 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         if kind == "FILL" and prop.projection == "TRIPLANAR":
             from ..painting.projection import geometry, triplanar
 
-            if "geometry" not in geometry_cache:
-                geometry_cache["geometry"] = geometry(ts, n)
-            positions, normals = geometry_cache["geometry"]
+            if "geometry" in geometry_cache:
+                positions, normals = geometry_cache["geometry"]
+            else:
+                positions, normals = geometry(ts, n)
+                geometry_cache["geometry"] = (positions, normals)
             return triplanar(cache[key], positions[y0:y1], normals[y0:y1], prop)
         u, v = np.meshgrid(
             (np.arange(n, dtype=np.float32) + 0.5) / n,

@@ -1,8 +1,8 @@
 """Geometry lifetimes independent of material edits; handlers only mark candidates.
 
-The reference projection still reads the base mesh. Hash its bulk data only after
-Blender reports a geometry update, never on each tile/timer tick. No evaluated
-mesh is retained. Modifier-aware projection is a separate M5 change.
+Hash base authoring data only after Blender reports a geometry update, never
+on each tile/timer tick. Projection acquires evaluated geometry in an owned
+scope; no evaluated mesh is retained. Modifier RNA also contributes to keys.
 """
 import hashlib
 import bpy
@@ -34,6 +34,7 @@ def mesh_signature(mesh):
         (mesh.loops, 'vertex_index', 1, np.int32),
         (mesh.polygons, 'loop_start', 1, np.int32), (mesh.polygons, 'loop_total', 1, np.int32),
         (mesh.polygons, 'material_index', 1, np.int32), (mesh.polygons, 'use_smooth', 1, np.bool_),
+        (mesh.corner_normals, 'vector', 3, np.float32),
     ):
         values = np.empty(len(collection)*width, dtype=dtype)
         collection.foreach_get(prop, values)

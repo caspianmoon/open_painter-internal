@@ -35,7 +35,7 @@ def worker(args):
     import numpy as np
     import fixtures
     import open_painter
-    from open_painter.evaluation import metrics, raster_cache
+    from open_painter.evaluation import metrics, raster_cache, memory
     from open_painter.evaluation.evaluator import LayerEvaluator
     from open_painter.core import image_manager as images
     open_painter.register()
@@ -91,9 +91,11 @@ def worker(args):
         viewport_rendering_included=False, first_usable_preview_wall_s=None,
         first_channel_publication_wall_s=rows[0]['wall_s'], final=initial, warm_roughness_edit=edit, channels_measured=rows,
         scalar_cache_bytes=sum(c.used for c in raster_cache._shared.values()),
+        controlled_cache_bytes=memory.shared.used,
+        cache_accounting='Legacy scalar_cache_bytes sums per-set ownership; controlled_cache_bytes deduplicates all admitted CPU arrays including geometry. Neither caps Blender process memory.',
         limitations=['CPU output publication is not displayed-frame latency.',
                      'Process RSS includes Blender and all previous work in this fresh process.',
-                     'Triplanar retains existing base-mesh evaluation; modifiers are present but not evaluated by this path.']
+                     'Triplanar uses shared evaluated mesh data; the Worn fixture has no assigned geometry or viewport rendering.']
     )
     if args.io:
         with metrics.Metrics() as io_metrics, tempfile.TemporaryDirectory(prefix='op-benchmark-io-') as folder:

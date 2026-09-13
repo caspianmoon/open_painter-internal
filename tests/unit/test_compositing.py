@@ -63,15 +63,19 @@ class CompositionTests(unittest.TestCase):
         from open_painter.evaluation.raster_cache import RasterCache
         cache=RasterCache(budget=128)
         value=np.ones(16,dtype=np.float32)
-        cache["a"]=value;cache["b"]=value
-        _=cache["a"]
-        cache["c"]=value
-        self.assertIn("a",cache);self.assertNotIn("b",cache)
-        self.assertEqual(cache.used,128)
-        cache["geometry"]=(value,value)
-        cache["d"]=np.ones(64,dtype=np.float32)
-        self.assertEqual(set(cache),{"geometry","d"})
-        cache.clear();self.assertEqual(cache.used,0)
+        cache["a"] = value
+        cache["b"] = value[:2]
+        self.assertEqual(cache.used, 64)  # same owning allocation
+        cache["c"] = value.copy()
+        _ = cache["a"]
+        cache["d"] = value.copy()
+        self.assertNotIn("b", cache)
+        self.assertNotIn("c", cache)
+        self.assertEqual(cache.used, 128)
+        cache["oversized"] = np.ones(64, dtype=np.float32)
+        self.assertNotIn("oversized", cache)
+        cache.clear()
+        self.assertEqual(cache.used, 0)
 
     def test_nonseparable_and_normal_invariants(self):
         base = np.array([.2,.45,.7],np.float32)

@@ -14,7 +14,6 @@ the render UV map's 0..1 tile. They do not transfer high-poly surface detail.
 import hashlib
 import json
 import math
-from contextlib import contextmanager
 
 import bpy
 import numpy as np
@@ -30,93 +29,8 @@ UTILITY_KINDS = (
 )
 
 
-def _unit(values):
-    return values / np.maximum(np.linalg.norm(values, axis=-1, keepdims=True), 1e-12)
-
-
-def _object_key(obj):
-    return f"{obj.library.filepath if obj.library else ''}|{obj.name_full}"
-
-
-@contextmanager
-def _targets(ts):
-    """Keep evaluated meshes alive only for the duration of this bake."""
-    if not ts.assignments or any(not ref.object for ref in ts.assignments):
-        raise ValueError("Assign valid target meshes before baking utility maps.")
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    temporary, targets = [], []
-    try:
-        objects = sorted({ref.object for ref in ts.assignments}, key=_object_key)
-        for obj in objects:
-            if obj.type != "MESH":
-                raise ValueError(f"{obj.name} is not a mesh.")
-            evaluated = obj.evaluated_get(depsgraph)
-            mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
-            temporary.append(evaluated)
-            uv = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
-            if uv is None:
-                raise ValueError(f"{obj.name} requires a render UV map.")
-            slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
-            mesh.calc_loop_triangles()
-            selected = [tri for tri in mesh.loop_triangles if tri.material_index in slots]
-            if not selected:
-                raise ValueError(f"{obj.name} has no evaluated faces in its assigned slots.")
-            local = np.empty((len(mesh.vertices), 3), dtype=np.float32)
-            mesh.vertices.foreach_get("co", local.ravel())
-            world = np.asarray(evaluated.matrix_world, dtype=np.float64)
-            coords = local @ world[:3, :3].T + world[:3, 3]
-            loop_normals = np.empty((len(mesh.loops), 3), dtype=np.float32)
-            # Blender 5.2 corner normals honor smooth/sharp faces and custom normals.
-            if len(mesh.corner_normals) == len(mesh.loops):
-                mesh.corner_normals.foreach_get("vector", loop_normals.ravel())
-            else:
-                for face in mesh.polygons:
-                    for index in face.loop_indices:
-                        loop_normals[index] = (
-                            mesh.vertices[mesh.loops[index].vertex_index].normal
-                            if face.use_smooth else face.normal
-                        )
-            normal_matrix = np.asarray(
-                evaluated.matrix_world.to_3x3().inverted_safe().transposed(), dtype=np.float64
-            )
-            world_normals = _unit(loop_normals @ normal_matrix.T).astype(np.float32)
-            uv_coords = np.empty((len(mesh.loops), 2), dtype=np.float32)
-            uv.data.foreach_get("uv", uv_coords.ravel())
-            used = np.unique(np.asarray([tri.vertices[:] for tri in selected], dtype=np.int32))
-            targets.append({
-                "object": obj, "mesh": mesh, "slots": slots, "triangles": selected,
-                "positions": coords, "object_normals": loop_normals,
-                "world_normals": world_normals, "uv": uv_coords,
-                "minimum": coords[used].min(axis=0), "maximum": coords[used].max(axis=0),
-                "mirrored": np.linalg.det(world[:3, :3]) < 0,
-            })
-        yield targets
-    finally:
-        for evaluated in temporary:
-            evaluated.to_mesh_clear()
-
-
-def _tiles(uv, n):
-    """Yield bounded raster tiles and barycentric weights at pixel centers."""
-    coords = uv * n - 0.5
-    lo = np.maximum(np.ceil(coords.min(axis=0)).astype(int), 0)
-    hi = np.minimum(np.floor(coords.max(axis=0)).astype(int) + 1, n)
-    a, b, c = coords
-    det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
-    if abs(det) < 1e-8 or np.any(hi <= lo):
-        return
-    for y0 in range(lo[1], hi[1], 64):
-        y1 = min(y0 + 64, hi[1])
-        x, y = np.meshgrid(
-            np.arange(lo[0], hi[0], dtype=np.float32),
-            np.arange(y0, y1, dtype=np.float32),
-        )
-        w0 = ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (y - c[1])) / det
-        w1 = ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (y - c[1])) / det
-        w2 = 1 - w0 - w1
-        inside = (w0 >= -1e-5) & (w1 >= -1e-5) & (w2 >= -1e-5)
-        if inside.any():
-            yield (slice(y0, y1), slice(lo[0], hi[0])), inside, np.stack((w0, w1, w2), -1), x, y
+from ...geometry.snapshots import targets as _targets, _unit, _object_key
+from ...geometry.uv_rasterizer import tiles as _tiles
 
 
 def _islands(target):

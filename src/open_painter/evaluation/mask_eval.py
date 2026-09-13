@@ -81,14 +81,18 @@ def _stack_signature(ts, layer, geometry_cache):
 
 def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
     geometry_cache = geometry_cache if geometry_cache is not None else {}
-    from .channel_eval import NEIGHBORHOOD_EFFECTS
-    full = any(m.enabled and m.source == "FILTER" and m.effect.kind in NEIGHBORHOOD_EFFECTS for m in layer.masks)
-    key = ("mask_stack", ts.id, layer.id, _stack_signature(ts, layer, geometry_cache), n,
-           0 if full else y0, n if full else y1)
+    from .operation_contracts import mask_footprint
+    from .tiles import expand
+    halo = mask_footprint(layer.masks)
+    low, high = (0, n) if halo is None else expand(y0, y1, halo, n)
+    key = ("mask_stack", ts.id, layer.id, _stack_signature(ts, layer, geometry_cache), n, low, high)
     if key not in geometry_cache:
-        geometry_cache[key] = np.asarray(_evaluate_masks(ts, layer, n, 0 if full else y0,
-                                             n if full else y1, cache, geometry_cache), dtype=np.float32)
-    return geometry_cache[key][y0:y1] if full else geometry_cache[key]
+        value = np.asarray(_evaluate_masks(ts, layer, n, low, high, cache, geometry_cache), dtype=np.float32)
+        geometry_cache[key] = value
+    else:
+        value = geometry_cache[key]
+    return value[y0 - low:y1 - low]
+
 
 
 @measured('masking')
@@ -144,7 +148,8 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
             key = mask.image.as_pointer()
             if key not in cache:
                 cache[key] = pixels(mask.image)
-            value = sample_uv(cache[key], u, v)[..., 0]
+            data = cache[key]
+            value = data[y0:y1, :, 0] if data.shape[:2] == (n, n) else sample_uv(data, u, v)[..., 0]
         elif mask.source == "BAKED":
             value = sample_uv(map_pixels(ts, mask.map_type, cache), u, v)[..., 0]
         else:

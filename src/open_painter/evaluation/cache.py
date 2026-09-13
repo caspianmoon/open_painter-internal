@@ -17,6 +17,8 @@ _jobs = {}
 _live_checks = {}
 _regions = {}
 _states = {}
+_scene_cursor = None
+_set_cursors = {}
 
 
 
@@ -62,6 +64,8 @@ def paint_input(scene, pressed):
 
 
 def tick():
+    global _scene_cursor
+    from .preview_policy import fair_order
     from .evaluator import LayerEvaluator
     from .raster_cache import prune
 
@@ -70,7 +74,7 @@ def tick():
     prune(live)
     dependencies.prune(live)
     live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
-    for table in (_paint_input, _live_checks):
+    for table in (_paint_input, _live_checks, _set_cursors):
         for key in set(table) - live_scenes:
             table.pop(key, None)
     for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
@@ -78,7 +82,7 @@ def tick():
         _pending.pop(identifier, None)
         _regions.pop(identifier, None)
         _states.pop(identifier, None)
-    for scene in bpy.data.scenes:
+    for scene in fair_order(list(bpy.data.scenes), _scene_cursor, lambda item: item.as_pointer()):
         if not hasattr(scene, "open_painter"):
             continue
         dependencies.refresh(scene)
@@ -108,7 +112,10 @@ def tick():
 
             if not any(is_area(area) for w in windows for area in w.screen.areas):
                 detect(scene)
-        for ts in scene.open_painter.texture_sets:
+        texture_sets = list(scene.open_painter.texture_sets)
+        active = scene.open_painter.active_texture_set
+        preferred = texture_sets[active].id if 0 <= active < len(texture_sets) else None
+        for ts in fair_order(texture_sets, _set_cursors.get(scene_key), lambda item: item.id, preferred):
             key = key_for(scene, ts)
             if not ts.dirty:
                 set_state(scene, ts, "READY")
@@ -142,14 +149,18 @@ def tick():
                 if evaluator is None:
                     evaluator = _evaluators[key] = LayerEvaluator(scene)
                 outputs = [image_manager.output(ts, channel) for channel in CHANNELS]
+                active_channel = scene.open_painter.blend_channel
+                outputs.sort(key=lambda output: output.channel != active_channel)
                 dirty = next((output for output in outputs if output.dirty), None)
                 if dirty:
+                    _scene_cursor = scene_key
+                    _set_cursors[scene_key] = ts.id
                     scene.open_painter.status = "Updating textures…"
                     set_state(scene, ts, "RUNNING")
                     entry = _jobs.get(key)
                     if entry is None or entry[0] != dirty.channel:
                         region = _regions.get(key)
-                        if region and (region[0], region[1]) != (ts.edit_serial, dirty.channel):
+                        if region and (region[0] != ts.edit_serial or region[1] not in ('*', dirty.channel)):
                             region = None
                         entry = (
                             dirty.channel,
@@ -163,7 +174,8 @@ def tick():
                             next(job)
                         except StopIteration:
                             _jobs.pop(key, None)
-                            _regions.pop(key, None)
+                            if not any(output.dirty for output in outputs):
+                                _regions.pop(key, None)
                             break
                         if monotonic() >= deadline:
                             return 0.001
@@ -207,6 +219,7 @@ def on_load(_):
     clear_shared()
     dependencies.clear()
     _states.clear()
+    _set_cursors.clear()
     _pending.clear()
     _paint_input.clear()
     cancel_all()
@@ -251,6 +264,10 @@ def on_save(_):
 
 
 def register():
+    addon = bpy.context.preferences.addons.get(__package__.rsplit('.', 1)[0])
+    if addon:
+        from .memory import shared
+        shared.configure(addon.preferences.texture_cache_mb * 1024 * 1024)
     bpy.app.handlers.depsgraph_update_post.append(dependencies.on_depsgraph)
     bpy.app.handlers.frame_change_post.append(dependencies.on_frame)
     bpy.app.handlers.load_post.append(on_load)
@@ -268,6 +285,7 @@ def unregister():
     clear_shared()
     dependencies.clear()
     _states.clear()
+    _set_cursors.clear()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

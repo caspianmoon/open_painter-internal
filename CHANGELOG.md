@@ -1,5 +1,13 @@
 # Changes
 
+## 0.1.16
+
+- Replace tangent-normal image differentiation with a geometric convex-crease texture bake of the evaluated target mesh. Coplanar triangulation, UV seams and sub-threshold tessellation do not become edge coverage.
+- Separate Minimum Edge Angle and Edge Width from generator intensity. Add Rebake Edge Map directly to Edge Wear properties; it replaces only Curvature and leaves Normal/AO maps intact. Flag legacy generated curvature maps for rebaking.
+- Regenerate library previews on a beveled cube using the actual geometric edge bake.
+- Validate cube triangulation invariance, clean dense sphere at maximum intensity, concave-fold exclusion, packed images, direct rebake and existing texture evaluation.
+- This is a target-mesh crease map, not high-to-low continuous curvature transfer. Fine detail present only in a high-poly normal bake is not captured. Existing curvature images require an explicit rebake.
+
 ## 0.1.15
 
 - Fix edge wear producing grunge on zero-curvature pixels: noise now breaks up curvature coverage instead of adding new coverage across flat surfaces. Amount cannot introduce wear on zero-curvature pixels.

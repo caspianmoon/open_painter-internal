@@ -20,9 +20,16 @@ scene.render.resolution_x=scene.render.resolution_y=256
 scene.render.resolution_percentage=100
 scene.render.image_settings.file_format='PNG'
 scene.world.color=(0.15,0.15,0.15)
-bpy.ops.mesh.primitive_uv_sphere_add(segments=96, ring_count=64, radius=1, location=(0,0,0))
+bpy.ops.mesh.primitive_cube_add(size=1.6, location=(0,0,0))
 sphere=bpy.context.object
-bpy.ops.object.shade_smooth()
+bevel = sphere.modifiers.new('Preview bevel', 'BEVEL')
+bevel.width = .12
+bevel.segments = 1
+bpy.ops.object.modifier_apply(modifier=bevel.name)
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.uv.smart_project(island_margin=.03)
+bpy.ops.object.mode_set(mode='OBJECT')
 bpy.ops.object.camera_add(location=(2.9,-4.5,2.0))
 camera=bpy.context.object
 camera.rotation_euler=(Vector((0,0,0))-camera.location).to_track_quat('-Z','Y').to_euler()
@@ -45,16 +52,11 @@ from open_painter.smart_masks.library import PRESETS, apply
 from open_painter.core import layer_stack, image_manager
 from open_painter.baking.bake_manager import bake_selected
 from open_painter.evaluation.mask_eval import evaluate_masks
-high = sphere.copy(); high.data = sphere.data.copy(); scene.collection.objects.link(high)
-for vertex in high.data.vertices:
- vertex.co *= 1 + .06 * np.sin(vertex.co.z * 32)
 ts = sets.create(scene, 'Mask preview', 512)
 sets.assign(scene, ts, sphere)
-ts.bake.high_objects.add().object = high
-ts.bake.ray_distance = .2
+ts.bake.selected_to_active = False
 bpy.context.view_layer.update()
 bake_selected(bpy.context, ts)
-high.hide_render = True
 layer = layer_stack.add(ts, 'FILL')
 preview_material = bpy.data.materials.new('Mask preview emission')
 preview_material.use_nodes = True

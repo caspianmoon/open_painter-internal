@@ -16,7 +16,21 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
     active_high: bpy.props.IntProperty()
     normal: bpy.props.BoolProperty(name="Normal", default=True)
     ao: bpy.props.BoolProperty(name="Ambient Occlusion", default=True)
-    curvature: bpy.props.BoolProperty(name="Curvature (from Normal)", default=True)
+    curvature: bpy.props.BoolProperty(name="Curvature (Target Mesh Edges)", default=True)
+    curvature_angle: bpy.props.FloatProperty(
+        name="Minimum Edge Angle",
+        default=20,
+        min=1,
+        max=179,
+        description="Convex target-mesh creases below this angle are excluded before intensity is applied",
+    )
+    curvature_width: bpy.props.FloatProperty(
+        name="Edge Width (px)",
+        default=4,
+        min=1,
+        max=64,
+        description="Width of baked edge coverage in texture pixels",
+    )
     selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=True)
     margin: bpy.props.IntProperty(name="Margin", default=16, min=0, max=128)
     ray_distance: bpy.props.FloatProperty(

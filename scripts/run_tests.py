@@ -15,7 +15,7 @@ env["BLENDER_USER_RESOURCES"] = str(root / ".blender-test" / "user")
 if not args.gui_only:
     for test in sorted((root / "tests/integration").glob("phase*.py")) + [
         root / "tests/integration" / name
-        for name in ("native_registration.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py")
+        for name in ("native_registration.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py")
     ]:
         print(f"Running {test.name}", flush=True)
         subprocess.run(

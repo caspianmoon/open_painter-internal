@@ -120,6 +120,25 @@ class OP_PT_masks(bpy.types.Panel):
             layout.prop(mask, "map_type")
         elif mask.source == "GENERATOR":
             layout.prop(mask, "generator")
+            if mask.generator == "EDGE_WEAR":
+                from ..constants import OWNER
+
+                image = next(
+                    (m.image for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None
+                )
+                if (
+                    image
+                    and image.get(OWNER)
+                    and "BakedCurvature" in image.name
+                    and not image.get("open_painter_curvature_method")
+                ):
+                    layout.label(text="Legacy curvature: rebake edge map.", icon="ERROR")
+                layout.prop(ts.bake, "curvature_angle")
+                layout.prop(ts.bake, "curvature_width")
+                layout.operator(
+                    "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
+                ).action = "CURVATURE"
+
         if mask.source in {"GENERATOR", "NOISE"}:
             for name in ("amount", "contrast", "noise_scale", "noise_strength", "seed"):
                 layout.prop(mask, name)

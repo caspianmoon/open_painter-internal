@@ -14,7 +14,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.1.15.zip`](dist/open_painter-0.1.15.zip).
+1. Download or build [`dist/open_painter-0.1.16.zip`](dist/open_painter-0.1.16.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -70,7 +70,7 @@ A mask on a **folder affects every child**, including the metal substrate in Pai
 chipped paint over metal, select **Paint coat** before applying a smart mask. Properties identifies
 the target and exposes generator, invert, levels, strength and **Normal / Multiply / Add** combination.
 New smart-mask effects use Normal; saved effects keep their previous combination.
-Edge Wear uses baked curvature coverage; noise only breaks up that coverage. **Bake Mask Stack to Texture** converts the selected layer’s mask effects into one packed, editable grayscale UV texture. The material node graph only displays channel textures; it does not implement edge-wear or grunge effects. This is an editable
+Edge Wear uses baked geometric crease coverage; noise only breaks up that coverage. After upgrading from an older bake, click **Rebake Edge Map** in Edge Wear properties. **Minimum Edge Angle** determines which convex target-mesh creases qualify; **Edge Width (px)** determines their texture width. Re-bake after changing either; generator intensity does not change edge classification. **Bake Mask Stack to Texture** converts the selected layer’s mask effects into one packed, editable grayscale UV texture. The material node graph only displays channel textures; it does not implement edge-wear or grunge effects. This is an editable
 mask-effect workflow, not complete Substance Painter generator parity.
 
 Properties shows one selected material channel at a time, with native color/image and UV/triplanar transform controls. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. Per-channel blend and
@@ -142,7 +142,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
 - Painting is one channel at a time. The native brush engine writes the layer image; the compositor
   updates the composite after stroke completion. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
 - Tangent normal layers use normalized RGB blending, not reoriented normal-map blending.
-- Curvature is an unsigned derivative approximation from tangent normals; UV seams can appear as edges.
+- Curvature is a convex-crease map of the evaluated target mesh, filtered by Minimum Edge Angle. Smooth continuous curvature and high-poly-only normal detail are not transferred.
   Dust uses tangent-normal Z, not world-up. Position Gradient, UDIM authoring and world normals are deferred.
 - Triplanar uses the base mesh's UVs, world positions and interpolated vertex normals. Apply topology-changing
   modifiers first; after moving geometry, use Refresh. UVs outside the first tile and overlapping islands
@@ -172,7 +172,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md),
 
 ![Mask stack and generator controls](docs/mask_controls.png)
 
-See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.15.
+See [CHANGELOG.md](CHANGELOG.md) for changes in 0.1.16.
 
 
 

@@ -27,7 +27,7 @@ def bake_selected(context, ts):
     settings = ts.bake
     low = {ref.object for ref in ts.assignments}
     high = {ref.object for ref in settings.high_objects if ref.object}
-    if settings.selected_to_active and not high:
+    if (settings.normal or settings.ao) and settings.selected_to_active and not high:
         raise ValueError(
             "High-poly source list is empty. Add sources or disable Bake from High Poly."
         )
@@ -42,7 +42,7 @@ def bake_selected(context, ts):
             raise ValueError("Custom cage topology must match the low-poly mesh.")
     if not any((settings.normal, settings.ao, settings.curvature)):
         raise ValueError("Select at least one map to bake.")
-    if settings.normal or settings.curvature:
+    if settings.normal:
         register_map(ts, "NORMAL", bake(context, ts, "NORMAL"))
     if settings.ao:
         register_map(ts, "AO", bake(context, ts, "AO"))

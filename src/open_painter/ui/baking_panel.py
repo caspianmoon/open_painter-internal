@@ -15,12 +15,26 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
             ("ADD_HIGH", "Add Selected High Poly", ""),
             ("REMOVE_HIGH", "Remove High Poly", ""),
             ("USE_MAPS", "Use Baked Maps", ""),
+            (
+                "CURVATURE",
+                "Rebake Edge Map",
+                "Bake target-mesh geometric creases into UV texture pixels",
+            ),
         ]
     )
 
     def run(self, context):
         ts = require_set(context)
-        if self.action == "ADD_HIGH":
+        if self.action == "CURVATURE":
+            from ..baking.maps.curvature import bake_curvature
+            from ..baking.bake_manager import register_map
+            from ..core.layer_stack import invalidate
+
+            if not any(ref.object for ref in ts.assignments):
+                raise ValueError("Assign the target mesh before baking its edge map.")
+            register_map(ts, "CURVATURE", bake_curvature(ts))
+            invalidate(ts)
+        elif self.action == "ADD_HIGH":
             for obj in context.selected_objects:
                 if obj.type == "MESH" and not any(r.object == obj for r in ts.bake.high_objects):
                     ref = ts.bake.high_objects.add()
@@ -90,6 +104,13 @@ class OP_PT_bake(bpy.types.Panel):
             layout.prop(settings, "cage_object")
         for key in ("normal", "ao", "curvature"):
             layout.prop(settings, key)
+        if settings.curvature:
+            layout.prop(settings, "curvature_angle")
+            layout.prop(settings, "curvature_width")
+            layout.label(text="Curvature uses target mesh geometry.")
+            layout.operator(
+                "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
+            ).action = "CURVATURE"
         layout.operator("open_painter.bake", icon="RENDER_STILL").action = "BAKE"
         layout.operator(
             "open_painter.bake", text="Use Baked Normal + AO in Stack"

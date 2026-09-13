@@ -34,6 +34,8 @@ def build(context,sources,resolution=2048,gutter=8):
     atlas=sets.create(scene,'Open Painter Atlas',resolution)
     sources=[next(ts for ts in scene.open_painter.texture_sets if ts.id==identifier) for identifier in source_ids]
     identifier=atlas.id
+    initial_images=[output.image for output in atlas.outputs if output.image]
+    initial_material=atlas.material
     created=[]; meshes=[]; made_images=[]
     try:
         graph=context.evaluated_depsgraph_get()
@@ -83,4 +85,8 @@ def build(context,sources,resolution=2048,gutter=8):
             bpy.data.images.remove(image)
         index=next((i for i,ts in enumerate(scene.open_painter.texture_sets) if ts.id==identifier),None)
         if index is not None: scene.open_painter.texture_sets.remove(index)
+        if initial_material:
+            bpy.data.materials.remove(initial_material)
+        for image in initial_images:
+            bpy.data.images.remove(image)
         raise

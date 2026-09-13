@@ -10,6 +10,7 @@ from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
 from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
+from .ui.offline_analysis import OP_OT_offline_analysis,OP_PT_offline_analysis
 from .properties.bake import OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
@@ -68,6 +69,8 @@ CLASSES = (
     OP_OT_material_state,
     OP_OT_material_stamp,
     OP_OT_production_export,
+    OP_OT_offline_analysis,
+    OP_PT_offline_analysis,
     OP_UL_masks,
     OP_PT_masks,
     OP_OT_bake,

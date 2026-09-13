@@ -60,5 +60,14 @@ with TemporaryDirectory(prefix='op-interactive-save-') as directory:
     ts=next(t for t in bpy.context.scene.open_painter.texture_sets if t.id==identifier)
     assert all(tuple(o.image.size)==(1024,1024) for o in ts.outputs)
     np.testing.assert_allclose(images.pixels(images.output(ts,'ROUGHNESS').image)[...,0],.91,atol=1e-7)
+# Deleting a set must release its disposable images and geometry cache.
+scene=bpy.context.scene
+ts.preview_quality='512'
+for _ in LayerEvaluator(scene).channel_steps(ts.id,'ROUGHNESS',preview_resolution=512): pass
+assert preview_policy._proxies
+sets.remove(scene,next(i for i,t in enumerate(scene.open_painter.texture_sets) if t.id==ts.id))
+cache.tick()
+assert not preview_policy._proxies and not preview_policy._resources
+assert not any(i.get('open_painter_disposable_preview') for i in bpy.data.images)
 open_painter.unregister()
 print('INTERACTIVE_PREVIEW_PASS',flush=True)

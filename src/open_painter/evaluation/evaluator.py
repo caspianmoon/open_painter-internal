@@ -154,6 +154,8 @@ class LayerEvaluator:
                     yield from visible_work(layer.id, ancestry | {layer.id})
 
         work = tuple(visible_work("", set()))
+        from .preview_policy import SlicePolicy
+        slices = SlicePolicy()
 
         def compose(parent_id, y0, y1, initial, ancestry, initial_coverage=0):
             rgb = np.array(initial, dtype=np.float32)
@@ -230,18 +232,23 @@ class LayerEvaluator:
                     continue
                 if layer.masks:
                     from .mask_eval import evaluate_masks
+                    step_started = perf_counter()
                     mask = evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)
-                    yield
+                    if slices.ready(perf_counter()-step_started):
+                        yield
                     if author.edit_serial != serial:
                         return None
                     if not np.any(mask):
                         skipped.add(layer.id)
                         continue
                 if layer.type == "FILL" and prop and prop.procedural:
+                    step_started = perf_counter()
                     _procedural_tile(prop, n, y0, y1, ts, self.geometry_cache)
-                    yield
+                    if slices.ready(perf_counter()-step_started):
+                        yield
                     if author.edit_serial != serial:
                         return None
+            step_started = perf_counter()
             rgb, _ = compose("", y0, y1, DEFAULTS[channel][:components], set(), 1)
             if channel == "NORMAL":
                 vectors = rgb * 2 - 1
@@ -252,7 +259,8 @@ class LayerEvaluator:
                 rgb = vectors * 0.5 + 0.5
             result[y0:y1, :, :3] = np.clip(rgb, 0, 1)
             result[y0:y1, :, 3] = 1
-            yield
+            if slices.ready(perf_counter()-step_started):
+                yield
             if author.edit_serial != serial:
                 return None
         if author.edit_serial != serial:

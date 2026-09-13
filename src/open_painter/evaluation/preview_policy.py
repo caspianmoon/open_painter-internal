@@ -6,6 +6,22 @@ _proxies = {}
 _resources = {}
 
 
+class SlicePolicy:
+    """Adapt rows of work between yields while retaining canonical cache strips."""
+    def __init__(self,budget=.004):
+        self.budget=budget; self.elapsed=0.; self.operations=0; self.first=True
+
+    def ready(self,elapsed):
+        from . import metrics
+        metrics.sample('indivisible_compute_s',elapsed)
+        self.elapsed+=elapsed; self.operations+=1
+        if self.first or self.elapsed>=self.budget or self.operations>=64:
+            metrics.sample('cooperative_compute_s',self.elapsed)
+            self.first=False; self.elapsed=0.; self.operations=0
+            return True
+        return False
+
+
 def resolution(ts):
     mode = getattr(ts, 'preview_quality', 'FULL')
     return min(int(ts.resolution), int(mode)) if mode != 'FULL' else int(ts.resolution)
@@ -51,6 +67,20 @@ def publish(scene, ts, channel, size, serial, pixels):
             if node.get(OWNER) and node.get('role') == channel and node.bl_idname == 'ShaderNodeTexImage':
                 node.image = image
     return image
+
+
+def prune(live):
+    """Release proxies and analysis caches of removed texture sets/scenes."""
+    import bpy
+    for key in set(_resources)-live:
+        _resources.pop(key).clear()
+    for key in list(_proxies):
+        if key[:2] not in live:
+            image=_proxies.pop(key)[2]
+            try:
+                bpy.data.images.remove(image)
+            except ReferenceError:
+                pass
 
 
 def clear():

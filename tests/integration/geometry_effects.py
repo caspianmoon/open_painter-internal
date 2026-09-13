@@ -44,6 +44,12 @@ assert obj.name in scene.objects and tuple(v.co[:] for v in obj.data.vertices)==
 moss=manager.create(ts,obj,mask,'MOSS',5,.02,31)
 assert moss and moss['instance_count']>0
 manager.remove(moss)
+for kind in ('SNOW','SPLINTERS','PEEL'):
+    effect=manager.create(ts,obj,mask,kind,2,.02,31)
+    bpy.context.view_layer.update()
+    graph=bpy.context.evaluated_depsgraph_get()
+    assert sum(1 for inst in graph.object_instances if inst.is_instance and inst.parent.original==effect)==effect['instance_count']
+    manager.remove(effect)
 # Editable curve weld creates real evaluated mesh, while source remains a curve.
 curve_data=bpy.data.curves.new('Authored weld','CURVE'); curve_data.dimensions='3D'
 spline=curve_data.splines.new('POLY'); spline.points.add(1)

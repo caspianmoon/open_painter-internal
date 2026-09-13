@@ -1,0 +1,67 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "background": false,
+  "size": 512,
+  "format": "RGBA32F",
+  "operations": [
+    {
+      "kind": "FILL",
+      "color": [
+        0.1,
+        0.2,
+        0.3,
+        1
+      ]
+    },
+    {
+      "kind": "OVER",
+      "opacity": 0.7
+    },
+    {
+      "kind": "LEVELS",
+      "black": 0.03,
+      "white": 0.9,
+      "gamma": 1.3
+    },
+    {
+      "kind": "GAUSSIAN_BLUR",
+      "radius": 2
+    }
+  ],
+  "cpu": {
+    "compile_s": 0,
+    "image_read_s": 0.0017713749984977767,
+    "backend": "CPU",
+    "fallback": "Disabled or no window GPU context",
+    "gpu_resource_bytes": 0,
+    "image_write_s": 0.0019696249946719036,
+    "end_to_end_s": 0.0418569999965257
+  },
+  "cold": {
+    "compile_s": 0.002037582999037113,
+    "image_read_s": 0.0008218750008381903,
+    "backend": "METAL",
+    "fallback": "",
+    "gpu_resource_bytes": 16777216,
+    "upload_create_s": 0.0024622089986223727,
+    "submit_s": 0.009374917004606687,
+    "readback_s": 0.02133779200084973,
+    "image_write_s": 0.0006240419970708899,
+    "end_to_end_s": 0.03473945800215006
+  },
+  "warm": {
+    "compile_s": 0.002037582999037113,
+    "image_read_s": 0.0004758340000989847,
+    "backend": "METAL",
+    "fallback": "",
+    "gpu_resource_bytes": 16777216,
+    "upload_create_s": 0.0018202079954789951,
+    "submit_s": 0.00023100000544218346,
+    "readback_s": 0.012878542001999449,
+    "image_write_s": 0.0002781250004773028,
+    "end_to_end_s": 0.015778041997691616
+  },
+  "max_absolute_error": 2.682209014892578e-07,
+  "promotion": "DISABLED: isolated image chain, no verified interactive whole-material advantage"
+}

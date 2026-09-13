@@ -24,6 +24,11 @@ def gauge(name, value):
         _active.peaks[name] = max(value, _active.peaks[name])
 
 
+def sample(name,value):
+    if _active is not None and len(_active.samples[name])<16384:
+        _active.samples[name].append(float(value))
+
+
 def measured(name):
     def decorate(fn):
         @wraps(fn)
@@ -41,6 +46,7 @@ class Metrics:
         self.counts = defaultdict(int)
         self.gauges = {}
         self.peaks = defaultdict(int)
+        self.samples = defaultdict(list)
         self.phases = {name: dict(calls=0, wall_s=0., cpu_s=0., exclusive_wall_s=0., exclusive_cpu_s=0.)
                        for name in ("source_generation", "masking", "filters", "blending", "geometry",
                                     "geometry_signature", "image_read", "image_write", "packing")}
@@ -76,10 +82,14 @@ class Metrics:
             entry['exclusive_cpu_s'] += cpu - child[1]
 
     def report(self):
+        import numpy as np
         try:
             import resource
             rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == 'darwin' else 1024)
         except ImportError:
             rss = None
-        return dict(phases=self.phases, counters=dict(self.counts), last_observed_bytes=self.gauges,
+        distributions={key:dict(samples=len(values),p50=float(np.percentile(values,50)),
+                               p95=float(np.percentile(values,95)),maximum=max(values))
+                       for key,values in self.samples.items() if values}
+        return dict(phases=self.phases, counters=dict(self.counts), distributions=distributions, last_observed_bytes=self.gauges,
                     peak_observed_bytes=dict(self.peaks), process_peak_rss_bytes=rss)

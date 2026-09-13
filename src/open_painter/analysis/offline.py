@@ -10,23 +10,33 @@ def contact_history(ts,field,start,end,step=1):
     if not frames or len(frames)>120:
         raise ValueError('Offline contact analysis supports 1–120 explicit samples')
     scene=ts.id_data; old_frame=scene.frame_current; old_subframe=scene.frame_subframe
-    counts=[(ref.object,len(ref.object.data.vertices),len(ref.object.data.polygons)) for ref in ts.assignments if ref.object]
+    objects=list(dict.fromkeys(ref.object for ref in ts.assignments if ref.object))
+    if not objects: raise ValueError('Assign a source surface before offline analysis')
+    topology={}
     n=int(field.resolution)
     duration=np.zeros((n,n),np.float32); proximity=np.zeros_like(duration)
     travel=0.; previous=None
     try:
         for frame in frames:
             scene.frame_set(frame)
-            for obj,vertices,faces in counts:
+            for obj in objects:
                 evaluated=obj.evaluated_get(scene.view_layers[0].depsgraph)
                 mesh=evaluated.to_mesh()
                 try:
-                    if len(mesh.vertices)!=vertices or len(mesh.polygons)!=faces:
+                    signature=(len(mesh.vertices),tuple(tuple(face.vertices) for face in mesh.polygons))
+                    if obj.as_pointer() in topology and signature!=topology[obj.as_pointer()]:
                         raise ValueError('Offline analysis requires stable evaluated topology')
+                    topology[obj.as_pointer()]=signature
                 finally: evaluated.to_mesh_clear()
-            values=compute(ts,field)
+            # Conservative world bounds reject obviously separated pairs before
+            # sampling UV geometry and issuing nearest-surface queries.
+            from mathutils import Vector
+            source_bounds=np.array([obj.matrix_world@Vector(corner) for obj in objects for corner in obj.bound_box])
+            other_bounds=np.array([field.object.matrix_world@Vector(corner) for corner in field.object.bound_box])
+            separated=np.any(source_bounds.max(axis=0)+field.distance<other_bounds.min(axis=0)) or np.any(other_bounds.max(axis=0)+field.distance<source_bounds.min(axis=0))
+            values=np.zeros((n,n),np.float32) if separated else compute(ts,field)
             proximity+=values; duration+=(values>.5)
-            relative=np.asarray(field.object.matrix_world.translation)-np.asarray(counts[0][0].matrix_world.translation)
+            relative=np.asarray(field.object.matrix_world.translation)-np.asarray(objects[0].matrix_world.translation)
             if previous is not None: travel+=float(np.linalg.norm(relative-previous))
             previous=relative
     finally:

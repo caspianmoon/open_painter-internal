@@ -62,6 +62,11 @@ assert new_source.masks[0].image != source.masks[0].image
 assert all(m.reference_layer==new_source.id for l in copied for m in l.masks if m.source=='REFERENCE')
 assert not issues(ts)
 with TemporaryDirectory(prefix='op-reference-') as directory:
+    original_id=ts.id
+    copied_set=sets.duplicate(scene,next(i for i,t in enumerate(scene.open_painter.texture_sets) if t.id==original_id))
+    assert not issues(copied_set), issues(copied_set)
+    LayerEvaluator(scene).evaluate_texture_set(copied_set.id)
+    ts=next(t for t in scene.open_painter.texture_sets if t.id==original_id)
     from open_painter.smart_materials.serializer import save
     from open_painter.smart_materials.loader import apply
     path=save(ts,Path(directory)/'damage.openpaintmaterial')

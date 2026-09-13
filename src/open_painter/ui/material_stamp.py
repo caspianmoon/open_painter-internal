@@ -63,3 +63,6 @@ class OP_OT_material_stamp(SafeOperator,bpy.types.Operator):
         apply(ts,layer,context.active_object,self.center,self.normal,self.radius,
               dict(BASE_COLOR=self.color[:],ROUGHNESS=self.roughness,METALLIC=self.metallic,HEIGHT=self.height),
               self.pressure,self.hardness)
+        if context.scene.open_painter.paint_image:
+            from ..painting.paint_session import synchronize
+            synchronize(context)

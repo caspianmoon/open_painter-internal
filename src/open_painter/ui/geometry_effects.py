@@ -7,14 +7,14 @@ class OP_OT_geometry_effect(SafeOperator,bpy.types.Operator):
     bl_idname='open_painter.geometry_effect'
     bl_label='Geometry Effect'
     bl_options={'REGISTER','UNDO'}
-    action: bpy.props.EnumProperty(items=[(k,k.title(),'') for k in ('RUST','MOSS','WELD','REGENERATE','FREEZE','UNFREEZE','REMOVE')])
+    action: bpy.props.EnumProperty(items=[(k,k.title(),'') for k in ('RUST','MOSS','WELD','REGENERATE','FREEZE','UNFREEZE','REMOVE','SNOW','SPLINTERS','PEEL')])
     density: bpy.props.FloatProperty(name='Instances per Square Unit',default=30,min=0,max=5000)
     size: bpy.props.FloatProperty(name='Size',default=.02,min=.0001,max=10)
     seed: bpy.props.IntProperty(name='Seed',default=1,min=0)
     lift: bpy.props.FloatProperty(name='Surface Lift',default=0,min=0,max=1)
 
     def invoke(self,context,event):
-        if self.action in {'RUST','MOSS','WELD'}:
+        if self.action in {'RUST','MOSS','WELD','SNOW','SPLINTERS','PEEL'}:
             return context.window_manager.invoke_props_dialog(self)
         return self.execute(context)
 
@@ -67,10 +67,14 @@ class OP_PT_geometry_effects(bpy.types.Panel):
         row=layout.row(align=True)
         for action,label in [('RUST','Rust Flakes'),('MOSS','Moss'),('WELD','Weld Curve')]:
             row.operator('open_painter.geometry_effect',text=label).action=action
+        layout.label(text='Experimental surface prototypes')
+        row=layout.row(align=True)
+        for action,label in [('SNOW','Snow Clumps'),('SPLINTERS','Splinters'),('PEEL','Peel Fragments')]:
+            row.operator('open_painter.geometry_effect',text=label).action=action
         obj=context.active_object
         if obj and obj.get('open_painter_geometry_effect')=='INSTANCE_HELPER':
             layout.label(text=f"{obj.get('instance_count',0):,} instances · bounded geometry")
-            if obj.get('kind') in {'RUST','MOSS'}:
+            if obj.get('kind') in {'RUST','MOSS','SNOW','SPLINTERS','PEEL'}:
                 for name in ('density','size','seed','lift'):
                     layout.prop(obj,f'["{name}"]',text=name.title())
                 layout.operator('open_painter.geometry_effect',text='Regenerate').action='REGENERATE'

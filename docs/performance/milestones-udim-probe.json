@@ -1,0 +1,22 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "native_paint": "NOT_RUN",
+  "bake": "NOT_RUN",
+  "tile_pixels": [
+    [
+      0.0,
+      1.0,
+      0.0,
+      1.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "tile_addressing": "FAILED",
+  "reason": "Image.pixels did not address independent tiles using tiles.active_index. Native paint/bake integration remains gated; no UDIM UI advertised."
+}

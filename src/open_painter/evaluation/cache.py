@@ -72,6 +72,8 @@ def tick():
     live = {key_for(scene, ts) for scene in bpy.data.scenes
             if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets}
     prune(live)
+    from . import preview_policy
+    preview_policy.prune(live)
     dependencies.prune(live)
     live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
     for table in (_paint_input, _live_checks, _set_cursors):
@@ -291,7 +293,7 @@ def on_save(_):
                     set_state(scene, ts, "FAILED", str(exc))
                     logger.error("Save preview: %s", exc)
     for image in bpy.data.images:
-        if image.get(OWNER) and image.has_data:
+        if image.get(OWNER) and image.has_data and image.users:
             from ..core.image_manager import pack_image
             pack_image(image)
 

@@ -43,5 +43,13 @@ with TemporaryDirectory(prefix='op-production-') as directory:
     actual=images.pixels(images.output(atlas,'ROUGHNESS').image)
     np.testing.assert_allclose(actual[10:-10,10:-10,0],.25,atol=1e-6)
     assert all(stack.channel_for(atlas.layers[0],key).image for key in ('BASE_COLOR','ROUGHNESS','NORMAL','HEIGHT','AO','OPACITY','METALLIC','EMISSION'))
+    from unittest.mock import patch
+    before=(len(bpy.data.images),len(bpy.data.materials),len(bpy.data.objects),len(scene.open_painter.texture_sets))
+    with patch('open_painter.export.atlas.sample_uv',side_effect=RuntimeError('Injected atlas sampling failure')):
+        try:
+            build(bpy.context,[source],512,8)
+            raise AssertionError('Failed atlas was accepted')
+        except RuntimeError as exc: assert 'Injected' in str(exc)
+    assert before==(len(bpy.data.images),len(bpy.data.materials),len(bpy.data.objects),len(scene.open_painter.texture_sets))
 open_painter.unregister()
 print('PRODUCTION_EXPORT_PASS',flush=True)

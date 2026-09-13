@@ -87,16 +87,20 @@ def apply(ts,layer,obj,center,normal,radius,values,pressure=1,hardness=.8):
     created=[]
     try:
         for prop,image,_,_,output in staged:
-            if image is None:
-                image=images.create(f'{ts.name}_{layer.name}_{prop.channel}',n,color_data=prop.channel=='BASE_COLOR')
-                created.append(image)
-            images.write(image,output,pack=False)
-            prop.image=image; prop.enabled=True
+            # Python Image.pixels writes are not native paint-undo tiles. Swap
+            # owned immutable snapshots so Blender's datablock undo restores the
+            # previous source, including an existing painted image.
+            replacement=images.create(f'{ts.name}_{layer.name}_{prop.channel}',n,color_data=prop.channel=='BASE_COLOR')
+            replacement.use_fake_user=False
+            replacement['open_painter_stamp_snapshot']=True
+            created.append(replacement)
+            # Packed pixels are retained by Blender's memfile redo as well as
+            # pointer undo; an unpacked generated Image can redo as blank.
+            images.write(replacement,output,pack=True)
+            prop.image=replacement; prop.enabled=True
     except Exception:
         for prop,image,enabled,original,_ in staged:
             prop.image=image; prop.enabled=enabled
-            if image:
-                image.pixels.foreach_set(original.ravel()); image.update()
         for image in created:
             bpy.data.images.remove(image)
         stack.invalidate(ts)

@@ -86,6 +86,7 @@ def duplicate(scene, index):
     settings = snapshot(source.bake)
     ts = create(scene, name, resolution)
     mapping = {item["id"]: new_id() for item in layers}
+    mask_mapping = {mask['id']: new_id() for item in layers for mask in item['masks']}
     for data in layers:
         layer = ts.layers.add()
         restore(data, layer)
@@ -96,7 +97,10 @@ def duplicate(scene, index):
             if layer.type == "PAINT" and channel.image:
                 channel.image = channel.image.copy()
         for mask in layer.masks:
-            mask.id = new_id()
+            mask.id = mask_mapping[mask.id]
+            if mask.source == 'REFERENCE':
+                mask.reference_layer = mapping.get(mask.reference_layer, mask.reference_layer)
+                mask.reference_mask = mask_mapping.get(mask.reference_mask, mask.reference_mask)
             if mask.source == "PAINT" and mask.image:
                 mask.image = mask.image.copy()
     for kind, image in maps:

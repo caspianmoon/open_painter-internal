@@ -15,7 +15,7 @@ from . import limits
 TAG = 'open_painter_geometry_effect'
 
 
-def scatter(ts, obj, mask, density, seed):
+def scatter(ts, obj, mask, density, seed, replacing=None):
     if density < 0:
         raise ValueError('Density cannot be negative')
     values = pixels(mask)[...,0]
@@ -29,7 +29,7 @@ def scatter(ts, obj, mask, density, seed):
         areas = np.linalg.norm(np.cross(coords[:,1]-coords[:,0],coords[:,2]-coords[:,0]),axis=1)*.5
         total = areas.sum()
         count = int(np.ceil(total*density))
-        limits.check(ts.id_data,count,count*12)
+        limits.check(ts.id_data,count,count*12,replacing=replacing)
         if not count or total <= 1e-12:
             return np.empty((0,3),np.float32),np.empty((0,3),np.float32)
         rng = np.random.default_rng(seed)
@@ -49,15 +49,19 @@ def scatter(ts, obj, mask, density, seed):
         return local_positions,local_normals
 
 
-def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, material=None):
-    if kind not in {'RUST','MOSS'} or size <= 0:
-        raise ValueError('Choose Rust or Moss and a positive instance size')
-    positions,normals = scatter(ts,obj,mask,density,seed)
+def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, material=None, replacing=None):
+    if kind not in {'RUST','MOSS','SNOW','SPLINTERS','PEEL'} or size <= 0:
+        raise ValueError('Choose a supported geometry effect and a positive instance size')
+    positions,normals = scatter(ts,obj,mask,density,seed,replacing)
     if not len(positions):
         return None
-    limits.check(ts.id_data,len(positions),len(positions)*12)
+    limits.check(ts.id_data,len(positions),len(positions)*12,replacing=replacing)
     from . import rust_flakes,moss
-    vertices,faces = (rust_flakes if kind=='RUST' else moss).mesh_data()
+    if kind in {'RUST','MOSS'}:
+        vertices,faces = (rust_flakes if kind=='RUST' else moss).mesh_data()
+    else:
+        from .advanced import mesh_data
+        vertices,faces=mesh_data(kind)
     identifier=new_id()
     created=[]
     try:
@@ -141,6 +145,6 @@ def regenerate(ts, helper):
         raise ValueError('Effect source or published mask is missing')
     # Replacing first would lose a good result on failure. Reserve against the
     # existing result conservatively until the replacement succeeds.
-    replacement=create(ts,helper.parent,mask,helper['kind'],helper['density'],helper['size'],helper['seed'],helper['lift'])
+    replacement=create(ts,helper.parent,mask,helper['kind'],helper['density'],helper['size'],helper['seed'],helper['lift'],replacing=helper)
     remove(helper)
     return replacement

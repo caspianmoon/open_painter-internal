@@ -141,6 +141,7 @@ def load(_):
     _active.clear()
     _previous.clear()
     _spaces.clear()
+    prepared = False
     for screen in bpy.data.screens:
         for record in screen.get("open_painter_areas", []):
             index = record.get("index", -1)
@@ -153,7 +154,10 @@ def load(_):
                     if not bpy.app.background:
                         from .native import prepare_assets, request_focus
 
-                        prepare_assets()
+                        if not prepared:
+                            # Asset handles are per file, not per area: one pass per load.
+                            prepare_assets()
+                            prepared = True
                         request_focus(area)
                         if (
                             screen.get("open_painter_ui_revision", 0) < 14

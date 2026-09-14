@@ -376,9 +376,15 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
                 layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
 
 
+_row_depths = {}
+
+
 class OP_UL_native_layers(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         rows = visible_rows(data)
+        # filter_items runs once per redraw before the items draw; keep the
+        # depths so draw_item does not walk the hierarchy again per row.
+        _row_depths[data.as_pointer()] = dict(rows)
         visible = {index for index, _ in rows}
         ordered = [index for index, _ in rows] + [
             i for i in range(len(data.layers)) if i not in visible
@@ -392,7 +398,10 @@ class OP_UL_native_layers(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         layer = item
         channel = channel_for(layer, context.scene.open_painter.blend_channel)
-        depth = dict(visible_rows(data)).get(index, 0)
+        depths = _row_depths.get(data.as_pointer())
+        if depths is None:
+            depths = _row_depths[data.as_pointer()] = dict(visible_rows(data))
+        depth = depths.get(index, 0)
         split = layout.split(factor=0.42, align=True)
         row = split.row(align=True)
         row.prop(

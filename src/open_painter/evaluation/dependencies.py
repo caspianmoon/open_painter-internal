@@ -12,6 +12,7 @@ from .resource_keys import key_for
 from .metrics import measured
 
 _mesh_epochs = {}
+_epoch = 0
 _mesh_fingerprints = {}
 _known = {}
 _candidates = set()
@@ -90,7 +91,13 @@ def remember(scene, ts, signature):
 
 
 @persistent
+def epoch():
+    """Counts geometry/transform depsgraph updates; a cheap cache token for mesh-derived state."""
+    return _epoch
+
+
 def on_depsgraph(scene, depsgraph):
+    global _epoch
     relevant = False
     for update in depsgraph.updates:
         item = update.id.original
@@ -101,6 +108,7 @@ def on_depsgraph(scene, depsgraph):
         elif isinstance(item, bpy.types.Object) and (update.is_updated_geometry or update.is_updated_transform):
             relevant = True
     if relevant:
+        _epoch += 1
         _candidates.add(scene.as_pointer())
 
 

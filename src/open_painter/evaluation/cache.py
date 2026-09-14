@@ -29,11 +29,14 @@ ACTIVE_INTERVAL = 0.016
 
 
 def wake():
-    """Run the scheduler on the next event loop pass (a structural edit is pending)."""
-    if bpy.app.background:
+    """Run the scheduler on the next event loop pass (a structural edit is pending).
+
+    Only re-arms a registered timer: tests and explicit CPU workflows that
+    unregistered it must not have it revived by a property callback.
+    """
+    if bpy.app.background or not bpy.app.timers.is_registered(tick):
         return
-    if bpy.app.timers.is_registered(tick):
-        bpy.app.timers.unregister(tick)
+    bpy.app.timers.unregister(tick)
     bpy.app.timers.register(tick, first_interval=0.0, persistent=True)
 
 

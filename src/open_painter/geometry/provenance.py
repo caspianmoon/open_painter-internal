@@ -30,8 +30,8 @@ def object_record(obj):
                 modifiers=[parameters(modifier) for modifier in obj.modifiers])
 
 
-def record(ts, kind):
-    scene = ts.id_data
+def settings_of(ts, kind):
+    """Bake settings that identify one map kind; cheap, no mesh access."""
     shared_bake = ('margin','ray_distance','cage_mode','cage_object','selected_to_active','samples',
                    'source_mode','device','separate_cage_distance','cage_extrusion')
     fields = {'NORMAL': shared_bake,
@@ -50,6 +50,12 @@ def record(ts, kind):
         # Recorded only when it differs from the implicit distance of earlier
         # bakes, so maps baked before this setting existed are not marked stale.
         settings['ao_distance'] = ts.bake.ao_distance
+    return settings
+
+
+def record(ts, kind):
+    scene = ts.id_data
+    settings = settings_of(ts, kind)
     extra = {}
     if kind in {'NORMAL','AO'}:
         extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object),
@@ -62,6 +68,9 @@ def record(ts, kind):
         settings=settings, **extra), sort_keys=True, separators=(',', ':'))
 
 
+_status_cache = {}
+
+
 def status(ts, prop):
     if not prop.image:
         return 'Missing'
@@ -71,4 +80,20 @@ def status(ts, prop):
     if prop.kind == 'CURVATURE' and (method not in (None, 'GEOMETRIC_CREASES_V2')
                                      or (method is None and 'BakedCurvature' in prop.image.name)):
         return 'Stale · crease-only map, rebake for smooth edges'
-    return 'Ready' if prop.provenance == record(ts, prop.kind) else 'Stale · update bake'
+    # The panel asks on every redraw; the record serialises mesh signatures and
+    # modifier settings, so reuse it until geometry, settings or targets change.
+    from ..evaluation.dependencies import epoch
+    scene = ts.id_data
+    slot = (ts.as_pointer(), prop.kind)
+    token = (prop.provenance, ts.edit_serial, epoch(), int(ts.resolution), scene.frame_current,
+             scene.frame_subframe, repr(settings_of(ts, prop.kind)),
+             tuple((identity(ref.object), ref.slot_index) for ref in ts.assignments),
+             tuple((identity(ref.object), identity(ref.target), identity(ref.cage)) for ref in ts.bake.high_objects))
+    cached = _status_cache.get(slot)
+    if cached is not None and cached[0] == token:
+        return cached[1]
+    result = 'Ready' if prop.provenance == record(ts, prop.kind) else 'Stale · update bake'
+    if len(_status_cache) > 64:
+        _status_cache.clear()
+    _status_cache[slot] = (token, result)
+    return result

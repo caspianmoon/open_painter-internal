@@ -79,6 +79,21 @@ smooth = images.pixels(bake_curvature(ts))[..., 0]
 assert smooth.max() > 0.9, smooth.max()
 assert 0.02 < np.count_nonzero(smooth) / smooth.size < 0.3, np.count_nonzero(smooth) / smooth.size
 obj.modifiers.remove(bevel)
+# A crease-only map left from an older bake is replaced when an edge-driven
+# recipe is added; a user-supplied curvature image is never touched.
+from open_painter.baking.bake_manager import refresh_stale_curvature, register_map
+legacy = images.create("Geometry edges_BakedCurvature", 512, (0, 0, 0, 1))
+legacy["open_painter_curvature_method"] = "GEOMETRIC_CREASES_V1"
+register_map(ts, "CURVATURE", legacy)
+assert refresh_stale_curvature(ts, {"AO"}) is False
+assert refresh_stale_curvature(ts, {"CURVATURE"}) is True
+current = next(m.image for m in ts.baked_maps if m.kind == "CURVATURE")
+assert current.get("open_painter_curvature_method") == "GEOMETRIC_CREASES_V2", current.get("open_painter_curvature_method")
+assert images.pixels(current)[..., 0].max() > .8, (current.name, images.pixels(current)[..., 0].max())  # crease lines peak between texel centres
+assert refresh_stale_curvature(ts, {"CURVATURE"}) is False
+custom = images.create("Artist curvature", 512, (.2, .2, .2, 1))
+register_map(ts, "CURVATURE", custom)
+assert refresh_stale_curvature(ts, {"CURVATURE"}) is False and next(m.image for m in ts.baked_maps if m.kind == "CURVATURE") == custom
 sphere_ts = sets.create(bpy.context.scene, "Dense sphere", 512)
 sets.assign(bpy.context.scene, sphere_ts, sphere)
 assert not images.pixels(bake_curvature(sphere_ts))[..., 0].any(), "Uniform curvature must stay flat"

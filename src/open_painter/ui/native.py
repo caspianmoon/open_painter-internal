@@ -159,12 +159,21 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
         if categories.activate(context, entry, source):
             return
         if entry[1] == "SMART_MASK":
-            from ..smart_masks.library import apply
-
-            apply(require_set(context), entry[0], replace=self.replace_masks)
+            from ..smart_masks.library import apply, PRESETS
+            from ..generators.base import required_maps
+            from ..baking.bake_manager import refresh_stale_curvature
+            ts = require_set(context)
+            preset = next((p for p in PRESETS if p[0] == entry[0]), None)
+            if preset and refresh_stale_curvature(ts, required_maps(preset[1])):
+                self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the mask")
+            apply(ts, entry[0], replace=self.replace_masks)
         elif entry[1] == "SMART_RECIPE":
-            from ..smart_materials.composer import apply
-            apply(require_set(context), entry[0])
+            from ..smart_materials.composer import apply, requirements
+            from ..baking.bake_manager import refresh_stale_curvature
+            ts = require_set(context)
+            if refresh_stale_curvature(ts, requirements(entry[0])):
+                self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the material")
+            apply(ts, entry[0])
         else:
             assets.apply(context, entry)
         ui = state.get(context.area)

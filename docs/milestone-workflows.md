@@ -14,9 +14,11 @@ not replace the editor or the material library.
   channel/mask and stage. Cycles reject before output publication. Publish a mask
   when a stable texture is needed by a geometry effect.
 - **Geometry Effects:** select an assigned source mesh and the layer whose mask
-  defines density. Rust Flakes/Moss create separate owned helpers. Regenerate,
-  Freeze and Remove operate on the selected helper. Weld Curve uses an editable
-  curve. Snow, splinters and peeling fragments are experimental prototypes.
+  defines density (for moss, the Moss texture effect's mask). Rust Flakes, Moss,
+  Snow, Splinters and Peel Fragments create separate owned helpers with variant
+  prototypes and their own materials; Regenerate, Freeze and Remove operate on
+  the selected helper. Weld Curve turns an editable curve into a rippled bead.
+  See [geometry-effects.md](geometry-effects.md).
 - **Age / Environment State:** tag participating fill layers with their semantic
   effect role, then apply Clean/Used/Damaged or custom age/usage/maintenance.
   Paint strokes and untagged layers are preserved. Use separate texture sets for

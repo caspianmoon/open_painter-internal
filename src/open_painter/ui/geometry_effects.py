@@ -13,8 +13,12 @@ class OP_OT_geometry_effect(SafeOperator,bpy.types.Operator):
     seed: bpy.props.IntProperty(name='Seed',default=1,min=0)
     lift: bpy.props.FloatProperty(name='Surface Lift',default=0,min=0,max=1)
 
+    # Starting points per kind: instances per square metre and prototype size in metres.
+    DEFAULTS={'RUST':(1500,.02),'MOSS':(3000,.08),'SNOW':(800,.07),'SPLINTERS':(800,.04),'PEEL':(600,.03),'WELD':(0,.015)}
+
     def invoke(self,context,event):
-        if self.action in {'RUST','MOSS','WELD','SNOW','SPLINTERS','PEEL'}:
+        if self.action in self.DEFAULTS:
+            self.density,self.size=self.DEFAULTS[self.action]
             return context.window_manager.invoke_props_dialog(self)
         return self.execute(context)
 
@@ -63,7 +67,7 @@ class OP_PT_geometry_effects(bpy.types.Panel):
 
     def draw(self,context):
         layout=self.layout
-        layout.label(text='Separate helpers · active layer mask')
+        layout.label(text='Separate helpers · active layer mask · owned materials')
         row=layout.row(align=True)
         for action,label in [('RUST','Rust Flakes'),('MOSS','Moss'),('WELD','Weld Curve')]:
             row.operator('open_painter.geometry_effect',text=label).action=action

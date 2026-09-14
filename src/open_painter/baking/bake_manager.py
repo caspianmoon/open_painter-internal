@@ -85,3 +85,27 @@ def bake_steps(context, ts):
 def bake_selected(context, ts):
     for _ in bake_steps(context, ts):
         pass
+
+
+def refresh_stale_curvature(ts, required):
+    """Rebake a crease-only Curvature map before an edge-driven recipe uses it.
+
+    Maps baked before GEOMETRIC_CREASES_V2 are empty on smooth geometry, so an
+    effect that reads them appears to do nothing. Rebaking is an explicit part
+    of the user's Add action, reported back to them; nothing happens when the
+    map is missing (the recipe preflight reports that) or already current.
+    """
+    if "CURVATURE" not in required:
+        return False
+    prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
+    if prop is None:
+        return False
+    from .maps.curvature import METHOD
+    method = prop.image.get("open_painter_curvature_method")
+    if method == METHOD:
+        return False
+    if method is None and "BakedCurvature" not in prop.image.name:
+        return False  # a user-supplied image: never replace it
+    register_map(ts, "CURVATURE", bake_curvature(ts))
+    invalidate(ts)
+    return True

@@ -1,0 +1,17 @@
+{
+  "asset": "moss_01",
+  "source": "Poly Haven",
+  "url": "https://polyhaven.com/a/moss_01",
+  "license": "CC0 1.0 Universal (public domain dedication)",
+  "authors": {"Rob Tuytel": "All"},
+  "published": "2023-06-21",
+  "downloaded": "2026-09-14",
+  "files": {
+    "moss_01_1k.blend": {"url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/1k/moss_01/moss_01_1k.blend", "md5": "39eb89a1c48257ec013bd8f104330bc1", "bytes": 174449, "use": "twelve LOD0 clump cards extracted to clumps.json (vertices, faces, UVs); not shipped"},
+    "moss_01_diff_1k.jpg": {"url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/moss_01/moss_01_diff_1k.jpg", "use": "base colour, sRGB, shipped unchanged"},
+    "moss_01_alpha_1k.png": {"url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/moss_01/moss_01_alpha_1k.png", "use": "card alpha, shipped unchanged"},
+    "moss_01_nor_gl_1k.png": {"url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moss_01/moss_01_nor_gl_1k.exr", "use": "OpenGL tangent normal, converted from EXR to 8-bit PNG (max abs difference 0.002)"},
+    "moss_01_rough_1k.png": {"url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/1k/moss_01/moss_01_rough_1k.exr", "use": "roughness, converted from EXR to 8-bit PNG (max abs difference 0.002)"}
+  },
+  "note": "Instanced as moss clump prototypes by the Moss geometry effect. CC0 requires no attribution; this record documents origin and integrity."
+}

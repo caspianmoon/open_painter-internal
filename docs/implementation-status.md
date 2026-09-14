@@ -16,6 +16,17 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Geometry effects reworked — 2026-09-14
+
+The M8 helpers instanced placeholder shapes (a box, a cone, an octahedron, a
+pentagon, two quads) in one size with the painted surface's material. They now
+instance real prototypes with variants, per-instance rotation/scale/lean, spacing
+and slope bias, owned procedural materials, CC0 Poly Haven `moss_01` scanned
+clump cards for moss, and a sunk, rippled weld bead. Adding an edge-driven
+material, effect or smart mask also rebakes a crease-only Curvature map so edge
+wear cannot silently be empty. Before/after renders and provenance:
+[geometry-effects.md](geometry-effects.md).
+
 ## Damaged Bevel effects — 2026-09-14
 
 The supplied "Damaged Variable Bevel" script depends on the Cycles-only Bevel and

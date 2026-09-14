@@ -277,8 +277,11 @@ class OP_OT_catalog_material(SearchPicker, SafeOperator, bpy.types.Operator):
     choice: bpy.props.EnumProperty(name="Material", items=material_items)
 
     def run(self, context):
-        from ..smart_materials.composer import apply
+        from ..smart_materials.composer import apply, requirements
+        from ..baking.bake_manager import refresh_stale_curvature
         ts = require_set(context)
+        if refresh_stale_curvature(ts, requirements(self.choice)):
+            self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the material")
         apply(ts, self.choice)
         _redraw(context, ts, mask=False)
 
@@ -291,8 +294,11 @@ class OP_OT_catalog_effect(SearchPicker, SafeOperator, bpy.types.Operator):
     choice: bpy.props.EnumProperty(name="Effect", items=effect_items)
 
     def run(self, context):
-        from ..smart_materials.composer import apply_effect
+        from ..smart_materials.composer import EFFECTS, apply_effect, requirements
+        from ..baking.bake_manager import refresh_stale_curvature
         ts = require_set(context)
+        if refresh_stale_curvature(ts, requirements(EFFECTS[self.choice])):
+            self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the effect")
         apply_effect(ts, self.choice)
         _redraw(context, ts, mask=False)
 

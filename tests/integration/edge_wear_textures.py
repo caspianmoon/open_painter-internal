@@ -72,6 +72,33 @@ ts = bpy.context.scene.open_painter.texture_sets[0]
 np.testing.assert_allclose(
     images.pixels(ts.layers[ts.active_layer].masks[0].image)[..., 0], mask_pixels, atol=1e-6
 )
+# Edge Width narrows the baked band per mask without a rebake: coverage shrinks
+# monotonically and stays inside the full band; it is a live shader uniform.
+from open_painter.generators.edge_wear import edge_wear as _edge_wear
+ramp = np.linspace(0, 1, 256, dtype=np.float32)[None, :].repeat(4, 0)
+full = _edge_wear(ramp, None, np.ones_like(ramp), 1, 1, 0, 1.0)
+half = _edge_wear(ramp, None, np.ones_like(ramp), 1, 1, 0, .5)
+assert np.allclose(full, np.clip(ramp * 2, 0, 1)) and (half <= full + 1e-6).all()
+assert half[0, 64] == 0 and half[0, 128] < .1 and half[0, 255] == 1, (half[0, 64], half[0, 128])
+assert np.allclose(half[0, 128:], np.clip((ramp[0, 128:] - .5) / .5 * 2, 0, 1), atol=1e-6)
+try:
+    from open_painter.evaluation import shader_preview
+except ImportError:
+    shader_preview = None
+if shader_preview is not None:
+    from open_painter.core import layer_stack as _stack, texture_set_manager as _sets, image_manager as _images
+    from open_painter.baking.bake_manager import register_map as _register
+    probe_scene = bpy.context.scene
+    bpy.ops.mesh.primitive_cube_add(location=(8, 0, 0))
+    probe_ts = _sets.create(probe_scene, "Edge width probe", 512)
+    _sets.assign(probe_scene, probe_ts, bpy.context.object)
+    _register(probe_ts, "CURVATURE", _images.create("probe curvature", 64, (1, 1, 1, 1)))
+    probe_layer = _stack.add(probe_ts, "FILL", "Probe")
+    probe_mask = probe_layer.masks.add()
+    probe_mask.source, probe_mask.generator = "GENERATOR", "EDGE_WEAR"
+    probe_mask.edge_width = .4
+    graph = shader_preview.ensure(probe_scene, probe_ts)
+    assert graph is not None and any(b.field == "edge_width" for b in graph.bindings.values()), "Edge Width is not a live binding"
 open_painter.unregister()
 print(
     "EDGE_WEAR_TEXTURES_PASS: zero off-edge coverage, texture bake equivalence, no effect nodes, packed save/reopen"

@@ -43,9 +43,12 @@ not replace the editor or the material library.
 - **Damaged Bevel / Rounded Edges:** bake Bevel Mask and Bevel Normal (Bake Mesh
   Maps → Bevel Maps, radius = band width), then Add Surface Effect. Works in
   EEVEE because the Cycles Bevel/AO nodes are baked, not evaluated per frame.
-- **Curvature V2:** Rebake Edge Map on existing projects (the map reads "Stale ·
-  crease-only"); Curvature Radius is the wear width (default 2 cm). Smooth bevels and
-  tessellated rims now drive Edge Wear and Chips in every material.
+- **Curvature V2 and Edge Width:** Rebake Edge Map on existing projects (the map
+  reads "Stale · crease-only"); adding an edge-driven material, effect or smart mask
+  rebakes it automatically. Curvature Radius (default 2 cm) is the maximum reach of
+  the band; each Edge Wear or Chips mask has a live Edge Width slider that narrows
+  it without a rebake. Smooth bevels and tessellated rims now drive Edge Wear and
+  Chips in every material.
 - **Mean Curvature / Selected Faces maps:** Bake Mesh Maps → Target Mesh Utility
   Maps. Mean Curvature is signed and smooth (0.5 flat, convex above, concave below)
   and shares Curvature Radius. Selected Faces snapshots the current face selection and

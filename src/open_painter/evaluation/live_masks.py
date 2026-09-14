@@ -55,6 +55,8 @@ def validate(ts, layer, n):
             raise UnsupportedMask('Transformed or non-default sampling masks require CPU evaluation')
         if mask.operation not in {'NORMAL', 'MULTIPLY', 'ADD'}:
             raise UnsupportedMask('Mask combination requires CPU evaluation')
+        if mask.generator in {'EDGE_WEAR', 'CHIPS'} and getattr(mask, 'edge_width', 1.0) < 1:
+            raise UnsupportedMask('A narrowed edge width requires CPU evaluation')
         for name, low, high in (('amount', 0., 1.), ('contrast', .01, 20.),
                                 ('noise_strength', 0., 1.), ('black', 0., 1.),
                                 ('white', 0., 1.), ('strength', 0., 1.)):

@@ -219,6 +219,9 @@ def run():
             add_mask(layer, generator=kind, amount=.64, contrast=1.3, noise_strength=.38,
                      black=.11, white=.83, strength=.76, invert=True)
         check("generator_" + generator, configure)
+    # Edge Width narrows the baked band identically on both evaluators.
+    check("generator_EDGE_WEAR_width",
+          lambda l, p: add_mask(l, generator="EDGE_WEAR", amount=.64, contrast=1.3, noise_strength=.38, edge_width=.45))
     for procedural in ("CHECKER", "FBM"):
         check("mask_procedural_" + procedural,
               lambda l,p,kind=procedural: add_mask(l, "PROCEDURAL", procedural=kind, noise_scale=4.25,

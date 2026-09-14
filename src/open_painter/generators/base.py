@@ -65,7 +65,8 @@ class Generator:
             return n if parameters.source == 'NOISE' else threshold(n)
         if self.id in {'EDGE_WEAR', 'CHIPS'}:
             ao = mesh_map('AO')[..., 0] if any(m.kind == 'AO' and m.image for m in texture_set.baked_maps) else None
-            edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, breakup_noise(), amount, contrast, strength)
+            edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, breakup_noise(), amount, contrast, strength,
+                              getattr(parameters, 'edge_width', 1.0))
             if self.id == 'CHIPS':
                 chips = procedural('VORONOI', u, v, seed=parameters.seed, scale=parameters.noise_scale)
                 edges *= .15 + .85 * threshold(chips)

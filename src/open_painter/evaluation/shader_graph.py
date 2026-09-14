@@ -419,7 +419,11 @@ class Graph(Math):
         if kind == 'NOISE':
             return noise() if mask.source == 'NOISE' else threshold(noise())
         if kind in {'EDGE_WEAR', 'CHIPS'}:
-            value = self.clamp(self.math('MULTIPLY', self.math('MULTIPLY', self.clamp(red('CURVATURE')),
+            # Edge Width narrows the baked band: (curvature - (1 - w)) / w, a live uniform.
+            width = self.param(mask, 'edge_width')
+            band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(red('CURVATURE')),
+                self.math('SUBTRACT', 1, width)), self.math('MAXIMUM', width, 1e-4)))
+            value = self.clamp(self.math('MULTIPLY', self.math('MULTIPLY', band,
                 self.math('MULTIPLY', 2, amount)), contrast))
             value = breakup(value)
             if any(m.kind == 'AO' and m.image for m in self.ts.baked_maps):

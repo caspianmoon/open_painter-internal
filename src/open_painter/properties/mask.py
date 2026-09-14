@@ -104,6 +104,11 @@ class OP_Mask(bpy.types.PropertyGroup):
     strength: bpy.props.FloatProperty(name="Strength", default=1, min=0, max=1, update=changed)
     amount: bpy.props.FloatProperty(name="Amount", default=0.5, min=0, max=1, update=changed)
     contrast: bpy.props.FloatProperty(name="Contrast", default=2, min=0.01, max=20, update=changed)
+    edge_width: bpy.props.FloatProperty(
+        name="Edge Width", default=1.0, min=0.05, max=1.0, subtype="FACTOR", update=changed,
+        description="How far edge wear reaches from the edge, as a fraction of the baked Curvature Radius; "
+                    "raise the radius and rebake for wider wear",
+    )
     noise_scale: bpy.props.FloatProperty(
         name="Noise Scale", default=12, min=1, max=512, update=changed
     )

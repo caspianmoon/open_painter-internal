@@ -2,6 +2,7 @@
 
 ## 0.2.8
 
+- Edge Width on Edge Wear and Chips masks: a live per-layer control that narrows the wear band within the baked Curvature Radius without a rebake; the radius, crease settings and Rebake Edge Map sit beside it in the mask properties.
 - Curvature map V2: crease lines plus a texel-domain curvature estimate (turning over area within Curvature Radius, relative to the surface median), so Edge Wear and Chips work on smooth, bevelled and scanned meshes. Old crease-only maps read as stale and are rebaked automatically when an edge-driven material, effect or smart mask is added.
 - Geometry effects reworked: variant prototypes with per-instance rotation, lean, size and spacing, owned materials, CC0 Poly Haven `moss_01` scanned moss cards, and a sunk, rippled weld bead. Placeholder box/cone/octahedron shapes are gone.
 - Damaged Bevel and Rounded Edges surface effects from Cycles-baked Bevel Mask and Bevel Normal maps; they render in EEVEE, Cycles and export alike.

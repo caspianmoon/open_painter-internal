@@ -60,7 +60,8 @@ def _stack_signature(ts, layer, geometry_cache):
         common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength)
         if mask.source in {"GENERATOR", "NOISE"}:
             extra = (mask.generator, mask.amount, mask.contrast, mask.noise_scale,
-                     mask.noise_strength, mask.seed, tuple(mask.id_color), maps)
+                     mask.noise_strength, mask.seed, tuple(mask.id_color), maps,
+                     getattr(mask, "edge_width", 1.0))
         elif mask.source == "PROCEDURAL":
             extra = (mask.procedural, mask.noise_scale, mask.seed, mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,

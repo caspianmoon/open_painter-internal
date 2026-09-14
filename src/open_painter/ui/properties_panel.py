@@ -172,7 +172,7 @@ class OP_PT_masks(bpy.types.Panel):
                 row = layout.row(align=True)
                 row.prop(mask,"id_color",text="Selected ID Color")
                 row.operator("open_painter.choose_baked_id", text="", icon="VIEWZOOM")
-            if mask.generator == "EDGE_WEAR":
+            if mask.generator in {"EDGE_WEAR", "CHIPS"}:
                 from ..constants import OWNER
 
                 image = next(
@@ -185,10 +185,14 @@ class OP_PT_masks(bpy.types.Panel):
                     and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
                 ):
                     layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
-                layout.prop(ts.bake, "curvature_angle")
-                layout.prop(ts.bake, "curvature_width")
-                layout.prop(ts.bake, "mean_curvature_distance")
-                layout.operator(
+                radius = ts.bake.mean_curvature_distance
+                layout.prop(mask, "edge_width", text=f"Edge Width (of {radius * 100:.1f} cm)", slider=True)
+                box = layout.box()
+                box.label(text="Baked edge map (rebake to change the reach)", icon="IMAGE_DATA")
+                box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
+                box.prop(ts.bake, "curvature_angle")
+                box.prop(ts.bake, "curvature_width")
+                box.operator(
                     "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
                 ).action = "CURVATURE"
 

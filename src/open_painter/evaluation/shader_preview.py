@@ -45,6 +45,20 @@ def current(scene, ts):
                 and not _pending(entry['graph']))
 
 
+def pending_work(scene, ts):
+    """True while the timer still has topology or isolated inputs to finish."""
+    if not requested(ts):
+        return False
+    entry = _sessions.get(key_for(scene, ts))
+    if not entry:
+        return True
+    if entry.get('error') and entry.get('serial') == ts.edit_serial:
+        return False
+    return bool(entry.get('rebuild') or not entry.get('attached', False)
+                or entry.get('serial') != ts.edit_serial
+                or (entry.get('graph') is not None and _pending(entry['graph'])))
+
+
 def diagnostics(scene, ts):
     entry = _sessions.get(key_for(scene, ts), {})
     graph = entry.get('graph')
@@ -115,6 +129,8 @@ def _update(scene, ts, entry, owner=None):
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
         metrics.count('shader_topology_invalidations')
+        from . import cache
+        cache.wake()
         return False
     except Exception as exc:
         # Keep the last valid shader attached, and expose a recoverable error.
@@ -277,7 +293,9 @@ def tick(scene, ts, *, force_repair=False):
             entry.update(error=str(exc), serial=ts.edit_serial)
             metrics.count('shader_resource_failures')
         _redraw(scene)
-    scene.open_painter.status = status(scene, ts)
+    text = status(scene, ts)
+    if scene.open_painter.status != text:
+        scene.open_painter.status = text
     return current(scene, ts)
 
 

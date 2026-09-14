@@ -23,6 +23,48 @@ _regions = {}
 _states = {}
 _scene_cursor = None
 _set_cursors = {}
+_last_prune = (frozenset(), 0.0)
+IDLE_INTERVAL = 0.1
+ACTIVE_INTERVAL = 0.016
+
+
+def wake():
+    """Run the scheduler on the next event loop pass (a structural edit is pending)."""
+    if bpy.app.background:
+        return
+    if bpy.app.timers.is_registered(tick):
+        bpy.app.timers.unregister(tick)
+    bpy.app.timers.register(tick, first_interval=0.0, persistent=True)
+
+
+def _prune(live, now):
+    """Drop runtime state of deleted scenes/sets; idle ticks skip the scan."""
+    global _last_prune
+    from .raster_cache import prune
+    from . import preview_policy, live_preview, shader_preview
+    if _last_prune[0] == live and now - _last_prune[1] < 1.0:
+        return
+    _last_prune = (live, now)
+    prune(live)
+    preview_policy.prune(live)
+    live_preview.prune(live)
+    shader_preview.prune(live)
+    dependencies.prune(live)
+    live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
+    for table in (_paint_input, _live_checks, _set_cursors):
+        for key in set(table) - live_scenes:
+            table.pop(key, None)
+    for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
+        discard(identifier)
+        _pending.pop(identifier, None)
+        _regions.pop(identifier, None)
+        _states.pop(identifier, None)
+
+
+def _set_status(scene, text):
+    # RNA writes tag the UI; only write when the text actually changes.
+    if scene.open_painter.status != text:
+        scene.open_painter.status = text
 
 
 
@@ -41,7 +83,10 @@ def job_state(scene, ts):
 
 
 def set_state(scene, ts, state, error=''):
-    _states[key_for(scene, ts)] = dict(state=state, serial=ts.edit_serial, error=error)
+    key = key_for(scene, ts)
+    entry = _states.get(key)
+    if entry is None or entry['state'] != state or entry['serial'] != ts.edit_serial or entry['error'] != error:
+        _states[key] = dict(state=state, serial=ts.edit_serial, error=error)
 
 
 
@@ -82,26 +127,11 @@ def tick():
     global _scene_cursor
     from .preview_policy import fair_order
     from .evaluator import LayerEvaluator
-    from .raster_cache import prune
 
-    live = {key_for(scene, ts) for scene in bpy.data.scenes
-            if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets}
-    prune(live)
-    from . import preview_policy
-    preview_policy.prune(live)
     from . import live_preview, shader_preview
-    live_preview.prune(live)
-    shader_preview.prune(live)
-    dependencies.prune(live)
-    live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
-    for table in (_paint_input, _live_checks, _set_cursors):
-        for key in set(table) - live_scenes:
-            table.pop(key, None)
-    for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
-        discard(identifier)
-        _pending.pop(identifier, None)
-        _regions.pop(identifier, None)
-        _states.pop(identifier, None)
+    live = frozenset(key_for(scene, ts) for scene in bpy.data.scenes
+                     if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets)
+    _prune(live, monotonic())
     for scene in fair_order(list(bpy.data.scenes), _scene_cursor, lambda item: item.as_pointer()):
         if not hasattr(scene, "open_painter"):
             continue
@@ -201,7 +231,7 @@ def tick():
                                                                   preview_resolution=preview_size))
                             _jobs[key] = entry
                         set_state(scene, ts, 'RUNNING')
-                        scene.open_painter.status = f'Interactive {preview_size} · full {ts.resolution} pending'
+                        _set_status(scene, f'Interactive {preview_size} · full {ts.resolution} pending')
                         deadline = monotonic() + .006
                         while True:
                             try:
@@ -220,7 +250,7 @@ def tick():
                 if dirty:
                     _scene_cursor = scene_key
                     _set_cursors[scene_key] = ts.id
-                    scene.open_painter.status = "Updating textures…"
+                    _set_status(scene, "Updating textures…")
                     set_state(scene, ts, "RUNNING")
                     entry = _jobs.get(key)
                     if entry is None or entry[0] != dirty.channel:
@@ -254,9 +284,9 @@ def tick():
                     for channel in layer.channels:
                         channel.dirty = False
                 set_state(scene, ts, "READY")
-                scene.open_painter.status = failure_message(scene)
+                _set_status(scene, failure_message(scene))
             except Exception as exc:
-                scene.open_painter.status = str(exc)
+                _set_status(scene, str(exc))
                 logger.error("Evaluation: %s", exc)
                 # Keep unresolved outputs and their last complete pixels. The same
                 # failed revision stays parked until an edit or explicit retry.
@@ -265,15 +295,18 @@ def tick():
             _pending.pop(key, None)
             discard(key)
             return 0.001
+    # Idle projects poll slowly: native edits bind synchronously in their RNA
+    # callbacks and structural edits wake the timer, so 60 Hz is only needed
+    # while painting or while a shader session still has work to finish.
     return (
-        0.016
+        ACTIVE_INTERVAL
         if any(
-            scene.open_painter.paint_image or any(shader_preview.requested(ts)
-                                                  for ts in scene.open_painter.texture_sets)
+            scene.open_painter.paint_image or _paint_input.get(scene.as_pointer())
+            or any(shader_preview.pending_work(scene, ts) for ts in scene.open_painter.texture_sets)
             for scene in bpy.data.scenes
             if hasattr(scene, "open_painter")
         )
-        else 0.1
+        else IDLE_INTERVAL
     )
 
 

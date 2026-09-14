@@ -70,6 +70,17 @@ class OP_PT_texture_set(bpy.types.Panel):
         addon = context.preferences.addons.get(__package__.rsplit(".", 1)[0])
         if addon and addon.preferences.developer_mode:
             layout.label(text=f"ID: {ts.id}")
+            from ..evaluation import shader_preview
+            info = shader_preview.diagnostics(context.scene, ts)
+            box = layout.box()
+            box.label(text=f"Shader: {info['state']} · builds {info['graph_builds']} · updates {info['update_calls']}")
+            if info.get('units'):
+                box.label(text=f"Units {info['units']} · nodes {info.get('shader_nodes')} · largest {info.get('largest_unit')}")
+                box.label(text=f"Last build {info.get('build_ms', 0):.0f} ms · reused {info.get('reused_units', 0)} · rebuilt {info.get('rebuilt_units', 0)}")
+                limit = info.get('max_textures_frag')
+                box.label(text=f"Unique images {info.get('unique_images')} / {limit if limit else '?'} fragment samplers")
+            if info.get('rebuild_scope'):
+                box.label(text=f"Rebuild pending: {info['rebuild_scope']}"[:96])
         layout.prop(ts, "name", text="Name")
         layout.prop(ts, "resolution")
         layout.prop(ts, "preview_ao")

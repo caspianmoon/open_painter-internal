@@ -1,0 +1,27 @@
+{
+ "note": "Real-window idle scheduler cost with one native texture set (Worn Painted Metal), tests/performance/idle_timer.py",
+ "before_0.2.9": {
+  "material": "Worn Painted Metal",
+  "window_seconds": 5.0,
+  "ticks": 294,
+  "ticks_per_second": 58.8,
+  "cpu_ms_per_second": 6.96,
+  "mean_tick_ms": 0.118,
+  "intervals": {
+   "0.016": 294
+  },
+  "shader_state": "SHADER"
+ },
+ "after": {
+  "material": "Worn Painted Metal",
+  "window_seconds": 5.08,
+  "ticks": 50,
+  "ticks_per_second": 9.8,
+  "cpu_ms_per_second": 1.57,
+  "mean_tick_ms": 0.16,
+  "intervals": {
+   "0.1": 50
+  },
+  "shader_state": "SHADER"
+ }
+}

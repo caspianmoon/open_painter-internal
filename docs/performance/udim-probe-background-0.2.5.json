@@ -1,0 +1,141 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "background": true,
+  "paths": {
+    "rna_pixels_active_index": {
+      "result": "FAILED",
+      "tile_pixels": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "note": "Image.pixels acquires the buffer without an image user, so it addresses the first tile."
+    },
+    "udim_file_round_trip": {
+      "result": "PASS",
+      "files": [
+        "UDIM addressing probe.1001.png",
+        "UDIM addressing probe.1002.png"
+      ],
+      "read": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "after_rewrite": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "note": "Independent per-tile read and write through tile files; a disk round trip per tile, not in-memory access."
+    },
+    "gpu_texture_array_read": {
+      "result": "UNAVAILABLE",
+      "reason": "gpu.texture.from_image crashes the background process; requires a window"
+    },
+    "native_paint_second_tile": {
+      "result": "NOT_RUN",
+      "reason": "background mode has no viewport"
+    },
+    "cycles_bake_second_tile": {
+      "result": "PASS",
+      "use_clear": {
+        "operator": [
+          "FINISHED"
+        ],
+        "second_tile_baked": true,
+        "first_tile_unchanged": false,
+        "baked_mean": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "other_mean": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "no_clear": {
+        "operator": [
+          "FINISHED"
+        ],
+        "second_tile_baked": true,
+        "first_tile_unchanged": true,
+        "baked_mean": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "other_mean": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "note": "Emission bake of a constant color; the plane covers tile 1002 only. With use_clear the bake clears every tile of the target image, so per-tile baking must disable clearing or restore untouched tiles itself."
+    },
+    "pack_save_reopen": {
+      "result": "PASS",
+      "packed": true,
+      "packed_files": 2,
+      "tiles_after_reopen": [
+        1001,
+        1002
+      ],
+      "read": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "note": "Tile files were deleted before saving; pixels survive only through the packed .blend."
+    }
+  },
+  "tile_addressing": "PASS",
+  "passing_paths": [
+    "udim_file_round_trip",
+    "cycles_bake_second_tile",
+    "pack_save_reopen"
+  ]
+}

@@ -298,6 +298,8 @@ def on_load(_):
     dependencies.clear()
     _states.clear()
     _set_cursors.clear()
+    from ..baking.diagnostics import forget
+    forget()
     _pending.clear()
     _paint_input.clear()
     cancel_all()
@@ -374,6 +376,8 @@ def unregister():
     dependencies.clear()
     _states.clear()
     _set_cursors.clear()
+    from ..baking.diagnostics import forget
+    forget()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

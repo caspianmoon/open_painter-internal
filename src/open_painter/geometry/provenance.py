@@ -38,9 +38,16 @@ def record(ts, kind):
               'AO': (*shared_bake,'ao_scope'),
               'CURVATURE': ('curvature_angle','curvature_width'),
               'UV_BORDER': ('uv_border_width',),
-              'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance')}
+              'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance'),
+              'MEAN_CURVATURE': ('mean_curvature_distance',)}
     settings = {key: identity(getattr(ts.bake,key)) if key == 'cage_object' else getattr(ts.bake,key)
                 for key in fields.get(kind, ())}
+    if kind in {'NORMAL', 'AO'} and int(ts.bake.supersample) != 1:
+        settings['supersample'] = int(ts.bake.supersample)
+    if kind == 'AO' and ts.bake.ao_distance != 10.0:
+        # Recorded only when it differs from the implicit distance of earlier
+        # bakes, so maps baked before this setting existed are not marked stale.
+        settings['ao_distance'] = ts.bake.ao_distance
     extra = {}
     if kind in {'NORMAL','AO'}:
         extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object),

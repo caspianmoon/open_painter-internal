@@ -1,0 +1,35 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "note": "Construction wall time only (nodes.new, rename, links.new); no GPU compile.",
+  "rows": [
+    {
+      "nodes": 500,
+      "flat_s": 0.544,
+      "grouped_s": 0.039,
+      "shared_s": 0.005,
+      "groups": 10
+    },
+    {
+      "nodes": 1000,
+      "flat_s": 2.195,
+      "grouped_s": 0.195,
+      "shared_s": 0.021,
+      "groups": 10
+    },
+    {
+      "nodes": 2000,
+      "flat_s": 10.776,
+      "grouped_s": 1.132,
+      "shared_s": 0.115,
+      "groups": 10
+    },
+    {
+      "nodes": 3000,
+      "flat_s": 46.095,
+      "grouped_s": 2.547,
+      "shared_s": 0.166,
+      "groups": 10
+    }
+  ]
+}

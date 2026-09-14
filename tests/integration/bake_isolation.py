@@ -115,6 +115,29 @@ ts.bake.source_mode = 'MATCHED'
 matched = bake_pixels(ts, 'NORMAL')
 np.testing.assert_allclose(left(matched), left(control), atol=3e-5, rtol=0)
 
+# Opt-in 2x supersampling bakes a 1024 working image with doubled margin and
+# box-filters it to the authored 512; normals stay unit length and the result
+# agrees with the 1x bake away from edges. Off remains byte-identical to before.
+from open_painter.baking.cycles_baker import supersample_preflight, downsample
+ts.bake.supersample = '2'
+supersampled = bake_pixels(ts, 'NORMAL')
+ts.bake.supersample = '1'
+assert supersampled.shape == (512, 512, 4)
+vectors = left(supersampled) * 2 - 1  # left() already selects interior RGB samples
+np.testing.assert_allclose(np.linalg.norm(vectors, axis=-1), 1, atol=2e-3)
+assert float(np.abs(left(supersampled) - left(matched)).mean()) < 0.01
+try:
+    supersample_preflight(8192, 2)
+    raise AssertionError('8K supersampling was not refused')
+except ValueError as exc:
+    assert 'GiB' in str(exc)
+assert supersample_preflight(2048, 2) == 4096 and supersample_preflight(4096, 1) == 4096
+tilted = np.zeros((4, 4, 4), np.float32); tilted[..., :3] = (.5, .5, 1); tilted[..., 3] = 1
+tilted[0, 0, :3] = (1, .5, .5)  # one supersample leaning +X; the box filter renormalizes
+reduced = downsample(tilted, 2, 'NORMAL')
+assert reduced.shape == (2, 2, 4) and np.isclose(np.linalg.norm(reduced[0, 0, :3] * 2 - 1), 1, atol=1e-6)
+assert reduced[0, 0, 0] > .5 and np.allclose(reduced[1, 1, :3], (.5, .5, 1))
+
 # Explicit pointer pairing must work independently of naming conventions.
 high_a.name = 'Detailed source without suffix'
 high_b.name = 'Another arbitrary source'
@@ -292,6 +315,29 @@ assert float(left(contact).mean()) < float(left(unrelated).mean()) - 0.2, 'SET s
 ao_ts.bake.ao_scope = 'PAIR'
 isolated = bake_pixels(ao_ts, 'AO')
 assert float(left(isolated).mean()) > 0.98, 'PAIR scope retained other target AO'
+# AO distance is an explicit setting through an owned staging World. The roof
+# sits 0.15 above the floor: a reach shorter than that gap removes its contact
+# occlusion, a reach beyond it restores it, and the World never leaks.
+ao_ts.bake.ao_scope = 'SET'
+worlds_before = len(bpy.data.worlds)
+ao_ts.bake.ao_distance = 0.05
+short = bake_pixels(ao_ts, 'AO')
+ao_ts.bake.ao_distance = 10.0
+long = bake_pixels(ao_ts, 'AO')
+assert len(bpy.data.worlds) == worlds_before, 'Owned bake World leaked'
+assert float(left(short).mean()) > float(left(long).mean()) + 0.2, (float(left(short).mean()), float(left(long).mean()))
+np.testing.assert_allclose(left(long), left(contact), atol=1e-5, rtol=0)  # default distance reproduces earlier bakes
+from open_painter.geometry.provenance import record, status
+from open_painter.baking.bake_manager import register_map
+registered = cycles_baker.bake(bpy.context, ao_ts, 'AO')
+register_map(ao_ts, 'AO', registered)
+ao_prop = next(m for m in ao_ts.baked_maps if m.kind == 'AO')
+assert status(ao_ts, ao_prop) == 'Ready'
+assert 'ao_distance' not in record(ao_ts, 'AO'), 'Default distance must not change provenance of existing maps'
+ao_ts.bake.ao_distance = 2.0
+assert 'ao_distance' in record(ao_ts, 'AO') and status(ao_ts, ao_prop).startswith('Stale'), status(ao_ts, ao_prop)
+ao_ts.bake.ao_distance = 10.0
+assert status(ao_ts, ao_prop) == 'Ready'
 
 print('BAKE_ISOLATION_STATS', {
     'unpaired_normal_max_error': float(np.abs(left(unpaired) - left(control)).max()),
@@ -299,6 +345,7 @@ print('BAKE_ISOLATION_STATS', {
     'unrelated_ao': float(left(unrelated).mean()),
     'set_contact_ao': float(left(contact).mean()),
     'pair_ao': float(left(isolated).mean()),
+    'short_distance_ao': float(left(short).mean()),
 }, flush=True)
 open_painter.unregister()
 print('BAKE_ISOLATION_PASS', flush=True)

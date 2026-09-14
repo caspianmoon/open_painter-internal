@@ -24,6 +24,7 @@ class OP_BakedMap(bpy.types.PropertyGroup):
     kind: bpy.props.EnumProperty(items=[(x, x.replace("_", " ").title(), "") for x in (
         "NORMAL", "AO", "CURVATURE", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL",
         "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER", "THICKNESS",
+        "MEAN_CURVATURE", "SELECTION",
     )], update=map_changed)
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=map_changed)
 
@@ -39,6 +40,16 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         ('SET', 'Texture Set Assembly', 'Include other listed parts at their authored positions; exclude unrelated scene objects'),
         ('PAIR', 'Individual Parts', 'Only the target and its matched high-poly sources contribute occlusion'),
     ], default='SET')
+    supersample: bpy.props.EnumProperty(
+        name="Anti-Aliasing", default="1",
+        items=[("1", "Off", "Bake at the authored resolution"),
+               ("2", "2x Supersample", "Bake at twice the size with scaled margin, then box-filter down; four times the bake memory")],
+        description="Supersampled Cycles bakes reduce edge aliasing on Normal and AO maps; output stays the authored size",
+    )
+    ao_distance: bpy.props.FloatProperty(
+        name="AO Distance", default=10.0, min=0.0, subtype="DISTANCE",
+        description="World-space occlusion reach for the AO bake; 10 matches previous bakes made without an explicit world",
+    )
     device: bpy.props.EnumProperty(name="Bake Device", items=[
         ('CPU', 'CPU', 'Use CPU without changing scene settings or device preferences'),
         ('SCENE', 'Scene Device', 'Use the current scene Cycles device and existing device preferences'),
@@ -66,6 +77,18 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
     thickness_samples: bpy.props.EnumProperty(
         name="Rays per Texel", items=[(str(n), str(n), "Inward rays against the evaluated target mesh") for n in (1, 4, 8)],
         default="1",
+    )
+    mean_curvature: bpy.props.BoolProperty(
+        name="Mean Curvature (Signed)", default=False,
+        description="Smooth signed curvature of the evaluated target: 0.5 flat, brighter convex, darker concave",
+    )
+    mean_curvature_distance: bpy.props.FloatProperty(
+        name="Curvature Distance", default=0.05, min=0.0, max=1000.0, subtype="DISTANCE",
+        description="World-space radius at which curvature saturates to fully convex or concave",
+    )
+    selection: bpy.props.BoolProperty(
+        name="Selected Faces", default=False,
+        description="Current face selection of the assigned meshes as a 0/1 mask; needs a face count unchanged by modifiers",
     )
     thickness_max_distance: bpy.props.FloatProperty(
         name="Thickness Distance", default=0, min=0, subtype="DISTANCE",

@@ -29,11 +29,28 @@ not replace the editor or the material library.
   an existing bundle. Generated geometry is explicitly included or omitted.
   Measure Density reports the active set. Select source props before Stage Atlas;
   it creates evaluated copies and new UVs at the explicitly chosen resolution.
+- **Inspect Bake Setup:** Bake Mesh Maps → Inspect Bake Setup checks
+  assignments, scale, cages and the evaluated render UVs of every object in the
+  set for degenerate faces, faces outside the 0–1 tile and exact UV overlaps.
+  Partial overlaps are warnings; stacked or mirrored islands are informational
+  because symmetric assets stack them deliberately. With Bake from High Poly on,
+  it also samples cage rays and reports the missed fraction as an estimate.
+  Select Problem Faces selects
+  the reported faces on their base meshes when no modifier changes the face
+  count. Nothing else is modified. See [bake diagnostics](bake-diagnostics.md).
+- **Mean Curvature / Selected Faces maps:** Bake Mesh Maps → Target Mesh Utility
+  Maps. Mean Curvature is signed and smooth (0.5 flat); Curvature Distance sets the
+  saturation radius. Selected Faces snapshots the current face selection and
+  Reselect Baked Faces restores it. Both are Baked mask sources.
+- **AO Distance and 2x Supersample:** in the bake settings; the default distance
+  matches earlier bakes and supersampling is refused above 2 GiB of bake memory.
 - **Offline Analysis:** use explicit contact frame ranges and a Contact field,
   choose a rest mesh for strain, mark selected cut faces, inspect the resource
   inventory, or stage a mesh LOD. Source meshes remain available for comparison.
 
 The [implementation status](implementation-status.md) lists limitations and
-acceptance evidence. UDIM authoring is not exposed: the tile-access probe failed.
+acceptance evidence. UDIM authoring is not exposed: per-tile pixel access exists
+only through tile files on this build ([gate rerun](udim-tile-access.md)), and no
+two-tile acceptance has run.
 The GPU image-chain experiment is disabled by default. Neither entry is presented
 as production-ready functionality.

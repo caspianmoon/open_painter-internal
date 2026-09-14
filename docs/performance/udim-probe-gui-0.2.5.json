@@ -1,0 +1,147 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "background": false,
+  "paths": {
+    "rna_pixels_active_index": {
+      "result": "FAILED",
+      "tile_pixels": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "note": "Image.pixels acquires the buffer without an image user, so it addresses the first tile."
+    },
+    "udim_file_round_trip": {
+      "result": "PASS",
+      "files": [
+        "UDIM addressing probe.1001.png",
+        "UDIM addressing probe.1002.png"
+      ],
+      "read": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "after_rewrite": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      ],
+      "note": "Independent per-tile read and write through tile files; a disk round trip per tile, not in-memory access."
+    },
+    "gpu_texture_array_read": {
+      "result": "FAILED",
+      "texture": {
+        "width": 16,
+        "height": 16,
+        "format": "SRGB8_A8",
+        "layers": 1
+      },
+      "samples": [
+        [
+          255.0,
+          0.0,
+          0.0,
+          255.0
+        ]
+      ],
+      "note": "Read-only. A single layer means the Python API uploaded only the first tile, not a tile array."
+    },
+    "native_paint_second_tile": {
+      "result": "PASS",
+      "second_tile_changed": true,
+      "first_tile_unchanged": true,
+      "painted_mean": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "cycles_bake_second_tile": {
+      "result": "PASS",
+      "use_clear": {
+        "operator": [
+          "FINISHED"
+        ],
+        "second_tile_baked": true,
+        "first_tile_unchanged": false,
+        "baked_mean": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "other_mean": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "no_clear": {
+        "operator": [
+          "FINISHED"
+        ],
+        "second_tile_baked": true,
+        "first_tile_unchanged": true,
+        "baked_mean": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "other_mean": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "note": "Emission bake of a constant color; the plane covers tile 1002 only. With use_clear the bake clears every tile of the target image, so per-tile baking must disable clearing or restore untouched tiles itself."
+    },
+    "pack_save_reopen": {
+      "result": "NOT_RUN",
+      "reason": "RuntimeError('reopen skipped with a window: open_mainfile ends the startup script; see the background run')",
+      "traceback": [
+        "    raise RuntimeError(\"reopen skipped with a window: open_mainfile ends the startup script; \"",
+        "                       \"see the background run\")",
+        "RuntimeError: reopen skipped with a window: open_mainfile ends the startup script; see the background run"
+      ]
+    }
+  },
+  "tile_addressing": "PASS",
+  "passing_paths": [
+    "udim_file_round_trip",
+    "native_paint_second_tile",
+    "cycles_bake_second_tile"
+  ]
+}

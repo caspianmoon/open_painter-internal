@@ -22,6 +22,9 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
             ),
             ('MATCH_SOURCES', 'Match Sources by Name', 'Match assigned _low objects with scene-local _high and _cage partners'),
             ('CREATE_CAGES', 'Create Editable Cages', 'Create owned render-evaluated cage meshes without modifying source objects'),
+            ('INSPECT', 'Inspect Bake Setup', 'Check assignments, scale, cages and evaluated UVs for degenerate, outside-tile and exactly overlapping faces; changes nothing'),
+            ('SELECT_ISSUES', 'Select Problem Faces', 'Select the faces reported by the last inspection on their base meshes'),
+            ('RESELECT_MAP', 'Reselect Baked Faces', 'Restore the face selection recorded by the Selected Faces map'),
         ]
     )
     cage_offset: bpy.props.FloatProperty(name='World-Space Offset', default=.01, min=0, subtype='DISTANCE')
@@ -38,7 +41,37 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
 
     def run(self, context):
         ts = require_set(context)
-        if self.action == 'MATCH_SOURCES':
+        if self.action == 'INSPECT':
+            from ..baking import diagnostics
+            issues = diagnostics.run(ts)
+            worst = {'ERROR': 'ERROR', 'WARNING': 'WARNING'}.get(
+                next((i.severity for i in issues if i.severity == 'ERROR'), None)
+                or next((i.severity for i in issues if i.severity == 'WARNING'), None), 'INFO')
+            self.report({worst}, f'{len(issues)} finding(s)' if issues else 'Bake setup has no findings')
+        elif self.action == 'SELECT_ISSUES':
+            from ..baking import diagnostics
+            issues = diagnostics.last(ts)
+            if not any(i.faces for i in issues):
+                raise ValueError('Run Inspect Bake Setup first; no faces were reported.')
+            counts, skipped = diagnostics.select_faces(ts, issues)
+            message = ', '.join(f'{name}: {count} face(s)' for name, count in counts.items()) or 'No selectable faces'
+            if skipped:
+                message += '; evaluated topology differs on ' + ', '.join(skipped)
+            self.report({'INFO'}, message)
+        elif self.action == 'RESELECT_MAP':
+            import json
+            from ..baking.diagnostics import Issue, select_faces
+            prop = next((m for m in ts.baked_maps if m.kind == 'SELECTION' and m.image), None)
+            if prop is None or not prop.image.get('selected_faces'):
+                raise ValueError('Bake the Selected Faces map first.')
+            recorded = json.loads(prop.image['selected_faces'])
+            issues = [Issue('INFO', 'Recorded selection', name, tuple(faces)) for name, faces in recorded.items()]
+            counts, skipped = select_faces(ts, issues)
+            message = ', '.join(f'{name}: {count} face(s)' for name, count in counts.items()) or 'No recorded faces'
+            if skipped:
+                message += '; evaluated topology differs on ' + ', '.join(skipped)
+            self.report({'INFO'}, message)
+        elif self.action == 'MATCH_SOURCES':
             from ..baking.pairing import match_sources
             parts = match_sources(ts, context.scene)
             self.report({'INFO'}, f'Matched {len(parts)} target(s); {len(ts.bake.high_objects)} high-poly source(s)')
@@ -126,7 +159,7 @@ class OP_PT_bake(bpy.types.Panel):
             if settings.cage_mode == 'CUSTOM' and len({r.object for r in ts.assignments if r.object}) > 1:
                 layout.prop(ref, 'cage')
         layout.prop(ts, "resolution")
-        for key in ("margin", "cage_mode", "ray_distance", "samples", "device"):
+        for key in ("margin", "cage_mode", "ray_distance", "samples", "device", "supersample"):
             layout.prop(settings, key)
         if settings.cage_mode == 'AUTO':
             layout.prop(settings, 'separate_cage_distance')
@@ -142,6 +175,7 @@ class OP_PT_bake(bpy.types.Panel):
             layout.prop(settings, key)
         if settings.ao:
             layout.prop(settings, 'ao_scope')
+            layout.prop(settings, 'ao_distance')
         if settings.curvature:
             layout.prop(settings, "curvature_angle")
             layout.prop(settings, "curvature_width")
@@ -151,16 +185,36 @@ class OP_PT_bake(bpy.types.Panel):
             ).action = "CURVATURE"
         section = layout.column(align=True)
         section.label(text="Target Mesh Utility Maps")
-        for key in ("position", "world_normal", "object_normal", "material_id", "object_id", "uv_island", "uv_border", "thickness"):
+        for key in ("position", "world_normal", "object_normal", "material_id", "object_id", "uv_island", "uv_border", "thickness", "mean_curvature", "selection"):
             section.prop(settings, key)
         if settings.uv_border:
             section.prop(settings, "uv_border_width")
+        if settings.mean_curvature:
+            section.prop(settings, "mean_curvature_distance")
+        if settings.selection:
+            section.label(text="Face selection of the assigned meshes; face count must survive modifiers.")
         if settings.thickness:
             section.prop(settings, "thickness_resolution")
             section.prop(settings, "thickness_samples")
             section.prop(settings, "thickness_max_distance")
             section.label(text="Closed surfaces; sampled inward rays.")
         section.label(text="Utility maps use evaluated target UVs.")
+        from ..baking import diagnostics
+        row = layout.row(align=True)
+        row.operator('open_painter.bake', text='Inspect Bake Setup', icon='VIEWZOOM').action = 'INSPECT'
+        findings = diagnostics.last(ts)
+        if any(issue.faces for issue in findings):
+            row.operator('open_painter.bake', text='', icon='RESTRICT_SELECT_OFF').action = 'SELECT_ISSUES'
+        for issue in findings[:8]:
+            icon = {'ERROR': 'ERROR', 'WARNING': 'INFO'}.get(issue.severity, 'DOT')
+            text = issue.message
+            if issue.object_name:
+                text = f'{issue.object_name}: {text}'
+            if issue.faces:
+                text += f' [{len(issue.faces)} faces]'
+            layout.label(text=text, icon=icon)
+        if len(findings) > 8:
+            layout.label(text=f'{len(findings) - 8} more finding(s)')
         layout.operator('open_painter.bake_queue', icon='RENDER_STILL')
         layout.label(text='Esc stops between maps; Cycles maps block.')
         layout.operator(
@@ -171,3 +225,5 @@ class OP_PT_bake(bpy.types.Panel):
             layout.label(
                 text=f"{prop.kind}: {status(ts, prop)}", icon="IMAGE_DATA"
             )
+        if any(prop.kind == 'SELECTION' and prop.image for prop in ts.baked_maps):
+            layout.operator('open_painter.bake', text='Reselect Baked Faces', icon='RESTRICT_SELECT_OFF').action = 'RESELECT_MAP'

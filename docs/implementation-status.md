@@ -1,5 +1,30 @@
 # Roadmap implementation status
 
+## Ucupaint integration — 2026-09-14
+
+Implemented from the study, outside the shader compiler and smart-material files:
+signed mean-curvature and selection utility maps with Reselect Baked Faces, UDIM tile
+enumeration in Inspect Bake Setup, an explicit AO Distance through an owned staging
+World, and opt-in 2× supersampled Cycles bakes with a byte preflight. Details, tests and
+measurements: [ucupaint-integration.md](ucupaint-integration.md). Section 7 of the
+study measures the 0.2.7 shader compiler (quadratic flat-tree construction, full
+rebuild on layer visibility, 64 fragment samplers on Metal) against Ucupaint's
+per-layer and library group structure (46 s → 2.5 s → 0.17 s for 3,000 nodes) and
+lists compiler recommendations that were not applied here.
+
+## Ucupaint study — 2026-09-14
+
+Research only, no code changes. [What Open Painter can take from Ucupaint 3.0.0](research/ucupaint-study.md)
+compares the GPL-3.0-or-later Ucupaint source (shader-node layer stack) with the CPU evaluator and lists ranked,
+source-cited candidates: a signed mean-curvature map to port (M5), UDIM tile enumeration and the file-based tile
+workflow (M11, consistent with the tile-access gate), bevel/SSAA/AO bake options (M5), per-channel mask participation,
+a Previous-Layers adjustment layer and non-destructive freezes (M7), a solo viewer (M3), Empty-driven decals (M10), a
+data-image colour-space policy, and mask-edge transition effects. Node plumbing, tile-file renaming, atlases, the
+network updater and scene-mutating bake bookkeeping are explicitly not to be taken. Each recommendation names the
+Open Painter files it touches and the Blender checks required before committing.
+
+
+
 ## Generated material quality — 2026-09-14
 
 Version **0.2.5** upgrades all **50 existing smart materials** using 15 generated
@@ -179,13 +204,13 @@ authored images and save/export outputs retain their resolution and precision.
 | M2 | Global disposable-cache allowance, scalar float32 working buffers, finite-halo strip evaluation, immutable decoded image reuse across a revision, retained active-channel output for regional edits without evicting source caches. | CPU parity and cache tests. Mandatory images, some full-frame filter temporaries and all process allocations are not a hard project-memory cap. No general buffer pool or subrectangle Blender Image upload. |
 | M3 | Explicit 512/1024 interactive proxy option, independent proxy cache and image ownership, adaptive cooperative compute batching, active-channel/fair scheduling, settled final evaluation, authoritative save/render flush. Deleted-set proxies are released. | Proxy/save and existing native paint tests. Individual full-frame operations and image transfers can still exceed the compute budget. No claim of universal real-time behavior or 2× cold speedup. |
 | M4 | Disabled-by-default CPU/GPU image-chain contract: fill, masked over, Levels and separable Gaussian blur; context-scoped resources and transfer/readback timing. Unsupported operations/parameters reject. | Actual Metal float32 parity experiment; headless CPU fallback. Isolated-chain speed does not establish a whole-material benefit. No production GPU routing or shader-stack rewrite. |
-| M5 | Shared evaluated geometry, scene-specific dependency graph, baked-map provenance/staleness, scale/UV/cage/degenerate diagnostics, map-boundary cancellable bake queue. | Evaluated projection, utility-map and diagnostics tests. A single Cycles map remains blocking. Exact UV overlap/ray-coverage diagnosis and arbitrary modifier-input provenance are not complete. |
+| M5 | Shared evaluated geometry, scene-specific dependency graph, baked-map provenance/staleness, scale/UV/cage/degenerate diagnostics, map-boundary cancellable bake queue. 2026-09-14: exact UV overlap analysis across all objects of a set, stacked/mirrored classification per polygon, sampled cage-ray coverage, Inspect Bake Setup and Select Problem Faces in the bake panel ([bake diagnostics](bake-diagnostics.md)). | Evaluated projection, utility-map and diagnostics tests; 126k evaluated faces inspect in 4.7 s; 20k sampled cage rays against a 126k-face source take 0.78 s and are reported as an estimate with the missed faces. A single Cycles map remains blocking. Arbitrary modifier-input provenance is not complete; face selection needs matching base/evaluated face counts. |
 | M6 | Explicit object/collection scene fields: orientation, position, distance, contact, exposure, heat/moisture/soot, named attributes and vertex groups. Bounded analysis resolution; manual/live/frozen modes; last-good retention and frozen portable serialization. | Panel/bolt field fixture verifies moving/deleting influencers, material-edit reuse and frozen round-trip. Fields are artistic scalar analyses, not fluid/thermal/physical simulation. |
 | M7 | Stable layer/mask references, pre/post-filter stages, dependency traversal and cycle rejection, published packed masks, duplicate/import remapping. | Reference consumers, cycles, edits, group/set duplication and save/import tests. Folder channel-composite references reject explicitly. Some image edits invalidate conservatively; published snapshots require explicit republishing. |
 | M8 | Published-mask-driven rust flakes/moss instances, deterministic area-weighted placement, Geometry Nodes ownership, count/triangle limits, regenerate/freeze/remove, editable curve weld geometry and logical coating-depth masks. | Actual evaluated instances, source preservation, transforms, ownership and limits tested. Geometry is optional and bounded. No volumetric substrate cutting or automatic physical damage. |
 | M9 | Explicit semantic layer tags, versioned environment profiles, Clean/Used/Damaged controls, deterministic variations, local opacity overrides, optional state serialization. | Three separate texture sets reproduce coordinated but distinct states; paint layers remain unchanged. Existing materials are not silently retagged; shared outputs cannot vary independently. |
 | M10 | Separate one-click Material Stamp with coordinated Base Color/Roughness/Metallic/Height, shared coverage, UV seam mapping, slot/backface/occlusion restrictions, pressure, packed immutable source snapshots and native undo. Existing fill projection supports editable decal transforms. | Seam/multi-slot CPU fixture and real Blender undo/redo. Continuous multi-channel strokes, full brush modifiers and dedicated scratch-curve fields are not complete. Packing/copying a stamp is not claimed fast continuous painting. |
-| M11 | Godot/glTF/Unity URP/HDRP profiles, independent packed channels, evaluated mesh/texture/manifest bundle, optional realized geometry, texel-density measurement, new-UV staged atlas, failure cleanup. | Export-byte, bundle, atlas preservation and rollback tests. UDIM `Image.pixels` tile-addressing probe failed; native two-tile paint/bake/save/export acceptance is NOT passed and no UDIM UI is advertised. Atlas uses grid cells, not a production packing optimizer. |
+| M11 | Godot/glTF/Unity URP/HDRP profiles, independent packed channels, evaluated mesh/texture/manifest bundle, optional realized geometry, texel-density measurement, new-UV staged atlas, failure cleanup. | Export-byte, bundle, atlas preservation and rollback tests. UDIM gate rerun 2026-09-14 ([udim-tile-access.md](udim-tile-access.md)): `Image.pixels` and `gpu.texture.from_image` reach only tile 1001, but per-tile files through a `<UDIM>` path and native painting onto tile 1002 both pass. Two-tile paint/bake/save/export acceptance is still NOT run and no UDIM UI is advertised. Atlas uses grid cells, not a production packing optimizer. |
 | M12 | Bounded offline pair contact history with broad-phase bounds and topology checks, rest-strain calculation, explicit cut-face attributes, snow/splinter/peel prototypes under M8 limits, three-way inheritance data preview, declarative recipe API, resource inventory and staged mesh LOD. | Offline/registration and geometry fixtures. Contact proximity/origin travel is not tangential friction. Persistent parent-version inheritance workflow, physical fatigue, true cross-sections and AI reference fitting are not complete. These packages remain optional/experimental individually, as specified by the plan. |
 
 ## Validation
@@ -253,6 +278,8 @@ addressing. Native tile painting and baking were therefore **not run**. This
 is a failed capability gate, not a claim that every possible UDIM access method
 is impossible. A different tile-storage/transfer path and complete two-tile
 acceptance are required before advertising support.
+The 2026-09-14 rerun in
+[udim-tile-access.md](udim-tile-access.md) found that path: per-tile files.
 
 ## Fresh paired 2K CPU benchmark
 

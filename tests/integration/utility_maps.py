@@ -142,6 +142,111 @@ assert {item.kind for item in cube_ts.baked_maps} == {"POSITION", "WORLD_NORMAL"
 assert not cube_ts.bake.thickness
 assert len(ts.material.node_tree.nodes) == node_count
 register_map(cube_ts, "THICKNESS", thickness_image)
+
+# Signed mean curvature (ported from Ucupaint): a beveled cube reads convex on
+# its rounded edges, flat (0.5) on face centres, and a hole punched inward reads
+# concave along its rim. Coverage alpha matches the other utility maps.
+cube = next(ref.object for ref in cube_ts.assignments if ref.object)
+bevel = cube.modifiers.new("Bevel", "BEVEL")
+bevel.width, bevel.segments = .15, 3
+bpy.context.view_layer.update()
+cube_ts.bake.mean_curvature_distance = .05
+curvature_image, curvature = pixels(cube_ts, "MEAN_CURVATURE")
+assert curvature_image["open_painter_mesh_map"] == "MEAN_CURVATURE"
+covered = curvature[..., 3] > 0
+assert covered.any() and np.isfinite(curvature).all()
+values = curvature[..., 0][covered]
+# A 0.15 bevel does not reach the 0.05 saturation radius, so the set is
+# stretched until its strongest feature saturates; the effective radius is recorded.
+assert values.max() > .95, values.max()
+assert curvature_image["mean_curvature_effective_distance"] > .05
+assert np.isclose(curvature_image["mean_curvature_distance"], .05)
+# Face interiors interpolate the bevel-ring vertices (vertex domain), so flat
+# areas sit above 0.5 rather than exactly on it; nothing reads concave.
+assert .5 <= np.median(values) < .75, np.median(values)
+assert values.min() >= .5 - 1e-4
+# Non-uniform scale and mirroring must not flip or break the sign.
+cube.scale = (-1.5, 1, .5)
+bpy.context.view_layer.update()
+mirrored = pixels(cube_ts, "MEAN_CURVATURE")[1]
+assert mirrored[..., 0][mirrored[..., 3] > 0].max() > .9 and mirrored[..., 0][mirrored[..., 3] > 0].min() >= .5 - 1e-4
+cube.scale = (1, 1, 1)
+# A concave feature: a recessed pocket in the top face. Its floor edges are
+# concave (dark) while the pocket lip and outer edges stay convex (bright).
+cube.modifiers.remove(bevel)
+pocket = bpy.data.objects.new("pocket", bpy.data.meshes.new("pocket"))
+bm = bmesh.new(); bmesh.ops.create_cube(bm, size=2)
+top = max(bm.faces, key=lambda f: f.calc_center_median().z)
+inset = bmesh.ops.inset_region(bm, faces=[top], thickness=.6, depth=0)
+bmesh.ops.translate(bm, verts=top.verts, vec=(0, 0, -.8))
+bm.to_mesh(pocket.data); bm.free()
+bpy.context.collection.objects.link(pocket)
+bpy.context.view_layer.objects.active = pocket
+bpy.ops.object.select_all(action="DESELECT"); pocket.select_set(True)
+bpy.ops.object.mode_set(mode="EDIT"); bpy.ops.mesh.select_all(action="SELECT")
+bpy.ops.uv.smart_project(island_margin=.02); bpy.ops.object.mode_set(mode="OBJECT")
+pocket_ts = sets.create(bpy.context.scene, "Pocket", 512)
+sets.assign(bpy.context.scene, pocket_ts, pocket)
+pocket_ts.bake.mean_curvature_distance = .05
+recess = pixels(pocket_ts, "MEAN_CURVATURE")[1]
+recess_values = recess[..., 0][recess[..., 3] > 0]
+assert recess_values.min() < .2 and recess_values.max() > .9, (recess_values.min(), recess_values.max())
+bpy.context.view_layer.objects.active = cube
+
+# Selection map: chosen faces are 1, others 0; the face list is recorded; a
+# topology-changing modifier is refused instead of guessed.
+for face in cube.data.polygons:
+    face.select = face.normal.z > .9
+selection_image, selection = pixels(cube_ts, "SELECTION")
+assert json.loads(selection_image["selected_faces"]) == {cube.name: [f.index for f in cube.data.polygons if f.select]}
+# Only the top face belongs to this set's slot, so its texels are the covered ones.
+sel = selection[..., 0][selection[..., 3] > 0]
+assert sel.size and np.all(sel == 1), np.unique(sel)[:8]
+for face in cube.data.polygons:
+    face.select = False
+cleared = pixels(cube_ts, "SELECTION")[1]
+assert np.all(cleared[..., 0][cleared[..., 3] > 0] == 0)
+for face in cube.data.polygons:
+    face.select = face.normal.z > .9
+subdivide = cube.modifiers.new("Subdivide", "SUBSURF")
+try:
+    bake_utility(cube_ts, "SELECTION")
+    raise AssertionError("Selection mapped through a topology-changing modifier")
+except ValueError as exc:
+    assert "face count" in str(exc)
+cube.modifiers.remove(subdivide)
+for face in cube.data.polygons:
+    face.select = face.normal.z > .9
+# Both kinds are selectable baked-mask sources and bake through the queue.
+cube_ts.bake.position = cube_ts.bake.world_normal = False
+cube_ts.bake.mean_curvature = cube_ts.bake.selection = True
+bake_selected(bpy.context, cube_ts)
+assert {item.kind for item in cube_ts.baked_maps} >= {"MEAN_CURVATURE", "SELECTION"}
+from open_painter.core import layer_stack as stack
+probe_layer = stack.add(cube_ts, "FILL", "Curvature probe")
+probe_mask = probe_layer.masks.add(); probe_mask.source, probe_mask.map_type = "BAKED", "MEAN_CURVATURE"
+from open_painter.evaluation.mask_eval import evaluate_masks
+masked = evaluate_masks(cube_ts, probe_layer, 64, 0, 64, {}, {})
+assert masked.shape[:2] == (64, 64) and np.isfinite(masked).all()
+# The persistent shader graph (0.2.7 native authoring, when present) samples any
+# baked map kind through the same generic path.
+try:
+    from open_painter.evaluation import shader_preview
+except ImportError:
+    shader_preview = None
+if shader_preview is not None:
+    graph = shader_preview.ensure(bpy.context.scene, cube_ts)
+    assert graph is not None and graph.tree is not None and not graph.pending_resources
+    curvature_prop = next(m for m in cube_ts.baked_maps if m.kind == "MEAN_CURVATURE")
+    assert any(node.bl_idname == "ShaderNodeTexImage" and node.image == curvature_prop.image for node in graph.tree.nodes)
+# Recorded faces can be restored on the base mesh.
+for face in cube.data.polygons:
+    face.select = False
+bpy.context.view_layer.objects.active = cube
+project = bpy.context.scene.open_painter
+project.active_texture_set = next(i for i, item in enumerate(project.texture_sets) if item.id == cube_ts.id)
+assert bpy.ops.open_painter.bake(action="RESELECT_MAP") == {"FINISHED"}
+assert [face.select for face in cube.data.polygons] == [face.normal.z > .9 for face in cube.data.polygons]
 filename = root / ".blender-test" / "utility-maps.blend"
 filename.parent.mkdir(exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(filename))
@@ -151,4 +256,4 @@ saved_thickness = next(item.image for item in loaded.baked_maps if item.kind == 
 assert saved_thickness.packed_file and saved_thickness["thickness_valid_hits"] > 0
 assert np.allclose(images.pixels(saved_thickness), thickness)
 open_painter.unregister()
-print("UTILITY_MAPS_PASS: assigned bounds; render UVs; world/object normals; stable IDs; islands/borders; evaluated modifiers; true closed/open thickness; packed save/reopen; no shader effect nodes")
+print("UTILITY_MAPS_PASS: assigned bounds; render UVs; world/object normals; stable IDs; islands/borders; evaluated modifiers; true closed/open thickness; signed mean curvature; selection mask; packed save/reopen; no shader effect nodes")

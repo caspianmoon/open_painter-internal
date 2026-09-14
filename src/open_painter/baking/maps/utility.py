@@ -6,6 +6,8 @@ IDs are flat deterministic RGB colors, with their source names stored as JSON.
 UV_BORDER is a grayscale distance falloff inside UV island boundaries.
 THICKNESS is an inward ray intersection distance / thickness_distance_scale;
 alpha is zero outside assigned UVs and where no opposing surface was found.
+MEAN_CURVATURE is signed smooth curvature (0.5 flat, >0.5 convex, <0.5 concave).
+SELECTION is the current face selection (1 selected, 0 otherwise).
 
 All maps describe the evaluated target mesh (including viewport modifiers), in
 the render UV map's 0..1 tile. They do not transfer high-poly surface detail.
@@ -23,9 +25,10 @@ from mathutils.bvhtree import BVHTree
 from ...core import image_manager as images
 
 
+# Append only: OP_BakedMap.kind and mask map types mirror this order.
 UTILITY_KINDS = (
     "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL", "MATERIAL_ID", "OBJECT_ID",
-    "UV_ISLAND", "UV_BORDER", "THICKNESS",
+    "UV_ISLAND", "UV_BORDER", "THICKNESS", "MEAN_CURVATURE", "SELECTION",
 )
 
 
@@ -92,12 +95,32 @@ def _material_key(ts, obj, slot):
     return f"{_object_key(obj)}|slot:{slot}"
 
 
-def _rasterize(targets, ts, kind, n, minimum, maximum, palette):
+def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
     result = np.zeros((n, n, 4), dtype=np.float32)
     span = maximum - minimum
     nondegenerate = span > max(float(np.linalg.norm(span)) * 1e-6, 1e-12)
-    for target in targets:
+    signals = {}
+    if kind == "MEAN_CURVATURE":
+        from .mean_curvature import vertex_signal
+        distance = ts.bake.mean_curvature_distance
+        signals = {index: vertex_signal(target, distance) for index, target in enumerate(targets)}
+        peak = max((float(np.abs(v).max()) for v in signals.values() if v.size), default=0.0)
+        # One symmetric stretch for the whole set keeps objects comparable and
+        # flat surfaces at exactly 0.5 while the strongest feature saturates.
+        stretch = 1.0 / peak if 0.0 < peak < 1.0 else 1.0
+        signals = {index: .5 + .5 * np.clip(v * stretch, -1, 1) for index, v in signals.items()}
+        if metadata is not None:
+            metadata["mean_curvature_distance"] = float(distance)
+            metadata["mean_curvature_effective_distance"] = float(distance * stretch)
+    for index, target in enumerate(targets):
         islands, borders = _islands(target) if kind in {"UV_ISLAND", "UV_BORDER"} else ({}, {})
+        scalars = signals.get(index)
+        faces = None
+        if kind == "SELECTION":
+            from .selection import polygon_flags
+            faces = polygon_flags(target)
+            if metadata is not None:
+                metadata.setdefault("selected_faces", {})[target["object"].name] = np.flatnonzero(faces).tolist()
         island_borders = {}
         if kind == "UV_BORDER":
             for face, edges in borders.items():
@@ -129,7 +152,11 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette):
                 ]
             for region, inside, weights, x, y in _tiles(uv, n):
                 tile = result[region]
-                if kind in {"POSITION", "WORLD_NORMAL", "OBJECT_NORMAL"}:
+                if scalars is not None:
+                    tile[..., :3][inside] = (weights @ scalars[list(tri.vertices)])[inside, None]
+                elif faces is not None:
+                    tile[..., :3][inside] = faces[tri.polygon_index]
+                elif kind in {"POSITION", "WORLD_NORMAL", "OBJECT_NORMAL"}:
                     current = weights @ values
                     if kind != "POSITION":
                         current = _unit(current) * 0.5 + 0.5
@@ -239,7 +266,9 @@ def bake_utility(ts, kind):
                 raise ValueError("Thickness needs non-zero target bounds or a positive maximum distance.")
             pixels, metadata = _thickness(targets, ts, n, distance_scale)
         else:
-            pixels = _rasterize(targets, ts, kind, n, minimum, maximum, palette)
+            pixels = _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata)
+    if kind == "SELECTION":
+        metadata["selected_faces"] = json.dumps(metadata.get("selected_faces", {}), sort_keys=True)
     image = images.create(f"{ts.name}_Baked{kind.title().replace('_', '')}", n)
     try:
         image["open_painter_mesh_map"] = kind

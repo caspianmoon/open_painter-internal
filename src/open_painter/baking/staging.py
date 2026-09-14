@@ -9,6 +9,7 @@ class BakeStage:
         self.context, self.ts, self.groups = context, ts, groups
         self.image, self.scratch = image, scratch
         self.scene = None
+        self.world = None
         self.objects, self.meshes, self.materials = [], [], []
         self.copies = {}
 
@@ -22,6 +23,13 @@ class BakeStage:
         self.scene.cycles.samples = self.ts.bake.samples
         self.scene.cycles.use_adaptive_sampling = False
         self.scene.cycles.seed = 0
+        # A scene created here has no World, so Cycles used its implicit AO
+        # distance. An owned World makes that distance an explicit bake setting
+        # (Ucupaint sets world.light_settings.distance the same way).
+        self.world = bpy.data.worlds.new('Open Painter Bake World')
+        self.world[OWNER] = True
+        self.world.light_settings.distance = self.ts.bake.ao_distance
+        self.scene.world = self.world
         originals = list(dict.fromkeys(obj for group in self.groups
                                       for obj in (group.low, *group.sources, group.cage) if obj))
         from .render_geometry import objects
@@ -79,6 +87,8 @@ class BakeStage:
             bpy.data.materials.remove(material)
         if self.scene:
             bpy.data.scenes.remove(self.scene)
+        if self.world:
+            bpy.data.worlds.remove(self.world)
 
 
 @contextmanager

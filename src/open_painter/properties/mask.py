@@ -10,6 +10,13 @@ def changed(self, context):
     invalidate(self, context)
 
 
+def numeric(self, context):
+    """A uniform or resource-identity edit; graph structure is unchanged."""
+    from .layer import numeric as invalidate
+
+    invalidate(self, context)
+
+
 class OP_Mask(bpy.types.PropertyGroup):
     reference_layer: bpy.props.StringProperty(name='Source Layer ID', update=changed)
     reference_mask: bpy.props.StringProperty(name='Through Mask Effect ID', update=changed)
@@ -25,10 +32,10 @@ class OP_Mask(bpy.types.PropertyGroup):
     detail_normal_anchor: bpy.props.StringProperty(name='Micro Normal', update=changed,
         description='Anchor point supplying a tangent normal whose relief the generator follows')
     detail_height_strength: bpy.props.FloatProperty(name='Height Details Intensity', default=1, min=0,
-        soft_max=4, max=10, update=changed, description='Strength of the Micro Height convexity and cavities')
+        soft_max=4, max=10, update=numeric, description='Strength of the Micro Height convexity and cavities')
     detail_normal_strength: bpy.props.FloatProperty(name='Normal Details Intensity', default=1, min=0,
-        soft_max=4, max=10, update=changed, description='Strength of the Micro Normal convexity and cavities')
-    detail_radius: bpy.props.FloatProperty(name='Micro Radius', default=2, min=.5, max=16, update=changed,
+        soft_max=4, max=10, update=numeric, description='Strength of the Micro Normal convexity and cavities')
+    detail_radius: bpy.props.FloatProperty(name='Micro Radius', default=2, min=.5, max=16, update=numeric,
         description='Texel radius over which micro details are measured; also the micro cavity reach')
     influence: bpy.props.PointerProperty(type=OP_Influencer)
     id: bpy.props.StringProperty()
@@ -51,7 +58,7 @@ class OP_Mask(bpy.types.PropertyGroup):
     )
     procedural: bpy.props.StringProperty(default="FBM", update=changed)
     effect: bpy.props.PointerProperty(type=OP_TextureEffect)
-    id_color: bpy.props.FloatVectorProperty(size=3, subtype="COLOR", default=(1,1,1), min=0,max=1, update=changed)
+    id_color: bpy.props.FloatVectorProperty(size=3, subtype="COLOR", default=(1,1,1), min=0,max=1, update=numeric)
     projection: bpy.props.EnumProperty(
         name="Projection",
         items=[
@@ -84,10 +91,10 @@ class OP_Mask(bpy.types.PropertyGroup):
         update=changed,
     )
     scale: bpy.props.FloatVectorProperty(
-        name="Scale", size=2, default=(1, 1), min=0.001, update=changed
+        name="Scale", size=2, default=(1, 1), min=0.001, update=numeric
     )
-    rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=changed)
-    offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=changed)
+    rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=numeric)
+    offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=numeric)
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=changed)
     map_type: bpy.props.EnumProperty(
         name="Map",
@@ -112,21 +119,21 @@ class OP_Mask(bpy.types.PropertyGroup):
         ],
         update=changed,
     )
-    invert: bpy.props.BoolProperty(name="Invert", update=changed)
-    black: bpy.props.FloatProperty(name="Black Level", min=0, max=1, update=changed)
-    white: bpy.props.FloatProperty(name="White Level", default=1, min=0, max=1, update=changed)
-    strength: bpy.props.FloatProperty(name="Strength", default=1, min=0, max=1, update=changed)
-    amount: bpy.props.FloatProperty(name="Amount", default=0.5, min=0, max=1, update=changed)
-    contrast: bpy.props.FloatProperty(name="Contrast", default=2, min=0.01, max=20, update=changed)
+    invert: bpy.props.BoolProperty(name="Invert", update=numeric)
+    black: bpy.props.FloatProperty(name="Black Level", min=0, max=1, update=numeric)
+    white: bpy.props.FloatProperty(name="White Level", default=1, min=0, max=1, update=numeric)
+    strength: bpy.props.FloatProperty(name="Strength", default=1, min=0, max=1, update=numeric)
+    amount: bpy.props.FloatProperty(name="Amount", default=0.5, min=0, max=1, update=numeric)
+    contrast: bpy.props.FloatProperty(name="Contrast", default=2, min=0.01, max=20, update=numeric)
     edge_width: bpy.props.FloatProperty(
-        name="Edge Width", default=1.0, min=0.05, max=1.0, subtype="FACTOR", update=changed,
+        name="Edge Width", default=1.0, min=0.05, max=1.0, subtype="FACTOR", update=numeric,
         description="How far edge wear reaches from the edge, as a fraction of the baked Curvature Radius; "
                     "raise the radius and rebake for wider wear",
     )
     noise_scale: bpy.props.FloatProperty(
-        name="Noise Scale", default=12, min=1, max=512, update=changed
+        name="Noise Scale", default=12, min=1, max=512, update=numeric
     )
     noise_strength: bpy.props.FloatProperty(
-        name="Noise Strength", default=0.2, min=0, max=1, update=changed
+        name="Noise Strength", default=0.2, min=0, max=1, update=numeric
     )
-    seed: bpy.props.IntProperty(name="Seed", default=1, min=0, update=changed)
+    seed: bpy.props.IntProperty(name="Seed", default=1, min=0, update=numeric)

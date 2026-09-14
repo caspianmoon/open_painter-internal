@@ -172,16 +172,17 @@ class Graph(Math):
         self._plan = None
         self._previous = None
         self._reused, self._warnings = [], []
+        self._stubs = False
 
     @property
     def anchors(self):
-        # Anchor placement is structural: every edit to it rebuilds its units.
-        # Adopted units keep closures on this object, so re-index after edits.
-        serial = getattr(self.ts, 'edit_serial', 0)
-        if self._anchors is None or self._anchors[0] != serial:
+        # Indexed once per planning pass: anchor placement is structural, so
+        # every structural check re-plans, and adopted units' closures on this
+        # object read the index refreshed by the latest plan.
+        if self._anchors is None:
             from .anchors import index
-            self._anchors = (serial, index(self.ts))
-        return self._anchors[1]
+            self._anchors = index(self.ts)
+        return self._anchors
 
     @contextmanager
     def role(self, identifier):
@@ -697,6 +698,7 @@ class Graph(Math):
         layers = {l.id: l for l in self.ts.layers}
         plan = SimpleNamespace(layers=layers, keys=set(), opaque={}, wiring=[], order=[])
         self._plan = plan
+        self._anchors = None
 
         def walk(parent, opaque, ancestors):
             for layer in self.ts.layers:
@@ -1483,6 +1485,7 @@ class Graph(Math):
         self.outputs = {channel: self.instance.outputs[channel] for channel in CHANNELS}
         self._reverse_map()
         self._structure = self.structural_signature()
+        self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
         self._previous = None
         from .references import warnings
@@ -1626,11 +1629,14 @@ class Graph(Math):
         changed.extend(key for key in before if key not in after)
         return changed or 'wiring'
 
-    def update(self, owner=None):
+    def update(self, owner=None, check_structure=True):
+        """Write changed bindings; ``check_structure`` is False for numeric-only edits."""
         started = perf_counter()
-        scope = self.rebuild_scope()
-        if scope is not None:
-            raise RebuildRequired('Shader graph topology changed', scope)
+        if check_structure or self._stubs:
+            # A stub stands in for hidden content, so visibility is structural for it.
+            scope = self.rebuild_scope()
+            if scope is not None:
+                raise RebuildRequired('Shader graph topology changed', scope)
         self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None
         bindings = self.owner_bindings.get(pointer, ()) if pointer is not None else self.bindings.values()

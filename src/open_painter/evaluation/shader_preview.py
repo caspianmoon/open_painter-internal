@@ -122,10 +122,10 @@ def _redraw(scene):
                     area.tag_redraw()
 
 
-def _update(scene, ts, entry, owner=None):
+def _update(scene, ts, entry, owner=None, check_structure=True):
     from .shader_graph import RebuildRequired
     try:
-        result = entry['graph'].update(owner)
+        result = entry['graph'].update(owner, check_structure=check_structure)
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
         metrics.count('shader_topology_invalidations')
@@ -226,11 +226,13 @@ def _owners(owner):
                 return
 
 
-def notify(owner, context=None, *, previous_dirty=None):
+def notify(owner, context=None, *, previous_dirty=None, structural=True):
     """Apply a property edit immediately if a shader has already been built.
 
     Initializing RNA collections may fire many callbacks. Those callbacks never
     create partial graphs; their completed operation is picked up by tick/repair.
+    ``structural=False`` marks a numeric edit: the graph writes its bindings
+    without re-deriving the structural signature.
     """
     started = perf_counter()
     result = None
@@ -244,7 +246,7 @@ def notify(owner, context=None, *, previous_dirty=None):
         _busy.add(key)
         try:
             if not entry.get('rebuild'):
-                updated = _update(scene, ts, entry, owner)
+                updated = _update(scene, ts, entry, owner, check_structure=structural)
                 affected = entry.get('diagnostics', {}).get('affected_channels')
                 if updated and previous_dirty is not None and affected is not None:
                     # Compiler dependencies may prove that a generic RNA

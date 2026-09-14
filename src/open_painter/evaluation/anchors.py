@@ -27,6 +27,9 @@ class Anchor:
 
 
 def index(ts, memo=None):
+    # Not cached across calls: anchor ids are assigned without an edit-serial
+    # bump, and Anchor.layer holds an RNA reference that a collection
+    # reallocation invalidates. The walk costs microseconds per layer.
     key = ('anchors', getattr(ts, 'id', ''), getattr(ts, 'edit_serial', 0))
     if memo is not None and key in memo:
         return memo[key]

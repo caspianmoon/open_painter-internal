@@ -3,6 +3,15 @@ import bpy
 
 
 def changed(self, context):
+    _changed(self, context, True)
+
+
+def numeric(self, context):
+    """A uniform or resource-identity edit; graph structure is unchanged."""
+    _changed(self, context, False)
+
+
+def _changed(self, context, structural):
     project = getattr(self.id_data, 'open_painter', None)
     if not project:
         return
@@ -33,7 +42,7 @@ def changed(self, context):
                     if output.channel in affected:
                         output.dirty = True
                 from ..evaluation.shader_preview import notify
-                notify(self, context, previous_dirty=previous_dirty)
+                notify(self, context, previous_dirty=previous_dirty, structural=structural)
                 return
 
 
@@ -44,33 +53,33 @@ class OP_TextureEffect(bpy.types.PropertyGroup):
     id: bpy.props.StringProperty()
     kind: bpy.props.StringProperty(default='LEVELS', update=changed)
     enabled: bpy.props.BoolProperty(default=True, update=changed)
-    strength: bpy.props.FloatProperty(name='Opacity',default=1,min=0,max=1,update=changed)
-    radius: bpy.props.FloatProperty(default=2,min=0,max=64,update=changed)
-    amount: bpy.props.FloatProperty(default=.5,min=-10,max=10,update=changed)
-    contrast: bpy.props.FloatProperty(default=1,min=0,max=10,update=changed)
-    gamma: bpy.props.FloatProperty(default=1,min=.01,max=10,update=changed)
-    black: bpy.props.FloatProperty(default=0,min=0,max=1,update=changed)
-    white: bpy.props.FloatProperty(default=1,min=0,max=1,update=changed)
-    output_black: bpy.props.FloatProperty(name='Output Black',default=0,min=0,max=1,update=changed)
-    output_white: bpy.props.FloatProperty(name='Output White',default=1,min=0,max=1,update=changed)
-    hue: bpy.props.FloatProperty(name='Hue Shift',default=0,min=-1,max=1,update=changed,
+    strength: bpy.props.FloatProperty(name='Opacity',default=1,min=0,max=1,update=numeric)
+    radius: bpy.props.FloatProperty(default=2,min=0,max=64,update=numeric)
+    amount: bpy.props.FloatProperty(default=.5,min=-10,max=10,update=numeric)
+    contrast: bpy.props.FloatProperty(default=1,min=0,max=10,update=numeric)
+    gamma: bpy.props.FloatProperty(default=1,min=.01,max=10,update=numeric)
+    black: bpy.props.FloatProperty(default=0,min=0,max=1,update=numeric)
+    white: bpy.props.FloatProperty(default=1,min=0,max=1,update=numeric)
+    output_black: bpy.props.FloatProperty(name='Output Black',default=0,min=0,max=1,update=numeric)
+    output_white: bpy.props.FloatProperty(name='Output White',default=1,min=0,max=1,update=numeric)
+    hue: bpy.props.FloatProperty(name='Hue Shift',default=0,min=-1,max=1,update=numeric,
         description='Hue rotation in turns; one third turns red to green')
-    saturation: bpy.props.FloatProperty(name='Saturation',default=1,min=0,max=4,update=changed)
-    lightness: bpy.props.FloatProperty(name='Lightness',default=0,min=-1,max=1,update=changed)
-    offset: bpy.props.FloatVectorProperty(name='Offset',size=2,default=(0,0),update=changed,
+    saturation: bpy.props.FloatProperty(name='Saturation',default=1,min=0,max=4,update=numeric)
+    lightness: bpy.props.FloatProperty(name='Lightness',default=0,min=-1,max=1,update=numeric)
+    offset: bpy.props.FloatVectorProperty(name='Offset',size=2,default=(0,0),update=numeric,
         description='Texture displacement in pixels')
-    transform_scale: bpy.props.FloatVectorProperty(name='Transform Scale',size=2,default=(1,1),min=.001,update=changed)
-    softness: bpy.props.FloatProperty(name='Softness',default=.05,min=.0001,max=1,update=changed)
-    steps: bpy.props.IntProperty(name='Steps',default=4,min=2,max=256,update=changed)
-    samples: bpy.props.IntProperty(name='Samples',default=8,min=2,max=64,update=changed)
+    transform_scale: bpy.props.FloatVectorProperty(name='Transform Scale',size=2,default=(1,1),min=.001,update=numeric)
+    softness: bpy.props.FloatProperty(name='Softness',default=.05,min=.0001,max=1,update=numeric)
+    steps: bpy.props.IntProperty(name='Steps',default=4,min=2,max=256,update=numeric)
+    samples: bpy.props.IntProperty(name='Samples',default=8,min=2,max=64,update=numeric)
     mode: bpy.props.EnumProperty(name='Mode',items=[('BLUR','Blur','Average neighboring samples'),
         ('MIN','Minimum','Erode using the driving slopes'),('MAX','Maximum','Expand using the driving slopes')],update=changed)
-    noise: bpy.props.StringProperty(name='Driving Noise',default='FBM',update=changed)
-    matrix: bpy.props.FloatVectorProperty(name='Channel Matrix',size=9,default=(1,0,0,0,1,0,0,0,1),update=changed)
-    bias: bpy.props.FloatVectorProperty(name='Channel Offset',size=3,default=(0,0,0),update=changed)
+    noise: bpy.props.StringProperty(name='Driving Noise',default='FBM',update=numeric)
+    matrix: bpy.props.FloatVectorProperty(name='Channel Matrix',size=9,default=(1,0,0,0,1,0,0,0,1),update=numeric)
+    bias: bpy.props.FloatVectorProperty(name='Channel Offset',size=3,default=(0,0,0),update=numeric)
     image: bpy.props.PointerProperty(name='Detail Texture',type=bpy.types.Image,update=changed)
-    angle: bpy.props.FloatProperty(default=0,subtype='ANGLE',update=changed)
-    scale: bpy.props.FloatProperty(default=8,min=.01,max=512,update=changed)
-    seed: bpy.props.IntProperty(default=1,min=0,update=changed)
-    color: bpy.props.FloatVectorProperty(size=3,subtype='COLOR',default=(0,0,0),min=0,max=1,update=changed)
-    color2: bpy.props.FloatVectorProperty(size=3,subtype='COLOR',default=(1,1,1),min=0,max=1,update=changed)
+    angle: bpy.props.FloatProperty(default=0,subtype='ANGLE',update=numeric)
+    scale: bpy.props.FloatProperty(default=8,min=.01,max=512,update=numeric)
+    seed: bpy.props.IntProperty(default=1,min=0,update=numeric)
+    color: bpy.props.FloatVectorProperty(size=3,subtype='COLOR',default=(0,0,0),min=0,max=1,update=numeric)
+    color2: bpy.props.FloatVectorProperty(size=3,subtype='COLOR',default=(1,1,1),min=0,max=1,update=numeric)

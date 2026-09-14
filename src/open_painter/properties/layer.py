@@ -6,6 +6,15 @@ from .mask import OP_Mask
 
 
 def changed(self, context):
+    _changed(self, context, True)
+
+
+def numeric(self, context):
+    """A uniform edit: the shader binds it without re-deriving graph structure."""
+    _changed(self, context, False)
+
+
+def _changed(self, context, structural):
     project = getattr(self.id_data, "open_painter", None)
     if project:
         pointer = self.as_pointer()
@@ -27,7 +36,7 @@ def changed(self, context):
                     if output.channel in affected:
                         output.dirty = True
                 from ..evaluation.shader_preview import notify
-                notify(self, context, previous_dirty=previous_dirty)
+                notify(self, context, previous_dirty=previous_dirty, structural=structural)
                 return
 
 
@@ -43,8 +52,8 @@ class OP_Layer(bpy.types.PropertyGroup):
             ("FOLDER", "Folder", "Group layers"),
         ]
     )
-    visible: bpy.props.BoolProperty(default=True, update=changed)
-    opacity: bpy.props.FloatProperty(name="Opacity", default=1, min=0, max=1, update=changed)
+    visible: bpy.props.BoolProperty(default=True, update=numeric)
+    opacity: bpy.props.FloatProperty(name="Opacity", default=1, min=0, max=1, update=numeric)
     blend_mode: bpy.props.EnumProperty(
         name="Blend",
         items=BLEND_ITEMS,

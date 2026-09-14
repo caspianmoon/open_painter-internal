@@ -184,6 +184,13 @@ class OP_PT_bake(bpy.types.Panel):
             layout.operator(
                 "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
             ).action = "CURVATURE"
+        bevel = layout.column(align=True)
+        bevel.label(text="Bevel Maps (Cycles-baked, engine independent)")
+        bevel.prop(settings, "bevel_normal")
+        bevel.prop(settings, "bevel_mask")
+        if settings.bevel_normal or settings.bevel_mask:
+            bevel.prop(settings, "bevel_radius")
+            bevel.prop(settings, "bevel_samples")
         section = layout.column(align=True)
         section.label(text="Target Mesh Utility Maps")
         for key in ("position", "world_normal", "object_normal", "material_id", "object_id", "uv_island", "uv_border", "thickness", "mean_curvature", "selection"):

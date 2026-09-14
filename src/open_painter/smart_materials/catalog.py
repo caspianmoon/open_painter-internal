@@ -26,10 +26,17 @@ def surface_detail(source_id, *, scale=(1.0, 1.0), color=0.06,
 def mask(kind, amount=0.35, scale=24.0, *, invert=False, contrast=None,
          procedural=None, generated_source=None, black=None, white=None,
          strength=None, operation=None, seed=None, noise_strength=None,
-         uv_scale=None, projection=None, triplanar_hardness=None):
+         uv_scale=None, projection=None, triplanar_hardness=None,
+         baked=False, optional=False):
+    """``baked`` reads the mesh map named by ``kind`` directly; ``optional``
+    masks are skipped, not required, when that map has not been baked."""
     result = {"kind": kind, "amount": amount, "scale": scale}
     if invert:
         result["invert"] = True
+    if baked:
+        result["baked"] = True
+    if optional:
+        result["optional"] = True
     if contrast is not None:
         result["contrast"] = contrast
     for key, value in (("procedural", procedural), ("generated_source", generated_source),
@@ -45,9 +52,16 @@ def mask(kind, amount=0.35, scale=24.0, *, invert=False, contrast=None,
 def layer(name, color, roughness, metallic=0.0, *, procedural=None,
           scale=24.0, detail=0.12, height=None, mask=None, mask_effects=(),
           generated_source=None, channels=None, opacity=None, height_value=None,
-          height_range=None, projection=None, triplanar_hardness=None):
+          height_range=None, projection=None, triplanar_hardness=None,
+          normal_map=None, blend_mode=None):
+    """``normal_map`` names a baked mesh map used as the Normal channel image;
+    ``blend_mode`` sets the layer blend (for example RNM for normal detail)."""
     result = {"name": name, "color": color, "roughness": roughness,
               "metallic": metallic, "scale": scale, "detail": detail}
+    if normal_map:
+        result["normal_map"] = normal_map
+    if blend_mode:
+        result["blend_mode"] = blend_mode
     if procedural:
         result["procedural"] = procedural
     if height is not None:

@@ -77,7 +77,7 @@ class OP_Mask(bpy.types.PropertyGroup):
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=changed)
     map_type: bpy.props.EnumProperty(
         name="Map",
-        items=[(x, x.replace("_", " ").title(), "") for x in ("AO", "CURVATURE", "NORMAL", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL", "THICKNESS", "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER", "MEAN_CURVATURE", "SELECTION")],
+        items=[(x, x.replace("_", " ").title(), "") for x in ("AO", "CURVATURE", "NORMAL", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL", "THICKNESS", "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER", "MEAN_CURVATURE", "SELECTION", "BEVEL_NORMAL", "BEVEL_MASK")],
         update=changed,
     )
     generator: bpy.props.EnumProperty(

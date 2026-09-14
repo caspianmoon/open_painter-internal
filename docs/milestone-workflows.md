@@ -38,6 +38,9 @@ not replace the editor or the material library.
   Select Problem Faces selects
   the reported faces on their base meshes when no modifier changes the face
   count. Nothing else is modified. See [bake diagnostics](bake-diagnostics.md).
+- **Damaged Bevel / Rounded Edges:** bake Bevel Mask and Bevel Normal (Bake Mesh
+  Maps → Bevel Maps, radius = band width), then Add Surface Effect. Works in
+  EEVEE because the Cycles Bevel/AO nodes are baked, not evaluated per frame.
 - **Curvature V2:** Rebake Edge Map on existing projects (the map reads "Stale ·
   crease-only"); Curvature Radius is the wear width (default 2 cm). Smooth bevels and
   tessellated rims now drive Edge Wear and Chips in every material.

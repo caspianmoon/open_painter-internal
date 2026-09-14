@@ -48,13 +48,64 @@ def _run_bake(**kwargs):
         raise RuntimeError('Cycles did not finish the bake')
 
 
+# Bevel maps sample the target's own geometry: the Cycles Bevel node rounds
+# the shading normal within a radius, and the distance between that normal and
+# the geometry normal is the edge amount. Baked once, both are ordinary
+# textures that EEVEE, Cycles and export all read; the shader Bevel node itself
+# only evaluates in Cycles.
+BEVEL_KINDS = {'BEVEL_NORMAL', 'BEVEL_MASK'}
+DEFAULT_COLORS = {'NORMAL': (.5, .5, 1, 1), 'BEVEL_NORMAL': (.5, .5, 1, 1),
+                  'AO': (1, 1, 1, 1), 'BEVEL_MASK': (0, 0, 0, 1)}
+
+
+def bevel_graph(material, kind, radius, samples):
+    """Wire the transient bake material so the Bevel node drives the pass.
+
+    BEVEL_NORMAL: Bevel -> Diffuse BSDF normal, baked as a tangent normal.
+    BEVEL_MASK: distance(Bevel normal, geometry normal) -> Emission, baked
+    as emission, clamped to 0..1 (a right angle reaches about 1.41).
+    """
+    tree = material.node_tree
+    nodes, links = tree.nodes, tree.links
+    output = next((n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial'), None)
+    if output is None:
+        output = nodes.new('ShaderNodeOutputMaterial')
+    bevel = nodes.new('ShaderNodeBevel')
+    bevel.samples = samples
+    bevel.inputs['Radius'].default_value = radius
+    if kind == 'BEVEL_NORMAL':
+        shader = nodes.new('ShaderNodeBsdfDiffuse')
+        links.new(bevel.outputs['Normal'], shader.inputs['Normal'])
+    else:
+        geometry = nodes.new('ShaderNodeNewGeometry')
+        distance = nodes.new('ShaderNodeVectorMath')
+        distance.operation = 'DISTANCE'
+        links.new(bevel.outputs['Normal'], distance.inputs[0])
+        links.new(geometry.outputs['Normal'], distance.inputs[1])
+        clamp = nodes.new('ShaderNodeMath')
+        clamp.operation = 'MINIMUM'
+        clamp.inputs[1].default_value = 1.0
+        links.new(distance.outputs['Value'], clamp.inputs[0])
+        shader = nodes.new('ShaderNodeEmission')
+        links.new(clamp.outputs['Value'], shader.inputs['Color'])
+        shader.inputs['Strength'].default_value = 1.0
+    links.new(shader.outputs[0], output.inputs['Surface'])
+
+
 def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
     from .pairing import groups
     from .staging import prepared
-    if kind not in {'NORMAL', 'AO'}:
-        raise ValueError('Cycles mesh maps support Normal and AO')
+    if kind not in {'NORMAL', 'AO', *BEVEL_KINDS}:
+        raise ValueError('Cycles mesh maps support Normal, AO, Bevel Normal and Bevel Mask')
     settings = ts.bake
-    parts = groups(ts)
+    bevel = kind in BEVEL_KINDS
+    if bevel:
+        # The target's own surface is baked; high-poly sources, cages and the
+        # projection settings play no part.
+        from .pairing import Group, _targets
+        parts = [Group(low, (), None) for low in _targets(ts)]
+    else:
+        parts = groups(ts)
     if not parts:
         raise ValueError('Assign a low-poly target before baking')
     objects = {obj for part in parts for obj in (part.low, *part.sources, part.cage) if obj}
@@ -70,13 +121,12 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
     working = supersample_preflight(resolution, factor)
     image = scratch = None
     try:
-        image = create(f'{ts.name}_Baked{kind.title()}', working,
-                       (.5, .5, 1, 1) if kind == 'NORMAL' else (1, 1, 1, 1))
+        image = create(f"{ts.name}_Baked{kind.title().replace('_', '')}", working, DEFAULT_COLORS[kind])
         scratch = create('OP Bake Unassigned Slots', 32)
         with prepared(context, ts, parts, image, scratch) as stage:
             bake_settings = stage.scene.render.bake
             bake_settings.target = 'IMAGE_TEXTURES'
-            bake_settings.use_selected_to_active = settings.selected_to_active
+            bake_settings.use_selected_to_active = settings.selected_to_active and not bevel
             bake_settings.normal_space = 'TANGENT'
             # Internal normals stay +Y; engine handedness conversion is export-only.
             bake_settings.normal_r = 'POS_X'
@@ -86,7 +136,10 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
             # keeps the same padding after downsampling (Ucupaint does the same).
             bake_settings.margin = settings.margin * factor
             bake_settings.use_clear = False  # Fresh neutral image shared by parts.
-            bake_settings.use_cage = settings.selected_to_active and settings.cage_mode != 'NONE'
+            bake_settings.use_cage = settings.selected_to_active and settings.cage_mode != 'NONE' and not bevel
+            if bevel:
+                for material in stage.materials:
+                    bevel_graph(material, kind, settings.bevel_radius, int(settings.bevel_samples))
             extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
             bake_settings.cage_extrusion = extrusion if settings.cage_mode == 'AUTO' else 0
             bake_settings.max_ray_distance = settings.ray_distance
@@ -95,12 +148,16 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
                 with stage.target(part, kind) as target:
                     uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
                     logger.info('Baking %s for %s from %d source(s)', kind, part.low.name, len(part.sources))
-                    _run_bake(type=kind, uv_layer=uv.name)
+                    _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
         if working != resolution:
-            reduced = downsample(pixels(image), factor, kind)
+            reduced = downsample(pixels(image), factor, 'NORMAL' if kind in {'NORMAL', 'BEVEL_NORMAL'} else kind)
             image.scale(resolution, resolution)  # keep the datablock identity; pixels are replaced below
             write(image, reduced, pack=False)
             image['open_painter_supersample'] = factor
+        if bevel:
+            image['open_painter_mesh_map'] = kind
+            image['bevel_radius'] = float(settings.bevel_radius)
+            image['bevel_samples'] = int(settings.bevel_samples)
         pack_image(image)
         return image
     except Exception:

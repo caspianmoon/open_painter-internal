@@ -38,6 +38,13 @@ MAP_REQUIREMENTS = {
     "DRIPS": {"POSITION", "AO"},
     "SCRATCHES": set(),
     "NOISE": set(),
+    # Baked-map mask sources and normal-map images name the map they read.
+    "AO": {"AO"},
+    "NORMAL": {"NORMAL"},
+    "CURVATURE": {"CURVATURE"},
+    "MEAN_CURVATURE": {"MEAN_CURVATURE"},
+    "BEVEL_MASK": {"BEVEL_MASK"},
+    "BEVEL_NORMAL": {"BEVEL_NORMAL"},
 }
 
 # Effects add one independently masked layer rather than a complete material.
@@ -89,6 +96,23 @@ EFFECTS = {
                           scale=27, detail=.7, mask=mask("DRIPS", .38, 27)),
     "Moss": layer("Moss", (.057, .11, .019), .95, procedural="FIBERS", scale=68,
                   detail=.75, height=.052, mask=mask("CAVITY_DIRT", .35, 39)),
+    # Damaged Variable Bevel, engine independent: the Cycles-only Bevel and AO
+    # shader nodes are replaced by the baked Bevel Mask (edge amount), Bevel
+    # Normal (rounded shading) and AO maps, so EEVEE, Cycles and export agree.
+    # Chips are recessed height, exposing the steel substrate, where the edge
+    # amount, a noise field (the variable radius) and, when AO exists, the
+    # open-surface term coincide. Disable colour channels on the layer to keep
+    # the reference script's normal-only behaviour.
+    "Damaged Bevel": layer("Damaged Bevel", STEEL, .48, 1, height_value=.3,
+                           mask=mask("BEVEL_MASK", baked=True, black=.04, white=.3),
+                           mask_effects=(mask("NOISE", procedural="MULTI_FRACTAL", scale=7, black=.47, white=.56,
+                                              operation="MULTIPLY"),
+                                         mask("AO", baked=True, black=.3, white=.75,
+                                              operation="MULTIPLY", optional=True))),
+    "Rounded Edges": {
+        **layer("Rounded Edges", STEEL, .5, normal_map="BEVEL_NORMAL", blend_mode="RNM"),
+        "channels": ("NORMAL",),
+    },
 }
 
 
@@ -109,7 +133,11 @@ def requirements(recipe_or_name):
     data = CATALOG[recipe_or_name] if isinstance(recipe_or_name, str) else recipe_or_name
     result = set()
     for spec in data.get("layers", (data,)):
+        if spec.get("normal_map"):
+            result.update(MAP_REQUIREMENTS[spec["normal_map"]])
         for settings in masks_for(spec):
+            if settings.get("optional"):
+                continue
             if not settings.get("procedural") and not settings.get("generated_source"):
                 result.update(MAP_REQUIREMENTS[settings["kind"]])
     return result
@@ -145,12 +173,25 @@ def validate(data):
                     or not (spec.get("procedural") or spec.get("generated_source"))):
                 raise ValueError("Height range needs an increasing 0–1 range and a surface source.")
         selected = set(spec.get("channels", ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT")))
-        if not selected <= {"BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT"}:
+        allowed = {"BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT"}
+        if spec.get("normal_map"):
+            if spec["normal_map"] not in {"BEVEL_NORMAL", "NORMAL"}:
+                raise ValueError("Unknown recipe normal map: " + str(spec["normal_map"]))
+            allowed.add("NORMAL")
+        if not selected <= allowed:
             raise ValueError("Unknown recipe texture channel.")
+        if "blend_mode" in spec:
+            from ..constants import BLEND_ITEMS
+            if spec["blend_mode"] not in {item[0] for item in BLEND_ITEMS}:
+                raise ValueError("Unknown recipe blend mode: " + str(spec["blend_mode"]))
         for settings in masks_for(spec):
             _validate_projection(settings)
             if settings["kind"] not in MAP_REQUIREMENTS:
                 raise ValueError("Unknown recipe mask: " + settings["kind"])
+            if settings.get("baked") and MAP_REQUIREMENTS[settings["kind"]] != {settings["kind"]}:
+                raise ValueError("A baked recipe mask must name a mesh map: " + settings["kind"])
+            if settings.get("optional") and not settings.get("baked"):
+                raise ValueError("Only baked recipe masks can be optional.")
             for key, lo, hi in (("amount", 0, 1), ("scale", 1, 512)):
                 value = settings[key]
                 if not math.isfinite(value) or not lo <= value <= hi:
@@ -198,9 +239,16 @@ def _seed(name, number, seed):
     return (crc32(name.encode("utf8")) + number * 104729 + int(seed)) & 0x7fffffff
 
 
+def _baked_image(ts, kind):
+    return next((entry.image for entry in ts.baked_maps
+                 if entry.kind == kind and entry.image and all(entry.image.size)), None)
+
+
 def _fill(ts, spec, parent_id, seed):
     item = stack.add(ts, "FILL", spec["name"], parent_id)
     item.opacity = spec.get("opacity", 1)
+    if "blend_mode" in spec:
+        item.blend_mode = spec["blend_mode"]
     detail = spec.get("generated_source")
     detail_image = generated_sources.load(detail["id"]) if detail else None
     selected = set(spec.get("channels", ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT")))
@@ -221,6 +269,12 @@ def _fill(ts, spec, parent_id, seed):
                 # A groove uses the same coverage as its mask. Applying a
                 # second noise field here produces unrelated raised scratches.
                 continue
+        elif prop.channel == "NORMAL" and spec.get("normal_map"):
+            image = _baked_image(ts, spec["normal_map"])
+            if image is None:
+                raise MissingMeshMaps(spec["name"], {spec["normal_map"]})
+            prop.image = image
+            continue
         if prop.enabled and prop.channel in {"BASE_COLOR", "ROUGHNESS", "HEIGHT"}:
             prop.procedural = ALIASES.get(spec.get("procedural"), spec.get("procedural", ""))
             prop.procedural_scale = spec["scale"]
@@ -246,11 +300,17 @@ def _fill(ts, spec, parent_id, seed):
                 effect.kind = "LEVELS"
                 effect.output_black, effect.output_white = spec["height_range"]
     for index, settings in enumerate(masks_for(spec)):
+        if settings.get("optional") and _baked_image(ts, settings["kind"]) is None:
+            continue  # Declared optional: the effect degrades gracefully without this map.
         effect = item.masks.add()
         effect.id, effect.name, effect.source = new_id(), settings["kind"].replace("_", " ").title(), "GENERATOR"
         effect.projection = settings.get("projection", "UV")
         effect.triplanar_hardness = settings.get("triplanar_hardness", 4)
-        effect.generator = settings["kind"]
+        if settings.get("baked"):
+            effect.source = "BAKED"
+            effect.map_type = settings["kind"]
+        else:
+            effect.generator = settings["kind"]
         effect.operation = settings.get("operation", "NORMAL" if index == 0 else "MULTIPLY")
         effect.amount = settings["amount"]
         effect.noise_scale = settings["scale"]

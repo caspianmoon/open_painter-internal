@@ -1,0 +1,18 @@
+{
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "renders": {
+    "BLENDER_EEVEE": {
+      "mean_abs_difference": 0.011722560040652752,
+      "changed_pixels": 0.11862630208333333,
+      "max_difference": 0.2692810595035553
+    },
+    "CYCLES": {
+      "mean_abs_difference": 0.010949633084237576,
+      "changed_pixels": 0.11597005208333333,
+      "max_difference": 0.205228790640831
+    }
+  },
+  "engine_agreement_jaccard": 0.9699322108025367,
+  "pass": true
+}

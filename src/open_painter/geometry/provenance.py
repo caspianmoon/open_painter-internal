@@ -39,10 +39,12 @@ def record(ts, kind):
               'CURVATURE': ('curvature_angle','curvature_width','mean_curvature_distance'),
               'UV_BORDER': ('uv_border_width',),
               'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance'),
-              'MEAN_CURVATURE': ('mean_curvature_distance',)}
+              'MEAN_CURVATURE': ('mean_curvature_distance',),
+              'BEVEL_NORMAL': ('bevel_radius','bevel_samples','margin','samples','device'),
+              'BEVEL_MASK': ('bevel_radius','bevel_samples','margin','samples','device')}
     settings = {key: identity(getattr(ts.bake,key)) if key == 'cage_object' else getattr(ts.bake,key)
                 for key in fields.get(kind, ())}
-    if kind in {'NORMAL', 'AO'} and int(ts.bake.supersample) != 1:
+    if kind in {'NORMAL', 'AO', 'BEVEL_NORMAL', 'BEVEL_MASK'} and int(ts.bake.supersample) != 1:
         settings['supersample'] = int(ts.bake.supersample)
     if kind == 'AO' and ts.bake.ao_distance != 10.0:
         # Recorded only when it differs from the implicit distance of earlier

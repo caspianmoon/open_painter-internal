@@ -26,7 +26,7 @@ class OP_BakedMap(bpy.types.PropertyGroup):
     kind: bpy.props.EnumProperty(items=[(x, x.replace("_", " ").title(), "") for x in (
         "NORMAL", "AO", "CURVATURE", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL",
         "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER", "THICKNESS",
-        "MEAN_CURVATURE", "SELECTION",
+        "MEAN_CURVATURE", "SELECTION", "BEVEL_NORMAL", "BEVEL_MASK",
     )], update=map_changed)
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=map_changed)
 
@@ -42,6 +42,22 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         ('SET', 'Texture Set Assembly', 'Include other listed parts at their authored positions; exclude unrelated scene objects'),
         ('PAIR', 'Individual Parts', 'Only the target and its matched high-poly sources contribute occlusion'),
     ], default='SET')
+    bevel_normal: bpy.props.BoolProperty(
+        name="Bevel Normal", default=False,
+        description="Rounded-edge shading normal from the Cycles Bevel node, baked to a tangent normal map so EEVEE and export see it",
+    )
+    bevel_mask: bpy.props.BoolProperty(
+        name="Bevel Mask", default=False,
+        description="Edge amount: distance between the Bevel-node normal and the geometry normal, baked as a grayscale mask",
+    )
+    bevel_radius: bpy.props.FloatProperty(
+        name="Bevel Radius", default=0.02, min=0.0001, max=10.0, subtype="DISTANCE",
+        description="World-space Bevel node radius for the Bevel Normal and Bevel Mask maps",
+    )
+    bevel_samples: bpy.props.IntProperty(
+        name="Bevel Samples", default=8, min=2, max=64,
+        description="Bevel node samples per shading point; more is smoother and slower",
+    )
     supersample: bpy.props.EnumProperty(
         name="Anti-Aliasing", default="1",
         items=[("1", "Off", "Bake at the authored resolution"),

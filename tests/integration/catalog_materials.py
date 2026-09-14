@@ -178,13 +178,19 @@ for name, data in CATALOG.items():
     print("CATALOG_RECIPE_PASS", name, flush=True)
 
 # Effects are single editable layers. Channel-only scratches retain base color.
+# The bevel effects read Cycles-baked bevel maps; synthetic ones stand in here.
+from open_painter.baking.bake_manager import register_map
+for kind, color in (("BEVEL_MASK", (0, 0, 0, 1)), ("BEVEL_NORMAL", (.5, .5, 1, 1))):
+    if not any(m.kind == kind and m.image for m in ts.baked_maps):
+        register_map(ts, kind, images.create("synthetic " + kind, 32, color))
 for name, spec in composer.EFFECTS.items():
     ts.layers.clear()
     ts.active_layer = 0
     base = stack.add(ts, "FILL", "Base")
     stack.channel_for(base, "BASE_COLOR").color = (.12, .23, .34, 1)
     effect = composer.apply_effect(ts, name)
-    assert len(ts.layers) == 2 and effect.type == "FILL" and len(effect.masks) == 1
+    assert len(ts.layers) == 2 and effect.type == "FILL"
+    assert len(effect.masks) == (len(composer.masks_for(spec)) if name == "Damaged Bevel" else 1 if spec.get("mask") else 0)
     if "channels" in spec:
         assert not stack.channel_for(effect, "BASE_COLOR").enabled
         assert not stack.channel_for(effect, "METALLIC").enabled

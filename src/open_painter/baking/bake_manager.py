@@ -55,13 +55,15 @@ def bake_steps(context, ts):
                     raise ValueError('Custom cage must be present in the active view layer')
                 validate_topology(part.low, part.cage, graph)
     selected_utility = [kind for kind in UTILITY_KINDS if getattr(settings, kind.lower())]
-    if not any((settings.normal, settings.ao, settings.curvature, selected_utility)):
+    bevel_kinds = [kind for kind in ("BEVEL_NORMAL", "BEVEL_MASK") if getattr(settings, kind.lower())]
+    if not any((settings.normal, settings.ao, settings.curvature, selected_utility, bevel_kinds)):
         raise ValueError("Select at least one map to bake.")
     tasks = []
     if settings.normal:
         tasks.append(("NORMAL", lambda: bake(context, ts, "NORMAL")))
     if settings.ao:
         tasks.append(("AO", lambda: bake(context, ts, "AO")))
+    tasks.extend((kind, lambda kind=kind: bake(context, ts, kind)) for kind in bevel_kinds)
     if settings.curvature:
         tasks.append(("CURVATURE", lambda: bake_curvature(ts)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)

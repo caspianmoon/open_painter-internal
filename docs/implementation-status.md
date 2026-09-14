@@ -16,6 +16,16 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Damaged Bevel effects — 2026-09-14
+
+The supplied "Damaged Variable Bevel" script depends on the Cycles-only Bevel and
+AO shader nodes. Its edge amount and rounded normal are now `BEVEL_MASK` and
+`BEVEL_NORMAL` mesh maps baked through the owned Cycles staging scene, and two
+effects, **Damaged Bevel** and **Rounded Edges**, build the same result from layer
+data, so EEVEE renders it (11.9 % of pixels changed, Cycles agreement 0.98).
+Recipes gained baked and optional mask sources and normal-map layers.
+[Mapping, evidence and limits](damaged-bevel.md).
+
 ## Curvature V2 — 2026-09-14
 
 The crease-only curvature map left every mesh-aware mask empty on smooth geometry

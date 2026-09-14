@@ -1,5 +1,13 @@
 # Changes
 
+## 0.2.8
+
+- Curvature map V2: crease lines plus a texel-domain curvature estimate (turning over area within Curvature Radius, relative to the surface median), so Edge Wear and Chips work on smooth, bevelled and scanned meshes. Old crease-only maps read as stale and are rebaked automatically when an edge-driven material, effect or smart mask is added.
+- Geometry effects reworked: variant prototypes with per-instance rotation, lean, size and spacing, owned materials, CC0 Poly Haven `moss_01` scanned moss cards, and a sunk, rippled weld bead. Placeholder box/cone/octahedron shapes are gone.
+- Damaged Bevel and Rounded Edges surface effects from Cycles-baked Bevel Mask and Bevel Normal maps; they render in EEVEE, Cycles and export alike.
+- Bake diagnostics: Inspect Bake Setup (exact UV overlap across the set, sampled cage-ray coverage), Select Problem Faces, UDIM tile enumeration; Mean Curvature and Selected Faces utility maps with Reselect Baked Faces; explicit AO Distance; opt-in 2x supersampled bakes with a memory preflight.
+- Research: UDIM tile-access gate rerun (per-tile files and native paint onto tile 1002 pass), Ucupaint study with measured shader-compiler findings.
+
 ## 0.2.7
 
 - Replace default live texture composition with a persistent internal Blender shader graph. Numeric layer, mask, generator and pointwise-filter edits update existing shader bindings; no complete channel texture is regenerated.

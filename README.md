@@ -5,7 +5,7 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the only runtime requirements. GPL-3.0-or-later.
 
-Version **0.2.7** evaluates editable layers and masks through an internal Blender
+Version **0.2.8** evaluates editable layers and masks through an internal Blender
 material shader graph. Supported sliders update shader values immediately;
 texture baking is reserved for export, explicit snapshots and isolated operations
 that need pixels. Existing `LIVE` projects adopt this path without reapplying presets.
@@ -32,7 +32,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.2.7.zip`](dist/open_painter-0.2.7.zip).
+1. Download or build [`dist/open_painter-0.2.8.zip`](dist/open_painter-0.2.8.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu

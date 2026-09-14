@@ -11,6 +11,7 @@ from open_painter.core import texture_set_manager as sets,layer_stack as stack
 from open_painter.core.material_inheritance import preview
 from open_painter.analysis.offline import strain,mark_faces,contact_history
 from open_painter.analysis.analyzer import report
+from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.utils.ids import new_id
 # Partial initialization rolls back all callbacks/classes, without a new layout.
 from open_painter.ui import editor
@@ -28,8 +29,10 @@ assert 'rest_object' in bpy.ops.open_painter.offline_analysis.get_rna_type().pro
 assert bpy.ops.open_painter.offline_analysis.get_rna_type().properties['rest_object'].type=='STRING'
 scene=bpy.context.scene; obj=bpy.context.active_object
 ts=sets.create(scene,'Offline',512); sets.assign(scene,ts,obj)
+ts.preview_backend='CPU'
 recipe={'name':'Declarative','layers':[dict(name='Base',color=[.2,.3,.4],roughness=.6,metallic=0,scale=8,detail=.1)]}
 api.apply_recipe(ts,recipe)
+LayerEvaluator(scene).evaluate_texture_set(ts.id)  # Account for explicitly allocated raster buffers.
 count=len(ts.layers)
 try:
     api.apply_recipe(ts,dict(recipe,script='not executable'))

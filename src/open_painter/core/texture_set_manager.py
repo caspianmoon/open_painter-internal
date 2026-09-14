@@ -19,11 +19,15 @@ def create(scene: bpy.types.Scene, name: str = "Texture Set", resolution=None):
     material.node_tree.nodes.clear()
     ts.material = material
     project.active_texture_set = len(project.texture_sets) - 1
-    from ..evaluation.evaluator import LayerEvaluator
-
-    # Write actual linear pixels: Blender's generated-color setting alone can
-    # color-transform the initial Base Color buffer before the first evaluation.
-    LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+    from ..evaluation.shader_preview import requested
+    if requested(ts):
+        from .material_manager import repair
+        repair(ts)
+    else:
+        from ..evaluation.evaluator import LayerEvaluator
+        # Explicit CPU mode writes real linear pixels instead of relying on
+        # Blender's color-managed generated-color initialization.
+        LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
     return ts
 
 
@@ -84,7 +88,11 @@ def duplicate(scene, index):
     layers = [snapshot(item) for item in source.layers]
     maps = [(m.kind, m.image) for m in source.baked_maps]
     settings = snapshot(source.bake)
+    surface = {key: getattr(source, key) for key in
+               ("anisotropy", "coat_weight", "coat_roughness", "height_distance")}
     ts = create(scene, name, resolution)
+    for key, value in surface.items():
+        setattr(ts, key, value)
     mapping = {item["id"]: new_id() for item in layers}
     mask_mapping = {mask['id']: new_id() for item in layers for mask in item['masks']}
     for data in layers:

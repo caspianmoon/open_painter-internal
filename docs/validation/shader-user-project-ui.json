@@ -1,0 +1,1457 @@
+{
+  "result": "PASS",
+  "error": null,
+  "source": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+  "original_sha256": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+  "original_unchanged": true,
+  "blender": "5.2.1 LTS",
+  "gpu_backend": "METAL",
+  "texture_set": {
+    "id": "2dd556f037ba4bdf9f2161e4311b5916",
+    "name": "defaultMaterial.003",
+    "resolution": "2048",
+    "layers": 6
+  },
+  "cases": [
+    {
+      "name": "Cavity dirt strength",
+      "mask_id": "c688bdd442fd49ea9ecfa7025318527d",
+      "ui_route": "isolated native RNA sidebar",
+      "parameter": "strength",
+      "original_value": 1.0,
+      "material_roi": [
+        411,
+        287,
+        1430,
+        910
+      ],
+      "baseline_jitter": 0.0,
+      "visible_threshold": 0.003,
+      "baseline_raw_jitter": 0.0,
+      "original_baseline_jitter": 0.0,
+      "original_baseline_raw_jitter": 0.0,
+      "restoration_mean_error": 0.0008396899211220443,
+      "calibration": [
+        {
+          "point": [
+            2088,
+            1377
+          ],
+          "before": 0.5,
+          "after": 0.587527334690094
+        }
+      ],
+      "samples": [
+        {
+          "index": 0,
+          "before_value": 0.15000000596046448,
+          "observed_value": 0.8458424806594849,
+          "first_completed_frame_ms": 394.8014170018723,
+          "screenshot_save_ms": 200.10883299983107,
+          "screenshot_load_and_read_ms": 57.786417004535906,
+          "material_mean_change": 0.025721680372953415,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.027020161971449852,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 2.9663329987670295,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1215,
+            "bound_serial": 1215,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 4,
+            "update_calls": 4,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 1,
+          "before_value": 0.8458424806594849,
+          "observed_value": 0.15000000596046448,
+          "first_completed_frame_ms": 338.4980829941924,
+          "screenshot_save_ms": 204.95166599721415,
+          "screenshot_load_and_read_ms": 57.26391699863598,
+          "material_mean_change": 0.022653568536043167,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.024612469598650932,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 2.387375003308989,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1216,
+            "bound_serial": 1216,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 5,
+            "update_calls": 5,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 2,
+          "before_value": 0.15000000596046448,
+          "observed_value": 0.8458424806594849,
+          "first_completed_frame_ms": 307.8504579971195,
+          "screenshot_save_ms": 235.11541700281668,
+          "screenshot_load_and_read_ms": 54.539582997676916,
+          "material_mean_change": 0.015755940228700638,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.017918387427926064,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 2.0716669969260693,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1217,
+            "bound_serial": 1217,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 6,
+            "update_calls": 6,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 3,
+          "before_value": 0.8458424806594849,
+          "observed_value": 0.15000000596046448,
+          "first_completed_frame_ms": 298.4411670040572,
+          "screenshot_save_ms": 227.59962500276743,
+          "screenshot_load_and_read_ms": 52.31716699927347,
+          "material_mean_change": 0.01517713163048029,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.018555883318185806,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 1.775290998921264,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1218,
+            "bound_serial": 1218,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 7,
+            "update_calls": 7,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 4,
+          "before_value": 0.15000000596046448,
+          "observed_value": 0.8458424806594849,
+          "first_completed_frame_ms": 299.07975000242004,
+          "screenshot_save_ms": 227.76675000204705,
+          "screenshot_load_and_read_ms": 53.2537079998292,
+          "material_mean_change": 0.015158357098698616,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.018709219992160797,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 1.6791660018498078,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1219,
+            "bound_serial": 1219,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 8,
+            "update_calls": 8,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 5,
+          "before_value": 0.8458424806594849,
+          "observed_value": 0.15000000596046448,
+          "first_completed_frame_ms": 355.6494169970392,
+          "screenshot_save_ms": 220.4804580032942,
+          "screenshot_load_and_read_ms": 54.83895899669733,
+          "material_mean_change": 0.02527294121682644,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.026508992537856102,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 3.0034580049687065,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1220,
+            "bound_serial": 1220,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 9,
+            "update_calls": 9,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 6,
+          "before_value": 0.15000000596046448,
+          "observed_value": 0.8458424806594849,
+          "first_completed_frame_ms": 312.0355840001139,
+          "screenshot_save_ms": 239.52320799435256,
+          "screenshot_load_and_read_ms": 54.528542001207825,
+          "material_mean_change": 0.016329551115632057,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.018754538148641586,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 1.8186249944847077,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1221,
+            "bound_serial": 1221,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 10,
+            "update_calls": 10,
+            "resource_steps": 478
+          }
+        },
+        {
+          "index": 7,
+          "before_value": 0.8458424806594849,
+          "observed_value": 0.15000000596046448,
+          "first_completed_frame_ms": 295.33054099738365,
+          "screenshot_save_ms": 226.50583300128346,
+          "screenshot_load_and_read_ms": 50.94324999663513,
+          "material_mean_change": 0.015111885033547878,
+          "settled_window_noise": null,
+          "raw_material_mean_change": 0.018558382987976074,
+          "before_release": true,
+          "diagnostic": {
+            "parameter_changes": [
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "invalidated_nodes": [
+              "Final:BASE_COLOR",
+              "Final:METALLIC",
+              "Final:ROUGHNESS",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+              "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+              "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+              "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+              "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+              "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+              "Parameter:open_painter.texture_sets[0].layers[5].masks[0].strength"
+            ],
+            "affected_channels": [
+              "BASE_COLOR",
+              "METALLIC",
+              "ROUGHNESS"
+            ],
+            "updated_bindings": 1,
+            "raster_boundaries_queued": 0,
+            "texture_bake_triggered": false,
+            "submission_ms": 1.7685410057310946,
+            "pending_resources": false,
+            "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+            "state": "SHADER",
+            "serial": 1222,
+            "bound_serial": 1222,
+            "error": "",
+            "attached": true,
+            "rebuild_pending": false,
+            "graph_builds": 1,
+            "binding_updates": 11,
+            "update_calls": 11,
+            "resource_steps": 478
+          }
+        }
+      ],
+      "instrumentation": {
+        "observed_calls": {},
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 9,
+          "shader_parameter_updates": 9,
+          "shader_update_calls": 9,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 9,
+            "p50": 1.8455829995218664,
+            "p95": 2.9886080024880357,
+            "maximum": 3.0034580049687065
+          },
+          "shader_callback_seconds": {
+            "samples": 9,
+            "p50": 0.0020078329980606213,
+            "p95": 0.0033040249953046443,
+            "maximum": 0.003343874996062368
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 2509406208
+      },
+      "native_events": [
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2088,
+            1377
+          ],
+          "phase": "BASELINE",
+          "enqueued_seconds": 44226.735373375
+        },
+        {
+          "type": "LEFTMOUSE",
+          "value": "PRESS",
+          "xy": [
+            2088,
+            1377
+          ],
+          "phase": "BASELINE",
+          "enqueued_seconds": 44227.045962583
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "BASELINE",
+          "enqueued_seconds": 44227.196001291
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2426,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44227.443205291
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44227.93092075
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2426,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44228.364039791
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44228.780109083
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2426,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44229.180398416
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44230.161707666
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2426,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44230.614000291
+        },
+        {
+          "type": "MOUSEMOVE",
+          "value": "NOTHING",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44231.030621708
+        },
+        {
+          "type": "LEFTMOUSE",
+          "value": "RELEASE",
+          "xy": [
+            2108,
+            1377
+          ],
+          "phase": "DRAG",
+          "enqueued_seconds": 44231.381165791
+        }
+      ]
+    }
+  ],
+  "active_case_samples": null,
+  "active_observation": null,
+  "native_input_events": [
+    {
+      "type": "ESC",
+      "value": "PRESS",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44221.915392625
+    },
+    {
+      "type": "ESC",
+      "value": "RELEASE",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44221.916270333
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44221.916290625
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "PRESS",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44222.651763208
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44222.996838
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2148,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44223.31732975
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "RELEASE",
+      "xy": [
+        2148,
+        1377
+      ],
+      "phase": "CALIBRATE",
+      "enqueued_seconds": 44223.689792958
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 44226.735373375
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "PRESS",
+      "xy": [
+        2088,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 44227.045962583
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 44227.196001291
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2426,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44227.443205291
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44227.93092075
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2426,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44228.364039791
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44228.780109083
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2426,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44229.180398416
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44230.161707666
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2426,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44230.614000291
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44231.030621708
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "RELEASE",
+      "xy": [
+        2108,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 44231.381165791
+    }
+  ],
+  "active_roi": [
+    411,
+    287,
+    1430,
+    910
+  ],
+  "capture_geometry": {
+    "window": [
+      1512,
+      787
+    ],
+    "screenshot": [
+      3024,
+      1574
+    ],
+    "viewport": [
+      4,
+      157,
+      2477,
+      1364
+    ],
+    "regions": [
+      {
+        "type": "HEADER",
+        "rect": [
+          4,
+          1469,
+          2477,
+          52
+        ]
+      },
+      {
+        "type": "TOOL_HEADER",
+        "rect": [
+          4,
+          1417,
+          2477,
+          52
+        ]
+      },
+      {
+        "type": "ASSET_SHELF",
+        "rect": [
+          4,
+          157,
+          2477,
+          231
+        ]
+      },
+      {
+        "type": "ASSET_SHELF_HEADER",
+        "rect": [
+          4,
+          388,
+          2477,
+          48
+        ]
+      },
+      {
+        "type": "TOOLS",
+        "rect": [
+          4,
+          436,
+          1,
+          1
+        ]
+      },
+      {
+        "type": "UI",
+        "rect": [
+          1920,
+          436,
+          561,
+          981
+        ]
+      },
+      {
+        "type": "HUD",
+        "rect": [
+          4,
+          436,
+          1,
+          1
+        ]
+      },
+      {
+        "type": "WINDOW",
+        "rect": [
+          4,
+          157,
+          2477,
+          1364
+        ]
+      }
+    ]
+  },
+  "geometry": {
+    "defaultMaterial": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 64004,
+      "faces": 100187,
+      "topology_and_positions": "e56c81e76f46c3eb2e91fff7b25709c0056bac6d24bc513656127f5a9bb48aad",
+      "uv": {
+        "UVMap": "c23023f9a1d3a42910d00bdc00c2bccd7ce509f2444737435be25edc2dccacd1"
+      },
+      "materials": []
+    },
+    "defaultMaterial.001": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 13496,
+      "faces": 17032,
+      "topology_and_positions": "2215bc928aecc768db1161915fda866efa969a198b9ba0322e30c39ea106d1e4",
+      "uv": {
+        "UVMap": "894b4a46aadd35e5b02b35cd298e042ace84c9d83152b659dff5109e158bf98a"
+      },
+      "materials": []
+    },
+    "defaultMaterial.002": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 984,
+      "faces": 1015,
+      "topology_and_positions": "1325c79c4a580542967cbbd8a18dc1cf63cf528836540552be28cec5e44635e6",
+      "uv": {
+        "UVMap": "5c1007f68bf35298733d571c5c9d5631078d14abff3d908aef44a6a115f4dd12"
+      },
+      "materials": []
+    },
+    "defaultMaterial.003": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 29785,
+      "faces": 39637,
+      "topology_and_positions": "e7ab1b0e58c79a43e8c446acd24f3f6993390fd198bf63b225c1505dc0870e54",
+      "uv": {
+        "UVMap": "f7b02eba4d17886a837a00d01291b1db0c89ea9e71ca73c18293cb1a7e12099c"
+      },
+      "materials": [
+        "OP \u00b7 defaultMaterial.003"
+      ]
+    },
+    "defaultMaterial.004": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 15919,
+      "faces": 25932,
+      "topology_and_positions": "5c7b955e6778d96a404c01ae99c2d8ec56cae05e09c0fe92bf39929339493267",
+      "uv": {
+        "UVMap": "49e79b9b6b463156f8a0446977718db7aca5d991cbb78221edb409bb9ca3378a"
+      },
+      "materials": []
+    },
+    "defaultMaterial.005": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 19380,
+      "faces": 25372,
+      "topology_and_positions": "770141b64f1af6f0ab27ce0bc61aaf11ec919b2a941baec8139daf382b03dd50",
+      "uv": {
+        "UVMap": "43ef89c42e704bfc3fe824abaef527828fa4d75af5b70c978843dba012f10ed1"
+      },
+      "materials": []
+    },
+    "defaultMaterial.006": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 20161,
+      "faces": 32583,
+      "topology_and_positions": "9a96b029525ab991f4abcfa28f9c3e952836951e16c5d9cc4cea95d131cb2c69",
+      "uv": {
+        "UVMap": "c2f2346582548e738412865ca7c37e747d28214f5b2ab60b43a4d80aeab8e87f"
+      },
+      "materials": []
+    },
+    "defaultMaterial.007": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 13157,
+      "faces": 20629,
+      "topology_and_positions": "91e43f4f3a79cd8423eee3ebb87b5ae7f716298e589dddb232a80e85eb63b3f8",
+      "uv": {
+        "UVMap": "7ae97a01979c94d5dd36348207d15c2df409870d9ff0f306476e6fe7929433be"
+      },
+      "materials": []
+    },
+    "defaultMaterial.008": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 22074,
+      "faces": 27368,
+      "topology_and_positions": "1d147f97d73d36fc0e6f29085fc3740fef972105b88346114077a07f9811afd1",
+      "uv": {
+        "UVMap": "bb1782afb7fb4be62fc25539c4c98040ba32ca8d690bb8ff020cfa7980ce279b"
+      },
+      "materials": []
+    },
+    "defaultMaterial.009": {
+      "type": "MESH",
+      "matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "vertices": 16225,
+      "faces": 25470,
+      "topology_and_positions": "6327e678708e3377f7ba7bd52c29dd5922767ad305879573301c67456f16736c",
+      "uv": {
+        "UVMap": "36f756888fda21e14a7ea36d5614c9d5be24e2531b535d343fa0843cc0aeee4b"
+      },
+      "materials": []
+    }
+  },
+  "viewport": {
+    "engine": "BLENDER_EEVEE",
+    "world": "World",
+    "saved_shading": "MATERIAL",
+    "studio_light": "courtyard.exr",
+    "studio_light_rotation": 0.0,
+    "saved_view_rotation": [
+      -0.7891489267349243,
+      -0.58103346824646,
+      -0.1180524080991745,
+      -0.16033637523651123
+    ],
+    "tested_shading": "MATERIAL"
+  },
+  "source_images": {
+    "Open Painter Detail - Brushed Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "sha256": "ca7354e30baaf1f340b7e2a634208a85a6e0facd47977035a0993dfd4e1c94d3"
+    },
+    "Open Painter Detail - Rust Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "sha256": "dfaa70a53d759fe192c0ea7f53a77b2b1085c240b17632f2eb5666df8389b4e2"
+    },
+    "Open Painter Detail - Polymer Grain": {
+      "size": [
+        1254,
+        1254
+      ],
+      "sha256": "94883cbd77b8054bdd4a44f1525bdb7d00f68131e5b23195d237e39e4b70e3f9"
+    },
+    "Open Painter Detail - Abrasion Mask V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "sha256": "8456f0c9d5de30cf0533a7313dd5c18e8ff5a8bc1789b07162f4b477b97315d1"
+    },
+    "defaultMaterial.003_BakedNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "c12f0c736428eb0135a3c5fa88b30a6eb3e41f1db8f44daaf3ad54306c7c621c"
+    },
+    "defaultMaterial.003_BakedAo": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "0b1e104bd6096176aad548bf5fe7409043e0da22d95e579264ef84aac381eaa9"
+    },
+    "defaultMaterial.003_BakedCurvature": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "ad7b9c35cecbc59d6eb88f9ae289bf364a0c632757633d217043bf815a22c89d"
+    },
+    "defaultMaterial.003_BakedPosition": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "9d9a74b3c3876574b8a4c6753b203922663de6a5faba75cb777d9c14d7820962"
+    },
+    "defaultMaterial.003_BakedWorldNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "a5f0951f26c98b872e04c2faecfbd4a9758abfd28546f70d473e86517ba6627f"
+    },
+    "defaultMaterial.003_BakedObjectNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "2232a6061d2d11d311a8652e7b050a7df905bdcccdb428fd6f3e047108b71c63"
+    },
+    "defaultMaterial.003_BakedMaterialId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "04ce1af867bf8097c92eee724f7213c797d738ac63ab2199606363aaee191c06"
+    },
+    "defaultMaterial.003_BakedObjectId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "e29e12a2d0000f46cba109f2f2144f6bc3630d9c213ed2c3d45cf882b8bfbbde"
+    },
+    "defaultMaterial.003_BakedUvIsland": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "90c984ff7d426f4ff2c6e8246a501b60f183c54cc1b83f657fb5f19470457b70"
+    },
+    "defaultMaterial.003_BakedUvBorder": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "723a4d44c716f6ecfc4fdb15f9ee39ceb03b5ba946d88b9ea00cff1eab59a226"
+    },
+    "defaultMaterial.003_BakedThickness": {
+      "size": [
+        2048,
+        2048
+      ],
+      "sha256": "99829f5319a063ef45dd7a047e7ca8427123b449028cf3d3e0bb7f23a9874102"
+    }
+  },
+  "initial_ready_seconds": 32.53292425000109,
+  "measurement": "Enqueue to changed completed window screenshot; includes viewport scheduling, GPU synchronization, PNG encoding, load and readback. Not scanout latency.",
+  "capture_decode": "libpng simplified RGB8 read into NumPy; no Blender image datablock mutations",
+  "coverage_measurement": "8x8 block means distinguish persistent coverage changes from fine-detail temporal antialiasing. Saved captures are unchanged full resolution.",
+  "scope": "One existing Cavity Dirt mask-strength control was exercised through an isolated native RNA sidebar on the supplied project, with eight back-and-forth moves during one held press. The original asset has one texture set and six layers. Full product-panel navigation was not tested. Geometry, UVs, source pixels, lighting, saved 2048 resolution and original file remained unchanged.",
+  "report_metadata_correction": "Only the descriptive scope was corrected from a hardcoded three controls to the one completed case. All captured metrics and preservation results are unchanged from the measured run.",
+  "post_run_harness_cleanup": {
+    "observed": "After all case measurements and preservation checks passed, the final test-panel redraw indexed past the last case while quitting.",
+    "fix": "Panel.poll now checks the case-index upper bound and excludes DONE/FAILED phases.",
+    "verification": "Python syntax check passed; the GUI run was not repeated for this cleanup-only fix."
+  }
+}

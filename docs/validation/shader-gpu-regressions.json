@@ -1,0 +1,44 @@
+[
+  {
+    "name": "live_gpu_math",
+    "passed": true,
+    "seconds": 5.2535870840001735,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_gpu_math.json"
+  },
+  {
+    "name": "live_gpu_checkpoints",
+    "passed": true,
+    "seconds": 3.291847874999803,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_gpu_checkpoints.json"
+  },
+  {
+    "name": "live_procedurals",
+    "passed": true,
+    "seconds": 14.222237166002742,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_procedurals.json"
+  },
+  {
+    "name": "live_masks",
+    "passed": true,
+    "seconds": 26.282816917002492,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_masks.json"
+  },
+  {
+    "name": "live_surface_relief",
+    "passed": true,
+    "seconds": 8.016453708005429,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_surface_relief.json"
+  },
+  {
+    "name": "live_preview",
+    "passed": true,
+    "seconds": 29.871788541997375,
+    "returncode": 0,
+    "report": "/Volumes/SSD/projects/open_painter/.blender-test/shader-native/gpu-live_preview.json"
+  }
+]

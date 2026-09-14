@@ -90,8 +90,14 @@ def clear():
     for scene in bpy.data.scenes:
         if hasattr(scene, 'open_painter'):
             for ts in scene.open_painter.texture_sets:
-                if ts.material:
-                    material_manager.repair(ts)
+                # Cleanup only adapters that actually reference a CPU preview.
+                # Native authoring graphs must survive disable/load without
+                # rebuilding recipes (which may intentionally lack mesh maps).
+                if ts.material and ts.material.node_tree and any(
+                        node.type == 'TEX_IMAGE' and node.image and
+                        node.image.get('open_painter_disposable_preview')
+                        for node in ts.material.node_tree.nodes):
+                    material_manager.repair(ts, image_overrides={})
     _proxies.clear()
     for cache in _resources.values():
         cache.clear()

@@ -60,7 +60,17 @@ def make_preview(entry, size=48):
     y, x = np.mgrid[:size, :size].astype(np.float32)
     u, v = (x + .5) / size, (y + .5) / size
     if kind == "PROCEDURAL":
-        rgb = procedurals.evaluate(value, u, v, seed=7, scale=6)
+        if value == "FINGERPRINTS":
+            # A recognizable single print needs enough samples per ridge.
+            # This only antialiases the shelf preview; authored inputs retain
+            # their full resolution, seed, density and numerical behavior.
+            samples = 4
+            yy, xx = np.mgrid[:size*samples, :size*samples].astype(np.float32)
+            rgb = procedurals.evaluate(value, (xx+.5)/(size*samples),
+                (yy+.5)/(size*samples), seed=7, scale=1, density=1)
+            rgb = rgb.reshape(size, samples, size, samples).mean(axis=(1,3))
+        else:
+            rgb = procedurals.evaluate(value, u, v, seed=7, scale=6)
     elif kind == "FILTER":
         gray = .2 + .6 * ((np.sin(u * 16) * np.cos(v * 12)) > 0)
         source = np.stack((u, gray, v), axis=-1).astype(np.float32)

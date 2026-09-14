@@ -13,12 +13,31 @@ sys.path.insert(0, str(ROOT / "src"))
 import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, texture_set_manager as sets
 from open_painter.evaluation.evaluator import LayerEvaluator
-from open_painter.smart_materials import composer
+from open_painter.export.surface_normal import combined as combined_normal
+from open_painter.smart_materials import composer, generated_sources
 from open_painter.smart_materials.catalog import CATALOG
+
+
+def authored_height_state(texture_set):
+    result = []
+    for item in texture_set.layers:
+        channel = stack.channel_for(item, "HEIGHT")
+        result.append((item.id, channel.enabled, channel.value, channel.procedural,
+                       channel.procedural_height, channel.projection, tuple(channel.scale),
+                       channel.detail_image.get("open_painter_generated_source") if channel.detail_image else None,
+                       [(effect.kind, effect.enabled, effect.output_black, effect.output_white)
+                        for effect in channel.effects]))
+    return result
+
 
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, "Catalog", 512)
+# Triplanar sources need real assigned geometry; an unassigned staging texture
+# intentionally samples a neutral point and cannot establish relief quality.
+bpy.ops.mesh.primitive_plane_add(size=2)
+sets.assign(scene, ts, bpy.context.object)
+bpy.context.view_layer.update()
 sentinel = stack.add(ts, "FILL", "User layer")
 stack.channel_for(sentinel, "BASE_COLOR").color = (.12, .23, .34, 1)
 sentinel_id = sentinel.id
@@ -80,8 +99,11 @@ assert composer._state(ts) == before
 assert ts.layers[0].id == sentinel_id
 np.testing.assert_allclose(stack.channel_for(ts.layers[0], "BASE_COLOR").color, (.12, .23, .34, 1))
 
-assert len(CATALOG) == 50
+original_catalog = json.loads((ROOT / "tests/fixtures/catalog_v025.json").read_text())
+assert len(CATALOG) == 50 and CATALOG.keys() == original_catalog.keys()
 hashes = {}
+height_hashes = {}
+relief = {}
 for name, data in CATALOG.items():
     composer.validate(data)
     ts.layers.clear()
@@ -96,21 +118,63 @@ for name, data in CATALOG.items():
     assert len(children) == len(data["layers"]) and not children[0].masks
     for child, spec in zip(children, data["layers"]):
         height = stack.channel_for(child, "HEIGHT")
-        assert height.enabled == ("height" in spec)
+        selected = spec.get("channels", ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT"))
+        assert height.enabled == ("HEIGHT" in selected and any(
+            key in spec for key in ("height", "height_value", "height_range")))
         if height.enabled:
-            assert abs(height.procedural_height - spec["height"]) < 1e-6
-        if spec.get("mask"):
-            assert child.masks[0].generator == spec["mask"]["kind"]
-            assert child.masks[0].invert == spec["mask"].get("invert", False)
+            if "height_range" in spec:
+                assert height.procedural_height == 1
+                assert len(height.effects) == 1 and height.effects[0].kind == "LEVELS"
+                np.testing.assert_allclose((height.effects[0].output_black, height.effects[0].output_white),
+                                           spec["height_range"], atol=1e-7)
+            elif "height_value" in spec:
+                assert not height.procedural and not height.detail_image
+                assert abs(height.value - spec["height_value"]) < 1e-6
+            else:
+                assert abs(height.procedural_height - spec.get("generated_source", {}).get("height", spec["height"])) < 1e-6
+        for channel in child.channels:
+            assert channel.projection == spec.get("projection", "UV")
+            assert abs(channel.triplanar_hardness - spec.get("triplanar_hardness", 4)) < 1e-6
         assert len(child.masks) == len(composer.masks_for(spec))
-        for extra in list(child.masks)[1:]:
-            assert extra.operation == "MULTIPLY", "Coating breakup must preserve edge losses"
-    image = LayerEvaluator(scene).evaluate_channel(ts.id, "BASE_COLOR")
+        for index, (mask, settings) in enumerate(zip(child.masks, composer.masks_for(spec))):
+            if settings.get("procedural"):
+                assert mask.source == "PROCEDURAL"
+            elif settings.get("generated_source"):
+                source_id = settings["generated_source"]["id"]
+                assert source_id in generated_sources.SOURCE_IDS
+                assert mask.source == "FILL" and mask.image.packed_file
+                assert mask.image.get("open_painter_generated_source") == source_id
+                assert mask.image.colorspace_settings.name == "Non-Color"
+            else:
+                assert mask.generator == settings["kind"]
+            assert mask.invert == settings.get("invert", False)
+            assert mask.operation == settings.get("operation", "NORMAL" if index == 0 else "MULTIPLY")
+            assert mask.projection == settings.get("projection", "UV")
+    evaluator = LayerEvaluator(scene)
+    image = evaluator.evaluate_channel(ts.id, "BASE_COLOR")
     values = images.pixels(image)
     assert np.isfinite(values).all() and values[..., :3].std() > 1e-5, name
     digest = hashlib.sha256(np.round(values, 5).tobytes()).hexdigest()
     assert digest not in hashes, (name, hashes.get(digest))
     hashes[digest] = name
+    heights = images.pixels(evaluator.evaluate_channel(ts.id, "HEIGHT"))
+    scalar = heights[..., 0]
+    assert np.isfinite(heights).all() and scalar.min() >= 0 and scalar.max() <= 1, name
+    assert scalar.std() > 1e-6 and np.ptp(scalar) > 1e-5 and ts.height_distance > 0, \
+        (name, "Material has no usable height relief")
+    height_digest = hashlib.sha256(np.round(scalar, 6).tobytes()).hexdigest()
+    assert height_digest not in height_hashes, (name, "Duplicate height", height_hashes.get(height_digest))
+    height_hashes[height_digest] = name
+    normals = images.pixels(evaluator.evaluate_channel(ts.id, "NORMAL"))
+    surface = combined_normal(ts, normals, heights)
+    vectors = surface[..., :3] * 2 - 1
+    assert np.isfinite(surface).all()
+    np.testing.assert_allclose(np.linalg.norm(vectors, axis=-1), 1, atol=2e-5)
+    assert np.max(np.abs(vectors[..., :2])) > 1e-5, (name, "Combined normal is flat")
+    relief[name] = {"height_min": float(scalar.min()), "height_max": float(scalar.max()),
+                    "height_std": float(scalar.std()), "height_distance": float(ts.height_distance),
+                    "world_height_span": float(np.ptp(scalar) * ts.height_distance),
+                    "combined_normal_xy_rms": float(np.sqrt(np.mean(vectors[..., :2] ** 2)))}
     print("CATALOG_RECIPE_PASS", name, flush=True)
 
 # Effects are single editable layers. Channel-only scratches retain base color.
@@ -136,12 +200,23 @@ assert children[-1].id == polish.id, "New folder effects must composite above it
 evaluator = LayerEvaluator(scene)
 evaluator.evaluate_texture_set(ts.id, force=True)
 expected = {out.channel: images.pixels(out.image).copy() for out in ts.outputs}
+expected_height_state = authored_height_state(ts)
+packed_inputs = {image.get("open_painter_generated_source"):
+                 hashlib.sha256(bytes(image.packed_file.data)).hexdigest()
+                 for image in bpy.data.images if image.get("open_painter_generated_source") and image.packed_file}
 path = ROOT / ".blender-test" / "catalog-materials.blend"
 path.parent.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(path))
 bpy.ops.wm.open_mainfile(filepath=str(path))
 ts = bpy.context.scene.open_painter.texture_sets[0]
-assert any(stack.channel_for(item, "HEIGHT").procedural_height < 0 for item in ts.layers)
+for item in ts.layers:
+    for image in [channel.detail_image for channel in item.channels] + [mask.image for mask in item.masks]:
+        if image and image.get("open_painter_generated_source"):
+            identifier = image.get("open_painter_generated_source")
+            assert image.packed_file and image.colorspace_settings.name == "Non-Color"
+            assert hashlib.sha256(bytes(image.packed_file.data)).hexdigest() == packed_inputs[identifier]
+assert authored_height_state(ts) == expected_height_state, \
+    "Save/reopen changed authored relief values, elevated coating ranges or source bindings"
 LayerEvaluator(bpy.context.scene).evaluate_texture_set(ts.id, force=True)
 for out in ts.outputs:
     np.testing.assert_allclose(images.pixels(out.image), expected[out.channel], atol=2e-6)
@@ -149,6 +224,7 @@ assert not any(node.bl_idname in {"ShaderNodeTexNoise", "ShaderNodeTexVoronoi", 
                for node in ts.material.node_tree.nodes)
 report = {"recipes": len(hashes), "layers": sum(len(data["layers"]) for data in CATALOG.values()),
           "effects": len(composer.EFFECTS), "pixel_fingerprints": len(hashes),
+          "height_fingerprints": len(height_hashes), "relief": relief,
           "missing_map_preflight": "PASS", "rollback": "PASS", "save_reopen": "PASS"}
 (ROOT / ".blender-test" / "catalog-materials.json").write_text(json.dumps(report, indent=2))
 open_painter.unregister()

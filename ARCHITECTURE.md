@@ -16,22 +16,25 @@ Blender user data directory or a user-chosen directory, never the installed exte
 
 ## Layer evaluation
 
-Interactive evaluation uses `evaluation/live_preview.py` to capture dependency
-signatures, resolve cached texture inputs and compose changed channels on the GPU.
-`live_inputs.py` selects validated GPU scalar/mask kernels or exact CPU inputs;
-`live_procedurals.py` and `live_masks.py` write disposable float32 textures on Metal,
-using CPU coordinate tables and explicitly sampled baked maps. Unsupported sources,
-transforms and filters keep the CPU path. `live_gpu.py` implements
-the existing blend math in float32; `live_display.py` publishes disposable image
-views with GPU mipmaps to the fixed material and 2D editor. Unchanged dependencies
-do no source work. A 256 MiB leaf cache is separate from the 256 MiB completed-folder
-cache. The latter only caches the first root folder: passthrough children use a
-known default backdrop; isolated children retain transparent coverage. Child and
-group-mode signatures invalidate it, while its own opacity/mask can reuse it. Identity fills and unit passthrough groups avoid redundant passes.
-The `LIVE` scheduler state leaves authoritative outputs dirty;
-save, render and export complete them through the CPU evaluator described below.
-Headless or incompatible work falls back to CPU. See the
-[live backend design and limits](docs/live-procedural-preview.md).
+Default authoring uses a persistent internal Blender material shader graph in
+`evaluation/shader_graph.py`, managed by `shader_preview.py`. Property changes bind
+to existing Value nodes and invalidate their downstream dependency chain. Original
+images remain editable inputs. Numeric shader-compatible edits perform no raster
+composition, channel-image writes or post-drag bake. See the
+[full callback trace, operation boundaries and diagnostics](docs/shader-preview-architecture.md).
+This dependency closure describes add-on binding and resource work. Blender can
+shade the complete material for visible pixels after an edit; the add-on neither
+controls partial GPU execution nor reports per-node GPU execution counts.
+
+Legacy integer-hash fields, neighborhood filters and scene analysis are isolated
+cached shader inputs. Only a changed boundary's input prefix is reevaluated;
+levels, mixing and supported downstream effects stay in the material shader.
+Structural edits compile a replacement group and reuse unchanged input resources.
+Save/render pack sources and complete pending boundaries without baking native
+channel outputs. Explicit export and CPU reference mode use `LayerEvaluator`.
+
+The older `live_preview.py`, `live_gpu.py` and `live_display.py` texture compositor
+remains available for reference regressions; it is no longer the default edit path.
 
 `LayerEvaluator` walks bottom to top into one float image per channel. Constant layers remain
 small broadcast arrays until a raster source requires full pixels. Raster operations use 16-row
@@ -46,7 +49,7 @@ compatibility. New folders have eight enabled channel records; old folders witho
 neutral behavior and initialize settings when edited. Disabled channels/layers/blends are skipped.
 Output image alpha remains opaque; the separate OPACITY channel drives the display material alpha.
 
-Mask stacks resolve painted data, baked maps or generators, followed by levels, invert and
+The CPU reference mask stacks resolve painted data, baked maps or generators, followed by levels, invert and
 normal/multiply/add operations. Procedural masks and ordered texture filters are also evaluated as grayscale pixels. Missing required maps produce an actionable message. Triplanar fills
 rasterize assigned mesh UV triangles into cached world position/normal images;
 three projected texture samples are weighted by normal components. CPU automatic
@@ -82,13 +85,13 @@ Baked map use in shading is explicit via a generated fill layer.
 
 ## Caching and painting
 
-Dirty flags live on texture sets, layers and channels/output records. Channel property edits only
-invalidate that channel in its owning texture set. Mask, folder and layer edits invalidate the
-owning set. Output revisions make scoped recomposition testable. An edit serial cancels stale work;
-CPU preview uses an 80 ms property-edit debounce. Live GPU and active brush work
-bypass that debounce. Geometry/source caches use their own dependency signatures,
-so material-only edits reuse unchanged geometry across evaluations.
-Saving packs images; load and undo/redo invalidate outputs. No critical state depends on module globals.
+Dirty flags describe explicit baked outputs independently of native shader state.
+Property callbacks retain prior output invalidations and add only dependent
+channels. Parameter-owner bindings and published source stages narrow the shader
+update. Source/geometry identities invalidate affected compatibility inputs.
+Native edits have no debounce or full texture job. CPU reference mode retains its
+cooperative raster scheduler and 80 ms debounce. Runtime shader resources and
+bindings can be reconstructed from persistent authoring data after load/undo.
 
 The paint bridge activates a native essential brush and selects `image_paint.canvas`. Persistent
 paint references identify the layer/channel/mask. Eligible unfiltered float paint
@@ -168,13 +171,13 @@ events consumed by the brush operator. During a stroke, snapshot composition run
 a final canvas check after release catches the last pixels. Idle Painter canvases are not repeatedly
 scanned. Painting through the legacy N-panel retains periodic detection. Saves/exports force a final
 canvas check. Blender image transfers and triplanar geometry generation are still whole-buffer work;
-this is a CPU compositor, not a GPU tile engine, and large projects can still exceed the work budget.
+these limits apply to explicit raster evaluation and isolated compatibility inputs.
 
 ## Texture procedures and filters (0.2.0)
 
 Procedural fills and masks evaluate through `texture_engine/procedurals.py`; filters operate on
 texture arrays through `texture_engine/filters.py`. Per-channel effects and mask filter records are
 persistent RNA data. Spatial filters request their required texture neighborhood; unchanged
-procedural and mask rasters can be reused through the bounded raster cache. These are CPU texture
-operations, not a GPU compositor or shader-effect graph. Triplanar source projection currently
-uses assigned base-mesh geometry; utility mesh-map baking separately uses evaluated geometry.
+procedural and mask rasters can be reused through the bounded raster cache. These exact CPU implementations remain the export/reference path. Native authoring
+compiles pointwise filters and analytic/image triplanar sampling into shader nodes;
+nonlocal filters and legacy hashed sources remain explicit compatibility boundaries.

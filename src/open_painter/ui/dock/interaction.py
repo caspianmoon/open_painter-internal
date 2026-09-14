@@ -295,11 +295,8 @@ def _route(context, ui, action, payload):
         if payload == "IMAGE_EDITOR":
             project = context.scene.open_painter
             context.space_data.ui_mode = "PAINT" if project.paint_image else "VIEW"
-            context.space_data.image = project.paint_image or (
-                next((o.image for o in ts.outputs if o.channel == project.paint_channel), None)
-                if ts
-                else None
-            )
+            from ...evaluation.composite_snapshot import for_view
+            context.space_data.image = for_view(context.scene, ts, project.paint_channel)
         configure(context.area)
         return
     if action == "EXIT":

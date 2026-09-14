@@ -1,0 +1,95 @@
+{
+  "category": "Painted and Coated Metals",
+  "description": "Steel below orange peel paint, edge chips, fine scratches and cavity dirt.",
+  "layers": [
+    {
+      "name": "Steel substrate",
+      "color": [
+        0.68,
+        0.69,
+        0.68
+      ],
+      "roughness": 0.42,
+      "metallic": 1,
+      "scale": 80,
+      "detail": 0.16,
+      "procedural": "BRUSHED",
+      "height": 0.014
+    },
+    {
+      "name": "Oxide beneath paint",
+      "color": [
+        0.074,
+        0.022,
+        0.012
+      ],
+      "roughness": 0.85,
+      "metallic": 0.0,
+      "scale": 52,
+      "detail": 0.65,
+      "procedural": "PITS",
+      "mask": {
+        "kind": "RUST",
+        "amount": 0.14,
+        "scale": 30
+      }
+    },
+    {
+      "name": "Blue paint coat",
+      "color": [
+        0.038,
+        0.133,
+        0.236
+      ],
+      "roughness": 0.42,
+      "metallic": 0.0,
+      "scale": 112,
+      "detail": 0.12,
+      "procedural": "ORANGE_PEEL",
+      "height": 0.028,
+      "mask": {
+        "kind": "CHIPS",
+        "amount": 0.28,
+        "scale": 48,
+        "invert": true
+      }
+    },
+    {
+      "name": "Scratched exposed steel",
+      "color": [
+        0.68,
+        0.69,
+        0.68
+      ],
+      "roughness": 0.49,
+      "metallic": 1,
+      "scale": 78,
+      "detail": 0.12,
+      "procedural": "SCRATCHES",
+      "height": -0.03,
+      "mask": {
+        "kind": "SCRATCHES",
+        "amount": 0.14,
+        "scale": 78
+      }
+    },
+    {
+      "name": "Recess dirt",
+      "color": [
+        0.049,
+        0.032,
+        0.02
+      ],
+      "roughness": 0.87,
+      "metallic": 0.0,
+      "scale": 30,
+      "detail": 0.7,
+      "procedural": "GRUNGE",
+      "mask": {
+        "kind": "CAVITY_DIRT",
+        "amount": 0.31,
+        "scale": 30
+      }
+    }
+  ]
+}

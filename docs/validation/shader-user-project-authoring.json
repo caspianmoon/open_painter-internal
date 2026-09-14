@@ -1,0 +1,988 @@
+{
+  "source": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+  "source_sha256": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+  "copy": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/authoring-trace.blend",
+  "blender": "5.2.1 LTS",
+  "resolution": 2048,
+  "mesh_objects": 10,
+  "vertices": 215185,
+  "polygons": 315225,
+  "assigned_objects": [
+    "defaultMaterial.003"
+  ],
+  "material": "defaultMaterial.003",
+  "layers": [
+    "Worn Painted Metal",
+    "Steel substrate",
+    "Oxide beneath paint",
+    "Blue paint coat",
+    "Scratched exposed steel",
+    "Recess dirt"
+  ],
+  "graph_nodes": 1474,
+  "cold_build_ms": 5077.469249998103,
+  "isolated_input_preparation_ms": 3522.8098330044304,
+  "controls": [
+    {
+      "label": "Blue paint chips coverage",
+      "field": "amount",
+      "changes": 49,
+      "median_ms": 1.57004199718358,
+      "p95_ms": 2.3309248004807155,
+      "maximum_ms": 5.519999998796266,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+          "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+          "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:BASE_COLOR",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:METALLIC",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+          "MaskLevels:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "MaskMix:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "MaskSource:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.1115829984191805,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1261,
+        "bound_serial": 1261,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 50,
+        "update_calls": 50,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.3431875049718656,
+            "p95": 1.9279832959000482,
+            "maximum": 2.466042002197355
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0014374585007317364,
+            "p95": 0.0021156394028366775,
+            "maximum": 0.0025641250031185336
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Abrasion mask black level",
+      "field": "black",
+      "changes": 49,
+      "median_ms": 1.5215000021271408,
+      "p95_ms": 2.51785800064681,
+      "maximum_ms": 2.8725000011036173,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[4].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+          "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+          "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+          "MaskLevels:67b3cd4127a045a4b2433d477bd3a35b:12ab70dd45b546de8dd038d9779b472e",
+          "MaskMix:67b3cd4127a045a4b2433d477bd3a35b:12ab70dd45b546de8dd038d9779b472e",
+          "Parameter:open_painter.texture_sets[0].layers[4].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.8342080002184957,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1311,
+        "bound_serial": 1311,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 100,
+        "update_calls": 100,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.300708496273728,
+            "p95": 2.271535200270591,
+            "maximum": 2.613000004203059
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0014016460008861031,
+            "p95": 0.0023850084518926445,
+            "maximum": 0.002735542002483271
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Rust amount",
+      "field": "amount",
+      "changes": 49,
+      "median_ms": 1.44779199763434,
+      "p95_ms": 2.269758000329601,
+      "maximum_ms": 2.9325829964363948,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].amount"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+          "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+          "LayerMix:b8b7854748aa4b289d18a343408a020f:BASE_COLOR",
+          "LayerMix:b8b7854748aa4b289d18a343408a020f:METALLIC",
+          "LayerMix:b8b7854748aa4b289d18a343408a020f:ROUGHNESS",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:BASE_COLOR",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:METALLIC",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+          "MaskLevels:b8b7854748aa4b289d18a343408a020f:c38e19a0fd194269849c021a777e5f57",
+          "MaskMix:b8b7854748aa4b289d18a343408a020f:c38e19a0fd194269849c021a777e5f57",
+          "MaskSource:b8b7854748aa4b289d18a343408a020f:c38e19a0fd194269849c021a777e5f57",
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].amount"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 2.1281250010360964,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1361,
+        "bound_serial": 1361,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 150,
+        "update_calls": 150,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.2530835010693409,
+            "p95": 2.1315624991984805,
+            "maximum": 2.7042910005548038
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0013320834987098351,
+            "p95": 0.0022248273005970984,
+            "maximum": 0.002802458002406638
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Recess dirt amount",
+      "field": "amount",
+      "changes": 49,
+      "median_ms": 1.524541999970097,
+      "p95_ms": 2.7156413998454805,
+      "maximum_ms": 3.529208006511908,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[5].masks[0].amount"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+          "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "MaskLevels:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+          "MaskMix:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+          "MaskSource:3f69f211e671485b90ad871fbe4d8f04:c688bdd442fd49ea9ecfa7025318527d",
+          "Parameter:open_painter.texture_sets[0].layers[5].masks[0].amount"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.2412500000209548,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1411,
+        "bound_serial": 1411,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 200,
+        "update_calls": 200,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.2846249992435332,
+            "p95": 2.4514097447536183,
+            "maximum": 3.186332993209362
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0014062914997339249,
+            "p95": 0.0025839419980911767,
+            "maximum": 0.0033665410010144114
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Blue paint layer opacity",
+      "field": "opacity",
+      "changes": 49,
+      "median_ms": 1.5539579981123097,
+      "p95_ms": 6.12771680171133,
+      "maximum_ms": 14.40924999769777,
+      "last_dependency_edit": {
+        "parameter_changes": [],
+        "invalidated_nodes": [],
+        "affected_channels": [],
+        "updated_bindings": 0,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 0.16099999629659578,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1461,
+        "bound_serial": 1461,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 249,
+        "update_calls": 250,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 49,
+          "shader_parameter_updates": 49,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.3370830019994173,
+            "p95": 2.8092395496059903,
+            "maximum": 14.018583002325613
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0014281869989645202,
+            "p95": 0.00551372730042202,
+            "maximum": 0.014179583005898166
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Coating height output",
+      "field": "output_white",
+      "changes": 49,
+      "median_ms": 1.4506250008707866,
+      "p95_ms": 2.4591745997895478,
+      "maximum_ms": 3.4742920033750124,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[3].channels[4].effects[0].output_white"
+        ],
+        "invalidated_nodes": [
+          "ChannelEffect:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT:0",
+          "Final:HEIGHT",
+          "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT",
+          "Parameter:open_painter.texture_sets[0].layers[3].channels[4].effects[0].output_white"
+        ],
+        "affected_channels": [
+          "HEIGHT"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.2043340029777028,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1511,
+        "bound_serial": 1511,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 299,
+        "update_calls": 300,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.232979502674425,
+            "p95": 2.1900709001783976,
+            "maximum": 3.1854999979259446
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.0013117920025251806,
+            "p95": 0.0022941213512240204,
+            "maximum": 0.003304208003100939
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    },
+    {
+      "label": "Steel roughness",
+      "field": "value",
+      "changes": 49,
+      "median_ms": 1.611708001291845,
+      "p95_ms": 3.069233801215887,
+      "maximum_ms": 3.723041998455301,
+      "last_dependency_edit": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[1].value"
+        ],
+        "invalidated_nodes": [
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+          "LayerMix:80a70f52abb845d498d4cf004d3aee69:ROUGHNESS",
+          "LayerMix:b8b7854748aa4b289d18a343408a020f:ROUGHNESS",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+          "LayerSource:80a70f52abb845d498d4cf004d3aee69:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[1].value"
+        ],
+        "affected_channels": [
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.2163329956820235,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1561,
+        "bound_serial": 1561,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 349,
+        "update_calls": 350,
+        "resource_steps": 336
+      },
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 50,
+          "shader_parameter_updates": 50,
+          "shader_update_calls": 50
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 50,
+            "p50": 1.3887290042475797,
+            "p95": 2.8641123502893606,
+            "maximum": 3.4999999988940544
+          },
+          "shader_callback_seconds": {
+            "samples": 50,
+            "p50": 0.001459833001717925,
+            "p95": 0.0029469712015270486,
+            "maximum": 0.003585999998904299
+          }
+        },
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 1805762560
+      }
+    }
+  ],
+  "measurement": "Synchronous RNA callback and normal scheduler work on the actual project. No viewport latency claim; held native slider screenshots are measured separately.",
+  "bypassed_coating_levels_recovery": "PASS",
+  "original_file_unchanged": true,
+  "result": "PASS"
+}

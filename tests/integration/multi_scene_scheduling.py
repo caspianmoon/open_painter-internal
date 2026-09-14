@@ -13,6 +13,7 @@ from open_painter.evaluation.evaluator import LayerEvaluator
 open_painter.register()
 a = bpy.context.scene
 ta = sets.create(a, 'Original', 512)
+ta.preview_backend = 'CPU'  # The queued raster scheduler is the subject of this test.
 la = stack.add(ta, 'FILL')
 LayerEvaluator(a).evaluate_texture_set(ta.id)
 b = a.copy()

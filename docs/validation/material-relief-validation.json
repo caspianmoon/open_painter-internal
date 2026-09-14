@@ -1,0 +1,2781 @@
+{
+  "status": "PASS",
+  "date": "2026-09-14",
+  "version": "0.2.6",
+  "blender": "5.2.1 LTS",
+  "catalog_count": 50,
+  "recipe_layer_count": 230,
+  "new_ai_sources": 13,
+  "bundled_ai_sources": 28,
+  "generation_mode": "built-in image_gen",
+  "catalog_sha256": "6002ab98cc5181a1c5a3d46bf8cddef734d2d862fad468b9ed5041ea69ac8f28",
+  "normal_export_sha256": "679855544fd38a1dc5a0edfcb91b2e77ec3f6422c4e079a81eb248fb72de27c7",
+  "master_provenance_sha256": "c3b7389b825f9c7300593ed2e0afbb813eb1ee08c1f1389a61dbfefa3425aeed",
+  "review_context_sha256": "9191c760a353ed3f0b09ab18245685c319eb208c8d91f2c626e5697f0f604e7f",
+  "gallery_sha256": "203362bb5ab156252251bbc98f5fc93d245f9ee0105eeadd872600b54ca80c2f",
+  "gallery_paired_materials": 50,
+  "gallery_existing_images": 200,
+  "all_previews_match_current_reviewed_recipes": true,
+  "all_map_headers_2048_16bit": true,
+  "background_integration_scripts": 57,
+  "unit_tests": 59,
+  "real_window_gpu_suites": 6,
+  "native_gui_workflows": 4,
+  "suite_note": "Background run resumed at generated_material_library.py after correcting its obsolete layer-only source assertion; preceding passing phases were retained. Catalog and generated-library suites passed again after the final 50 recipes and 28 assets were assembled. The final normal-export regression passed after the surface-gradient composition correction.",
+  "live_relief_gpu_max_error": 1.1920928955078125e-07,
+  "logs": {
+    "background_and_unit": {
+      "path": ".blender-test/material-relief/tests.log",
+      "sha256": "004ebc25e78e2b12c148b29b7bf5eaf8dc3a1403d69a2ab71bf20ff97c0f442e"
+    },
+    "gpu": {
+      "path": ".blender-test/material-relief/gpu.log",
+      "sha256": "dca72b4d6c446976ee5b6aa2d02ff166942c8affad9eab0b51d0957b1d8a5067"
+    },
+    "native_gui": {
+      "path": ".blender-test/material-relief/gui.log",
+      "sha256": "c0e41c9e767b9db87d8237df86dc1eba94d2c344cc23fe772af0e0fd94b2f69a"
+    },
+    "final_normal_regression": {
+      "path": ".blender-test/relief-review-regression.log",
+      "sha256": "24a346ded3e21d200ceadfc60de86c6a4026cea77a8f6958afe062bf7a6d1e95"
+    },
+    "final_catalog": {
+      "path": ".blender-test/material-relief/catalog-final.log",
+      "sha256": "6b68e1f5647c43dfd0ee3b99eef9b44df3620823921ae5009d672bfed4dbc84e",
+      "result": "PASS"
+    },
+    "final_generated_library": {
+      "path": ".blender-test/material-relief/generated-library-final.log",
+      "sha256": "050d3164ac225f33bf6cf58cc0d4c4d9fbfbd94991da320be1b5c56762c63bde",
+      "result": "PASS"
+    }
+  },
+  "assets": [
+    {
+      "id": "abrasion_mask_v2",
+      "sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "brass_tarnish",
+      "sha256": "07159194313e33f3b1f70d15d2052c02d543d77225375b39b17eaf8a96843b0e",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "brushed_metal",
+      "sha256": "80ba9a49f05ee0bc6788d369a0e926569baae0b19e563a8aacef8ef99b1075a2",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "brushed_relief_v2",
+      "sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "burn_blisters",
+      "sha256": "5b8bebc5e278aa5fa620cba7a4f564f8bbf989d623549f4c7a37f5808021684a",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "burn_relief_v2",
+      "sha256": "750b6b3950f6287087474b321e965b43125ff44d4b22d240e030144f617ad33e",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "cast_iron_grain",
+      "sha256": "68fc2b723131b3ee35dc8ec594331d51989e9f49cbc861ba6fdb062fca22e285",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "cement_relief_v2",
+      "sha256": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "charred_timber_v2",
+      "sha256": "71f3436b36af044aeec58b9bd4f06fc21822a798fd261aa04a520e165d720899",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "concrete_pores",
+      "sha256": "99fe25655c0298369a9c0928dc6916164c067b111eb0a3a717bf7b01090b9839",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "denim_twill_v2",
+      "sha256": "adc790d25b965674e3fad3333b75abc79ef64bf379372d7512d14f33c3909a1c",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "fabric_weave",
+      "sha256": "dacb88ba578c3f761c423736561d17f2d87198395e96e1bd02d8ff3ae2f7a9dc",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "fine_wood",
+      "sha256": "75e20022bf1d132beaa4ce4171d5a8356456dbfaeb6c29800cddbfcdd2a03f4a",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "granite_minerals",
+      "sha256": "d31a9fd663f1236419966381f5fb450697e9badc97881193b1585f149d38b5df",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "grease_deposits_v2",
+      "sha256": "1881e106a8bd02cd12286dbf79cc4f4b5499c47526a66c9ac2cdddc3e1f164cc",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "leather_grain",
+      "sha256": "51b5f783b3e29e315cc1b3acf167091a0be90421a1f8d8ab608fe4c440662218",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "leather_relief_v2",
+      "sha256": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "machined_scratches",
+      "sha256": "8f8d2971a4675939ad6eecf39b11539ec6ae02b84dbabb1b242dbd102aeb7583",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "marble_veins",
+      "sha256": "b4500bcc69584007c299658a07ffeb0f052fc9e2ceedc2e380beac1aeed41119",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "paint_loss_v2",
+      "sha256": "000de48c1336ae5c2a468e437b3fc904a3a9f5f321e880f5b9d1ebfc1490aa4c",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "polymer_grain",
+      "sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "rubber_cracks_v2",
+      "sha256": "8c45895958dc81b894605e59cbf33b67a2f996a9da6cbcf178ff3fbbb367517d",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "rust_detail",
+      "sha256": "13f956c2bd264396c788387fcca71dcabe47fd7f1773a3f0f4fac3eae9b73a63",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "rust_relief_v2",
+      "sha256": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "surface_smudges",
+      "sha256": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "timber_relief_v2",
+      "sha256": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "weld_bead_v2",
+      "sha256": "31c6bd32348f9cfa2dbc3425decab0752430db36e09c4b20dc280d8952e83e02",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    },
+    {
+      "id": "zinc_spangle",
+      "sha256": "d8379466ecbdf811fefa755480e6ac30494d0eb92c23407da63ed427b3fc46ec",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8
+    }
+  ],
+  "materials": [
+    {
+      "material": "Clean Brushed Steel",
+      "render_run": "final",
+      "recipe_sha256": "59e75e4f8d7b9e1791e40ff4ac281e999316ffa67747e7bb4ba0e72e8570f833",
+      "preview_sha256": "592d13c4d23d0b50b97d59fc6043bfd0a19e6ca6c4dd12342281c8f72cdefdde",
+      "height_stats": {
+        "minimum": 0.49111443758010864,
+        "maximum": 0.5084736943244934,
+        "mean": 0.5003129243850708,
+        "standard_deviation": 0.0016009012470021844,
+        "range": 0.017359256744384766,
+        "percentile_01": 0.4965285658836365,
+        "percentile_99": 0.5044214725494385,
+        "gradient_rms_per_texel": 0.0010879610199481249,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0008679628372192383,
+        "combined_normal_xy_rms": 0.029498489573597908
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Clean_Brushed_Steel_height.png",
+          "sha256": "e00e9742587cde311d34d2bee677db1c33f6e4cd1af3435fe36383813425b441",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Clean_Brushed_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Clean_Brushed_Steel_normal_combined.png",
+          "sha256": "641643f8b231fb0c5c5b62ea784f09a92136829a35ac0e930f371ef4c2a87515",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Worn Brushed Steel",
+      "render_run": "final",
+      "recipe_sha256": "e9aa0316463417d8695b6bb2c1692792c31ddb0ce7490d5f653c6f52ef67caa9",
+      "preview_sha256": "e5b31df50ec831edab49d0a220aaf71eef10cb4d96d3c805a1b5d97f176b7ed6",
+      "height_stats": {
+        "minimum": 0.4799114465713501,
+        "maximum": 0.5164766311645508,
+        "mean": 0.5001709461212158,
+        "standard_deviation": 0.0034874510020017624,
+        "range": 0.036565184593200684,
+        "percentile_01": 0.4906272292137146,
+        "percentile_99": 0.5084760785102844,
+        "gradient_rms_per_texel": 0.002509145066142082,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0018282592063769698,
+        "combined_normal_xy_rms": 0.06495922803878784
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Worn_Brushed_Steel_height.png",
+          "sha256": "a831d92c44eac857876c377e316ccc25f2f73689e48c430bd31c08713f4781d7",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Worn_Brushed_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Worn_Brushed_Steel_normal_combined.png",
+          "sha256": "194eefede5be8f8f14ca6583ae426f50ad8bc35e8ac021d1204df27e6a93eda5",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Machined Aluminum",
+      "render_run": "final",
+      "recipe_sha256": "fc050a0e9d2d298ba2c772c0fa325ce637584bb28f69be8fe688881f9fbebbe3",
+      "preview_sha256": "1f1e4030a501d9840d3ba1586475b07327e77a4ce8e6958df3d041a1bcbfaf5a",
+      "height_stats": {
+        "minimum": 0.486503541469574,
+        "maximum": 0.5132560133934021,
+        "mean": 0.5006557106971741,
+        "standard_deviation": 0.0024873639922589064,
+        "range": 0.026752471923828125,
+        "percentile_01": 0.49473798274993896,
+        "percentile_99": 0.5070547461509705,
+        "gradient_rms_per_texel": 0.00164036825299263,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0013376235729083419,
+        "combined_normal_xy_rms": 0.04153185710310936
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Machined_Aluminum_height.png",
+          "sha256": "087963beb3803c5492b551e6c1018852e042083f6280b44fee1f0d5864e3dc6f",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Machined_Aluminum_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Machined_Aluminum_normal_combined.png",
+          "sha256": "d03e753bdfbe2f273a39b6189f6a1c27bf8bf90ad8fad382fbbb2f09b3bc376b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Scratched Aluminum",
+      "render_run": "tuned",
+      "recipe_sha256": "6a1ae8039a6097a82e6188c810442e4f2e63a591ed8274f987a2d6a629660ea7",
+      "preview_sha256": "39a1df5bb58f2984f9e184d2d5bb9efa3eabe518a6d349a31eb67879dade09e9",
+      "height_stats": {
+        "minimum": 0.48188480734825134,
+        "maximum": 0.5119125247001648,
+        "mean": 0.5000739097595215,
+        "standard_deviation": 0.00256158085539937,
+        "range": 0.030027717351913452,
+        "percentile_01": 0.49217647314071655,
+        "percentile_99": 0.5058412551879883,
+        "gradient_rms_per_texel": 0.0020877474453300238,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0015013859374448657,
+        "combined_normal_xy_rms": 0.052984725683927536
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Scratched_Aluminum_height.png",
+          "sha256": "f2dc9e1e99f4a3ea2081cfdc1a09e688f9b2b8336efbfc4bdddb552b338f4942",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Scratched_Aluminum_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Scratched_Aluminum_normal_combined.png",
+          "sha256": "6231f2951b4857eb07f9b948eecb5d8beed17a0f9c0b334a25d0e0ed578fc566",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Cast Iron",
+      "render_run": "final",
+      "recipe_sha256": "cf6e9937216f343c6e0c70ada58e2e582e644e8018659b0a5c13ad3ad646328a",
+      "preview_sha256": "aee5994e0ae676ea54f6ef3ecb8b7d8ca8116e59c0c7a2a767f1064b63fe6f1e",
+      "height_stats": {
+        "minimum": 0.4460867643356323,
+        "maximum": 0.5513919591903687,
+        "mean": 0.494486927986145,
+        "standard_deviation": 0.01211696770042181,
+        "range": 0.10530519485473633,
+        "percentile_01": 0.46335795521736145,
+        "percentile_99": 0.5223317742347717,
+        "gradient_rms_per_texel": 0.01125043909996748,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005265259649604559,
+        "combined_normal_xy_rms": 0.23908406496047974
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Cast_Iron_height.png",
+          "sha256": "c9e7f875593ce61f4b3a4841dd5d88847ba60da4cb1818ffc6eba0c35b722ff6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Cast_Iron_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Cast_Iron_normal_combined.png",
+          "sha256": "7947dfc0e51d39f4af82fa9ce4bad8ffed6a7aa1cb1d73acee6bb005d4d1be53",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Raw Industrial Steel",
+      "render_run": "final",
+      "recipe_sha256": "c3d04b9bc9d86638b64415927936ca91fb75e136d6594626e1bc0e0a4021f2e2",
+      "preview_sha256": "4216c4eea9455dd6a1eed944ca76b1f5b498561c41aafc03f2aaff11f26366d2",
+      "height_stats": {
+        "minimum": 0.4808735251426697,
+        "maximum": 0.5131812691688538,
+        "mean": 0.5000505447387695,
+        "standard_deviation": 0.0029176021926105022,
+        "range": 0.03230774402618408,
+        "percentile_01": 0.49150604009628296,
+        "percentile_99": 0.5067721009254456,
+        "gradient_rms_per_texel": 0.0021298767533153296,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0016153872711583972,
+        "combined_normal_xy_rms": 0.05526115000247955
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Raw_Industrial_Steel_height.png",
+          "sha256": "85855b0432faad95f1732465f513f24d6102b4e6c714819190453904d9f42013",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Raw_Industrial_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Raw_Industrial_Steel_normal_combined.png",
+          "sha256": "bd27faa2515cad4a9c49feaab6703c0f7a5a7487f0ad70c124d344bb7898b8e3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Polished Chrome",
+      "render_run": "final",
+      "recipe_sha256": "a918132d06603006af4d9a13a7afc5f8b93b7991c5db95bb8711cec60d8f56cd",
+      "preview_sha256": "a759c57c00e4634cc4c9b06aa7efaf2ae11cf3abcbcb835fb93aa71103e56138",
+      "height_stats": {
+        "minimum": 0.49825000762939453,
+        "maximum": 0.5,
+        "mean": 0.4999244213104248,
+        "standard_deviation": 0.00020265881903469563,
+        "range": 0.0017499923706054688,
+        "percentile_01": 0.4989490807056427,
+        "percentile_99": 0.5,
+        "gradient_rms_per_texel": 0.00017155571549665183,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 8.749961853027344e-05,
+        "combined_normal_xy_rms": 0.004330826457589865
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Polished_Chrome_height.png",
+          "sha256": "1e63554d678e68297fe58c924216cb0464044976e682b818d09cc7d3032f1028",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Polished_Chrome_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Polished_Chrome_normal_combined.png",
+          "sha256": "3df1e8e3c9b28ce5f98b93111935e57639464910ddb217e16e0853eee89ba6e4",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Old Brass",
+      "render_run": "tuned",
+      "recipe_sha256": "a8b8833351ea5de60335d698e1f605599be05e9721cef2f9515bce4fdecde18c",
+      "preview_sha256": "5dc143609f4e81c73638b93ce65d98528279bf0b1efa2dfdd3058e33ca72a2ef",
+      "height_stats": {
+        "minimum": 0.48978424072265625,
+        "maximum": 0.5337464809417725,
+        "mean": 0.5093305110931396,
+        "standard_deviation": 0.005110881291329861,
+        "range": 0.04396224021911621,
+        "percentile_01": 0.4988544285297394,
+        "percentile_99": 0.5226616859436035,
+        "gradient_rms_per_texel": 0.0033245126251131296,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002198111964389682,
+        "combined_normal_xy_rms": 0.09054671227931976
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Old_Brass_height.png",
+          "sha256": "6d5c4f5ca7f48ccd81ac7fb5de72809a65152ddb4fb0a14a4da4b7c5d2c61d32",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Old_Brass_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Old_Brass_normal_combined.png",
+          "sha256": "bb80cbaaa4945041f664cbe3275b7a3159626092b2ca0084b74d01ad9e9839b6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Antique Bronze",
+      "render_run": "tuned",
+      "recipe_sha256": "fe36bf70cd6fec02b0c273962d98fb4e900cde54ca94b751193e9c15d16239c7",
+      "preview_sha256": "4072c9619185fe83b641817760b5947f5193f6b006ad4382a1e109b66f0789f1",
+      "height_stats": {
+        "minimum": 0.4501352310180664,
+        "maximum": 0.5468199253082275,
+        "mean": 0.49453526735305786,
+        "standard_deviation": 0.01106075569987297,
+        "range": 0.09668469429016113,
+        "percentile_01": 0.46608614921569824,
+        "percentile_99": 0.5200411081314087,
+        "gradient_rms_per_texel": 0.008834829553961754,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004834234714508057,
+        "combined_normal_xy_rms": 0.18534229695796967
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Antique_Bronze_height.png",
+          "sha256": "c0b69079e93a10fad91773b6600079fc91973e697bf44349a0c2649cfe76d20e",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Antique_Bronze_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Antique_Bronze_normal_combined.png",
+          "sha256": "df8888b7e8bdab8484cc69256c390aee1a885b7c50dab6186ec9acf6d07fc4bb",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Oxidized Copper",
+      "render_run": "tuned",
+      "recipe_sha256": "7878c75978c71d22219356950b7785144c19077a785506a71609868498ab2d2a",
+      "preview_sha256": "90975a646e1d7b656cb515a7435444f66da1020045227027dd8ac9e2ae38959f",
+      "height_stats": {
+        "minimum": 0.4403914213180542,
+        "maximum": 0.5585878491401672,
+        "mean": 0.49762076139450073,
+        "standard_deviation": 0.009292769245803356,
+        "range": 0.11819642782211304,
+        "percentile_01": 0.4696696400642395,
+        "percentile_99": 0.5219317674636841,
+        "gradient_rms_per_texel": 0.006935265380889177,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005909821484237909,
+        "combined_normal_xy_rms": 0.1544191986322403
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Oxidized_Copper_height.png",
+          "sha256": "90703ad4637d4411ebca4e17a8da63da441516b9f271f3a63357439a0340af3a",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Oxidized_Copper_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Oxidized_Copper_normal_combined.png",
+          "sha256": "91adfc8d6a1c47b0c79182c7f4c4620ca4aceea791fcbd8d2d7840160df0433f",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Worn Painted Metal",
+      "render_run": "tuned",
+      "recipe_sha256": "7937913a2000bfdd7d369100ec7cddc99150409680ae9a4c56349ad5686190ff",
+      "preview_sha256": "cb94b74668473421e9ed1c1d73e9014470085c0d43570c092d835980be6c2083",
+      "height_stats": {
+        "minimum": 0.5132060647010803,
+        "maximum": 0.5637336373329163,
+        "mean": 0.5491771101951599,
+        "standard_deviation": 0.004384640138596296,
+        "range": 0.05052757263183594,
+        "percentile_01": 0.5309213399887085,
+        "percentile_99": 0.5564665198326111,
+        "gradient_rms_per_texel": 0.004032288212329149,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0025263787247240543,
+        "combined_normal_xy_rms": 0.09989087283611298
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Worn_Painted_Metal_height.png",
+          "sha256": "a6676a5ae4b8ba2cebb20f0cda8d1d8d21e089583bc85e0b88c8e99f46c4ba5b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Worn_Painted_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Worn_Painted_Metal_normal_combined.png",
+          "sha256": "302b47b3fab6087f0cf0d4465ee2ee43a8706d5da5f78a1f98660d24cb9bac6f",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Heavy Chipped Paint",
+      "render_run": "final",
+      "recipe_sha256": "5c10d64a51acdf49615dc5c87b6676839a5af532c89fb288c8231bba4c602edf",
+      "preview_sha256": "727d3f30ac29ca7dfca235177bc737324b3a6ca20e31a9081041b591ca102527",
+      "height_stats": {
+        "minimum": 0.4500511586666107,
+        "maximum": 0.6407032012939453,
+        "mean": 0.5772395730018616,
+        "standard_deviation": 0.06284619122743607,
+        "range": 0.1906520426273346,
+        "percentile_01": 0.4621911942958832,
+        "percentile_99": 0.630240797996521,
+        "gradient_rms_per_texel": 0.027166636660695076,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00953260250389576,
+        "combined_normal_xy_rms": 0.2780276834964752
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Heavy_Chipped_Paint_height.png",
+          "sha256": "cc76d633aafd43361c9e2d1ce3670491dc43d1abb764cfad6ba094fd36b77a21",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Heavy_Chipped_Paint_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Heavy_Chipped_Paint_normal_combined.png",
+          "sha256": "1df8e277598c502dda5488021dc8a89ce07851078e80e61c35dad6e05e8fd24d",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Factory Powder-Coated Metal",
+      "render_run": "final",
+      "recipe_sha256": "70b152af12c1d07e4f32ab73c466fe2e4d245e7fbe7f0076213272be19774cb8",
+      "preview_sha256": "123a3a1373e6075ed38bea3caa5b3907283e697bf41a4e2b3e64527ed3aba911",
+      "height_stats": {
+        "minimum": 0.5328770279884338,
+        "maximum": 0.5579527020454407,
+        "mean": 0.5467556715011597,
+        "standard_deviation": 0.002418653341010213,
+        "range": 0.025075674057006836,
+        "percentile_01": 0.540475070476532,
+        "percentile_99": 0.552250325679779,
+        "gradient_rms_per_texel": 0.002354203723371029,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0012537837028503418,
+        "combined_normal_xy_rms": 0.06607697159051895
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Factory_Powder-Coated_Metal_height.png",
+          "sha256": "720628185513d8f27ccba03b89e2172839d3fe211a202d9b8ef38ad617347ca0",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Factory_Powder-Coated_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Factory_Powder-Coated_Metal_normal_combined.png",
+          "sha256": "045a66b3f97147e69f0b70a8b988298b345fe7cb3baf27fa0a516d8a7675378d",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Military Painted Steel",
+      "render_run": "final",
+      "recipe_sha256": "b23a8ccee9eb4079148af1b65fc9c2c644f7e374367030fdcd9245addb197011",
+      "preview_sha256": "93bd2a08792d4e166fe2432255e577575a2047716602fe673e958a3b941aff19",
+      "height_stats": {
+        "minimum": 0.5223005414009094,
+        "maximum": 0.5722950100898743,
+        "mean": 0.5549228191375732,
+        "standard_deviation": 0.004268919117748737,
+        "range": 0.049994468688964844,
+        "percentile_01": 0.5405932664871216,
+        "percentile_99": 0.5634481906890869,
+        "gradient_rms_per_texel": 0.003928918391466141,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0024997235741466284,
+        "combined_normal_xy_rms": 0.10154756158590317
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Military_Painted_Steel_height.png",
+          "sha256": "e9b03a7d5a8bf07d61652d901a7b2e24d30c80ab732a785d36c8133c4a466ff2",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Military_Painted_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Military_Painted_Steel_normal_combined.png",
+          "sha256": "c58ad70718184f2879068260de96ebf8961cd0ae093dc60a8509f589fbff3255",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Old Enamel Metal",
+      "render_run": "final",
+      "recipe_sha256": "33eae0781ad7e06c7f65b3c0bf8a08e6b774f2ad10906c0c75a89a82a5e7da9c",
+      "preview_sha256": "f88e37ee152982f3a62b5b54b8e5385fc14333fda2eee6d16f1f3a27d285646c",
+      "height_stats": {
+        "minimum": 0.5010755658149719,
+        "maximum": 0.5542812943458557,
+        "mean": 0.5420742034912109,
+        "standard_deviation": 0.009263880550861359,
+        "range": 0.05320572853088379,
+        "percentile_01": 0.5071427226066589,
+        "percentile_99": 0.5501847267150879,
+        "gradient_rms_per_texel": 0.008889912627637386,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0026602863799780607,
+        "combined_normal_xy_rms": 0.1894720196723938
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Old_Enamel_Metal_height.png",
+          "sha256": "495894bf5f7965a6f2678677ea386297733e9b96977091fb51bdc9aa128dadd5",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Old_Enamel_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Old_Enamel_Metal_normal_combined.png",
+          "sha256": "89f279f6d370bfaeba18132d2432e57dc78a0019255347a30688c162d075d75f",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Rusting Painted Steel",
+      "render_run": "tuned",
+      "recipe_sha256": "97abfe0c791f84cf90b0fb30808129daa02bdd42eb2059c86f499155760b91d1",
+      "preview_sha256": "e84ee40beb4ac401c73cc1d035e26bd4e91ce9275644f8c8d6e348d32f4bc490",
+      "height_stats": {
+        "minimum": 0.4581124782562256,
+        "maximum": 0.5821387767791748,
+        "mean": 0.5439044237136841,
+        "standard_deviation": 0.03369936719536781,
+        "range": 0.12402629852294922,
+        "percentile_01": 0.4729371666908264,
+        "percentile_99": 0.574470043182373,
+        "gradient_rms_per_texel": 0.015668494626879692,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.006201315205544233,
+        "combined_normal_xy_rms": 0.22715137898921967
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Rusting_Painted_Steel_height.png",
+          "sha256": "6de3f9b63e492f4ce3d81eaf855ebd5efc37f11b530c7ec3c715689bd41dd5d3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Rusting_Painted_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Rusting_Painted_Steel_normal_combined.png",
+          "sha256": "376a6cb8b53ae99f0023a176365998bc762c6525d0d4a539836555f276b24ce1",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Automotive Painted Metal",
+      "render_run": "final",
+      "recipe_sha256": "70b121b8b663514e835877eba26e6a56608ae496491541e5db5a0f48401e3014",
+      "preview_sha256": "f7aae7e393ae0e8ad4f0741ccc93e1482cef653201551646fc7dfe69d556c00e",
+      "height_stats": {
+        "minimum": 0.4983963370323181,
+        "maximum": 0.5022603273391724,
+        "mean": 0.5000120401382446,
+        "standard_deviation": 0.00038964691339060664,
+        "range": 0.003863990306854248,
+        "percentile_01": 0.4991571605205536,
+        "percentile_99": 0.5010562539100647,
+        "gradient_rms_per_texel": 0.0003807077882811427,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0001931995211634785,
+        "combined_normal_xy_rms": 0.010766778141260147
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Automotive_Painted_Metal_height.png",
+          "sha256": "638391a277cb52b47b334c64e390e0c16358c85549f540345bf7809042e681a5",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Automotive_Painted_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Automotive_Painted_Metal_normal_combined.png",
+          "sha256": "895888810532ca903ca2adcca4e158aec59ee0a00cac7a695f5e7fc48f12b77b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Burned Painted Metal",
+      "render_run": "industrial-final",
+      "recipe_sha256": "356801800bebfc006ff580c409223d82229282b08c6c58ec28bb49ca317fd410",
+      "preview_sha256": "b3de5fb7cfe0c463c0835fb10baa41b5a2b8e7ab649af5ce26b3cdf0d4798226",
+      "height_stats": {
+        "minimum": 0.45504021644592285,
+        "maximum": 0.6744827032089233,
+        "mean": 0.5667798519134521,
+        "standard_deviation": 0.02820935845375061,
+        "range": 0.2194424867630005,
+        "percentile_01": 0.49778270721435547,
+        "percentile_99": 0.6399142742156982,
+        "gradient_rms_per_texel": 0.01577645167708397,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.01097212452441454,
+        "combined_normal_xy_rms": 0.25335371494293213
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Burned_Painted_Metal_height.png",
+          "sha256": "44b7fb9614ef2df5214a46c0dd0f479d489ee1188ebb46eb551b783815b93e92",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Burned_Painted_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Burned_Painted_Metal_normal_combined.png",
+          "sha256": "7742f4ce765bff825eec55844b9fc35722fbcde07c8e9b61f66eca4515d406b3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Heavy Rust",
+      "render_run": "final",
+      "recipe_sha256": "d32772795d6b350c8a729379b9e7f4f69594eb7f2c27772413596c4b7d16ea29",
+      "preview_sha256": "e49d53fd30dfb3c7f50dfe7f15608f4f5e07e31b027f84934f327b36b1bb6140",
+      "height_stats": {
+        "minimum": 0.4233635365962982,
+        "maximum": 0.5765087008476257,
+        "mean": 0.49358105659484863,
+        "standard_deviation": 0.01833302155137062,
+        "range": 0.15314516425132751,
+        "percentile_01": 0.44757241010665894,
+        "percentile_99": 0.5399553775787354,
+        "gradient_rms_per_texel": 0.01508626900613308,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007657258305698633,
+        "combined_normal_xy_rms": 0.2746411859989166
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Heavy_Rust_height.png",
+          "sha256": "c7e0d144f6827df0421f5dbaccaba3abcfb9aeb3f6db39701e4b354570113cb7",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Heavy_Rust_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Heavy_Rust_normal_combined.png",
+          "sha256": "f4951df89c17484b0a5b8e865416da965885841504814feb088f89407341a265",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Surface Rust",
+      "render_run": "final",
+      "recipe_sha256": "87827116af0b7004dc833afe4e15186e21af1fa295e98ed5a25ace9b0d90537b",
+      "preview_sha256": "a9c83cb641f7786b72d0da1a6e4f614e075b61119b7ad2591b6aa39216b187b0",
+      "height_stats": {
+        "minimum": 0.49132370948791504,
+        "maximum": 0.5085217356681824,
+        "mean": 0.5004215240478516,
+        "standard_deviation": 0.0015990196261554956,
+        "range": 0.017198026180267334,
+        "percentile_01": 0.49661725759506226,
+        "percentile_99": 0.5045351982116699,
+        "gradient_rms_per_texel": 0.0010545223485678434,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0008599013090133667,
+        "combined_normal_xy_rms": 0.02688336744904518
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Surface_Rust_height.png",
+          "sha256": "58c30da097d7407c9d7ba0e3fe13989603d6cdfffbf479a6cfb7d62479af83b5",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Surface_Rust_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Surface_Rust_normal_combined.png",
+          "sha256": "d4b4baad81f66f3830aa48aa7c88ac6e2eaf70f7aa826bc03cb706112ccfe388",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Wet Rust",
+      "render_run": "final",
+      "recipe_sha256": "b7019c6a6bea1569ae1789e2a847504b2ff6b7d6e4ed50de8566ade9d70270a1",
+      "preview_sha256": "de7fa809a7578f8c9101ed319e35be81f698508051b13e3303bb9d675352b1fe",
+      "height_stats": {
+        "minimum": 0.4440881907939911,
+        "maximum": 0.555929958820343,
+        "mean": 0.49436891078948975,
+        "standard_deviation": 0.015867944806814194,
+        "range": 0.11184176802635193,
+        "percentile_01": 0.45591267943382263,
+        "percentile_99": 0.5341472029685974,
+        "gradient_rms_per_texel": 0.013042637147009373,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005592088680714369,
+        "combined_normal_xy_rms": 0.24855296313762665
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Wet_Rust_height.png",
+          "sha256": "722f11e2756e5a25499ee3217cc85e509b1cb6bbeb4033ab9fba309663f2b3ee",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Wet_Rust_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Wet_Rust_normal_combined.png",
+          "sha256": "2cda25ddd483662063f5b8c71682d96e5f6f2222f30c7a65645b4a862204ba94",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Galvanized Steel",
+      "render_run": "industrial-final",
+      "recipe_sha256": "1a7c8f49d4eaf684016ae066b8fd86946fdc2185ad1639635439c0c19cc104db",
+      "preview_sha256": "63d0331d13fea3ee18b38f2976af2ddc76c49203d72b9c140725f91b2f829628",
+      "height_stats": {
+        "minimum": 0.49574634432792664,
+        "maximum": 0.503172755241394,
+        "mean": 0.5005491375923157,
+        "standard_deviation": 0.0006844872259534895,
+        "range": 0.007426410913467407,
+        "percentile_01": 0.49830496311187744,
+        "percentile_99": 0.5019011497497559,
+        "gradient_rms_per_texel": 0.000511289166752249,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00037132055149413645,
+        "combined_normal_xy_rms": 0.012756173498928547
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Galvanized_Steel_height.png",
+          "sha256": "4f7a0d37d472667309106dce7beb17c371b59afe98ae6af66e059c444d4d600c",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Galvanized_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Galvanized_Steel_normal_combined.png",
+          "sha256": "d23651fb171b5d52308aa854c2bdcb25b6a4fe48e7cb7ceb65f128db66c0b5ff",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Welded Steel",
+      "render_run": "industrial-final",
+      "recipe_sha256": "124c4f571e192655fd870c2f9b2d32bc49e5046f88fbfbb9580f8fad5073dff0",
+      "preview_sha256": "9378179f610847ce302ad628fcf2eec612162b5ec0f0867974fac9d9fe6010cc",
+      "height_stats": {
+        "minimum": 0.4884316325187683,
+        "maximum": 0.75,
+        "mean": 0.5097054243087769,
+        "standard_deviation": 0.033515650779008865,
+        "range": 0.2615683674812317,
+        "percentile_01": 0.4955682158470154,
+        "percentile_99": 0.6708559989929199,
+        "gradient_rms_per_texel": 0.0040053981356322765,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0130784185603261,
+        "combined_normal_xy_rms": 0.08082372695207596
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Welded_Steel_height.png",
+          "sha256": "6e40cc74ead470c6bdf1c770608b0fbc0f8224bb35160d2ece25075f06ff543c",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Welded_Steel_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Welded_Steel_normal_combined.png",
+          "sha256": "ff756f94ea23437433be1c6b6d8a19a9ba4d216cd7d61fb948d9fca21d5d47c2",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Heat-Treated Metal",
+      "render_run": "final",
+      "recipe_sha256": "4c4afa42863d5418e426efb1661fd67813acc54c0722c75731ae220b788ed774",
+      "preview_sha256": "5cb0115535a373386a0e7542d3100e6ebb55e8ac0938f55fc942590989cda6fb",
+      "height_stats": {
+        "minimum": 0.4922877550125122,
+        "maximum": 0.5075748562812805,
+        "mean": 0.5003746747970581,
+        "standard_deviation": 0.0014213507529348135,
+        "range": 0.01528710126876831,
+        "percentile_01": 0.49699312448501587,
+        "percentile_99": 0.5040313005447388,
+        "gradient_rms_per_texel": 0.0009373532375320792,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0007643550634384155,
+        "combined_normal_xy_rms": 0.023923836648464203
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Heat-Treated_Metal_height.png",
+          "sha256": "8d3cdd55aa740b57a22f9079227566a7b7b3d9735a88d9e01a809dde4d26ff2f",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Heat-Treated_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Heat-Treated_Metal_normal_combined.png",
+          "sha256": "d22382ab2706231c0c1eb66f5c83ecc9168ed60567f11e5085f6637ec769ab67",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Greasy Machinery",
+      "render_run": "industrial-final",
+      "recipe_sha256": "a99d67d47f2483d2bd0fa675e5194f5236b853d0af6115ff1f186edee10e223d",
+      "preview_sha256": "5e2cba37f5c1ad6491375c4cd83e7cc073e3b3b6cebae017475f7e3acf77cf45",
+      "height_stats": {
+        "minimum": 0.4877239167690277,
+        "maximum": 0.5403610467910767,
+        "mean": 0.5030437111854553,
+        "standard_deviation": 0.005966664757579565,
+        "range": 0.05263713002204895,
+        "percentile_01": 0.4953097105026245,
+        "percentile_99": 0.5216006636619568,
+        "gradient_rms_per_texel": 0.0038193019572645426,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002631856594234705,
+        "combined_normal_xy_rms": 0.08449451625347137
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Greasy_Machinery_height.png",
+          "sha256": "f61eb87304fc511ade367fa5af351ea71ea64cf4e21c05e9c2c7bdc39e9e9a84",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Greasy_Machinery_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Greasy_Machinery_normal_combined.png",
+          "sha256": "5393b7619824c6a18250540b4946d49258a738facd35fbba542db7587a59f2bd",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Abandoned Machinery",
+      "render_run": "tuned",
+      "recipe_sha256": "2dd84cf4b0fc68dba6ca4d8a91b108467e67c2af7d5b87935af58852ce01623b",
+      "preview_sha256": "30f35d7513c36a83933f637a84fb4cf200e410f5b2eed589baa78a7589a50e5a",
+      "height_stats": {
+        "minimum": 0.4400944709777832,
+        "maximum": 0.5991551876068115,
+        "mean": 0.5518884658813477,
+        "standard_deviation": 0.04090619459748268,
+        "range": 0.15906071662902832,
+        "percentile_01": 0.4611831605434418,
+        "percentile_99": 0.5890418887138367,
+        "gradient_rms_per_texel": 0.019405383616685867,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007953035645186901,
+        "combined_normal_xy_rms": 0.2584410607814789
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Abandoned_Machinery_height.png",
+          "sha256": "e01b57a3e3b3e4869586df054ea0498f5e3aaea95e2b7ad99656c50f6c97ed20",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Abandoned_Machinery_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Abandoned_Machinery_normal_combined.png",
+          "sha256": "af3d445a09443588988a46dd7712312475cf863fbfaf544b0c6ad803bdc737ac",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Injection-Molded Plastic",
+      "render_run": "final",
+      "recipe_sha256": "b2bc72bec95649a8327ab739296f12cf31ef1a03a3b54a61fc012ab21c583d56",
+      "preview_sha256": "bcc83c47b2a723d89e9c1acc9f8694f78ddc36b5f51e50fe1aacfb3186765c2c",
+      "height_stats": {
+        "minimum": 0.4930688142776489,
+        "maximum": 0.5067253112792969,
+        "mean": 0.4997871220111847,
+        "standard_deviation": 0.0014089627657085657,
+        "range": 0.01365649700164795,
+        "percentile_01": 0.4965161681175232,
+        "percentile_99": 0.5031596422195435,
+        "gradient_rms_per_texel": 0.0014190854271873832,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0006828248733654618,
+        "combined_normal_xy_rms": 0.04316934570670128
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Injection-Molded_Plastic_height.png",
+          "sha256": "ef31251115645b74a404a717e0c70b64157ecc7cf59c582518300cef5ca6a6dc",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Injection-Molded_Plastic_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Injection-Molded_Plastic_normal_combined.png",
+          "sha256": "4a1e3a8e9a23b153f917ef410c3d05b7c06821d0e97aa8217881bb69dc44490d",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Worn Hard Plastic",
+      "render_run": "industrial-final",
+      "recipe_sha256": "a1d456960418a7a770c1d7951c303a94cd50167f879f469ce882c5b8a6a41439",
+      "preview_sha256": "0165343290313e6c0b2aaa8aff490dcb53f2a455d85b2244c0820a58bd750107",
+      "height_stats": {
+        "minimum": 0.471286416053772,
+        "maximum": 0.5136605501174927,
+        "mean": 0.4984520673751831,
+        "standard_deviation": 0.004181972239166498,
+        "range": 0.0423741340637207,
+        "percentile_01": 0.48262953758239746,
+        "percentile_99": 0.5060380697250366,
+        "gradient_rms_per_texel": 0.003802279941737652,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002118706703186035,
+        "combined_normal_xy_rms": 0.09557092189788818
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Worn_Hard_Plastic_height.png",
+          "sha256": "844c9a2b09ed7ce83a127d983194b39b731abd82f9cc572e2eff8ced43557a37",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Worn_Hard_Plastic_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Worn_Hard_Plastic_normal_combined.png",
+          "sha256": "d9166bec4d2629b9c62a22d0b1e899340efebe3bbe973a1fdd892f59788a8b79",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Soft-Touch Plastic",
+      "render_run": "industrial-final",
+      "recipe_sha256": "700841d9ade4c22a6819f7d127699287f887945d00b5a2e32021a83225c80b1b",
+      "preview_sha256": "ce8825aaaa50377342fa498bc3e9b5268fa003d541bd55e6e8f0f01c2263ff15",
+      "height_stats": {
+        "minimum": 0.4889236092567444,
+        "maximum": 0.5063049793243408,
+        "mean": 0.4994708001613617,
+        "standard_deviation": 0.0015712532913312316,
+        "range": 0.017381370067596436,
+        "percentile_01": 0.49478134512901306,
+        "percentile_99": 0.5028411149978638,
+        "gradient_rms_per_texel": 0.0015087752835825086,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0008690684917382896,
+        "combined_normal_xy_rms": 0.04407592490315437
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Soft-Touch_Plastic_height.png",
+          "sha256": "4414bc71940a06ba602edd812bcd0972bdf08e4d386bf9f8066236eaaa6a13c5",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Soft-Touch_Plastic_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Soft-Touch_Plastic_normal_combined.png",
+          "sha256": "115508f76f67a72e66a47a197967d7b76b1f1f970139f703ff75d9318b57b51a",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Sun-Damaged Plastic",
+      "render_run": "industrial-final",
+      "recipe_sha256": "1e4b4644bdfb2c357bb93c2d18807d41828356d6039ae2f254a29b8160d80e09",
+      "preview_sha256": "bb3c0504be6ff97b0e55055c6892542f0b3869064b89811283fdf6b2201e61e8",
+      "height_stats": {
+        "minimum": 0.4668589234352112,
+        "maximum": 0.5115261077880859,
+        "mean": 0.4976435601711273,
+        "standard_deviation": 0.007230438757687807,
+        "range": 0.044667184352874756,
+        "percentile_01": 0.4687691926956177,
+        "percentile_99": 0.5052079558372498,
+        "gradient_rms_per_texel": 0.00451603252440691,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0022333592642098665,
+        "combined_normal_xy_rms": 0.10024400800466537
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Sun-Damaged_Plastic_height.png",
+          "sha256": "0520dee222c796f9a8a328481d75f8cb922b4ca4edaf008f4b81f808b888b98e",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Sun-Damaged_Plastic_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Sun-Damaged_Plastic_normal_combined.png",
+          "sha256": "bad7d3f27bfc3da84d0052b0cb1bdcce54a4131b4f1f31e1fced2b628ac3378e",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Dirty Rubber",
+      "render_run": "industrial-final",
+      "recipe_sha256": "f088cad86008d792d29076efe60196bb150732f80f2a4a0e687c4f2c8d6d54a7",
+      "preview_sha256": "0323f3b9814329d9bde2721e502153d2d594c99043d4f45ac34967ddefa4120f",
+      "height_stats": {
+        "minimum": 0.47211983799934387,
+        "maximum": 0.5504905581474304,
+        "mean": 0.5032739043235779,
+        "standard_deviation": 0.009686200879514217,
+        "range": 0.07837072014808655,
+        "percentile_01": 0.48611101508140564,
+        "percentile_99": 0.5322383642196655,
+        "gradient_rms_per_texel": 0.006366402376443148,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003918536007404327,
+        "combined_normal_xy_rms": 0.14717894792556763
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Dirty_Rubber_height.png",
+          "sha256": "e76b9d6a91d64c3e4503bd176a408c81e5088d2c9d8a4464042f131e023bd804",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Dirty_Rubber_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Dirty_Rubber_normal_combined.png",
+          "sha256": "0097837306f6c5c104a9e64da71709c5b1fa6f428bb69c9d038238a628576822",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Cracked Old Rubber",
+      "render_run": "industrial-final",
+      "recipe_sha256": "04031479bd75e84dedd70f77f69b6cf6eeccc94b9d01533dbd13b82854d24c29",
+      "preview_sha256": "3a024e5890955748074694775509ec02946976aadbb2a2250a8448a77db7e298",
+      "height_stats": {
+        "minimum": 0.44144243001937866,
+        "maximum": 0.5234182476997375,
+        "mean": 0.495320200920105,
+        "standard_deviation": 0.01376360934227705,
+        "range": 0.08197581768035889,
+        "percentile_01": 0.44196847081184387,
+        "percentile_99": 0.5107470750808716,
+        "gradient_rms_per_texel": 0.007833457551896572,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004098791163414717,
+        "combined_normal_xy_rms": 0.1615549474954605
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Rubber_height.png",
+          "sha256": "f02cf2b7f8b08d0d61f04801193bf1662f4521785e958d36674a7ab52c552bc3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Rubber_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Rubber_normal_combined.png",
+          "sha256": "6a442329c11fb7e524a8cfcfd834e4cc488e3e5ea39e6054da23dd8b97e1ea52",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Fresh Oak",
+      "render_run": "final",
+      "recipe_sha256": "d6e5521e5641d59950611220619d31ff96be009944ec0dbb01cc7e290ccb8b29",
+      "preview_sha256": "3a756387add017dcabb9b80279d4b4a6f4438babab4248a8f2f5032e504e1513",
+      "height_stats": {
+        "minimum": 0.46249449253082275,
+        "maximum": 0.5266872048377991,
+        "mean": 0.5026957988739014,
+        "standard_deviation": 0.0074537890031933784,
+        "range": 0.06419271230697632,
+        "percentile_01": 0.4743800163269043,
+        "percentile_99": 0.5146000385284424,
+        "gradient_rms_per_texel": 0.004761353600770235,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003209635615348816,
+        "combined_normal_xy_rms": 0.14519630372524261
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Fresh_Oak_height.png",
+          "sha256": "0bca8f0fb0c53d648fba21e35e208a6c3a78fa7089d1f613df467c3901310d87",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Fresh_Oak_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Fresh_Oak_normal_combined.png",
+          "sha256": "1b6a038ef4dcf580be311ebc3500762a6e29e3c9c42546cd5b506d155a807dd4",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Old Worn Wood",
+      "render_run": "final",
+      "recipe_sha256": "72e579407ab917ad527370a13c2e376c52cdb29f6677a411e1b74965d20a4aef",
+      "preview_sha256": "69d5568bf3081233a944d1e2e6fd1dd75711b75e3a338989d1d4be6be83b016d",
+      "height_stats": {
+        "minimum": 0.4451856017112732,
+        "maximum": 0.5394160747528076,
+        "mean": 0.5037994384765625,
+        "standard_deviation": 0.011510880663990974,
+        "range": 0.09423047304153442,
+        "percentile_01": 0.45819082856178284,
+        "percentile_99": 0.5217419862747192,
+        "gradient_rms_per_texel": 0.007363521959632635,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004711523652076721,
+        "combined_normal_xy_rms": 0.18833625316619873
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Old_Worn_Wood_height.png",
+          "sha256": "0be45e1240b3fb0c3adac4e32e3e97146f01a18879e84bb7524aaa24c77372fb",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Old_Worn_Wood_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Old_Worn_Wood_normal_combined.png",
+          "sha256": "26de94021d6c92100835c998e28dfc6033cabdd0c7224fed8429136fce358f1d",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Painted Wood",
+      "render_run": "final",
+      "recipe_sha256": "f61a355fec60a0e4438037f56216a8aada7614ef9b227b10ee391c9da09ab6dd",
+      "preview_sha256": "db7cc2a160f147db3493b870d1cebaa481f836434e6d74aba5dde4f824c670df",
+      "height_stats": {
+        "minimum": 0.4530527591705322,
+        "maximum": 0.5937297940254211,
+        "mean": 0.5513915419578552,
+        "standard_deviation": 0.03344109654426575,
+        "range": 0.14067703485488892,
+        "percentile_01": 0.47914502024650574,
+        "percentile_99": 0.5839816331863403,
+        "gradient_rms_per_texel": 0.016040824353694916,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007033851929008961,
+        "combined_normal_xy_rms": 0.2447277307510376
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Painted_Wood_height.png",
+          "sha256": "f841fb5e262a9c8ebac7ce33e4491c2cc687d2b81c5c339e176c4a24e685fb58",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Painted_Wood_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Painted_Wood_normal_combined.png",
+          "sha256": "3afa6114e546713560dfd7e2f1d7602c6c3feaa4da9072219016da229d60c395",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Weathered Outdoor Wood",
+      "render_run": "final",
+      "recipe_sha256": "eedbe907c87f39459d1ccb818e9651eed7dcbbb8c1e38ea58d2e1445018b5496",
+      "preview_sha256": "2e1b8473b58ac48147496a29a5ff1b0abb6fdf806441ebf2007537e3972ba6d6",
+      "height_stats": {
+        "minimum": 0.43771815299987793,
+        "maximum": 0.550409197807312,
+        "mean": 0.5051184892654419,
+        "standard_deviation": 0.014026171527802944,
+        "range": 0.11269104480743408,
+        "percentile_01": 0.44983381032943726,
+        "percentile_99": 0.527577817440033,
+        "gradient_rms_per_texel": 0.008966002613306046,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0056345523335039616,
+        "combined_normal_xy_rms": 0.21321237087249756
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Weathered_Outdoor_Wood_height.png",
+          "sha256": "2de814c251f045ec4439ceda1ca1f8518b4f3d74fab3afbb1abd5e6191a4c717",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Weathered_Outdoor_Wood_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Weathered_Outdoor_Wood_normal_combined.png",
+          "sha256": "7aabb76d6bb6b0ad0c5fbcf271a48b29cbe495179f356f9b714e96e31fbfbc3c",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Burnt Wood",
+      "render_run": "final",
+      "recipe_sha256": "54dcd660b82b791ffdea6de88c249b98b75d3743738ef5698cb5584f7bbd95e9",
+      "preview_sha256": "2f76470e4ab17704d41dc6970a21f2232984a5c111c6e856502b689ef86690d7",
+      "height_stats": {
+        "minimum": 0.3955000042915344,
+        "maximum": 0.6036419868469238,
+        "mean": 0.4569622278213501,
+        "standard_deviation": 0.0376199372112751,
+        "range": 0.2081419825553894,
+        "percentile_01": 0.3962417542934418,
+        "percentile_99": 0.5308599472045898,
+        "gradient_rms_per_texel": 0.01318871695548296,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0104070995002985,
+        "combined_normal_xy_rms": 0.26499223709106445
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Burnt_Wood_height.png",
+          "sha256": "97c408373a61f649b44f3f56b39e9aa9791a7ecc9645ef3130952b216352d5db",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Burnt_Wood_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Burnt_Wood_normal_combined.png",
+          "sha256": "085b42c1e5556999724afbd9ae76fca273f1cdac2e160b6446f141887fd85aed",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Oiled Dark Wood",
+      "render_run": "final",
+      "recipe_sha256": "000557d4afa5df101ae78393b58d5e92ce0ddad5274b75d98212a31063506445",
+      "preview_sha256": "38855b46d38330733ae8e42cceb3f8bfa6c4457af3b41b1a158963b23787df5f",
+      "height_stats": {
+        "minimum": 0.4734994173049927,
+        "maximum": 0.5190749764442444,
+        "mean": 0.5018568634986877,
+        "standard_deviation": 0.005346430465579033,
+        "range": 0.04557555913925171,
+        "percentile_01": 0.4815802574157715,
+        "percentile_99": 0.5104623436927795,
+        "gradient_rms_per_texel": 0.0034166164696216583,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002278778003528714,
+        "combined_normal_xy_rms": 0.11663773655891418
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Oiled_Dark_Wood_height.png",
+          "sha256": "5bb80e3192419189760d721caf79eb6dcfbdca3db852ea33261c748a81198bd9",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Oiled_Dark_Wood_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Oiled_Dark_Wood_normal_combined.png",
+          "sha256": "d76c045ab22602e60c1e954b4ab797887eb2cafb71083fc0989707fd5fc457ea",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Rough Concrete",
+      "render_run": "final",
+      "recipe_sha256": "491a36638812b28370b1e1752017540f207ad78b1460a75581351202fc90b472",
+      "preview_sha256": "5f58db8995db19da9c62acd9b35752b03b963b65b43d97c986125f74cb6e4793",
+      "height_stats": {
+        "minimum": 0.4278058409690857,
+        "maximum": 0.5805213451385498,
+        "mean": 0.5035518407821655,
+        "standard_deviation": 0.015333558432757854,
+        "range": 0.1527155041694641,
+        "percentile_01": 0.45452582836151123,
+        "percentile_99": 0.5397722721099854,
+        "gradient_rms_per_texel": 0.012574576772749424,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007635775487869978,
+        "combined_normal_xy_rms": 0.24688199162483215
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Rough_Concrete_height.png",
+          "sha256": "7c71244486073378d266b353be1a345cf8528aad6312a71701d2974274bb5775",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Rough_Concrete_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Rough_Concrete_normal_combined.png",
+          "sha256": "1eaeea2ecee3b889f603eb6a34c4a4bd7d0baf70a175d0fe870f5f41c338dca7",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Old Dirty Concrete",
+      "render_run": "natural-final-concrete",
+      "recipe_sha256": "9e731a92a523dcf792959e2b74701c2a176676d6fe1fa22de7bffbe9e186090f",
+      "preview_sha256": "ce2a57941102b30c3f3522ff079f5309f3c3f9537d628b9efeed31b2b0a26d28",
+      "height_stats": {
+        "minimum": 0.41182857751846313,
+        "maximum": 0.6067683100700378,
+        "mean": 0.5046029090881348,
+        "standard_deviation": 0.019814664497971535,
+        "range": 0.1949397325515747,
+        "percentile_01": 0.44100335240364075,
+        "percentile_99": 0.5512867569923401,
+        "gradient_rms_per_texel": 0.01716122031211853,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00974698644131422,
+        "combined_normal_xy_rms": 0.311095267534256
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Old_Dirty_Concrete_height.png",
+          "sha256": "eb0b7c58a7935c990f2eacb95152ed3e2ca48b7730848d36474f5ab3c5dfcf6b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Old_Dirty_Concrete_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Old_Dirty_Concrete_normal_combined.png",
+          "sha256": "1bfdeee032142594863600effa3a1a80c11a3d651e55cfefb23458a10a79f9a3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Painted Concrete",
+      "render_run": "final",
+      "recipe_sha256": "657afe73a5637cec8c7a33b986cc7f6d2cfd652fbe862ae9192fa689ee0488cc",
+      "preview_sha256": "9e8e6135b9e24ff0c1fb4cc5310417d3119bd0fed9bf55d99e6576f6d7bc1ef2",
+      "height_stats": {
+        "minimum": 0.42458662390708923,
+        "maximum": 0.638604462146759,
+        "mean": 0.5649925470352173,
+        "standard_deviation": 0.04341435432434082,
+        "range": 0.2140178382396698,
+        "percentile_01": 0.4711056053638458,
+        "percentile_99": 0.6130530834197998,
+        "gradient_rms_per_texel": 0.021902574226260185,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.010700891725718975,
+        "combined_normal_xy_rms": 0.2938137948513031
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Painted_Concrete_height.png",
+          "sha256": "8908daa171dcdf68afd7bb7d992ec69721684815415092657d5c11d95182fc0b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Painted_Concrete_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Painted_Concrete_normal_combined.png",
+          "sha256": "8266f4fcf2d195bc687adb5c7360d28f565c9569388b2f47f9a7e0b2b113fcf0",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Polished Marble",
+      "render_run": "final",
+      "recipe_sha256": "777b77f7ade7ae8dbb48972fcbf341f474f6fe21b608413bc28d61a5f54af315",
+      "preview_sha256": "deecfda38f9be9a3b1718109bce781b566b31045fa36e48e3551008aa31e57da",
+      "height_stats": {
+        "minimum": 0.4980311393737793,
+        "maximum": 0.5003336071968079,
+        "mean": 0.49993860721588135,
+        "standard_deviation": 0.0001718546700431034,
+        "range": 0.0023024678230285645,
+        "percentile_01": 0.4991263151168823,
+        "percentile_99": 0.5001020431518555,
+        "gradient_rms_per_texel": 0.00010561128874542192,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00011512339551700279,
+        "combined_normal_xy_rms": 0.0026116485241800547
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Polished_Marble_height.png",
+          "sha256": "1cdb37d4775a2e41d806d2a4ba1c7731c158a384aa01342563229b75f3360fd3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Polished_Marble_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Polished_Marble_normal_combined.png",
+          "sha256": "1127ec0a8ac1181718615c405e3a51aea67a1b59b61f90de619f50eb0d034bd4",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Granite",
+      "render_run": "final",
+      "recipe_sha256": "1767e20fa7716406c3a6929f481dfb2eea7c545fd0c26d6e0a3d05dfc5b6fcbb",
+      "preview_sha256": "2d4d8df44f015ac6a69f49499856213b3a7435cbcb699b87c52b998f315f7ea4",
+      "height_stats": {
+        "minimum": 0.477508544921875,
+        "maximum": 0.521074652671814,
+        "mean": 0.49952149391174316,
+        "standard_deviation": 0.0068054236471652985,
+        "range": 0.043566107749938965,
+        "percentile_01": 0.48255693912506104,
+        "percentile_99": 0.5125022530555725,
+        "gradient_rms_per_texel": 0.005411637015640736,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0021783055271953344,
+        "combined_normal_xy_rms": 0.12252842634916306
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Granite_height.png",
+          "sha256": "7407b3b8533a763bd6cfcb23286b17bf21f1b2c1bd3ec607b03248a86dc76e5b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Granite_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Granite_normal_combined.png",
+          "sha256": "1c3ff7c58a70f9bcfded1074ce29e502749c9de27165e772fd143f82c01024c6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Weathered Stone",
+      "render_run": "natural-final",
+      "recipe_sha256": "be4b748fe8caafe1539393b947de933b929aca78c6bdcd4c27a4d5e441c83a2a",
+      "preview_sha256": "9fa632702122b42ffc607f808d200f6b92fda2244b78879f137c3aef07a1b5aa",
+      "height_stats": {
+        "minimum": 0.3994199335575104,
+        "maximum": 0.6313163042068481,
+        "mean": 0.5059403777122498,
+        "standard_deviation": 0.02388080023229122,
+        "range": 0.23189637064933777,
+        "percentile_01": 0.4343503415584564,
+        "percentile_99": 0.5633891820907593,
+        "gradient_rms_per_texel": 0.018065936863422394,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.011594818904995918,
+        "combined_normal_xy_rms": 0.3091515898704529
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Weathered_Stone_height.png",
+          "sha256": "769716dc8d19ef29d33788561fa19ce923df4e827282bae6b14b1c502bedc4fb",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Weathered_Stone_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Weathered_Stone_normal_combined.png",
+          "sha256": "22b7f7202e8361ce8d6836c44a5a7f085cd5f0b75c4eaeed2b83b0181fafff85",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Worn Leather",
+      "render_run": "final",
+      "recipe_sha256": "6df5a909b243f88486fa636cfc440d24c12fa9c069800daa3c20d93a9e7f2a36",
+      "preview_sha256": "adc7873ac0aff821fee3068a0a8d0b3a767a2b1a829bf1a328add0d116da17e1",
+      "height_stats": {
+        "minimum": 0.4549782872200012,
+        "maximum": 0.5375404357910156,
+        "mean": 0.49229779839515686,
+        "standard_deviation": 0.012684118933975697,
+        "range": 0.0825621485710144,
+        "percentile_01": 0.466236412525177,
+        "percentile_99": 0.5183274745941162,
+        "gradient_rms_per_texel": 0.011344045400619507,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004128107335418463,
+        "combined_normal_xy_rms": 0.23442578315734863
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Worn_Leather_height.png",
+          "sha256": "646893bee4570ebd499dfb7f38bc189228bba55310ae9d18c3a15d50e2901b0a",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Worn_Leather_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Worn_Leather_normal_combined.png",
+          "sha256": "404c8386f0d974d10d7f219365f672449f3eebf290a9f9ba13bdf0908455eae7",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Cracked Old Leather",
+      "render_run": "final",
+      "recipe_sha256": "f0dd8a6f56ff6d5db1d67105ad78ad353b5ca2dd6cf5c0f829ba660bf57eba7e",
+      "preview_sha256": "3f2ad3bced3f978525106fca836e25985fe5a54a5ab65cc63f0a3310c7beb6b3",
+      "height_stats": {
+        "minimum": 0.43586984276771545,
+        "maximum": 0.5614938735961914,
+        "mean": 0.48636728525161743,
+        "standard_deviation": 0.02209451235830784,
+        "range": 0.12562403082847595,
+        "percentile_01": 0.4443603754043579,
+        "percentile_99": 0.5298131704330444,
+        "gradient_rms_per_texel": 0.01754782535135746,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0062812017276883125,
+        "combined_normal_xy_rms": 0.3087438642978668
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Leather_height.png",
+          "sha256": "850833c866d396205587fbeb023714c9f56686011ed2010a501646f6f3830a93",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Leather_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Cracked_Old_Leather_normal_combined.png",
+          "sha256": "8fe732a0d046b46ebbb970533911e6263cc15d42709f12e324cb8854fcc95d80",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Denim Fabric",
+      "render_run": "final",
+      "recipe_sha256": "86eec4d6a27c65cce8ca28fab389068be1b7671e06028b9d50b518e1bec07627",
+      "preview_sha256": "dddff71028220717bf4ebc46f48aa9a5f8a2f0daf0d333d5aa1881febd666382",
+      "height_stats": {
+        "minimum": 0.47548288106918335,
+        "maximum": 0.5235608816146851,
+        "mean": 0.49984490871429443,
+        "standard_deviation": 0.010979962535202503,
+        "range": 0.04807800054550171,
+        "percentile_01": 0.4804414212703705,
+        "percentile_99": 0.5186704993247986,
+        "gradient_rms_per_texel": 0.005020182579755783,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0024039000272750854,
+        "combined_normal_xy_rms": 0.15070226788520813
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Denim_Fabric_height.png",
+          "sha256": "05d06143e413e020b09f272c1edfdd30b6a516a40c623c1e88ab80faf4adf7d3",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Denim_Fabric_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Denim_Fabric_normal_combined.png",
+          "sha256": "4d38fa8cc7c7c1367f37e2ff12c1753be10ca8d7326f88ab092430c95ec561d0",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Canvas Fabric",
+      "render_run": "final",
+      "recipe_sha256": "f938a8ae94a515b8bb276848ed07059e5df2e0714ef4690762b2b168a28bdc86",
+      "preview_sha256": "75a955ad94d009ca16b4bc8f2a28adb01354a9bf2054deadf315bc24955c4da0",
+      "height_stats": {
+        "minimum": 0.4626317024230957,
+        "maximum": 0.5278271436691284,
+        "mean": 0.5026365518569946,
+        "standard_deviation": 0.009028441272675991,
+        "range": 0.06519544124603271,
+        "percentile_01": 0.4746892750263214,
+        "percentile_99": 0.5180876851081848,
+        "gradient_rms_per_texel": 0.005260907579213381,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003259772202000022,
+        "combined_normal_xy_rms": 0.1505071371793747
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Canvas_Fabric_height.png",
+          "sha256": "c4e6bdd234da4bfeea9ec154a174b19fd3c38a2ef3ef57227743a9b5e042eab2",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Canvas_Fabric_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Canvas_Fabric_normal_combined.png",
+          "sha256": "60a586bc448b08cc33bb075e9971fb5d430d491a5b60efdca9b3c17f2764d210",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Sci-Fi Panel Surface",
+      "render_run": "final",
+      "recipe_sha256": "36699262b1f9fb8d874fe3f859e4cb0bb5ea83180fd4e8f13229f86b4fea244c",
+      "preview_sha256": "4d6fc91e09ccb9947a4fb802f93d2a12639d54b650e08683eb1531da24f91a99",
+      "height_stats": {
+        "minimum": 0.5281316637992859,
+        "maximum": 0.5714234709739685,
+        "mean": 0.5541300177574158,
+        "standard_deviation": 0.0037870213855057955,
+        "range": 0.04329180717468262,
+        "percentile_01": 0.544417679309845,
+        "percentile_99": 0.5627722144126892,
+        "gradient_rms_per_texel": 0.00352868577465415,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0021645904053002596,
+        "combined_normal_xy_rms": 0.08771391957998276
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Sci-Fi_Panel_Surface_height.png",
+          "sha256": "da1147546cfd4356147df3e27f7d788073554d99fd71fd4bee43f9afd4919122",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Sci-Fi_Panel_Surface_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Sci-Fi_Panel_Surface_normal_combined.png",
+          "sha256": "4aa9b03236e05c45c4b30981f5bc76d9bfd848abb260d2a5b4653154803dffd7",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    },
+    {
+      "material": "Post-Apocalyptic Scrap Metal",
+      "render_run": "final",
+      "recipe_sha256": "1a9b4c074cdb106ad44536aa34a7abbeca532cfa9e084172ead2bad83a65bc78",
+      "preview_sha256": "b331adb99a232837b48a7eda22ad0fed49efd8d63c6ea1b10990164c64eeabe1",
+      "height_stats": {
+        "minimum": 0.4404638707637787,
+        "maximum": 0.7095440030097961,
+        "mean": 0.609990119934082,
+        "standard_deviation": 0.05375372990965843,
+        "range": 0.26908013224601746,
+        "percentile_01": 0.48416846990585327,
+        "percentile_99": 0.6895984411239624,
+        "gradient_rms_per_texel": 0.028734790161252022,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.013454006984829903,
+        "combined_normal_xy_rms": 0.3210025429725647
+      },
+      "maps": {
+        "height": {
+          "file": ".blender-test/material-relief/review/Post-Apocalyptic_Scrap_Metal_height.png",
+          "sha256": "09e6ae1be18b462326eb22975f7bfdf501286dae24678a19d410df99743b28ac",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_raw": {
+          "file": ".blender-test/material-relief/review/Post-Apocalyptic_Scrap_Metal_normal_raw.png",
+          "sha256": "26296897436cb4833da05a2898834466a25bdf4f47813cff264a827914a55fb6",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        },
+        "normal_combined": {
+          "file": ".blender-test/material-relief/review/Post-Apocalyptic_Scrap_Metal_normal_combined.png",
+          "sha256": "be9678238a0020a80aeffd64aa1033e254047ccee17bc093118e32489a99fb9b",
+          "width": 2048,
+          "height": 2048,
+          "bit_depth": 16
+        }
+      }
+    }
+  ],
+  "limits": [
+    "Sources are original generated 1254px images; 2048px material outputs do not establish native 2K source detail.",
+    "Separate Blender runs have matching geometry and render settings but some differing UV/baked-normal byte hashes; original metadata is preserved.",
+    "Smooth finishes intentionally have subtle relief. No claim of measured scan calibration or guaranteed seamless borders."
+  ],
+  "final_catalog_checks": {
+    "recipes": 50,
+    "layers": 230,
+    "effects": 16,
+    "pixel_fingerprints": 50,
+    "height_fingerprints": 50,
+    "relief": {
+      "Clean Brushed Steel": {
+        "height_min": 0.49223417043685913,
+        "height_max": 0.5080198049545288,
+        "height_std": 0.0016029465477913618,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0007892817375250161,
+        "combined_normal_xy_rms": 0.01207626424729824
+      },
+      "Worn Brushed Steel": {
+        "height_min": 0.480148583650589,
+        "height_max": 0.5155096650123596,
+        "height_std": 0.0035342168994247913,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0017680540913715959,
+        "combined_normal_xy_rms": 0.027408506721258163
+      },
+      "Machined Aluminum": {
+        "height_min": 0.48741456866264343,
+        "height_max": 0.5130971670150757,
+        "height_std": 0.002484760480001569,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0012841299176216125,
+        "combined_normal_xy_rms": 0.018163181841373444
+      },
+      "Scratched Aluminum": {
+        "height_min": 0.48216164112091064,
+        "height_max": 0.5112091898918152,
+        "height_std": 0.0026154289953410625,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0014523774152621627,
+        "combined_normal_xy_rms": 0.020298268646001816
+      },
+      "Cast Iron": {
+        "height_min": 0.4464758336544037,
+        "height_max": 0.5480202436447144,
+        "height_std": 0.013427935540676117,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0050772204995155334,
+        "combined_normal_xy_rms": 0.11867498606443405
+      },
+      "Raw Industrial Steel": {
+        "height_min": 0.48107191920280457,
+        "height_max": 0.5124026536941528,
+        "height_std": 0.0029674936085939407,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0015665367245674133,
+        "combined_normal_xy_rms": 0.02320207841694355
+      },
+      "Polished Chrome": {
+        "height_min": 0.49825000762939453,
+        "height_max": 0.5,
+        "height_std": 0.00021459453273564577,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 8.749961853027344e-05,
+        "combined_normal_xy_rms": 0.0018146727234125137
+      },
+      "Old Brass": {
+        "height_min": 0.4910513460636139,
+        "height_max": 0.5332789421081543,
+        "height_std": 0.00547385960817337,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0021113797556608915,
+        "combined_normal_xy_rms": 0.042487505823373795
+      },
+      "Antique Bronze": {
+        "height_min": 0.451504111289978,
+        "height_max": 0.5328661203384399,
+        "height_std": 0.008338060230016708,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004068100359290838,
+        "combined_normal_xy_rms": 0.07137805223464966
+      },
+      "Oxidized Copper": {
+        "height_min": 0.4412074387073517,
+        "height_max": 0.5594160556793213,
+        "height_std": 0.010442951694130898,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005910431034862995,
+        "combined_normal_xy_rms": 0.08675466477870941
+      },
+      "Worn Painted Metal": {
+        "height_min": 0.5123577117919922,
+        "height_max": 0.5632292032241821,
+        "height_std": 0.005302758421748877,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0025435746647417545,
+        "combined_normal_xy_rms": 0.0416073352098465
+      },
+      "Heavy Chipped Paint": {
+        "height_min": 0.4500344395637512,
+        "height_max": 0.6396316885948181,
+        "height_std": 0.06362423300743103,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00947986263781786,
+        "combined_normal_xy_rms": 0.23404806852340698
+      },
+      "Factory Powder-Coated Metal": {
+        "height_min": 0.5312299728393555,
+        "height_max": 0.5577691793441772,
+        "height_std": 0.002940857782959938,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.001326960395090282,
+        "combined_normal_xy_rms": 0.023685209453105927
+      },
+      "Military Painted Steel": {
+        "height_min": 0.5202326774597168,
+        "height_max": 0.571692943572998,
+        "height_std": 0.005847280845046043,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0025730133056640625,
+        "combined_normal_xy_rms": 0.040639664977788925
+      },
+      "Old Enamel Metal": {
+        "height_min": 0.5002217888832092,
+        "height_max": 0.5538074970245361,
+        "height_std": 0.010052607394754887,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0026792853605002165,
+        "combined_normal_xy_rms": 0.08799847960472107
+      },
+      "Rusting Painted Steel": {
+        "height_min": 0.45836901664733887,
+        "height_max": 0.5810878276824951,
+        "height_std": 0.030839325860142708,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0061359405517578125,
+        "combined_normal_xy_rms": 0.15739823877811432
+      },
+      "Automotive Painted Metal": {
+        "height_min": 0.49848976731300354,
+        "height_max": 0.5022856593132019,
+        "height_std": 0.00043434841791167855,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0001897946058306843,
+        "combined_normal_xy_rms": 0.003942829556763172
+      },
+      "Burned Painted Metal": {
+        "height_min": 0.45551028847694397,
+        "height_max": 0.6737781763076782,
+        "height_std": 0.02896673046052456,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.010913394391536713,
+        "combined_normal_xy_rms": 0.1863466501235962
+      },
+      "Heavy Rust": {
+        "height_min": 0.4230816066265106,
+        "height_max": 0.5745501518249512,
+        "height_std": 0.020646164193749428,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00757342716678977,
+        "combined_normal_xy_rms": 0.16542182862758636
+      },
+      "Surface Rust": {
+        "height_min": 0.491909384727478,
+        "height_max": 0.5084196329116821,
+        "height_std": 0.001597345806658268,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0008255123975686729,
+        "combined_normal_xy_rms": 0.011682559736073017
+      },
+      "Wet Rust": {
+        "height_min": 0.4440593421459198,
+        "height_max": 0.5553358197212219,
+        "height_std": 0.017887545749545097,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005563823971897364,
+        "combined_normal_xy_rms": 0.14567433297634125
+      },
+      "Galvanized Steel": {
+        "height_min": 0.49530044198036194,
+        "height_max": 0.5028815269470215,
+        "height_std": 0.0007523531676270068,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0003790542541537434,
+        "combined_normal_xy_rms": 0.005946643650531769
+      },
+      "Welded Steel": {
+        "height_min": 0.4892124831676483,
+        "height_max": 0.7499639987945557,
+        "height_std": 0.03351295366883278,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.013037576340138912,
+        "combined_normal_xy_rms": 0.06635721772909164
+      },
+      "Heat-Treated Metal": {
+        "height_min": 0.49280834197998047,
+        "height_max": 0.5074840784072876,
+        "height_std": 0.001419863197952509,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0007337868446484208,
+        "combined_normal_xy_rms": 0.010385318659245968
+      },
+      "Greasy Machinery": {
+        "height_min": 0.4979306161403656,
+        "height_max": 0.5374497175216675,
+        "height_std": 0.002651561051607132,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00197595520876348,
+        "combined_normal_xy_rms": 0.015343611128628254
+      },
+      "Abandoned Machinery": {
+        "height_min": 0.44006359577178955,
+        "height_max": 0.5977429747581482,
+        "height_std": 0.0381234809756279,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007883968763053417,
+        "combined_normal_xy_rms": 0.18984779715538025
+      },
+      "Injection-Molded Plastic": {
+        "height_min": 0.4931248128414154,
+        "height_max": 0.5057162046432495,
+        "height_std": 0.001583112170919776,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0006295695784501731,
+        "combined_normal_xy_rms": 0.014347811229526997
+      },
+      "Worn Hard Plastic": {
+        "height_min": 0.47186124324798584,
+        "height_max": 0.5131398439407349,
+        "height_std": 0.00449282256886363,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002063930034637451,
+        "combined_normal_xy_rms": 0.039290498942136765
+      },
+      "Soft-Touch Plastic": {
+        "height_min": 0.4898231029510498,
+        "height_max": 0.5053589344024658,
+        "height_std": 0.0017376550240442157,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0007767915958538651,
+        "combined_normal_xy_rms": 0.015445548109710217
+      },
+      "Sun-Damaged Plastic": {
+        "height_min": 0.4669329524040222,
+        "height_max": 0.5110867619514465,
+        "height_std": 0.007483502849936485,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002207690617069602,
+        "combined_normal_xy_rms": 0.05422617495059967
+      },
+      "Dirty Rubber": {
+        "height_min": 0.4776966869831085,
+        "height_max": 0.5423967242240906,
+        "height_std": 0.0067891767248511314,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003235001815482974,
+        "combined_normal_xy_rms": 0.04723622649908066
+      },
+      "Cracked Old Rubber": {
+        "height_min": 0.4414915144443512,
+        "height_max": 0.5229947566986084,
+        "height_std": 0.014513171277940273,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00407516211271286,
+        "combined_normal_xy_rms": 0.094089075922966
+      },
+      "Fresh Oak": {
+        "height_min": 0.4629351496696472,
+        "height_max": 0.5281478762626648,
+        "height_std": 0.0074569773860275745,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003260636469349265,
+        "combined_normal_xy_rms": 0.05989938974380493
+      },
+      "Old Worn Wood": {
+        "height_min": 0.4456503689289093,
+        "height_max": 0.5422218441963196,
+        "height_std": 0.011516145430505276,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0048285736702382565,
+        "combined_normal_xy_rms": 0.09108202159404755
+      },
+      "Painted Wood": {
+        "height_min": 0.45494598150253296,
+        "height_max": 0.5920975208282471,
+        "height_std": 0.03196518123149872,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.006857577245682478,
+        "combined_normal_xy_rms": 0.1580970585346222
+      },
+      "Weathered Outdoor Wood": {
+        "height_min": 0.4381343424320221,
+        "height_max": 0.5531682372093201,
+        "height_std": 0.014032574370503426,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.005751695018261671,
+        "combined_normal_xy_rms": 0.1095162034034729
+      },
+      "Burnt Wood": {
+        "height_min": 0.3955000042915344,
+        "height_max": 0.5975331664085388,
+        "height_std": 0.037628356367349625,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.010101658292114735,
+        "combined_normal_xy_rms": 0.1957217901945114
+      },
+      "Oiled Dark Wood": {
+        "height_min": 0.4737977981567383,
+        "height_max": 0.5203290581703186,
+        "height_std": 0.005348368547856808,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002326563000679016,
+        "combined_normal_xy_rms": 0.04321781173348427
+      },
+      "Rough Concrete": {
+        "height_min": 0.42588138580322266,
+        "height_max": 0.5821191072463989,
+        "height_std": 0.017363518476486206,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007811886258423328,
+        "combined_normal_xy_rms": 0.1442209780216217
+      },
+      "Old Dirty Concrete": {
+        "height_min": 0.4143233001232147,
+        "height_max": 0.6001818180084229,
+        "height_std": 0.02238442562520504,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.009292925707995892,
+        "combined_normal_xy_rms": 0.18408261239528656
+      },
+      "Painted Concrete": {
+        "height_min": 0.43207865953445435,
+        "height_max": 0.6353768706321716,
+        "height_std": 0.04196924716234207,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.010164910927414894,
+        "combined_normal_xy_rms": 0.20526374876499176
+      },
+      "Polished Marble": {
+        "height_min": 0.49806472659111023,
+        "height_max": 0.5002771019935608,
+        "height_std": 0.00019558733038138598,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00011061877012252808,
+        "combined_normal_xy_rms": 0.0014233289984986186
+      },
+      "Granite": {
+        "height_min": 0.4775879383087158,
+        "height_max": 0.518735945224762,
+        "height_std": 0.00769373495131731,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0020574002992361784,
+        "combined_normal_xy_rms": 0.06653773784637451
+      },
+      "Weathered Stone": {
+        "height_min": 0.40184539556503296,
+        "height_max": 0.6281328201293945,
+        "height_std": 0.02798439748585224,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.011314371600747108,
+        "combined_normal_xy_rms": 0.2207411527633667
+      },
+      "Worn Leather": {
+        "height_min": 0.4557638168334961,
+        "height_max": 0.5321558713912964,
+        "height_std": 0.014292394742369652,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0038196027744561434,
+        "combined_normal_xy_rms": 0.12621212005615234
+      },
+      "Cracked Old Leather": {
+        "height_min": 0.4352077841758728,
+        "height_max": 0.5584896802902222,
+        "height_std": 0.02462715655565262,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.006164094898849726,
+        "combined_normal_xy_rms": 0.20980685949325562
+      },
+      "Denim Fabric": {
+        "height_min": 0.4757194221019745,
+        "height_max": 0.5231442451477051,
+        "height_std": 0.01098449807614088,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002371241105720401,
+        "combined_normal_xy_rms": 0.10419461131095886
+      },
+      "Canvas Fabric": {
+        "height_min": 0.46311381459236145,
+        "height_max": 0.5264322757720947,
+        "height_std": 0.009013494476675987,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003165923058986664,
+        "combined_normal_xy_rms": 0.07617008686065674
+      },
+      "Sci-Fi Panel Surface": {
+        "height_min": 0.5249919891357422,
+        "height_max": 0.5702281594276428,
+        "height_std": 0.005883465986698866,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002261808607727289,
+        "combined_normal_xy_rms": 0.036063361912965775
+      },
+      "Post-Apocalyptic Scrap Metal": {
+        "height_min": 0.4407179653644562,
+        "height_max": 0.7090408205986023,
+        "height_std": 0.052623700350522995,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.013416143134236336,
+        "combined_normal_xy_rms": 0.24335651099681854
+      }
+    },
+    "missing_map_preflight": "PASS",
+    "rollback": "PASS",
+    "save_reopen": "PASS"
+  },
+  "final_generated_library_checks": {
+    "all_fifty_existing_materials_use_generated_sources": "PASS",
+    "failed_composition_preserves_user_state_and_discards_new_sources": "PASS",
+    "bundled_png_files_match_provenance_and_packed_payloads": "PASS",
+    "shared_inputs_across_layers_channels_and_texture_sets": "PASS",
+    "native_parameter_edits_change_full_resolution_output_without_source_writes": "PASS",
+    "native_parameter_edits_reuse_decoded_source": "PASS",
+    "fixed_display_material_nodes_and_links": "PASS",
+    "optional_image_removal_restores_existing_procedural": "PASS"
+  }
+}

@@ -14,6 +14,7 @@ from open_painter.evaluation.evaluator import LayerEvaluator
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, 'Failure recovery', 512)
+ts.preview_backend = 'CPU'  # Test CPU job failure/retry and save-flush contracts explicitly.
 layer = stack.add(ts, 'FILL')
 LayerEvaluator(scene).evaluate_texture_set(ts.id)
 output = images.output(ts, 'ROUGHNESS')

@@ -1,4 +1,9 @@
-"""Actual window GPU recipe reuse, CPU parity, latest-edit flush and teardown."""
+"""Legacy GPU numerical parity plus current shader authoring lifecycle.
+
+The texture compositor is invoked explicitly as a reference backend. LIVE is
+the native material graph; the scheduler/save checks below exercise that public
+path without adding an obsolete authoring mode to production.
+"""
 import json
 import os
 import sys
@@ -16,7 +21,7 @@ sys.path.insert(0, str(ROOT / 'tests' / 'performance'))
 import open_painter
 from open_painter.constants import CHANNELS, OWNER
 from open_painter.core import image_manager as images, layer_stack as stack
-from open_painter.evaluation import cache, live_preview, live_display
+from open_painter.evaluation import cache, live_preview, live_display, shader_preview
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.metrics import Metrics
 
@@ -118,7 +123,8 @@ def main():
         assert not live_preview.current(scene, ts)
         live(scene, ts)
         cache.tick()
-        assert cache.job_state(scene, ts)['state'] == 'LIVE'
+        shader_preview.flush(scene, ts)
+        assert cache.job_state(scene, ts)['state'] == 'SHADER'
         # A native float paint source uses Blender's updated GPU image directly.
         layer = stack.add(ts, 'PAINT')
         prop = stack.channel_for(layer, 'ROUGHNESS')
@@ -136,6 +142,9 @@ def main():
         with Metrics() as paint_input:
             assert live_preview.native_paint_input(scene)
         assert paint_input.phases['image_read']['calls'] == 0
+        with Metrics() as shader_paint_input:
+            assert shader_preview.native_paint_input(scene)
+        assert shader_paint_input.phases['image_read']['calls'] == 0
         project.paint_image = None
         project.paint_set_id = project.paint_layer_id = project.paint_target_channel = ''
         actual = gpu_pixels(scene, ts, 'ROUGHNESS')
@@ -148,14 +157,21 @@ def main():
         LayerEvaluator(scene).evaluate_texture_set(ts.id)
         assert not ts.dirty
         live_preview.retry(scene, ts)
-        # Save must flush an edit that was never submitted to the live compositor.
+        # Native save preserves the latest recipe/source without generating full
+        # channel rasters. Export remains an explicit authoritative texture bake.
         layer.parent_id = ''
         data[:] = (.77, .77, .77, 1)
         images.write(prop.image, data, pack=False)
-        cache.on_save(None)
-        assert not ts.dirty
-        np.testing.assert_allclose(images.pixels(images.output(ts, 'ROUGHNESS').image)[..., 0], .77, atol=3e-5)
-        assert all(output.image.packed_file for output in ts.outputs)
+        saved_output = images.pixels(images.output(ts, 'ROUGHNESS').image).copy()
+        saved_revisions = {output.channel: output.revision for output in ts.outputs}
+        with Metrics() as saved:
+            cache.on_save(None)
+        assert ts.dirty and shader_preview.current(scene, ts)
+        assert saved.phases['image_write']['calls'] == 0, saved.report()
+        assert {output.channel: output.revision for output in ts.outputs} == saved_revisions
+        np.testing.assert_array_equal(images.pixels(images.output(ts, 'ROUGHNESS').image), saved_output)
+        np.testing.assert_allclose(images.pixels(prop.image)[..., 0], .77, atol=3e-5)
+        assert prop.image.packed_file
         assert not any(image.get('open_painter_disposable_preview') for image in bpy.data.images)
         # Export after a further edit must flush before reading any channel.
         data[:] = (.23, .23, .23, 1)
@@ -183,9 +199,12 @@ def main():
         assert all(node.image == images.output(ts, node['role']).image
                    for node in ts.material.node_tree.nodes if node.get(OWNER)
                    and node.get('role') in CHANNELS)
+        shader_preview.tick(scene, ts, force_repair=True)
+        shader_preview.flush(scene, ts)
+        assert shader_preview.current(scene, ts)
 
     result = dict(result='PASS', blender=bpy.app.version_string,
-                  build=bpy.app.build_hash.decode(), backend='Live GPU', resolution=n,
+                  build=bpy.app.build_hash.decode(), backend='Legacy GPU reference / Shader Native lifecycle', resolution=n,
                   fixture='Worn Painted Metal with generated scalar images; six initial layer records; synthetic 32² AO/curvature',
                   precision='Float32 leaves, composition, display texture and CPU authority',
                   cold=cold, warm_roughness_edits=edits, opacity_edit=opacity,

@@ -1,0 +1,54 @@
+{
+  "status": "PASS",
+  "date": "2026-09-14",
+  "version": "0.2.6",
+  "package": {
+    "path": "dist/open_painter-0.2.6.zip",
+    "sha256": "5ca51b0deebc83d1a4ebacdcaf2625b0807f3a754d6b9ac537ddd70791ad9b00",
+    "bytes": 126480152,
+    "archive_integrity": "PASS",
+    "all_current_source_bytes_match": "PASS",
+    "catalog_thumbnails_match_accepted_renders": 50,
+    "bundled_generated_sources": 28,
+    "packaged_source_index_links": "PASS"
+  },
+  "validation": {
+    "path": "docs/validation/material-relief-validation.json",
+    "sha256": "9f59576363800ce44a19edd6a9b16014aafa170b067dda19a6b159d7f72b5e2c",
+    "background_integration_scripts": 57,
+    "unit_tests": 59,
+    "gpu_suites": 6,
+    "native_gui_workflows": 4,
+    "final_catalog_and_generated_source_reruns": "PASS",
+    "all_50_visually_reviewed": "PASS",
+    "layer_count": 230
+  },
+  "installation": {
+    "status": "PASS",
+    "enabled_version": "0.2.6",
+    "directory": "/Users/khazarayaz/Library/Application Support/Blender/5.2/extensions/user_default/open_painter",
+    "all_archive_files_match_installed_bytes": 380,
+    "backup": "/Volumes/SSD/projects/open_painter/backups/blender-profile-before-update-20260914-162828",
+    "existing_artwork_saved_or_modified": false,
+    "restart_required_for_existing_blender_process": true,
+    "reapply_presets_to_use_revised_recipes": true,
+    "blender_process_exit_code": 0
+  },
+  "logs": {
+    "blender_extension_validation": {
+      "path": ".blender-test/material-relief/package-validate.log",
+      "sha256": "e2a9d6caa53f533b5d132064473128574772529396ea9710ebacd5fc4fc07073",
+      "result": "PASS"
+    },
+    "isolated_install": {
+      "path": ".blender-test/material-relief/package-install-test.log",
+      "sha256": "4e8947043116c0567b3bdbbb0e2da29a59fb223dd7e71c3777242ee8b3caedce",
+      "result": "PASS"
+    },
+    "user_profile_install": {
+      "path": ".blender-test/material-relief/install.log",
+      "sha256": "e49f1b808557d1b9d759dc509aa057bcee16ed961ad009aa0879364ab125f285",
+      "result": "PASS"
+    }
+  }
+}

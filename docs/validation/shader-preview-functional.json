@@ -1,0 +1,1188 @@
+{
+  "result": "PASS",
+  "blender": "5.2.1 LTS",
+  "initial": {
+    "resource_publications": 1,
+    "pending_resources": false,
+    "resource_step_ms": 7.059458999719936,
+    "state": "SHADER",
+    "serial": 32,
+    "bound_serial": 32,
+    "error": "",
+    "attached": true,
+    "rebuild_pending": false,
+    "graph_builds": 2,
+    "binding_updates": 0,
+    "update_calls": 0,
+    "resource_steps": 23
+  },
+  "checks": [
+    {
+      "name": "layer-opacity",
+      "mean_visible_change": 0.08912566304206848,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].opacity"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+          "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:BASE_COLOR",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:HEIGHT",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:METALLIC",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].opacity"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.1632910027401522,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 33,
+        "bound_serial": 33,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 1,
+        "update_calls": 1,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.001103665999835357,
+            "cpu_s": 0.0014170000000000016,
+            "exclusive_wall_s": 0.001103665999835357,
+            "exclusive_cpu_s": 0.0014170000000000016
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.00017458299407735467,
+            "cpu_s": 0.0003229999999998512,
+            "exclusive_wall_s": 0.00017458299407735467,
+            "exclusive_cpu_s": 0.0003229999999998512
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 1.1632910027401522,
+            "p95": 1.1632910027401522,
+            "maximum": 1.1632910027401522
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0014588339981855825,
+            "p95": 0.0014588339981855825,
+            "maximum": 0.0014588339981855825
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 227704832
+      }
+    },
+    {
+      "name": "image-mask-level",
+      "mean_visible_change": 0.05373174324631691,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+          "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:BASE_COLOR",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:HEIGHT",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:METALLIC",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:ROUGHNESS",
+          "MaskLevels:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "MaskLevels:641c56c0faca44f0ad7f7a0f9e04666b:82f1b9ca9aec45e39d73f0f578bdc682",
+          "MaskMix:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "MaskMix:641c56c0faca44f0ad7f7a0f9e04666b:82f1b9ca9aec45e39d73f0f578bdc682",
+          "MaskSource:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 3.1141250001383014,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 35,
+        "bound_serial": 35,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 3,
+        "update_calls": 3,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0006407920009223744,
+            "cpu_s": 0.001138999999999779,
+            "exclusive_wall_s": 0.0006407920009223744,
+            "exclusive_cpu_s": 0.001138999999999779
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.00016791700181784108,
+            "cpu_s": 0.00016800000000083415,
+            "exclusive_wall_s": 0.00016791700181784108,
+            "exclusive_cpu_s": 0.00016800000000083415
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 3.1141250001383014,
+            "p95": 3.1141250001383014,
+            "maximum": 3.1141250001383014
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0048533340013818815,
+            "p95": 0.0048533340013818815,
+            "maximum": 0.0048533340013818815
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 228507648
+      }
+    },
+    {
+      "name": "mask-levels-gamma",
+      "mean_visible_change": 0.05856780335307121,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[1].effect.gamma"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+          "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:BASE_COLOR",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:HEIGHT",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:METALLIC",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:ROUGHNESS",
+          "MaskLevels:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "MaskMix:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "MaskSource:641c56c0faca44f0ad7f7a0f9e04666b:62c3958246874387b041b49e009f1438",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[1].effect.gamma"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.6152079988387413,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 37,
+        "bound_serial": 37,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 5,
+        "update_calls": 5,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0006299589949776419,
+            "cpu_s": 0.0011590000000003542,
+            "exclusive_wall_s": 0.0006299589949776419,
+            "exclusive_cpu_s": 0.0011590000000003542
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.00028712600033031777,
+            "cpu_s": 0.00033599999999989194,
+            "exclusive_wall_s": 0.00028712600033031777,
+            "exclusive_cpu_s": 0.00033599999999989194
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 1.6152079988387413,
+            "p95": 1.6152079988387413,
+            "maximum": 1.6152079988387413
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0018667499971343204,
+            "p95": 0.0018667499971343204,
+            "maximum": 0.0018667499971343204
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 228507648
+      }
+    },
+    {
+      "name": "edge-wear-amount",
+      "mean_visible_change": 0.07000501453876495,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].amount"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+          "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+          "MaskLevels:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "MaskMix:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "MaskSource:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].amount"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 0.8599170032539405,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 39,
+        "bound_serial": 39,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 7,
+        "update_calls": 7,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0008379579958273098,
+            "cpu_s": 0.0010539999999998884,
+            "exclusive_wall_s": 0.0008379579958273098,
+            "exclusive_cpu_s": 0.0010539999999998884
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.0001280410069739446,
+            "cpu_s": 0.0001829999999998222,
+            "exclusive_wall_s": 0.0001280410069739446,
+            "exclusive_cpu_s": 0.0001829999999998222
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 0.8599170032539405,
+            "p95": 0.8599170032539405,
+            "maximum": 0.8599170032539405
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0009879589997581206,
+            "p95": 0.0009879589997581206,
+            "maximum": 0.0009879589997581206
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 228507648
+      }
+    },
+    {
+      "name": "edge-wear-breakup",
+      "mean_visible_change": 0.036860302090644836,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].noise_strength"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+          "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+          "MaskLevels:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "MaskMix:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "MaskSource:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+          "Parameter:open_painter.texture_sets[0].layers[2].masks[0].noise_strength"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.5224580056383274,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 41,
+        "bound_serial": 41,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 9,
+        "update_calls": 9,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0004895000020042062,
+            "cpu_s": 0.0010979999999998213,
+            "exclusive_wall_s": 0.0004895000020042062,
+            "exclusive_cpu_s": 0.0010979999999998213
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.00017854099860414863,
+            "cpu_s": 0.0003399999999995629,
+            "exclusive_wall_s": 0.00017854099860414863,
+            "exclusive_cpu_s": 0.0003399999999995629
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 1.5224580056383274,
+            "p95": 1.5224580056383274,
+            "maximum": 1.5224580056383274
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0017516670050099492,
+            "p95": 0.0017516670050099492,
+            "maximum": 0.0017516670050099492
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 228638720
+      }
+    },
+    {
+      "name": "channel-opacity",
+      "mean_visible_change": 0.09527991712093353,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[0].opacity"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:BASE_COLOR",
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[0].opacity"
+        ],
+        "affected_channels": [
+          "BASE_COLOR"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 0.6139580000308342,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 43,
+        "bound_serial": 43,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 11,
+        "update_calls": 11,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0005119589986861683,
+            "cpu_s": 0.0011499999999999844,
+            "exclusive_wall_s": 0.0005119589986861683,
+            "exclusive_cpu_s": 0.0011499999999999844
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.00018249900313094258,
+            "cpu_s": 0.00046400000000001995,
+            "exclusive_wall_s": 0.00018249900313094258,
+            "exclusive_cpu_s": 0.00046400000000001995
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 0.6139580000308342,
+            "p95": 0.6139580000308342,
+            "maximum": 0.6139580000308342
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0007078340058797039,
+            "p95": 0.0007078340058797039,
+            "maximum": 0.0007078340058797039
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 230850560
+      }
+    },
+    {
+      "name": "height-levels",
+      "mean_visible_change": 0.00381146720610559,
+      "restored_max_error": 0.0,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[4].effects[0].output_white"
+        ],
+        "invalidated_nodes": [
+          "ChannelEffect:641c56c0faca44f0ad7f7a0f9e04666b:HEIGHT:0",
+          "Final:HEIGHT",
+          "LayerMix:641c56c0faca44f0ad7f7a0f9e04666b:HEIGHT",
+          "Parameter:open_painter.texture_sets[0].layers[1].channels[4].effects[0].output_white"
+        ],
+        "affected_channels": [
+          "HEIGHT"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.0067910043289885,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 45,
+        "bound_serial": 45,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 2,
+        "binding_updates": 13,
+        "update_calls": 13,
+        "resource_steps": 23
+      },
+      "instrumentation": {
+        "observed_calls": {
+          "pack_image": 3
+        },
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 1,
+            "wall_s": 0.0006079169979784638,
+            "cpu_s": 0.001124000000000791,
+            "exclusive_wall_s": 0.0006079169979784638,
+            "exclusive_cpu_s": 0.001124000000000791
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 3,
+            "wall_s": 0.0001416669983882457,
+            "cpu_s": 0.00014199999999942037,
+            "exclusive_wall_s": 0.0001416669983882457,
+            "exclusive_cpu_s": 0.00014199999999942037
+          }
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "pack_unchanged_skips": 3,
+          "image_read_bytes": 262144,
+          "image_read_allocated_bytes": 262144,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0
+        },
+        "distributions": {
+          "shader_submission_ms": {
+            "samples": 1,
+            "p50": 1.0067910043289885,
+            "p95": 1.0067910043289885,
+            "maximum": 1.0067910043289885
+          },
+          "shader_callback_seconds": {
+            "samples": 1,
+            "p50": 0.0011371250002412125,
+            "p95": 0.0011371250002412125,
+            "maximum": 0.0011371250002412125
+          }
+        },
+        "last_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "peak_observed_bytes": {
+          "live_leaf_cache_bytes": 0
+        },
+        "process_peak_rss_bytes": 232734720
+      }
+    }
+  ],
+  "source_hashes": {
+    "Acceptance seeded scalar": "bfd39cd5fa1ab1429dc9da653dc24a3b070f214525e7ef8342ebc283686333f6",
+    "Acceptance curvature": "f02b515de206d38116de7e4de59eb8049fbcfd208cae2fa745936286dbaf5023"
+  },
+  "legacy_noise_scale": {
+    "classification": "one isolated scalar resource refresh",
+    "diagnostic": {
+      "parameter_changes": [],
+      "invalidated_nodes": [
+        "Final:BASE_COLOR",
+        "Final:METALLIC",
+        "Final:ROUGHNESS",
+        "LayerMix:0216ae818f434d75b862145b37de8283:BASE_COLOR",
+        "LayerMix:0216ae818f434d75b862145b37de8283:METALLIC",
+        "LayerMix:0216ae818f434d75b862145b37de8283:ROUGHNESS",
+        "MaskLevels:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+        "MaskMix:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+        "MaskSource:0216ae818f434d75b862145b37de8283:c69636a64a8c4dbbae353213904fa9c5",
+        "SourceField:open_painter.texture_sets[0].layers[2].masks[0]:FBM"
+      ],
+      "affected_channels": [
+        "BASE_COLOR",
+        "METALLIC",
+        "ROUGHNESS"
+      ],
+      "updated_bindings": 0,
+      "raster_boundaries_queued": 1,
+      "texture_bake_triggered": false,
+      "submission_ms": 1.1593749950407073,
+      "pending_resources": true,
+      "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+      "state": "BOUNDARY",
+      "serial": 47,
+      "bound_serial": 47,
+      "error": "",
+      "attached": true,
+      "rebuild_pending": false,
+      "graph_builds": 2,
+      "binding_updates": 14,
+      "update_calls": 15,
+      "resource_steps": 23
+    },
+    "instrumentation": {
+      "observed_calls": {
+        "pack_image": 3
+      },
+      "phases": {
+        "source_generation": {
+          "calls": 32,
+          "wall_s": 0.10590125205635559,
+          "cpu_s": 0.09875199999999928,
+          "exclusive_wall_s": 0.10590125205635559,
+          "exclusive_cpu_s": 0.09875199999999928
+        },
+        "masking": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "filters": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "blending": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry_signature": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_read": {
+          "calls": 1,
+          "wall_s": 0.0008297919994220138,
+          "cpu_s": 0.0013190000000005142,
+          "exclusive_wall_s": 0.0008297919994220138,
+          "exclusive_cpu_s": 0.0013190000000005142
+        },
+        "image_write": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "packing": {
+          "calls": 3,
+          "wall_s": 0.0034582499938551337,
+          "cpu_s": 0.0069760000000016475,
+          "exclusive_wall_s": 0.0034582499938551337,
+          "exclusive_cpu_s": 0.0069760000000016475
+        }
+      },
+      "counters": {
+        "shader_resource_requests": 1,
+        "shader_parameter_bindings_updated": 0,
+        "shader_parameter_updates": 0,
+        "shader_update_calls": 1,
+        "shader_resource_rows": 512,
+        "shader_resource_steps": 15,
+        "shader_resource_publications": 1,
+        "shader_resource_written_bytes": 4194304,
+        "pack_unchanged_skips": 2,
+        "pack_calls": 1,
+        "image_read_bytes": 262144,
+        "image_read_allocated_bytes": 262144
+      },
+      "distributions": {
+        "shader_submission_ms": {
+          "samples": 1,
+          "p50": 1.1593749950407073,
+          "p95": 1.1593749950407073,
+          "maximum": 1.1593749950407073
+        },
+        "shader_callback_seconds": {
+          "samples": 1,
+          "p50": 0.0013437499947031029,
+          "p95": 0.0013437499947031029,
+          "maximum": 0.0013437499947031029
+        }
+      },
+      "last_observed_bytes": {
+        "live_leaf_cache_bytes": 0
+      },
+      "peak_observed_bytes": {
+        "live_leaf_cache_bytes": 0
+      },
+      "process_peak_rss_bytes": 251609088
+    }
+  },
+  "structure": "visibility and reorder change actual material; restoration matches",
+  "persistence": "native save/reload preserves dirty outputs and packed sources",
+  "timing_scope": "No UI/frame latency is inferred from these correctness renders"
+}

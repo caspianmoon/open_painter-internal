@@ -1,5 +1,22 @@
 # Changes
 
+## 0.2.7
+
+- Replace default live texture composition with a persistent internal Blender shader graph. Numeric layer, mask, generator and pointwise-filter edits update existing shader bindings; no complete channel texture is regenerated.
+- Track parameter owners and downstream shader dependencies, including published source stages. Keep baked-output invalidation separate from authoring preview state.
+- Isolate legacy hash fields, neighborhood filters and scene analysis as reusable input resources. Keep final mask levels and filter strength shader-native, publish changed inputs atomically and discard superseded jobs.
+- Preserve editable image sources through save/reload without baking the native layer stack. Retain explicit CPU reference evaluation and texture export.
+- Add Developer Mode dependency diagnostics, rendered numerical comparisons, boundary-isolation and real-window interaction regressions.
+
+## 0.2.6
+
+- Re-author all 50 smart materials using thirteen new AI-generated wear and relief inputs, including actual scratch, chipped-coating, weld, blister, rubber-crack and grease masks. Replace scattered procedural scratch ticks and striped paint fragments with image coverage and material-specific relief.
+- Give coatings editable elevated height ranges, visible primer boundaries and recessed damage. Project isotropic damage through triplanar coordinates to avoid stretched UV-pole patterns; retain directional mapping for grain and weave.
+- Include height relief in exported normals, accounting for UV charts, mesh scale, authored normals and DirectX/OpenGL conventions. Preserve height distance in saved materials and copied texture sets; keep the preview's single bump evaluation.
+- Add tapered scratches, open branching fissures and sharply fractured paint as new texture sources. Preserve the numerical behavior of existing procedural identifiers and saved material instances.
+- Compose editable procedural/image masks with shared seeds, levels and constant recessed height. Reuse packed library image masks after material-only edits.
+- Fix aliased fingerprint shelf previews, refresh all material renders, and add per-material before/after review and regressions.
+
 ## 0.2.5
 
 - Add fifteen generated scalar surface-detail images to all 50 existing smart materials, with separate editable color, roughness and height amounts. Preserve mesh-map wear and all 50 recipes.

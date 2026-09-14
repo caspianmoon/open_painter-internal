@@ -1,6 +1,7 @@
 """Asset type isolation and real shelf activation into channels, masks and brushes."""
 
 import sys
+from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +16,52 @@ from open_painter.ui import library_categories as categories
 from open_painter.core import layer_stack as stack, texture_set_manager as sets
 
 open_painter.register()
+
+
+def verify_fingerprint_preview(proxy):
+    """The shelf must show a readable print, not separated aliased X marks."""
+    width, height = proxy.preview.image_size
+    assert (width, height) == (48, 48), (width, height)
+    rgba = np.asarray(proxy.preview.image_pixels_float, dtype=np.float32).reshape(height, width, 4)
+    assert np.isfinite(rgba).all() and rgba.min() >= 0 and rgba.max() <= 1
+    np.testing.assert_allclose(rgba[..., 0], rgba[..., 1], atol=1e-6)
+    np.testing.assert_allclose(rgba[..., 0], rgba[..., 2], atol=1e-6)
+    np.testing.assert_allclose(rgba[..., 3], 1, atol=1e-6)
+    gray = rgba[..., 0]
+
+    # A line through the center of a print crosses multiple visible ridges.
+    # The former six-repetition preview left this line empty at shelf size.
+    ridges = gray[height // 2] > .4
+    ridge_starts = ridges & ~np.r_[False, ridges[:-1]]
+    assert np.count_nonzero(ridge_starts) >= 4, "Fingerprint ridges vanished into thumbnail aliasing"
+
+    # Ignore the spaces between individual ridges when examining the overall
+    # print footprint. It should form one connected shape, rather than dozens
+    # of separate tiny marks distributed across the thumbnail.
+    footprint = gray.reshape(12, 4, 12, 4).mean(axis=(1, 3)) > .07
+    remaining = footprint.copy()
+    components = []
+    for y, x in np.argwhere(footprint):
+        if not remaining[y, x]:
+            continue
+        queue = deque(((int(y), int(x)),))
+        remaining[y, x] = False
+        count = 0
+        while queue:
+            qy, qx = queue.popleft()
+            count += 1
+            for ny, nx in ((qy-1, qx), (qy+1, qx), (qy, qx-1), (qy, qx+1)):
+                if 0 <= ny < 12 and 0 <= nx < 12 and remaining[ny, nx]:
+                    remaining[ny, nx] = False
+                    queue.append((ny, nx))
+        components.append(count)
+    assert components and max(components) / footprint.sum() > .9, "Fingerprint footprint is fragmented"
+    y, x = np.indices(gray.shape)
+    central = (x >= width*.2) & (x < width*.8) & (y >= height*.1) & (y < height*.9)
+    assert gray[central].sum() / gray.sum() > .9, "Fingerprint preview is a field of tiny stamps"
+    return rgba.copy()
+
+
 def run():
     project = bpy.context.scene.open_painter
     ts = sets.create(bpy.context.scene, "Asset category tests", 512)
@@ -44,6 +91,8 @@ def run():
                 if image.asset_data and native.VIEW3D_AST_open_painter.asset_poll(SimpleNamespace(local_id=image))}
 
 
+    fingerprint = handle("PROCEDURAL:FINGERPRINTS")
+    fingerprint_pixels = verify_fingerprint_preview(fingerprint)
     initial_serial = ts.edit_serial
     groups = {}
     for identifier, *_ in categories.CATEGORY_ITEMS:
@@ -61,9 +110,14 @@ def run():
     assert "ALPHA:Library alpha" in groups["ALPHAS"]
     assert "TEXTURE:Library source" in groups["TEXTURES"], (source.name, source.type, dict(source.items()), sorted(groups["TEXTURES"]))
     assert "PROCEDURAL:FBM" in groups["TEXTURES"]
+    surface_sources = ("TAPERED_SCRATCHES", "FINE_FISSURES", "FRACTURED_PAINT")
+    for identifier in ("FINGERPRINTS", "SCRATCHES", "CRACKS") + surface_sources:
+        assert "PROCEDURAL:" + identifier in groups["TEXTURES"], identifier
     assert set.union(*(values for name, values in groups.items() if name != "ALL")) == groups["ALL"]
     assert sum(len(values) for name, values in groups.items() if name != "ALL") == len(groups["ALL"])
-    assert project.bl_rna.properties["asset_category"].enum_items["MASKS"].value == 2
+    expected_category_values = {"ALL": 0, "MATERIALS": 1, "MASKS": 2, "SMART_MATERIALS": 3,
+                                "FILTERS": 4, "BRUSHES": 5, "ALPHAS": 6, "TEXTURES": 7}
+    assert {item.identifier: item.value for item in project.bl_rna.properties["asset_category"].enum_items} == expected_category_values
 
     apply("FILTER:LEVELS")
     assert stack.channel_for(layer, "ROUGHNESS").effects[0].kind == "LEVELS"
@@ -75,6 +129,9 @@ def run():
     apply("PROCEDURAL:FBM")
     assert stack.channel_for(layer, "ROUGHNESS").procedural == "FBM"
     assert channel.detail_image is None and not channel.detail_image_name
+    for identifier in surface_sources:
+        apply("PROCEDURAL:" + identifier)
+        assert channel.procedural == identifier and channel.enabled
     channel.detail_image = source
     apply("TEXTURE:Library source")
     assert stack.channel_for(layer, "ROUGHNESS").image == source
@@ -100,6 +157,8 @@ def run():
     assert proxy[categories.SOURCE_KEY] == source
     native.prepare_assets()
     assert len(bpy.data.images) == count
+    assert handle("PROCEDURAL:FINGERPRINTS") == fingerprint
+    np.testing.assert_array_equal(verify_fingerprint_preview(fingerprint), fingerprint_pixels)
     source.pixels.foreach_set(np.tile(np.array((.8, .4, .2, 1), dtype=np.float32), 16 * 16))
     source.update()
     assert bpy.ops.open_painter.refresh_assets() == {"FINISHED"}
@@ -139,7 +198,7 @@ def run():
     open_painter.unregister()
     open_painter.register()
     open_painter.unregister()
-    print("ASSET_CATEGORIES_PASS: seven disjoint categories; channel/mask filter and texture activation; brush/alpha activation; source rename/delete; idempotent refresh and lifecycle")
+    print("ASSET_CATEGORIES_PASS: seven disjoint categories; connected fingerprint ridges; opt-in surface source activation; stable category IDs; channel/mask filter and texture activation; brush/alpha activation; source rename/delete; idempotent refresh and lifecycle")
 
 
 area = next(area for area in bpy.context.screen.areas if area.type == "VIEW_3D")

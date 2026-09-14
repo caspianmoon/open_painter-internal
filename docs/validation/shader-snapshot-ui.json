@@ -1,0 +1,18 @@
+{
+  "result": "PASS",
+  "blender": "5.2.1 LTS",
+  "checks": [
+    "opening-2d-evaluates-one-selected-channel",
+    "shader-edit-leaves-visible-snapshot-explicitly-stale",
+    "refresh-publishes-current-selected-channel",
+    "2d-paint-retains-authored-canvas-without-compositing",
+    "finish-painting-keeps-source-and-does-not-bake",
+    "explicit-composite-remains-distinct-from-painted-source"
+  ],
+  "source": "Explicit 2D snapshot_Authored paint source_BASE_COLOR",
+  "snapshot": "Explicit 2D snapshot_BaseColor",
+  "allocated_output_channels": [
+    "BASE_COLOR"
+  ],
+  "automatic_shader_edit_bakes": 0
+}

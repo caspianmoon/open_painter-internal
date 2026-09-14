@@ -1,8 +1,13 @@
 # Smart material catalog
 
-Open Painter includes 50 authored smart material compositions containing 229 editable layers. Recipes are original data stored in `src/open_painter/smart_materials/catalog.py`. They compose texture fills, texture procedurals, and grayscale masks; they do not build shader effect graphs. The output material displays the resulting Base Color, Roughness, Metallic and Height textures.
+Open Painter includes 50 authored smart material compositions with editable layers. Recipes are original data stored in `src/open_painter/smart_materials/catalog.py`. They compose texture fills, texture procedurals, and grayscale masks; they do not build shader effect graphs. The output material displays the resulting Base Color, Roughness, Metallic and Height textures.
 
-Version 0.2.5 adds 15 generated scalar surface-detail sources across all 50
+Version 0.2.6 adds 13 generated wear/relief inputs and revises all 50 materials,
+including image-based scratches, chipped coatings, welds, blisters and rubber
+fissures. Height now contributes to exported normals. See the
+[current material review and validation](material-surface-quality.md).
+
+The earlier version 0.2.5 added 15 generated scalar surface-detail sources across all 50
 materials. They supply fine grain, pores, mineral structures and handling marks;
 color, roughness, height and mesh-aware masks remain editable. Existing material
 instances in saved projects are preserved; apply an updated library recipe to

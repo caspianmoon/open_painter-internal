@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "generated_date": "2026-09-14",
+  "mode": "built-in image_gen",
+  "license": "GPL-3.0-or-later",
+  "provenance": "AI-generated rubber fissure and grease deposit inputs created for Open Painter without third-party reference images. Not measured PBR scans or exclusive assets.",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "note": "Original selected 1254\u00d71254 PNG bytes retained. Seamlessness requested, exact boundary continuity not verified.",
+  "assets": [
+    {
+      "id": "rubber_cracks_v2",
+      "file": "rubber_cracks_v2.png",
+      "original_file": "exec-14e8adc4-e518-4acf-b80c-c584c422db1b.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "8c45895958dc81b894605e59cbf33b67a2f996a9da6cbcf178ff3fbbb367517d",
+      "bytes": 1014234,
+      "semantics": "Black is intact rubber; white crack interiors represent fissure coverage/depth, medium gray narrow transitional edges and shallower branches. Use the same coverage to recess height and darken the cracks. Bright crack centers, not bright rims around dark slits. Irregular sparse main stress fractures with finer secondary branching.",
+      "prompt_file": "docs/research/supplemental-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false,
+        "mean_grayscale_255": 14.67021766392202,
+        "coverage_above_16": 0.09999135143934942,
+        "coverage_above_32": 0.09031450236436386,
+        "coverage_above_64": 0.07633054290067637,
+        "coverage_above_128": 0.05499467096042266
+      },
+      "refined_from_original": "exec-fafb8438-e48d-47e0-b4c8-bb72cb50455a.png",
+      "refined_from_sha256": "be2bed4b9214875c78ec3faf0df982680861f769773aa016317ee51183495662",
+      "refinement_reason": "First output contained dark crack centers with bright rims. Built-in image editing filled the fissure centers to make a usable white-depth mask while preserving the crack topology."
+    },
+    {
+      "id": "grease_deposits_v2",
+      "file": "grease_deposits_v2.png",
+      "original_file": "exec-a12768df-df8d-4886-a96d-0d9538fdd90f.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "1881e106a8bd02cd12286dbf79cc4f4b5499c47526a66c9ac2cdddc3e1f164cc",
+      "bytes": 2122868,
+      "semantics": "Black is clean surface; brighter values indicate thicker greasy residue and deposited coverage. Localized smear arcs, dragged deposits, clotted ends and finer residue trails. Use the same mask for darkening, lower roughness and shallow positive buildup; retain gray film values rather than thresholding most of them away.",
+      "prompt_file": "docs/research/supplemental-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false,
+        "mean_grayscale_255": 18.1720713811497,
+        "coverage_above_16": 0.2608170600489916,
+        "coverage_above_32": 0.20100653983806843,
+        "coverage_above_64": 0.11238740973064822,
+        "coverage_above_128": 0.01870314833044624
+      }
+    }
+  ]
+}

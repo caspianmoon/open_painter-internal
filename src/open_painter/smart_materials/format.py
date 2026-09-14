@@ -1,6 +1,7 @@
 """Versioned ZIP/JSON format validation before Blender data mutation."""
 
 import json
+import math
 from zipfile import ZipFile, is_zipfile
 
 VERSION = 2
@@ -51,8 +52,9 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
     validate_assets(data)
     surface = data.get("surface", {})
     if not isinstance(surface, dict) or any(
-        key not in {"anisotropy","coat_weight","coat_roughness"}
-        or not isinstance(value,(float,int)) or not 0 <= value <= 1
+        key not in {"anisotropy","coat_weight","coat_roughness","height_distance"}
+        or not isinstance(value,(float,int)) or not math.isfinite(value)
+        or value < 0 or (key != "height_distance" and value > 1)
         for key,value in surface.items()
     ):
         raise ValueError("Invalid smart material surface values.")

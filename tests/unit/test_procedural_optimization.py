@@ -80,7 +80,9 @@ class ProceduralOptimizationTests(unittest.TestCase):
                              entry["sha256"])
 
     def test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles(self):
-        self.assertEqual(set(procedurals.CATALOG), set(reference.CATALOG))
+        self.assertEqual(set(procedurals.CATALOG) - set(reference.CATALOG),
+                         {"TAPERED_SCRATCHES", "FINE_FISSURES", "FRACTURED_PAINT"})
+        self.assertTrue(set(reference.CATALOG).issubset(procedurals.CATALOG))
         self.assertEqual(procedurals.ALIASES, reference.ALIASES)
         v, u = np.indices((9, 13), dtype=np.float32)
         u, v = u / 3 - 2.3, v / 2 - 1.7

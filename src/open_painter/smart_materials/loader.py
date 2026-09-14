@@ -19,7 +19,7 @@ def apply(ts, path: str | Path) -> None:
     loaded = []
     decoded_images = {}
     start = len(ts.layers)
-    old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")}
+    old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")}
     try:
         with TemporaryDirectory(prefix="open-painter-import-") as directory:
 

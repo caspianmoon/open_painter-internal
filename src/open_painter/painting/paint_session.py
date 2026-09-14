@@ -152,10 +152,12 @@ def finish(context, evaluate: bool = True) -> None:
     _scratch.pop(scene.as_pointer(), None)
     if evaluate and any(s.id == identifier for s in project.texture_sets):
         from ..evaluation.evaluator import LayerEvaluator
-        from ..evaluation.live_preview import available
+        from ..evaluation import shader_preview
 
         target_set = next(s for s in project.texture_sets if s.id == identifier)
-        if not available(scene, target_set):
+        if shader_preview.requested(target_set):
+            shader_preview.tick(scene, target_set)
+        else:
             LayerEvaluator(scene).evaluate_texture_set(identifier)
     ts = active_set(context)
     preview = (
@@ -164,8 +166,14 @@ def finish(context, evaluate: bool = True) -> None:
         else None
     )
     if ts:
-        from ..evaluation.live_display import displayed_image
-        preview = displayed_image(scene, ts, project.paint_channel)
+        from ..evaluation.shader_preview import requested
+        if requested(ts):
+            # Keep the image the artist just painted. A 2D composite is a
+            # separate explicit snapshot, never an implicit bake on brush exit.
+            preview = image
+        else:
+            from ..evaluation.live_display import displayed_image
+            preview = displayed_image(scene, ts, project.paint_channel)
     update_editors(context, preview, painting=False)
 
 

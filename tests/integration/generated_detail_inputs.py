@@ -50,6 +50,8 @@ def finish(job):
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, 'Shared scalar material detail', 512)
+ts.preview_backend = 'CPU'  # Exercise baked-output dirtiness and raster cache parity.
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
 layer = stack.add(ts, 'FILL')
 base, rough, height, normal = [stack.channel_for(layer, key)
                                for key in ('BASE_COLOR', 'ROUGHNESS', 'HEIGHT', 'NORMAL')]
@@ -196,6 +198,7 @@ for out in ts.outputs:
 # A shared detail pixel edit must dirty a published channel's consumers, even
 # when those consumers do not directly reference the source image themselves.
 reference_ts = sets.create(scene, 'Published generated detail', 512)
+reference_ts.preview_backend = 'CPU'
 published = stack.add(reference_ts, 'FILL', 'Published roughness')
 consumer = stack.add(reference_ts, 'FILL', 'Color from published detail')
 for prop in published.channels:

@@ -32,6 +32,7 @@ assert not edge_wear(edges, np.zeros_like(edges), noise, 0.46, 4, 0.65).any()
 
 open_painter.register()
 ts = sets.create(bpy.context.scene, "Edge texture test", 512)
+ts.preview_backend = 'CPU'  # This regression verifies the fixed raster display adapter.
 sets.assign(bpy.context.scene, ts, bpy.context.object)
 base = stack.add(ts, "FILL", "Substrate")
 stack.channel_for(base, "BASE_COLOR").color = (0, 0, 0, 1)

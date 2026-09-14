@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "generated_date": "2026-09-14",
+  "mode": "built-in image_gen",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "purpose": "Natural-material scalar relief sources. Generated images are artistic geometry inputs, not measured scans. Original returned pixels retained; no upscaling or image processing.",
+  "assets": [
+    {
+      "id": "timber_relief_v2",
+      "source": "/Users/khazarayaz/.codex/generated_images/01a09fc6-6f85-73a1-8fa2-b1078878252a/exec-26a73255-7750-49c1-acb1-8d424ae71363.png",
+      "prompt": "Use case: scientific-educational. Asset type: single grayscale linear surface HEIGHT MAP for a professional Blender PBR timber material. Generate one square 2048 x 2048 image, edge-to-edge continuous oak wood surface relief, orthographic top-down UV texture. Grayscale values encode height only: broad flat wood fiber tops around light-mid-gray 160, narrow open vessels and eroded grooves descending smoothly toward 25, occasional higher unbroken grain around 190. The visible swath represents about 30 cm of real quarter-sawn timber. Predominantly vertical longitudinal anatomy: organically bending irregular bundles, densely scattered short vessel pores following the grain, a few fine interrupted longer splits, natural narrow growth bands. Rich fine structure, clear readable vessels at multiple sizes, restrained organic waviness; do not make a whole knot or plank. No albedo coloration. Absolutely NO lighting, highlights, cast shadows, ambient occlusion, vignette, directional light-dark embossing, perspective, borders, frames, planks, labels or text. Do not render a photograph or shaded 3D material. Opposite boundaries must flow continuously for repeating tile use; same detail density and average value at every edge. Avoid regular parallel stripes, zebra bands, large cracks, checkerboard and arbitrary noise.",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a",
+      "bytes": 3087388
+    },
+    {
+      "id": "leather_relief_v2",
+      "source": "/Users/khazarayaz/.codex/generated_images/01a09fc6-6f85-73a1-8fa2-b1078878252a/exec-1cf910a3-bde9-4208-80f2-a0715652ef72.png",
+      "prompt": "Use case: scientific-educational. Asset type: single grayscale linear HEIGHT MAP for aged leather in a Blender PBR material. Generate square 2048 x 2048 flat edge-to-edge texture. Image values represent surface elevation only. Mid-gray to light-gray subtly rounded leather grain crowns (150-195), deeper charcoal valleys and dry cracks (20-70). Swath represents 20 cm real worn cowhide. Dense fine natural pebble grain, grouped and compressed in softly directional irregular creases; sparse larger interrupted and branched dry fissures, tapering smoothly, as long-worn leather rather than reptile skin. Multiscale tactile pores and grain, varied irregular lobes, a few shallow abraded flattened grain clusters. No broad polygon plates or giant cracks. Pure grayscale. No material color or photographs. Strictly no illumination, specular highlights, directional shading, cast shadows, AO, perspective, border, seams, text, labels, vignettes, repeated motif. Relief only; lighter centers descending evenly in every direction to dark crease beds. Seamless tile design, even density through all boundaries. High clarity of tiny grain and smooth ramps into narrow fissures.",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41",
+      "bytes": 3553897
+    },
+    {
+      "id": "denim_twill_v2",
+      "source": "/Users/khazarayaz/.codex/generated_images/01a09fc6-6f85-73a1-8fa2-b1078878252a/exec-7e203e76-79cf-40b5-8c78-484f31668445.png",
+      "prompt": "Use case: scientific-educational. Asset type: one production grayscale linear HEIGHT MAP texture for denim twill, Blender PBR shading. Single square 2048 x 2048 image. Flat orthographic square swath representing 8 cm of finely woven denim, fills entire image with exactly one continuous weave surface. Real dense 3/1 right-hand diagonal twill topology: individual short elongated raised warp floats step over one thread each row, giving fine diagonal ribs from lower left to upper right. Fine paired longitudinal cotton filaments inside every yarn, minute natural variation of yarn thickness and a few tiny loose surface fibers. Approximately 60-80 yarn columns across full width. HEIGHT ONLY, white/light gray is the rounded crown of each yarn, dark gray is the narrow opening between yarns, middle gray is the shoulders, smooth rounded cross sections and controlled high contrast for clear tangent normal derivation. All yarns same intrinsic grayscale elevation regardless of indigo/white color. Do not make a photograph, plain basket weave, canvas, crosshatching, checkerboard, single broad diagonal bars, wrinkles, seams or stitching. No lighting direction, highlights, cast shadows, AO, albedo coloration, exposure gradient, perspective, text or frame. Even scale and density at every edge, seamless tile intentions, microscopically crisp texture with no large features.",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "adc790d25b965674e3fad3333b75abc79ef64bf379372d7512d14f33c3909a1c",
+      "bytes": 2944785
+    },
+    {
+      "id": "cement_relief_v2",
+      "source": "/Users/khazarayaz/.codex/generated_images/01a09fc6-6f85-73a1-8fa2-b1078878252a/exec-d33e349f-a7e5-4088-8ac1-37c194820e29.png",
+      "prompt": "Use case: scientific-educational. Asset type: professional Blender material scalar geometry map, rough concrete surface relief. One square 2048 x 2048 image, fills whole frame; monochrome linear HEIGHT MAP, not a photograph. 40 cm wide sample of rough poured cement binder with mostly fine mineral grit and irregular recessed pores, occasional small shallow spalls exposing jagged aggregate. Dense tactile microstructure, pores range from pinpoints to 2-5 mm; very sparse 8 mm shallow pits; no huge craters. Grayscale exclusively encodes elevation, uniformly medium-gray cement plane at value 145, local grit crowns up to 185-210, pore interiors at 15-65 with sloping ramps into them. No bright crescent on one side of a hole, no shadow opposite, no directional lighting or highlight. Interlocking faint angular aggregate and gently rough cement, varied natural air pockets with irregular boundaries, slight multiscale surface variation. NO color/albedo variation that is unrelated to geometry, no large mottles, no wrinkles, no swirl, no scratches, no cracks, no vignette, borders, perspective, ground or objects, no text or labels. Tileable opposite edges with uniform average height and fine detail density across the image. Sharp and detailed geometry source with smooth height gradients inside individual depressions.",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+      "bytes": 3754717
+    },
+    {
+      "id": "charred_timber_v2",
+      "source": "/Users/khazarayaz/.codex/generated_images/01a09fc6-6f85-73a1-8fa2-b1078878252a/exec-2ad3668c-8650-43cc-bafc-b46de45e7971.png",
+      "prompt": "Use case: scientific-educational. Asset type: grayscale linear HEIGHT MAP of deeply charred timber for a Blender PBR material. Single square 2048x2048 edge-to-edge flat texture; do not render an object or a lit photograph. Heights only: raised charcoal ridges mid-light gray (145-180); deep narrow split beds black to dark gray (10-45), fine surface crumbling 90-140. Swath represents 35 cm of burned wood. Strong organic vertical longitudinal wood structure retained beneath char: thin irregular elongated charcoal strips broken occasionally across the grain into unequal short and long segments, open narrow irregular fissures, splintered granular ridges, intricate fine flaky charcoal lamination, thousands of microscopic pores. Realistic natural variety; no even grid, no regular planks, no broad polygon crocodile skin, no looping maze pattern, no giant knot. Fissures must descend symmetrically to dark beds with smooth narrow ramps; do not paint edge highlights or cast shadows. Pure grayscale surface elevation, no black soot albedo coloration, no ash-white albedo coloration, no directional lighting, no ambient occlusion, no reflections, no vignette, no perspective, text, border or labels. Tileable boundary intentions with continuous narrow fibers and uniform local feature sizes and value density to all edges.",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "71f3436b36af044aeec58b9bd4f06fc21822a798fd261aa04a520e165d720899",
+      "bytes": 3367156
+    }
+  ]
+}

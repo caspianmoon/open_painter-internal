@@ -11,6 +11,11 @@ SOURCE_IDS = frozenset({
     "fabric_weave", "rust_detail", "polymer_grain", "surface_smudges",
     "machined_scratches", "cast_iron_grain", "brass_tarnish", "burn_blisters",
     "zinc_spangle", "marble_veins", "granite_minerals",
+    "abrasion_mask_v2", "brushed_relief_v2", "paint_loss_v2", "rust_relief_v2",
+    "timber_relief_v2", "leather_relief_v2", "denim_twill_v2", "cement_relief_v2",
+    "charred_timber_v2",
+    "weld_bead_v2", "burn_relief_v2",
+    "rubber_cracks_v2", "grease_deposits_v2",
 })
 
 

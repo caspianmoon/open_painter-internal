@@ -1,0 +1,511 @@
+{
+  "reviewed_date": "2026-09-14",
+  "review_method": "Visual inspection of full-frame renders; numeric height and combined-normal statistics checked; current recipe and source hashes verified.",
+  "count": 18,
+  "settings": {
+    "blender": "5.2.1 LTS",
+    "shape": "curved",
+    "texture_resolution": 2048,
+    "render_resolution": 512,
+    "samples": 32,
+    "camera": {
+      "location": [
+        2.9000000953674316,
+        -4.5,
+        2.5
+      ],
+      "rotation": [
+        1.133908748626709,
+        5.560637461599072e-08,
+        0.5724597573280334
+      ],
+      "type": "ORTHO",
+      "ortho_scale": 2.700000047683716
+    },
+    "lighting": [
+      [
+        [
+          -3,
+          -4,
+          4
+        ],
+        700,
+        3.5,
+        [
+          1,
+          0.95,
+          0.9
+        ]
+      ],
+      [
+        [
+          4,
+          -1,
+          2
+        ],
+        500,
+        2,
+        [
+          0.8,
+          0.9,
+          1
+        ]
+      ],
+      [
+        [
+          0,
+          3,
+          3
+        ],
+        900,
+        2,
+        [
+          1,
+          1,
+          1
+        ]
+      ]
+    ],
+    "color_management": {
+      "view_transform": "AgX",
+      "look": "None",
+      "exposure": 0.0,
+      "gamma": 1.0
+    }
+  },
+  "replacement_note": "Old Dirty Concrete and Weathered Stone use verified matched-setting replacements. Raw UV/NORMAL/WORLD_NORMAL hashes differ across fresh Blender sessions; geometry, camera, lighting and AO/CURVATURE/POSITION hashes match.",
+  "records": [
+    {
+      "material": "Fresh Oak",
+      "reviewed_render": ".blender-test/material-relief/final/Fresh_Oak.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Visible open vessel pores and shallow bending fibers; directional UVs converge at the sphere pole.",
+      "recipe_sha256": "fda1daabab143dae27c9ed0030f5fd7e246e8898ffa33dff0f38299208ed6612",
+      "height_stats": {
+        "minimum": 0.46249449253082275,
+        "maximum": 0.5266872048377991,
+        "mean": 0.5026957988739014,
+        "standard_deviation": 0.0074537890031933784,
+        "range": 0.06419271230697632,
+        "percentile_01": 0.4743800163269043,
+        "percentile_99": 0.5146000385284424,
+        "gradient_rms_per_texel": 0.004761353600770235,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003209635615348816,
+        "combined_normal_xy_rms": 0.14519630372524261
+      },
+      "source_sha256": {
+        "timber_relief_v2": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a"
+      }
+    },
+    {
+      "material": "Old Worn Wood",
+      "reviewed_render": ".blender-test/material-relief/final/Old_Worn_Wood.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Darker and deeper vessel relief than fresh oak, with restrained wear and dark recesses.",
+      "recipe_sha256": "146445c194e06102577e91c2bf5dd20df05decaeabfd48e1efc306acef7d88b7",
+      "height_stats": {
+        "minimum": 0.4451856017112732,
+        "maximum": 0.5394160747528076,
+        "mean": 0.5037994384765625,
+        "standard_deviation": 0.011510880663990974,
+        "range": 0.09423047304153442,
+        "percentile_01": 0.45819082856178284,
+        "percentile_99": 0.5217419862747192,
+        "gradient_rms_per_texel": 0.007363521959632635,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004711523652076721,
+        "combined_normal_xy_rms": 0.18833625316619873
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "timber_relief_v2": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a"
+      }
+    },
+    {
+      "material": "Painted Wood",
+      "reviewed_render": ".blender-test/material-relief/final/Painted_Wood.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Crisp blue coating losses reveal tan wood and grain; no zebra-like damage bands.",
+      "recipe_sha256": "cb9bcc46fe158850dbfa51d10c69707430adb652315371e02456ef1dc8a35351",
+      "height_stats": {
+        "minimum": 0.4530527591705322,
+        "maximum": 0.5937297940254211,
+        "mean": 0.5513915419578552,
+        "standard_deviation": 0.03344109654426575,
+        "range": 0.14067703485488892,
+        "percentile_01": 0.47914502024650574,
+        "percentile_99": 0.5839816331863403,
+        "gradient_rms_per_texel": 0.016040824353694916,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007033851929008961,
+        "combined_normal_xy_rms": 0.2447277307510376
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "paint_loss_v2": "000de48c1336ae5c2a468e437b3fc904a3a9f5f321e880f5b9d1ebfc1490aa4c",
+        "timber_relief_v2": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a"
+      }
+    },
+    {
+      "material": "Weathered Outdoor Wood",
+      "reviewed_render": ".blender-test/material-relief/final/Weathered_Outdoor_Wood.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Bleached gray fibers and open grain relief are visibly distinct from fresh timber.",
+      "recipe_sha256": "a30642787c1f73879d433453a1f1cfa0cd21ddced4f661847137a9f1fdec5ec3",
+      "height_stats": {
+        "minimum": 0.43771815299987793,
+        "maximum": 0.550409197807312,
+        "mean": 0.5051184892654419,
+        "standard_deviation": 0.014026171527802944,
+        "range": 0.11269104480743408,
+        "percentile_01": 0.44983381032943726,
+        "percentile_99": 0.527577817440033,
+        "gradient_rms_per_texel": 0.008966002613306046,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0056345523335039616,
+        "combined_normal_xy_rms": 0.21321237087249756
+      },
+      "source_sha256": {
+        "timber_relief_v2": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a"
+      }
+    },
+    {
+      "material": "Burnt Wood",
+      "reviewed_render": ".blender-test/material-relief/final/Burnt_Wood.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Dedicated fractured charcoal source creates deep interrupted longitudinal fissures; UV pole convergence remains visible.",
+      "recipe_sha256": "2a4a5cbce542892a314561edd01f16e518f4bb76111b4713a1fc9831de4ffd3f",
+      "height_stats": {
+        "minimum": 0.3955000042915344,
+        "maximum": 0.6036419868469238,
+        "mean": 0.4569622278213501,
+        "standard_deviation": 0.0376199372112751,
+        "range": 0.2081419825553894,
+        "percentile_01": 0.3962417542934418,
+        "percentile_99": 0.5308599472045898,
+        "gradient_rms_per_texel": 0.01318871695548296,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0104070995002985,
+        "combined_normal_xy_rms": 0.26499223709106445
+      },
+      "source_sha256": {
+        "charred_timber_v2": "71f3436b36af044aeec58b9bd4f06fc21822a798fd261aa04a520e165d720899"
+      }
+    },
+    {
+      "material": "Oiled Dark Wood",
+      "reviewed_render": ".blender-test/material-relief/final/Oiled_Dark_Wood.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Strong polished/oiled highlights are broken by open vessel pores; reads substantially glossier than untreated wood.",
+      "recipe_sha256": "521d82be5654244161d16a7cd1ebbe093abd673e6f3be068057eded749a81e4c",
+      "height_stats": {
+        "minimum": 0.4734994173049927,
+        "maximum": 0.5190749764442444,
+        "mean": 0.5018568634986877,
+        "standard_deviation": 0.005346430465579033,
+        "range": 0.04557555913925171,
+        "percentile_01": 0.4815802574157715,
+        "percentile_99": 0.5104623436927795,
+        "gradient_rms_per_texel": 0.0034166164696216583,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.002278778003528714,
+        "combined_normal_xy_rms": 0.11663773655891418
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "surface_smudges": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0",
+        "timber_relief_v2": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a"
+      }
+    },
+    {
+      "material": "Rough Concrete",
+      "reviewed_render": ".blender-test/material-relief/final/Rough_Concrete.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine cement grit and small recessed pits are visible despite mostly uniform cement coloring.",
+      "recipe_sha256": "fab9c1f5be01325f37be5cdab64bf06c44238630c343fdac765acedbd7923579",
+      "height_stats": {
+        "minimum": 0.4278058409690857,
+        "maximum": 0.5805213451385498,
+        "mean": 0.5035518407821655,
+        "standard_deviation": 0.015333558432757854,
+        "range": 0.1527155041694641,
+        "percentile_01": 0.45452582836151123,
+        "percentile_99": 0.5397722721099854,
+        "gradient_rms_per_texel": 0.012574576772749424,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.007635775487869978,
+        "combined_normal_xy_rms": 0.24688199162483215
+      },
+      "source_sha256": {
+        "cement_relief_v2": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12"
+      }
+    },
+    {
+      "material": "Old Dirty Concrete",
+      "reviewed_render": ".blender-test/material-relief/natural-final-concrete/Old_Dirty_Concrete.png",
+      "context": ".blender-test/material-relief/natural-final-concrete/render-context.json",
+      "observation": "Corrected darker aged binder and broad generated mineral grime are now visibly distinct from rough concrete, while pores remain visible.",
+      "recipe_sha256": "686c34183e11f09e286740493f22d40ff6a6a9f85f57420f6e1e7d6d951fc2a8",
+      "height_stats": {
+        "minimum": 0.41182857751846313,
+        "maximum": 0.6067683100700378,
+        "mean": 0.5046029090881348,
+        "standard_deviation": 0.019814664497971535,
+        "range": 0.1949397325515747,
+        "percentile_01": 0.44100335240364075,
+        "percentile_99": 0.5512867569923401,
+        "gradient_rms_per_texel": 0.01716122031211853,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00974698644131422,
+        "combined_normal_xy_rms": 0.311095267534256
+      },
+      "source_sha256": {
+        "brass_tarnish": "07159194313e33f3b1f70d15d2052c02d543d77225375b39b17eaf8a96843b0e",
+        "cement_relief_v2": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12"
+      }
+    },
+    {
+      "material": "Painted Concrete",
+      "reviewed_render": ".blender-test/material-relief/final/Painted_Concrete.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Off-white film has crisp irregular losses exposing gray rough cement.",
+      "recipe_sha256": "22d3ac0768a1e4bdee58826623b6cdf08f09162cf527057b568f10f9aa1a11c3",
+      "height_stats": {
+        "minimum": 0.42458662390708923,
+        "maximum": 0.638604462146759,
+        "mean": 0.5649925470352173,
+        "standard_deviation": 0.04341435432434082,
+        "range": 0.2140178382396698,
+        "percentile_01": 0.4711056053638458,
+        "percentile_99": 0.6130530834197998,
+        "gradient_rms_per_texel": 0.021902574226260185,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.010700891725718975,
+        "combined_normal_xy_rms": 0.2938137948513031
+      },
+      "source_sha256": {
+        "cement_relief_v2": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+        "paint_loss_v2": "000de48c1336ae5c2a468e437b3fc904a3a9f5f321e880f5b9d1ebfc1490aa4c"
+      }
+    },
+    {
+      "material": "Polished Marble",
+      "reviewed_render": ".blender-test/material-relief/final/Polished_Marble.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine mineral veins remain nearly level under smooth polished reflections.",
+      "recipe_sha256": "1f2d564113ecb7afce122851c08a889dc60232705c7dbc9406096f7e86c6cfb3",
+      "height_stats": {
+        "minimum": 0.4980311393737793,
+        "maximum": 0.5003336071968079,
+        "mean": 0.49993860721588135,
+        "standard_deviation": 0.0001718546700431034,
+        "range": 0.0023024678230285645,
+        "percentile_01": 0.4991263151168823,
+        "percentile_99": 0.5001020431518555,
+        "gradient_rms_per_texel": 0.00010561128874542192,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.00011512339551700279,
+        "combined_normal_xy_rms": 0.0026116485241800547
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "marble_veins": "b4500bcc69584007c299658a07ffeb0f052fc9e2ceedc2e380beac1aeed41119"
+      }
+    },
+    {
+      "material": "Granite",
+      "reviewed_render": ".blender-test/material-relief/final/Granite.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine mineral speckle distinguishes the surface, with subtle differential grain relief.",
+      "recipe_sha256": "8083b527ea605e3957b06da531c64f244d371251c215269b1ebf10de174d7f8b",
+      "height_stats": {
+        "minimum": 0.477508544921875,
+        "maximum": 0.521074652671814,
+        "mean": 0.49952149391174316,
+        "standard_deviation": 0.0068054236471652985,
+        "range": 0.043566107749938965,
+        "percentile_01": 0.48255693912506104,
+        "percentile_99": 0.5125022530555725,
+        "gradient_rms_per_texel": 0.005411637015640736,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0021783055271953344,
+        "combined_normal_xy_rms": 0.12252842634916306
+      },
+      "source_sha256": {
+        "granite_minerals": "d31a9fd663f1236419966381f5fb450697e9badc97881193b1585f149d38b5df"
+      }
+    },
+    {
+      "material": "Weathered Stone",
+      "reviewed_render": ".blender-test/material-relief/natural-final/Weathered_Stone.png",
+      "context": ".blender-test/material-relief/natural-final/render-context.json",
+      "observation": "Corrected larger eroded features and stronger mineral variation separate the surface from fine cement.",
+      "recipe_sha256": "5156ecc2aa96ca7d1d8cc2b276ab6a4479ae1c4d46b5dbec82a3d3367f6d4f82",
+      "height_stats": {
+        "minimum": 0.3994199335575104,
+        "maximum": 0.6313163042068481,
+        "mean": 0.5059403777122498,
+        "standard_deviation": 0.02388080023229122,
+        "range": 0.23189637064933777,
+        "percentile_01": 0.4343503415584564,
+        "percentile_99": 0.5633891820907593,
+        "gradient_rms_per_texel": 0.018065936863422394,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.011594818904995918,
+        "combined_normal_xy_rms": 0.3091515898704529
+      },
+      "source_sha256": {
+        "cement_relief_v2": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+        "granite_minerals": "d31a9fd663f1236419966381f5fb450697e9badc97881193b1585f149d38b5df",
+        "surface_smudges": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0"
+      }
+    },
+    {
+      "material": "Worn Leather",
+      "reviewed_render": ".blender-test/material-relief/final/Worn_Leather.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine grain breaks rounded highlights and the groove carries restrained burnishing.",
+      "recipe_sha256": "e35626ba3249bd5389e2f692c09bbbc57fcb5f55083b7fef389b000e8255c0b8",
+      "height_stats": {
+        "minimum": 0.4549782872200012,
+        "maximum": 0.5375404357910156,
+        "mean": 0.49229779839515686,
+        "standard_deviation": 0.012684118933975697,
+        "range": 0.0825621485710144,
+        "percentile_01": 0.466236412525177,
+        "percentile_99": 0.5183274745941162,
+        "gradient_rms_per_texel": 0.011344045400619507,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.004128107335418463,
+        "combined_normal_xy_rms": 0.23442578315734863
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "leather_relief_v2": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41"
+      }
+    },
+    {
+      "material": "Cracked Old Leather",
+      "reviewed_render": ".blender-test/material-relief/final/Cracked_Old_Leather.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Larger irregular creases and drier grain distinguish the surface from smoother worn leather.",
+      "recipe_sha256": "364764ac6b0783c57a47933b8b70b9e9a231b9e9f16fdb475a29d6e6d9dd62c7",
+      "height_stats": {
+        "minimum": 0.43586984276771545,
+        "maximum": 0.5614938735961914,
+        "mean": 0.48636728525161743,
+        "standard_deviation": 0.02209451235830784,
+        "range": 0.12562403082847595,
+        "percentile_01": 0.4443603754043579,
+        "percentile_99": 0.5298131704330444,
+        "gradient_rms_per_texel": 0.01754782535135746,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0062812017276883125,
+        "combined_normal_xy_rms": 0.3087438642978668
+      },
+      "source_sha256": {
+        "leather_relief_v2": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41"
+      }
+    },
+    {
+      "material": "Denim Fabric",
+      "reviewed_render": ".blender-test/material-relief/final/Denim_Fabric.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine diagonal yarn ridges remain visible after reducing oversized relief; directional UV pole convergence is visible.",
+      "recipe_sha256": "2f0b9a00a0214510ba1da474528ea600d2e31ce619a69ae5041daeaba251cbf3",
+      "height_stats": {
+        "minimum": 0.47548288106918335,
+        "maximum": 0.5235608816146851,
+        "mean": 0.49984490871429443,
+        "standard_deviation": 0.010979962535202503,
+        "range": 0.04807800054550171,
+        "percentile_01": 0.4804414212703705,
+        "percentile_99": 0.5186704993247986,
+        "gradient_rms_per_texel": 0.005020182579755783,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0024039000272750854,
+        "combined_normal_xy_rms": 0.15070226788520813
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "denim_twill_v2": "adc790d25b965674e3fad3333b75abc79ef64bf379372d7512d14f33c3909a1c"
+      }
+    },
+    {
+      "material": "Canvas Fabric",
+      "reviewed_render": ".blender-test/material-relief/final/Canvas_Fabric.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine plain weave relief remains visible after reducing yarn height; UV sphere distortion follows the authored mapping.",
+      "recipe_sha256": "5d6f905feff9eac75b843b0fd8b99defc2e6fb2dc7959e7507e8c23bd53eec35",
+      "height_stats": {
+        "minimum": 0.4626317024230957,
+        "maximum": 0.5278271436691284,
+        "mean": 0.5026365518569946,
+        "standard_deviation": 0.009028441272675991,
+        "range": 0.06519544124603271,
+        "percentile_01": 0.4746892750263214,
+        "percentile_99": 0.5180876851081848,
+        "gradient_rms_per_texel": 0.005260907579213381,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.003259772202000022,
+        "combined_normal_xy_rms": 0.1505071371793747
+      },
+      "source_sha256": {
+        "fabric_weave": "dacb88ba578c3f761c423736561d17f2d87198395e96e1bd02d8ff3ae2f7a9dc"
+      }
+    },
+    {
+      "material": "Sci-Fi Panel Surface",
+      "reviewed_render": ".blender-test/material-relief/final/Sci-Fi_Panel_Surface.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Fine coating grain and service abrasion remain restrained; exposed alloy forms a bright rim along the actual groove edge.",
+      "recipe_sha256": "2d55fbca4f5fd10b69d718563afb3439b9eb2f8d2b2fedb1ac0c2da7f5f57c9f",
+      "height_stats": {
+        "minimum": 0.5281316637992859,
+        "maximum": 0.5714234709739685,
+        "mean": 0.5541300177574158,
+        "standard_deviation": 0.0037870213855057955,
+        "range": 0.04329180717468262,
+        "percentile_01": 0.544417679309845,
+        "percentile_99": 0.5627722144126892,
+        "gradient_rms_per_texel": 0.00352868577465415,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.0021645904053002596,
+        "combined_normal_xy_rms": 0.08771391957998276
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "machined_scratches": "8f8d2971a4675939ad6eecf39b11539ec6ae02b84dbabb1b242dbd102aeb7583",
+        "polymer_grain": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc"
+      }
+    },
+    {
+      "material": "Post-Apocalyptic Scrap Metal",
+      "reviewed_render": ".blender-test/material-relief/final/Post-Apocalyptic_Scrap_Metal.png",
+      "context": ".blender-test/material-relief/final/render-context.json",
+      "observation": "Yellow paint, sparse blue repair remnants and granular corrosion have clear shared chip boundaries without zebra-like pole patterns.",
+      "recipe_sha256": "1d998b19ae038b0ea90278bf6322beac536f87476348fee7c9bc652e58722e62",
+      "height_stats": {
+        "minimum": 0.4404638707637787,
+        "maximum": 0.7095440030097961,
+        "mean": 0.609990119934082,
+        "standard_deviation": 0.05375372990965843,
+        "range": 0.26908013224601746,
+        "percentile_01": 0.48416846990585327,
+        "percentile_99": 0.6895984411239624,
+        "gradient_rms_per_texel": 0.028734790161252022,
+        "height_distance": 0.05000000074505806,
+        "world_height_span": 0.013454006984829903,
+        "combined_normal_xy_rms": 0.3210025429725647
+      },
+      "source_sha256": {
+        "abrasion_mask_v2": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+        "cast_iron_grain": "68fc2b723131b3ee35dc8ec594331d51989e9f49cbc861ba6fdb062fca22e285",
+        "paint_loss_v2": "000de48c1336ae5c2a468e437b3fc904a3a9f5f321e880f5b9d1ebfc1490aa4c",
+        "polymer_grain": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+        "rust_relief_v2": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968"
+      }
+    }
+  ]
+}

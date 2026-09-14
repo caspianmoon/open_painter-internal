@@ -1,0 +1,149 @@
+{
+  "result": "PASS",
+  "version": "0.2.7",
+  "recorded_utc": "2026-09-14T15:27:42.027908+00:00",
+  "archive": "dist/open_painter-0.2.7.zip",
+  "archive_sha256": "36cfee7b3c6ca1e1999c86db6480343adca9c85de626f08dce04392b6e6bf3c2",
+  "integrity": {
+    "archive_sha256": "36cfee7b3c6ca1e1999c86db6480343adca9c85de626f08dce04392b6e6bf3c2",
+    "archive_bytes": 137486885,
+    "entries": 401,
+    "python_files_match_validated_source": 151,
+    "required_artifacts_present": [
+      "evaluation/shader_graph.py",
+      "evaluation/shader_preview.py",
+      "evaluation/shader_resources.py",
+      "evaluation/composite_snapshot.py",
+      "docs/validation/shader-user-project-ui.json",
+      "docs/validation/shader-user-project-contact.html",
+      "docs/validation/actual-project-persistence-export.json"
+    ],
+    "zip_crc": "PASS"
+  },
+  "installed": {
+    "path": "/Users/khazarayaz/Library/Application Support/Blender/5.2/extensions/user_default/open_painter",
+    "enabled_module": "bl_ext.user_default.open_painter",
+    "verified_files": 401,
+    "byte_mismatches": [],
+    "unexpected_python_files": [],
+    "backup": "/Volumes/SSD/projects/open_painter/backups/blender-profile-before-update-20260914-182635",
+    "previous_version": "0.2.6"
+  },
+  "source_project": {
+    "file": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+    "sha256": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+    "original_unchanged": true,
+    "resolution": 2048,
+    "meshes": 10,
+    "vertices": 215185,
+    "polygons": 315225,
+    "layers": 6
+  },
+  "validation": {
+    "authoring": {
+      "report": "shader-user-project-authoring.json",
+      "controls": 7,
+      "changes_per_control": 49,
+      "raster_writes": 0,
+      "measurement": "RNA submission plus scheduler; not viewport latency"
+    },
+    "held_slider": {
+      "report": "shader-user-project-ui.json",
+      "visuals": "shader-user-project-contact.html",
+      "control": "Cavity Dirt mask strength",
+      "held_reversals": 8,
+      "all_visible_before_release": true,
+      "capture_ms_min": 295.33054099738365,
+      "capture_ms_max": 394.8014170018723,
+      "raster_writes": 0,
+      "graph_rebuilds": 0,
+      "scope": "One existing Cavity Dirt mask-strength control was exercised through an isolated native RNA sidebar on the supplied project, with eight back-and-forth moves during one held press. The original asset has one texture set and six layers. Full product-panel navigation was not tested. Geometry, UVs, source pixels, lighting, saved 2048 resolution and original file remained unchanged."
+    },
+    "persistence_export": {
+      "report": "actual-project-persistence-export.json",
+      "result": "PASS",
+      "exported_files": 8,
+      "authored_images_preserved": 15,
+      "meshes_preserved": 10
+    },
+    "installed_package": {
+      "result": "PASS",
+      "version": "0.2.7",
+      "archive": "/Volumes/SSD/projects/open_painter/dist/open_painter-0.2.7.zip",
+      "module": "bl_ext.open_painter_project_test.open_painter",
+      "archive_sha256": "36cfee7b3c6ca1e1999c86db6480343adca9c85de626f08dce04392b6e6bf3c2",
+      "source": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+      "source_sha256": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+      "resolution": 2048,
+      "mesh_objects": 10,
+      "polygons": 315225,
+      "layers": 6,
+      "graph_nodes": 1474,
+      "native_edit_image_writes": 0,
+      "original_unchanged": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:ROUGHNESS",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+          "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+          "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+          "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+          "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+          "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+          "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:BASE_COLOR",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:METALLIC",
+          "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+          "MaskLevels:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "MaskMix:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "MaskSource:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+          "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "submission_ms": 1.0425000000395812,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 1213,
+        "bound_serial": 1213,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "graph_builds": 1,
+        "binding_updates": 2,
+        "update_calls": 2,
+        "resource_steps": 324
+      },
+      "registration_teardown": "PASS",
+      "scope": "Installed namespace and native binding validation on the supplied project; visual held-slider evidence is separate."
+    },
+    "extension_validator": "PASS; .blender-test/project-native/package-validate.log"
+  },
+  "limits": [
+    "Actual-project held visual coverage is one existing mask-strength control in a native RNA test sidebar; full product panel navigation was not tested.",
+    "Completed screenshot timings include scheduling, GPU synchronization, PNG encoding and readback; no 14 ms or physical scanout claim.",
+    "Blender evaluates the material shader. Diagnostics expose logical binding/dependency invalidation, not individual GPU node execution counts.",
+    "The saved Chips curvature map is extremely sparse; see shader-user-project-chip-diagnosis.json. Original maps were preserved.",
+    "First graph compilation and isolated legacy noise, derivatives, scene analysis or spatial-filter inputs can take time. Explicit 2D composites are snapshots.",
+    "A test-only sidebar cleanup IndexError occurred after the successful measured run; its bounds check was fixed and syntax checked without repeating the GUI run."
+  ]
+}

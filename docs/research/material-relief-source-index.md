@@ -1,0 +1,23 @@
+# Material relief source index
+
+The 0.2.6 revision adds **13 AI-generated scalar textures** to the 15 retained sources, for **28 bundled sources**. All were produced with the built-in `image_gen` tool. Generation requested **2048×2048**; the actual selected outputs are **1254×1254, 8-bit RGB PNGs**. These are authored texture inputs, not measured PBR scans. Material output resolution is separate from source resolution.
+
+Every file below preserves the selected tool output's exact PNG bytes, verified against the original generated file's SHA-256. No source was enlarged or processed numerically. Rubber fissures were refined with the built-in image-editing tool before the final output was selected; its initial and refinement prompts are both retained. Seamless borders were requested, but exact opposite-edge continuity is not guaranteed.
+
+| Actual file | Intended scalar use | Exact prompt file | Actual pixels | Preservation |
+|---|---|---|---|---|
+| [abrasion_mask_v2.png](../../src/open_painter/assets/generated/abrasion_mask_v2.png) | Clustered hairline scratches and drag abrasion; black intact, brighter damaged coverage. | [Abrasion](abrasion-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [brushed_relief_v2.png](../../src/open_painter/assets/generated/brushed_relief_v2.png) | Fine directional metal tooling; darker grooves, lighter ridges. | [Abrasion](abrasion-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [burn_relief_v2.png](../../src/open_painter/assets/generated/burn_relief_v2.png) | Heat-damaged coating; raised blisters and rims, recessed ruptures. | [Industrial](industrial-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [cement_relief_v2.png](../../src/open_painter/assets/generated/cement_relief_v2.png) | Cement grit and aggregate relief with dark recessed pores. | [Natural materials](natural-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [charred_timber_v2.png](../../src/open_painter/assets/generated/charred_timber_v2.png) | Longitudinal charcoal ridges, flaking fibers and dark split beds. | [Natural materials](natural-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [denim_twill_v2.png](../../src/open_painter/assets/generated/denim_twill_v2.png) | Diagonal twill yarn relief; light yarn crowns and dark inter-yarn gaps. | [Natural materials](natural-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [grease_deposits_v2.png](../../src/open_painter/assets/generated/grease_deposits_v2.png) | Localized wipe smears and deposits; black clean, brighter accumulated residue. | [Supplemental](supplemental-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [leather_relief_v2.png](../../src/open_painter/assets/generated/leather_relief_v2.png) | Pebbled leather crowns, compressed creases and recessed dry fissures. | [Natural materials](natural-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [paint_loss_v2.png](../../src/open_painter/assets/generated/paint_loss_v2.png) | Irregular coating loss; black surviving paint, white exposed substrate. | [Coatings](coating-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [rubber_cracks_v2.png](../../src/open_painter/assets/generated/rubber_cracks_v2.png) | Branching rubber fissures; black intact, white crack interiors encode cut depth. | [Supplemental, including refinement](supplemental-relief-prompts.json) | 1254×1254 | Exact selected refinement PNG |
+| [rust_relief_v2.png](../../src/open_painter/assets/generated/rust_relief_v2.png) | Corrosion relief; dark pits, light granular oxide peaks and flake rims. | [Coatings](coating-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [timber_relief_v2.png](../../src/open_painter/assets/generated/timber_relief_v2.png) | Longitudinal wood anatomy; light fiber tops, dark vessels and eroded grooves. | [Natural materials](natural-relief-prompts.json) | 1254×1254 | Exact original PNG |
+| [weld_bead_v2.png](../../src/open_painter/assets/generated/weld_bead_v2.png) | Raised overlapping weld pools; black sheet and a centered vertical bead. | [Industrial](industrial-relief-prompts.json) | 1254×1254 | Exact original PNG |
+
+Verification on 2026-09-14: all **28 registered IDs** match the 28 unique entries in the [master provenance manifest](../../src/open_painter/assets/generated/provenance.json). Every corresponding PNG exists and matches its recorded SHA-256, byte count, dimensions, bit depth and RGB header. All 13 new files also match their selected original generated PNG hashes, and every linked prompt file exists. Full hashes and original generated filenames remain in the manifest.

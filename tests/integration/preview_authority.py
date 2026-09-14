@@ -14,6 +14,7 @@ open_painter.register()
 scene = bpy.context.scene
 for index in range(3):
     ts = sets.create(scene, f'Fair set {index}', 512)
+    ts.preview_backend = 'CPU'  # Queue fairness and save authority concern raster jobs.
     layer = stack.add(ts, 'FILL')
     stack.channel_for(layer, 'BASE_COLOR').procedural = 'FBM'
     stack.channel_for(layer, 'BASE_COLOR').procedural_scale = 10 + index

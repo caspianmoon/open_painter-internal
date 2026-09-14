@@ -2,6 +2,8 @@
 import bpy
 import numpy as np
 from copy import deepcopy
+import json
+from pathlib import Path
 from open_painter.core import texture_set_manager as sets, layer_stack as stack, image_manager as images
 from open_painter.smart_materials import composer
 
@@ -34,8 +36,11 @@ def create(scene, name, resolution, *, generated_detail=False):
             material = 'Abandoned Machinery' if name == 'abandoned' else 'Worn Painted Metal'
             recipe = deepcopy(composer.CATALOG[material])
             if not generated_detail:
-                for spec in recipe['layers']:
-                    spec.pop('generated_source', None)
+                if material == 'Worn Painted Metal':
+                    recipe = json.loads(Path(__file__).with_name('worn_v020.json').read_text())
+                else:
+                    for spec in recipe['layers']:
+                        spec.pop('generated_source', None)
             composer.apply_document(ts, recipe, material)
         else:
             for _ in range(20 if name == 'constant' else 1):

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "generated_date": "2026-09-14",
+  "mode": "built-in image_gen",
+  "license": "GPL-3.0-or-later",
+  "provenance": "AI-generated abrasion and metal relief inputs created for Open Painter without third-party reference images. Not measured PBR scans or exclusive assets.",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "note": "Original 1254 x 1254 generated pixels preserved. Tool did not return requested 2048 resolution. Tiling requested; no guarantee of exact boundary continuity.",
+  "assets": [
+    {
+      "id": "abrasion_mask_v2",
+      "file": "abrasion_mask_v2.png",
+      "original_file": "exec-63b80a15-0960-40b1-a89c-a7ae3e280d61.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "bytes": 2831634,
+      "semantics": "Black is undamaged surface; brighter values encode abrasion coverage. Apply negative height for incised scratches and use separate restrained color/roughness response. Clustered hairline scuffs and occasional longer cuts.",
+      "prompt_file": "docs/research/abrasion-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "mean_grayscale_255": 13.223590093836883,
+        "coverage_above_32": 0.09689440361815078,
+        "coverage_above_64": 0.043793513070773206,
+        "coverage_above_128": 0.00835730765219559,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false
+      }
+    },
+    {
+      "id": "brushed_relief_v2",
+      "file": "brushed_relief_v2.png",
+      "original_file": "exec-6156b1ec-db06-43d2-8a1b-4e30f50e9540.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "bytes": 2869311,
+      "semantics": "Middle gray is level surface, darker values encode tool grooves and brighter values encode ridge relief. Fine largely horizontal irregular microtooling. Center scalar values before applying shallow signed height; align bump/normal, roughness and optional subtle color from this same source.",
+      "prompt_file": "docs/research/abrasion-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "mean_grayscale_255": 133.47419549308242,
+        "coverage_above_32": 0.9998263928634112,
+        "coverage_above_64": 0.9942773237283437,
+        "coverage_above_128": 0.5677061473460365,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false
+      }
+    }
+  ]
+}

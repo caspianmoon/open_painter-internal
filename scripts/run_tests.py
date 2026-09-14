@@ -7,13 +7,16 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("--blender", default="/Applications/Blender.app/Contents/MacOS/Blender")
 parser.add_argument("--gui", action="store_true")
+parser.add_argument("--start-at", help="Resume background regressions at this filename")
+parser.add_argument("--keep-going", action="store_true", help="Collect background failures and exit nonzero at the end")
 parser.add_argument("--gui-only", action="store_true")
 parser.add_argument("--gpu-only", action="store_true", help="Run real-window live GPU math and workflow regressions")
 parser.add_argument("--package", type=Path, help="Validate and install this candidate ZIP in isolated resources")
+parser.add_argument("--user-resources", type=Path, help="Isolated Blender profile (defaults to .blender-test/user)")
 args = parser.parse_args()
 env = os.environ.copy()
 # Tests never install into or save the artist's preference directory.
-env["BLENDER_USER_RESOURCES"] = str(root / ".blender-test" / "user")
+env["BLENDER_USER_RESOURCES"] = str((args.user_resources or root / ".blender-test" / "user").resolve())
 # Historical phases generate these bundled fixtures; do not leave the checkout edited.
 originals = {p: p.read_bytes() for p in [root / 'examples/phase01.blend', root / 'examples/bake_cube.blend', root / 'docs/native-painter.png'] if p.exists()}
 @atexit.register
@@ -25,13 +28,19 @@ if args.package:
     subprocess.run([args.blender, '--background', '--factory-startup', '--command', 'extension', 'validate', str(args.package.resolve())], cwd=root, env=env, check=True)
     subprocess.run([args.blender, '--background', '--factory-startup', '--python-exit-code', '1', '--python', str(root / 'tests/integration/install_extension.py')], cwd=root, env=env, check=True)
 
+failures = []
 if not args.gui_only and not args.gpu_only:
+    started = not args.start_at
     for test in sorted((root / "tests/integration").glob("phase*.py")) + [
         root / "tests/integration" / name
-        for name in ("native_registration.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "geometry_effects.py", "material_states.py", "material_stamps.py", "production_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py")
+        for name in ("native_registration.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "material_recipe_masks.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "geometry_effects.py", "material_states.py", "material_stamps.py", "production_export.py", "surface_relief_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py", "shader_nodes.py", "shader_sources.py", "shader_preview.py", "shader_boundaries.py", "shader_runtime.py", "shader_bypass.py")
     ]:
+        if not started:
+            started = test.name == args.start_at
+        if not started:
+            continue
         print(f"Running {test.name}", flush=True)
-        subprocess.run(
+        completed = subprocess.run(
             [
                 args.blender,
                 "--background",
@@ -43,8 +52,12 @@ if not args.gui_only and not args.gpu_only:
             ],
             cwd=root,
             env=env,
-            check=True,
+            check=not args.keep_going,
         )
+        if completed.returncode:
+            failures.append(test.name)
+    if not started:
+        raise ValueError(f"Unknown background test: {args.start_at}")
     subprocess.run(
         [
             args.blender,
@@ -64,6 +77,8 @@ if args.gui or args.gui_only:
         ("native_ui.py", "native-ui.json"),
         ("texture_operations_ui.py", "texture-operations-ui.json"),
         ("bake_queue_ui.py", "bake-queue-ui.json"),
+        ("shader_preview_ui.py", "shader-preview-ui.json"),
+        ("shader_snapshot_ui.py", "shader-snapshot-ui.json"),
     ]:
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
@@ -77,14 +92,21 @@ if args.gui or args.gui_only:
                 *(["--", "-ApplePersistenceIgnoreState", "YES"] if os.sys.platform == "darwin" else []),
             ],
             cwd=root,
-            env=(dict(env, OP_BAKE_QUEUE_REPORT=str(result_path))
-                 if filename == "bake_queue_ui.py" else env),
+            env=dict(env, **({
+                "bake_queue_ui.py": {"OP_BAKE_QUEUE_REPORT": str(result_path)},
+                "shader_preview_ui.py": {"OP_SHADER_UI_REPORT": str(result_path)},
+                "shader_snapshot_ui.py": {"OP_SNAPSHOT_UI_REPORT": str(result_path)},
+            }.get(filename, {}))),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
         if filename == "bake_queue_ui.py":
             if report.get("status") != "PASS":
+                raise RuntimeError(result)
+            continue
+        if filename in {"shader_preview_ui.py", "shader_snapshot_ui.py"}:
+            if report.get("result") != "PASS":
                 raise RuntimeError(result)
             continue
         expected = {
@@ -112,6 +134,7 @@ if args.gpu_only:
         ('live_gpu_checkpoints.py', 'live-gpu-checkpoints.json', 'OP_CHECKPOINT_REPORT', 'passed', True),
         ('live_procedurals.py', 'live-procedurals.json', 'OP_SCALAR_REPORT', 'status', 'PASS'),
         ('live_masks.py', 'live-masks.json', 'OP_MASK_REPORT', 'status', 'PASS'),
+        ('live_surface_relief.py', 'live-surface-relief.json', 'OP_RELIEF_GPU_REPORT', 'result', 'PASS'),
         ('live_preview.py', 'live-preview.json', 'OP_LIVE_REPORT', 'result', 'PASS'),
     ):
         result_path = root / '.blender-test' / report_name
@@ -123,4 +146,6 @@ if args.gpu_only:
         report = json.loads(result_path.read_text())
         if report.get(success_key) != success_value:
             raise RuntimeError(json.dumps(report))
+if failures:
+    raise RuntimeError("Background tests failed: " + ", ".join(failures))
 print("ALL TESTS PASSED")

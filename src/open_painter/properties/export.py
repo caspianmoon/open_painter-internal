@@ -19,7 +19,7 @@ class OP_ExportSettings(bpy.types.PropertyGroup):
     preset: bpy.props.EnumProperty(
         name="Preset",
         items=[
-            ("BLENDER", "Blender", "Six separate channels"),
+            ("BLENDER", "Blender", "Separate channels; normal includes height relief, height is also supplied for displacement"),
             ("UNREAL", "Unreal Engine 5", "DirectX normal and RGB=AO/Roughness/Metallic"),
             ("UNITY", "Unity Standard Metallic", "R=Metallic, A=Smoothness; OpenGL normal"),
             ("CUSTOM", "Custom RGBA", "Pack channel values into RGBA"),

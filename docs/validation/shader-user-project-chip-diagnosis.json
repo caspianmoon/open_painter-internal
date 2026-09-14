@@ -1,0 +1,148 @@
+{
+  "source": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+  "source_sha256": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+  "texture_set": "defaultMaterial.003",
+  "saved_resolution": 2048,
+  "method": "Read the supplied project without saving. Evaluate its existing masks at saved 2048 resolution using immutable source snapshots. Source images, maps, geometry, UVs and original file remain unchanged. These CPU statistics diagnose expected coverage, not viewport latency or GPU execution.",
+  "curvature": {
+    "min": 0.0,
+    "max": 0.9998708963394165,
+    "mean": 0.00014968412870075554,
+    "std": 0.011503137648105621,
+    "q50": 0.0,
+    "q90": 0.0,
+    "q99": 0.0,
+    "fraction_gt_001": 0.00018286705017089844,
+    "fraction_gt_01": 0.0001811981201171875
+  },
+  "ao": {
+    "min": 0.0,
+    "max": 1.0,
+    "mean": 0.9519789218902588,
+    "std": 0.17938768863677979,
+    "q50": 1.0,
+    "q90": 1.0,
+    "q99": 1.0,
+    "fraction_gt_001": 0.9889993667602539,
+    "fraction_gt_01": 0.9803380966186523
+  },
+  "chips_amount_endpoints": [
+    0.152,
+    0.848
+  ],
+  "chips_invert": true,
+  "chips_mask": {
+    "low": {
+      "min": 0.8034350872039795,
+      "max": 1.0,
+      "mean": 0.9999946355819702,
+      "std": 0.0006858828710392118,
+      "q50": 1.0,
+      "q90": 1.0,
+      "q99": 1.0,
+      "fraction_gt_001": 1.0,
+      "fraction_gt_01": 1.0
+    },
+    "high": {
+      "min": 0.1894667148590088,
+      "max": 1.0,
+      "mean": 0.9999587535858154,
+      "std": 0.004615503363311291,
+      "q50": 1.0,
+      "q90": 1.0,
+      "q99": 1.0,
+      "fraction_gt_001": 1.0,
+      "fraction_gt_01": 1.0
+    },
+    "delta": {
+      "min": 0.0,
+      "max": 0.707413911819458,
+      "mean": 3.5825905797537416e-05,
+      "std": 0.0039972360245883465,
+      "q50": 0.0,
+      "q90": 0.0,
+      "q99": 0.0,
+      "fraction_gt_001": 0.00012373924255371094,
+      "fraction_gt_01": 8.249282836914062e-05
+    }
+  },
+  "surviving_blue_weight_delta": {
+    "min": 0.0,
+    "max": 0.7046555280685425,
+    "mean": 2.9349534088396467e-05,
+    "std": 0.003523376304656267,
+    "q50": 0.0,
+    "q90": 0.0,
+    "q99": 0.0,
+    "fraction_gt_001": 0.00011754035949707031,
+    "fraction_gt_01": 7.462501525878906e-05
+  },
+  "later_layers": [
+    {
+      "layer": "Scratched exposed steel",
+      "mask": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.007820134982466698,
+        "std": 0.05226517841219902,
+        "q50": 0.0,
+        "q90": 0.0,
+        "q99": 0.2660583555698395,
+        "fraction_gt_001": 0.04232001304626465,
+        "fraction_gt_01": 0.0242769718170166
+      },
+      "surviving": {
+        "min": 0.10000002384185791,
+        "max": 1.0,
+        "mean": 0.9929618835449219,
+        "std": 0.04703865572810173,
+        "q50": 1.0,
+        "q90": 1.0,
+        "q99": 1.0,
+        "fraction_gt_001": 1.0,
+        "fraction_gt_01": 1.0
+      }
+    },
+    {
+      "layer": "Recess dirt",
+      "mask": {
+        "min": 0.0,
+        "max": 0.9301865100860596,
+        "mean": 0.07684287428855896,
+        "std": 0.21203239262104034,
+        "q50": 0.0,
+        "q90": 0.5618672370910645,
+        "q99": 0.763792097568512,
+        "fraction_gt_001": 0.11928296089172363,
+        "fraction_gt_01": 0.11926698684692383
+      },
+      "surviving": {
+        "min": 0.045041654258966446,
+        "max": 1.0,
+        "mean": 0.9397109746932983,
+        "std": 0.15448616445064545,
+        "q50": 1.0,
+        "q90": 1.0,
+        "q99": 1.0,
+        "fraction_gt_001": 1.0,
+        "fraction_gt_01": 0.9999556541442871
+      }
+    }
+  ],
+  "conclusion": "Only 0.01829% of saved curvature texels exceed 0.01. Chips amount changes 0.01237% of mask texels by more than 0.01; mean remaining blue-layer coverage change is 0.00002935. A 0.003 whole-ROI block-mean threshold cannot establish responsiveness for this sparse control. Other overlapping unassigned white meshes can dilute screen-space differences further. Shader CHIPS arithmetic matches the CPU generator; no compiler defect was identified.",
+  "representative_generator_control": {
+    "layer": "Recess dirt",
+    "mask": "Cavity Dirt",
+    "property": "strength",
+    "endpoints": [
+      0.15,
+      0.85
+    ],
+    "saved_mask_mean": 0.07684287428855896,
+    "layer_opacity": 0.699999988079071,
+    "predicted_mean_layer_coverage_change": 0.4523469838951827,
+    "derivation": "The first mask mixes unmasked coverage 1 with evaluated mask coverage. Thus mean coverage delta is layer opacity * strength delta * (1 - mask mean). This is a numerical prediction from actual source data, not a measured frame result.",
+    "reason": "The top dirt layer remains directly visible and mask strength is a shader-native scalar binding; this avoids the sparse curvature support of Chips and occlusion of Rust beneath the blue coat."
+  },
+  "evaluation_seconds": 13.54328833299951
+}

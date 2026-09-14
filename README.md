@@ -5,6 +5,24 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the only runtime requirements. GPL-3.0-or-later.
 
+Version **0.2.7** evaluates editable layers and masks through an internal Blender
+material shader graph. Supported sliders update shader values immediately;
+texture baking is reserved for export, explicit snapshots and isolated operations
+that need pixels. Existing `LIVE` projects adopt this path without reapplying presets.
+See the [architecture and diagnostics](docs/shader-preview-architecture.md).
+The supplied 2048 project's authoring, save/reopen/export, and held Cavity Dirt
+slider checks have passed. The visual check used an isolated native RNA sidebar;
+it does not cover navigation through the product panels. See the linked report
+for capture timing and remaining limits.
+
+All 50 smart materials retain the generated wear masks and raised relief added in
+0.2.6. See the [material review](docs/material-surface-review.html) and
+[source/validation record](docs/material-surface-quality.md).
+
+Exported Normal already includes Height. Use the separate Height map for
+displacement, or omit it when using the combined normal; applying it through a
+second bump node repeats the same relief.
+
 **Feature target:** the supplied Substance Painter documentation dated June 26, 2018.
 Full parity is not achieved. The [page-referenced feature inventory](PARITY.md) records working
 subsets, missing workflows, external dependencies and acceptance criteria.
@@ -14,7 +32,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.2.5.zip`](dist/open_painter-0.2.5.zip).
+1. Download or build [`dist/open_painter-0.2.7.zip`](dist/open_painter-0.2.7.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -35,7 +53,7 @@ No online account, network connection, or separate Python installation is needed
 ## Texture library
 
 Version 0.2.0 adds all **50 requested smart materials**, **16 stackable effects**, **18 smart masks**,
-**65 procedural sources** and **52 texture filters**. They form editable texture stacks rather than shader effects.
+**65 procedural sources** and **52 texture filters**. They form editable layer and mask recipes.
 See the [v1 workflow and controls](docs/texture-workflow-v1.md) and the [material catalog with required maps](docs/material-catalog.md).
 
 The native Painter toolbar has **Materials, Smart Materials, Smart Masks, Filters, Brushes, Alphas, and Textures** buttons that filter the bottom shelf. **All Types** clears that type filter. See [asset category controls](docs/asset-categories.md) for activation and import behavior.
@@ -145,9 +163,8 @@ unused managed datablocks. Undo covers project edits; exported and library files
 
 ## Current limitations
 
-- Live GPU evaluation is the default in a compatible Blender window. Supported procedural sources and mesh-aware masks generate GPU textures directly on Metal; folder opacity edits reuse completed children. Save/export resolve the latest edits through the CPU reference. Other generators, filters and projections keep CPU evaluation. See the [measured performance and memory limits](docs/live-preview-latency.md); 4K/8K have high memory costs.
-- Painting is one channel at a time. The native brush engine writes the layer image; the compositor
-  updates the composite after stroke completion. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
+- Shader Native is the default authoring mode. Supported numeric edits update existing bindings; legacy procedural fields and spatial filters can require isolated raster inputs. Initial graph construction and Blender's material redraw still have a cost. Native save preserves source images without baking output channels; export and explicit CPU Reference evaluate textures. See the [measured scope and remaining costs](docs/shader-preview-architecture.md); no universal viewport frame-time target is established.
+- Painting is one channel at a time. The native brush engine writes the layer image, which the material shader samples. A native 2D composite is an explicit snapshot and requires an explicit refresh after edits. Finishing native painting keeps the authored source canvas visible. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
 - Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.
 - Curvature is a convex-crease map of the evaluated target mesh, filtered by Minimum Edge Angle. Smooth continuous curvature and high-poly-only normal detail are not transferred.
   Dust uses baked world-normal Z; moving or deforming geometry requires rebaking affected mesh maps. UDIM authoring remains unsupported.

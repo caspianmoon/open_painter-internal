@@ -24,6 +24,8 @@ obj = bpy.context.object
 original = obj.active_material.name if obj.active_material else None
 assert bpy.ops.open_painter.texture_set(action="ADD") == {"FINISHED"}
 ts = scene.open_painter.texture_sets[0]
+ts.preview_backend = 'CPU'  # Explicit channel-image allocation/export contract.
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
 assert obj.active_material == ts.material
 assert {o.channel for o in ts.outputs} == set(CHANNELS)
 roles = {n.get("role"): n for n in ts.material.node_tree.nodes if n.get(OWNER)}

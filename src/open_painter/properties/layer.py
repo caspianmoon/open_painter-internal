@@ -8,17 +8,27 @@ from .mask import OP_Mask
 def changed(self, context):
     project = getattr(self.id_data, "open_painter", None)
     if project:
+        pointer = self.as_pointer()
         for ts in project.texture_sets:
-            identifier = getattr(self, "id", "")
-            belongs = identifier == ts.id or any(
-                item.id == identifier or any(m.id == identifier for m in item.masks)
-                for item in ts.layers
-            )
+            owned = next((layer for layer in ts.layers if layer.as_pointer() == pointer or
+                          any(mask.as_pointer() == pointer for mask in layer.masks)), None)
+            belongs = ts.as_pointer() == pointer or owned is not None
             if belongs:
+                previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 ts.dirty = True
                 ts.edit_serial += 1
+                from ..evaluation.references import dependent_channels
+                affected = ({prop.channel for prop in owned.channels if prop.enabled}
+                            | dependent_channels(ts, owned.id) if owned else
+                            {output.channel for output in ts.outputs})
+                if ts.preview_backend == 'CPU':
+                    affected.update(output.channel for output in ts.outputs)
                 for output in ts.outputs:
-                    output.dirty = True
+                    if output.channel in affected:
+                        output.dirty = True
+                from ..evaluation.shader_preview import notify
+                notify(self, context, previous_dirty=previous_dirty)
+                return
 
 
 class OP_Layer(bpy.types.PropertyGroup):

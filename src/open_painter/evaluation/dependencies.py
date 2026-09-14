@@ -144,6 +144,7 @@ def image_written(image):
         if not hasattr(scene, 'open_painter'):
             continue
         for ts in scene.open_painter.texture_sets:
+            from .references import dependent_channels
             kinds = {m.kind for m in ts.baked_maps if m.image and m.image.as_pointer() == pointer}
             channels = set()
             for layer in ts.layers:
@@ -155,21 +156,27 @@ def image_written(image):
                     # Published channel inputs can drive other channel masks.
                     # Save evaluates dirty outputs only, so their consumers must
                     # be dirtied even when they do not own the changed image.
-                    from .references import dependent_channels
                     for channel in direct:
                         channels.update(dependent_channels(ts, layer.id, channel))
                 masks = any(m.enabled and (m.image == image or m.effect.image == image or
                             (kinds and (map_dependencies(m) is None or kinds & map_dependencies(m))))
                             for m in layer.masks)
                 if masks:
-                    channels.update(o.channel for o in ts.outputs)
-                    break
+                    # Native recipes need no allocated baked outputs. Derive
+                    # consumers from the recipe, including published masks.
+                    channels.update(prop.channel for prop in layer.channels if prop.enabled)
+                    channels.update(dependent_channels(ts, layer.id, 'MASK'))
+                if direct or masks:
+                    layer.dirty = True
             if channels:
+                previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 ts.dirty = True
                 ts.edit_serial += 1
                 for output in ts.outputs:
                     if output.channel in channels:
                         output.dirty = True
+                from .shader_preview import notify
+                notify(ts, previous_dirty=previous_dirty)
 
 
 def clear():

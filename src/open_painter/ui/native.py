@@ -251,12 +251,8 @@ class OP_OT_native_view(SafeOperator, bpy.types.Operator):
             ts = active_set(context)
             project = context.scene.open_painter
             space.ui_mode = "PAINT" if project.paint_image else "VIEW"
-            from ..evaluation.live_display import displayed_image
-            space.image = project.paint_image or (
-                displayed_image(context.scene, ts, project.blend_channel)
-                if ts
-                else None
-            )
+            from ..evaluation.composite_snapshot import for_view
+            space.image = for_view(context.scene, ts, project.blend_channel)
         else:
             space.shading.type = "MATERIAL"
         for prop in (
@@ -272,6 +268,26 @@ class OP_OT_native_view(SafeOperator, bpy.types.Operator):
         request_focus(area)
         editor.persist(context.screen)
         area.tag_redraw()
+
+
+class OP_OT_native_snapshot(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.native_snapshot'
+    bl_label = 'Refresh 2D Composite Snapshot'
+    bl_description = 'Evaluate the selected channel once for the 2D view; shader edits do not refresh this snapshot'
+
+    @classmethod
+    def poll(cls, context):
+        return (context.area and context.area.type == 'IMAGE_EDITOR' and active_set(context)
+                and not context.scene.open_painter.paint_image)
+
+    def run(self, context):
+        project = context.scene.open_painter
+        if project.paint_image:
+            raise ValueError('Finish painting before viewing a composite snapshot')
+        from ..evaluation.composite_snapshot import request
+        context.space_data.image = request(context.scene, require_set(context), project.blend_channel)
+        context.space_data.ui_mode = 'VIEW'
+        context.area.tag_redraw()
 
 
 class OP_OT_native_select(SafeOperator, bpy.types.Operator):
@@ -327,11 +343,27 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         if ts:
             row.prop(ts, "resolution", text="")
             layout.prop(ts, 'preview_backend')
-            layout.prop(ts, 'preview_quality')
+            if ts.preview_backend == 'CPU':
+                layout.prop(ts, 'preview_quality')
             if ts.preview_backend == 'LIVE':
-                from ..evaluation.live_preview import status
+                from ..evaluation.shader_preview import status
                 layout.label(text=status(context.scene, ts), icon='INFO')
-            if ts.preview_quality != 'FULL' and ts.dirty:
+                if context.area.type == 'IMAGE_EDITOR':
+                    from ..evaluation.composite_snapshot import MARKER, stale
+                    image = context.space_data.image
+                    if project.paint_image:
+                        layout.label(text='Paint source canvas', icon='BRUSH_DATA')
+                    elif image and image.get(MARKER):
+                        channel = image.get('channel', '').replace('_', ' ').title()
+                        suffix = ' · out of date' if stale(ts, image) else ''
+                        layout.label(text=channel + ' Snapshot' + suffix,
+                                     icon='TIME' if stale(ts, image) else 'IMAGE_DATA')
+                    elif image:
+                        layout.label(text='Source image', icon='IMAGE_DATA')
+                    layout.prop(project, 'blend_channel', text='Composite channel')
+                    layout.operator('open_painter.native_snapshot', text='Refresh Composite Snapshot',
+                                    icon='FILE_REFRESH')
+            if ts.preview_backend == 'CPU' and ts.preview_quality != 'FULL' and ts.dirty:
                 layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
 
 
@@ -608,6 +640,7 @@ class OP_PT_native_export(PainterPanel, bpy.types.Panel):
 CLASSES = (
     OP_UL_native_layers,
     OP_OT_native_view,
+    OP_OT_native_snapshot,
     OP_OT_native_asset,
     OP_OT_refresh_assets,
     OP_OT_import_texture,

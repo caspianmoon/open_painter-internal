@@ -1,0 +1,21 @@
+{
+  "mode": "built-in image_gen",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "assets": [
+    {
+      "id": "weld_bead_v2",
+      "prompt": "Use case: scientific-educational\nAsset type: grayscale PBR height map, a square 2048 by 2048 raw texture, NO rendered object.\nCreate the heightfield of a real TIG welded steel seam, straight vertical up the exact center of the image. The weld occupies a narrow strip approximately 10 percent of the image width centered at x=0.5. About 24 successive overlapping weld pools travel from bottom to top, with believable stacked crescent/dime anatomy, irregular pool widths, subtly asymmetric raised rolled bead crests and inter-pool recesses. A continuous raised metal bead joins the pools. Distinct smooth rounded height gradients within each pool, bright crest, lower trailing lip. Very small scattered spatters immediately alongside the seam.\nRaw height semantics: pure BLACK for the flat surrounding unwelded sheet across 90 percent of width, medium gray for lower pool shoulders, pale gray to WHITE for highest smooth welded metal. The centers of the rounded raised lobes are the highest; dark recesses between overlaps are lower but above sheet. This is a single weld seam height/coverage source for geometry, not color, lighting or a shaded photograph. No heat tint colors, no white specular glints, no directional lighting, no drop shadows, no ambient occlusion. The height itself describes the raised shape.\nVertical top and bottom join seamlessly through a continuous pool sequence; left and right borders remain black for seamless repeat. Orthographic top down, no perspective, no text or legend, no border, no other seams. Do not produce a flat smooth stripe or long groove; the overlapping weld pools must be unmistakable at full resolution.",
+      "original": "exec-21d71a0f-b29c-477f-b0ad-ef91624c2fa3.png",
+      "semantics": "Black flat sheet, light raised overlapping weld beads; vertical seam centered U=.5."
+    },
+    {
+      "id": "burn_relief_v2",
+      "prompt": "Use case: scientific-educational\nAsset type: high-quality grayscale geometry HEIGHT MAP for heat-damaged painted steel, 2048x2048 square, raw texture data.\nGenerate a continuous top-down heightfield of scorched coating with blistered and ruptured paint. A convincing varied surface: clusters of raised rounded blisters of widely different small sizes, some ruptured into irregular crater rims with lower recessed interiors, wrinkled/buckled fragile coating between them, and patches of intact smoother paint. About 35 percent compact blistered clusters, 15 percent open crater losses, 50 percent relatively intact coating. Each blister cluster varies in density. Most blisters are 0.5–2 percent of image width; a few larger 4 percent blisters, hundreds of much finer pinholes. Do not draw an even field of identical circles.\nRAW HEIGHT SEMANTICS: medium gray intact film at 50% elevation; pale gray/white raised swollen blisters and curled crater edges; dark gray/black recessed ruptured losses. Encode smooth continuous hill height on closed blisters, with a sharper high rim on torn blisters and low irregular centers. The blister crowns themselves are light, not one light side and one dark side. Lacy tiny torn edges, slight granular char crust in the clustered regions.\nOnly grayscale displacement values: no lighting, no shadows, no specular highlights, no ambient occlusion, no directional shading, no colored rust or paint, no photo of a wall, no sphere, no border, no label. Isotropic varied aperiodic placement, match opposite edges for seamless tiling, no stripes, no repeating pattern of polka dots, no large smooth clouds. Full edge-to-edge texture.",
+      "original": "exec-8f1682b4-3a69-4f21-a94e-2c764ccf4251.png",
+      "semantics": "Midgray intact coating, light swollen blisters/rims, dark ruptured pits."
+    }
+  ]
+}

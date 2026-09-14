@@ -14,14 +14,26 @@ def changed(self, context):
             on_mask = channel is None and any(mask.effect.as_pointer() == pointer for mask in layer.masks)
             on_layer = any(effect.as_pointer() == pointer for effect in getattr(layer, 'effects', ()))
             if channel is not None or on_mask or on_layer:
+                previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 layer.dirty = True
                 ts.dirty = True
                 ts.edit_serial += 1
                 if channel is not None:
                     channel.dirty = True
+                from ..evaluation.references import dependent_channels
+                affected = (dependent_channels(ts, layer.id, channel.channel) | {channel.channel}
+                            if channel is not None else
+                            dependent_channels(ts, layer.id) |
+                            {prop.channel for prop in layer.channels if prop.enabled})
+                # Preserve conservative raster scheduling for legacy CPU masks
+                # and layer effects; native bindings supply their exact closure.
+                if channel is None and ts.preview_backend == 'CPU':
+                    affected.update(output.channel for output in ts.outputs)
                 for output in ts.outputs:
-                    if channel is None or output.channel == channel.channel:
+                    if output.channel in affected:
                         output.dirty = True
+                from ..evaluation.shader_preview import notify
+                notify(self, context, previous_dirty=previous_dirty)
                 return
 
 

@@ -12,10 +12,13 @@ import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, texture_set_manager as sets
 from open_painter.evaluation.channel_eval import source, apply_effect, effect_parameters, effect_ui_fields
 from open_painter.evaluation.mask_eval import evaluate_masks
+from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.texture_engine import procedurals, filters
 
 open_painter.register()
 ts = sets.create(bpy.context.scene, 'Procedural channels', 512)
+ts.preview_backend = 'CPU'  # Allocate outputs explicitly for raster invalidation checks.
+LayerEvaluator(bpy.context.scene).evaluate_texture_set(ts.id)
 layer = stack.add(ts, 'FILL')
 base = stack.channel_for(layer, 'BASE_COLOR')
 rough = stack.channel_for(layer, 'ROUGHNESS')

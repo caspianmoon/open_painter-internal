@@ -82,6 +82,9 @@ FILLS = {
     "SWIRLS": "Broken circular microscratches around seeded polishing centers",
     "SMUDGES": "Soft uneven stretched handling marks",
     "VEINS": "Warped branching mineral veins at several scales",
+    "TAPERED_SCRATCHES": "Sparse curved abrasion with pressure-tapered ends and variable depth",
+    "FINE_FISSURES": "Open branching surface fissures with tapered tips, without cell outlines",
+    "FRACTURED_PAINT": "Sharp irregular paint fragments with chipped boundaries and varied sizes",
 }
 
 CATALOG = {**NOISES, **FILLS}
@@ -240,6 +243,120 @@ def _pores(x, y, seed, radius=0.2, density=0.55):
     return (1 - _smooth(radius * 0.3, radius, f1)) * (identity < density)
 
 
+def _tapered_trace(along, across, half_length, width, bend):
+    """A finite pressure trace. Both width and opacity vanish at the tips.
+
+    Unlike the legacy capsule-distance scratch, a pressure trace has no circular
+    cap and no constant-width bright center running into an abrupt endpoint.
+    Coordinates/parameters are per-cell fields, so strip evaluation stays exact.
+    """
+    t = along / np.maximum(half_length, np.float32(1e-5))
+    pressure = np.maximum(1 - t * t, 0)
+    center = bend * (t * t - 0.35) * half_length
+    relative = np.abs(across - center) / np.maximum(width * pressure, np.float32(1e-6))
+    line = 1 - _smooth(0.15, 1, relative)
+    return line * np.sqrt(pressure)
+
+
+def _tapered_scratches(x, y, seed, width=0.024, density=0.34):
+    """Seeded finite abrasion, with varied curvature, length and pressure."""
+    ix, iy = np.floor(x), np.floor(y)
+    result = np.zeros_like(x)
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            cx, cy = ix + dx, iy + dy
+            px = x - cx - _hash(cx, cy, seed)
+            py = y - cy - _hash(cx, cy, seed + 21)
+            angle = (_hash(cx, cy, seed + 51) - 0.5) * np.float32(np.pi)
+            along = px * np.sin(angle) + py * np.cos(angle)
+            across = px * np.cos(angle) - py * np.sin(angle)
+            half_length = 0.10 + _hash(cx, cy, seed + 62) ** 2 * 0.55
+            local_width = width * (0.25 + _hash(cx, cy, seed + 73) * 0.75)
+            bend = (_hash(cx, cy, seed + 87) - 0.5) * 0.17
+            trace = _tapered_trace(along, across, half_length, local_width, bend)
+            # A groove's depth changes with pressure and with the surface. The
+            # low-frequency modulation cannot create disconnected white dashes.
+            trace *= 0.35 + _hash(cx, cy, seed + 99) * 0.65
+            result = np.maximum(result, trace * (_hash(cx, cy, seed + 9) < density))
+    return result
+
+
+def _fine_fissures(x, y, seed, width=0.022, density=0.62):
+    """Short branched fractures instead of a complete closed Voronoi network.
+
+    Each fracture contains a gently bent main fissure and two shorter branches
+    whose roots lie on it. The ends fade to a point; there are no cell borders.
+    This is a surface mask, not a simulation of structural fracture mechanics.
+    """
+    ix, iy = np.floor(x), np.floor(y)
+    result = np.zeros_like(x)
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            cx, cy = ix + dx, iy + dy
+            px = x - cx - _hash(cx, cy, seed)
+            py = y - cy - _hash(cx, cy, seed + 21)
+            angle = _hash(cx, cy, seed + 51) * np.float32(np.pi)
+            along = px * np.sin(angle) + py * np.cos(angle)
+            across = px * np.cos(angle) - py * np.sin(angle)
+            half_length = 0.20 + _hash(cx, cy, seed + 62) * 0.36
+            local_width = width * (0.45 + _hash(cx, cy, seed + 73) * 0.55)
+            bend = (_hash(cx, cy, seed + 87) - 0.5) * 0.50
+            fissure = _tapered_trace(along, across, half_length, local_width, bend)
+            for side, salt in ((-1, 131), (1, 179)):
+                root = (_hash(cx, cy, seed + salt) - 0.5) * half_length
+                root_across = bend * ((root / half_length) ** 2 - 0.35) * half_length
+                branch_angle = side * (0.38 + _hash(cx, cy, seed + salt + 1) * 0.63)
+                length = half_length * (0.27 + _hash(cx, cy, seed + salt + 2) * 0.46)
+                qa, qb = along - root, across - root_across
+                branch_along = qa * np.cos(branch_angle) + qb * np.sin(branch_angle)
+                branch_across = qb * np.cos(branch_angle) - qa * np.sin(branch_angle)
+                # Shift the branch so its root meets the main trace; the root
+                # lies inside the tapered support instead of being another tip.
+                branch = _tapered_trace(branch_along - length * 0.40,
+                                        branch_across, length * 0.65,
+                                        local_width * 0.65, bend * 0.5)
+                fissure = np.maximum(fissure, branch * 0.75)
+            result = np.maximum(result, fissure * (_hash(cx, cy, seed + 9) < density))
+    return result
+
+
+def _fractured_paint(x, y, seed, width=0.012, density=0.82):
+    """Solid paint-loss fragments with angular, ragged and sharp boundaries.
+
+    A seeded convex core plus multiscale boundary breakup gives varied chips.
+    The interior stays solid: high-frequency noise only cuts the perimeter, so
+    increasing coverage cannot turn the source into blurred cloudy blobs.
+    """
+    ix, iy = np.floor(x), np.floor(y)
+    result = np.zeros_like(x)
+    # One shared field per evaluation, not several full noise fields per chip.
+    breakup = (_fbm(x * 3.3, y * 3.3, seed + 211, 3) - 0.5) * 0.22
+    breakup += (_value(x * 23, y * 23, seed + 257) - 0.5) * 0.055
+    for dy in range(-1, 2):
+        for dx in range(-1, 2):
+            cx, cy = ix + dx, iy + dy
+            px = x - cx - _hash(cx, cy, seed)
+            py = y - cy - _hash(cx, cy, seed + 21)
+            angle = _hash(cx, cy, seed + 51) * np.float32(np.pi)
+            qx = px * np.cos(angle) - py * np.sin(angle)
+            qy = px * np.sin(angle) + py * np.cos(angle)
+            radius = 0.08 + _hash(cx, cy, seed + 62) ** 0.7 * 0.40
+            stretch = 0.55 + _hash(cx, cy, seed + 73) * 0.90
+            qx, qy = qx / stretch, qy * stretch
+            # Unequal opposite sides and oblique cuts make asymmetrical broken
+            # flakes, not circular pores, symmetric hexagons or cellular rings.
+            boundary = np.maximum(qx * (1 + _hash(cx, cy, seed + 87) * 0.65),
+                                  -qx * (0.7 + _hash(cx, cy, seed + 99) * 0.65))
+            boundary = np.maximum(boundary, qy * (0.85 + _hash(cx, cy, seed + 111) * 0.65))
+            boundary = np.maximum(boundary, -qy * (0.75 + _hash(cx, cy, seed + 127) * 0.55))
+            boundary = np.maximum(boundary, (qx * 0.6 - qy * 0.8) * 1.15)
+            boundary = np.maximum(boundary, -qx * 0.72 + qy * 0.55)
+            distance = boundary - radius + breakup
+            fragment = 1 - _smooth(-width, width, distance)
+            result = np.maximum(result, fragment * (_hash(cx, cy, seed + 9) < density))
+    return result
+
+
 @measured('source_generation')
 def evaluate(kind, u, v, seed=1, scale=8, **params):
     """Evaluate one catalog source as finite float32 grayscale in [0, 1].
@@ -317,6 +434,15 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
                    y + strength * _perlin(x * 0.6, y * 0.6, seed + 73), seed, octaves)
     elif key in {"SCRATCHES", "DIRECTIONAL_SCRATCHES", "GRUNGE_SCRATCHES"}:
         out = _scratch(x, y, seed, width, density, key == "DIRECTIONAL_SCRATCHES")
+    elif key == "TAPERED_SCRATCHES":
+        out = _tapered_scratches(x, y, seed, max(float(params.get("width", 0.024)), 1e-5),
+                                np.clip(float(params.get("density", 0.34)), 0, 1))
+    elif key == "FINE_FISSURES":
+        out = _fine_fissures(x, y, seed, max(float(params.get("width", 0.022)), 1e-5),
+                            np.clip(float(params.get("density", 0.62)), 0, 1))
+    elif key == "FRACTURED_PAINT":
+        out = _fractured_paint(x, y, seed, max(float(params.get("width", 0.012)), 1e-5),
+                              np.clip(float(params.get("density", 0.82)), 0, 1))
     elif key in {"CRACKS", "GRUNGE_CRACKS", "LEATHER_GRAIN", "RUST_FLAKES"}:
         warp = float(params.get("warp", 0.4))
         a, b, identity = _cells(x + warp * _perlin(x * 1.7, y * 1.7, seed + 9),

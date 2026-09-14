@@ -9,7 +9,9 @@ assets/0001.exr
 ```
 
 `material.json` has `format_version: 2`, `name`, an ordered `layers` array, and optional
-`surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`). Version 1 files remain readable. Each layer has
+`surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`,
+`height_distance`). Missing `height_distance` preserves the target texture set's
+existing setting. Version 1 files remain readable. Each layer has
 `id`, `name`, `type` (`FILL`, `PAINT`, `FOLDER`), optional `parent_id`, `visible`, `opacity`,
 `blend_mode`, `channels`, and `masks`. Layers run bottom to top. Defaults are Blender property defaults;
 missing channels on imported non-folder layers are created disabled. IDs must be unique and folder

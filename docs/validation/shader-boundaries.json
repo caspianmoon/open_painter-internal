@@ -1,0 +1,51 @@
+{
+  "result": "PASS",
+  "checks": [
+    "published-prefix-invalidation",
+    "unrelated-channel-no-raster",
+    "filter-strength-and-levels-native",
+    "atomic-input-swap",
+    "no-output-allocation",
+    "superseded-value-recovery",
+    "geometry-input-invalidation",
+    "scene-levels-no-analysis"
+  ],
+  "dependency_edit": {
+    "parameter_changes": [
+      "Parameter:open_painter.texture_sets[0].layers[0].channels[1].value"
+    ],
+    "invalidated_nodes": [
+      "Final:HEIGHT",
+      "Final:ROUGHNESS",
+      "LayerMix:d7fb91d7ff844184bd8ee599bcde9f7b:HEIGHT",
+      "LayerMix:de500ccd8da3459392dce5028796c445:ROUGHNESS",
+      "MaskLevels:d7fb91d7ff844184bd8ee599bcde9f7b:blurred-reference",
+      "MaskLevels:d7fb91d7ff844184bd8ee599bcde9f7b:published",
+      "MaskMix:d7fb91d7ff844184bd8ee599bcde9f7b:blurred-reference",
+      "MaskMix:d7fb91d7ff844184bd8ee599bcde9f7b:published",
+      "MaskSource:d7fb91d7ff844184bd8ee599bcde9f7b:blurred-reference",
+      "MaskSource:d7fb91d7ff844184bd8ee599bcde9f7b:published",
+      "Parameter:open_painter.texture_sets[0].layers[0].channels[1].value",
+      "RasterMaskPrefix:d7fb91d7ff844184bd8ee599bcde9f7b:blurred-reference"
+    ],
+    "affected_channels": [
+      "HEIGHT",
+      "ROUGHNESS"
+    ],
+    "updated_bindings": 1,
+    "raster_boundaries_queued": 1,
+    "texture_bake_triggered": false,
+    "submission_ms": 1.357041001028847,
+    "pending_resources": true,
+    "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+    "state": "BOUNDARY",
+    "serial": 24,
+    "bound_serial": 24,
+    "error": "",
+    "rebuild_pending": false,
+    "graph_builds": 2,
+    "binding_updates": 5,
+    "update_calls": 5,
+    "resource_steps": 2
+  }
+}

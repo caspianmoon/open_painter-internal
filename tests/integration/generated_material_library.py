@@ -48,12 +48,23 @@ def node_signature(texture_set):
 open_painter.register()
 scene = bpy.context.scene
 report = {"authored_resolution": 512, "assets": [], "checks": {}}
-assert len(CATALOG) == 50 and sum(len(recipe["layers"]) for recipe in CATALOG.values()) == 229
-assert all(any(spec.get("generated_source") for spec in recipe["layers"])
+original_catalog = json.loads((ROOT / "tests/fixtures/catalog_v025.json").read_text())
+assert len(CATALOG) == 50 and CATALOG.keys() == original_catalog.keys(), "Keep all fifty material identities"
+assert all(recipe["layers"] for recipe in CATALOG.values())
+assert all(any(settings.get("generated_source") for spec in recipe["layers"]
+               for settings in (spec, *composer.masks_for(spec)))
            for recipe in CATALOG.values()), "Every existing catalog material needs a suitable generated source"
-catalog_sources = {spec["generated_source"]["id"] for recipe in CATALOG.values()
-                   for spec in recipe["layers"] if spec.get("generated_source")}
-assert catalog_sources == generated_sources.SOURCE_IDS
+catalog_sources = set()
+for recipe in CATALOG.values():
+    composer.validate(recipe)
+    for spec in recipe["layers"]:
+        for settings in [spec, *composer.masks_for(spec)]:
+            if settings.get("generated_source"):
+                generated_sources.validate(settings["generated_source"])
+                catalog_sources.add(settings["generated_source"]["id"])
+assert catalog_sources <= generated_sources.SOURCE_IDS
+report["catalog_source_ids"] = sorted(catalog_sources)
+report["retained_library_source_ids"] = sorted(generated_sources.SOURCE_IDS - catalog_sources)
 report["generated_materials"] = len(CATALOG)
 report["checks"]["all_fifty_existing_materials_use_generated_sources"] = "PASS"
 
@@ -105,7 +116,7 @@ report["checks"]["failed_composition_preserves_user_state_and_discards_new_sourc
 # header and packed payload. Source resolution is separate from authored output.
 manifest = json.loads((generated_sources.ROOT / "provenance.json").read_text())
 records = manifest["assets"]
-assert len(records) == len(generated_sources.SOURCE_IDS) == 15
+assert len(records) == len(generated_sources.SOURCE_IDS)
 assert {record["id"] for record in records} == generated_sources.SOURCE_IDS
 loaded = {}
 source_state = {}

@@ -1,13 +1,44 @@
 # Validation
 
+Current project acceptance uses the artist-supplied `open painter test.blend`,
+retaining its 2048 resolution and complete model. `tests/performance/shader_user_project.py`
+measures the existing controls; `tests/integration/shader_project_ui.py` drives
+actual native mask sliders and captures the model's viewport; and
+`scripts/validate_project_persistence.py` checks source/mesh preservation and
+explicit export. `tests/integration/install_user_project.py` validates the
+installed extension namespace using that same asset. These scripts use copies.
+The authoring trace, save/reopen/export, and actual-project held Cavity Dirt
+strength check have passed. Eight reversals through an isolated native RNA
+sidebar changed the captured material before release, with zero raster work or
+texture writes. This checks the real property callback and viewport, not product
+panel navigation. See the [actual-project report](docs/shader-preview-architecture.md#validation-on-the-supplied-project)
+for its capture overhead, sparse Chips diagnosis, and scope. Archive installation
+is validated separately; viewport results do not cover installation.
+The small numerical fixtures below are development regressions; they do not
+establish responsiveness on the user's asset and are not the remaining acceptance path.
+
+The 0.2.7 native shader tests are `shader_nodes.py` (blend/filter GPU math),
+`shader_sources.py` (source/projection parity and 50 catalog compilations),
+`shader_runtime.py` (real callbacks/lifecycle), `shader_boundaries.py` (isolated
+fallback dependencies), and `shader_preview.py` (rendered edits and persistence).
+The regular background runner includes them. `--gui-only` includes an actual held
+mask slider test and the explicit 2D snapshot/paint-source workflow. Failed GUI
+reports fail the runner; callback timing alone cannot pass visual acceptance.
+
+Developer diagnostics and operation limits are documented in
+[shader-preview architecture](docs/shader-preview-architecture.md). The older
+raster scheduler tests explicitly select CPU Reference where their assertions
+require automatic channel-image generation.
+
+
 Validated on Blender 5.2.1 LTS, macOS Apple Silicon, using the Blender application installed locally.
 
-The latency follow-up includes 52 background integration scripts, 42 Blender unit
+The historical 0.2.4 latency follow-up included 52 background integration scripts, 42 Blender unit
 tests and 37 independent NumPy tests. The real-window `--gpu-only` runner covers
 183 compositing checks, 91 folder-cache checks, 38 procedural configurations,
 11 full-resolution mask cases plus unsupported-domain preflight checks, and the
 live painting/save/export workflow. `--gui-only` also checks the native bake queue, alongside the three existing UI workflows.
-See the [current validation report](docs/live-preview-latency.md) for the actual
+See the [historical latency report](docs/live-preview-latency.md) for those
 run results, exact commands, raw evidence and limits. GPU tests require an actual
 window and do not pass by skipping. All tests use isolated Blender resources.
 

@@ -12,6 +12,7 @@ from ..evaluation.blend_modes import sample_uv
 from ..evaluation.evaluator import LayerEvaluator
 from .channel_pack import pack
 from .image_writer import write
+from .surface_normal import combined as surface_normal
 from .presets import blender, custom, unity, unreal
 from .presets import godot,gltf,unity_urp,unity_hdrp
 
@@ -63,6 +64,8 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
                     )
                     scaled[start : start + len(v)] = sample_uv(value, u, v)
                 value = scaled
+            if key == "NORMAL":
+                value = surface_normal(ts, value, channel("HEIGHT"))
             cache[key] = value
         return cache[key]
 

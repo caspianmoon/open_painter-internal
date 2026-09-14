@@ -10,6 +10,7 @@ def changed(self, context):
     for ts in self.id_data.open_painter.texture_sets:
         for layer in ts.layers:
             if layer.id == self.layer_id:
+                previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 layer.dirty = True
                 ts.dirty = True
                 ts.edit_serial += 1
@@ -18,6 +19,8 @@ def changed(self, context):
                 for output in ts.outputs:
                     if output.channel in affected:
                         output.dirty = True
+                from ..evaluation.shader_preview import notify
+                notify(self, context, previous_dirty=previous_dirty)
                 return
 
 

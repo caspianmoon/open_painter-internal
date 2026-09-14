@@ -39,8 +39,9 @@ def _effect_signature(effect):
 def _stack_signature(ts, layer, geometry_cache):
     """Parameter identities keep mesh-aware masks reusable across color edits.
 
-    Painted/fill pixels retain conservative edit-serial invalidation. Geometry
-    and baked sources have independent resource identities. Explicit force
+    Painted/external fill pixels retain conservative edit-serial invalidation.
+    Packed library inputs use image revisions, like channel detail, so changing
+    roughness does not regenerate an unchanged image mask. Explicit force
     evaluation clears shared caches for external in-place pixel modifications.
     """
     memo = getattr(geometry_cache, "signatures", None)
@@ -77,9 +78,18 @@ def _stack_signature(ts, layer, geometry_cache):
             extra = (ts.edit_serial, mask.reference_layer, mask.reference_mask,
                      mask.reference_channel, mask.reference_stage)
         else:
-            extra = (ts.edit_serial, _image_identity(mask.image), mask.projection,
+            # Bundled detail images are shared, read-only authoring inputs.
+            # Managed writes still advance their image revision. Keep the old
+            # conservative path for user images and native paint canvases.
+            library_input = (mask.source == "FILL" and mask.projection == "UV"
+                             and mask.image and mask.image.packed_file
+                             and mask.image.get("open_painter_generated_source"))
+            extra = (None if library_input else ts.edit_serial,
+                     _image_identity(mask.image), mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
-                     mask.filtering, mask.triplanar_hardness)
+                     mask.filtering, mask.triplanar_hardness,
+                     getattr(geometry_cache, "geometry_stamp", None)
+                     if mask.projection == "TRIPLANAR" else None)
         result.append(common + extra)
     result = tuple(result)
     if memo is not None:

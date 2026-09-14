@@ -46,6 +46,8 @@ def main():
                         default=ROOT / ".blender-test/texture-material-benchmark.json")
     parser.add_argument("--legacy-detail", action="store_true",
                         help="Compare preserved procedural recipe without generated image detail")
+    parser.add_argument("--recipes", type=Path,
+                        help="Saved complete catalog snapshot for a reproducible previous-release comparison")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     open_painter.register()
     try:
@@ -63,9 +65,10 @@ def main():
 
         started = time.perf_counter()
         recipe = deepcopy(composer.CATALOG["Worn Painted Metal"])
+        if args.recipes:
+            recipe = json.loads(args.recipes.read_text())["Worn Painted Metal"]
         if args.legacy_detail:
-            for spec in recipe["layers"]:
-                spec.pop("generated_source", None)
+            recipe = json.loads((ROOT / 'tests/performance/worn_v020.json').read_text())
         composer.apply_document(ts, recipe, "Worn Painted Metal")
         author_seconds = time.perf_counter() - started
         evaluator = LayerEvaluator(scene)
@@ -112,6 +115,7 @@ def main():
             blender_version=bpy.app.version_string,
             blender_build_hash=bpy.app.build_hash.decode(),
             detail_variant="preserved_procedural" if args.legacy_detail else "generated_scalar_images",
+            recipe=recipe,
             resolution=args.resolution, layers=len(ts.layers), material="Worn Painted Metal",
             author_seconds=author_seconds, initial_seconds=initial_seconds,
             initial_cpu_seconds=initial_cpu_seconds, channel_seconds=channel_seconds,

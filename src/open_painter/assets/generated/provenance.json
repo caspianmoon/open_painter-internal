@@ -13,6 +13,28 @@
   "note": "Tool returned 1254-pixel sources; original pixels retained. Authored texture-set resolution is unchanged. No claim of measured physical calibration or guaranteed exact boundary continuity.",
   "assets": [
     {
+      "id": "abrasion_mask_v2",
+      "file": "abrasion_mask_v2.png",
+      "original_file": "exec-63b80a15-0960-40b1-a89c-a7ae3e280d61.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "bytes": 2831634,
+      "semantics": "Black is undamaged surface; brighter values encode abrasion coverage. Apply negative height for incised scratches and use separate restrained color/roughness response. Clustered hairline scuffs and occasional longer cuts.",
+      "prompt_file": "docs/research/abrasion-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "mean_grayscale_255": 13.223590093836883,
+        "coverage_above_32": 0.09689440361815078,
+        "coverage_above_64": 0.043793513070773206,
+        "coverage_above_128": 0.00835730765219559,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false
+      }
+    },
+    {
       "id": "brass_tarnish",
       "file": "brass_tarnish.png",
       "original_file": "exec-0faa18e9-6981-448e-b4c2-31bc5de92201.png",
@@ -35,6 +57,28 @@
       "bytes": 2862477
     },
     {
+      "id": "brushed_relief_v2",
+      "file": "brushed_relief_v2.png",
+      "original_file": "exec-6156b1ec-db06-43d2-8a1b-4e30f50e9540.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "bytes": 2869311,
+      "semantics": "Middle gray is level surface, darker values encode tool grooves and brighter values encode ridge relief. Fine largely horizontal irregular microtooling. Center scalar values before applying shallow signed height; align bump/normal, roughness and optional subtle color from this same source.",
+      "prompt_file": "docs/research/abrasion-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "mean_grayscale_255": 133.47419549308242,
+        "coverage_above_32": 0.9998263928634112,
+        "coverage_above_64": 0.9942773237283437,
+        "coverage_above_128": 0.5677061473460365,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false
+      }
+    },
+    {
       "id": "burn_blisters",
       "file": "burn_blisters.png",
       "original_file": "exec-e54f31b4-59de-4f61-b0b6-23b504be5e91.png",
@@ -44,6 +88,19 @@
       "color_type": "RGB",
       "sha256": "5b8bebc5e278aa5fa620cba7a4f564f8bbf989d623549f4c7a37f5808021684a",
       "bytes": 3783407
+    },
+    {
+      "id": "burn_relief_v2",
+      "file": "burn_relief_v2.png",
+      "original_file": "exec-8f1682b4-3a69-4f21-a94e-2c764ccf4251.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "750b6b3950f6287087474b321e965b43125ff44d4b22d240e030144f617ad33e",
+      "bytes": 3369617,
+      "semantics": "Midgray intact coating, light swollen blisters/rims, dark ruptured pits.",
+      "prompt_file": "docs/research/industrial-relief-prompts.json"
     },
     {
       "id": "cast_iron_grain",
@@ -57,6 +114,32 @@
       "bytes": 3902219
     },
     {
+      "id": "cement_relief_v2",
+      "file": "cement_relief_v2.png",
+      "original_file": "exec-d33e349f-a7e5-4088-8ac1-37c194820e29.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+      "bytes": 3754717,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "charred_timber_v2",
+      "file": "charred_timber_v2.png",
+      "original_file": "exec-2ad3668c-8650-43cc-bafc-b46de45e7971.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "71f3436b36af044aeec58b9bd4f06fc21822a798fd261aa04a520e165d720899",
+      "bytes": 3367156,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
       "id": "concrete_pores",
       "file": "concrete_pores.png",
       "original_file": "exec-e6fc29e6-f1ff-4e83-b225-b64888288859.png",
@@ -66,6 +149,19 @@
       "color_type": "RGB",
       "sha256": "99fe25655c0298369a9c0928dc6916164c067b111eb0a3a717bf7b01090b9839",
       "bytes": 3705122
+    },
+    {
+      "id": "denim_twill_v2",
+      "file": "denim_twill_v2.png",
+      "original_file": "exec-7e203e76-79cf-40b5-8c78-484f31668445.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "adc790d25b965674e3fad3333b75abc79ef64bf379372d7512d14f33c3909a1c",
+      "bytes": 2944785,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
     },
     {
       "id": "fabric_weave",
@@ -101,6 +197,29 @@
       "bytes": 3797884
     },
     {
+      "id": "grease_deposits_v2",
+      "file": "grease_deposits_v2.png",
+      "original_file": "exec-a12768df-df8d-4886-a96d-0d9538fdd90f.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "1881e106a8bd02cd12286dbf79cc4f4b5499c47526a66c9ac2cdddc3e1f164cc",
+      "bytes": 2122868,
+      "semantics": "Black is clean surface; brighter values indicate thicker greasy residue and deposited coverage. Localized smear arcs, dragged deposits, clotted ends and finer residue trails. Use the same mask for darkening, lower roughness and shallow positive buildup; retain gray film values rather than thresholding most of them away.",
+      "prompt_file": "docs/research/supplemental-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false,
+        "mean_grayscale_255": 18.1720713811497,
+        "coverage_above_16": 0.2608170600489916,
+        "coverage_above_32": 0.20100653983806843,
+        "coverage_above_64": 0.11238740973064822,
+        "coverage_above_128": 0.01870314833044624
+      }
+    },
+    {
       "id": "leather_grain",
       "file": "leather_grain.png",
       "original_file": "exec-846bd792-4ab9-440d-941c-2a6eae563527.png",
@@ -110,6 +229,19 @@
       "color_type": "RGB",
       "sha256": "51b5f783b3e29e315cc1b3acf167091a0be90421a1f8d8ab608fe4c440662218",
       "bytes": 3440043
+    },
+    {
+      "id": "leather_relief_v2",
+      "file": "leather_relief_v2.png",
+      "original_file": "exec-1cf910a3-bde9-4208-80f2-a0715652ef72.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41",
+      "bytes": 3553897,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
     },
     {
       "id": "machined_scratches",
@@ -137,6 +269,19 @@
       "refinement_prompt": "docs/research/generated-material-refinement.json"
     },
     {
+      "id": "paint_loss_v2",
+      "file": "paint_loss_v2.png",
+      "original_file": "exec-bde9970c-c05b-4a02-b1b2-b3b52273efbc.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "000de48c1336ae5c2a468e437b3fc904a3a9f5f321e880f5b9d1ebfc1490aa4c",
+      "bytes": 3041437,
+      "semantics": "Black surviving paint, white lost coating.",
+      "prompt_file": "docs/research/coating-relief-prompts.json"
+    },
+    {
       "id": "polymer_grain",
       "file": "polymer_grain.png",
       "original_file": "exec-531ece93-ac36-4097-9731-8b43e5e8de2e.png",
@@ -146,6 +291,32 @@
       "color_type": "RGB",
       "sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
       "bytes": 3663728
+    },
+    {
+      "id": "rubber_cracks_v2",
+      "file": "rubber_cracks_v2.png",
+      "original_file": "exec-14e8adc4-e518-4acf-b80c-c584c422db1b.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "8c45895958dc81b894605e59cbf33b67a2f996a9da6cbcf178ff3fbbb367517d",
+      "bytes": 1014234,
+      "semantics": "Black is intact rubber; white crack interiors represent fissure coverage/depth, medium gray narrow transitional edges and shallower branches. Use the same coverage to recess height and darken the cracks. Bright crack centers, not bright rims around dark slits. Irregular sparse main stress fractures with finer secondary branching.",
+      "prompt_file": "docs/research/supplemental-relief-prompts.json",
+      "validation": {
+        "visually_reviewed": true,
+        "original_pixels_preserved": true,
+        "exact_border_continuity_verified": false,
+        "mean_grayscale_255": 14.67021766392202,
+        "coverage_above_16": 0.09999135143934942,
+        "coverage_above_32": 0.09031450236436386,
+        "coverage_above_64": 0.07633054290067637,
+        "coverage_above_128": 0.05499467096042266
+      },
+      "refined_from_original": "exec-fafb8438-e48d-47e0-b4c8-bb72cb50455a.png",
+      "refined_from_sha256": "be2bed4b9214875c78ec3faf0df982680861f769773aa016317ee51183495662",
+      "refinement_reason": "First output contained dark crack centers with bright rims. Built-in image editing filled the fissure centers to make a usable white-depth mask while preserving the crack topology."
     },
     {
       "id": "rust_detail",
@@ -159,6 +330,19 @@
       "bytes": 3906572
     },
     {
+      "id": "rust_relief_v2",
+      "file": "rust_relief_v2.png",
+      "original_file": "exec-d0263924-9375-40c3-81e1-938551ba38c9.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968",
+      "bytes": 3913039,
+      "semantics": "Darker pits, lighter granular peaks and flake rims.",
+      "prompt_file": "docs/research/coating-relief-prompts.json"
+    },
+    {
       "id": "surface_smudges",
       "file": "surface_smudges.png",
       "original_file": "exec-2fdfdacd-0220-4225-9145-66ca752c01ab.png",
@@ -168,6 +352,32 @@
       "color_type": "RGB",
       "sha256": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0",
       "bytes": 2418660
+    },
+    {
+      "id": "timber_relief_v2",
+      "file": "timber_relief_v2.png",
+      "original_file": "exec-26a73255-7750-49c1-acb1-8d424ae71363.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a",
+      "bytes": 3087388,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "weld_bead_v2",
+      "file": "weld_bead_v2.png",
+      "original_file": "exec-21d71a0f-b29c-477f-b0ad-ef91624c2fa3.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "31c6bd32348f9cfa2dbc3425decab0752430db36e09c4b20dc280d8952e83e02",
+      "bytes": 1235037,
+      "semantics": "Black flat sheet, light raised overlapping weld beads; vertical seam centered U=.5.",
+      "prompt_file": "docs/research/industrial-relief-prompts.json"
     },
     {
       "id": "zinc_spangle",
@@ -181,5 +391,14 @@
       "bytes": 3108759
     }
   ],
-  "additional_prompts": "https://github.com/caspianmoon/open_painter/blob/task/generated-material-quality/docs/research/generated-material-prompts-specialized.json"
+  "additional_prompts": "https://github.com/caspianmoon/open_painter/blob/task/generated-material-quality/docs/research/generated-material-prompts-specialized.json",
+  "prompt_sets": [
+    "docs/research/generated-material-prompts.json",
+    "docs/research/generated-material-prompts-specialized.json",
+    "docs/research/coating-relief-prompts.json",
+    "docs/research/abrasion-relief-prompts.json",
+    "docs/research/natural-relief-prompts.json",
+    "docs/research/industrial-relief-prompts.json",
+    "docs/research/supplemental-relief-prompts.json"
+  ]
 }

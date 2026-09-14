@@ -1,0 +1,4264 @@
+{
+  "result": "PASS",
+  "source": "/Volumes/SSD/projects/open_painter/open painter test.blend",
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "resolution": 2048,
+  "checks": [
+    "real-ten-mesh-project-at-saved-2048",
+    "native-current-and-attached",
+    "actual-blue-coat-chips-edit-and-restoration-without-bake",
+    "native-save-preserves-dirty-output-pixels",
+    "saved-sources-packed-and-pixel-identical",
+    "reopen-preserves-complete-recipe-and-real-geometry",
+    "explicit-export-produces-eight-2048-png16-files",
+    "roughness-height-and-combined-normal-encode-current-output",
+    "export-reattaches-native-material",
+    "original-project-byte-identical"
+  ],
+  "source_sha256_before": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79",
+  "texture_set": "2dd556f037ba4bdf9f2161e4311b5916",
+  "texture_set_name": "defaultMaterial.003",
+  "geometry": {
+    "defaultMaterial": {
+      "vertices": 64004,
+      "polygons": 100187,
+      "loops": 300561,
+      "mesh_and_uv_sha256": "840d4906a48216b47513740ba900ba46325ec13581bee09ed9aa89bced1b86c8",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.001": {
+      "vertices": 13496,
+      "polygons": 17032,
+      "loops": 51096,
+      "mesh_and_uv_sha256": "f3c27648fef63e3bf32d3c6609026be6a47244517414728ec0acf206c62cd693",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.002": {
+      "vertices": 984,
+      "polygons": 1015,
+      "loops": 3045,
+      "mesh_and_uv_sha256": "496ac37558d95011ba6053fbf3fbcce4818e7769591f76bacac291c6976ccd2e",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.003": {
+      "vertices": 29785,
+      "polygons": 39637,
+      "loops": 118911,
+      "mesh_and_uv_sha256": "9462404089e13ed034a21f4f40a490ac95e5c7eabf5c195fe23617c50d079088",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": [
+        "OP \u00b7 defaultMaterial.003"
+      ]
+    },
+    "defaultMaterial.004": {
+      "vertices": 15919,
+      "polygons": 25932,
+      "loops": 77796,
+      "mesh_and_uv_sha256": "6438d4e67928db460a941e59525b3228d00f27c8916b2c3f184841a7f04b3b27",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.005": {
+      "vertices": 19380,
+      "polygons": 25372,
+      "loops": 76116,
+      "mesh_and_uv_sha256": "587f31da150df4e6968b283f6cef06c191906089db7aed7685623a61a4423cb7",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.006": {
+      "vertices": 20161,
+      "polygons": 32583,
+      "loops": 97749,
+      "mesh_and_uv_sha256": "d2c79d56124e3441b33af260da608079d7dc413c5829f36d5f7c3fcf0b4bf17a",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.007": {
+      "vertices": 13157,
+      "polygons": 20629,
+      "loops": 61887,
+      "mesh_and_uv_sha256": "bbf547f793b14b3b0654a75e6a918a37a8b16f7a3fc0813bf8e31537e3e55a19",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.008": {
+      "vertices": 22074,
+      "polygons": 27368,
+      "loops": 82104,
+      "mesh_and_uv_sha256": "c94fb41f69c86344cd70ce50a16a5c3712d27b147a6054e58db17cc37115c3dc",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    },
+    "defaultMaterial.009": {
+      "vertices": 16225,
+      "polygons": 25470,
+      "loops": 76410,
+      "mesh_and_uv_sha256": "b5398fd1fe18ac73054b379a6b5567bceda44a28d0dd2f58e053bd2a949dc2db",
+      "transform": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          7.549790126404332e-08,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          7.549790126404332e-08,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "materials": []
+    }
+  },
+  "authored_sources_before": {
+    "Open Painter Detail - Abrasion Mask V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "8456f0c9d5de30cf0533a7313dd5c18e8ff5a8bc1789b07162f4b477b97315d1",
+      "packed": true,
+      "packed_sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "uses": [
+        "Scratched exposed steel.masks[0].image"
+      ]
+    },
+    "Open Painter Detail - Brushed Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ca7354e30baaf1f340b7e2a634208a85a6e0facd47977035a0993dfd4e1c94d3",
+      "packed": true,
+      "packed_sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "uses": [
+        "Steel substrate.channels[0].detail_image",
+        "Steel substrate.channels[1].detail_image",
+        "Steel substrate.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Polymer Grain": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "94883cbd77b8054bdd4a44f1525bdb7d00f68131e5b23195d237e39e4b70e3f9",
+      "packed": true,
+      "packed_sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "uses": [
+        "Blue paint coat.channels[0].detail_image",
+        "Blue paint coat.channels[1].detail_image",
+        "Blue paint coat.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Rust Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "dfaa70a53d759fe192c0ea7f53a77b2b1085c240b17632f2eb5666df8389b4e2",
+      "packed": true,
+      "packed_sha256": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968",
+      "uses": [
+        "Oxide beneath paint.channels[0].detail_image",
+        "Oxide beneath paint.channels[1].detail_image"
+      ]
+    },
+    "defaultMaterial.003_BakedAo": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "0b1e104bd6096176aad548bf5fe7409043e0da22d95e579264ef84aac381eaa9",
+      "packed": true,
+      "packed_sha256": "5a0734e229b823c821085b9ce635d3a53df82c5a2bdcc4092ccf02a345e67bd3",
+      "uses": [
+        "baked.AO"
+      ]
+    },
+    "defaultMaterial.003_BakedCurvature": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ad7b9c35cecbc59d6eb88f9ae289bf364a0c632757633d217043bf815a22c89d",
+      "packed": true,
+      "packed_sha256": "e68358d82ccb150d4168b72c976feccf6089f1ae217135fa3751fef3c914bef1",
+      "uses": [
+        "baked.CURVATURE"
+      ]
+    },
+    "defaultMaterial.003_BakedMaterialId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "04ce1af867bf8097c92eee724f7213c797d738ac63ab2199606363aaee191c06",
+      "packed": true,
+      "packed_sha256": "44d2a64c869b19262e0950afa5cf94c51eaf115e4036e0fd3a6b4ce3f8d3f578",
+      "uses": [
+        "baked.MATERIAL_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "c12f0c736428eb0135a3c5fa88b30a6eb3e41f1db8f44daaf3ad54306c7c621c",
+      "packed": true,
+      "packed_sha256": "c1a6fe18475c7538100cf6163ebc3c5157dff5acd6815b708a8b1cd01532a5a7",
+      "uses": [
+        "baked.NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "e29e12a2d0000f46cba109f2f2144f6bc3630d9c213ed2c3d45cf882b8bfbbde",
+      "packed": true,
+      "packed_sha256": "8279a5ca8e9ffed5a95e0ac7b169489e684ecfb7b3a7cbcce3bf6dd0bad485de",
+      "uses": [
+        "baked.OBJECT_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "2232a6061d2d11d311a8652e7b050a7df905bdcccdb428fd6f3e047108b71c63",
+      "packed": true,
+      "packed_sha256": "686ead28ebbd913f102e3ef2bbd17125f976cfcfb538935dfe11b89bbbae1076",
+      "uses": [
+        "baked.OBJECT_NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedPosition": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "9d9a74b3c3876574b8a4c6753b203922663de6a5faba75cb777d9c14d7820962",
+      "packed": true,
+      "packed_sha256": "16e2ac50b0cbb2b50a7544de2776953709f897637f660bee9412f0c7b8d24e27",
+      "uses": [
+        "baked.POSITION"
+      ]
+    },
+    "defaultMaterial.003_BakedThickness": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "99829f5319a063ef45dd7a047e7ca8427123b449028cf3d3e0bb7f23a9874102",
+      "packed": true,
+      "packed_sha256": "5a1e31b7bea2ddef145edc7eb4512a9f1cdebf226ff70d63e9a4d059aeeb63c8",
+      "uses": [
+        "baked.THICKNESS"
+      ]
+    },
+    "defaultMaterial.003_BakedUvBorder": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "723a4d44c716f6ecfc4fdb15f9ee39ceb03b5ba946d88b9ea00cff1eab59a226",
+      "packed": true,
+      "packed_sha256": "ad98b4eeebecfd2c6a658f1fa8cfbe28251d5b2e30fcdc2881cbb0f64a0a8573",
+      "uses": [
+        "baked.UV_BORDER"
+      ]
+    },
+    "defaultMaterial.003_BakedUvIsland": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "90c984ff7d426f4ff2c6e8246a501b60f183c54cc1b83f657fb5f19470457b70",
+      "packed": true,
+      "packed_sha256": "5cbfa282170e0b64edb7e73b03dbf3a64a5aa4dff416a92aa28cff6e896df38e",
+      "uses": [
+        "baked.UV_ISLAND"
+      ]
+    },
+    "defaultMaterial.003_BakedWorldNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "a5f0951f26c98b872e04c2faecfbd4a9758abfd28546f70d473e86517ba6627f",
+      "packed": true,
+      "packed_sha256": "dabc8ba49bae2e0bd66fb63b179eade62755c45ffbd2a9001f86dd803e2c8e3d",
+      "uses": [
+        "baked.WORLD_NORMAL"
+      ]
+    }
+  },
+  "recipe_before": {
+    "id": "2dd556f037ba4bdf9f2161e4311b5916",
+    "name": "defaultMaterial.003",
+    "resolution": "2048",
+    "backend": "LIVE",
+    "surface": {
+      "height_distance": 0.05000000074505806,
+      "anisotropy": 0.0,
+      "coat_weight": 0.0,
+      "coat_roughness": 0.029999999329447746,
+      "preview_ao": true
+    },
+    "assignments": [
+      [
+        "defaultMaterial.003",
+        0
+      ]
+    ],
+    "layers": [
+      {
+        "name": "Worn Painted Metal",
+        "effect_semantic": "NONE",
+        "id": "57049eae89354958ac5f270066b7e203",
+        "type": "FOLDER",
+        "visible": true,
+        "opacity": 1.0,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "",
+        "order": 0,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "57049eae89354958ac5f270066b7e203",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [],
+        "active_mask": 0,
+        "expanded": true
+      },
+      {
+        "name": "Steel substrate",
+        "effect_semantic": "NONE",
+        "id": "80a70f52abb845d498d4cf004d3aee69",
+        "type": "FILL",
+        "visible": true,
+        "opacity": 1.0,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "57049eae89354958ac5f270066b7e203",
+        "order": 1,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.6800000071525574,
+              0.6899999976158142,
+              0.6800000071525574,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1237960897,
+            "procedural_detail": 0.05000000074505806,
+            "procedural_height": 0.017999999225139618,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Brushed Relief V2"
+            },
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.46000000834465027,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1237960897,
+            "procedural_detail": 0.17142857611179352,
+            "procedural_height": 0.017999999225139618,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Brushed Relief V2"
+            },
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1237960897,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 0.017999999225139618,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Brushed Relief V2"
+            },
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "80a70f52abb845d498d4cf004d3aee69",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [],
+        "active_mask": 0,
+        "expanded": true
+      },
+      {
+        "name": "Oxide beneath paint",
+        "effect_semantic": "NONE",
+        "id": "b8b7854748aa4b289d18a343408a020f",
+        "type": "FILL",
+        "visible": true,
+        "opacity": 0.699999988079071,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "57049eae89354958ac5f270066b7e203",
+        "order": 2,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.07400000095367432,
+              0.02199999988079071,
+              0.012000000104308128,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238065626,
+            "procedural_detail": 0.4000000059604645,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Rust Relief V2"
+            },
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.8500000238418579,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238065626,
+            "procedural_detail": 0.20000000298023224,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Rust Relief V2"
+            },
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "b8b7854748aa4b289d18a343408a020f",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [
+          {
+            "name": "Rust",
+            "reference_layer": "",
+            "reference_mask": "",
+            "reference_channel": "MASK",
+            "reference_stage": "POST_FILTER",
+            "influence": {
+              "name": "",
+              "kind": "UP",
+              "object": null,
+              "collection": null,
+              "mode": "MANUAL",
+              "resolution": "64",
+              "distance": 0.20000000298023224,
+              "bounds": [
+                0.0,
+                1.0
+              ],
+              "direction": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "attribute": "",
+              "update_serial": 0,
+              "image": null,
+              "provenance": "",
+              "error": ""
+            },
+            "id": "c38e19a0fd194269849c021a777e5f57",
+            "enabled": true,
+            "source": "GENERATOR",
+            "procedural": "FBM",
+            "effect": {
+              "name": "Levels",
+              "kind": "LEVELS",
+              "enabled": true,
+              "strength": 1.0,
+              "radius": 2.0,
+              "amount": 0.5,
+              "contrast": 1.0,
+              "gamma": 1.0,
+              "black": 0.0,
+              "white": 1.0,
+              "output_black": 0.0,
+              "output_white": 1.0,
+              "hue": 0.0,
+              "saturation": 1.0,
+              "lightness": 0.0,
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "transform_scale": [
+                1.0,
+                1.0
+              ],
+              "softness": 0.05000000074505806,
+              "steps": 4,
+              "samples": 8,
+              "mode": "BLUR",
+              "noise": "FBM",
+              "matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "bias": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "image": null,
+              "angle": 0.0,
+              "scale": 8.0,
+              "seed": 1,
+              "color": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "color2": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "id_color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ],
+            "image": null,
+            "map_type": "AO",
+            "generator": "RUST",
+            "operation": "NORMAL",
+            "invert": false,
+            "black": 0.0,
+            "white": 1.0,
+            "strength": 1.0,
+            "amount": 0.1599999964237213,
+            "contrast": 3.0,
+            "noise_scale": 75.0,
+            "noise_strength": 0.6499999761581421,
+            "seed": 1238065626
+          }
+        ],
+        "active_mask": 0,
+        "expanded": true
+      },
+      {
+        "name": "Blue paint coat",
+        "effect_semantic": "NONE",
+        "id": "ccfa7f86147b4b5d9356fe2672be7881",
+        "type": "FILL",
+        "visible": true,
+        "opacity": 1.0,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "57049eae89354958ac5f270066b7e203",
+        "order": 3,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.03799999877810478,
+              0.13300000131130219,
+              0.23600000143051147,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238170355,
+            "procedural_detail": 0.03500000014901161,
+            "procedural_height": 0.024000000208616257,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Polymer Grain"
+            },
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.5,
+              1.5
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.4300000071525574,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238170355,
+            "procedural_detail": 0.12857143580913544,
+            "procedural_height": 0.024000000208616257,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Polymer Grain"
+            },
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.5,
+              1.5
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238170355,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 1.0,
+            "effects": [
+              {
+                "name": "Levels",
+                "kind": "LEVELS",
+                "enabled": true,
+                "strength": 1.0,
+                "radius": 2.0,
+                "amount": 0.5,
+                "contrast": 1.0,
+                "gamma": 1.0,
+                "black": 0.0,
+                "white": 1.0,
+                "output_black": 0.5350000262260437,
+                "output_white": 0.5659999847412109,
+                "hue": 0.0,
+                "saturation": 1.0,
+                "lightness": 0.0,
+                "offset": [
+                  0.0,
+                  0.0
+                ],
+                "transform_scale": [
+                  1.0,
+                  1.0
+                ],
+                "softness": 0.05000000074505806,
+                "steps": 4,
+                "samples": 8,
+                "mode": "BLUR",
+                "noise": "FBM",
+                "matrix": [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ],
+                "bias": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "image": null,
+                "angle": 0.0,
+                "scale": 8.0,
+                "seed": 1,
+                "color": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "color2": [
+                  1.0,
+                  1.0,
+                  1.0
+                ]
+              }
+            ],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Polymer Grain"
+            },
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.5,
+              1.5
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "ccfa7f86147b4b5d9356fe2672be7881",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [
+          {
+            "name": "Chips",
+            "reference_layer": "",
+            "reference_mask": "",
+            "reference_channel": "MASK",
+            "reference_stage": "POST_FILTER",
+            "influence": {
+              "name": "",
+              "kind": "UP",
+              "object": null,
+              "collection": null,
+              "mode": "MANUAL",
+              "resolution": "64",
+              "distance": 0.20000000298023224,
+              "bounds": [
+                0.0,
+                1.0
+              ],
+              "direction": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "attribute": "",
+              "update_serial": 0,
+              "image": null,
+              "provenance": "",
+              "error": ""
+            },
+            "id": "32ce1b3277f3431797a7df56a564cdfa",
+            "enabled": true,
+            "source": "GENERATOR",
+            "procedural": "FBM",
+            "effect": {
+              "name": "Levels",
+              "kind": "LEVELS",
+              "enabled": true,
+              "strength": 1.0,
+              "radius": 2.0,
+              "amount": 0.5,
+              "contrast": 1.0,
+              "gamma": 1.0,
+              "black": 0.0,
+              "white": 1.0,
+              "output_black": 0.0,
+              "output_white": 1.0,
+              "hue": 0.0,
+              "saturation": 1.0,
+              "lightness": 0.0,
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "transform_scale": [
+                1.0,
+                1.0
+              ],
+              "softness": 0.05000000074505806,
+              "steps": 4,
+              "samples": 8,
+              "mode": "BLUR",
+              "noise": "FBM",
+              "matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "bias": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "image": null,
+              "angle": 0.0,
+              "scale": 8.0,
+              "seed": 1,
+              "color": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "color2": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "id_color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ],
+            "image": null,
+            "map_type": "AO",
+            "generator": "CHIPS",
+            "operation": "NORMAL",
+            "invert": true,
+            "black": 0.0,
+            "white": 1.0,
+            "strength": 1.0,
+            "amount": 0.28999999165534973,
+            "contrast": 1.25,
+            "noise_scale": 85.0,
+            "noise_strength": 0.699999988079071,
+            "seed": 1238170355
+          }
+        ],
+        "active_mask": 0,
+        "expanded": true
+      },
+      {
+        "name": "Scratched exposed steel",
+        "effect_semantic": "NONE",
+        "id": "67b3cd4127a045a4b2433d477bd3a35b",
+        "type": "FILL",
+        "visible": true,
+        "opacity": 0.8999999761581421,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "57049eae89354958ac5f270066b7e203",
+        "order": 4,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.3400000035762787,
+              0.36000001430511475,
+              0.3700000047683716,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238275084,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5099999904632568,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238275084,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5099999904632568,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "67b3cd4127a045a4b2433d477bd3a35b",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [
+          {
+            "name": "Abrasion Mask V2",
+            "reference_layer": "",
+            "reference_mask": "",
+            "reference_channel": "MASK",
+            "reference_stage": "POST_FILTER",
+            "influence": {
+              "name": "",
+              "kind": "UP",
+              "object": null,
+              "collection": null,
+              "mode": "MANUAL",
+              "resolution": "64",
+              "distance": 0.20000000298023224,
+              "bounds": [
+                0.0,
+                1.0
+              ],
+              "direction": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "attribute": "",
+              "update_serial": 0,
+              "image": null,
+              "provenance": "",
+              "error": ""
+            },
+            "id": "12ab70dd45b546de8dd038d9779b472e",
+            "enabled": true,
+            "source": "FILL",
+            "procedural": "FBM",
+            "effect": {
+              "name": "Levels",
+              "kind": "LEVELS",
+              "enabled": true,
+              "strength": 1.0,
+              "radius": 2.0,
+              "amount": 0.5,
+              "contrast": 1.0,
+              "gamma": 1.0,
+              "black": 0.0,
+              "white": 1.0,
+              "output_black": 0.0,
+              "output_white": 1.0,
+              "hue": 0.0,
+              "saturation": 1.0,
+              "lightness": 0.0,
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "transform_scale": [
+                1.0,
+                1.0
+              ],
+              "softness": 0.05000000074505806,
+              "steps": 4,
+              "samples": 8,
+              "mode": "BLUR",
+              "noise": "FBM",
+              "matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "bias": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "image": null,
+              "angle": 0.0,
+              "scale": 8.0,
+              "seed": 1,
+              "color": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "color2": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "id_color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "projection": "TRIPLANAR",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 8.0,
+            "scale": [
+              0.8500000238418579,
+              0.8500000238418579
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ],
+            "image": {
+              "id_type": "Image",
+              "name": "Open Painter Detail - Abrasion Mask V2"
+            },
+            "map_type": "AO",
+            "generator": "NOISE",
+            "operation": "NORMAL",
+            "invert": false,
+            "black": 0.10000000149011612,
+            "white": 0.6499999761581421,
+            "strength": 1.0,
+            "amount": 0.3499999940395355,
+            "contrast": 3.0,
+            "noise_scale": 24.0,
+            "noise_strength": 0.3499999940395355,
+            "seed": 1238275084
+          }
+        ],
+        "active_mask": 0,
+        "expanded": true
+      },
+      {
+        "name": "Recess dirt",
+        "effect_semantic": "NONE",
+        "id": "3f69f211e671485b90ad871fbe4d8f04",
+        "type": "FILL",
+        "visible": true,
+        "opacity": 0.699999988079071,
+        "blend_mode": "NORMAL",
+        "group_mode": "ISOLATED",
+        "parent_id": "57049eae89354958ac5f270066b7e203",
+        "order": 5,
+        "channels": [
+          {
+            "name": "",
+            "channel": "BASE_COLOR",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.04899999871850014,
+              0.03200000151991844,
+              0.019999999552965164,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238379813,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "ROUGHNESS",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.8899999856948853,
+            "procedural": "",
+            "procedural_scale": 24.0,
+            "procedural_seed": 1238379813,
+            "procedural_detail": 0.11999999731779099,
+            "procedural_height": 0.0,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "METALLIC",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": true,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "NORMAL",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              1.0,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "HEIGHT",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.5,
+              0.5,
+              0.5,
+              1.0
+            ],
+            "value": 0.5,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "AO",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "EMISSION",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              0.0,
+              0.0,
+              0.0,
+              1.0
+            ],
+            "value": 0.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "name": "",
+            "channel": "OPACITY",
+            "layer_id": "3f69f211e671485b90ad871fbe4d8f04",
+            "enabled": false,
+            "opacity": 1.0,
+            "opacity_percent": 100.0,
+            "blend_mode": "INHERIT",
+            "color": [
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            "value": 1.0,
+            "procedural": "",
+            "procedural_scale": 8.0,
+            "procedural_seed": 1,
+            "procedural_detail": 0.15000000596046448,
+            "procedural_height": 0.019999999552965164,
+            "effects": [],
+            "active_effect": 0,
+            "image": null,
+            "detail_image": null,
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "masks": [
+          {
+            "name": "Cavity Dirt",
+            "reference_layer": "",
+            "reference_mask": "",
+            "reference_channel": "MASK",
+            "reference_stage": "POST_FILTER",
+            "influence": {
+              "name": "",
+              "kind": "UP",
+              "object": null,
+              "collection": null,
+              "mode": "MANUAL",
+              "resolution": "64",
+              "distance": 0.20000000298023224,
+              "bounds": [
+                0.0,
+                1.0
+              ],
+              "direction": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "attribute": "",
+              "update_serial": 0,
+              "image": null,
+              "provenance": "",
+              "error": ""
+            },
+            "id": "c688bdd442fd49ea9ecfa7025318527d",
+            "enabled": true,
+            "source": "GENERATOR",
+            "procedural": "FBM",
+            "effect": {
+              "name": "Levels",
+              "kind": "LEVELS",
+              "enabled": true,
+              "strength": 1.0,
+              "radius": 2.0,
+              "amount": 0.5,
+              "contrast": 1.0,
+              "gamma": 1.0,
+              "black": 0.0,
+              "white": 1.0,
+              "output_black": 0.0,
+              "output_white": 1.0,
+              "hue": 0.0,
+              "saturation": 1.0,
+              "lightness": 0.0,
+              "offset": [
+                0.0,
+                0.0
+              ],
+              "transform_scale": [
+                1.0,
+                1.0
+              ],
+              "softness": 0.05000000074505806,
+              "steps": 4,
+              "samples": 8,
+              "mode": "BLUR",
+              "noise": "FBM",
+              "matrix": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ],
+              "bias": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "image": null,
+              "angle": 0.0,
+              "scale": 8.0,
+              "seed": 1,
+              "color": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "color2": [
+                1.0,
+                1.0,
+                1.0
+              ]
+            },
+            "id_color": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "projection": "UV",
+            "filtering": "BILINEAR",
+            "tiling": "REPEAT",
+            "triplanar_hardness": 4.0,
+            "scale": [
+              1.0,
+              1.0
+            ],
+            "rotation": 0.0,
+            "offset": [
+              0.0,
+              0.0
+            ],
+            "image": null,
+            "map_type": "AO",
+            "generator": "CAVITY_DIRT",
+            "operation": "NORMAL",
+            "invert": false,
+            "black": 0.0,
+            "white": 1.0,
+            "strength": 1.0,
+            "amount": 0.30000001192092896,
+            "contrast": 3.0,
+            "noise_scale": 65.0,
+            "noise_strength": 0.6499999761581421,
+            "seed": 1238379813
+          }
+        ],
+        "active_mask": 0,
+        "expanded": true
+      }
+    ],
+    "baked_maps": [
+      {
+        "name": "",
+        "provenance": "{\"bake_algorithm\":2,\"cage\":null,\"frame\":[1,0.0],\"kind\":\"NORMAL\",\"resolution\":2048,\"settings\":{\"cage_extrusion\":0.10000000149011612,\"cage_mode\":\"AUTO\",\"cage_object\":null,\"device\":\"CPU\",\"margin\":16,\"ray_distance\":0.10000000149011612,\"samples\":16,\"selected_to_active\":false,\"separate_cage_distance\":false,\"source_mode\":\"ALL\"},\"source_bindings\":[],\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "NORMAL",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedNormal"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"bake_algorithm\":2,\"cage\":null,\"frame\":[1,0.0],\"kind\":\"AO\",\"resolution\":2048,\"settings\":{\"ao_scope\":\"SET\",\"cage_extrusion\":0.10000000149011612,\"cage_mode\":\"AUTO\",\"cage_object\":null,\"device\":\"CPU\",\"margin\":16,\"ray_distance\":0.10000000149011612,\"samples\":16,\"selected_to_active\":false,\"separate_cage_distance\":false,\"source_mode\":\"ALL\"},\"source_bindings\":[],\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "AO",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedAo"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"CURVATURE\",\"resolution\":2048,\"settings\":{\"curvature_angle\":20.0,\"curvature_width\":4.0},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "CURVATURE",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedCurvature"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"POSITION\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "POSITION",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedPosition"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"WORLD_NORMAL\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "WORLD_NORMAL",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedWorldNormal"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"OBJECT_NORMAL\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "OBJECT_NORMAL",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedObjectNormal"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"MATERIAL_ID\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "MATERIAL_ID",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedMaterialId"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"OBJECT_ID\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "OBJECT_ID",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedObjectId"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"UV_ISLAND\",\"resolution\":2048,\"settings\":{},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "UV_ISLAND",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedUvIsland"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"UV_BORDER\",\"resolution\":2048,\"settings\":{\"uv_border_width\":4.0},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "UV_BORDER",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedUvBorder"
+        }
+      },
+      {
+        "name": "",
+        "provenance": "{\"frame\":[1,0.0],\"kind\":\"THICKNESS\",\"resolution\":2048,\"settings\":{\"thickness_max_distance\":0.0,\"thickness_resolution\":\"128\",\"thickness_samples\":\"1\"},\"sources\":[],\"targets\":[[{\"identity\":[\"\",\"defaultMaterial.003\"],\"matrix\":[[1.0,0.0,0.0,0.0],[0.0,7.549790126404332e-08,-1.0,0.0],[0.0,1.0,7.549790126404332e-08,0.0],[0.0,0.0,0.0,1.0]],\"mesh\":\"803f8814bcf0eea7fabda989792017dd7bde5ebca3e6040a79d2326e4f1ae441\",\"modifiers\":[]},0]],\"version\":1}",
+        "kind": "THICKNESS",
+        "image": {
+          "id_type": "Image",
+          "name": "defaultMaterial.003_BakedThickness"
+        }
+      }
+    ]
+  },
+  "outputs_before": {
+    "BASE_COLOR": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "33f4a18d9f0e402e063a942785dcc55e9e04504624eb637732c5fd86ff9f3786"
+    },
+    "ROUGHNESS": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "daaed67967d5a427a88244c6a6ab340ce73a9d9e2e6b820c5f515315ffcffb2c"
+    },
+    "METALLIC": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "70b86fda5fa99e6a655daafd3dfb63f7e6d840ca2f7f1f81f95c9ca6caf03ffd"
+    },
+    "NORMAL": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e"
+    },
+    "HEIGHT": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "cc0d212259388f2785b46405999eaf2c1e63af7220f2ee83b2b52c3f8068df35"
+    },
+    "AO": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+    },
+    "EMISSION": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "5a32675bdcb2f4f27b9b6e67d183923ef739cade791e61c4f5788b3c2eeaccfd"
+    },
+    "OPACITY": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+    }
+  },
+  "working_copy": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/project-working-copy.blend",
+  "stage": "complete",
+  "initial_native": {
+    "resource_publications": 1,
+    "pending_resources": false,
+    "resource_step_ms": 15.442500000062864,
+    "state": "SHADER",
+    "serial": 1211,
+    "bound_serial": 1211,
+    "error": "",
+    "attached": true,
+    "rebuild_pending": false,
+    "graph_builds": 1,
+    "binding_updates": 0,
+    "update_calls": 0,
+    "resource_steps": 326
+  },
+  "chips_edit": {
+    "original_amount": 0.28999999165534973,
+    "changed": {
+      "parameter_changes": [
+        "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+      ],
+      "invalidated_nodes": [
+        "Final:BASE_COLOR",
+        "Final:HEIGHT",
+        "Final:METALLIC",
+        "Final:ROUGHNESS",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+        "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+        "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+        "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+        "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:BASE_COLOR",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:METALLIC",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+        "MaskLevels:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "MaskMix:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "MaskSource:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+      ],
+      "affected_channels": [
+        "BASE_COLOR",
+        "HEIGHT",
+        "METALLIC",
+        "ROUGHNESS"
+      ],
+      "updated_bindings": 1,
+      "raster_boundaries_queued": 0,
+      "texture_bake_triggered": false,
+      "submission_ms": 1.6916659951675683,
+      "pending_resources": false,
+      "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+      "state": "SHADER",
+      "serial": 1212,
+      "bound_serial": 1212,
+      "error": "",
+      "attached": true,
+      "rebuild_pending": false,
+      "graph_builds": 1,
+      "binding_updates": 1,
+      "update_calls": 1,
+      "resource_steps": 326
+    },
+    "restored": {
+      "parameter_changes": [
+        "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+      ],
+      "invalidated_nodes": [
+        "Final:BASE_COLOR",
+        "Final:HEIGHT",
+        "Final:METALLIC",
+        "Final:ROUGHNESS",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:BASE_COLOR",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:METALLIC",
+        "LayerMix:3f69f211e671485b90ad871fbe4d8f04:ROUGHNESS",
+        "LayerMix:57049eae89354958ac5f270066b7e203:BASE_COLOR",
+        "LayerMix:57049eae89354958ac5f270066b7e203:HEIGHT",
+        "LayerMix:57049eae89354958ac5f270066b7e203:METALLIC",
+        "LayerMix:57049eae89354958ac5f270066b7e203:ROUGHNESS",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:BASE_COLOR",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:HEIGHT",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:METALLIC",
+        "LayerMix:67b3cd4127a045a4b2433d477bd3a35b:ROUGHNESS",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:BASE_COLOR",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:HEIGHT",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:METALLIC",
+        "LayerMix:ccfa7f86147b4b5d9356fe2672be7881:ROUGHNESS",
+        "MaskLevels:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "MaskMix:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "MaskSource:ccfa7f86147b4b5d9356fe2672be7881:32ce1b3277f3431797a7df56a564cdfa",
+        "Parameter:open_painter.texture_sets[0].layers[3].masks[0].amount"
+      ],
+      "affected_channels": [
+        "BASE_COLOR",
+        "HEIGHT",
+        "METALLIC",
+        "ROUGHNESS"
+      ],
+      "updated_bindings": 1,
+      "raster_boundaries_queued": 0,
+      "texture_bake_triggered": false,
+      "submission_ms": 2.0922089970554225,
+      "pending_resources": false,
+      "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+      "state": "SHADER",
+      "serial": 1213,
+      "bound_serial": 1213,
+      "error": "",
+      "attached": true,
+      "rebuild_pending": false,
+      "graph_builds": 1,
+      "binding_updates": 2,
+      "update_calls": 2,
+      "resource_steps": 326
+    },
+    "observation": {
+      "calls": {},
+      "phases": {
+        "source_generation": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "masking": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "filters": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "blending": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "geometry_signature": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_read": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "image_write": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        },
+        "packing": {
+          "calls": 0,
+          "wall_s": 0.0,
+          "cpu_s": 0.0,
+          "exclusive_wall_s": 0.0,
+          "exclusive_cpu_s": 0.0
+        }
+      },
+      "counters": {
+        "shader_parameter_bindings_updated": 2,
+        "shader_parameter_updates": 2,
+        "shader_update_calls": 2,
+        "shader_resource_publications": 0
+      },
+      "distributions": {
+        "shader_submission_ms": {
+          "samples": 2,
+          "p50": 1.8919374961114954,
+          "p95": 2.07218184696103,
+          "maximum": 2.0922089970554225
+        },
+        "shader_callback_seconds": {
+          "samples": 2,
+          "p50": 0.002060188002360519,
+          "p95": 0.0022708816039084924,
+          "maximum": 0.0022942920040804893
+        }
+      },
+      "last_observed_bytes": {},
+      "peak_observed_bytes": {},
+      "process_peak_rss_bytes": 2323644416
+    }
+  },
+  "save_observation": {
+    "calls": {
+      "pack_image": 27
+    },
+    "phases": {
+      "source_generation": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "masking": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "filters": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "blending": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "geometry": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "geometry_signature": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "image_read": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "image_write": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "packing": {
+        "calls": 27,
+        "wall_s": 0.06353991500509437,
+        "cpu_s": 0.1483909999999895,
+        "exclusive_wall_s": 0.06353991500509437,
+        "exclusive_cpu_s": 0.1483909999999895
+      }
+    },
+    "counters": {
+      "pack_unchanged_skips": 19,
+      "pack_calls": 8,
+      "shader_resource_publications": 0
+    },
+    "distributions": {},
+    "last_observed_bytes": {
+      "live_leaf_cache_bytes": 0
+    },
+    "peak_observed_bytes": {
+      "live_leaf_cache_bytes": 0
+    },
+    "process_peak_rss_bytes": 3762552832
+  },
+  "copy_sha256": "68a02c2be6b0489c6c581b82ce603fe7e657f2614632e2cc5a59d25d6cc444d9",
+  "authored_sources_saved": {
+    "Open Painter Detail - Abrasion Mask V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "8456f0c9d5de30cf0533a7313dd5c18e8ff5a8bc1789b07162f4b477b97315d1",
+      "packed": true,
+      "packed_sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "uses": [
+        "Scratched exposed steel.masks[0].image"
+      ]
+    },
+    "Open Painter Detail - Brushed Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ca7354e30baaf1f340b7e2a634208a85a6e0facd47977035a0993dfd4e1c94d3",
+      "packed": true,
+      "packed_sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "uses": [
+        "Steel substrate.channels[0].detail_image",
+        "Steel substrate.channels[1].detail_image",
+        "Steel substrate.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Polymer Grain": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "94883cbd77b8054bdd4a44f1525bdb7d00f68131e5b23195d237e39e4b70e3f9",
+      "packed": true,
+      "packed_sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "uses": [
+        "Blue paint coat.channels[0].detail_image",
+        "Blue paint coat.channels[1].detail_image",
+        "Blue paint coat.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Rust Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "dfaa70a53d759fe192c0ea7f53a77b2b1085c240b17632f2eb5666df8389b4e2",
+      "packed": true,
+      "packed_sha256": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968",
+      "uses": [
+        "Oxide beneath paint.channels[0].detail_image",
+        "Oxide beneath paint.channels[1].detail_image"
+      ]
+    },
+    "defaultMaterial.003_BakedAo": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "0b1e104bd6096176aad548bf5fe7409043e0da22d95e579264ef84aac381eaa9",
+      "packed": true,
+      "packed_sha256": "5a0734e229b823c821085b9ce635d3a53df82c5a2bdcc4092ccf02a345e67bd3",
+      "uses": [
+        "baked.AO"
+      ]
+    },
+    "defaultMaterial.003_BakedCurvature": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ad7b9c35cecbc59d6eb88f9ae289bf364a0c632757633d217043bf815a22c89d",
+      "packed": true,
+      "packed_sha256": "e68358d82ccb150d4168b72c976feccf6089f1ae217135fa3751fef3c914bef1",
+      "uses": [
+        "baked.CURVATURE"
+      ]
+    },
+    "defaultMaterial.003_BakedMaterialId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "04ce1af867bf8097c92eee724f7213c797d738ac63ab2199606363aaee191c06",
+      "packed": true,
+      "packed_sha256": "44d2a64c869b19262e0950afa5cf94c51eaf115e4036e0fd3a6b4ce3f8d3f578",
+      "uses": [
+        "baked.MATERIAL_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "c12f0c736428eb0135a3c5fa88b30a6eb3e41f1db8f44daaf3ad54306c7c621c",
+      "packed": true,
+      "packed_sha256": "c1a6fe18475c7538100cf6163ebc3c5157dff5acd6815b708a8b1cd01532a5a7",
+      "uses": [
+        "baked.NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "e29e12a2d0000f46cba109f2f2144f6bc3630d9c213ed2c3d45cf882b8bfbbde",
+      "packed": true,
+      "packed_sha256": "8279a5ca8e9ffed5a95e0ac7b169489e684ecfb7b3a7cbcce3bf6dd0bad485de",
+      "uses": [
+        "baked.OBJECT_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "2232a6061d2d11d311a8652e7b050a7df905bdcccdb428fd6f3e047108b71c63",
+      "packed": true,
+      "packed_sha256": "686ead28ebbd913f102e3ef2bbd17125f976cfcfb538935dfe11b89bbbae1076",
+      "uses": [
+        "baked.OBJECT_NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedPosition": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "9d9a74b3c3876574b8a4c6753b203922663de6a5faba75cb777d9c14d7820962",
+      "packed": true,
+      "packed_sha256": "16e2ac50b0cbb2b50a7544de2776953709f897637f660bee9412f0c7b8d24e27",
+      "uses": [
+        "baked.POSITION"
+      ]
+    },
+    "defaultMaterial.003_BakedThickness": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "99829f5319a063ef45dd7a047e7ca8427123b449028cf3d3e0bb7f23a9874102",
+      "packed": true,
+      "packed_sha256": "5a1e31b7bea2ddef145edc7eb4512a9f1cdebf226ff70d63e9a4d059aeeb63c8",
+      "uses": [
+        "baked.THICKNESS"
+      ]
+    },
+    "defaultMaterial.003_BakedUvBorder": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "723a4d44c716f6ecfc4fdb15f9ee39ceb03b5ba946d88b9ea00cff1eab59a226",
+      "packed": true,
+      "packed_sha256": "ad98b4eeebecfd2c6a658f1fa8cfbe28251d5b2e30fcdc2881cbb0f64a0a8573",
+      "uses": [
+        "baked.UV_BORDER"
+      ]
+    },
+    "defaultMaterial.003_BakedUvIsland": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "90c984ff7d426f4ff2c6e8246a501b60f183c54cc1b83f657fb5f19470457b70",
+      "packed": true,
+      "packed_sha256": "5cbfa282170e0b64edb7e73b03dbf3a64a5aa4dff416a92aa28cff6e896df38e",
+      "uses": [
+        "baked.UV_ISLAND"
+      ]
+    },
+    "defaultMaterial.003_BakedWorldNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "a5f0951f26c98b872e04c2faecfbd4a9758abfd28546f70d473e86517ba6627f",
+      "packed": true,
+      "packed_sha256": "dabc8ba49bae2e0bd66fb63b179eade62755c45ffbd2a9001f86dd803e2c8e3d",
+      "uses": [
+        "baked.WORLD_NORMAL"
+      ]
+    }
+  },
+  "reloaded_native": {
+    "state": "SHADER",
+    "serial": 1213,
+    "bound_serial": 1213,
+    "pending_resources": false,
+    "error": "",
+    "attached": true,
+    "rebuild_pending": false,
+    "graph_builds": 1,
+    "binding_updates": 0,
+    "update_calls": 0,
+    "resource_steps": 0
+  },
+  "authored_sources_reopened": {
+    "Open Painter Detail - Abrasion Mask V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "8456f0c9d5de30cf0533a7313dd5c18e8ff5a8bc1789b07162f4b477b97315d1",
+      "packed": true,
+      "packed_sha256": "f7d2cff60e36408731ad6884bc8c91ce014c574649f7ab61de25ba2652e002e8",
+      "uses": [
+        "Scratched exposed steel.masks[0].image"
+      ]
+    },
+    "Open Painter Detail - Brushed Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ca7354e30baaf1f340b7e2a634208a85a6e0facd47977035a0993dfd4e1c94d3",
+      "packed": true,
+      "packed_sha256": "4a0a584f34377c0c2e1a343bd03764a82ee089a82585d1c1873e2879f7f149f8",
+      "uses": [
+        "Steel substrate.channels[0].detail_image",
+        "Steel substrate.channels[1].detail_image",
+        "Steel substrate.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Polymer Grain": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "94883cbd77b8054bdd4a44f1525bdb7d00f68131e5b23195d237e39e4b70e3f9",
+      "packed": true,
+      "packed_sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "uses": [
+        "Blue paint coat.channels[0].detail_image",
+        "Blue paint coat.channels[1].detail_image",
+        "Blue paint coat.channels[4].detail_image"
+      ]
+    },
+    "Open Painter Detail - Rust Relief V2": {
+      "size": [
+        1254,
+        1254
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "dfaa70a53d759fe192c0ea7f53a77b2b1085c240b17632f2eb5666df8389b4e2",
+      "packed": true,
+      "packed_sha256": "7cbc5d95ef6926ea9b0ae900d3efe95b3df8815d0c1b98ac43a144c37ade3968",
+      "uses": [
+        "Oxide beneath paint.channels[0].detail_image",
+        "Oxide beneath paint.channels[1].detail_image"
+      ]
+    },
+    "defaultMaterial.003_BakedAo": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "0b1e104bd6096176aad548bf5fe7409043e0da22d95e579264ef84aac381eaa9",
+      "packed": true,
+      "packed_sha256": "5a0734e229b823c821085b9ce635d3a53df82c5a2bdcc4092ccf02a345e67bd3",
+      "uses": [
+        "baked.AO"
+      ]
+    },
+    "defaultMaterial.003_BakedCurvature": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "ad7b9c35cecbc59d6eb88f9ae289bf364a0c632757633d217043bf815a22c89d",
+      "packed": true,
+      "packed_sha256": "e68358d82ccb150d4168b72c976feccf6089f1ae217135fa3751fef3c914bef1",
+      "uses": [
+        "baked.CURVATURE"
+      ]
+    },
+    "defaultMaterial.003_BakedMaterialId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "04ce1af867bf8097c92eee724f7213c797d738ac63ab2199606363aaee191c06",
+      "packed": true,
+      "packed_sha256": "44d2a64c869b19262e0950afa5cf94c51eaf115e4036e0fd3a6b4ce3f8d3f578",
+      "uses": [
+        "baked.MATERIAL_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "c12f0c736428eb0135a3c5fa88b30a6eb3e41f1db8f44daaf3ad54306c7c621c",
+      "packed": true,
+      "packed_sha256": "c1a6fe18475c7538100cf6163ebc3c5157dff5acd6815b708a8b1cd01532a5a7",
+      "uses": [
+        "baked.NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectId": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "e29e12a2d0000f46cba109f2f2144f6bc3630d9c213ed2c3d45cf882b8bfbbde",
+      "packed": true,
+      "packed_sha256": "8279a5ca8e9ffed5a95e0ac7b169489e684ecfb7b3a7cbcce3bf6dd0bad485de",
+      "uses": [
+        "baked.OBJECT_ID"
+      ]
+    },
+    "defaultMaterial.003_BakedObjectNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "2232a6061d2d11d311a8652e7b050a7df905bdcccdb428fd6f3e047108b71c63",
+      "packed": true,
+      "packed_sha256": "686ead28ebbd913f102e3ef2bbd17125f976cfcfb538935dfe11b89bbbae1076",
+      "uses": [
+        "baked.OBJECT_NORMAL"
+      ]
+    },
+    "defaultMaterial.003_BakedPosition": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "9d9a74b3c3876574b8a4c6753b203922663de6a5faba75cb777d9c14d7820962",
+      "packed": true,
+      "packed_sha256": "16e2ac50b0cbb2b50a7544de2776953709f897637f660bee9412f0c7b8d24e27",
+      "uses": [
+        "baked.POSITION"
+      ]
+    },
+    "defaultMaterial.003_BakedThickness": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "99829f5319a063ef45dd7a047e7ca8427123b449028cf3d3e0bb7f23a9874102",
+      "packed": true,
+      "packed_sha256": "5a1e31b7bea2ddef145edc7eb4512a9f1cdebf226ff70d63e9a4d059aeeb63c8",
+      "uses": [
+        "baked.THICKNESS"
+      ]
+    },
+    "defaultMaterial.003_BakedUvBorder": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "723a4d44c716f6ecfc4fdb15f9ee39ceb03b5ba946d88b9ea00cff1eab59a226",
+      "packed": true,
+      "packed_sha256": "ad98b4eeebecfd2c6a658f1fa8cfbe28251d5b2e30fcdc2881cbb0f64a0a8573",
+      "uses": [
+        "baked.UV_BORDER"
+      ]
+    },
+    "defaultMaterial.003_BakedUvIsland": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "90c984ff7d426f4ff2c6e8246a501b60f183c54cc1b83f657fb5f19470457b70",
+      "packed": true,
+      "packed_sha256": "5cbfa282170e0b64edb7e73b03dbf3a64a5aa4dff416a92aa28cff6e896df38e",
+      "uses": [
+        "baked.UV_ISLAND"
+      ]
+    },
+    "defaultMaterial.003_BakedWorldNormal": {
+      "size": [
+        2048,
+        2048
+      ],
+      "colorspace": "Non-Color",
+      "pixel_float32_sha256": "a5f0951f26c98b872e04c2faecfbd4a9758abfd28546f70d473e86517ba6627f",
+      "packed": true,
+      "packed_sha256": "dabc8ba49bae2e0bd66fb63b179eade62755c45ffbd2a9001f86dd803e2c8e3d",
+      "uses": [
+        "baked.WORLD_NORMAL"
+      ]
+    }
+  },
+  "outputs_after_reopen": {
+    "BASE_COLOR": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "33f4a18d9f0e402e063a942785dcc55e9e04504624eb637732c5fd86ff9f3786"
+    },
+    "ROUGHNESS": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "daaed67967d5a427a88244c6a6ab340ce73a9d9e2e6b820c5f515315ffcffb2c"
+    },
+    "METALLIC": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "70b86fda5fa99e6a655daafd3dfb63f7e6d840ca2f7f1f81f95c9ca6caf03ffd"
+    },
+    "NORMAL": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e"
+    },
+    "HEIGHT": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "cc0d212259388f2785b46405999eaf2c1e63af7220f2ee83b2b52c3f8068df35"
+    },
+    "AO": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+    },
+    "EMISSION": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "5a32675bdcb2f4f27b9b6e67d183923ef739cade791e61c4f5788b3c2eeaccfd"
+    },
+    "OPACITY": {
+      "revision": 3,
+      "dirty": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "pixel_float32_sha256": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+    }
+  },
+  "export_observation": {
+    "calls": {
+      "cpu_channel_steps": 8,
+      "image_write": 8
+    },
+    "phases": {
+      "source_generation": {
+        "calls": 896,
+        "wall_s": 7.376967171170691,
+        "cpu_s": 6.134136000000382,
+        "exclusive_wall_s": 7.358700964170566,
+        "exclusive_cpu_s": 6.119449000000401
+      },
+      "masking": {
+        "calls": 512,
+        "wall_s": 13.281738163037517,
+        "cpu_s": 11.221696000000122,
+        "exclusive_wall_s": 5.615474863967393,
+        "exclusive_cpu_s": 4.632636999999761
+      },
+      "filters": {
+        "calls": 128,
+        "wall_s": 0.025664706015959382,
+        "cpu_s": 0.024852999999893655,
+        "exclusive_wall_s": 0.025664706015959382,
+        "exclusive_cpu_s": 0.024852999999893655
+      },
+      "blending": {
+        "calls": 3328,
+        "wall_s": 0.4038377891847631,
+        "cpu_s": 0.3623180000010393,
+        "exclusive_wall_s": 0.4038377891847631,
+        "exclusive_cpu_s": 0.3623180000010393
+      },
+      "geometry": {
+        "calls": 1,
+        "wall_s": 2.9739127089997055,
+        "cpu_s": 2.6733169999999973,
+        "exclusive_wall_s": 2.9739127089997055,
+        "exclusive_cpu_s": 2.6733169999999973
+      },
+      "geometry_signature": {
+        "calls": 9,
+        "wall_s": 9.950198727892712e-05,
+        "cpu_s": 8.799999997677332e-05,
+        "exclusive_wall_s": 9.950198727892712e-05,
+        "exclusive_cpu_s": 8.799999997677332e-05
+      },
+      "image_read": {
+        "calls": 15,
+        "wall_s": 0.6613917889917502,
+        "cpu_s": 0.3508549999999673,
+        "exclusive_wall_s": 0.6613917889917502,
+        "exclusive_cpu_s": 0.3508549999999673
+      },
+      "image_write": {
+        "calls": 8,
+        "wall_s": 0.36774658200738486,
+        "cpu_s": 0.24295399999999745,
+        "exclusive_wall_s": 0.36774658200738486,
+        "exclusive_cpu_s": 0.24295399999999745
+      },
+      "packing": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      }
+    },
+    "counters": {
+      "output_buffer_allocated_bytes": 536870912,
+      "cache_misses": 903,
+      "image_read_bytes": 838838528,
+      "image_read_allocated_bytes": 838838528,
+      "cache_insert_bytes": 396351984,
+      "decoded_image_bytes": 159377984,
+      "detail_decoded_bytes": 18870192,
+      "detail_sampled_strips": 384,
+      "detail_sampled_pixels": 12582912,
+      "detail_sampled_bytes": 50331648,
+      "cache_hits": 4476,
+      "cache_evictions": 2,
+      "detail_decoded_reuses": 381,
+      "image_write_bytes": 536870912,
+      "output_cache_capacity_skips": 1,
+      "detail_reused_strips": 640
+    },
+    "distributions": {
+      "indivisible_compute_s": {
+        "samples": 2816,
+        "p50": 0.00018043750242213719,
+        "p95": 0.031917906751914416,
+        "maximum": 3.0060439579974627
+      },
+      "cooperative_compute_s": {
+        "samples": 792,
+        "p50": 0.016456020501209423,
+        "p95": 0.04283824999911301,
+        "maximum": 3.0060439579974627
+      }
+    },
+    "last_observed_bytes": {
+      "output_buffer_bytes": 67108864,
+      "cache_controlled_bytes": 262134256
+    },
+    "peak_observed_bytes": {
+      "output_buffer_bytes": 67108864,
+      "cache_controlled_bytes": 268425712
+    },
+    "process_peak_rss_bytes": 4149559296
+  },
+  "exported_files": [
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_BaseColor.png",
+      "sha256": "baa0ba79abe916c0995c6a53a590f2ee23f1b40d00a3b6021d5919d0480b21a5",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": false
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Roughness.png",
+      "sha256": "06424baa8f9b03b7c97fead9975d0528029d1dff0a2d29e6541fbb23e2a68ae1",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": true
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Metallic.png",
+      "sha256": "bd8bb10c6b31547078f1b749ff68866963f607239bee433bb7d1092a300ad42b",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": false
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Normal.png",
+      "sha256": "975efc0994625120290f0444f506bb23f67fd4f98ac33d7e492417703486f8ab",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": true
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Height.png",
+      "sha256": "04a55303f6ff2e2d005a7709f0b1b1099a5ecf788dd392523b4e9aea98f152c2",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": true
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_AO.png",
+      "sha256": "1fe7bdcc414039dafc533f5fed2062f645c5c57a802032e01c241f1a06beb9dc",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": false
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Emission.png",
+      "sha256": "47a9136a8b7474c1c0ab454f215ea7245ba88c75081512166b81ad53a5000177",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": false
+    },
+    {
+      "path": "/Volumes/SSD/projects/open_painter/.blender-test/project-native/persistence-export/exports/defaultMaterial.003_Opacity.png",
+      "sha256": "1fe7bdcc414039dafc533f5fed2062f645c5c57a802032e01c241f1a06beb9dc",
+      "size": [
+        2048,
+        2048
+      ],
+      "bit_depth": 16,
+      "current_data_verified": false
+    }
+  ],
+  "combined_normal": {
+    "raw_normal_input_sha256": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e",
+    "height_input_sha256": "cc0d212259388f2785b46405999eaf2c1e63af7220f2ee83b2b52c3f8068df35",
+    "exported_uint16_sha256": "650905aa9b55e4fedda81069cb6d18aeb1a2b2cf9b3c91227c400e872608458e",
+    "xy_rms": 0.062273748219013214,
+    "max_unit_length_error": 1.7881393432617188e-07
+  },
+  "source_sha256_after": "dc8d39b8faadf7e67764e7c6b2c6c2d47101ad23bd7440579226664fa3b6af79"
+}

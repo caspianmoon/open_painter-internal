@@ -22,6 +22,19 @@ assert result == {"FINISHED"}, result
 module = "bl_ext.open_painter_test.open_painter"
 assert addon_utils.check(module)[1]
 assert importlib.import_module(module + ".constants").VERSION == version
+composer = importlib.import_module(module + ".smart_materials.composer")
+generated = importlib.import_module(module + ".smart_materials.generated_sources")
+assert len(composer.CATALOG) == 50
+for recipe in composer.CATALOG.values():
+    composer.validate(recipe)
+assert generated.ROOT.resolve().is_relative_to(Path(repo.directory).resolve())
+for identifier in sorted(generated.SOURCE_IDS):
+    image = generated.load(identifier)
+    assert image.packed_file and image.colorspace_settings.name == "Non-Color"
+    assert all(image.size)
+    bpy.data.images.remove(image)
+assert callable(importlib.import_module(module + ".export.surface_normal").combined)
+print("INSTALLED_LIBRARY_PASS", len(composer.CATALOG), "recipes", len(generated.SOURCE_IDS), "generated images")
 for _ in range(3):
     addon_utils.disable(module, default_set=True)
     assert not hasattr(bpy.types.Scene, "open_painter")
@@ -32,6 +45,21 @@ assert bpy.ops.open_painter.texture_set(action="ASSIGN") == {"FINISHED"}
 assert bpy.ops.open_painter.layer(action="FILL") == {"FINISHED"}
 ts = bpy.context.scene.open_painter.texture_sets[0]
 ts.resolution = "512"
+shader_preview = importlib.import_module(module + '.evaluation.shader_preview')
+material_manager = importlib.import_module(module + '.core.material_manager')
+stack = importlib.import_module(module + '.core.layer_stack')
+Metrics = importlib.import_module(module + '.evaluation.metrics').Metrics
+assert ts.preview_backend == 'LIVE' and not ts.outputs
+material_manager.repair(ts)
+graph = shader_preview.ensure(bpy.context.scene, ts)
+with Metrics() as observed:
+    stack.channel_for(ts.layers[0], 'ROUGHNESS').value = .37
+    assert shader_preview.current(bpy.context.scene, ts)
+    assert shader_preview.ensure(bpy.context.scene, ts) is graph
+    assert observed.phases['image_write']['calls'] == 0
+    assert observed.counts['shader_resource_requests'] == 0
+assert not ts.outputs
+print('INSTALLED_NATIVE_SHADER_PASS', shader_preview.diagnostics(bpy.context.scene, ts))
 assert bpy.ops.open_painter.texture_set(action="REFRESH") == {"FINISHED"}
 addon_utils.disable(module, default_set=True)
 print(

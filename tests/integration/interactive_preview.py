@@ -14,6 +14,7 @@ from open_painter.evaluation.snapshots import capture
 open_painter.register()
 scene=bpy.context.scene
 ts=sets.create(scene,'Preview authority',1024)
+ts.preview_backend='CPU'  # Disposable raster proxies belong to the explicit CPU mode.
 layer=stack.add(ts,'FILL')
 rough=stack.channel_for(layer,'ROUGHNESS'); rough.value=.25
 LayerEvaluator(scene).evaluate_texture_set(ts.id)

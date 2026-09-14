@@ -1,0 +1,5091 @@
+{
+  "Clean Brushed Steel": {
+    "category": "Metals",
+    "description": "Fine parallel brushing with sparse cross scratches and adjustable roughness.",
+    "layers": [
+      {
+        "name": "Brushed steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.29,
+        "metallic": 1,
+        "scale": 110,
+        "detail": 0.1,
+        "procedural": "BRUSHED",
+        "height": 0.018,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.06,
+          "roughness": 0.035,
+          "height": 0.018
+        }
+      },
+      {
+        "name": "Micro scratches",
+        "color": [
+          0.63,
+          0.64,
+          0.63
+        ],
+        "roughness": 0.38,
+        "metallic": 1,
+        "scale": 160,
+        "detail": 0.06,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.014,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.1,
+          "scale": 150
+        }
+      }
+    ],
+    "surface": {
+      "anisotropy": 0.65
+    }
+  },
+  "Worn Brushed Steel": {
+    "category": "Metals",
+    "description": "Brushed grain, exposed polished edges, handling marks and recess grime.",
+    "layers": [
+      {
+        "name": "Brushed substrate",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.38,
+        "metallic": 1,
+        "scale": 92,
+        "detail": 0.18,
+        "procedural": "BRUSHED",
+        "height": 0.026,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.1,
+          "roughness": 0.055,
+          "height": 0.026
+        }
+      },
+      {
+        "name": "Cross scratches",
+        "color": [
+          0.62,
+          0.64,
+          0.64
+        ],
+        "roughness": 0.45,
+        "metallic": 1,
+        "scale": 70,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.028,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.24,
+          "scale": 70
+        }
+      },
+      {
+        "name": "Polished edges",
+        "color": [
+          0.74,
+          0.75,
+          0.73
+        ],
+        "roughness": 0.14,
+        "metallic": 1,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.37,
+          "scale": 55
+        }
+      },
+      {
+        "name": "Handling oils",
+        "color": [
+          0.43,
+          0.42,
+          0.38
+        ],
+        "roughness": 0.19,
+        "metallic": 0.6,
+        "scale": 7,
+        "detail": 0.18,
+        "procedural": "FINGERPRINTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.17,
+          "scale": 7
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.08,
+          "roughness": 0.12
+        }
+      },
+      {
+        "name": "Recess grime",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.81,
+        "metallic": 0.0,
+        "scale": 24,
+        "detail": 0.6,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.36,
+          "scale": 30
+        }
+      }
+    ],
+    "surface": {
+      "anisotropy": 0.48
+    }
+  },
+  "Machined Aluminum": {
+    "category": "Metals",
+    "description": "Bright aluminum with fine cutter passes and a configurable anisotropic response.",
+    "layers": [
+      {
+        "name": "Aluminum stock",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.23,
+        "metallic": 1,
+        "scale": 84,
+        "detail": 0.11,
+        "procedural": "MACHINING",
+        "height": 0.022
+      },
+      {
+        "name": "Machining pass variation",
+        "color": [
+          0.8,
+          0.83,
+          0.84
+        ],
+        "roughness": 0.32,
+        "metallic": 1,
+        "scale": 180,
+        "detail": 0.07,
+        "procedural": "BRUSHED",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.16,
+          "scale": 5
+        },
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.045,
+          "roughness": 0.028
+        }
+      }
+    ],
+    "surface": {
+      "anisotropy": 0.78
+    }
+  },
+  "Scratched Aluminum": {
+    "category": "Metals",
+    "description": "Random intersecting scratches over machined aluminum, with impact pits and polished creases.",
+    "layers": [
+      {
+        "name": "Aluminum substrate",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.33,
+        "metallic": 1,
+        "scale": 96,
+        "detail": 0.12,
+        "procedural": "MACHINING",
+        "height": 0.016,
+        "generated_source": {
+          "id": "machined_scratches",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.075,
+          "roughness": 0.085,
+          "height": 0.016
+        }
+      },
+      {
+        "name": "Deep scratches",
+        "color": [
+          0.71,
+          0.74,
+          0.74
+        ],
+        "roughness": 0.52,
+        "metallic": 1,
+        "scale": 42,
+        "detail": 0.2,
+        "procedural": "SCRATCHES",
+        "height": -0.055,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.35,
+          "scale": 42
+        }
+      },
+      {
+        "name": "Impact dents",
+        "color": [
+          0.77,
+          0.79,
+          0.8
+        ],
+        "roughness": 0.47,
+        "metallic": 1,
+        "scale": 24,
+        "detail": 0.13,
+        "procedural": "PITS",
+        "height": -0.07,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.15,
+          "scale": 24
+        }
+      },
+      {
+        "name": "Worn edges",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.16,
+        "metallic": 1,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.34,
+          "scale": 65
+        }
+      }
+    ]
+  },
+  "Cast Iron": {
+    "category": "Metals",
+    "description": "Coarse casting grain and tiny pits under a dark oxide skin, with exposed metal on creases.",
+    "layers": [
+      {
+        "name": "Iron casting",
+        "color": [
+          0.69,
+          0.66,
+          0.61
+        ],
+        "roughness": 0.67,
+        "metallic": 1,
+        "scale": 92,
+        "detail": 0.36,
+        "procedural": "CASTING_NOISE",
+        "height": 0.09,
+        "generated_source": {
+          "id": "cast_iron_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.26,
+          "roughness": 0.12,
+          "height": 0.09
+        }
+      },
+      {
+        "name": "Casting oxide skin",
+        "color": [
+          0.046,
+          0.048,
+          0.044
+        ],
+        "roughness": 0.85,
+        "metallic": 0.0,
+        "scale": 34,
+        "detail": 0.6,
+        "procedural": "FBM",
+        "height": 0.025,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.18,
+          "scale": 80,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "cast_iron_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.32,
+          "roughness": 0.08,
+          "height": 0.025
+        }
+      },
+      {
+        "name": "Pinpoint oxidation",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.91,
+        "metallic": 0.0,
+        "scale": 145,
+        "detail": 0.8,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.16,
+          "scale": 70
+        }
+      },
+      {
+        "name": "Cavity deposits",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.31,
+          "scale": 35
+        }
+      }
+    ]
+  },
+  "Raw Industrial Steel": {
+    "category": "Metals",
+    "description": "Rolling marks, patchy mill scale and slight brown manufacturing discoloration.",
+    "layers": [
+      {
+        "name": "Rolled steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.44,
+        "metallic": 1,
+        "scale": 60,
+        "detail": 0.24,
+        "procedural": "BRUSHED",
+        "height": 0.025,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.14,
+          "roughness": 0.065,
+          "height": 0.025
+        }
+      },
+      {
+        "name": "Blue black mill scale",
+        "color": [
+          0.047,
+          0.063,
+          0.077
+        ],
+        "roughness": 0.65,
+        "metallic": 0.15,
+        "scale": 9,
+        "detail": 0.65,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.48,
+          "scale": 9
+        }
+      },
+      {
+        "name": "Rolling scratches",
+        "color": [
+          0.59,
+          0.6,
+          0.57
+        ],
+        "roughness": 0.3,
+        "metallic": 1,
+        "scale": 78,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.025,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.16,
+          "scale": 78
+        }
+      },
+      {
+        "name": "Light flash rust",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.76,
+        "metallic": 0.0,
+        "scale": 31,
+        "detail": 0.65,
+        "procedural": "SPOTS",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.1,
+          "scale": 31
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.45,
+          "roughness": 0.08
+        }
+      }
+    ]
+  },
+  "Polished Chrome": {
+    "category": "Metals",
+    "description": "Near mirror chromium with sparse fine scratches, soft wipe marks and fingerprints.",
+    "layers": [
+      {
+        "name": "Polished chromium",
+        "color": [
+          0.55,
+          0.556,
+          0.553
+        ],
+        "roughness": 0.055,
+        "metallic": 1,
+        "scale": 80,
+        "detail": 0.012,
+        "procedural": "FBM"
+      },
+      {
+        "name": "Hairline scratches",
+        "color": [
+          0.55,
+          0.556,
+          0.553
+        ],
+        "roughness": 0.23,
+        "metallic": 1,
+        "scale": 190,
+        "detail": 0.03,
+        "procedural": "SCRATCHES",
+        "height": -0.006,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.08,
+          "scale": 190
+        }
+      },
+      {
+        "name": "Wipe smudges",
+        "color": [
+          0.47,
+          0.47,
+          0.45
+        ],
+        "roughness": 0.19,
+        "metallic": 0.85,
+        "scale": 5,
+        "detail": 0.12,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.13,
+          "scale": 5
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.025,
+          "roughness": 0.11
+        }
+      },
+      {
+        "name": "Fingerprints",
+        "color": [
+          0.43,
+          0.42,
+          0.4
+        ],
+        "roughness": 0.27,
+        "metallic": 0.8,
+        "scale": 6,
+        "detail": 0.3,
+        "procedural": "FINGERPRINTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.1,
+          "scale": 8
+        }
+      }
+    ]
+  },
+  "Old Brass": {
+    "category": "Metals",
+    "description": "Warm brass with dull tarnish, scratches and deep dark deposits in recesses.",
+    "layers": [
+      {
+        "name": "Brass alloy",
+        "color": [
+          0.78,
+          0.57,
+          0.26
+        ],
+        "roughness": 0.32,
+        "metallic": 1,
+        "scale": 44,
+        "detail": 0.15,
+        "procedural": "FBM",
+        "height": 0.015,
+        "generated_source": {
+          "id": "brass_tarnish",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.18,
+          "roughness": 0.13,
+          "height": 0.015
+        }
+      },
+      {
+        "name": "Brown tarnish",
+        "color": [
+          0.12,
+          0.068,
+          0.019
+        ],
+        "roughness": 0.72,
+        "metallic": 0.15,
+        "scale": 12,
+        "detail": 0.7,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.4,
+          "scale": 12
+        },
+        "generated_source": {
+          "id": "brass_tarnish",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.65,
+          "roughness": 0.14
+        }
+      },
+      {
+        "name": "Handling scratches",
+        "color": [
+          0.78,
+          0.57,
+          0.26
+        ],
+        "roughness": 0.23,
+        "metallic": 1,
+        "scale": 95,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.018,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.17,
+          "scale": 95
+        }
+      },
+      {
+        "name": "Dark recess oxidation",
+        "color": [
+          0.038,
+          0.033,
+          0.016
+        ],
+        "roughness": 0.9,
+        "metallic": 0.0,
+        "scale": 60,
+        "detail": 0.5,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.56,
+          "scale": 28
+        }
+      },
+      {
+        "name": "Touched edges",
+        "color": [
+          0.78,
+          0.57,
+          0.26
+        ],
+        "roughness": 0.18,
+        "metallic": 1,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.19,
+          "scale": 70
+        }
+      }
+    ]
+  },
+  "Antique Bronze": {
+    "category": "Metals",
+    "description": "Aged bronze, brown tarnish and green patina restricted to sheltered cavities.",
+    "layers": [
+      {
+        "name": "Bronze casting",
+        "color": [
+          0.61,
+          0.375,
+          0.16
+        ],
+        "roughness": 0.43,
+        "metallic": 1,
+        "scale": 78,
+        "detail": 0.2,
+        "procedural": "PITS",
+        "height": 0.035
+      },
+      {
+        "name": "Aged brown surface",
+        "color": [
+          0.097,
+          0.049,
+          0.018
+        ],
+        "roughness": 0.68,
+        "metallic": 0.25,
+        "scale": 19,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.31,
+          "scale": 55,
+          "invert": true
+        }
+      },
+      {
+        "name": "Green cavity patina",
+        "color": [
+          0.055,
+          0.26,
+          0.175
+        ],
+        "roughness": 0.86,
+        "metallic": 0.0,
+        "scale": 32,
+        "detail": 0.7,
+        "procedural": "FBM",
+        "height": 0.03,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.57,
+          "scale": 35
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.45,
+          "roughness": 0.075,
+          "height": 0.03
+        }
+      },
+      {
+        "name": "Fine handling scratches",
+        "color": [
+          0.61,
+          0.375,
+          0.16
+        ],
+        "roughness": 0.3,
+        "metallic": 1,
+        "scale": 130,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.012,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.09,
+          "scale": 130
+        }
+      },
+      {
+        "name": "Polished high points",
+        "color": [
+          0.69,
+          0.43,
+          0.2
+        ],
+        "roughness": 0.22,
+        "metallic": 1,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.21,
+          "scale": 75
+        }
+      }
+    ]
+  },
+  "Oxidized Copper": {
+    "category": "Metals",
+    "description": "Bare copper beneath granular green oxidation, darker oxide and rain washed streaks.",
+    "layers": [
+      {
+        "name": "Copper sheet",
+        "color": [
+          1.0,
+          0.65,
+          0.527
+        ],
+        "roughness": 0.29,
+        "metallic": 1,
+        "scale": 72,
+        "detail": 0.12,
+        "procedural": "BRUSHED",
+        "height": 0.015,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.06,
+          "roughness": 0.045,
+          "height": 0.015
+        }
+      },
+      {
+        "name": "Brown copper oxide",
+        "color": [
+          0.15,
+          0.039,
+          0.014
+        ],
+        "roughness": 0.68,
+        "metallic": 0.0,
+        "scale": 11,
+        "detail": 0.65,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.62,
+          "scale": 15
+        }
+      },
+      {
+        "name": "Turquoise patina",
+        "color": [
+          0.058,
+          0.315,
+          0.25
+        ],
+        "roughness": 0.82,
+        "metallic": 0.0,
+        "scale": 48,
+        "detail": 0.58,
+        "procedural": "PITS",
+        "height": 0.045,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.46,
+          "scale": 28
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.4,
+          "roughness": 0.085,
+          "height": 0.045
+        }
+      },
+      {
+        "name": "Sheltered green deposits",
+        "color": [
+          0.02,
+          0.139,
+          0.075
+        ],
+        "roughness": 0.89,
+        "metallic": 0.0,
+        "scale": 37,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.36,
+          "scale": 37
+        }
+      },
+      {
+        "name": "Rain washed copper",
+        "color": [
+          1.0,
+          0.65,
+          0.527
+        ],
+        "roughness": 0.4,
+        "metallic": 1,
+        "scale": 22,
+        "detail": 0.14,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.18,
+          "scale": 22
+        }
+      }
+    ]
+  },
+  "Worn Painted Metal": {
+    "category": "Painted and Coated Metals",
+    "description": "Steel below orange peel paint, edge chips, fine scratches and cavity dirt.",
+    "layers": [
+      {
+        "name": "Steel substrate",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.42,
+        "metallic": 1,
+        "scale": 80,
+        "detail": 0.16,
+        "procedural": "BRUSHED",
+        "height": 0.014,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.08,
+          "roughness": 0.055,
+          "height": 0.014
+        }
+      },
+      {
+        "name": "Oxide beneath paint",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.85,
+        "metallic": 0.0,
+        "scale": 52,
+        "detail": 0.65,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.14,
+          "scale": 30
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.48,
+          "roughness": 0.08
+        }
+      },
+      {
+        "name": "Blue paint coat",
+        "color": [
+          0.038,
+          0.133,
+          0.236
+        ],
+        "roughness": 0.42,
+        "metallic": 0.0,
+        "scale": 112,
+        "detail": 0.12,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.028,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.28,
+          "scale": 48,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.06,
+          "roughness": 0.035,
+          "height": 0.028
+        }
+      },
+      {
+        "name": "Scratched exposed steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.49,
+        "metallic": 1,
+        "scale": 78,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.03,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.14,
+          "scale": 78
+        }
+      },
+      {
+        "name": "Recess dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.87,
+        "metallic": 0.0,
+        "scale": 30,
+        "detail": 0.7,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.31,
+          "scale": 30
+        }
+      }
+    ]
+  },
+  "Heavy Chipped Paint": {
+    "category": "Painted and Coated Metals",
+    "description": "Broad paint loss reveals pitted steel and corrosion beneath ragged surviving flakes.",
+    "layers": [
+      {
+        "name": "Pitted steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.62,
+        "metallic": 1,
+        "scale": 54,
+        "detail": 0.28,
+        "procedural": "PITS",
+        "height": 0.06
+      },
+      {
+        "name": "Oxidized exposed metal",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.91,
+        "metallic": 0.0,
+        "scale": 22,
+        "detail": 0.85,
+        "procedural": "GRUNGE",
+        "height": 0.09,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.59,
+          "scale": 22
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.62,
+          "roughness": 0.09,
+          "height": 0.09
+        }
+      },
+      {
+        "name": "Old primer",
+        "color": [
+          0.11,
+          0.06,
+          0.037
+        ],
+        "roughness": 0.81,
+        "metallic": 0.0,
+        "scale": 22,
+        "detail": 0.22,
+        "procedural": "CRACKS",
+        "height": 0.07,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.39,
+          "scale": 20,
+          "invert": true
+        }
+      },
+      {
+        "name": "Flaking yellow paint",
+        "color": [
+          0.64,
+          0.32,
+          0.033
+        ],
+        "roughness": 0.63,
+        "metallic": 0.0,
+        "scale": 18,
+        "detail": 0.4,
+        "procedural": "CRACKS",
+        "height": 0.11,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.68,
+          "scale": 14,
+          "invert": true
+        },
+        "mask_effects": [
+          {
+            "kind": "NOISE",
+            "amount": 0.49,
+            "scale": 6,
+            "contrast": 9
+          }
+        ]
+      },
+      {
+        "name": "Deep scoring",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.52,
+        "metallic": 1,
+        "scale": 35,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.065,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.28,
+          "scale": 35
+        }
+      },
+      {
+        "name": "Trapped dust",
+        "color": [
+          0.23,
+          0.184,
+          0.133
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.38,
+          "scale": 45
+        }
+      }
+    ]
+  },
+  "Factory Powder-Coated Metal": {
+    "category": "Painted and Coated Metals",
+    "description": "Fine textured powder coating, restrained handling scratches and slight crease exposure.",
+    "layers": [
+      {
+        "name": "Steel beneath coating",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.45,
+        "metallic": 1,
+        "scale": 105,
+        "detail": 0.1,
+        "procedural": "BRUSHED",
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.055,
+          "roughness": 0.04
+        }
+      },
+      {
+        "name": "Powder coat",
+        "color": [
+          0.051,
+          0.065,
+          0.074
+        ],
+        "roughness": 0.59,
+        "metallic": 0.0,
+        "scale": 92,
+        "detail": 0.18,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.055,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.12,
+          "scale": 105,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.07,
+          "roughness": 0.06,
+          "height": 0.055
+        }
+      },
+      {
+        "name": "Light coating scratches",
+        "color": [
+          0.07,
+          0.08,
+          0.086
+        ],
+        "roughness": 0.48,
+        "metallic": 0.0,
+        "scale": 155,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.012,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.07,
+          "scale": 155
+        }
+      }
+    ]
+  },
+  "Military Painted Steel": {
+    "category": "Painted and Coated Metals",
+    "description": "Matte olive coating, rubbed metal creases, dry scratches, earth and corrosion.",
+    "layers": [
+      {
+        "name": "Armor steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.48,
+        "metallic": 1,
+        "scale": 66,
+        "detail": 0.2,
+        "procedural": "BRUSHED",
+        "height": 0.02,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.1,
+          "roughness": 0.065,
+          "height": 0.02
+        }
+      },
+      {
+        "name": "Corrosion undercoat",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.87,
+        "metallic": 0.0,
+        "scale": 44,
+        "detail": 0.7,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.25,
+          "scale": 26
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.5,
+          "roughness": 0.085
+        }
+      },
+      {
+        "name": "Olive drab coating",
+        "color": [
+          0.088,
+          0.101,
+          0.039
+        ],
+        "roughness": 0.79,
+        "metallic": 0.0,
+        "scale": 96,
+        "detail": 0.28,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.04,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.37,
+          "scale": 39,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.1,
+          "roughness": 0.06,
+          "height": 0.04
+        }
+      },
+      {
+        "name": "Abrasion scoring",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.39,
+        "metallic": 1,
+        "scale": 62,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.04,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.22,
+          "scale": 62
+        }
+      },
+      {
+        "name": "Cavity earth",
+        "color": [
+          0.093,
+          0.065,
+          0.034
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 25,
+        "detail": 0.8,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.48,
+          "scale": 25
+        }
+      },
+      {
+        "name": "Settled dust",
+        "color": [
+          0.23,
+          0.184,
+          0.133
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 40,
+        "detail": 0.4,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "DUST",
+          "amount": 0.32,
+          "scale": 40
+        }
+      }
+    ]
+  },
+  "Old Enamel Metal": {
+    "category": "Painted and Coated Metals",
+    "description": "Faded cream enamel with crazing, dark cracks, worn edges and thin surface scratches.",
+    "layers": [
+      {
+        "name": "Iron substrate",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.53,
+        "metallic": 1,
+        "scale": 70,
+        "detail": 0.2,
+        "procedural": "PITS"
+      },
+      {
+        "name": "Rust at coating failures",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.83,
+        "metallic": 0.0,
+        "scale": 29,
+        "detail": 0.7,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.28,
+          "scale": 29
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.5,
+          "roughness": 0.08
+        }
+      },
+      {
+        "name": "Crazed cream enamel",
+        "color": [
+          0.66,
+          0.59,
+          0.43
+        ],
+        "roughness": 0.25,
+        "metallic": 0.0,
+        "scale": 32,
+        "detail": 0.55,
+        "procedural": "CRACKS",
+        "height": -0.042,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.24,
+          "scale": 58,
+          "invert": true
+        }
+      },
+      {
+        "name": "Faded enamel islands",
+        "color": [
+          0.78,
+          0.72,
+          0.56
+        ],
+        "roughness": 0.41,
+        "metallic": 0.0,
+        "scale": 7,
+        "detail": 0.17,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.25,
+          "scale": 7
+        }
+      },
+      {
+        "name": "Hairline surface marks",
+        "color": [
+          0.49,
+          0.45,
+          0.35
+        ],
+        "roughness": 0.51,
+        "metallic": 0.0,
+        "scale": 150,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.01,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.11,
+          "scale": 150
+        }
+      }
+    ],
+    "surface": {
+      "coat_weight": 0.5,
+      "coat_roughness": 0.18
+    }
+  },
+  "Rusting Painted Steel": {
+    "category": "Painted and Coated Metals",
+    "description": "Layered red paint over corroding steel, exposed chips, rust blooms and downward leakage.",
+    "layers": [
+      {
+        "name": "Steel substrate",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.58,
+        "metallic": 1,
+        "scale": 64,
+        "detail": 0.2,
+        "procedural": "PITS",
+        "height": 0.025
+      },
+      {
+        "name": "Deep oxide",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 25,
+        "detail": 0.75,
+        "procedural": "CRACKS",
+        "height": 0.09,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.61,
+          "scale": 23
+        }
+      },
+      {
+        "name": "Red paint coat",
+        "color": [
+          0.27,
+          0.044,
+          0.031
+        ],
+        "roughness": 0.53,
+        "metallic": 0.0,
+        "scale": 95,
+        "detail": 0.21,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.028,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.46,
+          "scale": 33,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.075,
+          "roughness": 0.045,
+          "height": 0.028
+        }
+      },
+      {
+        "name": "Active orange corrosion",
+        "color": [
+          0.42,
+          0.12,
+          0.023
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 58,
+        "detail": 0.75,
+        "procedural": "PITS",
+        "height": 0.065,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.31,
+          "scale": 35
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.55,
+          "roughness": 0.09,
+          "height": 0.065
+        }
+      },
+      {
+        "name": "Rust runoff",
+        "color": [
+          0.19,
+          0.047,
+          0.014
+        ],
+        "roughness": 0.78,
+        "metallic": 0.0,
+        "scale": 28,
+        "detail": 0.6,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.44,
+          "scale": 28
+        }
+      },
+      {
+        "name": "Recess grime",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.87,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.29,
+          "scale": 38
+        }
+      }
+    ]
+  },
+  "Automotive Painted Metal": {
+    "category": "Painted and Coated Metals",
+    "description": "Primer, saturated base coat, clearcoat response and subtle wash swirls with sparse scoring.",
+    "layers": [
+      {
+        "name": "Body steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.36,
+        "metallic": 1,
+        "scale": 145,
+        "detail": 0.08,
+        "procedural": "BRUSHED",
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.04,
+          "roughness": 0.025
+        }
+      },
+      {
+        "name": "Gray primer",
+        "color": [
+          0.25,
+          0.26,
+          0.24
+        ],
+        "roughness": 0.63,
+        "metallic": 0.0,
+        "scale": 105,
+        "detail": 0.1,
+        "procedural": "FBM"
+      },
+      {
+        "name": "Deep red base coat",
+        "color": [
+          0.31,
+          0.013,
+          0.022
+        ],
+        "roughness": 0.24,
+        "metallic": 0.0,
+        "scale": 170,
+        "detail": 0.055,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.009,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.025,
+          "roughness": 0.016,
+          "height": 0.009
+        }
+      },
+      {
+        "name": "Clearcoat wash swirls",
+        "color": [
+          0.3,
+          0.014,
+          0.023
+        ],
+        "roughness": 0.31,
+        "metallic": 0.0,
+        "scale": 17,
+        "detail": 0.045,
+        "procedural": "SWIRLS",
+        "height": -0.004,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.14,
+          "scale": 17
+        }
+      },
+      {
+        "name": "Fine clearcoat scratches",
+        "color": [
+          0.35,
+          0.019,
+          0.028
+        ],
+        "roughness": 0.39,
+        "metallic": 0.0,
+        "scale": 185,
+        "detail": 0.035,
+        "procedural": "SCRATCHES",
+        "height": -0.007,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.06,
+          "scale": 185
+        }
+      }
+    ],
+    "surface": {
+      "coat_weight": 1.0,
+      "coat_roughness": 0.085
+    }
+  },
+  "Burned Painted Metal": {
+    "category": "Painted and Coated Metals",
+    "description": "Blistered paint with charred zones, exposed heat-darkened steel and powdery soot.",
+    "layers": [
+      {
+        "name": "Heat darkened steel",
+        "color": [
+          0.35,
+          0.32,
+          0.27
+        ],
+        "roughness": 0.48,
+        "metallic": 1,
+        "scale": 15,
+        "detail": 0.35,
+        "procedural": "FBM"
+      },
+      {
+        "name": "Blistered green paint",
+        "color": [
+          0.042,
+          0.087,
+          0.056
+        ],
+        "roughness": 0.76,
+        "metallic": 0.0,
+        "scale": 30,
+        "detail": 0.55,
+        "procedural": "PITS",
+        "height": 0.12,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.55,
+          "scale": 27,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "burn_blisters",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.55,
+          "roughness": 0.13,
+          "height": 0.12
+        }
+      },
+      {
+        "name": "Scorched paint",
+        "color": [
+          0.035,
+          0.021,
+          0.013
+        ],
+        "roughness": 0.89,
+        "metallic": 0.0,
+        "scale": 34,
+        "detail": 0.7,
+        "procedural": "CRACKS",
+        "height": 0.07,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.53,
+          "scale": 6
+        },
+        "generated_source": {
+          "id": "burn_blisters",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.65,
+          "roughness": 0.08,
+          "height": 0.07
+        }
+      },
+      {
+        "name": "Soot deposition",
+        "color": [
+          0.017,
+          0.017,
+          0.016
+        ],
+        "roughness": 0.95,
+        "metallic": 0.0,
+        "scale": 22,
+        "detail": 0.45,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.35,
+          "scale": 12
+        }
+      },
+      {
+        "name": "Fine ash",
+        "color": [
+          0.2,
+          0.19,
+          0.17
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 95,
+        "detail": 0.5,
+        "procedural": "SPOTS",
+        "mask": {
+          "kind": "DUST",
+          "amount": 0.23,
+          "scale": 65
+        }
+      }
+    ]
+  },
+  "Heavy Rust": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Thick black oxide below broken rust scales, orange corrosion and pitted cavity deposits.",
+    "layers": [
+      {
+        "name": "Steel core",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.63,
+        "metallic": 1,
+        "scale": 43,
+        "detail": 0.25,
+        "procedural": "PITS",
+        "height": 0.04
+      },
+      {
+        "name": "Dark oxide bed",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 13,
+        "detail": 0.8,
+        "procedural": "FBM",
+        "height": 0.1
+      },
+      {
+        "name": "Rust flakes",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 27,
+        "detail": 0.95,
+        "procedural": "RUST_FLAKES",
+        "height": 0.17,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.72,
+          "scale": 18
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.75,
+          "roughness": 0.1,
+          "height": 0.17
+        }
+      },
+      {
+        "name": "Bright new rust",
+        "color": [
+          0.44,
+          0.15,
+          0.039
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 68,
+        "detail": 0.85,
+        "procedural": "PITS",
+        "height": 0.065,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.4,
+          "scale": 40
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.55,
+          "roughness": 0.09,
+          "height": 0.065
+        }
+      },
+      {
+        "name": "Dark rust cavities",
+        "color": [
+          0.039,
+          0.018,
+          0.011
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.43,
+          "scale": 28
+        }
+      }
+    ]
+  },
+  "Surface Rust": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Thin irregular orange oxidation on otherwise intact rolled steel.",
+    "layers": [
+      {
+        "name": "Intact steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.46,
+        "metallic": 1,
+        "scale": 94,
+        "detail": 0.15,
+        "procedural": "BRUSHED",
+        "height": 0.018,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.08,
+          "roughness": 0.05,
+          "height": 0.018
+        }
+      },
+      {
+        "name": "Thin brown oxide",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.71,
+        "metallic": 0.0,
+        "scale": 46,
+        "detail": 0.8,
+        "procedural": "SPOTS",
+        "height": 0.018,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.31,
+          "scale": 42
+        }
+      },
+      {
+        "name": "Orange flash rust",
+        "color": [
+          0.35,
+          0.091,
+          0.017
+        ],
+        "roughness": 0.83,
+        "metallic": 0.0,
+        "scale": 108,
+        "detail": 0.6,
+        "procedural": "RUST_PITTING",
+        "height": 0.012,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.18,
+          "scale": 64
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.45,
+          "roughness": 0.075,
+          "height": 0.012
+        }
+      }
+    ]
+  },
+  "Wet Rust": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Dark saturated rust with rough dry scales, low roughness moisture and glossy crevices.",
+    "layers": [
+      {
+        "name": "Dark wet corrosion",
+        "color": [
+          0.093,
+          0.024,
+          0.01
+        ],
+        "roughness": 0.55,
+        "metallic": 0.0,
+        "scale": 50,
+        "detail": 0.75,
+        "procedural": "PITS",
+        "height": 0.085,
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.55,
+          "roughness": 0.11,
+          "height": 0.085
+        }
+      },
+      {
+        "name": "Dry oxide scales",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 32,
+        "detail": 0.8,
+        "procedural": "CRACKS",
+        "height": 0.09,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.34,
+          "scale": 17
+        }
+      },
+      {
+        "name": "Surface moisture",
+        "color": [
+          0.065,
+          0.019,
+          0.009
+        ],
+        "roughness": 0.1,
+        "metallic": 0.0,
+        "scale": 9,
+        "detail": 0.28,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.48,
+          "scale": 9
+        }
+      },
+      {
+        "name": "Wet recesses",
+        "color": [
+          0.037,
+          0.013,
+          0.008
+        ],
+        "roughness": 0.075,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.49,
+          "scale": 22
+        }
+      }
+    ]
+  },
+  "Galvanized Steel": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Faceted zinc spangle texture, thin white oxidation and fine manufacturing scratches.",
+    "layers": [
+      {
+        "name": "Zinc spangle",
+        "color": [
+          0.876,
+          0.869,
+          0.854
+        ],
+        "roughness": 0.38,
+        "metallic": 1,
+        "scale": 34,
+        "detail": 0.48,
+        "procedural": "VORONOI",
+        "height": 0.012,
+        "generated_source": {
+          "id": "zinc_spangle",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.26,
+          "roughness": 0.16,
+          "height": 0.012
+        }
+      },
+      {
+        "name": "White zinc oxide",
+        "color": [
+          0.56,
+          0.59,
+          0.55
+        ],
+        "roughness": 0.79,
+        "metallic": 0.0,
+        "scale": 22,
+        "detail": 0.35,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.16,
+          "scale": 22
+        }
+      },
+      {
+        "name": "Manufacturing scratches",
+        "color": [
+          0.71,
+          0.73,
+          0.72
+        ],
+        "roughness": 0.47,
+        "metallic": 1,
+        "scale": 130,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.016,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.14,
+          "scale": 130
+        }
+      }
+    ]
+  },
+  "Welded Steel": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Industrial steel with local weld-like bands, heat tint, oxidized seams and soot.",
+    "layers": [
+      {
+        "name": "Steel sheet",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.41,
+        "metallic": 1,
+        "scale": 75,
+        "detail": 0.17,
+        "procedural": "BRUSHED",
+        "height": 0.018,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.09,
+          "roughness": 0.055,
+          "height": 0.018
+        }
+      },
+      {
+        "name": "Gold heat affected band",
+        "color": [
+          0.52,
+          0.35,
+          0.13
+        ],
+        "roughness": 0.48,
+        "metallic": 1,
+        "scale": 6,
+        "detail": 0.32,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.32,
+          "scale": 5
+        }
+      },
+      {
+        "name": "Blue temper band",
+        "color": [
+          0.14,
+          0.19,
+          0.34
+        ],
+        "roughness": 0.51,
+        "metallic": 0.85,
+        "scale": 11,
+        "detail": 0.27,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.18,
+          "scale": 9
+        }
+      },
+      {
+        "name": "Weld bead relief",
+        "color": [
+          0.4,
+          0.41,
+          0.37
+        ],
+        "roughness": 0.62,
+        "metallic": 1,
+        "scale": 24,
+        "detail": 0.3,
+        "procedural": "MACHINING",
+        "height": 0.085,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.15,
+          "scale": 8
+        }
+      },
+      {
+        "name": "Weld soot",
+        "color": [
+          0.023,
+          0.022,
+          0.019
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 41,
+        "detail": 0.7,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.32,
+          "scale": 25
+        }
+      }
+    ]
+  },
+  "Heat-Treated Metal": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Authored gold, brown, violet and blue temper bands over brushed metal.",
+    "layers": [
+      {
+        "name": "Steel substrate",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.31,
+        "metallic": 1,
+        "scale": 125,
+        "detail": 0.13,
+        "procedural": "BRUSHED",
+        "height": 0.012,
+        "generated_source": {
+          "id": "brushed_metal",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.07,
+          "roughness": 0.045,
+          "height": 0.012
+        }
+      },
+      {
+        "name": "Straw gold temper",
+        "color": [
+          0.59,
+          0.41,
+          0.14
+        ],
+        "roughness": 0.36,
+        "metallic": 1,
+        "scale": 5,
+        "detail": 0.25,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.47,
+          "scale": 4
+        }
+      },
+      {
+        "name": "Brown temper transition",
+        "color": [
+          0.3,
+          0.16,
+          0.064
+        ],
+        "roughness": 0.42,
+        "metallic": 0.9,
+        "scale": 8,
+        "detail": 0.23,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.25,
+          "scale": 7
+        }
+      },
+      {
+        "name": "Violet temper",
+        "color": [
+          0.24,
+          0.11,
+          0.34
+        ],
+        "roughness": 0.38,
+        "metallic": 0.9,
+        "scale": 9,
+        "detail": 0.3,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.25,
+          "scale": 8
+        }
+      },
+      {
+        "name": "Blue hot zones",
+        "color": [
+          0.064,
+          0.17,
+          0.38
+        ],
+        "roughness": 0.44,
+        "metallic": 0.8,
+        "scale": 14,
+        "detail": 0.25,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.21,
+          "scale": 12
+        }
+      }
+    ]
+  },
+  "Greasy Machinery": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Machined steel with dark cavity grease, thin oil, scratches and oil leakage.",
+    "layers": [
+      {
+        "name": "Machined steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.35,
+        "metallic": 1,
+        "scale": 77,
+        "detail": 0.2,
+        "procedural": "MACHINING",
+        "height": 0.02
+      },
+      {
+        "name": "Maintenance scratches",
+        "color": [
+          0.72,
+          0.72,
+          0.69
+        ],
+        "roughness": 0.27,
+        "metallic": 1,
+        "scale": 58,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.038,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.23,
+          "scale": 58
+        }
+      },
+      {
+        "name": "Cavity grease",
+        "color": [
+          0.024,
+          0.02,
+          0.014
+        ],
+        "roughness": 0.23,
+        "metallic": 0.0,
+        "scale": 19,
+        "detail": 0.75,
+        "procedural": "GRUNGE",
+        "height": 0.045,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.61,
+          "scale": 22
+        }
+      },
+      {
+        "name": "Thin oil deposits",
+        "color": [
+          0.086,
+          0.068,
+          0.035
+        ],
+        "roughness": 0.12,
+        "metallic": 0.2,
+        "scale": 8,
+        "detail": 0.35,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.28,
+          "scale": 8
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.1,
+          "roughness": 0.08
+        }
+      },
+      {
+        "name": "Oil drips",
+        "color": [
+          0.024,
+          0.02,
+          0.014
+        ],
+        "roughness": 0.17,
+        "metallic": 0.0,
+        "scale": 30,
+        "detail": 0.5,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.35,
+          "scale": 30
+        }
+      },
+      {
+        "name": "Dust stuck in grease",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.77,
+        "metallic": 0.0,
+        "scale": 90,
+        "detail": 0.6,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.23,
+          "scale": 57
+        }
+      }
+    ]
+  },
+  "Abandoned Machinery": {
+    "category": "Rust, Damage and Industrial",
+    "description": "Peeling industrial paint over rust, with oil leakage, dense cavity grime and top dust.",
+    "layers": [
+      {
+        "name": "Machine steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.6,
+        "metallic": 1,
+        "scale": 54,
+        "detail": 0.22,
+        "procedural": "PITS",
+        "height": 0.035
+      },
+      {
+        "name": "Deep corrosion",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 21,
+        "detail": 0.8,
+        "procedural": "CRACKS",
+        "height": 0.11,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.68,
+          "scale": 19
+        }
+      },
+      {
+        "name": "Peeling teal paint",
+        "color": [
+          0.037,
+          0.132,
+          0.115
+        ],
+        "roughness": 0.72,
+        "metallic": 0.0,
+        "scale": 29,
+        "detail": 0.45,
+        "procedural": "CRACKS",
+        "height": 0.075,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.68,
+          "scale": 24,
+          "invert": true
+        },
+        "mask_effects": [
+          {
+            "kind": "NOISE",
+            "amount": 0.53,
+            "scale": 5,
+            "contrast": 8
+          }
+        ]
+      },
+      {
+        "name": "Orange corrosion blooms",
+        "color": [
+          0.23,
+          0.059,
+          0.018
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 46,
+        "detail": 0.85,
+        "procedural": "PITS",
+        "height": 0.055,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.33,
+          "scale": 38
+        },
+        "generated_source": {
+          "id": "rust_detail",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.62,
+          "roughness": 0.09,
+          "height": 0.055
+        }
+      },
+      {
+        "name": "Stale oil leakage",
+        "color": [
+          0.024,
+          0.02,
+          0.014
+        ],
+        "roughness": 0.25,
+        "metallic": 0.0,
+        "scale": 21,
+        "detail": 0.55,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.34,
+          "scale": 21
+        }
+      },
+      {
+        "name": "Dense cavity grime",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.91,
+        "metallic": 0.0,
+        "scale": 31,
+        "detail": 0.75,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.56,
+          "scale": 31
+        }
+      },
+      {
+        "name": "Settled dust",
+        "color": [
+          0.23,
+          0.184,
+          0.133
+        ],
+        "roughness": 0.97,
+        "metallic": 0.0,
+        "scale": 37,
+        "detail": 0.4,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "DUST",
+          "amount": 0.48,
+          "scale": 37
+        }
+      }
+    ]
+  },
+  "Injection-Molded Plastic": {
+    "category": "Plastic and Rubber",
+    "description": "Fine satin plastic grain, broad mold variation and small molding imperfections.",
+    "layers": [
+      {
+        "name": "Molded plastic",
+        "color": [
+          0.12,
+          0.16,
+          0.21
+        ],
+        "roughness": 0.41,
+        "metallic": 0.0,
+        "scale": 155,
+        "detail": 0.085,
+        "procedural": "PLASTIC_GRAIN",
+        "height": 0.019,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.045,
+          "roughness": 0.035,
+          "height": 0.019
+        }
+      },
+      {
+        "name": "Mold flow variation",
+        "color": [
+          0.135,
+          0.17,
+          0.22
+        ],
+        "roughness": 0.46,
+        "metallic": 0.0,
+        "scale": 5,
+        "detail": 0.1,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.22,
+          "scale": 5
+        }
+      },
+      {
+        "name": "Fine molding grain",
+        "color": [
+          0.116,
+          0.154,
+          0.204
+        ],
+        "roughness": 0.49,
+        "metallic": 0.0,
+        "scale": 210,
+        "detail": 0.06,
+        "procedural": "PITS",
+        "height": 0.008,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.14,
+          "scale": 95
+        }
+      }
+    ]
+  },
+  "Worn Hard Plastic": {
+    "category": "Plastic and Rubber",
+    "description": "Hard plastic with fine grain, polished creases, pale scoring, oily handling marks and dirt.",
+    "layers": [
+      {
+        "name": "Plastic body",
+        "color": [
+          0.035,
+          0.047,
+          0.062
+        ],
+        "roughness": 0.58,
+        "metallic": 0.0,
+        "scale": 128,
+        "detail": 0.15,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.025,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.07,
+          "roughness": 0.05,
+          "height": 0.025
+        }
+      },
+      {
+        "name": "Pale scratches",
+        "color": [
+          0.08,
+          0.089,
+          0.102
+        ],
+        "roughness": 0.68,
+        "metallic": 0.0,
+        "scale": 89,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.024,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.24,
+          "scale": 89
+        }
+      },
+      {
+        "name": "Polished plastic edges",
+        "color": [
+          0.04,
+          0.05,
+          0.062
+        ],
+        "roughness": 0.23,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.31,
+          "scale": 65
+        }
+      },
+      {
+        "name": "Fingerprints",
+        "color": [
+          0.025,
+          0.034,
+          0.044
+        ],
+        "roughness": 0.3,
+        "metallic": 0.0,
+        "scale": 7,
+        "detail": 0.25,
+        "procedural": "FINGERPRINTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.17,
+          "scale": 7
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.06,
+          "roughness": 0.11
+        }
+      },
+      {
+        "name": "Accumulated dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.84,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.34,
+          "scale": 34
+        }
+      }
+    ]
+  },
+  "Soft-Touch Plastic": {
+    "category": "Plastic and Rubber",
+    "description": "Dark matte rubberized coating with velvety grain, rubbed areas and absorbed handling oils.",
+    "layers": [
+      {
+        "name": "Rubberized coating",
+        "color": [
+          0.024,
+          0.026,
+          0.028
+        ],
+        "roughness": 0.86,
+        "metallic": 0.0,
+        "scale": 145,
+        "detail": 0.16,
+        "procedural": "FBM",
+        "height": 0.013,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.07,
+          "roughness": 0.045,
+          "height": 0.013
+        }
+      },
+      {
+        "name": "Soft abrasion",
+        "color": [
+          0.043,
+          0.044,
+          0.044
+        ],
+        "roughness": 0.7,
+        "metallic": 0.0,
+        "scale": 83,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.012,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.12,
+          "scale": 83
+        }
+      },
+      {
+        "name": "Handling oils",
+        "color": [
+          0.017,
+          0.018,
+          0.019
+        ],
+        "roughness": 0.42,
+        "metallic": 0.0,
+        "scale": 6,
+        "detail": 0.2,
+        "procedural": "FINGERPRINTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.19,
+          "scale": 6
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.045,
+          "roughness": 0.1
+        }
+      }
+    ]
+  },
+  "Sun-Damaged Plastic": {
+    "category": "Plastic and Rubber",
+    "description": "Patchy bleached plastic with dry cracking, chalky grain and exposure-driven fading.",
+    "layers": [
+      {
+        "name": "Original blue plastic",
+        "color": [
+          0.033,
+          0.094,
+          0.18
+        ],
+        "roughness": 0.52,
+        "metallic": 0.0,
+        "scale": 106,
+        "detail": 0.18,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.023,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.08,
+          "roughness": 0.05,
+          "height": 0.023
+        }
+      },
+      {
+        "name": "Sun bleached surface",
+        "color": [
+          0.19,
+          0.28,
+          0.34
+        ],
+        "roughness": 0.83,
+        "metallic": 0.0,
+        "scale": 12,
+        "detail": 0.4,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "WORLD_NORMAL",
+          "amount": 0.66,
+          "scale": 12
+        }
+      },
+      {
+        "name": "Dry cracked regions",
+        "color": [
+          0.12,
+          0.16,
+          0.18
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 37,
+        "detail": 0.73,
+        "procedural": "CRACKS",
+        "height": -0.045,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.42,
+          "scale": 18
+        }
+      },
+      {
+        "name": "Chalky grain",
+        "color": [
+          0.31,
+          0.35,
+          0.35
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 168,
+        "detail": 0.27,
+        "procedural": "PITS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.2,
+          "scale": 51
+        }
+      }
+    ]
+  },
+  "Dirty Rubber": {
+    "category": "Plastic and Rubber",
+    "description": "Matte rubber grain, shallow scoring, rubbed ridges and embedded earth in cavities.",
+    "layers": [
+      {
+        "name": "Rubber compound",
+        "color": [
+          0.021,
+          0.023,
+          0.022
+        ],
+        "roughness": 0.83,
+        "metallic": 0.0,
+        "scale": 105,
+        "detail": 0.3,
+        "procedural": "RUBBER_GRAIN",
+        "height": 0.022,
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.11,
+          "roughness": 0.055,
+          "height": 0.022
+        }
+      },
+      {
+        "name": "Rubber scoring",
+        "color": [
+          0.036,
+          0.038,
+          0.034
+        ],
+        "roughness": 0.91,
+        "metallic": 0.0,
+        "scale": 59,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.036,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.21,
+          "scale": 59
+        }
+      },
+      {
+        "name": "Rubbed edges",
+        "color": [
+          0.025,
+          0.027,
+          0.024
+        ],
+        "roughness": 0.49,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.27,
+          "scale": 68
+        }
+      },
+      {
+        "name": "Embedded earth",
+        "color": [
+          0.096,
+          0.069,
+          0.041
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 71,
+        "detail": 0.8,
+        "procedural": "PITS",
+        "height": 0.04,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.51,
+          "scale": 38
+        }
+      }
+    ]
+  },
+  "Cracked Old Rubber": {
+    "category": "Plastic and Rubber",
+    "description": "Faded dry rubber with branching cracks, fine grain and dusty crevices.",
+    "layers": [
+      {
+        "name": "Aged rubber",
+        "color": [
+          0.058,
+          0.061,
+          0.054
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 23,
+        "detail": 0.78,
+        "procedural": "CRACKS",
+        "height": -0.1
+      },
+      {
+        "name": "Fine dry grain",
+        "color": [
+          0.085,
+          0.087,
+          0.075
+        ],
+        "roughness": 0.97,
+        "metallic": 0.0,
+        "scale": 126,
+        "detail": 0.4,
+        "procedural": "PITS",
+        "height": 0.016,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.44,
+          "scale": 29
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.14,
+          "roughness": 0.045,
+          "height": 0.016
+        }
+      },
+      {
+        "name": "Bleached patches",
+        "color": [
+          0.13,
+          0.13,
+          0.108
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 7,
+        "detail": 0.32,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.22,
+          "scale": 7
+        }
+      },
+      {
+        "name": "Dust in cracks",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 47,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.31,
+          "scale": 47
+        }
+      }
+    ]
+  },
+  "Fresh Oak": {
+    "category": "Wood",
+    "description": "Warm natural oak with long grain, darker vessel pores and restrained growth variation.",
+    "layers": [
+      {
+        "name": "Oak growth grain",
+        "color": [
+          0.4,
+          0.235,
+          0.105
+        ],
+        "roughness": 0.58,
+        "metallic": 0.0,
+        "scale": 7,
+        "detail": 0.65,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.048,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.72,
+          "roughness": 0.09,
+          "height": 0.048
+        }
+      },
+      {
+        "name": "Oak vessel pores",
+        "color": [
+          0.25,
+          0.12,
+          0.045
+        ],
+        "roughness": 0.72,
+        "metallic": 0.0,
+        "scale": 37,
+        "detail": 0.6,
+        "procedural": "WOOD_PORES",
+        "height": -0.039,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.24,
+          "scale": 38
+        }
+      },
+      {
+        "name": "Fine wood fibers",
+        "color": [
+          0.43,
+          0.26,
+          0.125
+        ],
+        "roughness": 0.62,
+        "metallic": 0.0,
+        "scale": 115,
+        "detail": 0.25,
+        "procedural": "FIBERS",
+        "height": 0.012,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.21,
+          "scale": 20
+        }
+      }
+    ]
+  },
+  "Old Worn Wood": {
+    "category": "Wood",
+    "description": "Dark aged timber grain, deep pores, dents, scratches and rubbed edges.",
+    "layers": [
+      {
+        "name": "Aged wood grain",
+        "color": [
+          0.16,
+          0.075,
+          0.029
+        ],
+        "roughness": 0.72,
+        "metallic": 0.0,
+        "scale": 9,
+        "detail": 0.85,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.064,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.82,
+          "roughness": 0.1,
+          "height": 0.064
+        }
+      },
+      {
+        "name": "Dark pores",
+        "color": [
+          0.053,
+          0.028,
+          0.013
+        ],
+        "roughness": 0.9,
+        "metallic": 0.0,
+        "scale": 39,
+        "detail": 0.65,
+        "procedural": "WOOD_PORES",
+        "height": -0.05,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.32,
+          "scale": 30
+        }
+      },
+      {
+        "name": "Dents",
+        "color": [
+          0.087,
+          0.043,
+          0.018
+        ],
+        "roughness": 0.84,
+        "metallic": 0.0,
+        "scale": 22,
+        "detail": 0.3,
+        "procedural": "PITS",
+        "height": -0.1,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.19,
+          "scale": 22
+        }
+      },
+      {
+        "name": "Fresh scoring",
+        "color": [
+          0.27,
+          0.13,
+          0.05
+        ],
+        "roughness": 0.73,
+        "metallic": 0.0,
+        "scale": 57,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.045,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.2,
+          "scale": 57
+        }
+      },
+      {
+        "name": "Polished edges",
+        "color": [
+          0.22,
+          0.108,
+          0.039
+        ],
+        "roughness": 0.29,
+        "metallic": 0.0,
+        "scale": 9,
+        "detail": 0.36,
+        "procedural": "WOOD_GRAIN",
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.36,
+          "scale": 52
+        },
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.38,
+          "roughness": 0.055
+        }
+      },
+      {
+        "name": "Crevice dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.39,
+          "scale": 31
+        }
+      }
+    ]
+  },
+  "Painted Wood": {
+    "category": "Wood",
+    "description": "Blue paint following timber grain, with chips exposing warm wood and darker recess dirt.",
+    "layers": [
+      {
+        "name": "Timber substrate",
+        "color": [
+          0.31,
+          0.16,
+          0.057
+        ],
+        "roughness": 0.7,
+        "metallic": 0.0,
+        "scale": 8,
+        "detail": 0.77,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.065,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.78,
+          "roughness": 0.09,
+          "height": 0.065
+        }
+      },
+      {
+        "name": "Wood pore depth",
+        "color": [
+          0.16,
+          0.064,
+          0.021
+        ],
+        "roughness": 0.79,
+        "metallic": 0.0,
+        "scale": 46,
+        "detail": 0.53,
+        "procedural": "WOOD_PORES",
+        "height": -0.031,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.2,
+          "scale": 34
+        }
+      },
+      {
+        "name": "Blue grain following paint",
+        "color": [
+          0.033,
+          0.2,
+          0.3
+        ],
+        "roughness": 0.53,
+        "metallic": 0.0,
+        "scale": 8,
+        "detail": 0.19,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.035,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.34,
+          "scale": 34,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.16,
+          "roughness": 0.055,
+          "height": 0.035
+        }
+      },
+      {
+        "name": "Fine paint scoring",
+        "color": [
+          0.23,
+          0.11,
+          0.039
+        ],
+        "roughness": 0.69,
+        "metallic": 0.0,
+        "scale": 82,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": -0.027,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.14,
+          "scale": 82
+        }
+      },
+      {
+        "name": "Dark crevices",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.86,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.3,
+          "scale": 33
+        }
+      }
+    ]
+  },
+  "Weathered Outdoor Wood": {
+    "category": "Wood",
+    "description": "Gray bleached timber, raised fibers, long cracks, moisture staining and crevice dirt.",
+    "layers": [
+      {
+        "name": "Weathered growth grain",
+        "color": [
+          0.22,
+          0.205,
+          0.166
+        ],
+        "roughness": 0.86,
+        "metallic": 0.0,
+        "scale": 8,
+        "detail": 0.7,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.084,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.66,
+          "roughness": 0.1,
+          "height": 0.084
+        }
+      },
+      {
+        "name": "Raised gray fibers",
+        "color": [
+          0.34,
+          0.33,
+          0.28
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 74,
+        "detail": 0.5,
+        "procedural": "FIBERS",
+        "height": 0.044,
+        "mask": {
+          "kind": "WORLD_NORMAL",
+          "amount": 0.53,
+          "scale": 24
+        }
+      },
+      {
+        "name": "Split timber",
+        "color": [
+          0.082,
+          0.075,
+          0.055
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 21,
+        "detail": 0.82,
+        "procedural": "CRACKS",
+        "height": -0.105,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.35,
+          "scale": 17
+        }
+      },
+      {
+        "name": "Moisture tracks",
+        "color": [
+          0.088,
+          0.078,
+          0.054
+        ],
+        "roughness": 0.69,
+        "metallic": 0.0,
+        "scale": 23,
+        "detail": 0.65,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.32,
+          "scale": 23
+        }
+      },
+      {
+        "name": "Crevice dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 47,
+        "detail": 0.5,
+        "procedural": "WOOD_PORES",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.41,
+          "scale": 36
+        }
+      }
+    ]
+  },
+  "Burnt Wood": {
+    "category": "Wood",
+    "description": "Warm timber through heat-darkened transitions into cracked charcoal and fine ash.",
+    "layers": [
+      {
+        "name": "Underlying timber",
+        "color": [
+          0.19,
+          0.071,
+          0.02
+        ],
+        "roughness": 0.77,
+        "metallic": 0.0,
+        "scale": 9,
+        "detail": 0.72,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.063,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.68,
+          "roughness": 0.095,
+          "height": 0.063
+        }
+      },
+      {
+        "name": "Heat browned grain",
+        "color": [
+          0.075,
+          0.027,
+          0.013
+        ],
+        "roughness": 0.87,
+        "metallic": 0.0,
+        "scale": 62,
+        "detail": 0.5,
+        "procedural": "FIBERS",
+        "height": 0.026,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.61,
+          "scale": 5
+        }
+      },
+      {
+        "name": "Cracked charcoal",
+        "color": [
+          0.018,
+          0.019,
+          0.018
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 23,
+        "detail": 0.75,
+        "procedural": "CRACKS",
+        "height": 0.14,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.5,
+          "scale": 7
+        }
+      },
+      {
+        "name": "Ash coated char",
+        "color": [
+          0.24,
+          0.23,
+          0.21
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 91,
+        "detail": 0.63,
+        "procedural": "PITS",
+        "height": 0.02,
+        "mask": {
+          "kind": "DUST",
+          "amount": 0.35,
+          "scale": 43
+        }
+      }
+    ]
+  },
+  "Oiled Dark Wood": {
+    "category": "Wood",
+    "description": "Deep brown polished timber, dark pores, rubbed oil finish and sparse fine handling scratches.",
+    "layers": [
+      {
+        "name": "Oiled timber grain",
+        "color": [
+          0.099,
+          0.04,
+          0.014
+        ],
+        "roughness": 0.26,
+        "metallic": 0.0,
+        "scale": 7,
+        "detail": 0.78,
+        "procedural": "WOOD_GRAIN",
+        "height": 0.037,
+        "generated_source": {
+          "id": "fine_wood",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.74,
+          "roughness": 0.07,
+          "height": 0.037
+        }
+      },
+      {
+        "name": "Deep vessel pores",
+        "color": [
+          0.03,
+          0.017,
+          0.009
+        ],
+        "roughness": 0.49,
+        "metallic": 0.0,
+        "scale": 41,
+        "detail": 0.62,
+        "procedural": "WOOD_PORES",
+        "height": -0.034,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.26,
+          "scale": 32
+        }
+      },
+      {
+        "name": "Handling fingerprints",
+        "color": [
+          0.082,
+          0.034,
+          0.012
+        ],
+        "roughness": 0.39,
+        "metallic": 0.0,
+        "scale": 6,
+        "detail": 0.25,
+        "procedural": "FINGERPRINTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.13,
+          "scale": 6
+        },
+        "generated_source": {
+          "id": "surface_smudges",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.08,
+          "roughness": 0.075
+        }
+      },
+      {
+        "name": "Fine finish scratches",
+        "color": [
+          0.13,
+          0.057,
+          0.021
+        ],
+        "roughness": 0.47,
+        "metallic": 0.0,
+        "scale": 142,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.012,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.1,
+          "scale": 142
+        }
+      }
+    ],
+    "surface": {
+      "coat_weight": 0.4,
+      "coat_roughness": 0.2
+    }
+  },
+  "Rough Concrete": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Cement with multiscale aggregate, fine pores and isolated deep air pockets.",
+    "layers": [
+      {
+        "name": "Cement binder",
+        "color": [
+          0.3,
+          0.29,
+          0.255
+        ],
+        "roughness": 0.89,
+        "metallic": 0.0,
+        "scale": 41,
+        "detail": 0.3,
+        "procedural": "FBM",
+        "height": 0.05,
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.26,
+          "roughness": 0.07,
+          "height": 0.05
+        }
+      },
+      {
+        "name": "Coarse aggregate",
+        "color": [
+          0.22,
+          0.21,
+          0.185
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 39,
+        "detail": 0.65,
+        "procedural": "CONCRETE_AGGREGATE",
+        "height": 0.064,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.37,
+          "scale": 28
+        }
+      },
+      {
+        "name": "Fine concrete pores",
+        "color": [
+          0.16,
+          0.15,
+          0.128
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 124,
+        "detail": 0.55,
+        "procedural": "PITS",
+        "height": -0.048,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.28,
+          "scale": 80
+        },
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.4,
+          "roughness": 0.065,
+          "height": -0.048
+        }
+      },
+      {
+        "name": "Air pockets",
+        "color": [
+          0.09,
+          0.083,
+          0.064
+        ],
+        "roughness": 1.0,
+        "metallic": 0.0,
+        "scale": 20,
+        "detail": 0.55,
+        "procedural": "PITS",
+        "height": -0.11,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.08,
+          "scale": 21
+        }
+      }
+    ]
+  },
+  "Old Dirty Concrete": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Rough old concrete with aggregate, dry cracks, water runoff and dark accumulated grime.",
+    "layers": [
+      {
+        "name": "Old concrete",
+        "color": [
+          0.22,
+          0.21,
+          0.178
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 48,
+        "detail": 0.39,
+        "procedural": "CONCRETE_AGGREGATE",
+        "height": 0.085,
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.36,
+          "roughness": 0.07,
+          "height": 0.085
+        }
+      },
+      {
+        "name": "Concrete pores",
+        "color": [
+          0.11,
+          0.103,
+          0.081
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 106,
+        "detail": 0.5,
+        "procedural": "PITS",
+        "height": -0.055,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.28,
+          "scale": 61
+        },
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.4,
+          "roughness": 0.055,
+          "height": -0.055
+        }
+      },
+      {
+        "name": "Dry cracks",
+        "color": [
+          0.061,
+          0.056,
+          0.043
+        ],
+        "roughness": 0.97,
+        "metallic": 0.0,
+        "scale": 13,
+        "detail": 0.85,
+        "procedural": "CRACKS",
+        "height": -0.1,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.28,
+          "scale": 15
+        }
+      },
+      {
+        "name": "Water stains",
+        "color": [
+          0.092,
+          0.086,
+          0.063
+        ],
+        "roughness": 0.7,
+        "metallic": 0.0,
+        "scale": 19,
+        "detail": 0.6,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.44,
+          "scale": 19
+        }
+      },
+      {
+        "name": "Cavity dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 35,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.5,
+          "scale": 35
+        }
+      }
+    ]
+  },
+  "Painted Concrete": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Off-white wall paint over coarse concrete with hairline cracks, peeling and grime.",
+    "layers": [
+      {
+        "name": "Concrete substrate",
+        "color": [
+          0.22,
+          0.21,
+          0.183
+        ],
+        "roughness": 0.93,
+        "metallic": 0.0,
+        "scale": 53,
+        "detail": 0.45,
+        "procedural": "VORONOI",
+        "height": 0.075,
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.34,
+          "roughness": 0.075,
+          "height": 0.075
+        }
+      },
+      {
+        "name": "Pitted cement",
+        "color": [
+          0.14,
+          0.13,
+          0.109
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 119,
+        "detail": 0.35,
+        "procedural": "PITS",
+        "height": -0.04,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.24,
+          "scale": 69
+        }
+      },
+      {
+        "name": "Wall paint",
+        "color": [
+          0.62,
+          0.59,
+          0.47
+        ],
+        "roughness": 0.77,
+        "metallic": 0.0,
+        "scale": 112,
+        "detail": 0.12,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.025,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.35,
+          "scale": 31,
+          "invert": true
+        },
+        "mask_effects": [
+          {
+            "kind": "NOISE",
+            "amount": 0.62,
+            "scale": 7,
+            "contrast": 10
+          }
+        ],
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.065,
+          "roughness": 0.045,
+          "height": 0.025
+        }
+      },
+      {
+        "name": "Hairline paint cracks",
+        "color": [
+          0.2,
+          0.18,
+          0.135
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 27,
+        "detail": 0.7,
+        "procedural": "CRACKS",
+        "height": -0.03,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.2,
+          "scale": 22
+        }
+      },
+      {
+        "name": "Dirt along recesses",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.31,
+          "scale": 37
+        }
+      }
+    ]
+  },
+  "Polished Marble": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Pale polished stone with warped dark veins, fine mineral variation and tiny polish scratches.",
+    "layers": [
+      {
+        "name": "Marble body",
+        "color": [
+          0.73,
+          0.72,
+          0.68
+        ],
+        "roughness": 0.15,
+        "metallic": 0.0,
+        "scale": 5,
+        "detail": 0.78,
+        "procedural": "VEINS",
+        "height": 0.008,
+        "generated_source": {
+          "id": "marble_veins",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 1.0,
+          "roughness": 0.028,
+          "height": 0.008
+        }
+      },
+      {
+        "name": "Warm mineral wisps",
+        "color": [
+          0.48,
+          0.42,
+          0.3
+        ],
+        "roughness": 0.18,
+        "metallic": 0.0,
+        "scale": 11,
+        "detail": 0.38,
+        "procedural": "VEINS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.12,
+          "scale": 10
+        },
+        "generated_source": {
+          "id": "marble_veins",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.72,
+          "roughness": 0.035
+        }
+      },
+      {
+        "name": "Polish micro scratches",
+        "color": [
+          0.71,
+          0.7,
+          0.67
+        ],
+        "roughness": 0.31,
+        "metallic": 0.0,
+        "scale": 205,
+        "detail": 0.04,
+        "procedural": "SCRATCHES",
+        "height": -0.005,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.07,
+          "scale": 205
+        }
+      }
+    ],
+    "surface": {
+      "coat_weight": 0.15,
+      "coat_roughness": 0.13
+    }
+  },
+  "Granite": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Interlocking mineral grains, pale feldspar, dark mica and isolated quartz with editable roughness.",
+    "layers": [
+      {
+        "name": "Granite mineral field",
+        "color": [
+          0.23,
+          0.2,
+          0.17
+        ],
+        "roughness": 0.42,
+        "metallic": 0.0,
+        "scale": 75,
+        "detail": 0.85,
+        "procedural": "STONE_GRAIN",
+        "height": 0.026,
+        "generated_source": {
+          "id": "granite_minerals",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 1.2,
+          "roughness": 0.14,
+          "height": 0.026
+        }
+      },
+      {
+        "name": "Pale feldspar",
+        "color": [
+          0.49,
+          0.43,
+          0.37
+        ],
+        "roughness": 0.46,
+        "metallic": 0.0,
+        "scale": 53,
+        "detail": 0.55,
+        "procedural": "VORONOI",
+        "height": 0.017,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.34,
+          "scale": 53
+        },
+        "generated_source": {
+          "id": "granite_minerals",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.7,
+          "roughness": 0.1,
+          "height": 0.017
+        }
+      },
+      {
+        "name": "Dark mica",
+        "color": [
+          0.026,
+          0.027,
+          0.025
+        ],
+        "roughness": 0.39,
+        "metallic": 0.0,
+        "scale": 133,
+        "detail": 0.45,
+        "procedural": "SPOTS",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.24,
+          "scale": 133
+        }
+      },
+      {
+        "name": "Quartz grains",
+        "color": [
+          0.68,
+          0.65,
+          0.6
+        ],
+        "roughness": 0.24,
+        "metallic": 0.0,
+        "scale": 112,
+        "detail": 0.18,
+        "procedural": "VORONOI",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.13,
+          "scale": 99
+        }
+      }
+    ]
+  },
+  "Weathered Stone": {
+    "category": "Stone, Concrete and Construction",
+    "description": "Eroded mineral surface with pitting, dark cavities, runoff and an independently removable moss layer.",
+    "layers": [
+      {
+        "name": "Stone substrate",
+        "color": [
+          0.21,
+          0.19,
+          0.145
+        ],
+        "roughness": 0.86,
+        "metallic": 0.0,
+        "scale": 35,
+        "detail": 0.6,
+        "procedural": "VORONOI",
+        "height": 0.075
+      },
+      {
+        "name": "Eroded grain",
+        "color": [
+          0.29,
+          0.27,
+          0.2
+        ],
+        "roughness": 0.97,
+        "metallic": 0.0,
+        "scale": 90,
+        "detail": 0.55,
+        "procedural": "PITS",
+        "height": -0.065,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.48,
+          "scale": 38
+        },
+        "generated_source": {
+          "id": "concrete_pores",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.38,
+          "roughness": 0.05,
+          "height": -0.065
+        }
+      },
+      {
+        "name": "Dark stone cavities",
+        "color": [
+          0.048,
+          0.046,
+          0.031
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.51,
+          "scale": 29
+        }
+      },
+      {
+        "name": "Moisture stains",
+        "color": [
+          0.081,
+          0.09,
+          0.047
+        ],
+        "roughness": 0.69,
+        "metallic": 0.0,
+        "scale": 21,
+        "detail": 0.45,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.28,
+          "scale": 21
+        }
+      },
+      {
+        "name": "Optional moss buildup",
+        "color": [
+          0.07,
+          0.115,
+          0.02
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 66,
+        "detail": 0.75,
+        "procedural": "FIBERS",
+        "height": 0.065,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.25,
+          "scale": 46
+        }
+      }
+    ]
+  },
+  "Worn Leather": {
+    "category": "Fabric and Leather",
+    "description": "Warm leather grain with creases, fine scoring, dark recesses and polished raised edges.",
+    "layers": [
+      {
+        "name": "Leather grain",
+        "color": [
+          0.18,
+          0.065,
+          0.023
+        ],
+        "roughness": 0.62,
+        "metallic": 0.0,
+        "scale": 83,
+        "detail": 0.48,
+        "procedural": "LEATHER_GRAIN",
+        "height": 0.057,
+        "generated_source": {
+          "id": "leather_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.42,
+          "roughness": 0.09,
+          "height": 0.057
+        }
+      },
+      {
+        "name": "Soft leather creases",
+        "color": [
+          0.091,
+          0.03,
+          0.012
+        ],
+        "roughness": 0.75,
+        "metallic": 0.0,
+        "scale": 17,
+        "detail": 0.42,
+        "procedural": "CRACKS",
+        "height": -0.045,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.28,
+          "scale": 19
+        }
+      },
+      {
+        "name": "Pale scratches",
+        "color": [
+          0.28,
+          0.125,
+          0.05
+        ],
+        "roughness": 0.77,
+        "metallic": 0.0,
+        "scale": 105,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.02,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.15,
+          "scale": 105
+        }
+      },
+      {
+        "name": "Dark recesses",
+        "color": [
+          0.046,
+          0.023,
+          0.013
+        ],
+        "roughness": 0.82,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.37,
+          "scale": 31
+        }
+      },
+      {
+        "name": "Burnished edges",
+        "color": [
+          0.15,
+          0.058,
+          0.021
+        ],
+        "roughness": 0.26,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.29,
+          "scale": 67
+        }
+      }
+    ]
+  },
+  "Cracked Old Leather": {
+    "category": "Fabric and Leather",
+    "description": "Dry fissured leather with faded grain, deep stains and severe pale edge abrasion.",
+    "layers": [
+      {
+        "name": "Old leather grain",
+        "color": [
+          0.093,
+          0.039,
+          0.017
+        ],
+        "roughness": 0.82,
+        "metallic": 0.0,
+        "scale": 76,
+        "detail": 0.6,
+        "procedural": "LEATHER_GRAIN",
+        "height": 0.061,
+        "generated_source": {
+          "id": "leather_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.5,
+          "roughness": 0.075,
+          "height": 0.061
+        }
+      },
+      {
+        "name": "Dry cracked hide",
+        "color": [
+          0.058,
+          0.027,
+          0.013
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 32,
+        "detail": 0.88,
+        "procedural": "CRACKS",
+        "height": -0.1,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.65,
+          "scale": 21
+        }
+      },
+      {
+        "name": "Faded islands",
+        "color": [
+          0.2,
+          0.113,
+          0.055
+        ],
+        "roughness": 0.92,
+        "metallic": 0.0,
+        "scale": 13,
+        "detail": 0.5,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.34,
+          "scale": 13
+        }
+      },
+      {
+        "name": "Deep stains",
+        "color": [
+          0.026,
+          0.018,
+          0.013
+        ],
+        "roughness": 0.69,
+        "metallic": 0.0,
+        "scale": 18,
+        "detail": 0.45,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.41,
+          "scale": 27
+        }
+      },
+      {
+        "name": "Abraded hide edges",
+        "color": [
+          0.31,
+          0.19,
+          0.091
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 119,
+        "detail": 0.35,
+        "procedural": "FIBERS",
+        "height": 0.02,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.52,
+          "scale": 57
+        }
+      }
+    ]
+  },
+  "Denim Fabric": {
+    "category": "Fabric and Leather",
+    "description": "Indigo directional weave, pale cross threads, worn raised areas and embedded dirt.",
+    "layers": [
+      {
+        "name": "Indigo weave",
+        "color": [
+          0.022,
+          0.055,
+          0.12
+        ],
+        "roughness": 0.88,
+        "metallic": 0.0,
+        "scale": 130,
+        "detail": 0.67,
+        "procedural": "WEAVE",
+        "height": 0.071,
+        "generated_source": {
+          "id": "fabric_weave",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.55,
+          "roughness": 0.065,
+          "height": 0.071
+        }
+      },
+      {
+        "name": "Pale weft threads",
+        "color": [
+          0.2,
+          0.23,
+          0.24
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 134,
+        "detail": 0.7,
+        "procedural": "FIBERS",
+        "height": 0.035,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.22,
+          "scale": 73
+        }
+      },
+      {
+        "name": "Faded weave ridges",
+        "color": [
+          0.115,
+          0.17,
+          0.225
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 130,
+        "detail": 0.4,
+        "procedural": "WEAVE",
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.38,
+          "scale": 83
+        },
+        "generated_source": {
+          "id": "fabric_weave",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.32,
+          "roughness": 0.045
+        }
+      },
+      {
+        "name": "Denim abrasion",
+        "color": [
+          0.18,
+          0.23,
+          0.27
+        ],
+        "roughness": 0.98,
+        "metallic": 0.0,
+        "scale": 62,
+        "detail": 0.12,
+        "procedural": "DIRECTIONAL_SCRATCHES",
+        "height": 0.03,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.14,
+          "scale": 62
+        }
+      },
+      {
+        "name": "Embedded dirt",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.97,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.22,
+          "scale": 43
+        }
+      }
+    ]
+  },
+  "Canvas Fabric": {
+    "category": "Fabric and Leather",
+    "description": "Coarse neutral woven canvas with fiber roughness, stained folds and fraying exposed edges.",
+    "layers": [
+      {
+        "name": "Canvas weave",
+        "color": [
+          0.33,
+          0.25,
+          0.145
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 78,
+        "detail": 0.6,
+        "procedural": "WEAVE",
+        "height": 0.096,
+        "generated_source": {
+          "id": "fabric_weave",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.5,
+          "roughness": 0.055,
+          "height": 0.096
+        }
+      },
+      {
+        "name": "Rough fibers",
+        "color": [
+          0.43,
+          0.34,
+          0.22
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 160,
+        "detail": 0.37,
+        "procedural": "FIBERS",
+        "height": 0.029,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.27,
+          "scale": 69
+        }
+      },
+      {
+        "name": "Irregular stains",
+        "color": [
+          0.13,
+          0.083,
+          0.034
+        ],
+        "roughness": 0.9,
+        "metallic": 0.0,
+        "scale": 9,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.24,
+          "scale": 9
+        }
+      },
+      {
+        "name": "Dirt in folds",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.37,
+          "scale": 40
+        }
+      },
+      {
+        "name": "Frayed edge fibers",
+        "color": [
+          0.51,
+          0.41,
+          0.28
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 108,
+        "detail": 0.55,
+        "procedural": "FIBERS",
+        "height": 0.057,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.32,
+          "scale": 75
+        }
+      }
+    ]
+  },
+  "Sci-Fi Panel Surface": {
+    "category": "Specialized Hero Materials",
+    "description": "Coated panel substrate with contrasting repairs, edge wear, scratches and recess grime; add decals above the folder.",
+    "layers": [
+      {
+        "name": "Panel alloy",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.36,
+        "metallic": 1,
+        "scale": 99,
+        "detail": 0.13,
+        "procedural": "MACHINING",
+        "height": 0.02
+      },
+      {
+        "name": "Dark panel coating",
+        "color": [
+          0.037,
+          0.05,
+          0.059
+        ],
+        "roughness": 0.54,
+        "metallic": 0.0,
+        "scale": 132,
+        "detail": 0.16,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.024,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.22,
+          "scale": 66,
+          "invert": true
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.07,
+          "roughness": 0.045,
+          "height": 0.024
+        }
+      },
+      {
+        "name": "Contrasting repair coating",
+        "color": [
+          0.24,
+          0.28,
+          0.29
+        ],
+        "roughness": 0.43,
+        "metallic": 0.0,
+        "scale": 5,
+        "detail": 0.12,
+        "procedural": "VORONOI",
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.14,
+          "scale": 5
+        }
+      },
+      {
+        "name": "Fine service scratches",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.45,
+        "metallic": 1,
+        "scale": 107,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.023,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.12,
+          "scale": 107
+        }
+      },
+      {
+        "name": "Exposed panel edges",
+        "color": [
+          0.916,
+          0.923,
+          0.924
+        ],
+        "roughness": 0.22,
+        "metallic": 1,
+        "scale": 24.0,
+        "detail": 0.12,
+        "mask": {
+          "kind": "EDGE_WEAR",
+          "amount": 0.27,
+          "scale": 90
+        }
+      },
+      {
+        "name": "Panel recess grime",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.87,
+        "metallic": 0.0,
+        "scale": 37,
+        "detail": 0.65,
+        "procedural": "GRUNGE",
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.43,
+          "scale": 37
+        }
+      }
+    ]
+  },
+  "Post-Apocalyptic Scrap Metal": {
+    "category": "Specialized Hero Materials",
+    "description": "Pitted steel, deep rust and two mismatched paint generations under repairs, gouges, oil and dust.",
+    "layers": [
+      {
+        "name": "Pitted scrap steel",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.67,
+        "metallic": 1,
+        "scale": 59,
+        "detail": 0.3,
+        "procedural": "PITS",
+        "height": 0.07
+      },
+      {
+        "name": "Deep rust scales",
+        "color": [
+          0.074,
+          0.022,
+          0.012
+        ],
+        "roughness": 0.96,
+        "metallic": 0.0,
+        "scale": 23,
+        "detail": 0.95,
+        "procedural": "CRACKS",
+        "height": 0.14,
+        "mask": {
+          "kind": "RUST",
+          "amount": 0.67,
+          "scale": 24
+        }
+      },
+      {
+        "name": "Old yellow paint",
+        "color": [
+          0.39,
+          0.22,
+          0.025
+        ],
+        "roughness": 0.76,
+        "metallic": 0.0,
+        "scale": 35,
+        "detail": 0.45,
+        "procedural": "CRACKS",
+        "height": 0.07,
+        "mask": {
+          "kind": "CHIPS",
+          "amount": 0.64,
+          "scale": 23,
+          "invert": true
+        },
+        "mask_effects": [
+          {
+            "kind": "NOISE",
+            "amount": 0.46,
+            "scale": 5,
+            "contrast": 9
+          }
+        ]
+      },
+      {
+        "name": "Later blue repair paint",
+        "color": [
+          0.02,
+          0.085,
+          0.13
+        ],
+        "roughness": 0.65,
+        "metallic": 0.0,
+        "scale": 87,
+        "detail": 0.3,
+        "procedural": "ORANGE_PEEL",
+        "height": 0.04,
+        "mask": {
+          "kind": "NOISE",
+          "amount": 0.27,
+          "scale": 6
+        },
+        "generated_source": {
+          "id": "polymer_grain",
+          "scale": [
+            1.0,
+            1.0
+          ],
+          "color": 0.12,
+          "roughness": 0.065,
+          "height": 0.04
+        }
+      },
+      {
+        "name": "Fresh gouges",
+        "color": [
+          0.68,
+          0.69,
+          0.68
+        ],
+        "roughness": 0.42,
+        "metallic": 1,
+        "scale": 36,
+        "detail": 0.12,
+        "procedural": "SCRATCHES",
+        "height": -0.075,
+        "mask": {
+          "kind": "SCRATCHES",
+          "amount": 0.31,
+          "scale": 36
+        }
+      },
+      {
+        "name": "Oil leakage",
+        "color": [
+          0.024,
+          0.02,
+          0.014
+        ],
+        "roughness": 0.21,
+        "metallic": 0.0,
+        "scale": 17,
+        "detail": 0.62,
+        "procedural": "STREAKS",
+        "mask": {
+          "kind": "DRIPS",
+          "amount": 0.32,
+          "scale": 17
+        }
+      },
+      {
+        "name": "Deep cavity grime",
+        "color": [
+          0.049,
+          0.032,
+          0.02
+        ],
+        "roughness": 0.94,
+        "metallic": 0.0,
+        "scale": 68,
+        "detail": 0.72,
+        "procedural": "PITS",
+        "height": 0.026,
+        "mask": {
+          "kind": "CAVITY_DIRT",
+          "amount": 0.59,
+          "scale": 32
+        }
+      },
+      {
+        "name": "Windblown dust",
+        "color": [
+          0.23,
+          0.184,
+          0.133
+        ],
+        "roughness": 0.99,
+        "metallic": 0.0,
+        "scale": 45,
+        "detail": 0.5,
+        "procedural": "FBM",
+        "mask": {
+          "kind": "DUST",
+          "amount": 0.41,
+          "scale": 45
+        }
+      }
+    ]
+  }
+}

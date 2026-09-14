@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "id": "timber_relief_v2",
+      "file": "timber_relief_v2.png",
+      "original_file": "exec-26a73255-7750-49c1-acb1-8d424ae71363.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "2a402ab58790a6650f107b7d8e458ea5b4c1151626ca0777cb78100d47481f1a",
+      "bytes": 3087388,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "leather_relief_v2",
+      "file": "leather_relief_v2.png",
+      "original_file": "exec-1cf910a3-bde9-4208-80f2-a0715652ef72.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "c75e6d91dc0ad60583452e53bf4df97041a9beea7bca0641963bcda582f5dd41",
+      "bytes": 3553897,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "denim_twill_v2",
+      "file": "denim_twill_v2.png",
+      "original_file": "exec-7e203e76-79cf-40b5-8c78-484f31668445.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "adc790d25b965674e3fad3333b75abc79ef64bf379372d7512d14f33c3909a1c",
+      "bytes": 2944785,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "cement_relief_v2",
+      "file": "cement_relief_v2.png",
+      "original_file": "exec-d33e349f-a7e5-4088-8ac1-37c194820e29.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "bb96748dab4d97c2d59edb1f2fc553624157986fd9ff13a3bc1a1f7104164f12",
+      "bytes": 3754717,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    },
+    {
+      "id": "charred_timber_v2",
+      "file": "charred_timber_v2.png",
+      "original_file": "exec-2ad3668c-8650-43cc-bafc-b46de45e7971.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "71f3436b36af044aeec58b9bd4f06fc21822a798fd261aa04a520e165d720899",
+      "bytes": 3367156,
+      "prompt_file": "docs/research/natural-relief-prompts.json",
+      "mode": "built-in image_gen"
+    }
+  ]
+}

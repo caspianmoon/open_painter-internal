@@ -1,0 +1,479 @@
+{
+  "source_cases": [
+    {
+      "name": "uv_rgba",
+      "max_error": 2.060175973261913e-06,
+      "mean_error": 3.986145344756579e-08,
+      "nodes": 60,
+      "resources": 0
+    },
+    {
+      "name": "uv_rgba_border",
+      "max_error": 1.8435753279533174e-07,
+      "mean_error": 1.4164962689128605e-08,
+      "nodes": 75,
+      "resources": 0
+    },
+    {
+      "name": "uv_rgba_nearest",
+      "max_error": 0.0,
+      "mean_error": 0.0,
+      "nodes": 60,
+      "resources": 0
+    },
+    {
+      "name": "triplanar_rgba",
+      "max_error": 3.337860107421875e-06,
+      "mean_error": 4.441244527697563e-08,
+      "nodes": 130,
+      "resources": 0
+    },
+    {
+      "name": "paint_float",
+      "max_error": 1.9669532775878906e-06,
+      "mean_error": 4.055133828728685e-08,
+      "nodes": 41,
+      "resources": 0
+    },
+    {
+      "name": "uv_scalar_detail",
+      "max_error": 4.76837158203125e-07,
+      "mean_error": 1.1059455573558807e-08,
+      "nodes": 73,
+      "resources": 0
+    },
+    {
+      "name": "triplanar_scalar_detail",
+      "max_error": 8.940696716308594e-07,
+      "mean_error": 1.652127501472478e-08,
+      "nodes": 143,
+      "resources": 0
+    },
+    {
+      "name": "generated_scalar_detail",
+      "max_error": 1.1026859283447266e-05,
+      "mean_error": 7.526735430474218e-07,
+      "nodes": 73,
+      "resources": 0
+    },
+    {
+      "name": "scalar_detail_height",
+      "max_error": 1.7881393432617188e-07,
+      "mean_error": 6.984919309616089e-09,
+      "nodes": 68,
+      "resources": 0
+    },
+    {
+      "name": "scalar_detail_normal",
+      "max_error": 7.748603820800781e-07,
+      "mean_error": 1.771453206345086e-08,
+      "nodes": 42,
+      "resources": 1
+    },
+    {
+      "name": "channel_procedural_CHECKER",
+      "max_error": 0.0,
+      "mean_error": 0.0,
+      "nodes": 82,
+      "resources": 0
+    },
+    {
+      "name": "channel_procedural_GRADIENT",
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 7.295360315850985e-09,
+      "nodes": 78,
+      "resources": 0
+    },
+    {
+      "name": "channel_procedural_FBM",
+      "max_error": 1.7881393432617188e-07,
+      "mean_error": 1.3271346688270569e-08,
+      "nodes": 50,
+      "resources": 1
+    },
+    {
+      "name": "generator_EDGE_WEAR",
+      "max_error": 5.960464477539063e-08,
+      "mean_error": 1.775333657860756e-09,
+      "nodes": 83,
+      "resources": 1
+    },
+    {
+      "name": "generator_DIRT",
+      "max_error": 5.960464477539063e-08,
+      "mean_error": 2.017865652348405e-09,
+      "nodes": 80,
+      "resources": 1
+    },
+    {
+      "name": "generator_CHIPS",
+      "max_error": 2.384185791015625e-07,
+      "mean_error": 2.784266373012656e-09,
+      "nodes": 94,
+      "resources": 2
+    },
+    {
+      "name": "generator_DUST",
+      "max_error": 5.960464477539063e-08,
+      "mean_error": 8.731149137020111e-11,
+      "nodes": 78,
+      "resources": 1
+    },
+    {
+      "name": "generator_DRIPS",
+      "max_error": 5.364418029785156e-07,
+      "mean_error": 2.6115836604390097e-08,
+      "nodes": 81,
+      "resources": 1
+    },
+    {
+      "name": "generator_UV_BORDER",
+      "max_error": 5.960464477539063e-08,
+      "mean_error": 2.376812746618384e-09,
+      "nodes": 69,
+      "resources": 0
+    },
+    {
+      "name": "mask_procedural_CHECKER",
+      "max_error": 2.9802322387695312e-08,
+      "mean_error": 9.701277108031814e-12,
+      "nodes": 178,
+      "resources": 0
+    },
+    {
+      "name": "mask_procedural_FBM",
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 7.664008982999349e-09,
+      "nodes": 60,
+      "resources": 1
+    },
+    {
+      "name": "native_mask_filter",
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 7.1498411635673165e-09,
+      "nodes": 153,
+      "resources": 1
+    },
+    {
+      "name": "isolated_filter_prefix",
+      "max_error": 1.7881393432617188e-07,
+      "mean_error": 6.907308947035062e-09,
+      "nodes": 118,
+      "resources": 1
+    },
+    {
+      "name": "published_scalar_uses_red",
+      "max_error": 5.960464477539063e-08,
+      "mean_error": 1.1350493878126144e-09,
+      "nodes": 84,
+      "resources": 0
+    }
+  ],
+  "catalog": [
+    {
+      "name": "Clean Brushed Steel",
+      "nodes": 487,
+      "resources": 0,
+      "compile_ms": 622.2262080045766
+    },
+    {
+      "name": "Worn Brushed Steel",
+      "nodes": 755,
+      "resources": 3,
+      "compile_ms": 1364.4634169977508
+    },
+    {
+      "name": "Machined Aluminum",
+      "nodes": 384,
+      "resources": 0,
+      "compile_ms": 377.82083300407976
+    },
+    {
+      "name": "Scratched Aluminum",
+      "nodes": 622,
+      "resources": 2,
+      "compile_ms": 902.3662079998758
+    },
+    {
+      "name": "Cast Iron",
+      "nodes": 1258,
+      "resources": 3,
+      "compile_ms": 3775.7331669999985
+    },
+    {
+      "name": "Raw Industrial Steel",
+      "nodes": 980,
+      "resources": 1,
+      "compile_ms": 2293.31029199966
+    },
+    {
+      "name": "Polished Chrome",
+      "nodes": 478,
+      "resources": 1,
+      "compile_ms": 565.4179999983171
+    },
+    {
+      "name": "Old Brass",
+      "nodes": 1419,
+      "resources": 2,
+      "compile_ms": 5127.061040999251
+    },
+    {
+      "name": "Antique Bronze",
+      "nodes": 1627,
+      "resources": 3,
+      "compile_ms": 5729.573582997546
+    },
+    {
+      "name": "Oxidized Copper",
+      "nodes": 1288,
+      "resources": 2,
+      "compile_ms": 3573.846874998708
+    },
+    {
+      "name": "Worn Painted Metal",
+      "nodes": 1474,
+      "resources": 4,
+      "compile_ms": 4476.585708005587
+    },
+    {
+      "name": "Heavy Chipped Paint",
+      "nodes": 2070,
+      "resources": 1,
+      "compile_ms": 9531.933749996824
+    },
+    {
+      "name": "Factory Powder-Coated Metal",
+      "nodes": 921,
+      "resources": 1,
+      "compile_ms": 1835.5987089962582
+    },
+    {
+      "name": "Military Painted Steel",
+      "nodes": 1579,
+      "resources": 5,
+      "compile_ms": 5001.7413339955965
+    },
+    {
+      "name": "Old Enamel Metal",
+      "nodes": 1401,
+      "resources": 3,
+      "compile_ms": 4253.151915996568
+    },
+    {
+      "name": "Rusting Painted Steel",
+      "nodes": 2276,
+      "resources": 5,
+      "compile_ms": 13458.25837499433
+    },
+    {
+      "name": "Automotive Painted Metal",
+      "nodes": 983,
+      "resources": 0,
+      "compile_ms": 2529.1642090014648
+    },
+    {
+      "name": "Burned Painted Metal",
+      "nodes": 1533,
+      "resources": 3,
+      "compile_ms": 5559.205290999671
+    },
+    {
+      "name": "Heavy Rust",
+      "nodes": 1955,
+      "resources": 1,
+      "compile_ms": 8774.041374999797
+    },
+    {
+      "name": "Surface Rust",
+      "nodes": 564,
+      "resources": 0,
+      "compile_ms": 727.2005420018104
+    },
+    {
+      "name": "Wet Rust",
+      "nodes": 1166,
+      "resources": 1,
+      "compile_ms": 3065.280625000014
+    },
+    {
+      "name": "Galvanized Steel",
+      "nodes": 816,
+      "resources": 0,
+      "compile_ms": 1537.3509169949102
+    },
+    {
+      "name": "Welded Steel",
+      "nodes": 838,
+      "resources": 1,
+      "compile_ms": 1468.0304170033196
+    },
+    {
+      "name": "Heat-Treated Metal",
+      "nodes": 1014,
+      "resources": 0,
+      "compile_ms": 2093.4497919952264
+    },
+    {
+      "name": "Greasy Machinery",
+      "nodes": 1699,
+      "resources": 1,
+      "compile_ms": 6457.631624994974
+    },
+    {
+      "name": "Abandoned Machinery",
+      "nodes": 2433,
+      "resources": 6,
+      "compile_ms": 13389.997666999989
+    },
+    {
+      "name": "Injection-Molded Plastic",
+      "nodes": 647,
+      "resources": 1,
+      "compile_ms": 997.3076669994043
+    },
+    {
+      "name": "Worn Hard Plastic",
+      "nodes": 1067,
+      "resources": 2,
+      "compile_ms": 2633.2214170033694
+    },
+    {
+      "name": "Soft-Touch Plastic",
+      "nodes": 834,
+      "resources": 0,
+      "compile_ms": 2032.1714160018018
+    },
+    {
+      "name": "Sun-Damaged Plastic",
+      "nodes": 1187,
+      "resources": 1,
+      "compile_ms": 3560.399124995456
+    },
+    {
+      "name": "Dirty Rubber",
+      "nodes": 1504,
+      "resources": 2,
+      "compile_ms": 7426.1554170007
+    },
+    {
+      "name": "Cracked Old Rubber",
+      "nodes": 1195,
+      "resources": 1,
+      "compile_ms": 3464.3624590025865
+    },
+    {
+      "name": "Fresh Oak",
+      "nodes": 536,
+      "resources": 0,
+      "compile_ms": 714.9191250064177
+    },
+    {
+      "name": "Old Worn Wood",
+      "nodes": 793,
+      "resources": 2,
+      "compile_ms": 1307.8543749943492
+    },
+    {
+      "name": "Painted Wood",
+      "nodes": 1188,
+      "resources": 2,
+      "compile_ms": 3533.2290420046775
+    },
+    {
+      "name": "Weathered Outdoor Wood",
+      "nodes": 819,
+      "resources": 2,
+      "compile_ms": 1550.5939580034465
+    },
+    {
+      "name": "Burnt Wood",
+      "nodes": 699,
+      "resources": 3,
+      "compile_ms": 1137.7410409986624
+    },
+    {
+      "name": "Oiled Dark Wood",
+      "nodes": 627,
+      "resources": 0,
+      "compile_ms": 960.0689580038306
+    },
+    {
+      "name": "Rough Concrete",
+      "nodes": 938,
+      "resources": 0,
+      "compile_ms": 1959.6565000028932
+    },
+    {
+      "name": "Old Dirty Concrete",
+      "nodes": 1169,
+      "resources": 2,
+      "compile_ms": 3028.852833995188
+    },
+    {
+      "name": "Painted Concrete",
+      "nodes": 1465,
+      "resources": 2,
+      "compile_ms": 4592.56437500153
+    },
+    {
+      "name": "Polished Marble",
+      "nodes": 886,
+      "resources": 0,
+      "compile_ms": 1848.8416250038426
+    },
+    {
+      "name": "Granite",
+      "nodes": 1103,
+      "resources": 0,
+      "compile_ms": 3654.16825000284
+    },
+    {
+      "name": "Weathered Stone",
+      "nodes": 1403,
+      "resources": 6,
+      "compile_ms": 5460.56574999966
+    },
+    {
+      "name": "Worn Leather",
+      "nodes": 1143,
+      "resources": 2,
+      "compile_ms": 3162.1432089959853
+    },
+    {
+      "name": "Cracked Old Leather",
+      "nodes": 1171,
+      "resources": 2,
+      "compile_ms": 3331.535375000385
+    },
+    {
+      "name": "Denim Fabric",
+      "nodes": 840,
+      "resources": 2,
+      "compile_ms": 1789.1115000020363
+    },
+    {
+      "name": "Canvas Fabric",
+      "nodes": 817,
+      "resources": 3,
+      "compile_ms": 1510.1188750049914
+    },
+    {
+      "name": "Sci-Fi Panel Surface",
+      "nodes": 1609,
+      "resources": 4,
+      "compile_ms": 5492.592417002015
+    },
+    {
+      "name": "Post-Apocalyptic Scrap Metal",
+      "nodes": 2834,
+      "resources": 5,
+      "compile_ms": 21388.514124999347
+    }
+  ],
+  "failures": [],
+  "readback_uv_bias": [
+    3.123283386230469e-05,
+    6.246566772460938e-05
+  ]
+}

@@ -1,5 +1,21 @@
 # Roadmap implementation status
 
+Version **0.2.7** introduces shader-native authoring. Existing `LIVE` texture sets
+compile into persistent Blender material graphs, with parameter-owner bindings
+and downstream dependency invalidation. Supported numeric edits update shader
+values without complete channel texture generation. Save/render preserve source
+images and finish only isolated unsupported inputs; export/CPU Reference remain
+explicit raster consumers. The Image Editor composite is an explicit snapshot;
+painting uses the original canvas. See the [architecture and diagnostics](shader-preview-architecture.md).
+On the supplied 2048 project, the authoring trace, save/reopen/export, and actual
+Cavity Dirt strength slider checks have passed. Eight held reversals changed
+the real viewport through an isolated native RNA sidebar. Product panel navigation
+and a 14 ms frame target are not established by this check.
+Earlier small-fixture passes are secondary evidence for individual code paths.
+
+Earlier reports below describe their named release's evaluator and measurements.
+
+
 ## Ucupaint integration — 2026-09-14
 
 Implemented from the study, outside the shader compiler and smart-material files:
@@ -24,6 +40,19 @@ network updater and scene-mutating bake bookkeeping are explicitly not to be tak
 Open Painter files it touches and the Blender checks required before committing.
 
 
+## Generated masks and surface relief — 2026-09-14
+
+Version **0.2.6** reauthors all 50 smart materials using 13 additional generated
+wear and relief inputs. Image coverage replaces procedural scratch ticks and
+striped coating fragments. Raised paint/primer levels, pitted corrosion,
+grain/weave relief, weld beads, blisters and recessed rubber fissures remain
+editable. Exported normals include the rendered Height relief and respect
+connected UV charts, geometry scale and separately authored normals.
+
+See the [current 50-material review](material-surface-review.html),
+[implementation and validation](material-surface-quality.md), and
+[exact generated source record](research/material-relief-source-index.md).
+The 0.2.5 report below records the earlier release, not this replacement.
 
 ## Generated material quality — 2026-09-14
 
@@ -277,8 +306,7 @@ after switching `tiles.active_index` returned the same green pixels for both
 addressing. Native tile painting and baking were therefore **not run**. This
 is a failed capability gate, not a claim that every possible UDIM access method
 is impossible. A different tile-storage/transfer path and complete two-tile
-acceptance are required before advertising support.
-The 2026-09-14 rerun in
+acceptance are required before advertising support. The 2026-09-14 rerun in
 [udim-tile-access.md](udim-tile-access.md) found that path: per-tile files.
 
 ## Fresh paired 2K CPU benchmark

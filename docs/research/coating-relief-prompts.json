@@ -1,0 +1,21 @@
+{
+  "mode": "built-in image_gen",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "assets": [
+    {
+      "id": "paint_loss_v2",
+      "prompt": "Use case: scientific-educational\nAsset type: production grayscale coverage/depth texture for a physically based 3D smart material, one square 2048 by 2048 image.\nCreate a premium original texture mask of heavy natural paint delamination on an old industrial steel panel. This is RAW TEXTURE DATA viewed orthographically straight down, filling the entire image, not a rendered material, illustration, photograph of an object, texture atlas, or sphere.\nPixel semantics: BLACK (0) is surviving intact paint; WHITE (1) is exposed substrate where paint has flaked away; narrow gray transitions describe irregular eroded borders. Approximately 40 percent exposed substrate and 60 percent connected surviving paint. Use many organically connected patches at three scales: several irregular palm-sized peeling regions, dozens of smaller ragged chips around their boundaries, and hundreds of tiny pinprick losses. The largest patch occupies at most 10 percent of the image. Complex chipped edges with tiny bites, short interrupted cracks emanating from damage, irregular rounded and angular boundaries, clustered deterioration and generous calm intact areas. Surviving paint is generally connected, not isolated decorative islands. Damage varies naturally, as corrosion undercutting paint. Interior regions should be largely solid grayscale for clean material separation; fine boundary information is extremely crisp.\nMake the distribution isotropic and aperiodic: no preferred horizontal, vertical, radial, or diagonal direction. Match all opposite image edges for seamless repeat. All of the square is usable material texture.\nStrictly monochrome grayscale. No light direction, no cast shadows, no highlights, no ambient occlusion, no baked color, no bevel shading, no vignette, no border, no text, no labels. Absolutely no zebra/tiger/camouflage stripes, no long sinuous ribbons, no repeated bands, no Voronoi polygon web, no paint brush strokes. Texture data with detailed scale variation, not a flat logo pattern.",
+      "original": "/Users/khazarayaz/.codex/generated_images/01a09fbd-d1fa-76e0-afc9-c932a28636c0/exec-bde9970c-c05b-4a02-b1b2-b3b52273efbc.png",
+      "semantics": "Black surviving paint, white lost coating."
+    },
+    {
+      "id": "rust_relief_v2",
+      "prompt": "Use case: scientific-educational\nAsset type: one seamless grayscale displacement HEIGHT MAP for a high-quality PBR material, square 2048x2048.\nCreate raw geometric height data for realistically corroded pitted industrial iron with flaking rust scales, orthographic top down, continuous surface to every edge. Medium gray is average elevation; dark gray/black is recessed pitting and eroded crevices; light gray is raised compact granular oxide; highest small flake edges approach white. Encode height only, not shaded appearance. Corrosion has a convincing hierarchy: irregular millimeter-sized granular oxide, groups of overlapping thin lifted rusty scales, tiny deep jagged pinholes, moderately broad worn compacted patches. Fine irregular craggy texture with distinct clean detail at full resolution. Some continuous smoother areas between the granular deposits prevent all-over uniform gravel. Broad variations must remain shallow; the pronounced relief is in actual smaller pits and thin layered flake edges. A clear 0.15–0.85 height range, unlike a low contrast cloudy grayscale photograph.\nIsotropic nonrepeating distribution, similar density across the square, no stripes, no grid, no directional scratching, no regular polygons. Exactly match opposite edges for tiling. Grayscale only; no color, no highlights, no drop shadows, no directional light, no specular reflections, no ambient occlusion, no vignette, no frame, no object, no sphere, no perspective, no text or labels. A texture heightfield for a renderer, not a photograph of rust.",
+      "original": "/Users/khazarayaz/.codex/generated_images/01a09fbd-d1fa-76e0-afc9-c932a28636c0/exec-d0263924-9375-40c3-81e1-938551ba38c9.png",
+      "semantics": "Darker pits, lighter granular peaks and flake rims."
+    }
+  ]
+}

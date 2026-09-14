@@ -21,6 +21,7 @@ from open_painter.painting.channel_paint import target
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, "Cooperative", 512)
+ts.preview_backend = 'CPU'  # This regression exercises explicit raster scheduling.
 base = stack.add(ts, "FILL")
 LayerEvaluator(scene).evaluate_texture_set(ts.id)
 serial = ts.edit_serial

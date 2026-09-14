@@ -9,6 +9,8 @@ def changed(self, context):
         for ts in project.texture_sets:
             if any(m.influence.as_pointer() == self.as_pointer() for layer in ts.layers for m in layer.masks):
                 invalidate(ts)
+                from ..evaluation.shader_preview import notify
+                notify(self, context)
 
 
 class OP_Influencer(bpy.types.PropertyGroup):

@@ -1,4 +1,8 @@
-"""Debounced evaluation lifecycle; only transient scheduling lives in memory."""
+"""Authoring lifecycle: native shaders and isolated inputs, or explicit CPU mode.
+
+The legacy debounce below belongs to CPU texture evaluation. Native parameter
+edits are bound synchronously and never enter that full-stack image scheduler.
+"""
 
 from time import monotonic
 
@@ -23,6 +27,12 @@ _set_cursors = {}
 
 
 def job_state(scene, ts):
+    from . import shader_preview
+    if shader_preview.requested(ts):
+        info = shader_preview.diagnostics(scene, ts)
+        return dict(state='SHADER' if info['state'] == 'SHADER' else
+                    'FAILED' if info['error'] else 'PREPARING_INPUT',
+                    serial=ts.edit_serial, error=info['error'])
     key = key_for(scene, ts)
     state = _states.get(key)
     if state and state['serial'] == ts.edit_serial:
@@ -41,8 +51,11 @@ def failure_message(scene):
 
 
 def retry(scene, ts):
-    from . import live_preview
-    live_preview.retry(scene, ts)
+    from . import live_preview, shader_preview
+    if shader_preview.requested(ts):
+        shader_preview.retry(scene, ts)
+    else:
+        live_preview.retry(scene, ts)
     _states.pop(key_for(scene, ts), None)
     _pending.pop(key_for(scene, ts), None)
     ts.dirty = True
@@ -76,8 +89,9 @@ def tick():
     prune(live)
     from . import preview_policy
     preview_policy.prune(live)
-    from . import live_preview
+    from . import live_preview, shader_preview
     live_preview.prune(live)
+    shader_preview.prune(live)
     dependencies.prune(live)
     live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
     for table in (_paint_input, _live_checks, _set_cursors):
@@ -106,7 +120,7 @@ def tick():
             # Never invalidate a partially completed snapshot with another scan.
             _paint_input[scene_key] = (True, monotonic())
             if not busy and monotonic() - _live_checks.get(scene_key, 0) >= 0.033:
-                if not live_preview.native_paint_input(scene):
+                if not shader_preview.native_paint_input(scene):
                     detect(scene, force=True)
                 _live_checks[scene_key] = monotonic()
         elif activity and not busy:
@@ -124,10 +138,20 @@ def tick():
         preferred = texture_sets[active].id if 0 <= active < len(texture_sets) else None
         for ts in fair_order(texture_sets, _set_cursors.get(scene_key), lambda item: item.id, preferred):
             key = key_for(scene, ts)
-            use_live = live_preview.available(scene, ts)
-            if use_live and live_preview.current(scene, ts):
-                set_state(scene, ts, 'LIVE')
+            if shader_preview.requested(ts):
+                # Authoring uses Blender's material shader. Dirty output images
+                # remain pending for an explicit bake, regardless of inactivity.
                 _pending.pop(key, None)
+                discard(key)
+                _regions.pop(key, None)
+                ready = shader_preview.tick(scene, ts)
+                info = shader_preview.diagnostics(scene, ts)
+                set_state(scene, ts, 'SHADER' if ready else
+                          'FAILED' if info['error'] else 'PREPARING_INPUT', info['error'])
+                if info['pending_resources']:
+                    _scene_cursor = scene_key
+                    _set_cursors[scene_key] = ts.id
+                    return .001
                 continue
             if not ts.dirty:
                 set_state(scene, ts, "READY")
@@ -144,45 +168,15 @@ def tick():
                 _pending[key] = (ts.edit_serial, now)
                 discard(key)
                 set_state(scene, ts, "STALE")
-                if not painting and not use_live:
+                if not painting:
                     continue
-            if key not in _jobs and not painting and not use_live and now - since < 0.08:
+            if key not in _jobs and not painting and now - since < 0.08:
                 set_state(scene, ts, "QUEUED")
                 continue
             try:
                 from ..constants import CHANNELS
                 from ..core import image_manager, material_manager
                 from ..core.validation import hierarchy_issues
-
-                if use_live:
-                    try:
-                        entry = _jobs.get(key)
-                        if entry is None or entry[0] != 'live':
-                            discard(key)
-                            entry = ('live', live_preview.steps(scene, ts))
-                            _jobs[key] = entry
-                        deadline = monotonic() + .006
-                        set_state(scene, ts, 'RUNNING')
-                        scene.open_painter.status = 'Updating live textures…'
-                        while True:
-                            try:
-                                next(entry[1])
-                            except StopIteration:
-                                _jobs.pop(key, None)
-                                if live_preview.current(scene, ts):
-                                    set_state(scene, ts, 'LIVE')
-                                    scene.open_painter.status = live_preview.status(scene, ts)
-                                    _pending.pop(key, None)
-                                break
-                            if monotonic() >= deadline:
-                                break
-                        _scene_cursor = scene_key
-                        _set_cursors[scene_key] = ts.id
-                        return .001
-                    except Exception as exc:
-                        discard(key)
-                        live_preview.failed(scene, ts, exc)
-                        logger.warning('Live preview unavailable; using CPU: %s', exc)
 
                 issues = hierarchy_issues(ts)
                 if issues:
@@ -274,7 +268,7 @@ def tick():
     return (
         0.016
         if any(
-            scene.open_painter.paint_image or any(live_preview.requested(ts)
+            scene.open_painter.paint_image or any(shader_preview.requested(ts)
                                                   for ts in scene.open_painter.texture_sets)
             for scene in bpy.data.scenes
             if hasattr(scene, "open_painter")
@@ -292,6 +286,8 @@ def on_load(_):
     cancel_all()
     from .live_preview import clear as clear_live
     clear_live()
+    from .shader_preview import clear as clear_shaders
+    clear_shaders()
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -318,7 +314,8 @@ def on_load(_):
 
 @persistent
 def on_save(_):
-    # A save performs a complete authoritative flush; discard older preview jobs.
+    # Save native recipes and their authored inputs. Only explicit CPU preview
+    # mode flushes full channel outputs; native mode completes source boundaries.
     cancel_all()
     from .live_preview import clear as clear_live
     clear_live()
@@ -328,12 +325,32 @@ def on_save(_):
     from ..painting.paint_session import detect
     from .evaluator import LayerEvaluator
 
+    source_images = set()
     for scene in bpy.data.scenes:
         if not hasattr(scene, "open_painter"):
             continue
         detect(scene, force=True)
         for ts in scene.open_painter.texture_sets:
-            if ts.dirty:
+            sources = [item.image for item in ts.baked_maps]
+            for layer in ts.layers:
+                for prop in layer.channels:
+                    sources.extend((prop.image, prop.detail_image))
+                    sources.extend(effect.image for effect in prop.effects)
+                for mask in layer.masks:
+                    sources.extend((mask.image, mask.effect.image, mask.influence.image))
+            source_images.update(image.as_pointer() for image in sources if image)
+            from . import shader_preview
+            if shader_preview.requested(ts):
+                try:
+                    shader_preview.flush(scene, ts)
+                    info = shader_preview.diagnostics(scene, ts)
+                    set_state(scene, ts, 'SHADER' if shader_preview.current(scene, ts)
+                              else 'FAILED', info['error'])
+                except Exception as exc:
+                    scene.open_painter.status = f'Shader input needs attention: {exc}'
+                    set_state(scene, ts, 'FAILED', str(exc))
+                    logger.error('Save shader input: %s', exc)
+            elif ts.dirty:
                 try:
                     LayerEvaluator(scene).evaluate_texture_set(ts.id)
                     set_state(scene, ts, "READY")
@@ -342,7 +359,7 @@ def on_save(_):
                     set_state(scene, ts, "FAILED", str(exc))
                     logger.error("Save preview: %s", exc)
     for image in bpy.data.images:
-        if image.get(OWNER) and image.has_data and image.users:
+        if (image.get(OWNER) or image.as_pointer() in source_images) and image.has_data and image.users:
             from ..core.image_manager import pack_image
             pack_image(image)
 
@@ -370,6 +387,8 @@ def unregister():
     cancel_all()
     from .live_preview import clear as clear_live
     clear_live()
+    from .shader_preview import clear as clear_shaders
+    clear_shaders()
     from .preview_policy import clear
     clear()
     clear_shared()

@@ -131,6 +131,8 @@ def repair(ts, image_overrides=None):
                 nodes.remove(old)
                 if tree and not tree.users and tree.get(OWNER):
                     bpy.data.node_groups.remove(tree)
+        from ..evaluation.shader_graph import remove_orphan_units
+        remove_orphan_units(ts.id)
         shader_preview.mark_attached(ts.id_data, ts, graph)
     else:
         shader_preview.mark_attached(ts.id_data, ts)

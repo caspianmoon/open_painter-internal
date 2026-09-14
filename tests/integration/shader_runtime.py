@@ -138,14 +138,22 @@ assert sum(node.get('role') == 'Procedural Graph' for node in ts.material.node_t
 # External callers may compile before the timer gets a chance to wire the
 # replacement. Ready status must describe the visible adapter, not compilation.
 source = next(layer for layer in ts.layers if layer.id == source_id)
+# Visibility is a shader uniform: hiding a layer keeps the compiled graph.
+graph = shader_preview.ensure(scene, ts)
+identities = graph.node_identities()
 source.visible = False
+assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is graph
+assert graph.node_identities() == identities
+source.visible = True
+assert shader_preview.current(scene, ts)
+source.blend_mode = 'MULTIPLY'
 replacement = shader_preview.ensure(scene, ts)
 assert not shader_preview.current(scene, ts)
 assert not shader_preview.diagnostics(scene, ts)['attached']
 ready(scene, ts)
 surface = next(node for node in ts.material.node_tree.nodes if node.get('role') == 'Surface')
 assert surface.inputs['Roughness'].links[0].from_node == replacement.instance
-source.visible = True
+source.blend_mode = 'NORMAL'
 ready(scene, ts)
 
 # Explicit raster consumers can temporarily replace the adapter without changing

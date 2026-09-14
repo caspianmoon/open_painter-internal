@@ -24,6 +24,16 @@ POINTWISE = frozenset({
 })
 
 
+def effect_key(kind):
+    key = str(kind).strip().upper().replace("-", "_").replace(" / ", "_").replace(" ", "_")
+    return {"GRAYSCALE": "DESATURATE", "HSL_ADJUSTMENT": "HSL"}.get(key, key)
+
+
+def is_pointwise(kind):
+    """True when the effect compiles to shader arithmetic; its enabled flag is then a uniform."""
+    return effect_key(kind) in POINTWISE
+
+
 def smooth(b, low, high, value):
     """Reference smoothstep with the same protected interval and saturation."""
     t = b.clamp(b.math("DIVIDE", b.math("SUBTRACT", value, low),
@@ -87,8 +97,7 @@ def apply_effect(b, signal, effect):
     output is clamped before effect opacity, exactly like apply_effect's CPU
     path. This function makes no persistent property or source image mutations.
     """
-    key = str(effect.kind).strip().upper().replace("-", "_").replace(" / ", "_").replace(" ", "_")
-    key = {"GRAYSCALE": "DESATURATE", "HSL_ADJUSTMENT": "HSL"}.get(key, key)
+    key = effect_key(effect.kind)
     if key not in POINTWISE:
         raise UnsupportedEffect(f"{effect.kind} requires a spatial raster boundary")
     m = b.math

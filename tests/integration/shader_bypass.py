@@ -46,12 +46,12 @@ def bypass_lifecycle():
     layer.blend_mode = "MULTIPLY"
     rebuilt = shader_preview.flush(scene, ts)
     assert rebuilt is not graph and shader_preview.current(scene, ts)
-    identities = tuple(node.as_pointer() for node in rebuilt.tree.nodes)
+    identities = rebuilt.node_identities()
     with Metrics() as observed:
         levels.strength = 1.
         assert shader_preview.diagnostics(scene, ts)["state"] == "FAILED"
         assert shader_preview.ensure(scene, ts) is rebuilt
-        assert tuple(node.as_pointer() for node in rebuilt.tree.nodes) == identities
+        assert rebuilt.node_identities() == identities
         levels.white = .9
         assert shader_preview.current(scene, ts)
         assert shader_preview.ensure(scene, ts) is rebuilt
@@ -62,7 +62,7 @@ def bypass_lifecycle():
     combine.strength = 1.
     assert shader_preview.diagnostics(scene, ts)["state"] == "FAILED"
     assert shader_preview.ensure(scene, ts) is rebuilt
-    assert tuple(node.as_pointer() for node in rebuilt.tree.nodes) == identities
+    assert rebuilt.node_identities() == identities
     image = bpy.data.images.new("Recovered normal detail", width=8, height=8, float_buffer=True)
     image.generated_color = (.5, .5, 1., 1.)
     image.colorspace_settings.name = "Non-Color"

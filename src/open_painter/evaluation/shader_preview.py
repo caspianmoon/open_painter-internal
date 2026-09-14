@@ -56,6 +56,7 @@ def diagnostics(scene, ts):
             'pending_resources': pending, 'error': entry.get('error', ''),
             'attached': bool(entry.get('attached', False)),
             'rebuild_pending': bool(entry.get('rebuild')),
+            'rebuild_scope': entry.get('rebuild_scope'),
             'graph_builds': entry.get('graph_builds', 0),
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
@@ -111,8 +112,8 @@ def _update(scene, ts, entry, owner=None):
     from .shader_graph import RebuildRequired
     try:
         result = entry['graph'].update(owner)
-    except RebuildRequired:
-        entry.update(rebuild=True, error='')
+    except RebuildRequired as exc:
+        entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
         metrics.count('shader_topology_invalidations')
         return False
     except Exception as exc:
@@ -155,7 +156,8 @@ def ensure(scene, ts):
         candidate = None
         try:
             candidate = Graph(scene, ts, ts.material)
-            candidate.build()
+            # Units whose structure and owners are unchanged move over intact.
+            candidate.build(reuse=previous)
         except Exception as exc:
             if candidate is not None:
                 try:
@@ -173,7 +175,7 @@ def ensure(scene, ts):
                  'binding_updates': (entry or {}).get('binding_updates', 0),
                  'update_calls': (entry or {}).get('update_calls', 0),
                  'resource_steps': (entry or {}).get('resource_steps', 0)}
-        _record(entry, ts, {})
+        _record(entry, ts, dict(getattr(candidate, '_last', {})))
         _sessions[key] = entry
         if previous is not None:
             previous.close()

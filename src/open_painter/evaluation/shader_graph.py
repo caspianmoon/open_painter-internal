@@ -25,7 +25,7 @@ import numpy as np
 from ..constants import CHANNELS, DEFAULTS, OWNER
 from ..core.layer_stack import channel_for
 from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combine
-from .shader_effects import apply_effect, UnsupportedEffect
+from .shader_effects import apply_effect, is_pointwise, UnsupportedEffect
 from .shader_resources import Resources, RESOURCE, values
 from .resource_keys import image_key
 from . import metrics
@@ -40,23 +40,26 @@ class RebuildRequired(Exception):
 
 
 def _effects_signature(items):
-    return tuple((e.kind, bool(e.enabled), bool(e.image), e.id) for e in items)
+    # A pointwise effect's enabled flag is a shader uniform, not structure.
+    return tuple((e.kind, None if is_pointwise(e.kind) else bool(e.enabled), bool(e.image), e.id)
+                 for e in items)
 
 
 def _prop_signature(prop, count=None):
     effects = list(prop.effects)
     if count is not None:
         effects = effects[:count]
-    return (prop.channel, prop.enabled, prop.blend_mode, bool(prop.image), bool(prop.detail_image),
-            prop.procedural, prop.projection, prop.filtering, prop.tiling, prop.anchor,
-            _effects_signature(effects))
+    # enabled and blend_mode belong to the channel unit that consumes this content.
+    return (prop.channel, bool(prop.image), bool(prop.detail_image), prop.procedural,
+            prop.projection, prop.filtering, prop.tiling, prop.anchor, _effects_signature(effects))
 
 
 def _mask_signature(m):
     return (m.id, m.enabled, m.source, m.generator, m.procedural, m.map_type, m.operation,
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
             m.reference_channel, m.reference_stage, m.reference_anchor, m.detail_height_anchor,
-            m.detail_normal_anchor, m.effect.kind, m.effect.enabled, bool(m.effect.image))
+            m.detail_normal_anchor, m.effect.kind,
+            None if is_pointwise(m.effect.kind) else m.effect.enabled, bool(m.effect.image))
 
 
 def global_signature(ts):
@@ -100,6 +103,7 @@ class ResourceBinding:
     node: object
     signature: object
     pending_image: object = None
+    owner_factory: object = None
 
 
 @dataclass
@@ -122,6 +126,7 @@ class Unit:
     compiled_effects: dict = field(default_factory=dict)
     input_consumers: dict = field(default_factory=dict)   # input name -> roles reading it
     output_producer: dict = field(default_factory=dict)   # output name -> role or ('input', name)
+    owner_pointers: tuple = ()                            # RNA addresses captured by this unit
     build_ms: float = 0.0
 
     def input(self, name, socket_type):
@@ -165,14 +170,18 @@ class Graph(Math):
         self._last = {}
         self._anchors = None
         self._plan = None
+        self._previous = None
+        self._reused, self._warnings = [], []
 
     @property
     def anchors(self):
-        # Anchor placement is structural: every edit to it rebuilds the graph.
-        if self._anchors is None:
+        # Anchor placement is structural: every edit to it rebuilds its units.
+        # Adopted units keep closures on this object, so re-index after edits.
+        serial = getattr(self.ts, 'edit_serial', 0)
+        if self._anchors is None or self._anchors[0] != serial:
             from .anchors import index
-            self._anchors = index(self.ts)
-        return self._anchors
+            self._anchors = (serial, index(self.ts))
+        return self._anchors[1]
 
     @contextmanager
     def role(self, identifier):
@@ -330,7 +339,10 @@ class Graph(Math):
         coord = coordinate if coordinate is not None else self.coord_uv()
         self.link(coord, node.inputs['Vector'])
         if getter:
-            self.image_bindings.append((owner.as_pointer(), self._role, getter, node, image_key(image)))
+            entry = (owner.as_pointer(), self._role, getter, node, image_key(image))
+            self.image_bindings.append(entry)
+            if self.unit is not None:
+                self.unit.image_bindings.append(entry)
         result = Signal(node.outputs['Color'], node.outputs['Alpha'])
         if tiling == 'NONE':
             coverage = self._coverage(coord)
@@ -367,15 +379,24 @@ class Graph(Math):
         return self.image(prop.image, getter=lambda: prop.image, owner=prop)
 
     def boundary(self, identifier, owners, identity, factory):
-        """Expose one unsupported source/prefix as a stable shader image input."""
+        """Expose one unsupported source/prefix as a stable shader image input.
+
+        ``owners`` lists the RNA items whose edits re-identify this input, or a
+        callable returning them so an adopted unit can refresh their addresses.
+        """
         signature = identity()
         image = self.resources.request(signature, lambda: factory(signature))
         node = self.node('ShaderNodeTexImage')
         node.image = image
         node.interpolation, node.extension = 'Linear', 'EXTEND'
         self.link(self.coord_uv(), node.inputs['Vector'])
-        self.resource_bindings.append(ResourceBinding(identifier,
-            {o.as_pointer() for o in owners}, identity, factory, node, signature))
+        owner_factory = owners if callable(owners) else None
+        items = owners() if callable(owners) else owners
+        binding = ResourceBinding(identifier, {o.as_pointer() for o in items}, identity, factory,
+                                  node, signature, owner_factory=owner_factory)
+        self.resource_bindings.append(binding)
+        if self.unit is not None:
+            self.unit.resource_bindings.append(binding)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
 
     @staticmethod
@@ -467,10 +488,12 @@ class Graph(Math):
         return self._field(prop, kind)
 
     def _channel_prefix(self, layer, prop, count):
-        owners = [prop, *list(prop.effects)[:count]]
         anchored = layer.type == 'FILL' and prop.anchor
-        if anchored:
-            owners.extend(self._anchor_dependencies(prop.anchor)[0])
+        def owners():
+            items = [prop, *list(prop.effects)[:count]]
+            if anchored:
+                items.extend(self._anchor_dependencies(prop.anchor)[0])
+            return items
         def identity():
             return ('channel-prefix', layer.type, prop.channel,
                     values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
@@ -653,8 +676,21 @@ class Graph(Math):
                     return candidate
         return None
 
-    def _included(self, layer):
-        return bool(layer.visible)
+    @staticmethod
+    def _included(layer):
+        # Hidden layers compile behind a zero uniform: toggling visibility
+        # writes one socket instead of rebuilding and recompiling the material.
+        return True
+
+    def _visible(self, layer):
+        """Effective visibility: the layer and every ancestor are visible."""
+        seen = set()
+        while layer is not None and layer.id not in seen:
+            if not layer.visible:
+                return False
+            seen.add(layer.id)
+            layer = self._layer(layer.parent_id) if layer.parent_id else None
+        return True
 
     def plan(self):
         """Resolve the unit set, wiring and opacity contexts from authoring data."""
@@ -686,20 +722,30 @@ class Graph(Math):
             work.extend(self._reference_keys(key))
         return plan
 
-    def _unit_signature(self, key):
+    def _unit_signature(self, key, stub=None):
         layer = self._layer(key[1])
         if layer is None:
             return None
         refs = tuple(self._reference_keys(key))
         if key[0] == 'CHANNEL':
             prop = channel_for(layer, key[2])
-            return (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs)
+            signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs)
+            if stub:
+                # A stub stands in while the layer is hidden and its content unchanged.
+                return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
+            return signature
         if key[0] == 'SRC':
             prop = channel_for(layer, key[2])
             return (layer.type, _prop_signature(prop, key[3]), refs, self._continuation(key))
         masks = list(layer.masks)
         stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
         return (tuple(_mask_signature(m) for m in masks[:stop]), refs, self._continuation(key))
+
+    def _source_signature(self, layer, channel):
+        """Everything a stubbed channel would compile: its source and mask stacks."""
+        prop = channel_for(layer, channel)
+        return (_prop_signature(prop) if prop is not None else None,
+                tuple(_mask_signature(m) for m in layer.masks))
 
     # ---- channel content ---------------------------------------------------
 
@@ -729,7 +775,9 @@ class Graph(Math):
             value = self._channel_base(layer, prop, channel)
         for index in range(start, count):
             effect = effects[index]
-            if effect.enabled and effect.kind != 'ANCHOR':
+            # A disabled pointwise effect compiles behind its enabled uniform,
+            # so toggling it never rebuilds; spatial filters stay structural.
+            if effect.kind != 'ANCHOR' and (effect.enabled or is_pointwise(effect.kind)):
                 self._compiled_effects[effect.as_pointer()] = effect
                 self.unit.compiled_effects[effect.as_pointer()] = effect
                 with self.role(f'ChannelEffect:{layer.id}:{channel}:{index}'):
@@ -806,9 +854,11 @@ class Graph(Math):
         refs = details.anchors(mask)
         if not refs:
             return None
-        owners = [mask]
-        for _, identifier in refs:
-            owners.extend(self._anchor_dependencies(identifier)[0])
+        def owners():
+            items = [mask]
+            for _, identifier in refs:
+                items.extend(self._anchor_dependencies(identifier)[0])
+            return items
         def identity():
             return ('micro-details', mask.detail_radius,
                     tuple((slot, identifier, self._anchor_dependencies(identifier)[1]) for slot, identifier in refs))
@@ -1047,8 +1097,10 @@ class Graph(Math):
     def _mask_prefix(self, layer, masks):
         # Freeze the selected prefix before the caller continues appending masks.
         masks = tuple(masks)
-        owners, _ = self._mask_dependencies(masks[:-1])
-        owners.extend((masks[-1], masks[-1].effect))
+        def owners():
+            items, _ = self._mask_dependencies(masks[:-1])
+            items.extend((masks[-1], masks[-1].effect))
+            return items
         def identity():
             return ('mask-filter-prefix', self._mask_dependencies(masks[:-1])[1],
                     values(masks[-1].effect, excluded={'strength'}))
@@ -1099,7 +1151,7 @@ class Graph(Math):
                 if mask.source == 'FILTER':
                     if result is None:
                         result = 1.0
-                    if not mask.effect.enabled:
+                    if not mask.effect.enabled and not is_pointwise(mask.effect.kind):
                         value = result
                     else:
                         self._compiled_effects[mask.effect.as_pointer()] = mask.effect
@@ -1172,6 +1224,66 @@ class Graph(Math):
         name = layer.name[:24] if layer is not None else key[1][:8]
         return 'OP ' + ' · '.join(str(part) for part in (key[0], name, *key[2:]))
 
+    def _unit_owners(self, key):
+        """RNA items whose addresses this unit's bindings and closures capture."""
+        layer = self._layer(key[1])
+        owners = [self.ts, *self.ts.baked_maps, layer]
+        if key[0] == 'CHANNEL':
+            prop = channel_for(layer, key[2])
+            if prop is not None:
+                owners.append(prop)
+        elif key[0] == 'SRC':
+            prop = channel_for(layer, key[2])
+            owners.append(prop)
+            owners.extend(list(prop.effects)[:key[3]])
+        else:
+            masks = list(layer.masks)
+            stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
+            for mask in masks[:stop]:
+                owners.extend((mask, mask.effect, mask.influence))
+        return tuple(item.as_pointer() for item in owners)
+
+    def _adopt(self, previous, key):
+        """Move an unchanged unit out of the previous graph instead of recompiling."""
+        unit = previous.units.get(key) if previous is not None else None
+        if unit is None or unit.tree is None:
+            return None
+        try:
+            if unit.signature != self._unit_signature(key, stub=unit.flags.get('stub')):
+                return None
+            # Collection reallocation moves PropertyGroups; captured references
+            # are only valid while every owner still lives at its old address.
+            if unit.owner_pointers != self._unit_owners(key):
+                return None
+        except (ValueError, StopIteration, ReferenceError):
+            return None
+        del previous.units[key]
+        unit.instance = None
+        for binding in unit.resource_bindings:
+            if binding.owner_factory is not None:
+                binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+            if binding.pending_image is not None or not binding.node.image.get('op_shader_resource_ready'):
+                # The previous graph closes its unfinished jobs; queue this input again.
+                image = self.resources.request(binding.signature,
+                                               lambda b=binding: b.factory(b.signature))
+                if image.get('op_shader_resource_ready'):
+                    binding.node.image, binding.pending_image = image, None
+                else:
+                    binding.pending_image = image
+        self.bindings.update(unit.bindings)
+        for binding in unit.bindings.values():
+            self.owner_bindings[binding.owner.as_pointer()].append(binding)
+        self.resource_bindings.extend(unit.resource_bindings)
+        self.image_bindings.extend(unit.image_bindings)
+        self._compiled_effects.update(unit.compiled_effects)
+        self._plan.keys.add(key)
+        self.units[key] = unit
+        self._reused.append(key)
+        # Its published inputs must exist in this graph too (adopted or rebuilt).
+        for producer_key, _, _ in unit.imports:
+            self.compile_unit(producer_key)
+        return unit
+
     def compile_unit(self, key):
         """Compile one unit (and, recursively, every unit it imports)."""
         unit = self.units.get(key)
@@ -1179,31 +1291,76 @@ class Graph(Math):
             return unit
         if key in self._building_units:
             raise ValueError('Published inputs contain a reference cycle')
+        unit = self._adopt(self._previous, key)
+        if unit is not None:
+            return unit
         self._building_units.add(key)
         started = perf_counter()
-        unit = Unit(key)
-        unit.tree = bpy.data.node_groups.new(self._unit_name(key), 'ShaderNodeTree')
-        unit.tree[OWNER] = True
-        unit.tree['op_shader_graph'] = self.ts.id
-        unit.tree['op_unit'] = repr(key)
         layer = self._layer(key[1])
-        with self.enter(unit):
-            unit.group_input = self.node('NodeGroupInput')
-            unit.group_output = self.node('NodeGroupOutput')
-            if key[0] == 'SRC':
-                signal = self.source(layer, key[2], key[3])
-                self._export('Color', signal.color, 'NodeSocketColor')
-                self._export('Alpha', signal.alpha, 'NodeSocketFloat')
-            elif key[0] == 'MASK':
-                self._export('Value', self.mask(layer, key[2], key[3]), 'NodeSocketFloat')
-            else:
-                self._compile_channel(unit, layer, key[2])
-        unit.signature = self._unit_signature(key)
+        try:
+            unit = self._compile(key, layer)
+        except ValueError as error:
+            if key[0] != 'CHANNEL' or self._visible(layer):
+                self._building_units.discard(key)
+                raise
+            # A hidden layer's invalid content passes its backdrop through; the
+            # stub is replaced, and the error surfaced, when the layer is shown.
+            unit = self._compile(key, layer, stub=str(error))
+        unit.owner_pointers = self._unit_owners(key)
+        unit.signature = self._unit_signature(key, stub=unit.flags.get('stub'))
         unit.build_ms = (perf_counter() - started) * 1000
         self._building_units.discard(key)
         self._plan.keys.add(key)
         self.units[key] = unit
         return unit
+
+    def _compile(self, key, layer, stub=None):
+        unit = Unit(key)
+        unit.tree = bpy.data.node_groups.new(self._unit_name(key), 'ShaderNodeTree')
+        unit.tree[OWNER] = True
+        unit.tree['op_shader_graph'] = self.ts.id
+        unit.tree['op_unit'] = repr(key)
+        try:
+            with self.enter(unit):
+                unit.group_input = self.node('NodeGroupInput')
+                unit.group_output = self.node('NodeGroupOutput')
+                if stub is not None:
+                    unit.flags['stub'] = stub
+                    self._warnings.append(f'Hidden layer "{layer.name}" is not compiled: {stub}')
+                    self._export('Out', unit.input('In', 'NodeSocketColor'), 'NodeSocketColor')
+                    if not self._plan.opaque[layer.id]:
+                        self._export('Out:Alpha', unit.input('In:Alpha', 'NodeSocketFloat'), 'NodeSocketFloat')
+                elif key[0] == 'SRC':
+                    signal = self.source(layer, key[2], key[3])
+                    self._export('Color', signal.color, 'NodeSocketColor')
+                    self._export('Alpha', signal.alpha, 'NodeSocketFloat')
+                elif key[0] == 'MASK':
+                    self._export('Value', self.mask(layer, key[2], key[3]), 'NodeSocketFloat')
+                else:
+                    self._compile_channel(unit, layer, key[2])
+        except Exception:
+            self._discard_partial(unit)
+            raise
+        return unit
+
+    def _discard_partial(self, unit):
+        """Drop the tree and bindings of a unit whose compilation failed."""
+        for key in list(self.bindings):
+            if key[0] == unit.key:
+                binding = self.bindings.pop(key)
+                owners = self.owner_bindings.get(binding.owner.as_pointer(), [])
+                if binding in owners:
+                    owners.remove(binding)
+        self.resource_bindings = [b for b in self.resource_bindings if b not in unit.resource_bindings]
+        self.image_bindings = [b for b in self.image_bindings if b not in unit.image_bindings]
+        for pointer in unit.compiled_effects:
+            self._compiled_effects.pop(pointer, None)
+        try:
+            if unit.tree is not None and not unit.tree.users:
+                bpy.data.node_groups.remove(unit.tree)
+        except (ReferenceError, RuntimeError):
+            pass
+        unit.tree = None
 
     def _compile_channel(self, unit, layer, channel):
         """Blend one layer's channel over its backdrop inside the unit."""
@@ -1213,7 +1370,7 @@ class Graph(Math):
         backdrop = Signal(unit.input('In', 'NodeSocketColor'),
                           1.0 if opaque else unit.input('In:Alpha', 'NodeSocketFloat'))
         with self.role(f'LayerMix:{layer.id}:{channel}'):
-            amount = self.param(layer, 'opacity')
+            amount = self.math('MULTIPLY', self.param(layer, 'opacity'), self.param(layer, 'visible'))
             if prop:
                 amount = self.math('MULTIPLY', amount, self.param(prop, 'opacity'))
             amount = self.math('MULTIPLY', amount, self.mask(layer))
@@ -1253,7 +1410,8 @@ class Graph(Math):
                     grouped = self._wire(layer.id, channel, backdrop, ancestors | {layer.id})
                 else:
                     grouped = self._wire(layer.id, channel, Signal((0., 0., 0.), 0.0), ancestors | {layer.id})
-                self.link(grouped.color, instance.inputs['Grouped'])
+                if 'Grouped' in unit.inputs:
+                    self.link(grouped.color, instance.inputs['Grouped'])
                 if 'Grouped:Alpha' in unit.inputs:
                     self.link(grouped.alpha, instance.inputs['Grouped:Alpha'])
             backdrop = Signal(instance.outputs['Out'],
@@ -1269,14 +1427,17 @@ class Graph(Math):
         unit.instance = node
         return node
 
-    def build(self):
+    def build(self, reuse=None):
+        """Compile the graph; units of ``reuse`` with unchanged structure are adopted."""
         from ..core.validation import hierarchy_issues
         problems = hierarchy_issues(self.ts)
         if problems:
             raise ValueError(' | '.join(problems))
-        self.validate_parameters()
         started = perf_counter()
         plan = self.plan()
+        self._previous = reuse if (reuse is not None and reuse.units
+                                   and global_signature(reuse.ts) == global_signature(self.ts)) else None
+        self._reused, self._warnings = [], []
         self.tree = bpy.data.node_groups.new('OP Procedural · ' + self.ts.name, 'ShaderNodeTree')
         self.tree[OWNER] = True
         self.tree['op_shader_graph'] = self.ts.id
@@ -1322,6 +1483,8 @@ class Graph(Math):
         self.outputs = {channel: self.instance.outputs[channel] for channel in CHANNELS}
         self._reverse_map()
         self._structure = self.structural_signature()
+        self.validate_parameters()
+        self._previous = None
         from .references import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
         self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': list(CHANNELS),
@@ -1330,8 +1493,10 @@ class Graph(Math):
                       'build_ms': (perf_counter() - started) * 1000,
                       'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
                       'largest_unit': max(unit_nodes.values(), default=0),
+                      'reused_units': len(self._reused), 'rebuilt_units': len(self.units) - len(self._reused),
                       'unique_images': len(self.unique_images()), 'max_textures_frag': _sampler_limit(),
-                      'pending_resources': self.pending_resources, 'warnings': warnings(self.ts)}
+                      'pending_resources': self.pending_resources,
+                      'warnings': list(warnings(self.ts)) + self._warnings}
         metrics.count('shader_graph_builds')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
@@ -1432,8 +1597,12 @@ class Graph(Math):
 
     def structural_signature(self):
         plan = self.plan()
-        units = tuple(sorted((key, self._unit_signature(key)) for key in plan.keys))
+        units = tuple(sorted((key, self._unit_signature(key, stub=self._stub(key))) for key in plan.keys))
         return (global_signature(self.ts), tuple(plan.wiring), units)
+
+    def _stub(self, key):
+        unit = self.units.get(key)
+        return unit.flags.get('stub') if unit is not None else None
 
     def matches_structure(self):
         try:
@@ -1442,10 +1611,26 @@ class Graph(Math):
             # An invalid hierarchy is reported by the rebuild, with its message.
             return False
 
+    def rebuild_scope(self):
+        """'global', or the unit keys whose structure no longer matches; None when current."""
+        try:
+            current = self.structural_signature()
+        except ValueError:
+            return 'global'
+        if current == self._structure:
+            return None
+        if current[0] != self._structure[0]:
+            return 'global'
+        before, after = dict(self._structure[2]), dict(current[2])
+        changed = [key for key, signature in after.items() if before.get(key) != signature]
+        changed.extend(key for key in before if key not in after)
+        return changed or 'wiring'
+
     def update(self, owner=None):
         started = perf_counter()
-        if not self.matches_structure():
-            raise RebuildRequired('Shader graph topology changed')
+        scope = self.rebuild_scope()
+        if scope is not None:
+            raise RebuildRequired('Shader graph topology changed', scope)
         self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None
         bindings = self.owner_bindings.get(pointer, ()) if pointer is not None else self.bindings.values()
@@ -1511,7 +1696,12 @@ class Graph(Math):
         result = self.resources.step(budget)
         for binding in self.resource_bindings:
             if binding.pending_image and binding.pending_image.get('op_shader_resource_ready'):
+                stale = binding.node.image
                 binding.node.image, binding.pending_image = binding.pending_image, None
+                if (stale is not None and stale is not binding.node.image and not stale.users
+                        and stale.get(RESOURCE) and not stale.get('op_shader_resource_ready')):
+                    # An interrupted placeholder from a superseded graph.
+                    bpy.data.images.remove(stale)
         return result
     def close(self):
         try:
@@ -1540,7 +1730,7 @@ class Graph(Math):
         # A hidden layer may still publish a source to a visible mask. Validate
         # effects reached by compilation, rather than approximating dependency
         # scope using layer visibility. First-build checks run in apply_effect.
-        for effect in self._compiled_effects.values():
+        for effect in self._live_effects():
             if (effect.enabled and effect.strength > 0
                     and effect.kind == 'NORMAL_COMBINE' and not effect.image):
                 raise ValueError('Normal Combine needs a detail normal texture.')
@@ -1548,6 +1738,26 @@ class Graph(Math):
                     and effect.kind in {'LEVELS', 'ROUGHNESS_REMAP', 'METALLIC_REMAP', 'HEIGHT_REMAP'}
                     and effect.white <= effect.black):
                 raise ValueError('White level must be greater than black level')
+
+    def _live_effects(self):
+        """Effects reachable from visible layers; hidden-only content is not validated."""
+        if not self.units:
+            return list(self._compiled_effects.values())
+        live, work = set(), []
+        for key, unit in self.units.items():
+            layer = self._layer(key[1])
+            if key[0] == 'CHANNEL' and layer is not None and self._visible(layer):
+                work.append(key)
+        while work:
+            key = work.pop()
+            if key in live or key not in self.units:
+                continue
+            live.add(key)
+            work.extend(producer for producer, _, _ in self.units[key].imports)
+        effects = {}
+        for key in live:
+            effects.update(self.units[key].compiled_effects)
+        return list(effects.values())
 
 
 def _sampler_limit():

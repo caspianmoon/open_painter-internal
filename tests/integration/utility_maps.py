@@ -238,7 +238,7 @@ if shader_preview is not None:
     graph = shader_preview.ensure(bpy.context.scene, cube_ts)
     assert graph is not None and graph.tree is not None and not graph.pending_resources
     curvature_prop = next(m for m in cube_ts.baked_maps if m.kind == "MEAN_CURVATURE")
-    assert any(node.bl_idname == "ShaderNodeTexImage" and node.image == curvature_prop.image for node in graph.tree.nodes)
+    assert any(node.bl_idname == "ShaderNodeTexImage" and node.image == curvature_prop.image for node in graph.nodes())
 # Recorded faces can be restored on the base mesh.
 for face in cube.data.polygons:
     face.select = False

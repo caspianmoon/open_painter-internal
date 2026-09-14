@@ -49,7 +49,7 @@ report={'result':'PASS','version':version,'archive':str(archive),'module':module
         'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),
         'source':str(source),'source_sha256':original_hash,'resolution':2048,
         'mesh_objects':10,'polygons':315225,'layers':len(ts.layers),
-        'graph_nodes':len(graph.tree.nodes),'native_edit_image_writes':0,'original_unchanged':True,
+        'graph_nodes':graph.node_count,'native_edit_image_writes':0,'original_unchanged':True,
         'diagnostic':runtime.diagnostics(scene,ts)}
 addon_utils.disable(module,default_set=True)
 assert not hasattr(bpy.types.Scene,'open_painter')

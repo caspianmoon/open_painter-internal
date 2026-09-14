@@ -88,14 +88,14 @@ def run():
         ts.preview_backend = "LIVE"
         graph = shader_preview.ensure(scene, ts)
         report["cold_callback_ms"] = (perf_counter()-started)*1000
-        report["graph_nodes"] = len(graph.tree.nodes)
+        report["graph_nodes"] = graph.node_count
         started = perf_counter()
         while graph.pending_resources:
             graph.step_resources(.02)
         report["source_preparation_ms"] = (perf_counter()-started)*1000
         mask = next(mask for layer in ts.layers for mask in layer.masks
                     if mask.enabled and mask.source == "GENERATOR" and mask.white > .5)
-        before_nodes = tuple(node.as_pointer() for node in graph.tree.nodes)
+        before_nodes = graph.node_identities()
         times = []
         from open_painter.evaluation.metrics import Metrics
         with Metrics() as measured:
@@ -104,7 +104,7 @@ def run():
                 started = perf_counter()
                 mask.black = value
                 times.append((perf_counter()-started)*1000)
-        assert tuple(node.as_pointer() for node in graph.tree.nodes) == before_nodes
+        assert graph.node_identities() == before_nodes
         report["hot_callback"] = dict(parameter=mask.name + ".black", events=len(times),
                                       median_ms=float(np.median(times)), p95_ms=float(np.percentile(times, 95)),
                                       max_ms=max(times), samples_ms=times,
@@ -123,7 +123,7 @@ def run():
 
     def timed_node(self, kind):
         started = perf_counter()
-        node = self.tree.nodes.new(kind)
+        node = self._target().nodes.new(kind)
         middle = perf_counter()
         if unique_names:
             node.name = f"OP_{len(self.tree.nodes):06d}"
@@ -159,7 +159,7 @@ def run():
         Math.link = original_link
     report["node_cost"] = node_cost
     print("SHADER_COLD_NODE_COST", json.dumps(node_cost), flush=True)
-    report["graph_nodes"] = len(graph.tree.nodes)
+    report["graph_nodes"] = graph.node_count
     report["resource_boundaries"] = len(graph.resource_bindings)
     report["after_build"] = counts(ts)
     _, report["close"] = measure("close", graph.close)

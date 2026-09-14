@@ -108,7 +108,7 @@ if shader_preview is not None:
             break
         graph.step_resources(budget=1.0)
     assert not graph.pending_resources
-    assert any(node.bl_idname == "ShaderNodeTexImage" and node.image == kinds["BEVEL_MASK"] for node in graph.tree.nodes)
+    assert any(node.bl_idname == "ShaderNodeTexImage" and node.image == kinds["BEVEL_MASK"] for node in graph.nodes())
 
 # Portable material round trip keeps the baked masks as images.
 path = root / ".blender-test" / "damaged-bevel.openpaintmaterial"

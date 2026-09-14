@@ -1,0 +1,31 @@
+{
+ "blender": "5.2.1 LTS",
+ "build": "9e2066aef7ef",
+ "note": "Construction wall time of Graph.build() only; no GPU compile, no boundary stepping.",
+ "materials": [
+  {
+   "name": "Worn Painted Metal",
+   "layers": 6,
+   "compose_ms": 112.4,
+   "build_ms": 4630.4,
+   "resource_boundaries": 4,
+   "nodes": 1481,
+   "links": 2015,
+   "trees": 1,
+   "largest_tree": 1481,
+   "unique_images": 10
+  },
+  {
+   "name": "Post-Apocalyptic Scrap Metal",
+   "layers": 9,
+   "compose_ms": 121.2,
+   "build_ms": 16117.4,
+   "resource_boundaries": 5,
+   "nodes": 2841,
+   "links": 4015,
+   "trees": 1,
+   "largest_tree": 2841,
+   "unique_images": 14
+  }
+ ]
+}

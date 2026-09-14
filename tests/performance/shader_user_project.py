@@ -34,7 +34,7 @@ graph=shader_preview.flush(scene,ts)
 prepare_ms=(time.perf_counter()-started)*1000
 assert shader_preview.current(scene,ts)
 outputs={o.channel:(o.revision,o.dirty,o.image.as_pointer() if o.image else 0) for o in ts.outputs}
-node_ids=tuple(n.as_pointer() for n in graph.tree.nodes)
+node_ids=graph.node_identities()
 
 height=layer_stack.channel_for(layers['Blue paint coat'],'HEIGHT').effects[0]
 controls=[
@@ -49,7 +49,7 @@ controls=[
 report={'source':str(source),'source_sha256':original_hash,'copy':str(copy),'blender':bpy.app.version_string,
         'resolution':int(resolution),'mesh_objects':len(meshes),'vertices':sum(len(o.data.vertices) for o in meshes),
         'polygons':sum(len(o.data.polygons) for o in meshes),'assigned_objects':[r.object.name for r in ts.assignments],
-        'material':ts.name,'layers':[l.name for l in ts.layers],'graph_nodes':len(graph.tree.nodes),
+        'material':ts.name,'layers':[l.name for l in ts.layers],'graph_nodes':graph.node_count,
         'cold_build_ms':build_ms,'isolated_input_preparation_ms':prepare_ms,'controls':[],
         'measurement':'Synchronous RNA callback and normal scheduler work on the actual project. No viewport latency claim; held native slider screenshots are measured separately.'}
 for label,owner,field,low,high in controls:
@@ -64,7 +64,7 @@ for label,owner,field,low,high in controls:
             info=shader_preview.diagnostics(scene,ts)
             assert shader_preview.current(scene,ts),info
             assert not info['raster_boundaries_queued'] and not info['pending_resources'],info
-            assert tuple(n.as_pointer() for n in graph.tree.nodes)==node_ids
+            assert graph.node_identities()==node_ids
         setattr(owner,field,original)
         cache.tick()
     metrics=observed.report()

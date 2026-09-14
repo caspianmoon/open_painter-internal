@@ -1,5 +1,29 @@
 # Roadmap implementation status
 
+## Generated material quality — 2026-09-14
+
+Version **0.2.5** upgrades all **50 existing smart materials** using 15 generated
+scalar images across 76 existing layers. All 229 layer records, native UI,
+mesh-aware masks, fixed display material and portable v1/v2 compatibility remain.
+Generated inputs are shared, packed and sampled as float32 scalar data; native
+color, roughness and height remain editable. Existing saved material instances
+are preserved. All 50 library thumbnails were rendered again from actual output.
+
+Fresh validation passed 55 background integration scripts, 49 unit tests, five
+real-window GPU suites and four native GUI workflows. The new sources and
+portable/shared-image paths have dedicated regressions. Full 2K CPU composition
+was measured at 36.566 s cold / 0.272 s warm roughness versus 30.887 / 0.244 s for
+the preserved procedural recipe. Warm source/mask generation and geometry work
+are zero; these numbers are CPU authority, not interactive frame latency.
+The generated images are 1254px sources and are not claimed as measured 2K PBR
+scans or universally seamless assets.
+
+[Implementation, exact commands, measurements and limits](generated-material-quality.md),
+[actual render gallery](generated-material-gallery.html), and
+[source provenance](../src/open_painter/assets/generated/provenance.json).
+
+---
+
 ## Licensed library sourcing — 2026-09-14
 
 Research completed on `task/licensed-library-research`, preserving 0.2.4 commit

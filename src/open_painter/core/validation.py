@@ -24,6 +24,8 @@ def validate(ts) -> list[str]:
         for channel in layer.channels:
             if channel.enabled and channel.image_name and not channel.image:
                 issues.append(f"Texture image missing on {layer.name}: {channel.image_name}.")
+            if channel.enabled and channel.detail_image_name and not channel.detail_image:
+                issues.append(f"Surface detail missing on {layer.name}: {channel.detail_image_name}.")
         for mask in layer.masks:
             if not mask.enabled:
                 continue

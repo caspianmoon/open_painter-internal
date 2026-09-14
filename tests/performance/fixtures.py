@@ -1,6 +1,7 @@
 """Deterministic CPU workloads. Worn fixture preserves the committed 0.2.0 inputs."""
 import bpy
 import numpy as np
+from copy import deepcopy
 from open_painter.core import texture_set_manager as sets, layer_stack as stack, image_manager as images
 from open_painter.smart_materials import composer
 
@@ -23,14 +24,19 @@ def synthetic_maps(ts, extended=False):
         images.write(item.image, data)
 
 
-def create(scene, name, resolution):
+def create(scene, name, resolution, *, generated_detail=False):
     result = []
     for index in range(3 if name == 'three_sets' else 1):
         ts = sets.create(scene, 'Texture benchmark ' + str(index), resolution)
         result.append(ts)
         if name in {'worn', 'abandoned', 'three_sets'}:
             synthetic_maps(ts, name == 'abandoned')
-            composer.apply(ts, 'Abandoned Machinery' if name == 'abandoned' else 'Worn Painted Metal')
+            material = 'Abandoned Machinery' if name == 'abandoned' else 'Worn Painted Metal'
+            recipe = deepcopy(composer.CATALOG[material])
+            if not generated_detail:
+                for spec in recipe['layers']:
+                    spec.pop('generated_source', None)
+            composer.apply_document(ts, recipe, material)
         else:
             for _ in range(20 if name == 'constant' else 1):
                 layer = stack.add(ts, 'FILL')

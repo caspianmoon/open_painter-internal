@@ -117,6 +117,10 @@ def activate(context, entry, source):
                 raise ValueError("Select a fill layer to assign a texture input.")
             prop = channel_for(layer, context.scene.open_painter.properties_channel)
             prop.enabled = True
+            # Shelf activation replaces the fill source. Direct RNA image
+            # assignment can still combine a base texture with scalar detail.
+            prop.detail_image = None
+            prop.detail_image_name = ""
         prop.image = source
         prop.procedural = ""
         invalidate(ts)

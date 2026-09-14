@@ -17,6 +17,7 @@ def apply(ts, path: str | Path) -> None:
     mapping = {layer["id"]: new_id() for layer in data["layers"]}
     mask_mapping = {m['id']: new_id() for layer in data['layers'] for m in layer.get('masks',[]) if m.get('id')}
     loaded = []
+    decoded_images = {}
     start = len(ts.layers)
     old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness")}
     try:
@@ -27,6 +28,9 @@ def apply(ts, path: str | Path) -> None:
                     key = value["asset"]
                     if key not in assets:
                         raise ValueError(f"Missing smart material texture: {key}")
+                    identity = (key, value.get("colorspace", "Non-Color"))
+                    if identity in decoded_images:
+                        return decoded_images[identity]
                     dest = Path(directory) / f"{new_id()}.exr"
                     dest.write_bytes(assets[key])
                     image = bpy.data.images.load(str(dest), check_existing=False)
@@ -35,6 +39,7 @@ def apply(ts, path: str | Path) -> None:
                     image.colorspace_settings.name = value.get("colorspace", "Non-Color")
                     image.pack()
                     image.use_fake_user = True
+                    decoded_images[identity] = image
                     return image
                 if isinstance(value, dict):
                     return {k: decode(v) for k, v in value.items()}

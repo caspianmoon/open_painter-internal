@@ -41,7 +41,7 @@ def triplanar(texture, positions, normals, prop):
         weights / np.maximum(weights.max(axis=-1, keepdims=True), 1e-8)
     ) ** prop.triplanar_hardness
     weights /= np.maximum(weights.sum(axis=-1, keepdims=True), 1e-8)
-    result = np.zeros((*positions.shape[:2], 4), dtype=np.float32)
+    result = np.zeros((*positions.shape[:2], texture.shape[-1]), dtype=np.float32)
     cs, sn = np.cos(prop.rotation), np.sin(prop.rotation)
     for axis, (a, b) in enumerate(((1, 2), (0, 2), (0, 1))):
         u, v = positions[..., a] * prop.scale[0], positions[..., b] * prop.scale[1]

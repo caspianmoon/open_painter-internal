@@ -1,0 +1,271 @@
+{
+  "authored_resolution": 512,
+  "assets": [
+    {
+      "id": "brass_tarnish",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3418122,
+      "sha256": "07159194313e33f3b1f70d15d2052c02d543d77225375b39b17eaf8a96843b0e",
+      "border_metrics": {
+        "left_right_mean_abs": 0.046779900789260864,
+        "left_right_max_abs": 0.21205255389213562,
+        "top_bottom_mean_abs": 0.04543667286634445,
+        "top_bottom_max_abs": 0.28544551134109497,
+        "interior_horizontal_mean_abs": 0.04660134017467499,
+        "interior_vertical_mean_abs": 0.0471465177834034,
+        "scalar_mean": 0.43961960077285767,
+        "scalar_std": 0.08043120056390762
+      }
+    },
+    {
+      "id": "brushed_metal",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2862477,
+      "sha256": "80ba9a49f05ee0bc6788d369a0e926569baae0b19e563a8aacef8ef99b1075a2",
+      "border_metrics": {
+        "left_right_mean_abs": 0.08022364228963852,
+        "left_right_max_abs": 0.39327380061149597,
+        "top_bottom_mean_abs": 0.08365024626255035,
+        "top_bottom_max_abs": 0.34172704815864563,
+        "interior_horizontal_mean_abs": 0.023521121591329575,
+        "interior_vertical_mean_abs": 0.10974661260843277,
+        "scalar_mean": 0.5700709819793701,
+        "scalar_std": 0.10630808025598526
+      }
+    },
+    {
+      "id": "burn_blisters",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3783407,
+      "sha256": "5b8bebc5e278aa5fa620cba7a4f564f8bbf989d623549f4c7a37f5808021684a",
+      "border_metrics": {
+        "left_right_mean_abs": 0.07114775478839874,
+        "left_right_max_abs": 0.44286981225013733,
+        "top_bottom_mean_abs": 0.08503863215446472,
+        "top_bottom_max_abs": 0.49971139430999756,
+        "interior_horizontal_mean_abs": 0.06590484082698822,
+        "interior_vertical_mean_abs": 0.07399405539035797,
+        "scalar_mean": 0.5343148708343506,
+        "scalar_std": 0.10912714153528214
+      }
+    },
+    {
+      "id": "cast_iron_grain",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3902219,
+      "sha256": "68fc2b723131b3ee35dc8ec594331d51989e9f49cbc861ba6fdb062fca22e285",
+      "border_metrics": {
+        "left_right_mean_abs": 0.11423701792955399,
+        "left_right_max_abs": 0.43783140182495117,
+        "top_bottom_mean_abs": 0.1299075186252594,
+        "top_bottom_max_abs": 0.469455748796463,
+        "interior_horizontal_mean_abs": 0.07913237810134888,
+        "interior_vertical_mean_abs": 0.09729128330945969,
+        "scalar_mean": 0.4489036202430725,
+        "scalar_std": 0.1413903534412384
+      }
+    },
+    {
+      "id": "concrete_pores",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3705122,
+      "sha256": "99fe25655c0298369a9c0928dc6916164c067b111eb0a3a717bf7b01090b9839",
+      "border_metrics": {
+        "left_right_mean_abs": 0.06797337532043457,
+        "left_right_max_abs": 0.3420149087905884,
+        "top_bottom_mean_abs": 0.07705753296613693,
+        "top_bottom_max_abs": 0.4944102168083191,
+        "interior_horizontal_mean_abs": 0.06599092483520508,
+        "interior_vertical_mean_abs": 0.06503324210643768,
+        "scalar_mean": 0.5348610877990723,
+        "scalar_std": 0.09849711507558823
+      }
+    },
+    {
+      "id": "fabric_weave",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3385830,
+      "sha256": "dacb88ba578c3f761c423736561d17f2d87198395e96e1bd02d8ff3ae2f7a9dc",
+      "border_metrics": {
+        "left_right_mean_abs": 0.1515626758337021,
+        "left_right_max_abs": 0.5310792922973633,
+        "top_bottom_mean_abs": 0.12625133991241455,
+        "top_bottom_max_abs": 0.4924141764640808,
+        "interior_horizontal_mean_abs": 0.04937049001455307,
+        "interior_vertical_mean_abs": 0.050151363015174866,
+        "scalar_mean": 0.5351666808128357,
+        "scalar_std": 0.1259281188249588
+      }
+    },
+    {
+      "id": "fine_wood",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2705671,
+      "sha256": "75e20022bf1d132beaa4ce4171d5a8356456dbfaeb6c29800cddbfcdd2a03f4a",
+      "border_metrics": {
+        "left_right_mean_abs": 0.061357319355010986,
+        "left_right_max_abs": 0.3005608022212982,
+        "top_bottom_mean_abs": 0.05689606815576553,
+        "top_bottom_max_abs": 0.4232463240623474,
+        "interior_horizontal_mean_abs": 0.06450920552015305,
+        "interior_vertical_mean_abs": 0.020345084369182587,
+        "scalar_mean": 0.5667366981506348,
+        "scalar_std": 0.07467217743396759
+      }
+    },
+    {
+      "id": "granite_minerals",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3797884,
+      "sha256": "d31a9fd663f1236419966381f5fb450697e9badc97881193b1585f149d38b5df",
+      "border_metrics": {
+        "left_right_mean_abs": 0.11635378003120422,
+        "left_right_max_abs": 0.6515671610832214,
+        "top_bottom_mean_abs": 0.1391395628452301,
+        "top_bottom_max_abs": 0.6327568888664246,
+        "interior_horizontal_mean_abs": 0.07770434021949768,
+        "interior_vertical_mean_abs": 0.07767070829868317,
+        "scalar_mean": 0.4893245995044708,
+        "scalar_std": 0.1807868480682373
+      }
+    },
+    {
+      "id": "leather_grain",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3440043,
+      "sha256": "51b5f783b3e29e315cc1b3acf167091a0be90421a1f8d8ab608fe4c440662218",
+      "border_metrics": {
+        "left_right_mean_abs": 0.09035483002662659,
+        "left_right_max_abs": 0.3960784375667572,
+        "top_bottom_mean_abs": 0.101887047290802,
+        "top_bottom_max_abs": 0.43614354729652405,
+        "interior_horizontal_mean_abs": 0.04154712334275246,
+        "interior_vertical_mean_abs": 0.062485795468091965,
+        "scalar_mean": 0.4771001636981964,
+        "scalar_std": 0.09761663526296616
+      }
+    },
+    {
+      "id": "machined_scratches",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3180645,
+      "sha256": "8f8d2971a4675939ad6eecf39b11539ec6ae02b84dbabb1b242dbd102aeb7583",
+      "border_metrics": {
+        "left_right_mean_abs": 0.05912528932094574,
+        "left_right_max_abs": 0.32774433493614197,
+        "top_bottom_mean_abs": 0.0605957917869091,
+        "top_bottom_max_abs": 0.2655544579029083,
+        "interior_horizontal_mean_abs": 0.03187892958521843,
+        "interior_vertical_mean_abs": 0.07827172428369522,
+        "scalar_mean": 0.5434033870697021,
+        "scalar_std": 0.0843793973326683
+      }
+    },
+    {
+      "id": "marble_veins",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2208555,
+      "sha256": "b4500bcc69584007c299658a07ffeb0f052fc9e2ceedc2e380beac1aeed41119",
+      "border_metrics": {
+        "left_right_mean_abs": 0.02644420601427555,
+        "left_right_max_abs": 0.2789819836616516,
+        "top_bottom_mean_abs": 0.02448638156056404,
+        "top_bottom_max_abs": 0.32770827412605286,
+        "interior_horizontal_mean_abs": 0.012594414874911308,
+        "interior_vertical_mean_abs": 0.012513555586338043,
+        "scalar_mean": 0.48779621720314026,
+        "scalar_std": 0.048945412039756775
+      }
+    },
+    {
+      "id": "polymer_grain",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3663728,
+      "sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "border_metrics": {
+        "left_right_mean_abs": 0.09236276894807816,
+        "left_right_max_abs": 0.451834499835968,
+        "top_bottom_mean_abs": 0.09499397873878479,
+        "top_bottom_max_abs": 0.34902429580688477,
+        "interior_horizontal_mean_abs": 0.061839740723371506,
+        "interior_vertical_mean_abs": 0.07211702316999435,
+        "scalar_mean": 0.4869450330734253,
+        "scalar_std": 0.1103348359465599
+      }
+    },
+    {
+      "id": "rust_detail",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3906572,
+      "sha256": "13f956c2bd264396c788387fcca71dcabe47fd7f1773a3f0f4fac3eae9b73a63",
+      "border_metrics": {
+        "left_right_mean_abs": 0.09858794510364532,
+        "left_right_max_abs": 0.5221239924430847,
+        "top_bottom_mean_abs": 0.10270164161920547,
+        "top_bottom_max_abs": 0.5924243927001953,
+        "interior_horizontal_mean_abs": 0.07978851348161697,
+        "interior_vertical_mean_abs": 0.08950953930616379,
+        "scalar_mean": 0.43828728795051575,
+        "scalar_std": 0.13365726172924042
+      }
+    },
+    {
+      "id": "surface_smudges",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2418660,
+      "sha256": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0",
+      "border_metrics": {
+        "left_right_mean_abs": 0.018421322107315063,
+        "left_right_max_abs": 0.08432388305664062,
+        "top_bottom_mean_abs": 0.01591913029551506,
+        "top_bottom_max_abs": 0.07674825191497803,
+        "interior_horizontal_mean_abs": 0.015642337501049042,
+        "interior_vertical_mean_abs": 0.016443822532892227,
+        "scalar_mean": 0.4508403241634369,
+        "scalar_std": 0.019703786820173264
+      }
+    },
+    {
+      "id": "zinc_spangle",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3108759,
+      "sha256": "d8379466ecbdf811fefa755480e6ac30494d0eb92c23407da63ed427b3fc46ec",
+      "border_metrics": {
+        "left_right_mean_abs": 0.05704258754849434,
+        "left_right_max_abs": 0.2801145315170288,
+        "top_bottom_mean_abs": 0.05676775798201561,
+        "top_bottom_max_abs": 0.41847532987594604,
+        "interior_horizontal_mean_abs": 0.03445078432559967,
+        "interior_vertical_mean_abs": 0.03378428518772125,
+        "scalar_mean": 0.5885744094848633,
+        "scalar_std": 0.0797165259718895
+      }
+    }
+  ],
+  "checks": {
+    "all_fifty_existing_materials_use_generated_sources": "PASS",
+    "failed_composition_preserves_user_state_and_discards_new_sources": "PASS",
+    "bundled_png_files_match_provenance_and_packed_payloads": "PASS",
+    "shared_inputs_across_layers_channels_and_texture_sets": "PASS",
+    "native_parameter_edits_change_full_resolution_output_without_source_writes": "PASS",
+    "native_parameter_edits_reuse_decoded_source": "PASS",
+    "fixed_display_material_nodes_and_links": "PASS",
+    "optional_image_removal_restores_existing_procedural": "PASS"
+  },
+  "generated_materials": 50
+}

@@ -147,8 +147,17 @@ def image_written(image):
             kinds = {m.kind for m in ts.baked_maps if m.image and m.image.as_pointer() == pointer}
             channels = set()
             for layer in ts.layers:
-                channels.update(p.channel for p in layer.channels
-                                if p.image == image or any(e.image == image for e in p.effects))
+                direct = {p.channel for p in layer.channels
+                          if p.image == image or getattr(p, 'detail_image', None) == image
+                          or any(e.image == image for e in p.effects)}
+                channels.update(direct)
+                if direct:
+                    # Published channel inputs can drive other channel masks.
+                    # Save evaluates dirty outputs only, so their consumers must
+                    # be dirtied even when they do not own the changed image.
+                    from .references import dependent_channels
+                    for channel in direct:
+                        channels.update(dependent_channels(ts, layer.id, channel))
                 masks = any(m.enabled and (m.image == image or m.effect.image == image or
                             (kinds and (map_dependencies(m) is None or kinds & map_dependencies(m))))
                             for m in layer.masks)

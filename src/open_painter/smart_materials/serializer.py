@@ -21,23 +21,34 @@ def save(ts, path: str | Path) -> Path:
         raise ValueError("A material already exists at this path. Choose a new filename.")
     path.parent.mkdir(parents=True, exist_ok=True)
     assets = {}
+    image_assets = {}
 
     def encode(value):
         if isinstance(value, bpy.types.Image):
-            key = f"assets/{len(assets):04d}.exr"
-            assets[key] = value
+            # The same static detail source can drive several channels and
+            # layers. Store it once, preserving that sharing on import.
+            pointer = value.as_pointer()
+            key = image_assets.get(pointer)
+            if key is None:
+                key = f"assets/{len(assets):04d}.exr"
+                image_assets[pointer] = key
+                assets[key] = value
             return {"asset": key, "colorspace": value.colorspace_settings.name}
         if isinstance(value, dict):
             return {
                 k: encode(v)
                 for k, v in value.items()
-                if k not in {"dirty", "revision", "image_name"}
+                if k not in {"dirty", "revision", "image_name", "detail_image_name"}
             }
         if isinstance(value, list):
             return [encode(v) for v in value]
         return value
 
     def layer_data(layer):
+        for channel in layer.channels:
+            for field in ("image", "detail_image"):
+                if getattr(channel, field + "_name") and not getattr(channel, field):
+                    raise ValueError(f"Missing texture on {layer.name}: {getattr(channel, field + '_name')}")
         values = snapshot(layer)
         for mask in values.get('masks', []):
             if mask.get('source') == 'SCENE':

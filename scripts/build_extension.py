@@ -20,6 +20,11 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         if (root / name).exists():
             archive.write(root / name, name)
     for path in [root / "docs/implementation-status.md", root / "docs/live-procedural-preview.md",
+                 root / "docs/generated-material-quality.md",
+                 root / "docs/research/generated-material-prompts.json",
+                 root / "docs/research/generated-material-prompts-specialized.json",
+                 root / "docs/research/generated-material-refinement.json",
+                 *sorted((root / "docs/validation").glob("generated-material-*.json")),
                  root / "docs/live-preview-latency.md", root / "docs/live-preview-latency-research.md",
                  root / "docs/bake-queue-fix.md", *sorted((root / "docs/validation").glob("bake-queue-*.json")),
                  *sorted((root / "docs/performance").glob("*"))]:

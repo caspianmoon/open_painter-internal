@@ -30,6 +30,25 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
         data = json.loads(path.read_text())
     if data.get("format_version") not in {1, VERSION}:
         raise ValueError("Unsupported smart material version.")
+
+    def validate_assets(value):
+        # Optional channel detail images use the existing version-2 image
+        # reference format. Reject a broken archive before allocating layers.
+        if isinstance(value, dict):
+            if "asset" in value:
+                key = value["asset"]
+                if not isinstance(key, str) or key not in assets:
+                    raise ValueError(f"Missing smart material texture: {key}")
+                if not isinstance(value.get("colorspace", "Non-Color"), str):
+                    raise ValueError("Invalid smart material image colorspace.")
+            else:
+                for child in value.values():
+                    validate_assets(child)
+        elif isinstance(value, list):
+            for child in value:
+                validate_assets(child)
+
+    validate_assets(data)
     surface = data.get("surface", {})
     if not isinstance(surface, dict) or any(
         key not in {"anisotropy","coat_weight","coat_roughness"}

@@ -13,7 +13,7 @@ import numpy as np
 from ..core.layer_stack import channel_for
 from ..constants import DEFAULTS, OWNER
 from . import metrics
-from .channel_eval import TILE_ROWS, _procedural_tile, source
+from .channel_eval import TILE_ROWS, _procedural_tile, _detail_tile, source
 from .image_snapshots import ImageSnapshots
 from .mask_eval import _effect_signature, _stack_signature, evaluate_masks, map_pixels
 from .preview_policy import SlicePolicy, resolution, resources as preview_resources
@@ -42,7 +42,9 @@ def _constant_identity(layer, prop, mode, backdrop):
     this deliberately does not infer constants from textures, masks or filters.
     """
     if (backdrop is None or layer.type != 'FILL' or mode != 'NORMAL'
-            or prop.image or prop.image_name or prop.procedural or _effects(prop)):
+            or prop.image or prop.image_name or prop.procedural
+            or getattr(prop, 'detail_image', None) or getattr(prop, 'detail_image_name', '')
+            or _effects(prop)):
         return False
     color = _color(prop, layer.type)
     return all(np.isfinite(color)) and tuple(color[:3]) == backdrop
@@ -78,6 +80,12 @@ class Builder:
         self.signatures = SimpleNamespace(signatures={}, geometry_stamp=self.geometry_stamp)
 
     def _field_key(self, prop):
+        detail = getattr(prop, 'detail_image', None)
+        if detail:
+            return (*self.prefix, 'detail-scalar-v1', image_key(detail), prop.projection,
+                    prop.filtering, prop.tiling, tuple(prop.scale), prop.rotation,
+                    tuple(prop.offset), prop.triplanar_hardness,
+                    self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
         if self._gpu_field_supported(prop):
             return self._scalar_key(prop.procedural, prop.procedural_scale, prop.procedural_seed)
         return (*self.prefix, 'procedural', prop.procedural, prop.procedural_scale,
@@ -92,7 +100,9 @@ class Builder:
 
     def _gpu_field_supported(self, prop):
         from .live_procedurals import supports
-        return (not (self.n & (self.n - 1)) and prop.projection == 'UV'
+        return (not getattr(prop, 'detail_image', None)
+                and not getattr(prop, 'detail_image_name', '')
+                and not (self.n & (self.n - 1)) and prop.projection == 'UV'
                 and tuple(prop.scale) == (1., 1.) and prop.rotation == 0
                 and tuple(prop.offset) == (0., 0.) and prop.tiling == 'REPEAT'
                 and supports(prop.procedural, self.n, scale=prop.procedural_scale,
@@ -126,6 +136,8 @@ class Builder:
     def _source_key(self, prop, kind):
         return (*self.prefix, 'source', kind, prop.channel, image_key(prop.image),
                 prop.image_name if not prop.image else '', tuple(prop.color), prop.value,
+                image_key(getattr(prop, 'detail_image', None)),
+                getattr(prop, 'detail_image_name', '') if not getattr(prop, 'detail_image', None) else '',
                 prop.procedural, prop.procedural_scale, prop.procedural_seed,
                 prop.procedural_detail, prop.procedural_height, prop.projection,
                 prop.filtering, prop.tiling, tuple(prop.scale), prop.rotation,
@@ -185,9 +197,14 @@ class Builder:
     def _source(self, layer, prop, images, resolve):
         if prop.image_name and not prop.image:
             raise ValueError(f'Texture image is missing: {prop.image_name}. Reload or clear the channel texture.')
+        detail = getattr(prop, 'detail_image', None)
+        detail_name = getattr(prop, 'detail_image_name', '')
+        if layer.type == 'FILL' and detail_name and not detail:
+            raise ValueError(f'Surface detail image is missing: {detail_name}. '
+                             'Reload or clear the surface detail texture.')
         effects = _effects(prop)
         color = _color(prop, layer.type)
-        if not prop.image and not effects and (layer.type == 'PAINT' or not prop.procedural):
+        if not prop.image and not effects and (layer.type == 'PAINT' or not (prop.procedural or detail)):
             return {'color': color}, ('constant', color)
         if (layer.type == 'PAINT' and not effects and prop.image and prop.image.is_float
                 and tuple(prop.image.size) == (self.n, self.n)
@@ -207,11 +224,12 @@ class Builder:
             # Keep external image settings intact and preserve float32 precision
             # if Blender retained an already-created half-precision native texture.
             metrics.count('live_native_paint_precision_fallbacks')
-        if (layer.type == 'FILL' and prop.procedural and prop.channel != 'NORMAL'
+        if (layer.type == 'FILL' and (prop.procedural or detail) and prop.channel != 'NORMAL'
                 and not prop.image and not effects and prop.tiling == 'REPEAT'):
             key = self._field_key(prop)
+            field = _detail_tile if detail else _procedural_tile
             texture = yield from self._texture(key, 1, lambda low, high:
-                _procedural_tile(prop, self.n, low, high, self.ts, self.resources), resolve,
+                field(prop, self.n, low, high, self.ts, self.resources), resolve,
                 (lambda: self.device.generate_scalar(prop.procedural, self.n,
                     scale=prop.procedural_scale, seed=prop.procedural_seed))
                 if hasattr(self.device, 'generate_scalar') and self._gpu_field_supported(prop) else None)

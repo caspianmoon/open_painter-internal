@@ -190,8 +190,9 @@ def resource_estimate(scene, ts, n):
             if layer.type == 'FOLDER' or prop is None:
                 continue
             effects = any(effect.enabled and effect.strength > 0 for effect in prop.effects)
-            if prop.image or effects or (layer.type == 'FILL' and prop.procedural):
-                simple = (layer.type == 'FILL' and prop.procedural and not prop.image
+            field = prop.procedural or getattr(prop, 'detail_image', None)
+            if prop.image or effects or (layer.type == 'FILL' and field):
+                simple = (layer.type == 'FILL' and field and not prop.image
                           and not effects and channel != 'NORMAL' and prop.tiling == 'REPEAT')
                 components += 1 if simple else 4
         inputs = max(inputs, n * n * components * 4)

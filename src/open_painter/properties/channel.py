@@ -26,6 +26,11 @@ def image_changed(self, context):
     changed(self, context)
 
 
+def detail_image_changed(self, context):
+    self.detail_image_name = self.detail_image.name if self.detail_image else ""
+    changed(self, context)
+
+
 class OP_Channel(bpy.types.PropertyGroup):
     channel: bpy.props.EnumProperty(items=CHANNEL_ITEMS)
     layer_id: bpy.props.StringProperty()
@@ -70,6 +75,11 @@ class OP_Channel(bpy.types.PropertyGroup):
     active_effect: bpy.props.IntProperty()
     image_name: bpy.props.StringProperty()
     image: bpy.props.PointerProperty(name="Texture", type=bpy.types.Image, update=image_changed)
+    detail_image_name: bpy.props.StringProperty()
+    detail_image: bpy.props.PointerProperty(
+        name="Surface Detail", type=bpy.types.Image, update=detail_image_changed,
+        description="Scalar texture varying the editable color, roughness or height; replaces procedural detail",
+    )
     projection: bpy.props.EnumProperty(
         name="Projection",
         items=[

@@ -68,17 +68,27 @@ def run():
     apply("FILTER:LEVELS")
     assert stack.channel_for(layer, "ROUGHNESS").effects[0].kind == "LEVELS"
     assert not stack.channel_for(layer, "BASE_COLOR").effects
+    channel = stack.channel_for(layer, "ROUGHNESS")
+    channel.detail_image = source
+    channel.image = source
+    assert channel.detail_image == source, "Direct base-image assignment discarded scalar detail"
     apply("PROCEDURAL:FBM")
     assert stack.channel_for(layer, "ROUGHNESS").procedural == "FBM"
+    assert channel.detail_image is None and not channel.detail_image_name
+    channel.detail_image = source
     apply("TEXTURE:Library source")
     assert stack.channel_for(layer, "ROUGHNESS").image == source
     assert not stack.channel_for(layer, "ROUGHNESS").procedural
+    assert channel.detail_image is None and not channel.detail_image_name
+    channel.detail_image = source
     native.state.get(bpy.context.area).mask_selected = True
     apply("PROCEDURAL:FBM")
     apply("FILTER:INVERT")
     apply("TEXTURE:Library source")
     assert [mask.source for mask in layer.masks] == ["PROCEDURAL", "FILTER", "FILL"]
     assert layer.masks[1].effect.kind == "INVERT" and layer.masks[2].image == source
+    assert channel.detail_image == source, "Mask texture activation changed the channel source"
+    channel.detail_image = None
 
     # Renaming source IDs reuses their shelf proxy; deleting a source removes it from the shelf.
     proxy = handle("TEXTURE:Library source")

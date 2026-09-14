@@ -32,7 +32,7 @@ def scalar_compatible(channel, layers, properties):
 def scalar_source(prop, kind, n, y0, y1, ts, geometry_cache):
     """Scalar fill plus separate coverage; called only after compatibility proof."""
     import numpy as np
-    from .channel_eval import _procedural_tile, _coordinates, apply_texture_effects
+    from .channel_eval import _field_tile, _coordinates, apply_texture_effects
     from .operation_contracts import stack_footprint
     from .tiles import expand
     if kind == 'PAINT':  # An image-bearing paint source fails compatibility.
@@ -40,8 +40,10 @@ def scalar_source(prop, kind, n, y0, y1, ts, geometry_cache):
     effects = tuple(e for e in prop.effects if e.enabled and e.strength > 0)
     low, high = expand(y0, y1, stack_footprint(effects), n)
     value = np.float32(prop.value)
-    if prop.procedural:
-        noise = _procedural_tile(prop, n, low, high, ts, geometry_cache)
+    has_field = (prop.procedural or getattr(prop, 'detail_image', None)
+                 or getattr(prop, 'detail_image_name', ''))
+    if has_field:
+        noise = _field_tile(prop, n, low, high, ts, geometry_cache)
         if prop.channel == 'HEIGHT':
             value = .5 + (noise - .5) * prop.procedural_height
         else:
@@ -50,7 +52,7 @@ def scalar_source(prop, kind, n, y0, y1, ts, geometry_cache):
     value = np.broadcast_to(value, (high - low, n))
     value = apply_texture_effects(value, effects)[y0 - low:y1 - low, :, None]
     coverage = np.float32(1)
-    if prop.procedural and prop.projection == 'UV' and prop.tiling == 'NONE':
+    if has_field and prop.projection == 'UV' and prop.tiling == 'NONE':
         u, v = _coordinates(prop, n, y0, y1)
         coverage = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1))[..., None]
     return value, coverage

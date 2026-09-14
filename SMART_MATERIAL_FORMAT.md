@@ -21,6 +21,13 @@ Channels use stable IDs: BASE_COLOR, ROUGHNESS, METALLIC, NORMAL, HEIGHT, AO, EM
 Export uses lossless 32-bit float EXR. Assets are bundled separately, never base64 JSON. Imported
 assets become independently owned, packed Blender images.
 
+Channels may additionally contain `detail_image`, using the same asset-reference
+shape. This scalar source modulates editable color/value with `procedural_detail`
+and height with `procedural_height`; it replaces procedural detail while present.
+Shared image bindings export one EXR per source and import as one shared packed
+image. Missing optional fields retain the previous behavior in versions 1 and 2.
+Missing referenced images fail before import mutates layers or export writes a file.
+
 Masks support `source` (PAINT/BAKED/GENERATOR/NOISE/FILL/PROCEDURAL/FILTER), `image`, `map_type`, `generator`,
 `enabled`, `operation` (MULTIPLY/ADD/NORMAL), `invert`, `black`, `white`, `strength`, `amount`, `contrast`,
 `noise_scale`, `noise_strength` and `seed`. Baked maps are resolved in the target texture set; they are

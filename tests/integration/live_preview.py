@@ -51,7 +51,7 @@ def main():
     from fixtures import create, edit
     benchmark = os.environ.get('OP_LIVE_BENCHMARK') == '1'
     n = 2048 if benchmark else 512
-    ts = create(scene, 'worn', n)[0]
+    ts = create(scene, 'worn', n, generated_detail=True)[0]
     assert ts.preview_backend == 'LIVE'
     revisions = {output.channel: output.revision for output in ts.outputs}
     cold = live(scene, ts)
@@ -186,7 +186,7 @@ def main():
 
     result = dict(result='PASS', blender=bpy.app.version_string,
                   build=bpy.app.build_hash.decode(), backend='Live GPU', resolution=n,
-                  fixture='Worn Painted Metal; six initial layer records; synthetic 32² AO/curvature',
+                  fixture='Worn Painted Metal with generated scalar images; six initial layer records; synthetic 32² AO/curvature',
                   precision='Float32 leaves, composition, display texture and CPU authority',
                   cold=cold, warm_roughness_edits=edits, opacity_edit=opacity,
                   max_absolute_error=errors, authoritative_flush_s=flush_s,

@@ -1,0 +1,131 @@
+{
+  "blender_version": "5.2.1 LTS",
+  "blender_build_hash": "9e2066aef7ef",
+  "detail_variant": "preserved_procedural",
+  "resolution": 2048,
+  "layers": 6,
+  "material": "Worn Painted Metal",
+  "author_seconds": 0.026326457998948172,
+  "initial_seconds": 30.887047500000335,
+  "initial_cpu_seconds": 20.859559,
+  "channel_seconds": {
+    "BASE_COLOR": 29.82956487499905,
+    "ROUGHNESS": 0.3702737919993524,
+    "METALLIC": 0.21080066700233147,
+    "NORMAL": 0.07650250000006054,
+    "HEIGHT": 0.16918950000035693,
+    "AO": 0.051670542001375,
+    "EMISSION": 0.09097250000195345,
+    "OPACITY": 0.08652250000159256
+  },
+  "channel_cpu_seconds": {
+    "BASE_COLOR": 19.963328999999998,
+    "ROUGHNESS": 0.32018799999999814,
+    "METALLIC": 0.18945300000000032,
+    "NORMAL": 0.06454399999999794,
+    "HEIGHT": 0.15195699999999945,
+    "AO": 0.043095000000000994,
+    "EMISSION": 0.06536000000000186,
+    "OPACITY": 0.06064100000000039
+  },
+  "roughness_edit_seconds": 0.24376516600023024,
+  "roughness_edit_cpu_seconds": 0.2157340000000012,
+  "roughness_edit_metrics": {
+    "phases": {
+      "source_generation": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "masking": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "filters": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "blending": {
+        "calls": 768,
+        "wall_s": 0.018679116939892992,
+        "cpu_s": 0.01609800000002437,
+        "exclusive_wall_s": 0.018679116939892992,
+        "exclusive_cpu_s": 0.01609800000002437
+      },
+      "geometry": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "geometry_signature": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "image_read": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "image_write": {
+        "calls": 1,
+        "wall_s": 0.002766666999377776,
+        "cpu_s": 0.0027670000000021844,
+        "exclusive_wall_s": 0.002766666999377776,
+        "exclusive_cpu_s": 0.0027670000000021844
+      },
+      "packing": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      }
+    },
+    "counters": {
+      "output_buffer_allocated_bytes": 67108864,
+      "cache_hits": 2304,
+      "image_write_bytes": 67108864
+    },
+    "distributions": {
+      "indivisible_compute_s": {
+        "samples": 1280,
+        "p50": 7.2500006353948265e-06,
+        "p95": 0.0013157461518858325,
+        "maximum": 0.005162749999726657
+      },
+      "cooperative_compute_s": {
+        "samples": 46,
+        "p50": 0.004562980508126202,
+        "p95": 0.005998898011966958,
+        "maximum": 0.006437540003389586
+      }
+    },
+    "last_observed_bytes": {
+      "output_buffer_bytes": 67108864
+    },
+    "peak_observed_bytes": {
+      "output_buffer_bytes": 67108864
+    },
+    "process_peak_rss_bytes": 885260288
+  },
+  "max_cooperative_step_cpu_ms": 40.31199999999835,
+  "max_cooperative_step_ms": 405.9845419978956,
+  "scalar_cache_mib": 208.03125,
+  "max_rss_mib": 854.796875,
+  "context": "CPU texture composition with synthetic AO/curvature; excludes mesh baking and viewport rendering."
+}

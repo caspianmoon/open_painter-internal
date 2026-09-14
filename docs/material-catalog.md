@@ -2,6 +2,12 @@
 
 Open Painter includes 50 authored smart material compositions containing 229 editable layers. Recipes are original data stored in `src/open_painter/smart_materials/catalog.py`. They compose texture fills, texture procedurals, and grayscale masks; they do not build shader effect graphs. The output material displays the resulting Base Color, Roughness, Metallic and Height textures.
 
+Version 0.2.5 adds 15 generated scalar surface-detail sources across all 50
+materials. They supply fine grain, pores, mineral structures and handling marks;
+color, roughness, height and mesh-aware masks remain editable. Existing material
+instances in saved projects are preserved; apply an updated library recipe to
+use its new inputs. See [generated material quality and validation](generated-material-quality.md).
+
 A material is inserted as an isolated folder above the selected layer. Its children are stored from substrate to topmost effect, and the library selects the folder after insertion. Coating-loss masks belong to coating layers: hiding paint exposes the underlying metal or timber. A mask on the whole folder deliberately affects its substrate too.
 
 Heavy Chipped Paint, Abandoned Machinery, Painted Concrete and Post-Apocalyptic Scrap Metal combine edge loss with a second editable, high-contrast breakup mask on the paint layer. This exposes substrate across damaged flat areas without making the edge-wear generator itself invent geometric edges there. Mask operations remain visible and editable in the layer's mask stack.

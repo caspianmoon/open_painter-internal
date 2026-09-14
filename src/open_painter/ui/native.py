@@ -524,15 +524,23 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
                 text="Color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "Value",
             )
             body.template_ID(channel, "image", open="image.open")
+            body.label(text="Surface Detail", icon="TEXTURE")
+            body.template_ID(channel, "detail_image", open="image.open")
             row = body.row(align=True)
-            row.operator("open_painter.choose_procedural", text=channel.procedural.replace("_", " ").title() if channel.procedural else "Choose Procedural", icon="TEXTURE")
-            if channel.procedural:
+            source_label = ("Replace with Procedural" if channel.detail_image else
+                            channel.procedural.replace("_", " ").title() if channel.procedural else
+                            "Choose Procedural")
+            row.operator("open_painter.choose_procedural", text=source_label, icon="TEXTURE")
+            if channel.procedural and not channel.detail_image:
                 row.operator("open_painter.clear_procedural", text="", icon="X")
-                for key in ("procedural_scale", "procedural_seed", "procedural_detail"):
+                for key in ("procedural_scale", "procedural_seed"):
                     body.prop(channel, key)
+            if channel.detail_image or channel.procedural:
+                if channel.channel not in {"HEIGHT", "NORMAL"}:
+                    body.prop(channel, "procedural_detail")
                 if channel.channel in {"HEIGHT", "NORMAL"}:
                     body.prop(channel, "procedural_height")
-            if channel.image or channel.procedural:
+            if channel.image or channel.detail_image or channel.procedural:
                 body.separator()
                 body.label(text="FILL", icon="TEXTURE")
                 for key in ("projection", "filtering", "tiling"):

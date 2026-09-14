@@ -1,0 +1,6 @@
+{
+  "mode": "built-in image_gen edit",
+  "asset": "marble_veins",
+  "reason": "Blender render review: bright input clipped the white marble albedo and lost vein contrast.",
+  "prompt": "Use case: precise-object-edit\nEdit this existing generated marble scalar texture. Preserve its natural branching mineral veins, square flat composition, uniform detail and repeatability, but change its value range: replace the nearly white matrix with uniform MIDDLE GRAY approximately RGB 135,135,135, and deepen the main fine branching veins to dark gray around 30,30,30 so they remain legible when multiplied by editable white marble albedo. Secondary veins should remain delicate and natural. This is a scalar material input, not white marble albedo. No directional lighting, reflections, shadows, borders, text, logos, watermark or perspective. Keep the natural vein scale and every pixel filled. Opposite edges must tile. One texture only."
+}

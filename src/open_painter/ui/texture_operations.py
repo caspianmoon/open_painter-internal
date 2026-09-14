@@ -157,6 +157,8 @@ class OP_OT_choose_procedural(SearchPicker, SafeOperator, bpy.types.Operator):
             prop = _channel(context, layer)
             prop.image = None  # Switch source; preserve the image datablock itself.
             prop.image_name = ""
+            prop.detail_image = None
+            prop.detail_image_name = ""
             prop.procedural = self.choice
             prop.enabled = True
         _redraw(context, ts, mask=self.target == "MASK")

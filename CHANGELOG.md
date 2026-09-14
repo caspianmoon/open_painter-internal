@@ -1,5 +1,11 @@
 # Changes
 
+## 0.2.5
+
+- Add fifteen generated scalar surface-detail images to all 50 existing smart materials, with separate editable color, roughness and height amounts. Preserve mesh-map wear and all 50 recipes.
+- Share packed source images and cached scalar inputs across channels; material value edits reuse the live GPU texture instead of writing new source files.
+- Keep detail inputs portable in version-2 smart material archives and packed Blender projects; retain version-1 compatibility. Add native source controls and missing-image validation.
+
 ## 0.2.4
 
 - Fix Bake Selected Maps failing on native timer events in Blender 5.2. Gate work on the queue timer without reading unsupported Event properties.

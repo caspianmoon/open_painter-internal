@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "generated_date": "2026-09-14",
+  "mode": "built-in image_gen",
+  "license": "GPL-3.0-or-later",
+  "provenance": "AI-generated surface-detail inputs created for Open Painter without third-party reference images. Not measured PBR scans or exclusive assets.",
+  "terms_url": "https://openai.com/policies/terms-of-use/",
+  "prompts": "https://github.com/caspianmoon/open_painter/blob/task/generated-material-quality/docs/research/generated-material-prompts.json",
+  "requested_size": [
+    2048,
+    2048
+  ],
+  "note": "Tool returned 1254-pixel sources; original pixels retained. Authored texture-set resolution is unchanged. No claim of measured physical calibration or guaranteed exact boundary continuity.",
+  "assets": [
+    {
+      "id": "brass_tarnish",
+      "file": "brass_tarnish.png",
+      "original_file": "exec-0faa18e9-6981-448e-b4c2-31bc5de92201.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "07159194313e33f3b1f70d15d2052c02d543d77225375b39b17eaf8a96843b0e",
+      "bytes": 3418122
+    },
+    {
+      "id": "brushed_metal",
+      "file": "brushed_metal.png",
+      "original_file": "exec-dd753745-d858-40dc-880f-e42c3e978770.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "80ba9a49f05ee0bc6788d369a0e926569baae0b19e563a8aacef8ef99b1075a2",
+      "bytes": 2862477
+    },
+    {
+      "id": "burn_blisters",
+      "file": "burn_blisters.png",
+      "original_file": "exec-e54f31b4-59de-4f61-b0b6-23b504be5e91.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "5b8bebc5e278aa5fa620cba7a4f564f8bbf989d623549f4c7a37f5808021684a",
+      "bytes": 3783407
+    },
+    {
+      "id": "cast_iron_grain",
+      "file": "cast_iron_grain.png",
+      "original_file": "exec-8d3f7963-3480-4461-b1e6-40b0b2fb55c9.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "68fc2b723131b3ee35dc8ec594331d51989e9f49cbc861ba6fdb062fca22e285",
+      "bytes": 3902219
+    },
+    {
+      "id": "concrete_pores",
+      "file": "concrete_pores.png",
+      "original_file": "exec-e6fc29e6-f1ff-4e83-b225-b64888288859.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "99fe25655c0298369a9c0928dc6916164c067b111eb0a3a717bf7b01090b9839",
+      "bytes": 3705122
+    },
+    {
+      "id": "fabric_weave",
+      "file": "fabric_weave.png",
+      "original_file": "exec-bf997764-3139-40a5-8afc-286c9bcc88f9.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "dacb88ba578c3f761c423736561d17f2d87198395e96e1bd02d8ff3ae2f7a9dc",
+      "bytes": 3385830
+    },
+    {
+      "id": "fine_wood",
+      "file": "fine_wood.png",
+      "original_file": "exec-96bc0ff2-7747-4113-a116-51a17814858d.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "75e20022bf1d132beaa4ce4171d5a8356456dbfaeb6c29800cddbfcdd2a03f4a",
+      "bytes": 2705671
+    },
+    {
+      "id": "granite_minerals",
+      "file": "granite_minerals.png",
+      "original_file": "exec-ce80888f-9fe1-45a6-8e2d-6135c1a83e84.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "d31a9fd663f1236419966381f5fb450697e9badc97881193b1585f149d38b5df",
+      "bytes": 3797884
+    },
+    {
+      "id": "leather_grain",
+      "file": "leather_grain.png",
+      "original_file": "exec-846bd792-4ab9-440d-941c-2a6eae563527.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "51b5f783b3e29e315cc1b3acf167091a0be90421a1f8d8ab608fe4c440662218",
+      "bytes": 3440043
+    },
+    {
+      "id": "machined_scratches",
+      "file": "machined_scratches.png",
+      "original_file": "exec-aa4a13e3-6f29-45fb-ab2d-65cfcf882a70.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "8f8d2971a4675939ad6eecf39b11539ec6ae02b84dbabb1b242dbd102aeb7583",
+      "bytes": 3180645
+    },
+    {
+      "id": "marble_veins",
+      "file": "marble_veins.png",
+      "original_file": "exec-299cc148-67bd-4d67-81cb-61e2f18715e6.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "b4500bcc69584007c299658a07ffeb0f052fc9e2ceedc2e380beac1aeed41119",
+      "bytes": 2208555,
+      "refined_from_original": "exec-c40a0083-7630-48d8-b7a5-1f4630053947.png",
+      "refined_from_sha256": "6f9d77e42e2fa573f2f42b408036170767ac95037d934cd39754d6aaf26c6c3a",
+      "refinement_prompt": "docs/research/generated-material-refinement.json"
+    },
+    {
+      "id": "polymer_grain",
+      "file": "polymer_grain.png",
+      "original_file": "exec-531ece93-ac36-4097-9731-8b43e5e8de2e.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "8ae223860bd135fa4c530300272f334cf8d53f5609f7711bcb4c89ac1fdc73bc",
+      "bytes": 3663728
+    },
+    {
+      "id": "rust_detail",
+      "file": "rust_detail.png",
+      "original_file": "exec-af39d372-4529-428c-ba71-3ab7af48aaf2.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "13f956c2bd264396c788387fcca71dcabe47fd7f1773a3f0f4fac3eae9b73a63",
+      "bytes": 3906572
+    },
+    {
+      "id": "surface_smudges",
+      "file": "surface_smudges.png",
+      "original_file": "exec-2fdfdacd-0220-4225-9145-66ca752c01ab.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "a52539502cbca72c59de8fb7b2af3e5eea65c44711c1907f30e71081b15b6aa0",
+      "bytes": 2418660
+    },
+    {
+      "id": "zinc_spangle",
+      "file": "zinc_spangle.png",
+      "original_file": "exec-834693e7-6862-4d97-8266-bc1cb95a493d.png",
+      "width": 1254,
+      "height": 1254,
+      "bit_depth": 8,
+      "color_type": "RGB",
+      "sha256": "d8379466ecbdf811fefa755480e6ac30494d0eb92c23407da63ed427b3fc46ec",
+      "bytes": 3108759
+    }
+  ],
+  "additional_prompts": "https://github.com/caspianmoon/open_painter/blob/task/generated-material-quality/docs/research/generated-material-prompts-specialized.json"
+}

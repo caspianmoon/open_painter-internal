@@ -7,10 +7,13 @@ normal output evaluator consumes the stored layer data after a successful edit.
 import math
 from zlib import crc32
 
+import bpy
+
 from ..core import layer_stack as stack
 from ..texture_engine.procedurals import ALIASES, CATALOG as PROCEDURALS
 from ..utils.ids import new_id
 from .catalog import CATALOG, DIRT, DUST, OIL, PATINA, RUST, STEEL, layer, mask
+from . import generated_sources
 
 
 MAP_REQUIREMENTS = {
@@ -118,6 +121,8 @@ def validate(data):
         source = spec.get("procedural")
         if source and ALIASES.get(source, source) not in PROCEDURALS:
             raise ValueError("Unknown texture procedural: " + source)
+        if "generated_source" in spec:
+            generated_sources.validate(spec["generated_source"])
         selected = set(spec.get("channels", ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT")))
         if not selected <= {"BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT"}:
             raise ValueError("Unknown recipe texture channel.")
@@ -152,6 +157,8 @@ def _seed(name, number, seed):
 
 def _fill(ts, spec, parent_id, seed):
     item = stack.add(ts, "FILL", spec["name"], parent_id)
+    detail = spec.get("generated_source")
+    detail_image = generated_sources.load(detail["id"]) if detail else None
     selected = set(spec.get("channels", ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT")))
     for prop in item.channels:
         prop.enabled = prop.channel in selected and (prop.channel != "HEIGHT" or "height" in spec)
@@ -169,6 +176,17 @@ def _fill(ts, spec, parent_id, seed):
             prop.procedural_seed = seed
             prop.procedural_detail = spec["detail"]
             prop.procedural_height = spec.get("height", 0)
+            if detail:
+                amplitude = detail.get({"BASE_COLOR": "color", "ROUGHNESS": "roughness",
+                                        "HEIGHT": "height"}[prop.channel], 0)
+                if amplitude:
+                    prop.detail_image = detail_image
+                    prop.scale = detail.get("scale", (1, 1))
+                    if prop.channel == "HEIGHT":
+                        prop.procedural_height = amplitude
+                    else:
+                        prop.procedural_detail = (amplitude / .35 if prop.channel == "ROUGHNESS"
+                                                  else amplitude)
     for index, settings in enumerate(masks_for(spec)):
         effect = item.masks.add()
         effect.id, effect.name, effect.source = new_id(), settings["kind"].replace("_", " ").title(), "GENERATOR"
@@ -216,6 +234,7 @@ def apply_document(ts,data,name='Declarative Material',seed=1):
     """Apply validated data without installing code or modifying the catalog."""
     preflight(ts, data, name)
     before = _state(ts)
+    before_images = {image.as_pointer() for image in bpy.data.images}
     active = stack.active(ts)
     parent_id = active.parent_id if active else ""
     try:
@@ -233,6 +252,7 @@ def apply_document(ts,data,name='Declarative Material',seed=1):
         return ts.layers[ts.active_layer]
     except Exception:
         _rollback(ts, before)
+        generated_sources.discard_unused_new_images(before_images)
         raise
 
 

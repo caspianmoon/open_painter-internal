@@ -13,6 +13,7 @@ benchmark. The default report is .blender-test/texture-material-benchmark.json.
 """
 
 import argparse
+from copy import deepcopy
 import json
 from pathlib import Path
 import sys
@@ -33,6 +34,7 @@ import numpy as np
 import open_painter
 from open_painter.core import image_manager, layer_stack, texture_set_manager
 from open_painter.evaluation.evaluator import LayerEvaluator
+from open_painter.evaluation.metrics import Metrics
 from open_painter.smart_materials import composer
 
 
@@ -42,6 +44,8 @@ def main():
                         choices=(512, 1024, 2048, 4096, 8192))
     parser.add_argument("--report", type=Path,
                         default=ROOT / ".blender-test/texture-material-benchmark.json")
+    parser.add_argument("--legacy-detail", action="store_true",
+                        help="Compare preserved procedural recipe without generated image detail")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     open_painter.register()
     try:
@@ -58,7 +62,11 @@ def main():
             image_manager.write(mesh_map.image, data)
 
         started = time.perf_counter()
-        composer.apply(ts, "Worn Painted Metal")
+        recipe = deepcopy(composer.CATALOG["Worn Painted Metal"])
+        if args.legacy_detail:
+            for spec in recipe["layers"]:
+                spec.pop("generated_source", None)
+        composer.apply_document(ts, recipe, "Worn Painted Metal")
         author_seconds = time.perf_counter() - started
         evaluator = LayerEvaluator(scene)
         initial_started = time.perf_counter()
@@ -94,18 +102,22 @@ def main():
         coat = next(layer for layer in ts.layers if layer.name == "Blue paint coat")
         layer_stack.channel_for(coat, "ROUGHNESS").value += .03
         started, cpu_started = time.perf_counter(), time.process_time()
-        LayerEvaluator(scene).evaluate_texture_set(ts.id)
+        with Metrics() as edit_metrics:
+            LayerEvaluator(scene).evaluate_texture_set(ts.id)
         edit_seconds = time.perf_counter() - started
         edit_cpu_seconds = time.process_time() - cpu_started
         # Darwin reports bytes; Linux reports KiB.
         rss_scale = 2**20 if sys.platform == "darwin" else 2**10
         report = dict(
             blender_version=bpy.app.version_string,
+            blender_build_hash=bpy.app.build_hash.decode(),
+            detail_variant="preserved_procedural" if args.legacy_detail else "generated_scalar_images",
             resolution=args.resolution, layers=len(ts.layers), material="Worn Painted Metal",
             author_seconds=author_seconds, initial_seconds=initial_seconds,
             initial_cpu_seconds=initial_cpu_seconds, channel_seconds=channel_seconds,
             channel_cpu_seconds=channel_cpu_seconds, roughness_edit_seconds=edit_seconds,
             roughness_edit_cpu_seconds=edit_cpu_seconds,
+            roughness_edit_metrics=edit_metrics.report(),
             max_cooperative_step_cpu_ms=max_cpu_step * 1000,
             max_cooperative_step_ms=max_step * 1000, scalar_cache_mib=cache_bytes / 2**20,
             max_rss_mib=(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / rss_scale

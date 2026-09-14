@@ -9,6 +9,7 @@ import numpy as np
 
 from ..core.image_manager import pixels
 from .blend_modes import sample_uv
+from .metrics import count, measured
 from ..texture_engine import filters, procedurals
 
 TILE_ROWS = 16
@@ -211,13 +212,91 @@ def _procedural_tile(prop, n, y0, y1, ts, geometry_cache):
     return parts[0] if len(parts) == 1 else np.concatenate(parts)
 
 
+def _detail_pixels(image, resources):
+    """Keep one float32 luminance plane, rather than four decoded components.
+
+    Linear sampling and luminance commute. Reducing the source once keeps the
+    same information needed by detail fills while avoiding an RGBA source copy
+    and RGB temporaries for every sampled strip. Authored images stay untouched.
+    """
+    from .image_snapshots import read
+    from .resource_keys import image_key
+    key = ("decoded_detail_scalar", image_key(image))
+    if key in resources:
+        count("detail_decoded_reuses")
+        return resources[key]
+    # A plain cache requests a transient decoded image, never an RGBA entry in
+    # the persistent image-snapshot cache. Only the scalar result is retained.
+    rgba = read({}, image, linear=True)
+    scalar = rgba[..., 0] * np.float32(.2126)
+    scalar += rgba[..., 1] * np.float32(.7152)
+    scalar += rgba[..., 2] * np.float32(.0722)
+    scalar = scalar[..., None]
+    scalar.flags.writeable = False
+    resources[key] = scalar
+    count("detail_decoded_bytes", scalar.nbytes)
+    return scalar
+
+
+@measured("source_generation")
+def _sample_detail(image, prop, n, low, high, ts, geometry_cache):
+    """One actual scalar sampling operation; cache hits never enter this phase."""
+    scalar = _detail_pixels(image, geometry_cache)
+    value = np.asarray(_sample_fill(scalar, prop, n, low, high, ts, geometry_cache)[..., 0],
+                       dtype=np.float32)
+    count("detail_sampled_strips")
+    count("detail_sampled_pixels", value.size)
+    count("detail_sampled_bytes", value.nbytes)
+    return value
+
+
+def _detail_tile(prop, n, y0, y1, ts, geometry_cache):
+    """Sample a shared scalar detail image without baking channel-specific files.
+
+    The image is linear data; RGB inputs are reduced to luminance. Both decoded
+    pixels and canonical scalar strips are revisioned independently of color,
+    roughness and height controls. Existing UV and triplanar sampling remains the
+    reference, including filtering, rotation and repeat/transparent borders.
+    """
+    from .resource_keys import image_key
+    image = getattr(prop, "detail_image", None)
+    if image is None:
+        raise ValueError(f"Surface detail image is missing: {getattr(prop, 'detail_image_name', '')}. "
+                         "Reload or clear the surface detail texture.")
+    identity = ("detail_scalar", getattr(ts, "id", ""), image_key(image), n,
+                prop.projection, prop.filtering, prop.tiling, tuple(prop.scale),
+                prop.rotation, tuple(prop.offset), prop.triplanar_hardness,
+                getattr(geometry_cache, "geometry_stamp", None)
+                if prop.projection == "TRIPLANAR" else None)
+    parts = []
+    for low in range(y0 // TILE_ROWS * TILE_ROWS, y1, TILE_ROWS):
+        high = min(low + TILE_ROWS, n)
+        key = (*identity, low, high)
+        if key not in geometry_cache:
+            value = _sample_detail(image, prop, n, low, high, ts, geometry_cache)
+            geometry_cache[key] = value
+        else:
+            value = geometry_cache[key]
+            count("detail_reused_strips")
+        parts.append(value[max(y0 - low, 0):min(y1 - low, high - low)])
+    return parts[0] if len(parts) == 1 else np.concatenate(parts)
+
+
+def _field_tile(prop, n, y0, y1, ts, geometry_cache):
+    if getattr(prop, "detail_image", None) or getattr(prop, "detail_image_name", ""):
+        return _detail_tile(prop, n, y0, y1, ts, geometry_cache)
+    return _procedural_tile(prop, n, y0, y1, ts, geometry_cache)
+
+
 def _raw_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
     rgba = _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache)
     # Mask fill properties also have a `procedural` field, but an image fill must
     # remain an image fill. Their dedicated PROCEDURAL source is evaluated by masks.
-    if kind != "FILL" or not hasattr(prop, "channel") or not getattr(prop, "procedural", ""):
+    if kind != "FILL" or not hasattr(prop, "channel") or not (
+            getattr(prop, "procedural", "") or getattr(prop, "detail_image", None)
+            or getattr(prop, "detail_image_name", "")):
         return rgba
-    scalar = _procedural_tile(prop, n, y0, y1, ts, geometry_cache)
+    scalar = _field_tile(prop, n, y0, y1, ts, geometry_cache)
     out = np.broadcast_to(rgba, (y1 - y0, n, 4)).copy()
     if prop.channel == "HEIGHT":
         out[..., :3] = (.5 + (scalar - .5) * prop.procedural_height)[..., None]
@@ -228,10 +307,10 @@ def _raw_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         # raster while avoiding a full-resolution RGB normal cache at 8K.
         parts = []
         if y0:
-            parts.append(_procedural_tile(prop, n, y0 - 1, y0, ts, geometry_cache))
+            parts.append(_field_tile(prop, n, y0 - 1, y0, ts, geometry_cache))
         parts.append(scalar)
         if y1 < n:
-            parts.append(_procedural_tile(prop, n, y1, y1 + 1, ts, geometry_cache))
+            parts.append(_field_tile(prop, n, y1, y1 + 1, ts, geometry_cache))
         height = np.concatenate(parts)
         normal = filters.height_to_normal(height, prop.procedural_height * n)
         start = 1 if y0 else 0
@@ -282,43 +361,39 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
             f"Texture image is missing: {prop.image_name}. Reload or clear the channel texture."
         )
     if prop.image:
+        return _image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache)
+    if kind == "PAINT":
+        return np.array([0, 0, 0, 0], dtype=np.float32)
+    if prop.channel in {"BASE_COLOR", "NORMAL", "EMISSION"}:
+        return np.array(prop.color, dtype=np.float32)
+    return np.array([prop.value, prop.value, prop.value, 1], dtype=np.float32)
+
+
+def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
+    """Shared image sampling for regular fills, paint and scalar detail inputs."""
+    if image:
         from .image_snapshots import read
-        key = (prop.image.as_pointer(), "linear")
+        key = (image.as_pointer(), "linear")
         if key not in cache:
-            cache[key] = read(cache, prop.image, linear=True)
+            cache[key] = read(cache, image, linear=True)
         if kind == "PAINT" and cache[key].shape[:2] == (n, n):
             # Paint pixels already occupy the output UV grid. Resampling four
             # neighbours per pixel was the dominant cost of every brush update.
             rgba = cache[key][y0:y1].copy()
-            if prop.image.is_float:
+            if image.is_float:
                 np.divide(
                     rgba[..., :3], rgba[..., 3:4], out=rgba[..., :3], where=rgba[..., 3:4] > 1e-8
                 )
                 rgba[..., :3][rgba[..., 3] <= 1e-8] = 0
             return rgba
-        if kind == "FILL" and prop.projection == "TRIPLANAR":
-            from ..painting.projection import geometry, triplanar
-
-            if "geometry" in geometry_cache:
-                positions, normals = geometry_cache["geometry"]
-            else:
-                positions, normals = geometry(ts, n)
-                geometry_cache["geometry"] = (positions, normals)
-            return triplanar(cache[key], positions[y0:y1], normals[y0:y1], prop)
+        if kind == "FILL":
+            return _sample_fill(cache[key], prop, n, y0, y1, ts, geometry_cache)
         u, v = np.meshgrid(
             (np.arange(n, dtype=np.float32) + 0.5) / n,
             (np.arange(y0, y1, dtype=np.float32) + 0.5) / n,
         )
-        if kind == "FILL":
-            u, v = (u - 0.5) * prop.scale[0], (v - 0.5) * prop.scale[1]
-            cs, sn = np.cos(prop.rotation), np.sin(prop.rotation)
-            u, v = cs * u - sn * v + 0.5 + prop.offset[0], sn * u + cs * v + 0.5 + prop.offset[1]
-        rgba = (
-            sample_uv(cache[key], u, v, prop.filtering, prop.tiling)
-            if kind == "FILL"
-            else sample_uv(cache[key], u, v)
-        )
-        if kind == "PAINT" and prop.image.is_float:
+        rgba = sample_uv(cache[key], u, v)
+        if kind == "PAINT" and image.is_float:
             # Blender's native float brush buffers are premultiplied.
             rgba[..., :3] = np.divide(
                 rgba[..., :3],
@@ -327,8 +402,17 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
                 where=rgba[..., 3:4] > 1e-8,
             )
         return rgba
-    if kind == "PAINT":
-        return np.array([0, 0, 0, 0], dtype=np.float32)
-    if prop.channel in {"BASE_COLOR", "NORMAL", "EMISSION"}:
-        return np.array(prop.color, dtype=np.float32)
-    return np.array([prop.value, prop.value, prop.value, 1], dtype=np.float32)
+
+
+def _sample_fill(texture, prop, n, y0, y1, ts, geometry_cache):
+    """Identical texture projection for RGBA fills and single-plane detail."""
+    if prop.projection == "TRIPLANAR":
+        from ..painting.projection import geometry, triplanar
+        if "geometry" in geometry_cache:
+            positions, normals = geometry_cache["geometry"]
+        else:
+            positions, normals = geometry(ts, n)
+            geometry_cache["geometry"] = (positions, normals)
+        return triplanar(texture, positions[y0:y1], normals[y0:y1], prop)
+    u, v = _coordinates(prop, n, y0, y1)
+    return sample_uv(texture, u, v, prop.filtering, prop.tiling)

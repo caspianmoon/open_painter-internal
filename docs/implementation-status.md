@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Curvature V2 — 2026-09-14
+
+The crease-only curvature map left every mesh-aware mask empty on smooth geometry
+(0.018 % of texels above 0.01 on the supplied 39k-face shell), which is why materials
+looked flatly applied. `CURVATURE` now combines crease lines with a texel-domain
+kernel estimate (turning over area within Curvature Radius, relative to the surface
+median), giving edge wear on bevels and tessellated rims after a rebake; old maps show
+as stale. Before/after renders and measurements: [ucupaint-integration.md](ucupaint-integration.md).
+
 ## Ucupaint integration — 2026-09-14
 
 Implemented from the study, outside the shader compiler and smart-material files:

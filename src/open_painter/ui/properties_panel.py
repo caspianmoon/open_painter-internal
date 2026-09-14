@@ -182,11 +182,12 @@ class OP_PT_masks(bpy.types.Panel):
                     image
                     and image.get(OWNER)
                     and "BakedCurvature" in image.name
-                    and not image.get("open_painter_curvature_method")
+                    and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
                 ):
-                    layout.label(text="Legacy curvature: rebake edge map.", icon="ERROR")
+                    layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
                 layout.prop(ts.bake, "curvature_angle")
                 layout.prop(ts.bake, "curvature_width")
+                layout.prop(ts.bake, "mean_curvature_distance")
                 layout.operator(
                     "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
                 ).action = "CURVATURE"

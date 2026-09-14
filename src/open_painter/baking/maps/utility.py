@@ -99,22 +99,17 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
     result = np.zeros((n, n, 4), dtype=np.float32)
     span = maximum - minimum
     nondegenerate = span > max(float(np.linalg.norm(span)) * 1e-6, 1e-12)
-    signals = {}
     if kind == "MEAN_CURVATURE":
-        from .mean_curvature import vertex_signal
-        distance = ts.bake.mean_curvature_distance
-        signals = {index: vertex_signal(target, distance) for index, target in enumerate(targets)}
-        peak = max((float(np.abs(v).max()) for v in signals.values() if v.size), default=0.0)
-        # One symmetric stretch for the whole set keeps objects comparable and
-        # flat surfaces at exactly 0.5 while the strongest feature saturates.
-        stretch = 1.0 / peak if 0.0 < peak < 1.0 else 1.0
-        signals = {index: .5 + .5 * np.clip(v * stretch, -1, 1) for index, v in signals.items()}
+        from .mean_curvature import signed_map
+        values, covered, extra = signed_map(targets, n, ts.bake.mean_curvature_distance,
+                                            ts.bake.curvature_angle, ts.bake.curvature_width)
+        result[..., :3] = values[..., None]
+        result[..., 3] = covered
         if metadata is not None:
-            metadata["mean_curvature_distance"] = float(distance)
-            metadata["mean_curvature_effective_distance"] = float(distance * stretch)
+            metadata.update(extra)
+        return result
     for index, target in enumerate(targets):
         islands, borders = _islands(target) if kind in {"UV_ISLAND", "UV_BORDER"} else ({}, {})
-        scalars = signals.get(index)
         faces = None
         if kind == "SELECTION":
             from .selection import polygon_flags
@@ -152,9 +147,7 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
                 ]
             for region, inside, weights, x, y in _tiles(uv, n):
                 tile = result[region]
-                if scalars is not None:
-                    tile[..., :3][inside] = (weights @ scalars[list(tri.vertices)])[inside, None]
-                elif faces is not None:
+                if faces is not None:
                     tile[..., :3][inside] = faces[tri.polygon_index]
                 elif kind in {"POSITION", "WORLD_NORMAL", "OBJECT_NORMAL"}:
                     current = weights @ values

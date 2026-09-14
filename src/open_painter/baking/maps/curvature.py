@@ -1,7 +1,11 @@
-"""Bake convex geometric creases into the assigned render UVs, without shader effects.
+"""Bake convex edges of the evaluated target into the assigned render UVs.
 
-This is an edge map of the evaluated target mesh, not a derivative of tangent normals.
-Normal/AO high-to-low baking remains separate; high-poly normal detail is not curvature.
+Two signals are combined by maximum: hard creases above the minimum angle as
+fixed-pixel-width lines (the original GEOMETRIC_CREASES_V1 behaviour), and the
+convex part of the physical-radius curvature in ``mean_curvature`` so smooth
+bevels and tessellated rims register too. This is an edge map of the target
+mesh, not a derivative of tangent normals; high-poly normal detail is not
+curvature.
 """
 
 from math import cos, radians
@@ -10,8 +14,8 @@ import numpy as np
 from ...core import image_manager as images
 
 
-def crease_edges(mesh, world, minimum_angle):
-    """Return convex shared mesh edges above the independent geometric threshold."""
+def crease_edges(mesh, world, minimum_angle, concave=False):
+    """Return convex (or concave) shared mesh edges above the geometric threshold."""
     adjacency = {}
     normals, centers = {}, {}
     transform = world.to_3x3().inverted_safe().transposed()
@@ -30,17 +34,20 @@ def crease_edges(mesh, world, minimum_angle):
         if dot >= limit or dot > 1 - 1e-6:
             continue
         separation = centers[b] - centers[a]
-        if normals[a].dot(separation) < -1e-8 and normals[b].dot(separation) > 1e-8:
+        if concave:
+            if normals[a].dot(separation) > 1e-8 and normals[b].dot(separation) < -1e-8:
+                result.add(edge)
+        elif normals[a].dot(separation) < -1e-8 and normals[b].dot(separation) > 1e-8:
             result.add(edge)
     return result
 
 
-def rasterize(mesh, world, slots, n, minimum_angle, width):
+def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
     result = np.zeros((n, n), dtype=np.float32)
     uv_layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
     if uv_layer is None:
         raise ValueError("Curvature requires a render UV map.")
-    creases = crease_edges(mesh, world, minimum_angle)
+    creases = crease_edges(mesh, world, minimum_angle, concave)
     mesh.calc_loop_triangles()
     for tri in mesh.loop_triangles:
         if tri.material_index not in slots:
@@ -84,6 +91,9 @@ def rasterize(mesh, world, slots, n, minimum_angle, width):
     return result
 
 
+METHOD = "GEOMETRIC_CREASES_V2"
+
+
 def bake_curvature(ts):
     n = int(ts.resolution)
     values = np.zeros((n, n), dtype=np.float32)
@@ -99,9 +109,17 @@ def bake_curvature(ts):
             np.maximum(values, current, out=values)
         finally:
             evaluated.to_mesh_clear()
+    # Smooth convex curvature within the physical radius: rims, bevels and
+    # dense edges that never exceed the crease angle still become edge wear.
+    from ...geometry.snapshots import targets
+    from .mean_curvature import convex_map
+    with targets(ts) as meshes:
+        np.maximum(values, convex_map(meshes, n, ts.bake.mean_curvature_distance,
+                                      radians(ts.bake.curvature_angle)), out=values)
     rgba = np.ones((n, n, 4), dtype=np.float32)
     rgba[..., :3] = values[..., None]
     image = images.create(f"{ts.name}_BakedCurvature", n)
-    image["open_painter_curvature_method"] = "GEOMETRIC_CREASES_V1"
+    image["open_painter_curvature_method"] = METHOD
+    image["mean_curvature_distance"] = float(ts.bake.mean_curvature_distance)
     images.write(image, rgba)
     return image

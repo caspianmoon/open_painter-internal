@@ -36,7 +36,7 @@ def record(ts, kind):
                    'source_mode','device','separate_cage_distance','cage_extrusion')
     fields = {'NORMAL': shared_bake,
               'AO': (*shared_bake,'ao_scope'),
-              'CURVATURE': ('curvature_angle','curvature_width'),
+              'CURVATURE': ('curvature_angle','curvature_width','mean_curvature_distance'),
               'UV_BORDER': ('uv_border_width',),
               'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance'),
               'MEAN_CURVATURE': ('mean_curvature_distance',)}
@@ -65,4 +65,8 @@ def status(ts, prop):
         return 'Missing'
     if not prop.provenance:
         return 'Unverified inputs'
+    method = prop.image.get('open_painter_curvature_method')
+    if prop.kind == 'CURVATURE' and (method not in (None, 'GEOMETRIC_CREASES_V2')
+                                     or (method is None and 'BakedCurvature' in prop.image.name)):
+        return 'Stale · crease-only map, rebake for smooth edges'
     return 'Ready' if prop.provenance == record(ts, prop.kind) else 'Stale · update bake'

@@ -85,8 +85,8 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         description="Smooth signed curvature of the evaluated target: 0.5 flat, brighter convex, darker concave",
     )
     mean_curvature_distance: bpy.props.FloatProperty(
-        name="Curvature Distance", default=0.05, min=0.0, max=1000.0, subtype="DISTANCE",
-        description="World-space radius at which curvature saturates to fully convex or concave",
+        name="Curvature Radius", default=0.02, min=0.0001, max=1000.0, subtype="DISTANCE",
+        description="World-space radius within which surface turning is measured for the Curvature and Mean Curvature maps; edge bands are about this wide",
     )
     selection: bpy.props.BoolProperty(
         name="Selected Faces", default=False,

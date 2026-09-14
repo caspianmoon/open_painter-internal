@@ -38,9 +38,12 @@ not replace the editor or the material library.
   Select Problem Faces selects
   the reported faces on their base meshes when no modifier changes the face
   count. Nothing else is modified. See [bake diagnostics](bake-diagnostics.md).
+- **Curvature V2:** Rebake Edge Map on existing projects (the map reads "Stale ·
+  crease-only"); Curvature Radius is the wear width (default 2 cm). Smooth bevels and
+  tessellated rims now drive Edge Wear and Chips in every material.
 - **Mean Curvature / Selected Faces maps:** Bake Mesh Maps → Target Mesh Utility
-  Maps. Mean Curvature is signed and smooth (0.5 flat); Curvature Distance sets the
-  saturation radius. Selected Faces snapshots the current face selection and
+  Maps. Mean Curvature is signed and smooth (0.5 flat, convex above, concave below)
+  and shares Curvature Radius. Selected Faces snapshots the current face selection and
   Reselect Baked Faces restores it. Both are Baked mask sources.
 - **AO Distance and 2x Supersample:** in the bake settings; the default distance
   matches earlier bakes and supersampling is refused above 2 GiB of bake memory.

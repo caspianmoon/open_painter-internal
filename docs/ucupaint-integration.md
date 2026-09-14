@@ -6,31 +6,52 @@ docstring. Everything below is implemented outside the shader compiler and the
 smart-material files that were being edited concurrently; the compiler findings are
 recommendations in section 7 of the study, not changes.
 
-## Signed mean-curvature map (`MEAN_CURVATURE`)
+## Curvature V2: smooth edges for every recipe (`CURVATURE`) and a signed map (`MEAN_CURVATURE`)
 
-`baking/maps/mean_curvature.py` ports Ucupaint's `fill_curvature_vcol`
-(`bake_common.py:170-262`): weld coincident vertices, pair the faces at every welded
-edge, accumulate the signed dihedral angle weighted by edge length, normalize by the
-vertex area share, saturate at Curvature Distance, relax once, then rasterize through
-the existing UV rasterizer. Differences from the port source: it runs on the evaluated
-world-space snapshot (`geometry/snapshots.targets`) so non-uniform and mirrored scale
-behave like the other utility maps, writes no attribute to the user mesh, and
-replaces Ucupaint's post-bake min/max normalization with one symmetric stretch per
-texture set (flat stays exactly 0.5; the strongest feature saturates). The effective
-radius is stored on the image (`mean_curvature_effective_distance`) and the distance
-is part of the map's provenance.
+**Problem observed on the supplied project** (`open painter test.blend`, 39,637-face smooth
+shell): the crease-only `CURVATURE` map had 0.018 % of its texels above 0.01, so the
+CHIPS/EDGE_WEAR masks of every material were empty and the only visible wear was the
+ungated scratch image — "the flat material applied everywhere".
 
-The existing `CURVATURE` crease map and every recipe that consumes it are untouched.
-The new map is a `BAKED` mask source (`Map: Mean Curvature`); use Black/White levels or
-Invert to select convex or concave regions. Limits: vertex-domain, so flat faces
-between bevel rings read slightly above 0.5; it describes the target's own evaluated
-geometry, not high-poly detail.
+`baking/maps/mean_curvature.py` keeps Ucupaint's welded edge pairing and signed dihedral
+weighting (`bake_common.py:170-262`) but estimates curvature per **texel** as a kernel
+ratio: turning (¼ · angle · length per adjacent face) within Curvature Radius of the
+texel's world position, divided by surface area within it — the integral of mean
+curvature over the kernel. It is exact for cylinders, identical on every face of a
+sphere, insensitive to tessellation density and sliver triangles, and gives edge bands
+of physical width. The surface's median turning is subtracted (a sphere or the body of a
+rounded object is the flat baseline), and turning below a 0.1 rad dead zone counts as
+flat. Faces are sampled at half the radius; candidates are gathered per radius-sized
+block, so cost scales with covered area, not face count.
 
-Test (`tests/integration/utility_maps.py`): bevelled cube reads convex, no concave
-values, stretch records the effective radius; mirrored non-uniform scale keeps the
-sign; an inset pocket reads below 0.2 on its floor edges and above 0.9 on lips; the
-map bakes through the queue, evaluates as a BAKED mask on the CPU, and the shader
-graph samples it through the generic `mesh_map` path.
+- `CURVATURE` (`GEOMETRIC_CREASES_V2`) = max(crease lines as before, convex part of the
+  new estimate with edges above the crease angle excluded). Every recipe that reads
+  Curvature gets edge wear on smooth geometry after a rebake. Maps baked with the old
+  method report "Stale · crease-only map, rebake for smooth edges".
+- `MEAN_CURVATURE` = signed estimate (0.5 flat, convex above, concave below), stretched so
+  the strongest feature saturates, with convex/concave crease lines drawn on top so sharp
+  lips on coarse meshes stay crisp. A `BAKED` mask source; use levels/invert to pick
+  convex or concave.
+- Curvature Radius (default 0.02 m) is the wear width; it is part of both maps'
+  provenance.
+
+Earlier attempts and why they were rejected: a per-vertex port bled across large faces
+and read a sphere body as convex; a fixed-radius edge kernel rippled when the radius was
+smaller than the edge spacing; a per-face estimate exploded on sliver triangles.
+
+Measured on the project at 2048: rebake 31.7 s (crease-only was ~5 s); texels above 0.01
+went from 0.018 % to 12.65 %; the Blue paint coat CHIPS mask went from no coverage to
+1.6 % concentrated on panel rims. Renders with the unchanged recipe:
+[before](validation/curvature-v2-before.png), [after](validation/curvature-v2-after.png),
+[the map](validation/curvature-v2-map.png). Tests: `geometric_curvature.py` (12 cube
+creases unchanged, dense sphere and flat triangulation stay black, a bevel under the
+crease angle registers), `utility_maps.py` (bevelled cube convex only, mirrored
+non-uniform scale, inset pocket concave floor and convex lips, queue bake, CPU mask and
+shader-graph sampling).
+
+Still recipe-level, not fixed here: the scratch image masks are not gated by exposure,
+and cavity dirt reads only AO (the concave part of the new map is a better recess
+signal). Those live in the smart-material recipes.
 
 ## Selection map (`SELECTION`) and Reselect Baked Faces
 

@@ -179,7 +179,8 @@ class OP_PT_bake(bpy.types.Panel):
         if settings.curvature:
             layout.prop(settings, "curvature_angle")
             layout.prop(settings, "curvature_width")
-            layout.label(text="Curvature uses target mesh geometry.")
+            layout.prop(settings, "mean_curvature_distance")
+            layout.label(text="Creases plus smooth bevels within the radius; target mesh only.")
             layout.operator(
                 "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
             ).action = "CURVATURE"
@@ -189,7 +190,7 @@ class OP_PT_bake(bpy.types.Panel):
             section.prop(settings, key)
         if settings.uv_border:
             section.prop(settings, "uv_border_width")
-        if settings.mean_curvature:
+        if settings.mean_curvature and not settings.curvature:
             section.prop(settings, "mean_curvature_distance")
         if settings.selection:
             section.label(text="Face selection of the assigned meshes; face count must survive modifiers.")

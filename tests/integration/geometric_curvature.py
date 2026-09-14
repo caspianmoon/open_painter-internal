@@ -64,11 +64,25 @@ sets.assign(bpy.context.scene, ts, obj)
 image = bake_curvature(ts)
 pixels = images.pixels(image)[..., 0]
 assert pixels.max() > 0.5 and np.count_nonzero(pixels) < pixels.size * 0.15
-assert image.packed_file and image["open_painter_curvature_method"] == "GEOMETRIC_CREASES_V1"
+assert image.packed_file and image["open_painter_curvature_method"] == "GEOMETRIC_CREASES_V2"
 assert not ts.baked_maps
 assert bpy.ops.open_painter.bake(action="CURVATURE") == {"FINISHED"}
-assert ts.baked_maps[0].image.get("open_painter_curvature_method") == "GEOMETRIC_CREASES_V1"
+assert ts.baked_maps[0].image.get("open_painter_curvature_method") == "GEOMETRIC_CREASES_V2"
+# V2 adds physical-radius convex curvature: a bevel below the crease angle now
+# registers as an edge band, while a dense sphere and the flat faces stay black.
+bevel = obj.modifiers.new("Bevel", "BEVEL")
+bevel.width, bevel.segments = .04, 6  # about 13 degrees per edge, under the 20 degree crease minimum; tighter than the 0.02 radius
+bpy.context.view_layer.update()
+ts.baked_maps.clear()
+assert not crease_edges(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data, obj.matrix_world, 20)
+smooth = images.pixels(bake_curvature(ts))[..., 0]
+assert smooth.max() > 0.9, smooth.max()
+assert 0.02 < np.count_nonzero(smooth) / smooth.size < 0.3, np.count_nonzero(smooth) / smooth.size
+obj.modifiers.remove(bevel)
+sphere_ts = sets.create(bpy.context.scene, "Dense sphere", 512)
+sets.assign(bpy.context.scene, sphere_ts, sphere)
+assert not images.pixels(bake_curvature(sphere_ts))[..., 0].any(), "Uniform curvature must stay flat"
 open_painter.unregister()
 print(
-    "GEOMETRIC_CURVATURE_PASS: 12 cube creases before/after triangulation; smooth sphere and flat triangulation stay black at maximum intensity; UV seams add no edges; packed texture bake"
+    "GEOMETRIC_CURVATURE_PASS: 12 cube creases before/after triangulation; smooth sphere and flat triangulation stay black at maximum intensity; UV seams add no edges; packed texture bake; sub-threshold bevel registers; dense sphere stays black"
 )

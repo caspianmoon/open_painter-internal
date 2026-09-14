@@ -40,6 +40,8 @@ def changed(self, context):
 # Stable string identifiers are serialized; the menu selects these through an operator.
 class OP_TextureEffect(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default='Levels')
+    # Only ANCHOR items carry an id: consumers reference the capture position by it.
+    id: bpy.props.StringProperty()
     kind: bpy.props.StringProperty(default='LEVELS', update=changed)
     enabled: bpy.props.BoolProperty(default=True, update=changed)
     strength: bpy.props.FloatProperty(name='Opacity',default=1,min=0,max=1,update=changed)

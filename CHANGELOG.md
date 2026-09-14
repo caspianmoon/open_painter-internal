@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.9
+
+- Anchor points: Add Anchor Point in a mask stack publishes the coverage before it; Anchor in a channel's filter stack publishes the channel after the filters above it. Published Input masks, fill channel content (with the channel's own detail and filters on top) and generator Micro Height / Micro Normal inputs reference them, on the CPU reference and shader-native evaluators alike.
+- Micro details: Edge Wear, Chips, Dirt, Cavity Dirt, Rust and Drips take anchored height or tangent-normal relief, so painted rivets and scratches get worn rims and dirt rings with live intensity sliders and a texel radius.
+- Reference rules: dependency cycles are checked per stack item (any acyclic reference is allowed, including inside one layer); a missing anchor or published source evaluates as neutral and is reported as a warning instead of aborting evaluation. Anchors list their consumers, consumers locate their anchor, and deleting an anchor or its layer reports the references it broke.
+- Smart material format 3: anchor ids on masks, channels and filter items are remapped on import, group duplication and texture-set duplication; unknown ids import as missing anchors; cyclic files are refused.
+
 ## 0.2.8
 
 - Edge Width on Edge Wear and Chips masks: a live per-layer control that narrows the wear band within the baked Curvature Radius without a rebake; the radius, crease settings and Rebake Edge Map sit beside it in the mask properties.

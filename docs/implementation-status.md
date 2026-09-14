@@ -1,6 +1,6 @@
 # Roadmap implementation status
 
-Version **0.2.7** introduces shader-native authoring. Existing `LIVE` texture sets
+Version **0.2.7** introduced shader-native authoring. Existing `LIVE` texture sets
 compile into persistent Blender material graphs, with parameter-owner bindings
 and downstream dependency invalidation. Supported numeric edits update shader
 values without complete channel texture generation. Save/render preserve source
@@ -15,6 +15,20 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 
 Earlier reports below describe their named release's evaluator and measurements.
 
+
+## Anchor points — 2026-09-15
+
+Substance-style anchor points: an *Anchor Point* row in a mask stack publishes
+the coverage before it, an *Anchor* row in a channel's filter stack publishes
+the channel after the filters above it. Published Input masks, fill channel
+content and generator Micro Height / Micro Normal inputs reference them; anchors
+list their consumers and consumers locate their anchor. References are checked
+per stack item (any acyclic reference is allowed, cycles are refused when picked)
+and a missing anchor evaluates as neutral with a warning instead of aborting.
+CPU and shader-native evaluation agree on ten new parity cases (max error
+2.1e-6); the shader memoizes every stack prefix so consumers share the owner's
+nodes. Smart-material format 3 remaps anchor ids on import and duplication.
+[Workflow, semantics and evidence](anchor-points.md).
 
 ## Geometry effects reworked — 2026-09-14
 

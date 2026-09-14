@@ -10,7 +10,7 @@ SCALAR_EFFECTS = set('''LEVELS HISTOGRAM_SCAN HISTOGRAM_RANGE
 BRIGHTNESS_CONTRAST GAMMA INVERT THRESHOLD CLAMP POSTERIZE QUANTIZE
 ROUGHNESS_REMAP METALLIC_REMAP HEIGHT_REMAP AO_STRENGTH ROUGHNESS_CONTRAST
 BLUR GAUSSIAN_BLUR HIGH_PASS SHARPEN SMOOTH_MASK DILATE ERODE
-MORPHOLOGICAL_EXPAND MORPHOLOGICAL_CONTRACT'''.split())
+MORPHOLOGICAL_EXPAND MORPHOLOGICAL_CONTRACT ANCHOR'''.split())
 
 
 def scalar_compatible(channel, layers, properties):
@@ -23,8 +23,8 @@ def scalar_compatible(channel, layers, properties):
         mode = prop.blend_mode if prop and prop.blend_mode != 'INHERIT' else layer.blend_mode
         if mode in RGB_MODES:
             return False
-        if prop and (prop.image or prop.image_name or any(e.enabled and e.strength > 0 and e.kind not in SCALAR_EFFECTS
-                                       for e in prop.effects)):
+        if prop and (prop.image or prop.image_name or getattr(prop, 'anchor', '')
+                     or any(e.enabled and e.strength > 0 and e.kind not in SCALAR_EFFECTS for e in prop.effects)):
             return False
     return True
 

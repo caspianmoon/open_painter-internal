@@ -34,7 +34,7 @@ def validate(ts, layer, n):
     """Pure preflight. No GPU allocation, scalar evaluation or image reading."""
     if not isinstance(n, int) or n < 1 or n > 8192 or n & (n - 1):
         raise UnsupportedMask('GPU masks require an authored power-of-two square grid up to 8192')
-    masks = tuple(mask for mask in layer.masks if mask.enabled)
+    masks = tuple(mask for mask in layer.masks if mask.enabled and getattr(mask, 'source', '') != 'ANCHOR')
     if not masks:
         raise UnsupportedMask('An empty stack needs no GPU mask texture')
     # Match map_pixels and the CPU edge generators: a non-null Image is present,
@@ -57,6 +57,8 @@ def validate(ts, layer, n):
             raise UnsupportedMask('Mask combination requires CPU evaluation')
         if mask.generator in {'EDGE_WEAR', 'CHIPS'} and getattr(mask, 'edge_width', 1.0) < 1:
             raise UnsupportedMask('A narrowed edge width requires CPU evaluation')
+        if getattr(mask, 'detail_height_anchor', '') or getattr(mask, 'detail_normal_anchor', ''):
+            raise UnsupportedMask('Micro detail anchors require CPU evaluation')
         for name, low, high in (('amount', 0., 1.), ('contrast', .01, 20.),
                                 ('noise_strength', 0., 1.), ('black', 0., 1.),
                                 ('white', 0., 1.), ('strength', 0., 1.)):

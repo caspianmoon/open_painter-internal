@@ -1,4 +1,4 @@
-# Smart material format, version 2
+# Smart material format, version 3
 
 A `.openpaintmaterial` file is either UTF-8 JSON (for constant/procedural-only materials) or a ZIP:
 
@@ -8,10 +8,10 @@ assets/0000.exr
 assets/0001.exr
 ```
 
-`material.json` has `format_version: 2`, `name`, an ordered `layers` array, and optional
+`material.json` has `format_version: 3`, `name`, an ordered `layers` array, and optional
 `surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`,
 `height_distance`). Missing `height_distance` preserves the target texture set's
-existing setting. Version 1 files remain readable. Each layer has
+existing setting. Version 1 and 2 files remain readable. Each layer has
 `id`, `name`, `type` (`FILL`, `PAINT`, `FOLDER`), optional `parent_id`, `visible`, `opacity`,
 `blend_mode`, `channels`, and `masks`. Layers run bottom to top. Defaults are Blender property defaults;
 missing channels on imported non-folder layers are created disabled. IDs must be unique and folder
@@ -30,12 +30,14 @@ Shared image bindings export one EXR per source and import as one shared packed
 image. Missing optional fields retain the previous behavior in versions 1 and 2.
 Missing referenced images fail before import mutates layers or export writes a file.
 
-Masks support `source` (PAINT/BAKED/GENERATOR/NOISE/FILL/PROCEDURAL/FILTER), `image`, `map_type`, `generator`,
+Masks support `source` (PAINT/BAKED/GENERATOR/NOISE/FILL/PROCEDURAL/FILTER/SCENE/REFERENCE/ANCHOR), `image`, `map_type`, `generator`,
 `enabled`, `operation` (MULTIPLY/ADD/NORMAL), `invert`, `black`, `white`, `strength`, `amount`, `contrast`,
-`noise_scale`, `noise_strength` and `seed`. Baked maps are resolved in the target texture set; they are
+`noise_scale`, `noise_strength`, `seed`, `edge_width`, the REFERENCE fields (`reference_layer`, `reference_mask`,
+`reference_channel`, `reference_stage`, `reference_anchor`) and the generator micro-detail fields
+(`detail_height_anchor`, `detail_normal_anchor`, `detail_height_strength`, `detail_normal_strength`, `detail_radius`). Baked maps are resolved in the target texture set; they are
 not exported as project map records. A baked map explicitly assigned as a layer texture is bundled.
 
-The importer accepts versions 1 and 2, at most 256 layers and 512 MiB uncompressed ZIP data.
+The importer accepts versions 1 to 3, at most 256 layers and 512 MiB uncompressed ZIP data.
 Only directly contained `assets/*.exr` entries can satisfy asset references. Files are read by name
 and written to generated temporary paths; archive paths are never extracted directly. Invalid input
 raises an actionable error and rolls back newly created Blender data. Imported metadata is not executable.
@@ -47,6 +49,12 @@ detail and signed height amplitude, plus an ordered `effects` collection and `ac
 Mask records with source FILTER store one nested `effect` parameter record; PROCEDURAL masks store
 their source identifier. These effects operate on texture data, without shader effect graphs.
 Old files without these fields use empty effect stacks and property defaults.
+
+Version 3 adds anchor points. A mask with `source: ANCHOR` and a channel effect with `kind: ANCHOR`
+and an `id` publish the stack prefix before them; consumers store that id in a mask's `reference_anchor`,
+`detail_height_anchor` or `detail_normal_anchor`, or in a channel's `anchor`. Import assigns fresh ids to
+anchors and remaps consumers; an id that does not resolve is kept verbatim and reported as a missing anchor
+after import, while a reference cycle is refused and rolled back. Add-ons older than 0.2.9 cannot read version 3.
 
 The authored built-in recipe schema in `smart_materials/catalog.py` is separate from this portable
 format: the composer expands recipes into the persistent layer/channel/mask records before export.

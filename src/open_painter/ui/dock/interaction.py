@@ -104,6 +104,7 @@ class OP_OT_dock_popup(SafeOperator, bpy.types.Operator):
                 )
                 op.action = "ADD"
                 op.source = source
+            layout.operator("open_painter.anchor", text="Anchor Point", icon="ANCHOR_CENTER").action = "ADD_MASK"
         elif self.section == "BLEND":
             if layer.type == "FOLDER":
                 layout.prop(layer, "group_mode")

@@ -51,4 +51,6 @@ def capture(group, pixel_scale=1.0):
             values['radius'] *= pixel_scale
         if values.get('kind') in {'HEIGHT_TO_NORMAL', 'EDGE_DETECT'}:
             values['amount'] *= pixel_scale
+    if group.bl_rna.identifier == 'OP_Mask' and pixel_scale != 1 and 'detail_radius' in values:
+        values['detail_radius'] *= pixel_scale
     return Parameters(values, group.as_pointer())

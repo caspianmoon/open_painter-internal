@@ -386,10 +386,16 @@
         214,
         218
       ],
-      "status": "missing",
+      "status": "implemented",
       "feature": "Named anchors, references, dependency updates, broken-reference feedback and navigation.",
-      "acceptance": "Reference only preceding content in the same set, reevaluate dependent generators/fills, detect loops and report a source moved above its consumer.",
-      "evidence": []
+      "acceptance": "Anchor rows in mask and channel filter stacks; Published Input masks, fill content and generator micro details reference them within one set; any acyclic reference is allowed (item-granular cycle check refuses loops when picked); dependent fills and generators re-evaluate; missing anchors read as neutral with a warning; anchors list consumers and consumers locate their anchor; deleting reports broken references.",
+      "evidence": [
+        "src/open_painter/evaluation/anchors.py",
+        "src/open_painter/evaluation/references.py",
+        "src/open_painter/ui/anchors.py",
+        "tests/integration/anchor_points.py",
+        "tests/integration/shader_sources.py"
+      ]
     },
     {
       "id": "effects.generators",
@@ -407,10 +413,12 @@
       ],
       "status": "partial",
       "feature": "Mesh-aware generators, smart masks, parameterized 3D noises and linear gradients.",
-      "acceptance": "Add world-position/normal-aware dirt/dust, microdetail anchor inputs, Perlin/fractal/Simplex/Worley noises, 3D gradients and reusable smart masks. Current edge wear/dirt and UV noise are approximations.",
+      "acceptance": "Add world-position/normal-aware dirt/dust, Perlin/fractal/Simplex/Worley noises, 3D gradients and reusable smart masks. Micro Height / Micro Normal anchor inputs wear and soil painted relief. Current edge wear/dirt and UV noise are approximations.",
       "evidence": [
         "src/open_painter/generators",
-        "tests/integration/phase06.py"
+        "src/open_painter/generators/micro_details.py",
+        "tests/integration/phase06.py",
+        "tests/integration/micro_detail_anchors.py"
       ]
     },
     {

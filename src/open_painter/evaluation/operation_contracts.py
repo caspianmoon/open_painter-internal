@@ -9,7 +9,7 @@ POINTWISE = frozenset('''LEVELS HISTOGRAM_SCAN HISTOGRAM_RANGE
 BRIGHTNESS_CONTRAST GAMMA INVERT THRESHOLD CLAMP POSTERIZE QUANTIZE HSL HSV
 HUE_SHIFT SATURATION COLOR_BALANCE GRADIENT_MAP COLORIZE TINT TEMPERATURE
 DESATURATE REPLACE_COLOR ROUGHNESS_REMAP METALLIC_REMAP HEIGHT_REMAP
-NORMAL_STRENGTH NORMAL_INVERT_Y AO_STRENGTH ROUGHNESS_CONTRAST CHANNEL_MIXER'''.split())
+NORMAL_STRENGTH NORMAL_INVERT_Y AO_STRENGTH ROUGHNESS_CONTRAST CHANNEL_MIXER ANCHOR'''.split())
 
 
 def footprint(kind, radius=2):
@@ -37,7 +37,8 @@ def stack_footprint(effects):
 
 
 def mask_footprint(masks):
-    if any(m.enabled and m.source == 'REFERENCE' for m in masks):
+    from .anchors import consumed
+    if any(m.enabled and (m.source == 'REFERENCE' or consumed(m)) for m in masks):
         return None  # Source-stage filters may widen the dependency transitively.
     return stack_footprint(m.effect for m in masks
                            if m.enabled and m.strength > 0 and m.source == 'FILTER')

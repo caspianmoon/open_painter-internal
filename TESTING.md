@@ -61,6 +61,9 @@ phase coverage is listed below. Covered behavior:
 - UE5 file naming and ORM bytes, BaseColor sRGB, Unity metallic/smoothness, resolution override,
   PNG/TIFF 8/16-bit independent RGBA (including zero alpha), collision protection.
 - Triplanar fills, unassigned texture-set duplication, lifecycle handler cleanup.
+- Anchor points (`anchor_points.py`, `micro_detail_anchors.py`): mid-stack mask and channel captures, anchored
+  fill content, item-granular cycle rules, missing-anchor warnings, operators and deletion reports, duplication and
+  material round trips, generator micro details from height and normal anchors, and CPU/shader parity cases.
 
 ## Real UI checks
 

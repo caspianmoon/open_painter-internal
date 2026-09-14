@@ -48,7 +48,8 @@ with TemporaryDirectory(prefix="open-painter-generated-portable-") as directory:
     path = serializer.save(ts, directory / "generated.openpaintmaterial")
     with ZipFile(path) as archive:
         data = json.loads(archive.read("material.json"))
-        assert data["format_version"] == 2
+        from open_painter.smart_materials.format import VERSION
+        assert data["format_version"] == VERSION
         assets = [name for name in archive.namelist() if name.startswith("assets/")]
         assert len(assets) == 1, "Shared scalar source was encoded more than once"
         for item in data["layers"]:

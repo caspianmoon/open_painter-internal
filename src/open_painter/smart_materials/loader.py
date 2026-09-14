@@ -16,6 +16,10 @@ def apply(ts, path: str | Path) -> None:
     data, assets = read(Path(path))
     mapping = {layer["id"]: new_id() for layer in data["layers"]}
     mask_mapping = {m['id']: new_id() for layer in data['layers'] for m in layer.get('masks',[]) if m.get('id')}
+    effect_mapping = {e['id']: new_id() for layer in data['layers'] for c in layer.get('channels', [])
+                      for e in c.get('effects', []) if e.get('id')}
+    # Anchor ids are mask or effect ids; unknown ones stay verbatim so they report as missing.
+    anchor_mapping = {**mask_mapping, **effect_mapping}
     loaded = []
     decoded_images = {}
     start = len(ts.layers)
@@ -53,11 +57,19 @@ def apply(ts, path: str | Path) -> None:
                 values["parent_id"] = mapping.get(source.get("parent_id"), "")
                 for channel in values.get("channels", []):
                     channel["layer_id"] = values["id"]
+                    if channel.get('anchor'):
+                        channel['anchor'] = anchor_mapping.get(channel['anchor'], channel['anchor'])
+                    for effect in channel.get('effects', []):
+                        if effect.get('id'):
+                            effect['id'] = effect_mapping.get(effect['id'], effect['id'])
                 for mask in values.get("masks", []):
                     mask['id'] = mask_mapping.get(mask.get('id'), new_id())
                     if mask.get('source') == 'REFERENCE':
                         mask['reference_layer'] = mapping.get(mask.get('reference_layer'), '')
                         mask['reference_mask'] = mask_mapping.get(mask.get('reference_mask'), '')
+                    for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
+                        if mask.get(field):
+                            mask[field] = anchor_mapping.get(mask[field], mask[field])
                 layer = ts.layers.add()
                 restore(values, layer)
                 if layer.type != "FOLDER":
@@ -71,6 +83,10 @@ def apply(ts, path: str | Path) -> None:
                             prop.enabled = False
                             prop.color = DEFAULTS[key]
                             prop.value = DEFAULTS[key][0]
+        from ..evaluation.references import issues
+        problems = issues(ts)
+        if problems:
+            raise ValueError(' | '.join(problems))
         for key, value in data.get("surface", {}).items():
             if key in old_surface:
                 setattr(ts,key,value)

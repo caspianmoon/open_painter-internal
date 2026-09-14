@@ -17,6 +17,19 @@ class OP_Mask(bpy.types.PropertyGroup):
         items=[('MASK','Mask Stack','Source mask stack, independent of layer opacity')] + CHANNEL_ITEMS)
     reference_stage: bpy.props.EnumProperty(name='Stage', default='POST_FILTER', update=changed,
         items=[('PRE_FILTER','Before Filters','Omit source filters'),('POST_FILTER','After Filters','Include source filters')])
+    # Anchor ids take precedence over the legacy layer/mask/stage reference fields.
+    reference_anchor: bpy.props.StringProperty(name='Anchor', update=changed,
+        description='Anchor point whose published result this mask reads')
+    detail_height_anchor: bpy.props.StringProperty(name='Micro Height', update=changed,
+        description='Anchor point supplying height details the generator wears and soils')
+    detail_normal_anchor: bpy.props.StringProperty(name='Micro Normal', update=changed,
+        description='Anchor point supplying a tangent normal whose relief the generator follows')
+    detail_height_strength: bpy.props.FloatProperty(name='Height Details Intensity', default=1, min=0,
+        soft_max=4, max=10, update=changed, description='Strength of the Micro Height convexity and cavities')
+    detail_normal_strength: bpy.props.FloatProperty(name='Normal Details Intensity', default=1, min=0,
+        soft_max=4, max=10, update=changed, description='Strength of the Micro Normal convexity and cavities')
+    detail_radius: bpy.props.FloatProperty(name='Micro Radius', default=2, min=.5, max=16, update=changed,
+        description='Texel radius over which micro details are measured; also the micro cavity reach')
     influence: bpy.props.PointerProperty(type=OP_Influencer)
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Mask")
@@ -32,6 +45,7 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("FILTER", "Filter", "Filter the accumulated mask texture"),
             ('SCENE', 'Scene Field', 'Bounded UV analysis of explicit scene inputs'),
             ('REFERENCE', 'Published Input', 'Reference a layer mask or channel in this texture set'),
+            ('ANCHOR', 'Anchor Point', 'Publish the mask result at this position for other layers'),
         ],
         update=changed,
     )

@@ -24,6 +24,7 @@ from open_painter.evaluation.blend_modes import blend
 from open_painter.evaluation.shader_graph import Graph
 from open_painter.smart_materials import composer, generated_sources
 from open_painter.smart_materials.catalog import CATALOG
+from open_painter.texture_engine import filters
 from open_painter.utils.ids import new_id
 
 N = 32
@@ -260,6 +261,109 @@ def run():
         consumer = next(item for item in ts.layers if item.id == identifier)
         consumer.masks[0].reference_layer = source_id
     check("published_scalar_uses_red", published_scalar)
+
+    # Anchor points: prefixes of another layer's stacks instantiate identically.
+    def hidden_layer(name, channel, image, effects=()):
+        layer = stack.add(ts, "FILL", name)
+        layer.visible = False
+        for p in layer.channels:
+            p.enabled = p.channel == channel
+        prop = stack.channel_for(layer, channel)
+        prop.image = image
+        anchor_id = ""
+        for kind, fields in effects:
+            effect = prop.effects.add()
+            effect.kind = kind
+            if kind == "ANCHOR":
+                effect.id = anchor_id = new_id()
+            for key, value in fields.items():
+                setattr(effect, key, value)
+        return layer, anchor_id
+
+    def anchor_mask_mid_stack(layer, prop):
+        identifier = layer.id
+        add_mask(layer, "REFERENCE")
+        published = stack.add(ts, "FILL", "Published mask stack")
+        published.visible = False
+        add_mask(published, "FILL", image=detail, strength=.9)
+        anchor = add_mask(published, "ANCHOR")
+        add_mask(published, "FILTER", black=.2, white=.7, invert=True)
+        consumer = next(item for item in ts.layers if item.id == identifier)
+        consumer.masks[0].reference_anchor = anchor.id
+    check("anchor_mask_mid_stack", anchor_mask_mid_stack)
+
+    def anchor_channel_prefix(layer, prop):
+        identifier = layer.id
+        _, anchor_id = hidden_layer("Published color", "BASE_COLOR", rgba,
+                                    (("HSL", {"hue": .2, "saturation": 1.4}), ("ANCHOR", {}), ("INVERT", {})))
+        stack.channel_for(next(item for item in ts.layers if item.id == identifier), "BASE_COLOR").anchor = anchor_id
+    check("anchor_channel_prefix", anchor_channel_prefix)
+
+    def anchor_channel_after_boundary(layer, prop):
+        identifier = layer.id
+        _, anchor_id = hidden_layer("Published blurred roughness", "ROUGHNESS", detail,
+                                    (("GAUSSIAN_BLUR", {"radius": 1.5}), ("ANCHOR", {}),
+                                     ("LEVELS", {"black": .2, "white": .8})))
+        consumer = stack.channel_for(next(item for item in ts.layers if item.id == identifier), "ROUGHNESS")
+        consumer.anchor = anchor_id
+        effect = consumer.effects.add()
+        effect.kind = "GAMMA"
+        effect.gamma = 1.6
+    check("anchor_channel_after_boundary", anchor_channel_after_boundary, channel="ROUGHNESS")
+    assert report["source_cases"][-1]["resources"] == 1, report["source_cases"][-1]
+
+    def anchor_reference_mask_from_channel(layer, prop):
+        identifier = layer.id
+        add_mask(layer, "REFERENCE", black=.1, white=.9)
+        _, anchor_id = hidden_layer("Published luminance", "BASE_COLOR", rgba, (("ANCHOR", {}),))
+        next(item for item in ts.layers if item.id == identifier).masks[0].reference_anchor = anchor_id
+    check("anchor_reference_mask_from_channel", anchor_reference_mask_from_channel)
+
+    def anchor_same_layer_cross_channel(layer, prop):
+        height = stack.channel_for(layer, "HEIGHT")
+        height.enabled = True
+        height.image = detail
+        effect = height.effects.add()
+        effect.kind, effect.id = "ANCHOR", new_id()
+        prop.anchor = effect.id
+    check("anchor_same_layer_cross_channel", anchor_same_layer_cross_channel)
+
+    def anchor_consumer_modulated(layer, prop):
+        identifier = layer.id
+        _, anchor_id = hidden_layer("Published base", "BASE_COLOR", rgba, (("ANCHOR", {}),))
+        consumer = stack.channel_for(next(item for item in ts.layers if item.id == identifier), "BASE_COLOR")
+        consumer.anchor = anchor_id
+        consumer.procedural, consumer.procedural_scale, consumer.procedural_detail = "CHECKER", 3.5, .8
+        effect = consumer.effects.add()
+        effect.kind = "LEVELS"
+        effect.black, effect.white = .15, .85
+    check("anchor_consumer_modulated", anchor_consumer_modulated)
+
+    def anchor_missing_neutral(layer, prop):
+        prop.anchor = "nowhere"
+        add_mask(layer, "REFERENCE", reference_anchor="nowhere")
+    check("anchor_missing_neutral", anchor_missing_neutral)
+
+    bump = images.create("Bump disc", N)
+    disc = np.full((N, N, 4), .5, np.float32)
+    disc[..., 3] = 1
+    disc[(u - .5) ** 2 + (v - .5) ** 2 < .3 ** 2, :3] = 1
+    images.write(bump, disc, pack=False)
+    bump_normal = images.create("Bump normal", N)
+    normal = np.ones((N, N, 4), np.float32)
+    normal[..., :3] = filters.height_to_normal(disc[..., 0], 8)
+    images.write(bump_normal, normal, pack=False)
+
+    def micro(layer, prop, generator="EDGE_WEAR", slot="detail_height_anchor", channel="HEIGHT"):
+        identifier = layer.id
+        add_mask(layer, generator=generator, amount=.64, contrast=1.3, noise_strength=.38, detail_radius=1.5)
+        _, anchor_id = hidden_layer("Published relief", channel, bump if channel == "HEIGHT" else bump_normal,
+                                    (("ANCHOR", {}),))
+        setattr(next(item for item in ts.layers if item.id == identifier).masks[0], slot, anchor_id)
+    check("generator_EDGE_WEAR_micro_height", micro)
+    check("generator_CAVITY_DIRT_micro_height", lambda l, p: micro(l, p, "CAVITY_DIRT"))
+    check("generator_DIRT_micro_normal", lambda l, p: micro(l, p, "DIRT", "detail_normal_anchor", "NORMAL"))
+    assert report["source_cases"][-1]["resources"] >= 1, report["source_cases"][-1]
 
     for name in (() if os.environ.get("OP_SHADER_SOURCE_ONLY") else CATALOG):
         ts.layers.clear()

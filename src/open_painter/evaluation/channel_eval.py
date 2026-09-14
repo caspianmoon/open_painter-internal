@@ -51,6 +51,7 @@ EFFECT_UI_FIELDS = {
     "HEIGHT_TO_NORMAL": ("amount",), "AO_STRENGTH": ("amount",),
     "ROUGHNESS_CONTRAST": ("contrast",), "CHANNEL_MIXER": ("matrix", "bias"),
     "EDGE_DETECT": ("amount",),
+    "ANCHOR": (),
 }
 for _kind in ("BLUR", "GAUSSIAN_BLUR", "HIGH_PASS", "DILATE", "ERODE",
               "MORPHOLOGICAL_EXPAND", "MORPHOLOGICAL_CONTRACT", "SMOOTH_MASK"):
@@ -111,8 +112,8 @@ def apply_effect(data, effect):
     Grayscale colorization/normal conversion can return RGB. Effect opacity blends
     against the original expanded grayscale. Reusable by layer and mask stacks.
     """
-    if not effect.enabled or effect.strength <= 0:
-        return data
+    if not effect.enabled or effect.strength <= 0 or effect.kind == "ANCHOR":
+        return data  # Anchor points publish the stack here and change nothing.
     source = np.asarray(data, np.float32)
     alpha = source[..., 3:4] if source.ndim == 3 and source.shape[-1] == 4 else None
     original = source[..., :3] if alpha is not None else source
@@ -345,7 +346,9 @@ def source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         return apply_texture_effects(raster, effects)[y0 - low:y1 - low]
     # The pixel cache belongs to the current channel evaluation; keep filtered
     # RGBA here rather than retaining every layer/channel result in geometry cache.
-    key = ("filtered_channel", prop.as_pointer(), n, getattr(ts, "edit_serial", 0))
+    # Anchor prefixes share the owner's pointer, so the effect subset is part of the key.
+    key = ("filtered_channel", prop.as_pointer(), tuple(e.as_pointer() for e in effects), n,
+           getattr(ts, "edit_serial", 0))
     if key not in cache:
         raster = np.empty((n, n, 4), np.float32)
         for low in range(0, n, TILE_ROWS):
@@ -360,6 +363,15 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         raise ValueError(
             f"Texture image is missing: {prop.image_name}. Reload or clear the channel texture."
         )
+    if kind == "FILL" and getattr(prop, "anchor", ""):
+        from .references import evaluate_anchor
+        value = evaluate_anchor(ts, prop.anchor, n, y0, y1, cache, geometry_cache)
+        if value is None:
+            return np.array([0, 0, 0, 0], dtype=np.float32)  # Missing anchor contributes nothing.
+        if value.ndim == 2:
+            return np.concatenate((np.repeat(value[..., None], 3, axis=-1),
+                                   np.ones((y1 - y0, n, 1), np.float32)), axis=-1)
+        return value
     if prop.image:
         return _image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache)
     if kind == "PAINT":

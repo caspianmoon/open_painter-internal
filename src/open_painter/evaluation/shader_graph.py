@@ -28,16 +28,17 @@ class RebuildRequired(Exception):
 
 def structural_signature(ts):
     def effects(items):
-        return tuple((e.kind, bool(e.enabled), bool(e.image)) for e in items)
+        return tuple((e.kind, bool(e.enabled), bool(e.image), e.id) for e in items)
     return (int(ts.resolution), tuple((m.kind, bool(m.image)) for m in ts.baked_maps),
             tuple((l.id, l.type, l.parent_id, l.visible, l.group_mode, l.blend_mode,
                    tuple((p.channel, p.enabled, p.blend_mode, bool(p.image),
                           bool(p.detail_image), p.procedural, p.projection, p.filtering,
-                          p.tiling, effects(p.effects)) for p in l.channels),
+                          p.tiling, p.anchor, effects(p.effects)) for p in l.channels),
                    tuple((m.id, m.enabled, m.source, m.generator, m.procedural,
                           m.map_type, m.operation, m.projection, m.filtering, m.tiling,
                           bool(m.image), m.reference_layer, m.reference_mask,
-                          m.reference_channel, m.reference_stage,
+                          m.reference_channel, m.reference_stage, m.reference_anchor,
+                          m.detail_height_anchor, m.detail_normal_anchor,
                           m.effect.kind, m.effect.enabled, bool(m.effect.image)) for m in l.masks))
                   for l in ts.layers))
 
@@ -87,6 +88,15 @@ class Graph(Math):
         self._building = set()
         self._structure = None
         self._last = {}
+        self._anchors = None
+
+    @property
+    def anchors(self):
+        # Anchor placement is structural: every edit to it rebuilds the graph.
+        if self._anchors is None:
+            from .anchors import index
+            self._anchors = index(self.ts)
+        return self._anchors
 
     @contextmanager
     def role(self, identifier):
@@ -298,12 +308,16 @@ class Graph(Math):
 
     def _channel_prefix(self, layer, prop, count):
         owners = [prop, *list(prop.effects)[:count]]
+        anchored = layer.type == 'FILL' and prop.anchor
+        if anchored:
+            owners.extend(self._anchor_dependencies(prop.anchor)[0])
         def identity():
             return ('channel-prefix', layer.type, prop.channel,
                     values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
                     tuple(values(e, excluded={'strength'} if i == count - 1 else ())
                           for i, e in enumerate(list(prop.effects)[:count])),
-                    self._geometry_stamp(prop.projection == 'TRIPLANAR'))
+                    self._geometry_stamp(prop.projection == 'TRIPLANAR'),
+                    ('anchor', self._anchor_dependencies(prop.anchor)[1]) if anchored else None)
         def factory(signature):
             from .snapshots import capture
             effects = tuple(capture(e).replaced(strength=1.) if i == count - 1 else capture(e)
@@ -338,19 +352,12 @@ class Graph(Math):
         with self.role(f'RasterChannelPrefix:{layer.id}:{prop.channel}:{count}'):
             return self.boundary(self._role, owners, identity, factory)
 
-    def source(self, layer, channel, pre_filter=False):
-        key = (layer.id, channel, pre_filter)
-        if key in self._source_cache:
-            return self._source_cache[key]
-        prop = channel_for(layer, channel)
-        if prop is None or not prop.enabled or layer.type == 'FOLDER':
-            return Signal((0., 0., 0.), 0)
-        if prop.image_name and not prop.image:
-            raise ValueError('Texture image is missing: ' + prop.image_name + '. Reload or clear the channel texture.')
-        if prop.detail_image_name and not prop.detail_image:
-            raise ValueError('Surface detail image is missing: ' + prop.detail_image_name + '. Reload or clear the detail texture.')
+    def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
-            if prop.image:
+            if layer.type == 'FILL' and prop.anchor:
+                # Anchored content is already in texture space: no projection or tiling.
+                value = self.anchor_signal(prop.anchor)
+            elif prop.image:
                 value = (self.image(prop.image, getter=lambda: prop.image, owner=prop) if layer.type == 'PAINT'
                     else self.projected(prop, lambda uv: self.image(prop.image, uv, prop.filtering, prop.tiling,
                                                                   getter=lambda: prop.image, owner=prop)))
@@ -384,25 +391,165 @@ class Graph(Math):
                 value = Signal(self.clamp(color), value.alpha)
                 if prop.projection == 'UV' and prop.tiling == 'NONE':
                     value = Signal(value.color, self.math('MULTIPLY', value.alpha, self._coverage(self.coordinates(prop))))
-            if not pre_filter:
-                for index, effect in enumerate(prop.effects):
-                    if not effect.enabled:
-                        continue
-                    self._compiled_effects[effect.as_pointer()] = effect
-                    with self.role(f'ChannelEffect:{layer.id}:{channel}:{index}'):
-                        try:
-                            value = apply_effect(self, value, effect)
-                        except UnsupportedEffect:
-                            filtered = self._channel_prefix(layer, prop, index + 1)
-                            value = Signal(self.mix(value.color, filtered.color, self.param(effect, 'strength')),
-                                           value.alpha)
-        self._source_cache[key] = value
         return value
+
+    def source(self, layer, channel, count=None):
+        """Channel content after the first `count` effects; None means the whole stack.
+
+        Every prefix is memoized, so an anchor consumer and the owning layer
+        share one node chain instead of compiling the same source twice.
+        """
+        prop = channel_for(layer, channel)
+        if prop is None or not prop.enabled or layer.type == 'FOLDER':
+            return Signal((0., 0., 0.), 0)
+        effects = list(prop.effects)
+        count = len(effects) if count is None else min(int(count), len(effects))
+        key = (layer.id, channel, count)
+        if key in self._source_cache:
+            return self._source_cache[key]
+        if prop.image_name and not prop.image:
+            raise ValueError('Texture image is missing: ' + prop.image_name + '. Reload or clear the channel texture.')
+        if prop.detail_image_name and not prop.detail_image:
+            raise ValueError('Surface detail image is missing: ' + prop.detail_image_name + '. Reload or clear the detail texture.')
+        guard = ('source', layer.id, channel)
+        if guard in self._building:
+            raise ValueError('Anchor points contain a reference cycle')
+        self._building.add(guard)
+        start, value = 0, None
+        for k in range(count, -1, -1):
+            if (layer.id, channel, k) in self._source_cache:
+                start, value = k, self._source_cache[(layer.id, channel, k)]
+                break
+        if value is None:
+            value = self._channel_base(layer, prop, channel)
+            self._source_cache[(layer.id, channel, 0)] = value
+        for index in range(start, count):
+            effect = effects[index]
+            if effect.enabled and effect.kind != 'ANCHOR':
+                self._compiled_effects[effect.as_pointer()] = effect
+                with self.role(f'ChannelEffect:{layer.id}:{channel}:{index}'):
+                    try:
+                        value = apply_effect(self, value, effect)
+                    except UnsupportedEffect:
+                        filtered = self._channel_prefix(layer, prop, index + 1)
+                        value = Signal(self.mix(value.color, filtered.color, self.param(effect, 'strength')),
+                                       value.alpha)
+            self._source_cache[(layer.id, channel, index + 1)] = value
+        self._building.discard(guard)
+        return value
+
+    def _anchor(self, identifier):
+        """(anchor, Signal) published at an anchor point; a missing anchor is transparent."""
+        anchor = self.anchors.get(identifier)
+        if anchor is None:
+            return None, Signal((0., 0., 0.), 0)
+        if anchor.kind == 'MASK':
+            gray = self.mask(anchor.layer, through=identifier)
+            return anchor, Signal(self.combine(gray, gray, gray), 1.0)
+        return anchor, self.source(anchor.layer, anchor.channel, count=anchor.position)
+
+    def anchor_signal(self, identifier):
+        return self._anchor(identifier)[1]
+
+    def anchor_scalar(self, identifier):
+        """Mask coverage read from an anchor: red or luminance times alpha, like references.mask_value."""
+        anchor, signal = self._anchor(identifier)
+        if anchor is None:
+            return 0.0
+        if anchor.kind == 'MASK':
+            return self.mask(anchor.layer, through=identifier)
+        gray = (luminance(self, signal.color) if anchor.channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
+                else self.separate(signal.color)[0])
+        return self.math('MULTIPLY', gray, signal.alpha)
+
+    def _anchor_dependencies(self, identifier, seen=frozenset()):
+        """Owners and repr-stable identity of everything an anchor publishes."""
+        anchor = self.anchors.get(identifier)
+        if anchor is None:
+            return [], ('missing-anchor', identifier)
+        node = (anchor.layer_id, anchor.channel, anchor.position)
+        if node in seen:
+            raise ValueError('Anchor points contain a reference cycle')
+        seen = seen | {node}
+        if anchor.kind == 'MASK':
+            owners, keys = self._mask_dependencies(list(anchor.layer.masks)[:anchor.position], seen)
+            return owners, ('anchor-mask', keys)
+        prop = channel_for(anchor.layer, anchor.channel)
+        if prop is None:
+            return [], ('missing-anchor', identifier)
+        return self._channel_identity(anchor.layer, prop, anchor.position, seen)
+
+    def _channel_identity(self, layer, prop, count, seen=frozenset()):
+        """Exact inputs of a channel prefix, including anchored content it instantiates."""
+        effects = list(prop.effects)[:count]
+        owners = [prop, *effects]
+        key = ('channel', layer.type, prop.channel,
+               values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
+               tuple(values(e) for e in effects), self._geometry_stamp(prop.projection == 'TRIPLANAR'))
+        if layer.type == 'FILL' and prop.anchor:
+            nested, nested_key = self._anchor_dependencies(prop.anchor, seen)
+            owners.extend(nested)
+            key += (('anchor', nested_key),)
+        return owners, key
+
+    def _micro(self, mask):
+        """(convex, cavity) from anchored micro details, or None without anchors.
+
+        The strength-independent convexity raster is a CPU boundary: a flat
+        node tree cannot sample a compiled anchor at neighbouring texels, and
+        sharing generators/micro_details.encode keeps both evaluators identical.
+        """
+        from ..generators import micro_details as details
+        refs = details.anchors(mask)
+        if not refs:
+            return None
+        owners = [mask]
+        for _, identifier in refs:
+            owners.extend(self._anchor_dependencies(identifier)[0])
+        def identity():
+            return ('micro-details', mask.detail_radius,
+                    tuple((slot, identifier, self._anchor_dependencies(identifier)[1]) for slot, identifier in refs))
+        def factory(signature):
+            from .snapshots import capture
+            snapshot = capture(mask)
+            def parts():
+                cache, resources = {}, {}
+                height = slopes = None
+                for low in range(0, self.n, 64):
+                    high = min(low + 64, self.n)
+                    rows_height, rows_slopes = details.fields(self.ts, snapshot, self.n, low, high, cache, resources)
+                    if rows_height is not None:
+                        if height is None:
+                            height = np.full((self.n, self.n), .5, np.float32)
+                        height[low:high] = rows_height
+                    if rows_slopes is not None:
+                        if slopes is None:
+                            slopes = (np.zeros((self.n, self.n), np.float32), np.zeros((self.n, self.n), np.float32))
+                        slopes[0][low:high], slopes[1][low:high] = rows_slopes
+                    # Placeholder rows keep the strip budget honest while anchors evaluate.
+                    yield low, np.full((high - low, self.n), .5, np.float32)
+                if height is None and slopes is None:
+                    encoded = np.full((self.n, self.n, 3), .5, np.float32)
+                else:
+                    encoded = details.encode(height, slopes, float(snapshot.detail_radius))
+                yield from self._parts(encoded)
+            return parts()
+        with self.role('MicroDetails:' + mask.path_from_id()):
+            red, green, _ = self.separate(self.boundary(self._role, owners, identity, factory).color)
+        signed = 0.0
+        if any(slot == 'HEIGHT' for slot, _ in refs):
+            signed = self.math('ADD', signed, self.math('MULTIPLY', self.math('SUBTRACT', red, .5),
+                self.math('MULTIPLY', 2, self.param(mask, 'detail_height_strength'))))
+        if any(slot == 'NORMAL' for slot, _ in refs):
+            signed = self.math('ADD', signed, self.math('MULTIPLY', self.math('SUBTRACT', green, .5),
+                self.math('MULTIPLY', 2, self.param(mask, 'detail_normal_strength'))))
+        return self.clamp(signed), self.clamp(self.math('MULTIPLY', signed, -1))
 
     def generator(self, mask):
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
         amount, contrast = self.param(mask, 'amount'), self.param(mask, 'contrast')
         strength = self.param(mask, 'noise_strength')
+        micro = self._micro(mask) if kind in {'EDGE_WEAR', 'CHIPS', 'DIRT', 'CAVITY_DIRT', 'RUST', 'DRIPS'} else None
         field = None
         def noise():
             nonlocal field
@@ -423,6 +570,8 @@ class Graph(Math):
             width = self.param(mask, 'edge_width')
             band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(red('CURVATURE')),
                 self.math('SUBTRACT', 1, width)), self.math('MAXIMUM', width, 1e-4)))
+            if micro is not None:
+                band = self.math('MAXIMUM', band, micro[0])
             value = self.clamp(self.math('MULTIPLY', self.math('MULTIPLY', band,
                 self.math('MULTIPLY', 2, amount)), contrast))
             value = breakup(value)
@@ -434,14 +583,20 @@ class Graph(Math):
                     self.math('MULTIPLY', .85, threshold(chips))))
             return self.clamp(value)
         if kind == 'DIRT':
-            cavity = self.math('SUBTRACT', 1, red('AO'))
+            ao, curvature = red('AO'), red('CURVATURE')
+            if micro is not None:
+                ao = self.math('MINIMUM', ao, self.math('SUBTRACT', 1, micro[1]))
+                curvature = self.math('MAXIMUM', curvature, micro[0])
+            cavity = self.math('SUBTRACT', 1, ao)
             value = self.math('MULTIPLY', cavity, self.math('ADD', .8,
-                self.math('MULTIPLY', .2, self.math('SUBTRACT', 1, red('CURVATURE')))))
+                self.math('MULTIPLY', .2, self.math('SUBTRACT', 1, curvature))))
             value = self.math('ADD', value, self.math('SUBTRACT', amount, .5))
             value = self.math('ADD', value, self.math('MULTIPLY', self.math('SUBTRACT', noise(), .5), strength))
             return self.clamp(self.math('MULTIPLY', value, contrast))
         if kind in {'CAVITY_DIRT', 'RUST'}:
             cavity = self.clamp(self.math('SUBTRACT', 1, red('AO')))
+            if micro is not None:
+                cavity = self.math('MAXIMUM', cavity, micro[1])
             if kind == 'CAVITY_DIRT':
                 return breakup(self.clamp(self.math('MULTIPLY', self.math('MULTIPLY', cavity,
                     self.math('ADD', 1, self.math('MULTIPLY', amount, 8))), contrast)))
@@ -490,6 +645,8 @@ class Graph(Math):
                 streaks = self.separate(self.boundary(self._role, [mask], identity, factory).color)[0]
             pos = self.separate(self.mesh_map('POSITION').color)[2]
             cavity = self.math('SUBTRACT', 1, red('AO'))
+            if micro is not None:
+                cavity = self.math('MAXIMUM', cavity, micro[1])
             return self.math('MULTIPLY', threshold(streaks), self.clamp(self.math('ADD',
                 self.math('MULTIPLY', cavity, 3), self.math('MULTIPLY', amount, self.math('SUBTRACT', 1, pos)))))
         raise ValueError('Unknown generator: ' + kind)
@@ -538,9 +695,10 @@ class Graph(Math):
         channels and masks beyond a published stage cannot invalidate this leaf.
         """
         from .dependencies import map_dependencies
+        from .anchors import consumed
         owners, keys = [], []
         for mask in masks:
-            if not mask.enabled:
+            if not mask.enabled or mask.source == 'ANCHOR':
                 continue
             owners.extend((mask, mask.effect, mask.influence))
             stamp = values(mask, excluded={'influence'})
@@ -551,29 +709,35 @@ class Graph(Math):
                                     if required is None or m.kind in required)),)
             if mask.projection == 'TRIPLANAR':
                 stamp += (('geometry', self._geometry_stamp(True)),)
-            if mask.source == 'REFERENCE':
+            if mask.source == 'REFERENCE' and not mask.reference_anchor:
                 target = next((l for l in self.ts.layers if l.id == mask.reference_layer), None)
-                if target is None or target.id in seen:
-                    raise ValueError('Missing or cyclic published source')
-                if mask.reference_channel == 'MASK':
-                    prefix = []
-                    for item in target.masks:
+                if target is None:
+                    stamp += (('missing', mask.reference_layer),)
+                elif mask.reference_channel == 'MASK':
+                    prefix, through = [], len(target.masks)
+                    for index, item in enumerate(target.masks):
                         if mask.reference_stage != 'PRE_FILTER' or item.source != 'FILTER':
                             prefix.append(item)
                         if item.id == mask.reference_mask:
+                            through = index + 1
                             break
-                    nested_owners, nested_keys = self._mask_dependencies(prefix, seen | {target.id})
+                    node = (target.id, 'MASK', through)
+                    if node in seen:
+                        raise ValueError('Published inputs contain a reference cycle')
+                    nested_owners, nested_keys = self._mask_dependencies(prefix, seen | {node})
                     owners.extend(nested_owners)
                     stamp += (('published-mask', nested_keys),)
                 else:
                     prop = channel_for(target, mask.reference_channel)
                     if prop:
-                        effects = tuple(prop.effects) if mask.reference_stage != 'PRE_FILTER' else ()
-                        owners.extend((prop, *effects))
-                        stamp += (('published-channel', target.type,
-                                   values(prop, excluded={'effects', 'opacity', 'blend_mode'}),
-                                   tuple(values(e) for e in effects),
-                                   self._geometry_stamp(prop.projection == 'TRIPLANAR')),)
+                        count = 0 if mask.reference_stage == 'PRE_FILTER' else len(prop.effects)
+                        nested_owners, nested_key = self._channel_identity(target, prop, count, seen)
+                        owners.extend(nested_owners)
+                        stamp += (('published-channel', nested_key),)
+            for identifier in consumed(mask):
+                nested_owners, nested_key = self._anchor_dependencies(identifier, seen)
+                owners.extend(nested_owners)
+                stamp += (('anchor', identifier, nested_key),)
             keys.append(stamp)
         return owners, tuple(keys)
 
@@ -603,16 +767,38 @@ class Graph(Math):
             return self.separate(self.boundary(self._role, owners, identity, factory).color)[0]
 
     def mask(self, layer, through='', pre_filter=False):
+        """Mask coverage after the item `through` (inclusive) or the whole stack.
+
+        The accumulated value is memoized after every item, so an anchor prefix
+        and the owning layer share one chain; a first-item mix stays distinct
+        from an all-ones backdrop until the public result is returned.
+        """
         key = (layer.id, through, pre_filter)
         if key in self._mask_cache:
             return self._mask_cache[key]
-        if key in self._building:
+        guard = ('mask', layer.id, through, pre_filter)
+        if guard in self._building:
             raise ValueError('Published inputs contain a reference cycle')
-        self._building.add(key)
-        result = None
-        prefix = []
-        for mask in layer.masks:
-            if mask.enabled and not (pre_filter and mask.source == 'FILTER'):
+        masks = list(layer.masks)
+        stop = len(masks)
+        if through:
+            stop = next((i + 1 for i, m in enumerate(masks) if m.id == through), None)
+            if stop is None:
+                self._mask_cache[key] = 0.0  # A missing published stage reads as neutral.
+                return 0.0
+        self._building.add(guard)
+        def active(mask):
+            return mask.enabled and mask.source != 'ANCHOR' and not (pre_filter and mask.source == 'FILTER')
+        result, start = None, 0
+        for i in range(stop, 0, -1):
+            cached = (layer.id, masks[i - 1].id, pre_filter, 'prefix')
+            if cached in self._mask_cache:
+                result, start = self._mask_cache[cached], i
+                break
+        prefix = [m for m in masks[:start] if active(m)]
+        for index in range(start, stop):
+            mask = masks[index]
+            if active(mask):
                 prefix.append(mask)
                 with self.role(f'MaskSource:{layer.id}:{mask.id}'):
                     if mask.source == 'FILTER':
@@ -629,16 +815,20 @@ class Graph(Math):
                                 filtered = self._mask_prefix(layer, prefix)
                                 value = self.scalar_mix(result, filtered, self.param(mask.effect, 'strength'))
                     elif mask.source == 'REFERENCE':
-                        target = next((l for l in self.ts.layers if l.id == mask.reference_layer), None)
-                        if target is None:
-                            raise ValueError('Published source layer is missing')
-                        if mask.reference_channel == 'MASK':
-                            value = self.mask(target, mask.reference_mask, mask.reference_stage == 'PRE_FILTER')
+                        if mask.reference_anchor:
+                            value = self.anchor_scalar(mask.reference_anchor)
                         else:
-                            sample = self.source(target, mask.reference_channel, mask.reference_stage == 'PRE_FILTER')
-                            gray = (luminance(self, sample.color) if mask.reference_channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
-                                    else self.separate(sample.color)[0])
-                            value = self.math('MULTIPLY', gray, sample.alpha)
+                            target = next((l for l in self.ts.layers if l.id == mask.reference_layer), None)
+                            if target is None:
+                                value = 0.0
+                            elif mask.reference_channel == 'MASK':
+                                value = self.mask(target, mask.reference_mask, mask.reference_stage == 'PRE_FILTER')
+                            else:
+                                sample = self.source(target, mask.reference_channel,
+                                                     0 if mask.reference_stage == 'PRE_FILTER' else None)
+                                gray = (luminance(self, sample.color) if mask.reference_channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
+                                        else self.separate(sample.color)[0])
+                                value = self.math('MULTIPLY', gray, sample.alpha)
                     elif mask.source in {'FILL', 'PAINT'}:
                         sample = (self.projected(mask, lambda uv: self.image(mask.image, uv, mask.filtering, mask.tiling,
                                                             getter=lambda mask=mask: mask.image, owner=mask))
@@ -676,9 +866,8 @@ class Graph(Math):
                         result = self.math('MULTIPLY', result, self.scalar_mix(1, value, strength))
                     else:
                         result = self.clamp(self.math('ADD', result, self.math('MULTIPLY', value, strength)))
-            if mask.id == through:
-                break
-        self._building.remove(key)
+            self._mask_cache[(layer.id, mask.id, pre_filter, 'prefix')] = result
+        self._building.discard(guard)
         result = 1.0 if result is None else result
         self._mask_cache[key] = result
         return result
@@ -756,10 +945,12 @@ class Graph(Math):
             if a and b and a != b and b != 'OutputInterface':
                 self.reverse[a].add(b)
         self._structure = structural_signature(self.ts)
+        from .references import warnings
         self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': list(CHANNELS),
                       'updated_bindings': 0, 'raster_boundaries_queued': len(self.resources.queue),
                       'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
-                      'shader_nodes': len(self.tree.nodes), 'pending_resources': self.pending_resources}
+                      'shader_nodes': len(self.tree.nodes), 'pending_resources': self.pending_resources,
+                      'warnings': warnings(self.ts)}
         metrics.count('shader_graph_builds')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))

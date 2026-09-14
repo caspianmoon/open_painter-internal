@@ -224,8 +224,12 @@ class OP_OT_channel_effect(SafeOperator, bpy.types.Operator):
             raise ValueError("Add a channel filter first.")
         index = max(0, min(prop.active_effect, len(prop.effects) - 1))
         if self.action == "DELETE":
+            from .anchors import broken_labels, report_broken
+            effect = prop.effects[index]
+            broken = broken_labels(ts, [effect.id] if effect.kind == "ANCHOR" and effect.id else [])
             prop.effects.remove(index)
             prop.active_effect = max(0, index - 1)
+            report_broken(self, context, broken)
         else:
             destination = max(0, min(len(prop.effects) - 1, index + (-1 if self.action == "UP" else 1)))
             prop.effects.move(index, destination)
@@ -305,6 +309,10 @@ class OP_OT_catalog_effect(SearchPicker, SafeOperator, bpy.types.Operator):
 
 class OP_UL_texture_effects(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        if item.kind == "ANCHOR":
+            layout.label(text="", icon="BLANK1")
+            layout.prop(item, "name", text="", emboss=False, icon="ANCHOR_CENTER")
+            return
         layout.prop(item, "enabled", text="")
         layout.prop(item, "name", text="", emboss=False, icon="MODIFIER")
 
@@ -328,6 +336,7 @@ def draw_channel_effects(layout, context, layer):
     row = layout.row(align=True)
     row.label(text="FILTERS", icon="MODIFIER")
     row.operator("open_painter.choose_filter", text="Add Filter", icon="ADD")
+    row.operator("open_painter.anchor", text="Anchor", icon="ANCHOR_CENTER").action = "ADD_CHANNEL"
     if not prop.effects:
         return
     layout.template_list("OP_UL_texture_effects", "channel", prop, "effects", prop, "active_effect", rows=2)
@@ -335,6 +344,12 @@ def draw_channel_effects(layout, context, layer):
     for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ("DELETE", "TRASH")):
         row.operator("open_painter.channel_effect", text="", icon=icon).action = action
     effect = prop.effects[max(0, min(prop.active_effect, len(prop.effects) - 1))]
+    if effect.kind == "ANCHOR":
+        row.label(text="Anchor Point", icon="ANCHOR_CENTER")
+        from .anchors import draw_anchor_settings
+        draw_anchor_settings(layout, require_set(context), effect)
+        layout.label(text="Publishes this channel after the filters above it", icon="INFO")
+        return
     row.operator("open_painter.choose_filter", text=effect.kind.replace("_", " ").title()).create = False
     body = layout.column()
     body.enabled = effect.enabled

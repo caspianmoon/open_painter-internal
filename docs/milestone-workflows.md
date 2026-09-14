@@ -13,6 +13,13 @@ not replace the editor or the material library.
 - **References:** choose Reference as a mask source and select the source layer,
   channel/mask and stage. Cycles reject before output publication. Publish a mask
   when a stable texture is needed by a geometry effect.
+- **Anchor points:** Add Mask Effect → Add Anchor Point places a row that publishes
+  the mask coverage above it; FILTERS → Anchor publishes a channel after the
+  filters above it. Pick an anchor on a Published Input mask, on a fill channel's
+  Content Anchor, or in a generator's Micro Details (Micro Height / Micro Normal
+  give painted relief edge wear and dirt). Any acyclic reference is allowed;
+  selecting an anchor lists its consumers, consumers locate their anchor, and
+  deleting an anchor reports the references it broke. [Details](anchor-points.md).
 - **Geometry Effects:** select an assigned source mesh and the layer whose mask
   defines density (for moss, the Moss texture effect's mask). Rust Flakes, Moss,
   Snow, Splinters and Peel Fragments create separate owned helpers with variant

@@ -1,49 +1,129 @@
-"""Within-set published inputs. References never share editable paint buffers.
+"""Within-set published inputs and anchor points. References never share editable paint buffers.
 
 Channel references sample the source layer's own channel before composition;
 mask references sample its mask stack (optionally through a selected effect).
+Anchor points publish a stack prefix at their position; a missing anchor reads as
+neutral and is reported by warnings(), while dependency cycles remain errors.
 Folder mask references are supported; folder composite channels are not implied.
 """
 import numpy as np
 
+LUMA = np.array((.2126, .7152, .0722), np.float32)
+
+
+def graph(ts):
+    """Item-granular dependency edges, structural errors and non-fatal warnings.
+
+    Nodes are stack positions (layer id, 'MASK' or channel, count): each item
+    depends on the accumulated result before it, consumers depend on the anchor's
+    position, and a channel consumer feeds the channel's own effect chain.
+    """
+    from ..core.layer_stack import channel_for
+    from .anchors import index, consumed
+    registry, by_id = index(ts), {layer.id: layer for layer in ts.layers}
+    edges, errors, warnings, seen_ids = {}, [], [], set()
+
+    def add(node, target):
+        edges.setdefault(node, set()).add(target)
+
+    def anchored(node, layer, item):
+        for identifier in consumed(item):
+            anchor = registry.get(identifier)
+            if anchor is None:
+                warnings.append(f'{layer.name}: anchor point is missing')
+                continue
+            add(node, (anchor.layer_id, anchor.channel, anchor.position))
+
+    for layer in ts.layers:
+        for position, mask in enumerate(layer.masks):
+            node = (layer.id, 'MASK', position + 1)
+            add(node, (layer.id, 'MASK', position))
+            if mask.source == 'ANCHOR':
+                if mask.id in seen_ids:
+                    warnings.append(f'{layer.name}: duplicate anchor id')
+                seen_ids.add(mask.id)
+                continue
+            if not mask.enabled:
+                continue
+            if mask.source == 'REFERENCE' and not mask.reference_anchor:
+                target = by_id.get(mask.reference_layer)
+                if target is None:
+                    warnings.append(f'{layer.name}: published source layer is missing')
+                    continue
+                if mask.reference_channel == 'MASK':
+                    through = len(target.masks)
+                    if mask.reference_mask:
+                        through = next((i + 1 for i, m in enumerate(target.masks) if m.id == mask.reference_mask), None)
+                        if through is None:
+                            warnings.append(f'{layer.name}: published mask effect is missing')
+                            continue
+                    add(node, (target.id, 'MASK', through))
+                elif target.type == 'FOLDER':
+                    errors.append(f'{layer.name}: reference a folder mask, not a folder composite channel')
+                else:
+                    prop = channel_for(target, mask.reference_channel)
+                    count = 0 if prop is None or mask.reference_stage == 'PRE_FILTER' else len(prop.effects)
+                    add(node, (target.id, mask.reference_channel, count))
+            anchored(node, layer, mask)
+        for prop in layer.channels:
+            for position, effect in enumerate(prop.effects):
+                add((layer.id, prop.channel, position + 1), (layer.id, prop.channel, position))
+                if effect.kind == 'ANCHOR' and effect.id:
+                    if effect.id in seen_ids:
+                        warnings.append(f'{layer.name}: duplicate anchor id')
+                    seen_ids.add(effect.id)
+            if prop.enabled:
+                anchored((layer.id, prop.channel, 0), layer, prop)
+
+    state = {}
+    for start in edges:
+        if start in state:
+            continue
+        stack = [(start, iter(edges.get(start, ())))]
+        state[start] = 'visiting'
+        while stack:
+            node, targets = stack[-1]
+            for target in targets:
+                status = state.get(target)
+                if status == 'visiting':
+                    names = {by_id[n[0]].name for n, _ in stack if n[0] in by_id}
+                    errors.append('Published inputs contain a reference cycle through ' + ', '.join(sorted(names)))
+                    stack.clear()
+                    break
+                if status is None:
+                    state[target] = 'visiting'
+                    stack.append((target, iter(edges.get(target, ()))))
+                    break
+            else:
+                state[node] = 'done'
+                stack.pop()
+        if errors and errors[-1].startswith('Published inputs contain a reference cycle'):
+            break
+    return edges, errors, warnings
+
 
 def issues(ts):
-    by_id = {layer.id: layer for layer in ts.layers}
-    edges = {identifier: set() for identifier in by_id}
-    problems = []
-    for layer in ts.layers:
-        for mask in layer.masks:
-            if not mask.enabled or mask.source != 'REFERENCE':
-                continue
-            target = by_id.get(mask.reference_layer)
-            if target is None:
-                problems.append(f'{layer.name}: published source layer is missing')
-                continue
-            if mask.reference_mask and not any(m.id == mask.reference_mask for m in target.masks):
-                problems.append(f'{layer.name}: published mask effect is missing')
-            if target.type == 'FOLDER' and mask.reference_channel != 'MASK':
-                problems.append(f'{layer.name}: reference a folder mask, not a folder composite channel')
-            edges[layer.id].add(target.id)
-    visiting, done = set(), set()
-    def visit(identifier):
-        if identifier in visiting:
-            raise ValueError('Published inputs contain a reference cycle')
-        if identifier in done:
-            return
-        visiting.add(identifier)
-        for target in edges[identifier]:
-            visit(target)
-        visiting.remove(identifier); done.add(identifier)
-    try:
-        for identifier in edges:
-            visit(identifier)
-    except ValueError as exc:
-        problems.append(str(exc))
-    return problems
+    """Errors that block evaluation: reference cycles and folder composite references."""
+    return graph(ts)[1]
+
+
+def warnings(ts):
+    """Missing anchors and published sources; evaluation continues with neutral values."""
+    return graph(ts)[2]
 
 
 def dependent_channels(ts, source_layer, source_channel=None):
     """Transitive consumers of a changed source, restricted by enabled channels."""
+    from .anchors import index, consumed
+    registry = index(ts)
+
+    def reads(item, identifier, channel):
+        for key in consumed(item):
+            anchor = registry.get(key)
+            if anchor and anchor.layer_id == identifier and (channel is None or anchor.channel == channel):
+                return True
+        return False
+
     affected, pending = set(), [(source_layer, source_channel)]
     seen = set()
     while pending:
@@ -52,19 +132,62 @@ def dependent_channels(ts, source_layer, source_channel=None):
             continue
         seen.add((identifier,channel))
         for layer in ts.layers:
-            if any(m.enabled and m.source == 'REFERENCE' and m.reference_layer == identifier and
-                   (channel is None or m.reference_channel == channel) for m in layer.masks):
+            if any(m.enabled and ((m.source == 'REFERENCE' and not m.reference_anchor and m.reference_layer == identifier
+                                   and (channel is None or m.reference_channel == channel))
+                                  or reads(m, identifier, channel)) for m in layer.masks):
                 affected.update(p.channel for p in layer.channels if p.enabled)
                 pending.append((layer.id,None))
+                continue
+            for prop in layer.channels:
+                if prop.enabled and reads(prop, identifier, channel):
+                    affected.add(prop.channel)
+                    pending.append((layer.id, prop.channel))
     return affected
+
+
+def mask_value(rgba, channel):
+    """Gray coverage of a published channel: red for scalars, luminance for colors, times alpha."""
+    gray = rgba[...,0] if channel not in {'BASE_COLOR','EMISSION','NORMAL'} else rgba[...,:3] @ LUMA
+    return gray * rgba[...,3]
+
+
+def evaluate_anchor(ts, identifier, n, y0, y1, cache, resources):
+    """Straight RGBA rows for a channel anchor, coverage rows for a mask anchor, None if missing."""
+    from ..core.layer_stack import channel_for
+    from .anchors import resolve
+    from .snapshots import capture, Parameters
+    anchor = resolve(ts, identifier, getattr(resources, 'signatures', None))
+    if anchor is None:
+        return None
+    layer = anchor.layer if isinstance(anchor.layer, Parameters) else capture(anchor.layer)
+    if anchor.kind == 'MASK':
+        from .mask_eval import evaluate_masks
+        # Derived ids keep the prefix apart from the owner's stack in every cache key.
+        prefix = layer.replaced(id=layer.id + ':anchor:' + identifier, masks=tuple(layer.masks)[:anchor.position])
+        return evaluate_masks(ts, prefix, n, y0, y1, cache, resources)
+    prop = channel_for(layer, anchor.channel)
+    if prop is None or not prop.enabled or layer.type == 'FOLDER':
+        return np.zeros((y1 - y0, n, 4), np.float32)
+    from .channel_eval import source
+    prefix = prop.replaced(effects=tuple(prop.effects)[:anchor.position])
+    return np.broadcast_to(source(prefix, layer.type, n, y0, y1, cache, ts, resources), (y1 - y0, n, 4))
 
 
 def evaluate(ts, mask, n, y0, y1, cache, resources):
     from ..core.layer_stack import channel_for
     from .snapshots import capture, Parameters
+    if mask.reference_anchor:
+        from .anchors import resolve
+        value = evaluate_anchor(ts, mask.reference_anchor, n, y0, y1, cache, resources)
+        if value is None:
+            return np.zeros((y1-y0,n),np.float32)
+        if value.ndim == 2:
+            return value
+        anchor = resolve(ts, mask.reference_anchor, getattr(resources, 'signatures', None))
+        return np.ascontiguousarray(mask_value(value, anchor.channel), np.float32)
     source_layer = next((layer for layer in ts.layers if layer.id == mask.reference_layer),None)
     if source_layer is None:
-        raise ValueError('Published source layer is missing')
+        return np.zeros((y1-y0,n),np.float32)
     layer = source_layer if isinstance(source_layer, Parameters) else capture(source_layer)
     if mask.reference_channel == 'MASK':
         from .mask_eval import evaluate_masks
@@ -72,7 +195,7 @@ def evaluate(ts, mask, n, y0, y1, cache, resources):
         if mask.reference_mask:
             index = next((i for i,m in enumerate(masks) if m.id == mask.reference_mask),None)
             if index is None:
-                raise ValueError('Published mask effect is missing')
+                return np.zeros((y1-y0,n),np.float32)
             masks = masks[:index+1]
         if mask.reference_stage == 'PRE_FILTER':
             masks = [m for m in masks if m.source != 'FILTER']
@@ -89,5 +212,4 @@ def evaluate(ts, mask, n, y0, y1, cache, resources):
         prop = prop.replaced(effects=())
     from .channel_eval import source
     rgba = source(prop,layer.type,n,y0,y1,cache,ts,resources)
-    gray = rgba[...,0] if mask.reference_channel not in {'BASE_COLOR','EMISSION','NORMAL'} else rgba[...,:3] @ np.array((.2126,.7152,.0722),np.float32)
-    return np.broadcast_to(gray * rgba[...,3], (y1-y0,n)).copy()
+    return np.broadcast_to(mask_value(rgba, mask.reference_channel), (y1-y0,n)).copy()

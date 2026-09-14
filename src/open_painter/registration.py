@@ -6,6 +6,7 @@ from .preferences import OP_Preferences
 from .baking.jobs import OP_OT_bake_queue
 from .properties.influencer import OP_Influencer
 from .ui.references import OP_OT_reference_source
+from .ui.anchors import OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
 from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
@@ -64,6 +65,10 @@ CLASSES = (
     OP_PT_layers,
     OP_OT_mask,
     OP_OT_reference_source,
+    OP_OT_anchor,
+    OP_OT_anchor_pick,
+    OP_OT_anchor_locate,
+    OP_OT_anchor_select_consumer,
     OP_OT_geometry_effect,
     OP_PT_geometry_effects,
     OP_OT_material_state,

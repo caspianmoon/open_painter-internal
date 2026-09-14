@@ -40,6 +40,12 @@ def validate(ts) -> list[str]:
     return issues
 
 
+def warnings(ts) -> list[str]:
+    """Non-blocking problems: missing anchors and published sources read as neutral."""
+    from ..evaluation.references import warnings as reference_warnings
+    return reference_warnings(ts)
+
+
 def hierarchy_issues(ts) -> list[str]:
     """Detect unreachable layers and invalid hierarchy before writing outputs."""
     from ..evaluation.references import issues as reference_issues

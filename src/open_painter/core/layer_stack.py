@@ -147,6 +147,9 @@ def duplicate(ts, index):
     sources = [snapshot(item) for item in ts.layers if item.id in ids]
     mapping = {item["id"]: new_id() for item in sources}
     mask_mapping = {m['id']: new_id() for item in sources for m in item['masks']}
+    effect_mapping = {e['id']: new_id() for item in sources for c in item['channels'] for e in c['effects'] if e['id']}
+    # Anchors outside the copied subtree keep their original ids, like layer references.
+    anchor_mapping = {**mask_mapping, **effect_mapping}
     for source in sources:
         target = ts.layers.add()
         restore(source, target)
@@ -158,10 +161,19 @@ def duplicate(ts, index):
             if mask.source == 'REFERENCE':
                 mask.reference_layer = mapping.get(mask.reference_layer,mask.reference_layer)
                 mask.reference_mask = mask_mapping.get(mask.reference_mask,mask.reference_mask)
+            for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
+                value = getattr(mask, field)
+                if value:
+                    setattr(mask, field, anchor_mapping.get(value, value))
             if mask.source == "PAINT" and mask.image:
                 mask.image = mask.image.copy()
         for channel in target.channels:
             channel.layer_id = target.id
+            if channel.anchor:
+                channel.anchor = anchor_mapping.get(channel.anchor, channel.anchor)
+            for effect in channel.effects:
+                if effect.id:
+                    effect.id = effect_mapping.get(effect.id, effect.id)
             if target.type == "PAINT" and channel.image:
                 channel.image = channel.image.copy()
     # Move the copied subtree immediately above the original root. Stable IDs

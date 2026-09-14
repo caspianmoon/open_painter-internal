@@ -52,6 +52,7 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         if (root / name).exists():
             write_file(archive, root / name, name)
     for path in [root / "docs/implementation-status.md", root / "docs/live-procedural-preview.md",
+                 root / "docs/anchor-points.md", root / "docs/milestone-workflows.md",
                  root / "docs/generated-material-quality.md",
                  root / "docs/shader-preview-architecture.md",
                  root / "docs/validation/shader-preview-contact.html",

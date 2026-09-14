@@ -104,7 +104,8 @@ class LayerEvaluator:
                 prop = channel_for(layer, channel)
                 if prop and not prop.enabled:
                     continue
-                footprints = [mask_footprint(layer.masks), stack_footprint(prop.effects) if prop else 0]
+                footprints = [mask_footprint(layer.masks), stack_footprint(prop.effects) if prop else 0,
+                              None if prop and getattr(prop, "anchor", "") else 0]
                 if None in footprints:
                     region = None
                     break

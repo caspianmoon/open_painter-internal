@@ -26,6 +26,16 @@ def draw(self, context):
         original_draw(self, context)
         layer = stack.active(context.scene.open_painter.texture_sets[0])
         drawn.add("mask" if native.state.get(context.area).mask_selected else "channel")
+        if native.state.get(context.area).mask_selected and layer.masks:
+            mask = layer.masks[layer.active_mask]
+            if mask.source == "ANCHOR":
+                drawn.add("anchor_mask")
+            elif mask.source == "REFERENCE" and mask.reference_anchor:
+                drawn.add("anchor_reference")
+        else:
+            prop = stack.channel_for(layer, context.scene.open_painter.properties_channel)
+            if prop and prop.effects and prop.effects[min(prop.active_effect, len(prop.effects) - 1)].kind == "ANCHOR":
+                drawn.add("anchor_channel")
     except Exception:
         errors.append(traceback.format_exc())
         raise
@@ -71,11 +81,37 @@ def mask_stage():
     assert "channel" in drawn and not errors, errors
     bpy.ops.open_painter.choose_procedural(choice="SCRATCHES", target="MASK", create=True)
     bpy.ops.open_painter.choose_filter(choice="SLOPE_BLUR", target="MASK")
+    later(anchor_stage, 2)
+
+
+def anchor_stage():
+    assert "mask" in drawn and not errors, errors
+    ts = bpy.context.scene.open_painter.texture_sets[0]
+    assert bpy.ops.open_painter.anchor(action="ADD_MASK") == {"FINISHED"}
+    anchor_id = stack.active(ts).masks[-1].id
+    later(lambda: anchor_reference_stage(anchor_id), 2)
+
+
+def anchor_reference_stage(anchor_id):
+    assert "anchor_mask" in drawn and not errors, errors
+    assert bpy.ops.open_painter.mask(action="ADD", source="REFERENCE") == {"FINISHED"}
+    assert bpy.ops.open_painter.anchor_pick(target="REFERENCE_MASK", choice=anchor_id) == {"FINISHED"}
+    later(lambda: anchor_channel_stage(anchor_id), 2)
+
+
+def anchor_channel_stage(anchor_id):
+    assert "anchor_reference" in drawn and not errors, errors
+    ts = bpy.context.scene.open_painter.texture_sets[0]
+    assert bpy.ops.open_painter.anchor_locate(anchor_id=anchor_id) == {"FINISHED"}
+    layer = stack.active(ts)
+    assert layer.masks[layer.active_mask].id == anchor_id
+    bpy.ops.open_painter.native_select(layer_id=layer.id, mask=False)
+    assert bpy.ops.open_painter.anchor(action="ADD_CHANNEL") == {"FINISHED"}
     later(search_stage, 2)
 
 
 def search_stage():
-    assert "mask" in drawn and not errors, errors
+    assert "anchor_channel" in drawn and not errors, errors
     region = bpy.context.region
     bpy.context.window.cursor_warp(region.x + region.width // 2, region.y + region.height // 2)
     assert bpy.ops.open_painter.catalog_material("INVOKE_DEFAULT") == {"RUNNING_MODAL"}
@@ -99,7 +135,8 @@ def check():
     ts = bpy.context.scene.open_painter.texture_sets[0]
     assert stack.active(ts).name == "Polished Chrome", stack.active(ts).name
     assert not errors, errors
-    result_path.write_text(json.dumps({"native_channel_controls": "PASS", "native_mask_filters": "PASS", "native_search_selection": "PASS"}, indent=2))
+    result_path.write_text(json.dumps({"native_channel_controls": "PASS", "native_mask_filters": "PASS",
+                                       "native_anchor_controls": "PASS", "native_search_selection": "PASS"}, indent=2))
     print("TEXTURE_OPERATIONS_UI_PASS")
     bpy.ops.wm.quit_blender()
 

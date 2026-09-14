@@ -42,7 +42,7 @@ def _constant_identity(layer, prop, mode, backdrop):
     this deliberately does not infer constants from textures, masks or filters.
     """
     if (backdrop is None or layer.type != 'FILL' or mode != 'NORMAL'
-            or prop.image or prop.image_name or prop.procedural
+            or prop.image or prop.image_name or prop.procedural or getattr(prop, 'anchor', '')
             or getattr(prop, 'detail_image', None) or getattr(prop, 'detail_image_name', '')
             or _effects(prop)):
         return False
@@ -143,7 +143,8 @@ class Builder:
                 prop.filtering, prop.tiling, tuple(prop.scale), prop.rotation,
                 tuple(prop.offset), prop.triplanar_hardness,
                 tuple(_effect_signature(effect) for effect in _effects(prop)),
-                self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
+                self.geometry_stamp if prop.projection == 'TRIPLANAR' else None,
+                getattr(prop, 'anchor', ''), self.ts.edit_serial if getattr(prop, 'anchor', '') else None)
 
     def _texture(self, key, components, tile, resolve=True, gpu_source=None):
         if not resolve:
@@ -185,7 +186,8 @@ class Builder:
         # Native edits increment the source Image revision before this builder is
         # captured. References depend on other authored channels and conservatively
         # retain the actual serial until their transitive keys are represented.
-        references = any(mask.enabled and mask.source == 'REFERENCE' for mask in layer.masks)
+        from .anchors import consumed
+        references = any(mask.enabled and (mask.source == 'REFERENCE' or consumed(mask)) for mask in layer.masks)
         parameters = self.mask_ts if references else self.mask_ts.replaced(edit_serial=0)
         signature = _stack_signature(parameters, layer, self.signatures)
         key = (*self.prefix, 'mask', signature)
@@ -204,7 +206,8 @@ class Builder:
                              'Reload or clear the surface detail texture.')
         effects = _effects(prop)
         color = _color(prop, layer.type)
-        if not prop.image and not effects and (layer.type == 'PAINT' or not (prop.procedural or detail)):
+        anchored = layer.type == 'FILL' and getattr(prop, 'anchor', '')
+        if not prop.image and not effects and not anchored and (layer.type == 'PAINT' or not (prop.procedural or detail)):
             return {'color': color}, ('constant', color)
         if (layer.type == 'PAINT' and not effects and prop.image and prop.image.is_float
                 and tuple(prop.image.size) == (self.n, self.n)
@@ -225,7 +228,7 @@ class Builder:
             # if Blender retained an already-created half-precision native texture.
             metrics.count('live_native_paint_precision_fallbacks')
         if (layer.type == 'FILL' and (prop.procedural or detail) and prop.channel != 'NORMAL'
-                and not prop.image and not effects and prop.tiling == 'REPEAT'):
+                and not prop.image and not effects and not anchored and prop.tiling == 'REPEAT'):
             key = self._field_key(prop)
             field = _detail_tile if detail else _procedural_tile
             texture = yield from self._texture(key, 1, lambda low, high:

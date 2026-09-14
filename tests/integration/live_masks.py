@@ -162,6 +162,7 @@ def run():
                         {'black':.8,'white':.2}, {'black':.5,'white':.51},
                         {'black':.6,'white':.6},
                         {'generator':'SCRATCHES','amount':1.,'contrast':3.},
+                        {'detail_height_anchor':'anchor'},{'detail_normal_anchor':'anchor'},
                         {'generator':'SCRATCHES','amount':.3,'contrast':3.,'black':.25,'white':.5}):
             layer=SimpleNamespace(name='Declined',masks=[edge,copy_mask(dirt,**changes)])
             assert not supports(ts,layer,N), 'Unsupported parameters passed pure preflight'

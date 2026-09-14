@@ -4,7 +4,7 @@ import json
 import math
 from zipfile import ZipFile, is_zipfile
 
-VERSION = 2
+VERSION = 3  # 3: anchor points (anchor ids on masks, channels and filter items)
 MAX_BYTES = 512 * 1024 * 1024
 
 
@@ -29,7 +29,7 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
         if path.stat().st_size > 4 * 1024 * 1024:
             raise ValueError("Smart material JSON is too large.")
         data = json.loads(path.read_text())
-    if data.get("format_version") not in {1, VERSION}:
+    if data.get("format_version") not in {1, 2, VERSION}:
         raise ValueError("Unsupported smart material version.")
 
     def validate_assets(value):
@@ -84,10 +84,12 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
                 raise ValueError("Invalid smart material folder hierarchy.")
             seen.add(parent)
             parent = by_id[parent].get("parent_id", "")
-    edges = {identifier: set() for identifier in by_id}
+    # Reference cycles are item-granular and checked by references.issues once
+    # the layers exist; the loader rolls back on failure. Anchor ids that do
+    # not resolve import verbatim and report as missing rather than rejecting.
     for layer in layers:
         for mask in layer.get('masks',[]):
-            if mask.get('source') != 'REFERENCE':
+            if mask.get('source') != 'REFERENCE' or mask.get('reference_anchor'):
                 continue
             target = by_id.get(mask.get('reference_layer'))
             if target is None:
@@ -95,17 +97,4 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
             selected = mask.get('reference_mask')
             if selected and not any(m.get('id') == selected for m in target.get('masks',[])):
                 raise ValueError('Published mask effect is missing from material')
-            edges[layer['id']].add(target['id'])
-    visiting, done = set(), set()
-    def visit(identifier):
-        if identifier in visiting:
-            raise ValueError('Material published inputs contain a reference cycle')
-        if identifier in done:
-            return
-        visiting.add(identifier)
-        for target in edges[identifier]:
-            visit(target)
-        visiting.remove(identifier); done.add(identifier)
-    for identifier in edges:
-        visit(identifier)
     return data, assets

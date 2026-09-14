@@ -38,10 +38,13 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             if not layer.masks:
                 raise ValueError("Select a layer with a mask first.")
             from ..evaluation.mask_eval import bake_mask_texture
+            from .anchors import broken_labels, report_broken
 
             image = bake_mask_texture(ts, layer)
+            broken = broken_labels(ts, [m.id for m in layer.masks if m.source == "ANCHOR"])
             # Commit only after evaluation and packing have succeeded.
             layer.masks.clear()
+            report_broken(self, context, broken)
             mask = layer.masks.add()
             mask.id, mask.name, mask.source = new_id(), "Baked Mask", "PAINT"
             mask.image = image
@@ -67,8 +70,11 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         elif layer.masks:
             i = max(0, min(layer.active_mask, len(layer.masks) - 1))
             if self.action == "DELETE":
+                from .anchors import broken_labels, report_broken
+                broken = broken_labels(ts, [layer.masks[i].id] if layer.masks[i].source == "ANCHOR" else [])
                 layer.masks.remove(i)
                 layer.active_mask = max(0, i - 1)
+                report_broken(self, context, broken)
             else:
                 j = max(0, min(len(layer.masks) - 1, i + (-1 if self.action == "UP" else 1)))
                 layer.masks.move(i, j)
@@ -86,6 +92,10 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
 
 class OP_UL_masks(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        if item.source == "ANCHOR":
+            layout.label(text="", icon="BLANK1")
+            layout.prop(item, "name", text="", emboss=False, icon="ANCHOR_CENTER")
+            return
         layout.prop(item, "enabled", text="")
         layout.prop(item, "name", text="", emboss=False, icon="MOD_MASK")
 
@@ -120,11 +130,20 @@ class OP_PT_masks(bpy.types.Panel):
             "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
         ).action = "BAKE"
         layout.prop(mask, "source", text="Source")
+        if mask.source == 'ANCHOR':
+            from .anchors import draw_anchor_settings
+            draw_anchor_settings(layout, ts, mask)
+            layout.label(text='Publishes the mask result up to here; changes nothing itself', icon='INFO')
+            return
         if mask.source == 'REFERENCE':
-            source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
-            layout.operator('open_painter.reference_source',text=source.name if source else 'Choose Source Layer',icon='LINKED')
-            layout.prop(mask,'reference_channel')
-            layout.prop(mask,'reference_stage')
+            from .anchors import draw_anchor_field
+            draw_anchor_field(layout, ts, 'REFERENCE_MASK', mask.reference_anchor, text='Anchor')
+            if not mask.reference_anchor:
+                source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
+                layout.label(text='Legacy layer source')
+                layout.operator('open_painter.reference_source',text=source.name if source else 'Choose Source Layer',icon='LINKED')
+                layout.prop(mask,'reference_channel')
+                layout.prop(mask,'reference_stage')
             layout.label(text='Source layer input, before stack blending')
         elif mask.source == 'SCENE':
             field = mask.influence
@@ -195,6 +214,19 @@ class OP_PT_masks(bpy.types.Panel):
                 box.operator(
                     "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
                 ).action = "CURVATURE"
+            from ..generators.micro_details import KINDS as MICRO_KINDS
+            if mask.generator in MICRO_KINDS:
+                from .anchors import draw_anchor_field
+                box = layout.box()
+                box.label(text="Micro Details", icon="ANCHOR_CENTER")
+                for target, field, strength, text in (
+                        ("DETAIL_HEIGHT", "detail_height_anchor", "detail_height_strength", "Micro Height"),
+                        ("DETAIL_NORMAL", "detail_normal_anchor", "detail_normal_strength", "Micro Normal")):
+                    draw_anchor_field(box, ts, target, getattr(mask, field), text=text)
+                    if getattr(mask, field):
+                        box.prop(mask, strength, slider=True)
+                if mask.detail_height_anchor or mask.detail_normal_anchor:
+                    box.prop(mask, "detail_radius", text="Micro Radius (px)")
 
         if mask.source in {"GENERATOR", "NOISE"}:
             for name in ("amount", "contrast", "noise_scale", "noise_strength", "seed"):

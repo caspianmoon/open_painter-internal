@@ -423,6 +423,9 @@ class OP_UL_native_layers(bpy.types.UIList):
                 depress=index == data.active_layer and state.get(context.area).mask_selected,
             )
             op.layer_id, op.mask = layer.id, True
+        if any(m.source == "ANCHOR" for m in layer.masks) or any(
+                e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
+            row.label(text="", icon="ANCHOR_CENTER")
         controls = split.split(factor=0.5, align=True)
         blend_control = controls.row(align=True)
         opacity_control = controls.row(align=True)
@@ -501,6 +504,7 @@ class OP_MT_native_masks(bpy.types.Menu):
         op.target, op.create = "MASK", True
         op = self.layout.operator("open_painter.choose_filter", text="Add Filter", icon="MODIFIER")
         op.target, op.create = "MASK", True
+        self.layout.operator("open_painter.anchor", text="Add Anchor Point", icon="ANCHOR_CENTER").action = "ADD_MASK"
         self.layout.separator()
         self.layout.prop(context.scene.open_painter, "asset_category", text="Library")
 
@@ -559,6 +563,10 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             layout.prop(channel, "enabled", text="Enabled")
             body = layout.column()
             body.enabled = channel.enabled
+            from .anchors import draw_anchor_field
+            draw_anchor_field(body, ts, "CHANNEL", channel.anchor, text="Content Anchor")
+            if channel.anchor:
+                body.label(text="Anchor replaces the color and image; detail and filters still apply", icon="INFO")
             body.prop(
                 channel,
                 "color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "value",

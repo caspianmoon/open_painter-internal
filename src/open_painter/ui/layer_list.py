@@ -82,7 +82,19 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
                 raise ValueError("Select a group first.")
             layer_stack.remove(ts, ts.active_layer)
         elif self.action == "DELETE":
+            from ..evaluation import anchors
+            from .anchors import report_broken
+            doomed = {layer.id}
+            while True:
+                grown = doomed | {item.id for item in ts.layers if item.parent_id in doomed}
+                if grown == doomed:
+                    break
+                doomed = grown
+            broken = [f"{owner.name} ({anchors.CONSUMER_LABELS[kind]})"
+                      for item in ts.layers if item.id in doomed for identifier in anchors.owned(item)
+                      for owner, kind, _ in anchors.consumers(ts, identifier) if owner.id not in doomed]
             layer_stack.remove_tree(ts, layer.id)
+            report_broken(self, context, broken)
         elif self.action == "DUPLICATE":
             layer_stack.duplicate(ts, ts.active_layer)
         elif self.action in {"UP", "DOWN"}:

@@ -58,10 +58,16 @@ def _stack_signature(ts, layer, geometry_cache):
         maps = tuple((item.kind, _image_identity(item.image)) for item in ts.baked_maps
                      if item.image and (required is None or item.kind in required))
         common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength)
-        if mask.source in {"GENERATOR", "NOISE"}:
+        if mask.source == "ANCHOR":
+            extra = ()  # Pass-through; binding it to the edit serial would defeat generator caching.
+        elif mask.source in {"GENERATOR", "NOISE"}:
+            from .anchors import consumed
+            anchors = consumed(mask)
             extra = (mask.generator, mask.amount, mask.contrast, mask.noise_scale,
                      mask.noise_strength, mask.seed, tuple(mask.id_color), maps,
-                     getattr(mask, "edge_width", 1.0))
+                     getattr(mask, "edge_width", 1.0), anchors,
+                     (getattr(mask, "detail_radius", 2.0), getattr(mask, "detail_height_strength", 1.0),
+                      getattr(mask, "detail_normal_strength", 1.0), ts.edit_serial) if anchors else None)
         elif mask.source == "PROCEDURAL":
             extra = (mask.procedural, mask.noise_scale, mask.seed, mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
@@ -77,7 +83,7 @@ def _stack_signature(ts, layer, geometry_cache):
                      (_image_identity(mask.influence.image), mask.influence.update_serial),)
         elif mask.source == 'REFERENCE':
             extra = (ts.edit_serial, mask.reference_layer, mask.reference_mask,
-                     mask.reference_channel, mask.reference_stage)
+                     mask.reference_channel, mask.reference_stage, mask.reference_anchor)
         else:
             # Bundled detail images are shared, read-only authoring inputs.
             # Managed writes still advance their image revision. Keep the old
@@ -121,7 +127,7 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
     )
     result = None
     for mask in layer.masks:
-        if not mask.enabled:
+        if not mask.enabled or mask.source == "ANCHOR":
             continue
         if mask.source == "FILTER":
             from .channel_eval import apply_effect
@@ -180,7 +186,7 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
         else:
             from ..generators.base import evaluate
 
-            value = evaluate(ts, mask, u, v, cache)
+            value = evaluate(ts, mask, u, v, cache, resources=geometry_cache, rows=(n, y0, y1))
         value = np.clip((value - mask.black) / max(1e-6, mask.white - mask.black), 0, 1)
         if mask.invert:
             value = 1 - value

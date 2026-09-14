@@ -9,6 +9,7 @@ from ..texture_engine.procedurals import evaluate as procedural
 from .dirt import dirt
 from .edge_wear import edge_wear
 from .noise import noise
+from . import micro_details
 
 REQUIRED_MAPS = {
     'NOISE': (), 'EDGE_WEAR': ('CURVATURE',), 'DIRT': ('AO', 'CURVATURE'),
@@ -38,9 +39,13 @@ class Generator:
     id: str
     name: str
 
-    def evaluate(self, texture_set, parameters, u, v, cache):
+    def evaluate(self, texture_set, parameters, u, v, cache, resources=None, rows=None):
         n = None
         amount, contrast, strength = parameters.amount, parameters.contrast, parameters.noise_strength
+        # Anchored micro details need row coordinates; legacy callers stay bit-identical.
+        micro = (micro_details.evaluate(texture_set, parameters, rows, cache, resources)
+                 if rows is not None and self.id in micro_details.KINDS and micro_details.anchors(parameters)
+                 else None)
 
         def breakup_noise():
             nonlocal n
@@ -66,15 +71,20 @@ class Generator:
         if self.id in {'EDGE_WEAR', 'CHIPS'}:
             ao = mesh_map('AO')[..., 0] if any(m.kind == 'AO' and m.image for m in texture_set.baked_maps) else None
             edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, breakup_noise(), amount, contrast, strength,
-                              getattr(parameters, 'edge_width', 1.0))
+                              getattr(parameters, 'edge_width', 1.0), None if micro is None else micro[0])
             if self.id == 'CHIPS':
                 chips = procedural('VORONOI', u, v, seed=parameters.seed, scale=parameters.noise_scale)
                 edges *= .15 + .85 * threshold(chips)
             return edges
         if self.id == 'DIRT':
-            return dirt(mesh_map('AO')[..., 0], mesh_map('CURVATURE')[..., 0], breakup_noise(), amount, contrast, strength)
+            ao, curvature = mesh_map('AO')[..., 0], mesh_map('CURVATURE')[..., 0]
+            if micro is not None:
+                ao, curvature = np.minimum(ao, 1 - micro[1]), np.maximum(curvature, micro[0])
+            return dirt(ao, curvature, breakup_noise(), amount, contrast, strength)
         if self.id in {'CAVITY_DIRT', 'RUST'}:
             cavity = np.clip(1 - mesh_map('AO')[..., 0], 0, 1)
+            if micro is not None:
+                cavity = np.maximum(cavity, micro[1])
             if self.id == 'CAVITY_DIRT':
                 return breakup(np.clip(cavity * (1 + amount * 8) * contrast, 0, 1))
             # Corrosion starts in occluded regions and grows onto exposed surfaces.
@@ -90,6 +100,8 @@ class Generator:
         if self.id == 'DRIPS':
             pos = mesh_map('POSITION')
             cavity = 1 - mesh_map('AO')[..., 0]
+            if micro is not None:
+                cavity = np.maximum(cavity, micro[1])
             streaks = procedural('STREAKS', pos[..., 0] + pos[..., 1] * .731, pos[..., 2], seed=parameters.seed, scale=parameters.noise_scale)
             return threshold(streaks) * np.clip(cavity * 3 + amount * (1 - pos[..., 2]), 0, 1)
         if self.id in {'MATERIAL_ID', 'OBJECT_ID', 'UV_ISLAND'}:
@@ -110,5 +122,6 @@ class Generator:
 GENERATORS = {key: Generator(key, key.replace('_', ' ').title()) for key in REQUIRED_MAPS}
 
 
-def evaluate(ts, mask, u, v, cache):
-    return GENERATORS['NOISE' if mask.source == 'NOISE' else mask.generator].evaluate(ts, mask, u, v, cache)
+def evaluate(ts, mask, u, v, cache, resources=None, rows=None):
+    return GENERATORS['NOISE' if mask.source == 'NOISE' else mask.generator].evaluate(
+        ts, mask, u, v, cache, resources=resources, rows=rows)

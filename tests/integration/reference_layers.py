@@ -40,9 +40,16 @@ LayerEvaluator(scene).evaluate_texture_set(ts.id)
 prop.value=.6
 assert images.output(ts,'ROUGHNESS').dirty
 LayerEvaluator(scene).evaluate_texture_set(ts.id)
-# Cycle is rejected before any publication.
+# Cycles are item-granular: the source mask stack reading the consumer's mask
+# stack is fine while the consumer reads the source's HEIGHT channel or only the
+# painted prefix, and becomes a cycle once the consumer reads the whole stack.
 source=next(l for l in ts.layers if l.id==source_id)
 cycle=source.masks.add(); cycle.id=new_id(); cycle.source='REFERENCE'; cycle.reference_layer=consumer.id
+assert not issues(ts), issues(ts)
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
+consumer.masks[0].reference_channel='MASK'
+assert not issues(ts), issues(ts)
+consumer.masks[0].reference_mask=''
 assert any('cycle' in text for text in issues(ts))
 revision=images.output(ts,'ROUGHNESS').revision
 try:
@@ -51,6 +58,7 @@ try:
 except ValueError: pass
 assert images.output(ts,'ROUGHNESS').revision==revision
 source.masks.remove(len(source.masks)-1)
+consumer.masks[0].reference_channel='HEIGHT'; consumer.masks[0].reference_mask=paint_id
 # Group duplication remaps internal references and copies editable paint.
 folder=stack.group(ts,[l.id for l in ts.layers],'Bundle')
 folder_id=folder.id

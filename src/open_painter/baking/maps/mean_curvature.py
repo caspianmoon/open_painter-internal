@@ -23,7 +23,6 @@ angle are left to the crease-line rasterizer when ``exclude_angle`` is given.
 import numpy as np
 
 from ...geometry.snapshots import _unit
-from ...geometry.uv_rasterizer import tiles as _tiles
 
 DEAD_ZONE = 0.1  # turning across the diameter, in radians (about six degrees)
 
@@ -97,92 +96,139 @@ def face_turning(target, exclude_angle=None):
 
 
 def _samples(target, turning, area, spacing):
-    """Point samples over every assigned triangle carrying its share of turning and area."""
+    """Point samples over every assigned triangle carrying its share of turning and area.
+
+    Triangles are grouped by their (steps_u, steps_v) lattice so each group is
+    sampled in one array operation; the placement rule is unchanged.
+    """
     positions = np.asarray(target["positions"], np.float64)
+    tri_vertices, tri_polygons = target["tri_vertices"], target["tri_polygons"]
+    if not len(tri_vertices):
+        return np.empty((0, 3)), np.empty(0), np.empty(0)
+    corners = positions[tri_vertices]                                    # (T, 3, 3)
+    edges = np.linalg.norm(np.roll(corners, -1, axis=1) - corners, axis=2)  # edge k: corner k -> k+1
+    k = np.argmax(edges, axis=1)
+    rotated = np.stack([corners[np.arange(len(corners)), (k + shift) % 3] for shift in range(3)], axis=1)
+    base = np.maximum(edges[np.arange(len(edges)), k], 1e-12)
+    tri_area = .5 * np.linalg.norm(np.cross(rotated[:, 1] - rotated[:, 0], rotated[:, 2] - rotated[:, 0]), axis=1)
+    height = 2 * tri_area / base
+    steps_u = np.maximum(np.ceil(base / spacing).astype(np.int64), 1)
+    steps_v = np.maximum(np.ceil(height / spacing).astype(np.int64), 1)
+    share = tri_area / np.maximum(area[tri_polygons], 1e-18)
+    turn = turning[tri_polygons] * share
+    lattice = steps_u * (steps_v.max() + 1) + steps_v
     points, turn_w, area_w = [], [], []
-    for tri in target["triangles"]:
-        corners = positions[list(tri.vertices)]
-        edges = [np.linalg.norm(corners[(k + 1) % 3] - corners[k]) for k in range(3)]
-        k = int(np.argmax(edges))
-        corners = corners[[k, (k + 1) % 3, (k + 2) % 3]]
-        base = max(edges[k], 1e-12)
-        tri_area = .5 * np.linalg.norm(np.cross(corners[1] - corners[0], corners[2] - corners[0]))
-        height = 2 * tri_area / base
-        steps_u = max(int(np.ceil(base / spacing)), 1)
-        steps_v = max(int(np.ceil(height / spacing)), 1)
-        i, j = np.meshgrid(np.arange(steps_u + 1), np.arange(steps_v + 1))
-        u = (i + 1 / 3) / (steps_u + 1)
-        v = (j + 1 / 3) / (steps_v + 1)
+    for code in np.unique(lattice):
+        chosen = np.flatnonzero(lattice == code)
+        su, sv = int(steps_u[chosen[0]]), int(steps_v[chosen[0]])
+        i, j = np.meshgrid(np.arange(su + 1), np.arange(sv + 1))
+        u = (i + 1 / 3) / (su + 1)
+        v = (j + 1 / 3) / (sv + 1)
         keep = u + v < 1
         u, v = u[keep], v[keep]
         count = max(len(u), 1)
-        polygon = tri.polygon_index
-        share = tri_area / max(area[polygon], 1e-18)  # this triangle's part of its polygon
-        points.append(corners[0] + (corners[1] - corners[0]) * u[:, None] + (corners[2] - corners[0]) * v[:, None])
-        turn_w.append(np.full(count, turning[polygon] * share / count))
-        area_w.append(np.full(count, tri_area / count))
-    if not points:
-        return np.empty((0, 3)), np.empty(0), np.empty(0)
+        c0, c1, c2 = rotated[chosen, 0], rotated[chosen, 1], rotated[chosen, 2]
+        sampled = (c0[:, None, :] + (c1 - c0)[:, None, :] * u[None, :, None]
+                   + (c2 - c0)[:, None, :] * v[None, :, None])
+        points.append(sampled.reshape(-1, 3))
+        turn_w.append(np.repeat(turn[chosen] / count, len(u)))
+        area_w.append(np.repeat(tri_area[chosen] / count, len(u)))
     return np.concatenate(points), np.concatenate(turn_w), np.concatenate(area_w)
 
 
-def _grid(points, radius):
-    cells = {}
-    for index, key in enumerate(map(tuple, np.floor(points / radius).astype(np.int64))):
-        cells.setdefault(key, []).append(index)
-    return {key: np.asarray(value, np.int64) for key, value in cells.items()}
+_OFFSETS = np.array([(x, y, z) for x in (-1, 0, 1) for y in (-1, 0, 1) for z in (-1, 0, 1)], np.int64)
 
 
-def _nearby(cells, lo, hi):
-    found = [cells[key] for x in range(lo[0], hi[0] + 1) for y in range(lo[1], hi[1] + 1)
-             for z in range(lo[2], hi[2] + 1) if (key := (x, y, z)) in cells]
-    return np.concatenate(found) if found else np.empty(0, np.int64)
+def _encode(cells, origin, span):
+    shifted = cells - origin
+    return (shifted[:, 0] * span[1] + shifted[:, 1]) * span[2] + shifted[:, 2]
 
 
 def estimate(target, n, radius, result, covered, exclude_angle=None):
-    """Write turning across ``2 * radius`` per texel of this target into ``result``."""
+    """Write turning across ``2 * radius`` per texel of this target into ``result``.
+
+    Texels are grouped by grid cell (size ``radius``); each group evaluates the
+    tent kernel against the samples of its 27 surrounding cells in one block,
+    so samples beyond the kernel contribute nothing, exactly as the per-block
+    search did, while the Python cost is per cell rather than per triangle.
+    """
+    from ...geometry.uv_rasterizer import interpolate, rasterize
     turning, area = face_turning(target, exclude_angle)
     points, turn_w, area_w = _samples(target, turning, area, radius * .5)
-    cells = _grid(points, radius) if len(points) else {}
+    rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n, unique=False)
+    if not len(rows):
+        return result
+    covered[rows, cols] = True
+    if not len(points):
+        return result
     positions = np.asarray(target["positions"], np.float64)
-    for tri in target["triangles"]:
-        uv = target["uv"][list(tri.loops)]
-        corners = positions[list(tri.vertices)]
-        # Texel size in world units, to cut each tile into blocks about one
-        # radius wide so a block only gathers the samples that can reach it.
-        uv_area = .5 * abs((uv[1, 0] - uv[0, 0]) * (uv[2, 1] - uv[0, 1]) - (uv[2, 0] - uv[0, 0]) * (uv[1, 1] - uv[0, 1]))
-        world_area = .5 * np.linalg.norm(np.cross(corners[1] - corners[0], corners[2] - corners[0]))
-        texel = np.sqrt(world_area / max(uv_area, 1e-18)) / n
-        block = max(8, int(radius / max(texel, 1e-12)))
-        for region, inside, tri_weights, _, _ in _tiles(uv, n):
-            covered[region] |= inside
-            if not cells:
+    texels = interpolate(weights, positions[target["tri_vertices"][tri]])
+    cells = np.floor(points / radius).astype(np.int64)
+    origin = cells.min(axis=0) - 2
+    span = cells.max(axis=0) - origin + 3
+    order = np.argsort(_encode(cells, origin, span), kind="stable")
+    sorted_keys = _encode(cells, origin, span)[order]
+    sorted_points, sorted_turn, sorted_area = points[order], turn_w[order], area_w[order]
+    unique_keys, starts, counts = np.unique(sorted_keys, return_index=True, return_counts=True)
+    texel_cells = np.floor(texels / radius).astype(np.int64)
+    inside = np.all((texel_cells >= origin) & (texel_cells < origin + span), axis=1)
+    texel_keys = np.where(inside, _encode(np.where(inside[:, None], texel_cells, origin), origin, span), -1)
+    texel_order = np.argsort(texel_keys, kind="stable")
+    sorted_texels = texels[texel_order]
+    group_keys, group_starts, group_counts = np.unique(texel_keys[texel_order], return_index=True, return_counts=True)
+    # Neighbour sample ranges of every texel cell, resolved for all groups at once.
+    group_cells = np.stack(((group_keys // span[2]) // span[1], (group_keys // span[2]) % span[1], group_keys % span[2]), axis=1) + origin
+    neighbour_starts = np.zeros((len(group_keys), len(_OFFSETS)), np.int64)
+    neighbour_counts = np.zeros((len(group_keys), len(_OFFSETS)), np.int64)
+    for column, offset in enumerate(_OFFSETS):
+        neighbour = group_cells + offset
+        outside = np.any((neighbour < origin) | (neighbour >= origin + span), axis=1)
+        code = _encode(np.where(outside[:, None], origin, neighbour), origin, span)
+        slot = np.minimum(np.searchsorted(unique_keys, code), len(unique_keys) - 1)
+        hit = (unique_keys[slot] == code) & ~outside & (group_keys >= 0)
+        neighbour_starts[hit, column] = starts[slot[hit]]
+        neighbour_counts[hit, column] = counts[slot[hit]]
+    value = np.zeros(len(texels))
+    for group in range(len(group_keys)):
+        if group_keys[group] < 0:
+            continue
+        pieces = [(int(s), int(c)) for s, c in zip(neighbour_starts[group], neighbour_counts[group]) if c]
+        if not pieces:
+            continue
+        gathered = np.concatenate([sorted_points[s:s + c] for s, c in pieces])
+        tw = np.concatenate([sorted_turn[s:s + c] for s, c in pieces])
+        aw = np.concatenate([sorted_area[s:s + c] for s, c in pieces])
+        first, total = int(group_starts[group]), int(group_counts[group])
+        block = sorted_texels[first:first + total]
+        # Sub-blocks by octant: samples farther than the radius from a
+        # sub-block's bounding box have a zero kernel for all of its texels and
+        # are dropped before the pair matrix; the remaining sums are unchanged.
+        centre = (block.min(axis=0) + block.max(axis=0)) * .5
+        octant = ((block >= centre) * (1, 2, 4)).sum(axis=1)
+        for code in range(8):
+            member = np.flatnonzero(octant == code)
+            if not len(member):
                 continue
-            tile = result[region]
-            width = inside.shape[1]
-            for x0 in range(0, width, block):
-                sub = np.zeros_like(inside)
-                sub[:, x0:x0 + block] = inside[:, x0:x0 + block]
-                p = (tri_weights @ corners)[sub]
-                if not len(p):
-                    continue
-                lo = np.floor((p.min(axis=0) - radius) / radius).astype(np.int64)
-                hi = np.floor((p.max(axis=0) + radius) / radius).astype(np.int64)
-                nearby = _nearby(cells, lo, hi)
-                if not len(nearby):
-                    continue
-                sample_points, tw, aw = points[nearby], turn_w[nearby], area_w[nearby]
-                value = np.zeros(len(p))
-                step = max(1, 2_000_000 // len(nearby))
-                for start in range(0, len(p), step):
-                    chunk = p[start:start + step]
-                    kernel = np.clip(1 - np.linalg.norm(chunk[:, None, :] - sample_points[None], axis=-1) / radius, 0, None)
-                    numerator, denominator = kernel @ tw, kernel @ aw
-                    # 4 R H: a bend of radius r reads 2 R / r; a hard edge saturates.
-                    value[start:start + step] = np.where(denominator > 1e-18, 4 * radius * numerator / np.maximum(denominator, 1e-18), 0.0)
-                current = tile[sub]
-                # Overlapping UVs from several objects keep the stronger feature.
-                tile[sub] = np.where(np.abs(value) > np.abs(current), value, current)
+            sub = block[member]
+            lo, hi = sub.min(axis=0), sub.max(axis=0)
+            outside = np.maximum(np.maximum(lo - gathered, gathered - hi), 0)
+            near = np.flatnonzero((outside * outside).sum(axis=1) <= radius * radius)
+            if not len(near):
+                continue
+            kernel = np.clip(1 - np.linalg.norm(sub[:, None, :] - gathered[near][None], axis=-1) / radius, 0, None)
+            numerator, denominator = kernel @ tw[near], kernel @ aw[near]
+            # 4 R H: a bend of radius r reads 2 R / r; a hard edge saturates.
+            value[texel_order[first + member]] = np.where(
+                denominator > 1e-18, 4 * radius * numerator / np.maximum(denominator, 1e-18), 0.0)
+    # Overlapping UVs (from several triangles or objects) keep the stronger feature.
+    flat = rows * n + cols
+    order = np.lexsort((np.abs(value), flat))
+    flat_sorted = flat[order]
+    last = np.flatnonzero(np.append(flat_sorted[1:] != flat_sorted[:-1], True))
+    chosen = order[last]
+    current = result.reshape(-1)[flat[chosen]]
+    strongest = value[chosen]
+    result.reshape(-1)[flat[chosen]] = np.where(np.abs(strongest) > np.abs(current), strongest, current)
     return result
 
 

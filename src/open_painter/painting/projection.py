@@ -19,18 +19,17 @@ def geometry(ts, n, coverage=False):
         # Preserve their neutral staging preview until the artist assigns one.
         return (positions, normals, valid) if coverage else (positions, normals)
     from ..geometry.snapshots import targets
-    from ..geometry.uv_rasterizer import tiles
+    from ..geometry.uv_rasterizer import interpolate, rasterize
     with targets(ts) as objects:
         for target in objects:
-            for triangle in target["triangles"]:
-                loops = list(triangle.loops)
-                points = target["positions"][list(triangle.vertices)]
-                corner_normals = target["world_normals"][loops]
-                for region, inside, weights, *_ in tiles(target["uv"][loops], n):
-                    positions[region][inside] = (weights @ points)[inside]
-                    normals[region][inside] = (weights @ corner_normals)[inside]
-                    if coverage:
-                        valid[region][inside] = True
+            # All triangles of a target at once; later targets overwrite earlier ones.
+            rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n)
+            if not len(rows):
+                continue
+            positions[rows, cols] = interpolate(weights, target["positions"][target["tri_vertices"][tri]])
+            normals[rows, cols] = interpolate(weights, target["world_normals"][target["tri_loops"][tri]])
+            if coverage:
+                valid[rows, cols] = True
     return (positions, normals, valid) if coverage else (positions, normals)
 
 

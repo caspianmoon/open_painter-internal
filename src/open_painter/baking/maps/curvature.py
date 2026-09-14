@@ -15,31 +15,56 @@ from ...core import image_manager as images
 
 
 def crease_edges(mesh, world, minimum_angle, concave=False):
-    """Return convex (or concave) shared mesh edges above the geometric threshold."""
-    adjacency = {}
-    normals, centers = {}, {}
-    transform = world.to_3x3().inverted_safe().transposed()
-    for face in mesh.polygons:
-        normals[face.index] = (transform @ face.normal).normalized()
-        centers[face.index] = world @ face.center
-        for edge in face.edge_keys:
-            adjacency.setdefault(tuple(sorted(edge)), []).append(face.index)
+    """Return convex (or concave) shared mesh edges above the geometric threshold.
+
+    Vectorised over polygons and loops: face normals/centers come from
+    foreach_get, edges shared by exactly two faces are found by sorting keys.
+    """
+    count = len(mesh.polygons)
+    if not count:
+        return set()
+    normals = np.empty(count * 3, np.float32)
+    mesh.polygons.foreach_get("normal", normals)
+    centers = np.empty(count * 3, np.float32)
+    mesh.polygons.foreach_get("center", centers)
+    loop_start = np.empty(count, np.int32)
+    mesh.polygons.foreach_get("loop_start", loop_start)
+    loop_total = np.empty(count, np.int32)
+    mesh.polygons.foreach_get("loop_total", loop_total)
+    loop_vertex = np.empty(len(mesh.loops), np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vertex)
+    transform = np.asarray(world.to_3x3().inverted_safe().transposed(), np.float64)
+    normals = normals.reshape(-1, 3).astype(np.float64) @ transform.T
+    normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+    matrix = np.asarray(world, np.float64)
+    centers = centers.reshape(-1, 3).astype(np.float64) @ matrix[:3, :3].T + matrix[:3, 3]
+    # Each loop starts one polygon edge; the next loop wraps within the polygon.
+    face = np.repeat(np.arange(count), loop_total)
+    loop = np.arange(len(loop_vertex))
+    following = loop + 1
+    last = loop_start + loop_total - 1
+    following[last] = loop_start
+    va, vb = loop_vertex, loop_vertex[following]
+    keys = np.minimum(va, vb).astype(np.int64) * len(mesh.vertices) + np.maximum(va, vb)
+    order = np.argsort(keys, kind="stable")
+    sorted_keys = keys[order]
+    unique, first, counts = np.unique(sorted_keys, return_index=True, return_counts=True)
+    shared = counts == 2  # Open/nonmanifold boundaries are not convex surface creases.
+    a = face[order[first[shared]]]
+    b = face[order[first[shared] + 1]]
     limit = cos(radians(minimum_angle))
-    result = set()
-    for edge, faces in adjacency.items():
-        if len(faces) != 2:
-            continue  # Open/nonmanifold boundaries are not convex surface creases.
-        a, b = faces
-        dot = normals[a].dot(normals[b])
-        if dot >= limit or dot > 1 - 1e-6:
-            continue
-        separation = centers[b] - centers[a]
-        if concave:
-            if normals[a].dot(separation) > 1e-8 and normals[b].dot(separation) < -1e-8:
-                result.add(edge)
-        elif normals[a].dot(separation) < -1e-8 and normals[b].dot(separation) > 1e-8:
-            result.add(edge)
-    return result
+    dot = np.einsum("ij,ij->i", normals[a], normals[b])
+    candidate = ~((dot >= limit) | (dot > 1 - 1e-6))
+    separation = centers[b] - centers[a]
+    along_a = np.einsum("ij,ij->i", normals[a], separation)
+    along_b = np.einsum("ij,ij->i", normals[b], separation)
+    if concave:
+        chosen = candidate & (along_a > 1e-8) & (along_b < -1e-8)
+    else:
+        chosen = candidate & (along_a < -1e-8) & (along_b > 1e-8)
+    edge_keys = unique[shared][chosen]
+    vertices = len(mesh.vertices)
+    return set(zip((edge_keys // vertices).tolist(), (edge_keys % vertices).tolist()))
 
 
 def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
@@ -48,18 +73,25 @@ def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
     if uv_layer is None:
         raise ValueError("Curvature requires a render UV map.")
     creases = crease_edges(mesh, world, minimum_angle, concave)
+    if not creases:
+        return result
     mesh.calc_loop_triangles()
-    for tri in mesh.loop_triangles:
-        if tri.material_index not in slots:
-            continue
-        edges = [
-            (i, j)
-            for i, j in ((0, 1), (1, 2), (2, 0))
-            if tuple(sorted((tri.vertices[i], tri.vertices[j]))) in creases
-        ]
-        if not edges:
-            continue
-        coords = np.array([uv_layer.data[i].uv[:] for i in tri.loops], dtype=np.float32) * n - 0.5
+    from ...geometry.snapshots import _triangle_arrays
+    tri_vertices, tri_loops, tri_material, _ = _triangle_arrays(mesh)
+    uv = np.empty((len(mesh.loops), 2), np.float32)
+    uv_layer.data.foreach_get("uv", uv.ravel())
+    vertices = len(mesh.vertices)
+    crease_keys = np.fromiter((a * vertices + b for a, b in creases), np.int64, len(creases))
+    sides = ((0, 1), (1, 2), (2, 0))
+    flags = np.zeros((len(tri_vertices), 3), bool)
+    for column, (i, j) in enumerate(sides):
+        va, vb = tri_vertices[:, i], tri_vertices[:, j]
+        flags[:, column] = np.isin(np.minimum(va, vb).astype(np.int64) * vertices + np.maximum(va, vb), crease_keys)
+    selected = np.isin(tri_material, np.fromiter(slots, np.int32, len(slots))) & flags.any(axis=1)
+    # Only triangles touching a crease rasterize; the arithmetic is unchanged.
+    for triangle in np.flatnonzero(selected):
+        edges = [side for column, side in enumerate(sides) if flags[triangle, column]]
+        coords = uv[tri_loops[triangle]] * n - 0.5
         lo = np.maximum(np.ceil(coords.min(axis=0)).astype(int), 0)
         hi = np.minimum(np.floor(coords.max(axis=0)).astype(int) + 1, n)
         a, b, c = coords

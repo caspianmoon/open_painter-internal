@@ -12,7 +12,7 @@ def signature(ts, field):
 
 def _attribute(ts, field, n):
     from ..geometry.snapshots import targets
-    from ..geometry.uv_rasterizer import tiles
+    from ..geometry.uv_rasterizer import interpolate, rasterize
     result = np.zeros((n,n),np.float32)
     with targets(ts) as meshes:
         for target in meshes:
@@ -39,11 +39,14 @@ def _attribute(ts, field, n):
                     values = colors[:,:3] @ np.array((.2126,.7152,.0722),np.float32)
                 else:
                     raise ValueError(f'{obj.name}: attribute must be float or color')
-            for tri in target['triangles']:
-                indices = list(tri.vertices if domain == 'POINT' else tri.loops)
-                samples = values[indices] if domain != 'FACE' else np.full(3, values[tri.polygon_index])
-                for region, inside, weights, _, _ in tiles(target['uv'][list(tri.loops)], n):
-                    result[region][inside] = (weights @ samples)[inside]
+            rows, cols, tri, weights = rasterize(target['uv'][target['tri_loops']], n)
+            if not len(rows):
+                continue
+            if domain == 'FACE':
+                corners = np.repeat(values[target['tri_polygons'][tri]][:, None], 3, axis=1)
+            else:
+                corners = values[(target['tri_vertices'] if domain == 'POINT' else target['tri_loops'])[tri]]
+            result[rows, cols] = interpolate(weights, corners)
     return result
 
 

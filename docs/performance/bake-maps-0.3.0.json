@@ -1,0 +1,75 @@
+{
+ "note": "tests/performance/bake_maps.py on open painter test.blend (2048, 315k polygons in scene, 39.6k assigned faces). Identical output means a bit-identical map; the interpolated maps (geometry, POSITION, WORLD_NORMAL, THICKNESS) differ only in float rounding of the barycentric interpolation.",
+ "rows": [
+  {
+   "step": "geometry 2048",
+   "before_ms": 2361.5,
+   "after_ms": 1237.8,
+   "speedup": 1.91,
+   "identical_output": false
+  },
+  {
+   "step": "POSITION",
+   "before_ms": 2145.9,
+   "after_ms": 793.1,
+   "speedup": 2.71,
+   "identical_output": false
+  },
+  {
+   "step": "WORLD_NORMAL",
+   "before_ms": 2183.7,
+   "after_ms": 800.4,
+   "speedup": 2.73,
+   "identical_output": false
+  },
+  {
+   "step": "MATERIAL_ID",
+   "before_ms": 1850.7,
+   "after_ms": 652.9,
+   "speedup": 2.83,
+   "identical_output": true
+  },
+  {
+   "step": "UV_ISLAND",
+   "before_ms": 2992.5,
+   "after_ms": 1311.4,
+   "speedup": 2.28,
+   "identical_output": true
+  },
+  {
+   "step": "UV_BORDER",
+   "before_ms": 9653.5,
+   "after_ms": 1784.2,
+   "speedup": 5.41,
+   "identical_output": true
+  },
+  {
+   "step": "SELECTION",
+   "before_ms": 1721.3,
+   "after_ms": 653.4,
+   "speedup": 2.63,
+   "identical_output": true
+  },
+  {
+   "step": "THICKNESS",
+   "before_ms": 2967.8,
+   "after_ms": 834.8,
+   "speedup": 3.56,
+   "identical_output": false
+  },
+  {
+   "step": "MEAN_CURVATURE",
+   "before_ms": 28654.2,
+   "after_ms": 11485.3,
+   "speedup": 2.49,
+   "identical_output": true
+  },
+  {
+   "step": "CURVATURE",
+   "before_ms": 28671.0,
+   "after_ms": 10992.2,
+   "speedup": 2.61,
+   "identical_output": true
+  }
+ ]
+}

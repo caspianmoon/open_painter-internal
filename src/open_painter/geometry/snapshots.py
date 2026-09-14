@@ -16,6 +16,34 @@ def _object_key(obj):
     return f"{obj.library.filepath if obj.library else ''}|{obj.name_full}"
 
 
+class Target(dict):
+    """One evaluated mesh's arrays; the RNA triangle list is built only on request."""
+
+    def __missing__(self, key):
+        if key == "triangles":
+            triangles = self["mesh"].loop_triangles
+            self["triangles"] = value = [triangles[int(i)] for i in self["tri_indices"]]
+            return value
+        raise KeyError(key)
+
+
+def _triangle_arrays(mesh):
+    """Corner/vertex/polygon indices of every loop triangle, without per-triangle RNA."""
+    count = len(mesh.loop_triangles)
+    vertices = np.empty(count * 3, np.int32)
+    mesh.loop_triangles.foreach_get("vertices", vertices)
+    loops = np.empty(count * 3, np.int32)
+    mesh.loop_triangles.foreach_get("loops", loops)
+    material = np.empty(count, np.int32)
+    mesh.loop_triangles.foreach_get("material_index", material)
+    polygons = np.empty(count, np.int32)
+    if hasattr(mesh, "loop_triangle_polygons"):
+        mesh.loop_triangle_polygons.foreach_get("value", polygons)
+    else:
+        mesh.loop_triangles.foreach_get("polygon_index", polygons)
+    return vertices.reshape(-1, 3), loops.reshape(-1, 3), material, polygons
+
+
 @contextmanager
 def targets(ts):
     """Keep evaluated meshes alive only for the duration of this bake."""
@@ -40,8 +68,9 @@ def targets(ts):
                 raise ValueError(f"{obj.name} requires a render UV map.")
             slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
             mesh.calc_loop_triangles()
-            selected = [tri for tri in mesh.loop_triangles if tri.material_index in slots]
-            if not selected:
+            tri_vertices, tri_loops, tri_material, tri_polygons = _triangle_arrays(mesh)
+            chosen = np.flatnonzero(np.isin(tri_material, np.fromiter(slots, np.int32, len(slots))))
+            if not len(chosen):
                 raise ValueError(f"{obj.name} has no evaluated faces in its assigned slots.")
             local = np.empty((len(mesh.vertices), 3), dtype=np.float32)
             mesh.vertices.foreach_get("co", local.ravel())
@@ -64,14 +93,16 @@ def targets(ts):
             world_normals = _unit(loop_normals @ normal_matrix.T).astype(np.float32)
             uv_coords = np.empty((len(mesh.loops), 2), dtype=np.float32)
             uv.data.foreach_get("uv", uv_coords.ravel())
-            used = np.unique(np.asarray([tri.vertices[:] for tri in selected], dtype=np.int32))
-            targets.append({
-                "object": obj, "mesh": mesh, "slots": slots, "triangles": selected,
+            used = np.unique(tri_vertices[chosen])
+            targets.append(Target({
+                "object": obj, "mesh": mesh, "slots": slots, "tri_indices": chosen,
+                "tri_vertices": tri_vertices[chosen], "tri_loops": tri_loops[chosen],
+                "tri_polygons": tri_polygons[chosen], "tri_material": tri_material[chosen],
                 "positions": coords, "object_normals": loop_normals,
                 "world_normals": world_normals, "uv": uv_coords,
                 "minimum": coords[used].min(axis=0), "maximum": coords[used].max(axis=0),
                 "mirrored": np.linalg.det(world[:3, :3]) < 0,
-            })
+            }))
         yield targets
     finally:
         for evaluated in temporary:

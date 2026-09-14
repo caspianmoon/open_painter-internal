@@ -32,43 +32,130 @@ UTILITY_KINDS = (
 )
 
 
-from ...geometry.snapshots import targets as _targets, _unit, _object_key
-from ...geometry.uv_rasterizer import tiles as _tiles
+from ...geometry.snapshots import targets as _targets, _triangle_arrays, _unit, _object_key
+from ...geometry.uv_rasterizer import interpolate as _interpolate, rasterize as _rasterize_batched, tiles as _tiles
 
 
 def _islands(target):
-    """Topology plus continuous UV endpoints; triangulation never adds borders."""
+    """UV islands of the assigned faces: (root per polygon, border segments per island).
+
+    Topology plus continuous UV endpoints; triangulation never adds borders.
+    Vectorised: polygon loops come from foreach_get, shared edges pair up by
+    sorted key, and joins run through an array union-find.
+    """
     mesh, uv = target["mesh"], target["uv"]
-    faces = [face for face in mesh.polygons if face.material_index in target["slots"]]
-    parents = {face.index: face.index for face in faces}
-    adjacency = {}
+    count = len(mesh.polygons)
+    material = np.empty(count, np.int32)
+    mesh.polygons.foreach_get("material_index", material)
+    loop_start = np.empty(count, np.int32)
+    mesh.polygons.foreach_get("loop_start", loop_start)
+    loop_total = np.empty(count, np.int32)
+    mesh.polygons.foreach_get("loop_total", loop_total)
+    loop_vertex = np.empty(len(mesh.loops), np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vertex)
+    faces = np.flatnonzero(np.isin(material, np.fromiter(target["slots"], np.int32, len(target["slots"]))))
+    labels = np.full(count, -1, np.int64)
+    if not len(faces):
+        return labels, {}
+    face_of_loop = np.repeat(faces, loop_total[faces])
+    loops = np.concatenate([np.arange(loop_start[f], loop_start[f] + loop_total[f]) for f in faces]) \
+        if len(faces) < 4096 else np.flatnonzero(np.isin(np.repeat(np.arange(count), loop_total), faces))
+    following = loops + 1
+    last = loop_start[faces] + loop_total[faces] - 1
+    following[np.isin(loops, last)] = loop_start[face_of_loop[np.isin(loops, last)]]
+    va, vb = loop_vertex[loops], loop_vertex[following]
+    swap = va > vb
+    a = np.where(swap, following, loops)
+    b = np.where(swap, loops, following)
+    keys = np.minimum(va, vb).astype(np.int64) * len(mesh.vertices) + np.maximum(va, vb)
+    order = np.argsort(keys, kind="stable")
+    sorted_keys = keys[order]
+    _, first, counts = np.unique(sorted_keys, return_index=True, return_counts=True)
+    paired = first[counts == 2]
+    entry_a, entry_b = order[paired], order[paired + 1]
+    joined = (np.all(np.abs(uv[a[entry_a]] - uv[a[entry_b]]) <= 1e-6, axis=1)
+              & np.all(np.abs(uv[b[entry_a]] - uv[b[entry_b]]) <= 1e-6, axis=1))
+    # Union in the original insertion order (first appearance of each shared
+    # edge) with root(b) hooked under root(a): island representatives, and so
+    # the island ID colors keyed by them, stay identical to earlier bakes.
+    parent = list(range(count))
 
     def root(index):
-        while parents[index] != index:
-            parents[index] = parents[parents[index]]
-            index = parents[index]
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
         return index
 
-    for face in faces:
-        loops = list(face.loop_indices)
-        for a, b in zip(loops, loops[1:] + loops[:1]):
-            va, vb = mesh.loops[a].vertex_index, mesh.loops[b].vertex_index
-            ordered = (a, b) if va < vb else (b, a)
-            key = tuple(sorted((va, vb)))
-            adjacency.setdefault(key, []).append((face.index, ordered))
+    sequence = np.argsort(entry_a[joined], kind="stable")
+    for fa, fb in zip(face_of_loop[entry_a[joined]][sequence].tolist(),
+                      face_of_loop[entry_b[joined]][sequence].tolist()):
+        parent[root(fb)] = root(fa)
+    labels[faces] = [root(int(face)) for face in faces]
+    border = np.ones(len(loops), bool)
+    border[entry_a[joined]] = False
+    border[entry_b[joined]] = False
+    segments = np.stack((uv[a[border]], uv[b[border]]), axis=1)
+    islands = labels[face_of_loop[border]]
     borders = {}
-    for entries in adjacency.values():
-        joined = False
-        if len(entries) == 2:
-            (a, la), (b, lb) = entries
-            if np.allclose(uv[list(la)], uv[list(lb)], atol=1e-6, rtol=0):
-                parents[root(b)] = root(a)
-                joined = True
-        if not joined:
-            for face, (a, b) in entries:
-                borders.setdefault(face, []).append((uv[a], uv[b]))
-    labels = {index: root(index) for index in parents}
+    for island in np.unique(islands):
+        borders[int(island)] = segments[islands == island]
     return labels, borders
+
+
+def _border_coverage(rows, cols, texel_island, borders, n, width):
+    """Distance falloff from an island's own border edges, evaluated for every edge at once."""
+    ids = {island: index for index, island in enumerate(borders)}
+    if not ids or not len(rows):
+        return np.zeros(len(rows), np.float32)
+    segments = np.concatenate([borders[island] for island in ids]).astype(np.float32) * n - 0.5
+    edge_island = np.concatenate([np.full(len(borders[island]), ids[island]) for island in ids])
+    start, end = segments[:, 0], segments[:, 1]
+    delta = end - start
+    length = delta[:, 0] * delta[:, 0] + delta[:, 1] * delta[:, 1]
+    reach = int(math.ceil(width)) + 1
+    x0 = np.clip(np.floor(np.minimum(start[:, 0], end[:, 0])).astype(np.int64) - reach, 0, n)
+    x1 = np.clip(np.ceil(np.maximum(start[:, 0], end[:, 0])).astype(np.int64) + reach + 1, 0, n)
+    y0 = np.clip(np.floor(np.minimum(start[:, 1], end[:, 1])).astype(np.int64) - reach, 0, n)
+    y1 = np.clip(np.ceil(np.maximum(start[:, 1], end[:, 1])).astype(np.int64) + reach + 1, 0, n)
+    valid = (length >= 1e-12) & (x1 > x0) & (y1 > y0)
+    extent = np.maximum(x1 - x0, y1 - y0)
+    keys, values = [], []
+    block, previous = 8, 0
+    while previous < extent.max(initial=0):
+        chosen = np.flatnonzero(valid & (extent > previous) & (extent <= block))
+        previous, block = block, block * 2
+        if not len(chosen):
+            continue
+        offsets = np.arange(previous, dtype=np.float32)
+        chunk = max(64, (1 << 21) // (previous * previous))
+        for at in range(0, len(chosen), chunk):
+            sub = chosen[at:at + chunk]
+            x = x0[sub].astype(np.float32)[:, None, None] + offsets[None, None, :]
+            y = y0[sub].astype(np.float32)[:, None, None] + offsets[None, :, None]
+            sx, sy = start[sub, 0, None, None], start[sub, 1, None, None]
+            dx, dy = delta[sub, 0, None, None], delta[sub, 1, None, None]
+            t = np.clip(((x - sx) * dx + (y - sy) * dy) / length[sub, None, None], 0, 1)
+            distance = np.hypot(x - sx - t * dx, y - sy - t * dy)
+            value = np.clip(1 - distance / width, 0, 1)
+            inside = (x < x1[sub, None, None]) & (y < y1[sub, None, None]) & (value > 0)
+            index, yy, xx = np.nonzero(inside)
+            texel = (y0[sub][index] + yy) * n + (x0[sub][index] + xx)
+            keys.append(texel * len(ids) + edge_island[sub][index])
+            values.append(value[inside])
+    result = np.zeros(len(rows), np.float32)
+    if not keys:
+        return result
+    keys, values = np.concatenate(keys), np.concatenate(values)
+    order = np.argsort(keys, kind="stable")
+    keys, values = keys[order], values[order]
+    unique, first = np.unique(keys, return_index=True)
+    peak = np.maximum.reduceat(values, first)
+    wanted = (rows * n + cols) * len(ids) + np.array([ids.get(int(island), -1) for island in texel_island])
+    position = np.searchsorted(unique, wanted)
+    position = np.minimum(position, len(unique) - 1)
+    matched = unique[position] == wanted
+    result[matched] = peak[position[matched]]
+    return result
 
 
 def _id_color(key, palette):
@@ -109,66 +196,66 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
             metadata.update(extra)
         return result
     for index, target in enumerate(targets):
-        islands, borders = _islands(target) if kind in {"UV_ISLAND", "UV_BORDER"} else ({}, {})
+        islands, borders = _islands(target) if kind in {"UV_ISLAND", "UV_BORDER"} else (None, {})
         faces = None
         if kind == "SELECTION":
             from .selection import polygon_flags
             faces = polygon_flags(target)
             if metadata is not None:
                 metadata.setdefault("selected_faces", {})[target["object"].name] = np.flatnonzero(faces).tolist()
-        island_borders = {}
-        if kind == "UV_BORDER":
-            for face, edges in borders.items():
-                island_borders.setdefault(islands[face], []).extend(edges)
-            island_borders = {key: np.asarray(edges) for key, edges in island_borders.items()}
         obj = target["object"]
-        for tri in target["triangles"]:
-            uv = target["uv"][list(tri.loops)]
-            if kind == "POSITION":
-                values = np.divide(
-                    target["positions"][list(tri.vertices)] - minimum, span,
-                    out=np.full((3, 3), 0.5, dtype=np.float64), where=nondegenerate,
-                ).astype(np.float32)
-            elif kind in {"WORLD_NORMAL", "OBJECT_NORMAL"}:
-                values = target["world_normals" if kind == "WORLD_NORMAL" else "object_normals"][list(tri.loops)]
-            elif kind in {"MATERIAL_ID", "OBJECT_ID", "UV_ISLAND"}:
-                key = _material_key(ts, obj, tri.material_index) if kind == "MATERIAL_ID" else _object_key(obj)
-                if kind == "UV_ISLAND":
-                    key += f"|island:{islands[tri.polygon_index]}"
-                color = _id_color(key, palette)
-            elif kind == "UV_BORDER":
-                # Border falloff can extend into adjacent faces of an island.
-                # Limit segment tests spatially without treating triangle edges as borders.
-                edge_array = island_borders.get(islands[tri.polygon_index], np.empty((0, 2, 2)))
-                pad = ts.bake.uv_border_width / n
-                selected_edges = edge_array[
-                    np.all(edge_array.max(axis=1) >= uv.min(axis=0) - pad, axis=1)
-                    & np.all(edge_array.min(axis=1) <= uv.max(axis=0) + pad, axis=1)
-                ]
-            for region, inside, weights, x, y in _tiles(uv, n):
-                tile = result[region]
-                if faces is not None:
-                    tile[..., :3][inside] = faces[tri.polygon_index]
-                elif kind in {"POSITION", "WORLD_NORMAL", "OBJECT_NORMAL"}:
-                    current = weights @ values
-                    if kind != "POSITION":
-                        current = _unit(current) * 0.5 + 0.5
-                    tile[..., :3][inside] = current[inside]
-                elif kind in {"MATERIAL_ID", "OBJECT_ID", "UV_ISLAND"}:
-                    tile[..., :3][inside] = color
-                elif kind == "UV_BORDER":
-                    coverage = np.zeros_like(x)
-                    for ua, ub in selected_edges:
-                        start, end = ua * n - 0.5, ub * n - 0.5
-                        delta = end - start
-                        length = float(delta @ delta)
-                        if length < 1e-12:
-                            continue
-                        t = np.clip(((x - start[0]) * delta[0] + (y - start[1]) * delta[1]) / length, 0, 1)
-                        distance = np.hypot(x - start[0] - t * delta[0], y - start[1] - t * delta[1])
-                        np.maximum(coverage, np.clip(1 - distance / ts.bake.uv_border_width, 0, 1), out=coverage)
-                    tile[..., :3][inside] = coverage[inside, None]
-                tile[..., 3][inside] = 1
+        tri_loops, tri_vertices, tri_polygons = target["tri_loops"], target["tri_vertices"], target["tri_polygons"]
+        if kind == "UV_BORDER":
+            rows, cols, tri, _ = _rasterize_batched(target["uv"][tri_loops], n)
+            if not len(rows):
+                continue
+            texel_island = islands[tri_polygons[tri]]
+            result[rows, cols, :3] = _border_coverage(rows, cols, texel_island, borders, n,
+                                                      float(ts.bake.uv_border_width))[:, None]
+            result[rows, cols, 3] = 1
+            continue
+        # Every other map interpolates per-corner or per-triangle data: rasterize
+        # the whole target at once instead of one Python iteration per triangle.
+        rows, cols, tri, weights = _rasterize_batched(target["uv"][tri_loops], n)
+        if not len(rows):
+            continue
+        if faces is not None:
+            result[rows, cols, :3] = faces[tri_polygons[tri]][:, None]
+        elif kind == "POSITION":
+            normalized = np.divide(
+                target["positions"] - minimum, span,
+                out=np.full_like(target["positions"], 0.5), where=nondegenerate,
+            ).astype(np.float32)
+            result[rows, cols, :3] = _interpolate(weights, normalized[tri_vertices[tri]])
+        elif kind in {"WORLD_NORMAL", "OBJECT_NORMAL"}:
+            corners = target["world_normals" if kind == "WORLD_NORMAL" else "object_normals"][tri_loops[tri]]
+            result[rows, cols, :3] = _unit(_interpolate(weights, corners)) * 0.5 + 0.5
+        elif kind in {"MATERIAL_ID", "OBJECT_ID", "UV_ISLAND"}:
+            # Keys enter the palette in triangle order, as the sequential bake did.
+            if kind == "OBJECT_ID":
+                keys = np.full(len(tri_loops), _object_key(obj), dtype=object)
+            elif kind == "MATERIAL_ID":
+                slots_seen = {int(slot): _material_key(ts, obj, int(slot)) for slot in np.unique(target["tri_material"])}
+                keys = np.array([slots_seen[int(slot)] for slot in target["tri_material"]], dtype=object)
+            else:
+                keys = np.array([f"{_object_key(obj)}|island:{int(islands[int(polygon)])}" for polygon in tri_polygons],
+                                dtype=object)
+            colors = np.empty((len(tri_loops), 3), np.float32)
+            for key in dict.fromkeys(keys.tolist()):
+                colors[keys == key] = _id_color(key, palette)
+            result[rows, cols, :3] = colors[tri]
+        result[rows, cols, 3] = 1
+    return result
+
+
+def _orthogonal(vectors):
+    """mathutils.Vector.orthogonal for rows of (N, 3): perpendicular via the dominant axis."""
+    x, y, z = vectors[:, 0], vectors[:, 1], vectors[:, 2]
+    dominant = np.argmax(np.abs(vectors), axis=1)
+    result = np.empty_like(vectors)
+    result[:, 0] = np.select([dominant == 0, dominant == 1], [-y - z, y], z)
+    result[:, 1] = np.select([dominant == 0, dominant == 1], [x, -x - z], z)
+    result[:, 2] = np.select([dominant == 0, dominant == 1], [x, y], -x - y)
     return result
 
 
@@ -182,49 +269,56 @@ def _thickness(targets, ts, n, distance_scale):
     ray_count = hit_count = 0
     # Last surface wins for overlapping UVs, matching the other data maps. Work
     # backwards so even heavily stacked UVs never exceed resolution² * samples.
+    # Sample directions: the inward normal plus a cone of tilted rays.
+    angles = 2 * math.pi * np.arange(samples) / max(1, samples - 1)
+    cone = np.stack((np.cos(angles), np.sin(angles)), axis=-1) * 0.18
     for target in reversed(targets):
+        all_vertices, all_loops, _, _ = _triangle_arrays(target["mesh"])
         tree = BVHTree.FromPolygons(
-            target["positions"].tolist(),
-            [tuple(tri.vertices) for tri in target["mesh"].loop_triangles], all_triangles=True,
+            target["positions"].tolist(), all_vertices.tolist(), all_triangles=True,
         )
-        for tri in reversed(target["triangles"]):
-            uv = target["uv"][list(tri.loops)]
-            positions = target["positions"][list(tri.vertices)]
-            normals = target["world_normals"][list(tri.loops)]
-            for region, inside, weights, _x, _y in _tiles(uv, resolution):
-                inside &= ~sampled[region]
-                if not inside.any():
+        sign = -1 if target["mirrored"] else 1
+        rows, cols, tri, weights = _rasterize_batched(target["uv"][target["tri_loops"]], resolution)
+        fresh = ~sampled[rows, cols]
+        rows, cols, tri, weights = rows[fresh], cols[fresh], tri[fresh], weights[fresh]
+        if not len(rows):
+            continue
+        sampled[rows, cols] = True
+        points = _interpolate(weights, target["positions"][target["tri_vertices"][tri]])
+        inward = -_unit(_interpolate(weights, target["world_normals"][target["tri_loops"][tri]]))
+        # Orthonormal frames for every point at once; only the intersection
+        # queries remain per ray (mathutils has no batch API).
+        tangent = _unit(_orthogonal(inward))
+        bitangent = np.cross(inward, tangent)
+        rays = inward[:, None, :] + cone[None, :, 0, None] * tangent[:, None, :] + cone[None, :, 1, None] * bitangent[:, None, :]
+        rays = _unit(rays)
+        rays[:, 0] = inward
+        # Plain Python lists feed mathutils far faster than ndarray rows.
+        along = np.einsum("psk,pk->ps", rays, inward).tolist()
+        origins = (points + inward * epsilon).tolist()
+        rays = rays.tolist()
+        values = np.zeros((len(points), 4), dtype=np.float32)
+        cast = tree.ray_cast
+        for index, origin in enumerate(origins):
+            origin = Vector(origin)
+            total, count = 0.0, 0
+            for sample, direction in enumerate(rays[index]):
+                ray = Vector(direction)
+                _hit, normal, _face, distance = cast(origin, ray, distance_scale)
+                ray_count += 1
+                if distance is None or distance <= epsilon:
                     continue
-                sampled[region] |= inside
-                points = (weights @ positions)[inside]
-                directions = -_unit((weights @ normals)[inside])
-                values = np.zeros((len(points), 4), dtype=np.float32)
-                for index, (point, direction) in enumerate(zip(points, directions)):
-                    inward = Vector(direction)
-                    tangent = inward.orthogonal().normalized()
-                    bitangent = inward.cross(tangent)
-                    origin = Vector(point) + inward * epsilon
-                    distances = []
-                    for sample in range(samples):
-                        angle = 2 * math.pi * sample / max(1, samples - 1)
-                        ray = inward if sample == 0 else (
-                            inward + 0.18 * (math.cos(angle) * tangent + math.sin(angle) * bitangent)
-                        ).normalized()
-                        _hit, normal, _face, distance = tree.ray_cast(origin, ray, distance_scale)
-                        ray_count += 1
-                        if distance is None or distance <= epsilon:
-                            continue
-                        # Require an exit-facing surface. An open sheet hitting a separate
-                        # entering shell is not a material thickness measurement.
-                        sign = -1 if target["mirrored"] else 1
-                        if normal.dot(ray) * sign <= 1e-6:
-                            continue
-                        distances.append(distance * ray.dot(inward) + epsilon)
-                        hit_count += 1
-                    if distances:
-                        values[index, :3] = min(1.0, float(np.mean(distances)) / distance_scale)
-                        values[index, 3] = 1
-                result[region][inside] = values
+                # Require an exit-facing surface. An open sheet hitting a separate
+                # entering shell is not a material thickness measurement.
+                if normal.dot(ray) * sign <= 1e-6:
+                    continue
+                total += distance * along[index][sample] + epsilon
+                count += 1
+                hit_count += 1
+            if count:
+                values[index, :3] = min(1.0, total / count / distance_scale)
+                values[index, 3] = 1
+        result[rows, cols] = values
     if resolution != n:
         # Nearest resampling preserves valid/invalid classification and does not
         # invent measurements across UV islands. The sampling grid is explicit.
@@ -233,9 +327,8 @@ def _thickness(targets, ts, n, distance_scale):
         # Reapply precise high-resolution UV coverage; no expanded island edges.
         coverage = np.zeros((n, n), dtype=bool)
         for target in targets:
-            for tri in target["triangles"]:
-                for region, inside, *_ in _tiles(target["uv"][list(tri.loops)], n):
-                    coverage[region] |= inside
+            rows, cols, _, _ = _rasterize_batched(target["uv"][target["tri_loops"]], n)
+            coverage[rows, cols] = True
         result[~coverage] = 0
     return result, {"thickness_sampling_resolution": resolution, "thickness_samples": samples,
                     "thickness_ray_count": ray_count, "thickness_valid_hits": hit_count,

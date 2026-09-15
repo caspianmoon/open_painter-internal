@@ -52,6 +52,10 @@ not replace the editor or the material library.
 - **Material Stamp (4 Channels):** choose radius, hardness and channel values,
   then click an assigned visible surface. Escape cancels placement; normal
   navigation passes through. This is a discrete stamp, with one undo/redo step.
+- **Target renderer (0.5.1):** the toolbar's Target menu (Blender, Unreal 5, Unity
+  HDRP/URP, Godot 4, Custom) sets every set's export conventions; Engine Preview shows
+  the asset as the engine will compute it from the exported files; Export → <Target>
+  writes textures, manifest and mesh in one step. [Details](target-renderer.md).
 - **Production Export:** choose the texture export directory and engine profile.
   Evaluated Bundle writes a new scene, textures and manifest without overwriting
   an existing bundle. Generated geometry is explicitly included or omitted.

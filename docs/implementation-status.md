@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Target renderer 0.5.1 — 2026-09-15
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Registry of engine conventions, naming, mesh options, manifest | done | `tests/unit/test_targets.py` |
+| Engine Preview adapters (quantisation, DX round trip, Z reconstruction, smoothness, AO indirect, view transform), numeric-only toggling | done, 2/255 | `tests/integration/engine_preview.py` |
+| Export → Target with restored settings, mesh export, refusal to overwrite | done | `tests/integration/export_target.py` |
+| Packed-texture snapshot preview (BC block compression emulation) | deferred | plan |
+
 ## Live geometry-aware fields 0.5.0 — 2026-09-15
 
 | Item | Status | Evidence |

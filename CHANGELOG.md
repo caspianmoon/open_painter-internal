@@ -1,5 +1,21 @@
 # Changes
 
+## 0.5.1
+
+Target renderer: pick the engine once.
+
+- Project-level Target (Blender, Unreal Engine 5, Unity HDRP, Unity URP, Godot 4, Custom)
+  configures every following set's export preset, format and bit depth, file naming
+  (`T_{set}_BC` for Unreal, `albedo/orm/normal` for Godot, …), the resolution cap and the
+  paired mesh export (FBX with Unreal's axes, glTF for Godot).
+- Engine Preview: the display material shows what the engine computes from the exported
+  files — 8-bit quantisation through sRGB, DirectX green round trip, BC5 Z reconstruction,
+  smoothness round trip, AO on indirect light only, Standard view — as role-tagged adapter
+  nodes; no graph rebuild, verified against numpy to 2/255.
+- Export → <Target>: one click writes the textures, a per-set manifest of conventions and
+  colour spaces, and the mesh; the set's own settings are restored afterwards.
+- See docs/target-renderer.md.
+
 ## 0.5.0
 
 Geometry-aware materials: the scene is a live input.

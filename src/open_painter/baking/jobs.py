@@ -84,7 +84,10 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
     bl_idname = 'open_painter.edge_map_refresh'
     bl_label = 'Rebake Edge Map (Background)'
     bl_options = {'REGISTER', 'INTERNAL'}
-    set_id: bpy.props.StringProperty(options={'HIDDEN'}, description='Texture set to rebake; the active set when empty')
+    if hasattr(bpy, 'props'):   # the pure unit tests load this module with a stub bpy
+        set_id: bpy.props.StringProperty(options={'HIDDEN'}, description='Texture set to rebake; the active set when empty')
+    else:
+        set_id = ''
     running = False
     _timer = None
     _job = None

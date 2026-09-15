@@ -25,10 +25,13 @@ def filename(ts_name, channel, extension, prefix="", suffix=""):
     return f"{safe_name(prefix + ts_name)}_{safe_name(channel + suffix)}.{extension}"
 
 
-def export(context: bpy.types.Context, ts, settings) -> list[Path]:
-    if not settings.directory:
-        raise ValueError("Choose an export directory.")
-    directory = Path(bpy.path.abspath(settings.directory))
+def export(context: bpy.types.Context, ts, settings, naming=None, directory=None) -> list[Path]:
+    """Write the set's maps; ``naming(ts_name, label, extension)`` overrides file names."""
+    if directory is None:
+        if not settings.directory:
+            raise ValueError("Choose an export directory.")
+        directory = Path(bpy.path.abspath(settings.directory))
+    directory = Path(directory)
     definitions = (
         custom.outputs(settings)
         if settings.preset == "CUSTOM"
@@ -37,7 +40,8 @@ def export(context: bpy.types.Context, ts, settings) -> list[Path]:
     )
     extension = "png" if settings.file_format == "PNG" else "tif"
     destinations = [
-        directory / filename(ts.name, key, extension, settings.prefix, settings.suffix)
+        directory / (naming(ts.name, key, extension) if naming is not None
+                     else filename(ts.name, key, extension, settings.prefix, settings.suffix))
         for key, _ in definitions
     ]
     if any(p.exists() for p in destinations):

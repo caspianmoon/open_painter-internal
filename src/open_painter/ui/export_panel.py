@@ -31,7 +31,10 @@ class OP_PT_export(bpy.types.Panel):
         layout = self.layout
         if not ts:
             return
+        from .target_panel import draw_target
+        draw_target(layout, context)
         settings = ts.export
+        layout.prop(settings, "follow_target")
         for key in (
             "directory",
             "preset",

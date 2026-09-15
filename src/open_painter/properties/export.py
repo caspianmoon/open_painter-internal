@@ -35,6 +35,8 @@ class OP_ExportSettings(bpy.types.PropertyGroup):
     bit_depth: bpy.props.EnumProperty(
         name="Bit Depth", items=[("8", "8 bit", ""), ("16", "16 bit", "")], default="8"
     )
+    follow_target: bpy.props.BoolProperty(name="Follow Project Target", default=True,
+        description="Take preset, format and bit depth from the project's Target renderer")
     prefix: bpy.props.StringProperty(name="Prefix")
     suffix: bpy.props.StringProperty(name="Suffix")
     custom_r: bpy.props.EnumProperty(name="R", items=PACK_ITEMS, default="AO")

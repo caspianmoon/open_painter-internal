@@ -851,6 +851,12 @@ def toolbar(self, context):
     row.operator("open_painter.paint", text="Finish").stop = True
     row.popover(panel="OP_PT_native_bake", text="Bake Mesh Maps")
     row.popover(panel="OP_PT_native_export", text="Export Textures")
+    project = context.scene.open_painter
+    row = self.layout.row(align=True)
+    row.prop(project, "target", text="")
+    row.prop(project, "engine_preview", text="", icon="SHADING_RENDERED", toggle=True)
+    from ..targets import get
+    row.operator("open_painter.export_target", text="Export → " + get(project.target).label, icon="EXPORT")
 
 
 class OP_PT_native_bake(PainterPanel, bpy.types.Panel):

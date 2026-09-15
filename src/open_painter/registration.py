@@ -12,6 +12,7 @@ from .graph.tree import CLASSES as GRAPH_TREE_CLASSES
 from .graph.operators import CLASSES as GRAPH_OPERATOR_CLASSES
 from .ui.modules import CLASSES as MODULE_CLASSES
 from .ui.scene_fields import CLASSES as SCENE_FIELD_CLASSES
+from .ui.target_panel import CLASSES as TARGET_CLASSES
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
 from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
@@ -102,7 +103,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES
 
 
 _registered = False

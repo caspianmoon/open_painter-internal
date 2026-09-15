@@ -19,7 +19,12 @@ def update_surface(ts):
     if roles.get('Height'):
         roles['Height'].inputs['Distance'].default_value = ts.height_distance
     if roles.get('AO Preview'):
-        roles['AO Preview'].inputs[0].default_value = 1 if ts.preview_ao else 0
+        project = getattr(ts.id_data, 'open_painter', None)
+        indirect = False
+        if project is not None and project.engine_preview and project.engine_preview_ao_indirect:
+            from ..targets import get
+            indirect = get(project.target).ao_usage == 'INDIRECT'
+        roles['AO Preview'].inputs[0].default_value = 0 if indirect else (1 if ts.preview_ao else 0)
 
 
 def repair(ts, image_overrides=None):
@@ -88,6 +93,9 @@ def repair(ts, image_overrides=None):
             if texture.image != image:
                 texture.image = image
             colors[channel] = texture.outputs['Color']
+    from ..targets import preview as engine_preview
+    project = getattr(ts.id_data, 'open_painter', None)
+    engine_preview.remove(nodes)
     connect(colors['EMISSION'], bsdf.inputs['Emission Color'])
     connect(colors['OPACITY'], bsdf.inputs['Alpha'])
     for socket, value in (("Emission Strength",1),("Anisotropic",ts.anisotropy),
@@ -104,16 +112,21 @@ def repair(ts, image_overrides=None):
     factor = 1 if ts.preview_ao else 0
     if ao.inputs[0].default_value != factor:
         ao.inputs[0].default_value = factor
-    connect(colors["BASE_COLOR"], ao.inputs[1])
+    if bsdf.inputs['Specular IOR Level'].default_value != .5:
+        bsdf.inputs['Specular IOR Level'].default_value = .5
+    display = colors
+    if project is not None and project.engine_preview:
+        display = engine_preview.adapt(ts, project, colors, node, connect, bsdf, ao)
+    connect(display["BASE_COLOR"], ao.inputs[1])
     connect(colors["AO"], ao.inputs[2])
     connect(ao.outputs[0], bsdf.inputs["Base Color"])
     for channel, socket in (("ROUGHNESS", "Roughness"), ("METALLIC", "Metallic")):
-        connect(colors[channel], bsdf.inputs[socket])
+        connect(display[channel], bsdf.inputs[socket])
     normal = node("Normal", "ShaderNodeNormalMap", (0, -200))
     bump = node("Height", "ShaderNodeBump", (250, -200))
     if bump.inputs["Distance"].default_value != ts.height_distance:
         bump.inputs["Distance"].default_value = ts.height_distance
-    connect(colors["NORMAL"], normal.inputs["Color"])
+    connect(display["NORMAL"], normal.inputs["Color"])
     connect(normal.outputs["Normal"], bump.inputs["Normal"])
     connect(colors["HEIGHT"], bump.inputs["Height"])
     connect(bump.outputs["Normal"], bsdf.inputs["Normal"])

@@ -13,9 +13,13 @@ than the square of the whole graph. Blender inlines groups when it generates
 shader code, so the GPU work is unchanged. Units are keyed by stable authoring
 ids; a structural edit rebuilds only the units whose signature changed.
 """
+from ast import literal_eval
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from hashlib import sha256
+import json
+import re
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -239,6 +243,72 @@ class Graph(Math):
         return (self.unit.input('Normal', 'NodeSocketVector') if self.unit is not None
                 else self.geometry.outputs['Normal'])
 
+    # ---- persistent descriptors -----------------------------------------
+    # Nodes carry JSON descriptors keyed by stable ids so a session can be
+    # rebuilt from the persisted trees after undo/redo without recompiling.
+
+    _PATH = re.compile(r'(\w+)(?:\[(\d+)\])?')
+
+    def _owner_key(self, owner):
+        """Stable identity of an RNA item: ids rather than collection indices."""
+        if owner == self.ts:
+            return ['ts']
+        path = owner.path_from_id()
+        tokens = self._PATH.findall(path)
+        key, cursor = [], None
+        for name, index in tokens:
+            if name in {'open_painter', 'texture_sets'}:
+                continue
+            if name == 'layers':
+                cursor = self.ts.layers[int(index)]
+                key = ['layer', cursor.id]
+            elif name == 'channels':
+                cursor = cursor.channels[int(index)]
+                key = ['channel', key[1], cursor.channel]
+            elif name == 'effects':
+                key = ['effect', *key[1:], int(index)]
+            elif name == 'masks':
+                cursor = cursor.masks[int(index)]
+                key = ['mask', key[1], cursor.id]
+            elif name == 'effect':
+                key = ['mask_effect', *key[1:]]
+            elif name == 'influence':
+                key = ['influence', *key[1:]]
+            elif name == 'baked_maps':
+                key = ['baked', self.ts.baked_maps[int(index)].kind]
+            elif name == 'bake':
+                key = ['bake']
+            else:
+                raise ValueError('Unsupported shader owner path: ' + path)
+        return key
+
+    def _resolve(self, key):
+        """RNA item for a descriptor key, or None when it no longer exists."""
+        kind = key[0]
+        if kind == 'ts':
+            return self.ts
+        if kind == 'bake':
+            return self.ts.bake
+        if kind == 'baked':
+            return next((m for m in self.ts.baked_maps if m.kind == key[1] and m.image), None)
+        layer = self._layer(key[1])
+        if layer is None:
+            return None
+        if kind == 'layer':
+            return layer
+        if kind in {'channel', 'effect'}:
+            prop = channel_for(layer, key[2])
+            if prop is None:
+                return None
+            if kind == 'channel':
+                return prop
+            effects = list(prop.effects)
+            return effects[key[3]] if key[3] < len(effects) else None
+        mask = next((m for m in layer.masks if m.id == key[2]), None)
+        if mask is None:
+            return None
+        return {'mask': mask, 'mask_effect': mask.effect, 'influence': mask.influence}.get(kind)
+
     def param(self, owner, field, index=None):
         key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
         if key not in self.bindings:
@@ -247,6 +317,7 @@ class Graph(Math):
                 identifier += f'[{index}]'
             with self.role(identifier):
                 node = self.node('ShaderNodeValue')
+            node['op_binding'] = json.dumps([self._owner_key(owner), field, index])
             raw = getattr(owner, field)
             value = float(raw if index is None else raw[index])
             node.outputs[0].default_value = value
@@ -330,7 +401,8 @@ class Graph(Math):
         return self.combine(self.math('ADD', self.math('ADD', u, center), self.param(owner, 'offset', 0)),
                             self.math('ADD', self.math('ADD', v, center), self.param(owner, 'offset', 1)), 0)
 
-    def image(self, image, coordinate=None, filtering='BILINEAR', tiling='REPEAT', getter=None, owner=None):
+    def image(self, image, coordinate=None, filtering='BILINEAR', tiling='REPEAT', getter=None, owner=None,
+              attribute='image'):
         if image is None:
             raise ValueError('A shader source image is missing')
         node = self.node('ShaderNodeTexImage')
@@ -340,6 +412,7 @@ class Graph(Math):
         coord = coordinate if coordinate is not None else self.coord_uv()
         self.link(coord, node.inputs['Vector'])
         if getter:
+            node['op_image'] = json.dumps([self._owner_key(owner), attribute])
             entry = (owner.as_pointer(), self._role, getter, node, image_key(image))
             self.image_bindings.append(entry)
             if self.unit is not None:
@@ -379,11 +452,13 @@ class Graph(Math):
             raise ValueError(f'This mask requires a baked {kind.title()} map. Bake mesh maps first.')
         return self.image(prop.image, getter=lambda: prop.image, owner=prop)
 
-    def boundary(self, identifier, owners, identity, factory):
+    def boundary(self, identifier, owners, identity, factory, descriptor=None):
         """Expose one unsupported source/prefix as a stable shader image input.
 
         ``owners`` lists the RNA items whose edits re-identify this input, or a
         callable returning them so an adopted unit can refresh their addresses.
+        ``descriptor`` names the site and its owners so the binding can be
+        rebuilt from the persisted node after undo.
         """
         signature = identity()
         image = self.resources.request(signature, lambda: factory(signature))
@@ -391,6 +466,8 @@ class Graph(Math):
         node.image = image
         node.interpolation, node.extension = 'Linear', 'EXTEND'
         self.link(self.coord_uv(), node.inputs['Vector'])
+        if descriptor is not None:
+            node['op_boundary'] = json.dumps(descriptor)
         owner_factory = owners if callable(owners) else None
         items = owners() if callable(owners) else owners
         binding = ResourceBinding(identifier, {o.as_pointer() for o in items}, identity, factory,
@@ -399,6 +476,27 @@ class Graph(Math):
         if self.unit is not None:
             self.unit.resource_bindings.append(binding)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
+
+    def _rebind(self, node, owners, identity, factory):
+        """Reattach a persisted boundary node to fresh closures (undo rehydration)."""
+        signature = identity()
+        owner_factory = owners if callable(owners) else None
+        items = owners() if callable(owners) else owners
+        binding = ResourceBinding(node.get('op_dependency'), {o.as_pointer() for o in items}, identity,
+                                  factory, node, signature, owner_factory=owner_factory)
+        key = sha256(repr((self.n, signature)).encode()).hexdigest()
+        image = node.image
+        if (image is None or image.get(RESOURCE) != key or not image.get('op_shader_resource_ready')
+                or not image.has_data):
+            fresh = self.resources.request(signature, lambda: factory(signature))
+            if fresh.get('op_shader_resource_ready'):
+                node.image = fresh
+            else:
+                binding.pending_image = fresh
+        self.resource_bindings.append(binding)
+        if self.unit is not None:
+            self.unit.resource_bindings.append(binding)
+        return binding
 
     @staticmethod
     def _parts(data, rows=16):
@@ -414,7 +512,7 @@ class Graph(Math):
         # influencers have their own identities and must not evict those leaves.
         return stamp[:4] if stamp is not None else None
 
-    def _field(self, owner, kind=None, generator=False):
+    def _field(self, owner, kind=None, generator=False, rehydrate=None):
         """Preserve custom integer-hash noise as a separately cached scalar."""
         kind = kind or owner.procedural
         if generator:
@@ -443,8 +541,11 @@ class Graph(Math):
                 for low in range(0, self.n, 16):
                     yield low, _procedural_tile(snapshot, self.n, low, min(low + 16, self.n), self.ts, resources)
             return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, [owner], identity, factory)
         with self.role('SourceField:' + owner.path_from_id() + ':' + kind):
-            return self.separate(self.boundary(self._role, [owner], identity, factory).color)[0]
+            return self.separate(self.boundary(self._role, [owner], identity, factory,
+                                               ['field', self._owner_key(owner), kind, bool(generator)]).color)[0]
 
     ANALYTIC = {'SOLID', 'GRADIENT', 'LINEAR_GRADIENT', 'RADIAL_GRADIENT',
                 'CHECKER', 'STRIPES', 'DOTS', 'PATTERN', 'GRID', 'TILE_PATTERN', 'BRICK_PATTERN'}
@@ -478,7 +579,7 @@ class Graph(Math):
     def detail(self, prop):
         if prop.detail_image:
             result = self.projected(prop, lambda uv: self.image(prop.detail_image, uv,
-                prop.filtering, prop.tiling, getter=lambda: prop.detail_image, owner=prop))
+                prop.filtering, prop.tiling, getter=lambda: prop.detail_image, owner=prop, attribute='detail_image'))
             return luminance(self, result.color)
         from ..texture_engine.procedurals import ALIASES
         kind = ALIASES.get(prop.procedural, prop.procedural)
@@ -488,7 +589,7 @@ class Graph(Math):
             return self.separate(result.color)[0]
         return self._field(prop, kind)
 
-    def _channel_prefix(self, layer, prop, count):
+    def _channel_prefix(self, layer, prop, count, rehydrate=None):
         anchored = layer.type == 'FILL' and prop.anchor
         def owners():
             items = [prop, *list(prop.effects)[:count]]
@@ -533,8 +634,11 @@ class Graph(Math):
                 filtered = apply_texture_effects(data, snapshot.effects)
                 yield from self._parts(filtered)
             return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
         with self.role(f'RasterChannelPrefix:{layer.id}:{prop.channel}:{count}'):
-            return self.boundary(self._role, owners, identity, factory)
+            return self.boundary(self._role, owners, identity, factory,
+                                 ['channel_prefix', layer.id, prop.channel, count])
 
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
@@ -845,7 +949,7 @@ class Graph(Math):
             key += (('anchor', nested_key),)
         return owners, key
 
-    def _micro(self, mask):
+    def _micro(self, mask, rehydrate=None):
         """(convex, cavity) from anchored micro details, or None without anchors.
 
         The strength-independent convexity raster is a CPU boundary: a flat
@@ -889,8 +993,11 @@ class Graph(Math):
                     encoded = details.encode(height, slopes, float(snapshot.detail_radius))
                 yield from self._parts(encoded)
             return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
         with self.role('MicroDetails:' + mask.path_from_id()):
-            red, green, _ = self.separate(self.boundary(self._role, owners, identity, factory).color)
+            red, green, _ = self.separate(self.boundary(self._role, owners, identity, factory,
+                                                        ['micro', *self._owner_key(mask)[1:]]).color)
         signed = 0.0
         if any(slot == 'HEIGHT' for slot, _ in refs):
             signed = self.math('ADD', signed, self.math('MULTIPLY', self.math('SUBTRACT', red, .5),
@@ -978,26 +1085,7 @@ class Graph(Math):
             return self.math('MULTIPLY', self.clamp(self.math('MULTIPLY', self.math('MULTIPLY', value,
                 self.math('MULTIPLY', amount, 2)), contrast)), source.alpha)
         if kind == 'DRIPS':
-            # Domain-warped legacy streak hash needs just one cached scalar field;
-            # its threshold, amount and cavity mix remain ordinary uniforms.
-            def identity():
-                return ('drip-field', mask.noise_scale, mask.seed,
-                    tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps if m.kind == 'POSITION'))
-            def factory(signature):
-                _, scale, seed, _ = signature
-                def parts():
-                    from ..texture_engine.procedurals import evaluate
-                    from .mask_eval import map_pixels
-                    from .blend_modes import sample_uv
-                    cache = {}
-                    u = (np.arange(self.n, dtype=np.float32)[None, :] + .5) / self.n
-                    for low in range(0, self.n, 16):
-                        v = (np.arange(low, min(low + 16, self.n), dtype=np.float32)[:, None] + .5) / self.n
-                        pos = sample_uv(map_pixels(self.ts, 'POSITION', cache), u, v)
-                        yield low, evaluate('STREAKS', pos[..., 0] + pos[..., 1] * .731, pos[..., 2], scale=scale, seed=seed)
-                return parts()
-            with self.role('SourceField:' + mask.path_from_id() + ':DRIPS'):
-                streaks = self.separate(self.boundary(self._role, [mask], identity, factory).color)[0]
+            streaks = self._drips(mask)
             pos = self.separate(self.mesh_map('POSITION').color)[2]
             cavity = self.math('SUBTRACT', 1, red('AO'))
             if micro is not None:
@@ -1006,7 +1094,32 @@ class Graph(Math):
                 self.math('MULTIPLY', cavity, 3), self.math('MULTIPLY', amount, self.math('SUBTRACT', 1, pos)))))
         raise ValueError('Unknown generator: ' + kind)
 
-    def _mask_source_boundary(self, layer, mask):
+    def _drips(self, mask, rehydrate=None):
+        # Domain-warped legacy streak hash needs just one cached scalar field;
+        # its threshold, amount and cavity mix remain ordinary uniforms.
+        def identity():
+            return ('drip-field', mask.noise_scale, mask.seed,
+                tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps if m.kind == 'POSITION'))
+        def factory(signature):
+            _, scale, seed, _ = signature
+            def parts():
+                from ..texture_engine.procedurals import evaluate
+                from .mask_eval import map_pixels
+                from .blend_modes import sample_uv
+                cache = {}
+                u = (np.arange(self.n, dtype=np.float32)[None, :] + .5) / self.n
+                for low in range(0, self.n, 16):
+                    v = (np.arange(low, min(low + 16, self.n), dtype=np.float32)[:, None] + .5) / self.n
+                    pos = sample_uv(map_pixels(self.ts, 'POSITION', cache), u, v)
+                    yield low, evaluate('STREAKS', pos[..., 0] + pos[..., 1] * .731, pos[..., 2], scale=scale, seed=seed)
+            return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, [mask], identity, factory)
+        with self.role('SourceField:' + mask.path_from_id() + ':DRIPS'):
+            return self.separate(self.boundary(self._role, [mask], identity, factory,
+                                               ['drips', *self._owner_key(mask)[1:]]).color)[0]
+
+    def _mask_source_boundary(self, layer, mask, rehydrate=None):
         def identity():
             if mask.source == 'SCENE':
                 return ('scene-field', self._scene_identity(mask.influence))
@@ -1029,7 +1142,10 @@ class Graph(Math):
                     yield low, _evaluate_masks(self.ts, source_layer, self.n, low, min(low + 16, self.n), cache, geometry)
             return parts()
         owners = [mask, mask.influence]
-        return self.separate(self.boundary(self._role, owners, identity, factory).color)[0]
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
+        return self.separate(self.boundary(self._role, owners, identity, factory,
+                                           ['mask_source', layer.id, mask.id]).color)[0]
 
     def _scene_identity(self, field):
         if field.mode == 'MANUAL':
@@ -1096,7 +1212,7 @@ class Graph(Math):
             keys.append(stamp)
         return owners, tuple(keys)
 
-    def _mask_prefix(self, layer, masks):
+    def _mask_prefix(self, layer, masks, pre_filter=False, rehydrate=None):
         # Freeze the selected prefix before the caller continues appending masks.
         masks = tuple(masks)
         def owners():
@@ -1120,8 +1236,11 @@ class Graph(Math):
                     yield low, evaluate_masks(self.ts, snapshot, self.n, low,
                                               min(low + 16, self.n), cache, geometry)
             return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
         with self.role(f'RasterMaskPrefix:{layer.id}:{masks[-1].id}'):
-            return self.separate(self.boundary(self._role, owners, identity, factory).color)[0]
+            return self.separate(self.boundary(self._role, owners, identity, factory,
+                                               ['mask_prefix', layer.id, masks[-1].id, bool(pre_filter)]).color)[0]
 
     def mask(self, layer, through='', pre_filter=False):
         """Mask coverage after the item `through` (inclusive) or the whole stack.
@@ -1162,7 +1281,7 @@ class Graph(Math):
                             filtered = apply_effect(self, Signal(result), mask.effect)
                             value = luminance(self, filtered.color)
                         except UnsupportedEffect:
-                            filtered = self._mask_prefix(layer, prefix)
+                            filtered = self._mask_prefix(layer, prefix, pre_filter)
                             value = self.scalar_mix(result, filtered, self.param(mask.effect, 'strength'))
                 elif mask.source == 'REFERENCE':
                     if mask.reference_anchor:
@@ -1311,6 +1430,9 @@ class Graph(Math):
         unit.owner_pointers = self._unit_owners(key)
         unit.signature = self._unit_signature(key, stub=unit.flags.get('stub'))
         unit.build_ms = (perf_counter() - started) * 1000
+        unit.tree['op_flags'] = json.dumps(unit.flags)
+        unit.tree['op_exports'] = json.dumps(unit.exports)
+        unit.tree['op_effects'] = json.dumps([self._owner_key(e) for e in unit.compiled_effects.values()])
         self._building_units.discard(key)
         self._plan.keys.add(key)
         self.units[key] = unit
@@ -1485,6 +1607,7 @@ class Graph(Math):
         self.outputs = {channel: self.instance.outputs[channel] for channel in CHANNELS}
         self._reverse_map()
         self._structure = self.structural_signature()
+        self.tree['op_signature'] = repr(self._structure)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
         self._previous = None
@@ -1504,6 +1627,151 @@ class Graph(Math):
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
         return self
+
+    def rehydrate(self):
+        """Adopt the material's persisted graph after undo/redo instead of rebuilding.
+
+        Returns True when the persisted top tree matches the current structural
+        signature and every descriptor resolves; bindings, image and boundary
+        bindings and the dependency closure are rebuilt from the trees. Nothing
+        is created or modified on failure, so the caller can compile normally.
+        """
+        from ..core.validation import hierarchy_issues
+        if self.material is None or self.material.node_tree is None or hierarchy_issues(self.ts):
+            return False
+        instance = next((node for node in self.material.node_tree.nodes
+                         if node.get(OWNER) and node.get('role') == 'Procedural Graph'), None)
+        top = instance.node_tree if instance is not None else None
+        if top is None or top.get('op_shader_graph') != self.ts.id or not top.get('op_signature'):
+            return False
+        started = perf_counter()
+        plan = self.plan()
+        units, by_instance = {}, {}
+        for node in top.nodes:
+            if node.bl_idname != 'ShaderNodeGroup' or not node.get('op_unit') or node.node_tree is None:
+                continue
+            unit = Unit(literal_eval(node['op_unit']))
+            unit.tree, unit.instance = node.node_tree, node
+            unit.group_input = next((n for n in unit.tree.nodes if n.bl_idname == 'NodeGroupInput'), None)
+            unit.group_output = next((n for n in unit.tree.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+            if unit.group_input is None or unit.group_output is None:
+                return False
+            for item in unit.tree.interface.items_tree:
+                if item.item_type != 'SOCKET':
+                    continue
+                (unit.inputs if item.in_out == 'INPUT' else unit.outputs)[item.name] = item.socket_type
+            unit.flags = json.loads(unit.tree.get('op_flags', '{}'))
+            unit.exports = {name: tuple(value) for name, value in json.loads(unit.tree.get('op_exports', '{}')).items()}
+            units[unit.key] = unit
+            by_instance[node.as_pointer()] = unit
+        self.units = units
+        complete = False
+        try:
+            if repr(self.structural_signature()) != top['op_signature']:
+                return False
+            for link in top.links:
+                consumer = by_instance.get(link.to_node.as_pointer())
+                producer = by_instance.get(link.from_node.as_pointer())
+                if consumer is not None and producer is not None and link.to_socket.name.startswith('Ref'):
+                    consumer.imports.append((producer.key, link.from_socket.name, link.to_socket.name))
+            for unit in units.values():
+                if not self._rehydrate_unit(unit):
+                    return False
+            complete = True
+        finally:
+            if not complete:
+                # Leave the persisted trees untouched; forget partial bookkeeping.
+                self.units, self.bindings, self.owner_bindings = {}, {}, defaultdict(list)
+                self.resource_bindings, self.image_bindings, self._compiled_effects = [], [], {}
+                self.resources.close()
+        self.tree, self.instance = top, instance
+        self.geometry = next(n for n in top.nodes if n.bl_idname == 'ShaderNodeNewGeometry')
+        self.uv = next(n for n in top.nodes if n.bl_idname == 'ShaderNodeTexCoord').outputs['UV']
+        self.outputs = {channel: instance.outputs[channel] for channel in CHANNELS}
+        for channel in CHANNELS:
+            self.channels['Final:' + channel] = channel
+        self._reverse_map()
+        self._structure = self.structural_signature()
+        self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
+        self.resources.used = {b.node.image.get(RESOURCE) for b in self.resource_bindings if b.node.image}
+        from .references import warnings
+        unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
+        self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': [],
+                      'updated_bindings': 0, 'raster_boundaries_queued': len(self.resources.queue),
+                      'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
+                      'build_ms': 0.0, 'rehydrate_ms': (perf_counter() - started) * 1000, 'rehydrated': True,
+                      'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
+                      'largest_unit': max(unit_nodes.values(), default=0),
+                      'reused_units': len(self.units), 'rebuilt_units': 0,
+                      'unique_images': len(self.unique_images()), 'max_textures_frag': _sampler_limit(),
+                      'pending_resources': self.pending_resources, 'warnings': list(warnings(self.ts))}
+        metrics.count('shader_graph_rehydrations')
+        from .dependencies import remember, geometry_key
+        remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
+        return True
+
+    def _rehydrate_unit(self, unit):
+        with self.enter(unit):
+            for node in unit.tree.nodes:
+                if node.get('op_binding'):
+                    owner_key, field, index = json.loads(node['op_binding'])
+                    owner = self._resolve(owner_key)
+                    if owner is None:
+                        return False
+                    identifier = node.get('op_dependency')
+                    binding = Binding(owner, field, index, node.outputs[0], float(node.outputs[0].default_value), identifier)
+                    key = (unit.key, owner.as_pointer(), field, index)
+                    self.bindings[key] = binding
+                    unit.bindings[key] = binding
+                    self.owner_bindings[owner.as_pointer()].append(binding)
+                elif node.get('op_image'):
+                    owner_key, attribute = json.loads(node['op_image'])
+                    owner = self._resolve(owner_key)
+                    if owner is None:
+                        return False
+                    getter = (lambda o=owner, a=attribute: getattr(o, a))
+                    entry = (owner.as_pointer(), node.get('op_dependency'), getter, node, image_key(node.image))
+                    self.image_bindings.append(entry)
+                    unit.image_bindings.append(entry)
+                elif node.get('op_boundary'):
+                    if not self._rehydrate_boundary(unit, node, json.loads(node['op_boundary'])):
+                        return False
+            for owner_key in json.loads(unit.tree.get('op_effects', '[]')):
+                effect = self._resolve(owner_key)
+                if effect is None:
+                    return False
+                unit.compiled_effects[effect.as_pointer()] = effect
+                self._compiled_effects[effect.as_pointer()] = effect
+        unit.owner_pointers = self._unit_owners(unit.key)
+        unit.signature = self._unit_signature(unit.key, stub=unit.flags.get('stub'))
+        return True
+
+    def _rehydrate_boundary(self, unit, node, descriptor):
+        site, *args = descriptor
+        if site == 'field':
+            owner = self._resolve(args[0])
+            return owner is not None and self._field(owner, args[1], args[2], rehydrate=node) is not None
+        layer = self._layer(args[0])
+        if layer is None:
+            return False
+        if site == 'channel_prefix':
+            prop = channel_for(layer, args[1])
+            return prop is not None and self._channel_prefix(layer, prop, args[2], rehydrate=node) is not None
+        mask = next((m for m in layer.masks if m.id == args[1]), None)
+        if mask is None:
+            return False
+        if site == 'micro':
+            return self._micro(mask, rehydrate=node) is not None
+        if site == 'drips':
+            return self._drips(mask, rehydrate=node) is not None
+        if site == 'mask_source':
+            return self._mask_source_boundary(layer, mask, rehydrate=node) is not None
+        if site == 'mask_prefix':
+            masks = list(layer.masks)
+            stop = next(i + 1 for i, m in enumerate(masks) if m.id == args[1])
+            prefix = [m for m in masks[:stop] if self._mask_active(m, args[2])]
+            return self._mask_prefix(layer, prefix, args[2], rehydrate=node) is not None
+        return False
 
     def _reverse_map(self):
         """Dependency closure across unit boundaries, keyed by op_dependency roles."""

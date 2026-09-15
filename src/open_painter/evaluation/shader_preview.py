@@ -72,6 +72,7 @@ def diagnostics(scene, ts):
             'rebuild_pending': bool(entry.get('rebuild')),
             'rebuild_scope': entry.get('rebuild_scope'),
             'graph_builds': entry.get('graph_builds', 0),
+            'graph_rehydrations': entry.get('graph_rehydrations', 0),
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
             'resource_steps': entry.get('resource_steps', 0)}
@@ -170,10 +171,23 @@ def ensure(scene, ts):
         from .shader_graph import Graph
         previous = entry.get('graph') if entry else None
         candidate = None
+        rehydrated = False
         try:
-            candidate = Graph(scene, ts, ts.material)
-            # Units whose structure and owners are unchanged move over intact.
-            candidate.build(reuse=previous)
+            if previous is None:
+                # After undo/redo or reload the material still carries the last
+                # compiled graph: adopt it instead of rebuilding and recompiling.
+                candidate = Graph(scene, ts, ts.material)
+                rehydrated = candidate.rehydrate()
+                if rehydrated:
+                    report = dict(candidate._last)
+                    # Any uniform that drifted from the authored value is corrected here.
+                    corrections = candidate.update()
+                    candidate._last = {**report, **corrections,
+                                       'rehydration_corrections': corrections.get('updated_bindings', 0)}
+            if not rehydrated:
+                candidate = Graph(scene, ts, ts.material)
+                # Units whose structure and owners are unchanged move over intact.
+                candidate.build(reuse=previous)
         except Exception as exc:
             if candidate is not None:
                 try:
@@ -187,7 +201,8 @@ def ensure(scene, ts):
                 return previous
             raise
         entry = {'material': ts.material, 'graph': candidate, 'diagnostics': {}, 'attached': False,
-                 'graph_builds': (entry or {}).get('graph_builds', 0) + 1,
+                 'graph_builds': (entry or {}).get('graph_builds', 0) + (0 if rehydrated else 1),
+                 'graph_rehydrations': (entry or {}).get('graph_rehydrations', 0) + (1 if rehydrated else 0),
                  'binding_updates': (entry or {}).get('binding_updates', 0),
                  'update_calls': (entry or {}).get('update_calls', 0),
                  'resource_steps': (entry or {}).get('resource_steps', 0)}

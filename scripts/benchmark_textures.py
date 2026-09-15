@@ -41,6 +41,12 @@ def worker(args):
     open_painter.register()
     scene = bpy.context.scene
     sets = fixtures.create(scene, args.fixture, args.resolution)
+    from open_painter.constants import CHANNELS
+    for ts in sets:
+        # This is the explicit CPU reference benchmark; native sets allocate no outputs.
+        ts.preview_backend = 'CPU'
+        for channel in CHANNELS:
+            images.output(ts, channel)
     channels = [o.channel for o in sets[0].outputs]
     rows = []
     with metrics.Metrics() as cold:

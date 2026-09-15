@@ -86,10 +86,13 @@ def _convolve_axis(data, kernel, axis):
     pad[axis] = (half, half)
     padded = np.pad(data, pad, mode="edge")
     result = np.zeros_like(data)
+    scratch = np.empty_like(data)
     for offset, weight in enumerate(kernel):
         region = [slice(None)] * data.ndim
         region[axis] = slice(offset, offset + data.shape[axis])
-        result += padded[tuple(region)] * weight
+        # result += slice * weight, without a fresh temporary per tap
+        np.multiply(padded[tuple(region)], weight, out=scratch)
+        result += scratch
     return result
 
 
@@ -106,17 +109,34 @@ def gaussian_blur(data, radius=2):
 
 
 def _morphology(data, radius, dilate):
+    """Separable max/min over a (2r+1) window; exact for any radius.
+
+    Running windows are built by doubling (a window of width w combined with
+    itself shifted by w has width 2w) and the odd remainder is covered by two
+    overlapping power-of-two windows, which is exact because max/min are
+    idempotent. The pass count is logarithmic in the radius; the result is the
+    same as the sequential sweep.
+    """
     radius = min(max(int(np.ceil(radius)), 0), 192)
     out = data.copy()
     reduce = np.maximum if dilate else np.minimum
+    width = 2 * radius + 1
+    power = 1 << (width.bit_length() - 1)
     for axis in (0, 1):
         pad = [(0, 0)] * data.ndim
         pad[axis] = (radius, radius)
         padded = np.pad(out, pad, mode="edge")
-        for step in range(2 * radius + 1):
-            region = [slice(None)] * data.ndim
-            region[axis] = slice(step, step + data.shape[axis])
-            reduce(out, padded[tuple(region)], out=out)
+        length = data.shape[axis]
+        running, covered = padded, 1
+        while covered < power:
+            span = running.shape[axis] - covered
+            head, tail = [slice(None)] * data.ndim, [slice(None)] * data.ndim
+            head[axis], tail[axis] = slice(0, span), slice(covered, covered + span)
+            running = reduce(running[tuple(head)], running[tuple(tail)])
+            covered *= 2
+        head, tail = [slice(None)] * data.ndim, [slice(None)] * data.ndim
+        head[axis], tail[axis] = slice(0, length), slice(width - power, width - power + length)
+        out = reduce(running[tuple(head)], running[tuple(tail)])
     return out
 
 
@@ -415,4 +435,7 @@ def apply(data, kind, **params):
             out = sample(source, sx + cx, sy + cy)
     else:
         out = _color_apply(source, key, params)
-    return np.clip(np.nan_to_num(out, nan=0, posinf=1, neginf=0), 0, 1).astype(np.float32)
+    # One sanitised copy, clipped in place; `out` may alias the caller's data.
+    result = np.nan_to_num(out, nan=0, posinf=1, neginf=0)
+    np.clip(result, 0, 1, out=result)
+    return result.astype(np.float32, copy=False)

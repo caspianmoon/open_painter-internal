@@ -127,12 +127,13 @@ def sample_uv(texture, u, v, filtering="BILINEAR", tiling="REPEAT"):
     su, sv = (u % 1, v % 1) if repeat else (np.clip(u, 0, 1), np.clip(v, 0, 1))
     x, y = su * w - 0.5, sv * h - 0.5
 
+    flat = texture.reshape(-1, *texture.shape[2:])
+
     def fetch(ix, iy):
-        return (
-            texture[iy % h, ix % w]
-            if repeat
-            else texture[np.clip(iy, 0, h - 1), np.clip(ix, 0, w - 1)]
-        )
+        # One flat gather is markedly faster than a two-array advanced index.
+        if repeat:
+            return flat[(iy % h) * w + ix % w]
+        return flat[np.clip(iy, 0, h - 1) * w + np.clip(ix, 0, w - 1)]
 
     if filtering == "NEAREST":
         result = fetch(

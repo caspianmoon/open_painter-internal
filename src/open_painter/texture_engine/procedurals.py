@@ -102,25 +102,90 @@ ALIASES = {
 }
 
 
+_HASH_SCALE = np.float32(1.0 / 4294967296.0)
+_recent_lattice = []  # [(array, uint32 conversion)] of the last few coordinate arrays
+
+
+def _to_lattice(values):
+    """Lattice coordinate array as uint32 (modulo 2**32).
+
+    Noise primitives hash the same coordinate arrays several times with
+    different seeds; the last few conversions are kept by array identity (the
+    cache holds the arrays alive, so an id cannot be recycled underneath it).
+    """
+    if isinstance(values, np.ndarray) and values.ndim:
+        for source, converted in _recent_lattice:
+            if source is values:
+                return converted
+    with np.errstate(invalid="ignore"):
+        converted = np.asarray(values, dtype=np.int64).astype(np.uint32)
+    if isinstance(values, np.ndarray) and values.ndim:
+        _recent_lattice.append((values, converted))
+        del _recent_lattice[:-6]
+    return converted
+
+
+def _hash_lattice(a, b, seed):
+    """Hash of uint32 lattice coordinates; two scratch buffers, no temporaries beyond them."""
+    with np.errstate(over="ignore"):
+        salt = np.uint32(((int(seed) & 0xFFFFFFFF) * 2246822519) & 0xFFFFFFFF)
+        if np.ndim(a) == 0 or np.ndim(b) == 0:
+            h = a * np.uint32(374761393) + b * np.uint32(668265263) + salt
+            h = (h ^ (h >> np.uint32(13))) * np.uint32(1274126177)
+            h ^= h >> np.uint32(16)
+            return np.float32(h) * _HASH_SCALE
+        if a.shape != b.shape:
+            a, b = np.broadcast_arrays(a, b)
+        h = a * np.uint32(374761393)
+        t = b * np.uint32(668265263)
+        h += t
+        h += salt
+        np.right_shift(h, np.uint32(13), out=t)
+        t ^= h
+        np.multiply(t, np.uint32(1274126177), out=h)
+        np.right_shift(h, np.uint32(16), out=t)
+        h ^= t
+    result = h.astype(np.float32)
+    result *= _HASH_SCALE
+    return result
+
+
 def _hash(x, y, seed):
     # Unsigned 32-bit arithmetic implements the intended modulo-2**32 hash
     # directly; uint64 intermediates and masks doubled all lattice temporaries.
-    with np.errstate(over="ignore", invalid="ignore"):
-        a = np.asarray(x, dtype=np.int64).astype(np.uint32)
-        b = np.asarray(y, dtype=np.int64).astype(np.uint32)
-        salt = np.uint32(((int(seed) & 0xFFFFFFFF) * 2246822519) & 0xFFFFFFFF)
-        h = a * np.uint32(374761393) + b * np.uint32(668265263) + salt
-        h = (h ^ (h >> np.uint32(13))) * np.uint32(1274126177)
-        h ^= h >> np.uint32(16)
-    return h.astype(np.float32) * np.float32(1.0 / 4294967296.0)
+    return _hash_lattice(_to_lattice(x), _to_lattice(y), seed)
+
+
+def _reverse_subtract(value, target):
+    """target = value - target in place when that keeps NumPy's promotion."""
+    if isinstance(target, np.ndarray) and target.ndim and np.result_type(value, target) == target.dtype:
+        return np.subtract(value, target, out=target)
+    return value - target
+
+
+def _inplace(operation, target, other):
+    """target = operation(target, other) in place when that keeps NumPy's promotion."""
+    if isinstance(target, np.ndarray) and target.ndim and np.result_type(target, other) == target.dtype:
+        return operation(target, other, out=target)
+    return operation(target, other)
 
 
 def _fade(t):
-    return t * t * t * (t * (t * 6 - 15) + 10)
+    # t * t * t * (t * (t * 6 - 15) + 10), evaluated in that order, reusing buffers
+    inner = t * 6
+    inner = _inplace(np.subtract, inner, 15)
+    inner = _inplace(np.multiply, inner, t)
+    inner = _inplace(np.add, inner, 10)
+    cubic = t * t
+    cubic = _inplace(np.multiply, cubic, t)
+    return _inplace(np.multiply, cubic, inner)
 
 
 def _mix(a, b, t):
-    return a + (b - a) * t
+    # a + (b - a) * t
+    delta = b - a
+    delta = _inplace(np.multiply, delta, t)
+    return _inplace(np.add, delta, a)
 
 
 def _smooth(a, b, x):
@@ -136,17 +201,29 @@ def _value(x, y, seed):
 
 
 def _gradient(ix, iy, dx, dy, seed):
-    angle = _hash(ix, iy, seed) * np.float32(2 * np.pi)
-    return np.cos(angle) * dx + np.sin(angle) * dy
+    angle = _hash(ix, iy, seed)
+    angle *= np.float32(2 * np.pi)
+    return _gradient_angle(angle, dx, dy)
+
+
+def _gradient_angle(angle, dx, dy):
+    # cos(angle) * dx + sin(angle) * dy, reusing the angle buffer
+    if np.ndim(angle) == 0:
+        return np.cos(angle) * dx + np.sin(angle) * dy
+    along = _inplace(np.multiply, np.cos(angle), dx)
+    across = _inplace(np.multiply, np.sin(angle, out=angle), dy)
+    return _inplace(np.add, along, across)
 
 
 def _perlin(x, y, seed):
     ix, iy = np.floor(x), np.floor(y)
     dx, dy = x - ix, y - iy
+    ix1, iy1 = ix + 1, iy + 1
+    fade_x, fade_y = _fade(dx), _fade(dy)
     return _mix(_mix(_gradient(ix, iy, dx, dy, seed),
-                     _gradient(ix + 1, iy, dx - 1, dy, seed), _fade(dx)),
-                _mix(_gradient(ix, iy + 1, dx, dy - 1, seed),
-                     _gradient(ix + 1, iy + 1, dx - 1, dy - 1, seed), _fade(dx)), _fade(dy))
+                     _gradient(ix1, iy, dx - 1, dy, seed), fade_x),
+                _mix(_gradient(ix, iy1, dx, dy - 1, seed),
+                     _gradient(ix1, iy1, dx - 1, dy - 1, seed), fade_x), fade_y)
 
 
 def _simplex(x, y, seed):
@@ -198,11 +275,15 @@ def _cells(x, y, seed, *, need_first=True, need_second=True, need_identity=True)
         winner_x, winner_y = np.zeros_like(ix), np.zeros_like(iy)
         selected = np.zeros_like(first, dtype=bool)
     for dy in range(-2, 3):
+        cy = iy + dy
         for dx in range(-2, 3):
-            cx, cy = ix + dx, iy + dy
-            px = cx + _hash(cx, cy, seed)
-            py = cy + _hash(cx, cy, seed + 79)
-            dist = (x - px) ** 2 + (y - py) ** 2
+            cx = ix + dx
+            # px = cx + hash; dist = (x - px) ** 2 + (y - py) ** 2, reusing buffers
+            px = _reverse_subtract(x, _inplace(np.add, _hash(cx, cy, seed), cx))
+            px = _inplace(np.multiply, px, px)
+            py = _reverse_subtract(y, _inplace(np.add, _hash(cx, cy, seed + 79), cy))
+            py = _inplace(np.multiply, py, py)
+            dist = px + py
             if need_second or need_identity:
                 closer = dist < first
             if need_second:
@@ -224,13 +305,15 @@ def _scratch(x, y, seed, width=0.025, density=0.55, directional=False):
     ix, iy = np.floor(x), np.floor(y)
     result = np.zeros_like(x)
     for dy in range(-1, 2):
+        cy = iy + dy
         for dx in range(-1, 2):
-            cx, cy = ix + dx, iy + dy
+            cx = ix + dx
             px = x - cx - _hash(cx, cy, seed)
             py = y - cy - _hash(cx, cy, seed + 21)
             angle = (_hash(cx, cy, seed + 51) - 0.5) * (0.16 if directional else np.pi)
-            along = px * np.sin(angle) + py * np.cos(angle)
-            across = px * np.cos(angle) - py * np.sin(angle)
+            sin, cos = np.sin(angle), np.cos(angle)
+            along = px * sin + py * cos
+            across = px * cos - py * sin
             half = 0.12 + _hash(cx, cy, seed + 62) * 0.55
             distance = np.sqrt(across ** 2 + np.maximum(np.abs(along) - half, 0) ** 2)
             line = 1 - _smooth(width * 0.25, width, distance)

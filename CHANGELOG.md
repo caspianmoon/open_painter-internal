@@ -33,6 +33,8 @@ Material Director.
 - AI Undo keeps the artist's current layer and mask order (a layer added or moved after the AI
   change no longer jumps in the stack); an extra generated image is ignored rather than fatal; small
   3D-view regions are no longer upsampled for capture.
+- Asset-shelf handles (one image per library material, mask, filter, procedural, brush and
+  alpha) are no longer written into saved .blend files; they are rebuilt on load as before.
 - See [Material Director](docs/material-director.md) for setup and supported scope.
 
 ## 0.7.0

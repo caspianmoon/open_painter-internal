@@ -4,6 +4,7 @@ from pathlib import Path
 from textwrap import wrap
 
 import bpy
+from bpy.app.handlers import persistent
 from bpy_extras.io_utils import ImportHelper
 
 from ..constants import BLEND_ITEMS
@@ -29,6 +30,27 @@ def catalog():
     ] + [
         (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
     ] + categories.extras()
+
+
+def handles():
+    return [image for image in bpy.data.images if ASSET_KEY in image]
+
+
+@persistent
+def unmark_handles(_):
+    """Shelf handles are runtime UI state rebuilt on load: never write them
+    into the artist's .blend. Without a fake user or asset mark they have no
+    users, so the file writer skips them while they stay usable in session."""
+    for image in handles():
+        if image.asset_data:
+            image.asset_clear()
+        image.use_fake_user = False
+
+
+@persistent
+def remark_handles(_):
+    if handles() and not bpy.app.background:
+        prepare_assets()
 
 
 def prepare_assets(*, refresh_sources=False):

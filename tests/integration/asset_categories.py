@@ -195,6 +195,18 @@ def run():
     bpy.data.textures.remove(alpha)
     native.prepare_assets()
     assert not alpha_proxy.asset_data
+
+    # Shelf handles are runtime state: saving must not write hundreds of
+    # library images into the artist's file, and the imported texture stays.
+    assert len(native.handles()) > 100
+    saved = Path(bpy.app.tempdir) / "asset-handles.blend"
+    bpy.ops.wm.save_as_mainfile(filepath=str(saved))
+    assert not any(image.use_fake_user or image.asset_data for image in native.handles())
+    bpy.ops.wm.open_mainfile(filepath=str(saved))
+    assert not native.handles(), [image.name for image in native.handles()][:5]
+    assert bpy.data.images.get("category-source.png").packed_file
+    native.prepare_assets()
+    assert len(native.handles()) > 100
     open_painter.unregister()
     open_painter.register()
     open_painter.unregister()

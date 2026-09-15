@@ -214,8 +214,11 @@ class OP_OT_close_editor(bpy.types.Operator):
 
 
 def register():
+    from .native import remark_handles, unmark_handles
     bpy.app.handlers.load_post.append(load)
     bpy.app.handlers.save_pre.append(save)
+    bpy.app.handlers.save_pre.append(unmark_handles)
+    bpy.app.handlers.save_post.append(remark_handles)
     bpy.types.VIEW3D_HT_header.prepend(header)
     bpy.types.IMAGE_HT_header.prepend(header)
     bpy.app.timers.register(restore_initial, first_interval=0.1)
@@ -229,7 +232,9 @@ def restore_initial():
 def unregister():
     if bpy.app.timers.is_registered(restore_initial):
         bpy.app.timers.unregister(restore_initial)
-    for handlers, fn in ((bpy.app.handlers.load_post, load), (bpy.app.handlers.save_pre, save)):
+    from .native import remark_handles, unmark_handles
+    for handlers, fn in ((bpy.app.handlers.load_post, load), (bpy.app.handlers.save_pre, save),
+                         (bpy.app.handlers.save_pre, unmark_handles), (bpy.app.handlers.save_post, remark_handles)):
         if fn in handlers:
             handlers.remove(fn)
     bpy.types.VIEW3D_HT_header.remove(header)

@@ -82,6 +82,7 @@ if args.gui or args.gui_only:
         ("edge_map_refresh_ui.py", "edge-map-refresh-ui.json"),
         ("layer_drag_ui.py", "layer-drag-ui.json"),
         ("graph_view_ui.py", "graph-view-ui.json"),
+        ("module_ui.py", "module-ui.json"),
     ]:
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
@@ -103,12 +104,13 @@ if args.gui or args.gui_only:
                 "two_windows_ui.py": {"OP_TWO_WINDOWS_REPORT": str(result_path)},
                 "layer_drag_ui.py": {"OP_LAYER_DRAG_UI_REPORT": str(result_path)},
                 "graph_view_ui.py": {"OP_GRAPH_UI_REPORT": str(result_path)},
+                "module_ui.py": {"OP_MODULE_UI_REPORT": str(result_path)},
             }.get(filename, {}))),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
-        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py"}:
+        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

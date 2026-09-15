@@ -21,6 +21,15 @@ The 0.2.7 native shader tests are `shader_nodes.py` (blend/filter GPU math),
 `shader_sources.py` (source/projection parity and 50 catalog compilations),
 `shader_runtime.py` (real callbacks/lifecycle), `shader_boundaries.py` (isolated
 fallback dependencies), and `shader_preview.py` (rendered edits and persistence).
+0.3.0 adds `shader_units.py` (per-unit compilation: folder/reference parity with
+hidden layers and disabled effects, uniform toggles, partial rebuilds, mutual
+references, cycles, stubs), `shader_structural_fields.py` (every property flags a
+rebuild or binds on the same graph, as declared) and `shader_undo.py` (undo/redo
+rehydration). Performance scripts: `tests/performance/shader_build_scaling.py`,
+`shader_structural_edits.py`, `bake_maps.py` (user project, output hashes),
+`idle_timer.py` (real window) and `scripts/benchmark_comparison.py`; the pure
+`tests/unit/test_uv_rasterizer.py` checks the batched rasteriser against the
+per-triangle reference exactly.
 The regular background runner includes them. `--gui-only` includes an actual held
 mask slider test and the explicit 2D snapshot/paint-source workflow. Failed GUI
 reports fail the runner; callback timing alone cannot pass visual acceptance.

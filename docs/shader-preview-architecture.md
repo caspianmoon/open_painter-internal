@@ -97,6 +97,46 @@ existing Principled/Bump/mix sockets directly. They do not dirty channel pixels.
 The normal exporter uses the current height distance when combining evaluated
 height with the independent authored normal channel.
 
+## Units and rebuild scope
+
+Blender re-validates a node tree on every `nodes.new` and `links.new`, so a flat
+tree of N nodes costs O(N²) to construct. `Graph.build` therefore emits one
+`ShaderNodeTree` per *unit* and a small top tree that instances and chains them:
+
+| Unit key | Content | Interface |
+| --- | --- | --- |
+| `('CHANNEL', layer_id, channel)` | layer opacity × visibility × channel opacity × mask coverage, then the blend of the layer's source (or a folder's grouped children) over the backdrop | `In` (+ `In:Alpha` inside isolated folders), `Grouped[:Alpha]` for folders, `UV/Position/Normal`, `Ref*` → `Out[:Alpha]` |
+| `('SRC', layer_id, channel, count)` | channel content after the first `count` effects; continues from the longest shorter published prefix | coordinates, `Ref*` → `Color`, `Alpha` |
+| `('MASK', layer_id, through, pre_filter)` | mask coverage through one mask (or the whole stack) | coordinates, `Ref*` → `Value` |
+
+Every `source()`/`mask()` call from another unit imports the producer through group
+sockets (`Ref<n>` inputs), so an anchor consumer and the owning layer share one
+chain; constants are inlined. The import graph is a DAG by construction (a cycle is
+refused while compiling). The top tree holds the coordinate nodes, the instances,
+the per-channel `Final:` normalisation and the group output; wiring follows the
+CPU evaluator's composition order. Blender inlines groups when generating shader
+code, so the GPU program is the same as the flat tree's.
+
+Structure is described by a global signature (resolution, baked maps), the wiring
+(layer order, parents, folder modes, touched channels) and one signature per unit.
+Layer visibility and the `enabled` flag of pointwise effects are uniforms (hidden
+layers compile behind a zero coverage; hidden content that cannot compile becomes a
+pass-through stub with a warning). `Graph.update` raises `RebuildRequired` with the
+mismatching unit keys; `Graph.build(reuse=previous)` adopts every unit whose
+signature *and RNA owner addresses* are unchanged (collection reallocation moves
+PropertyGroups, so captured references are only trusted while every owner keeps its
+address) and recompiles the rest. Numeric property callbacks tell the session the
+structure is unchanged and skip the signature walk.
+
+Value nodes, image samplers and boundary samplers carry JSON descriptors keyed by
+stable ids; unit trees record flags, exports and compiled effects; the top tree
+records the signature it was built for. After undo, redo, reload or re-enabling
+the add-on, `Graph.rehydrate` adopts the persisted graph when the signature still
+matches, rebuilds all bindings and the dependency closure from the trees and runs
+a full binding update to correct any drifted uniform; otherwise it compiles
+normally. Developer Mode lists units, node counts, last build/reuse figures and
+unique images against `gpu.capabilities.max_textures_frag_get()`.
+
 ## Explicit 2D snapshots and painting
 
 The Image Editor requires an image, so opening a native 2D composite requests one
@@ -296,12 +336,14 @@ blending, image read/write or compatibility-resource requests. These timings
 measure Python/RNA submission, not GPU completion or displayed frame rate.
 [Heavy-material timing record](validation/shader-heavy-material-timing.json).
 
-Initial construction remains expensive: that material took about 19.7 seconds
-to build its graph, plus 0.45 seconds to prepare isolated inputs, under concurrent
-test load. Unique internal names reduce Blender's node-name collision cost, but
-large topology changes still rebuild the compiled group. Numeric shader edits
-reuse it. This is a remaining structural-edit cost, and not evidence that arbitrary
-materials or every operation meet a 14 ms viewport target.
+Those 0.2.7 timings were taken on the flat single-tree compiler, whose construction
+was quadratic in node count (19.7 s for that material). Since 0.3.0 the graph is
+compiled per unit (see [Units and rebuild scope](#units-and-rebuild-scope)): the same
+material builds in 0.70 s, a blend-mode change rebuilds 4 of its 73 units in 80 ms,
+hiding a layer writes one uniform in 2.8 ms, and an undo rehydrates the session in
+tens of milliseconds. Records: [construction per material](performance/shader-build-0.3.0.json)
+against the [0.2.9 baseline](performance/shader-build-0.2.9.json). None of this is
+evidence that arbitrary materials or every operation meet a 14 ms viewport target.
 
 The [2D workflow test](validation/shader-snapshot-ui.json) verifies an explicit
 one-channel composite snapshot, a visibly stale state after a shader edit,

@@ -16,6 +16,35 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Performance release 0.3.0 — 2026-09-15
+
+Measured on Blender 5.2.1 LTS, macOS Apple Silicon; every figure has a script and a
+JSON record. Numerical behaviour is unchanged (output hashes and frozen-reference
+suites), except float rounding of barycentric interpolation in four bake maps.
+
+| Area | Before (0.2.9) | After | Evidence |
+| --- | --- | --- | --- |
+| Shader build, Worn Painted Metal / Post-Apocalyptic / 2K project | 4.6 s / 16.1 s / 5.1 s | 0.41 s / 0.70 s / 0.64 s | `tests/performance/shader_build_scaling.py`, [shader-build-0.2.9.json](performance/shader-build-0.2.9.json), `shader_user_project.py` |
+| Hide layer / blend-mode change / add mask (73-unit material) | full rebuild + recompile (16 s) | 2.8 ms same graph / 80 ms, 4 units / 127 ms, 1 unit | `tests/performance/shader_structural_edits.py` |
+| Undo to a current shader | full rebuild + recompile | 30 ms, same instance | `tests/integration/shader_undo.py` |
+| Slider callback median (2K project, 7 controls) | 1.45–1.61 ms | 0.41–0.73 ms | `tests/performance/shader_user_project.py` |
+| Idle scheduler (real window) | 58.8 ticks/s, 7.0 ms CPU/s | 9.8 ticks/s, 1.6 ms CPU/s | `tests/performance/idle_timer.py`, [idle-timer-0.3.0.json](performance/idle-timer-0.3.0.json) |
+| Mesh-map bakes on the 2K project | POSITION 2.15 s … UV_BORDER 9.65 s, MEAN_CURVATURE 28.7 s | 0.79 s … 1.78 s, 11.5 s | `tests/performance/bake_maps.py`, [bake-maps-0.3.0.json](performance/bake-maps-0.3.0.json) |
+| CPU reference cold worn/2K (paired medians) | 16.03 s | 14.50 s | `scripts/benchmark_comparison.py`, [paired-cpu-0.3.0.json](performance/paired-cpu-0.3.0.json) |
+
+Implemented and tested in Blender: per-unit shader compilation with adoption on
+structural edits, uniform visibility/enable flags, undo rehydration, numeric
+fast-path callbacks, 10 Hz idle scheduler, panel draw caches, batched UV
+rasterisation for geometry and mesh-map bakes, vectorised islands/creases/curvature
+kernel, buffer-reusing noise and filter kernels. Not done: library node groups for
+repeated blend/effect arithmetic (the heavy catalog material already builds under
+one second, so the further gain was not needed), deferred boundary rasters for
+hidden layers, and a compiled CPU path (the CPU reference is now bound by real
+NumPy work on 16-row strips).
+
+See [shader-preview-architecture.md](shader-preview-architecture.md#units-and-rebuild-scope)
+for the compiler structure and the [changelog](../CHANGELOG.md#030).
+
 ## Anchor points — 2026-09-15
 
 Substance-style anchor points: an *Anchor Point* row in a mask stack publishes

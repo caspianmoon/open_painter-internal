@@ -1,5 +1,58 @@
 # Changes
 
+## 0.3.0
+
+Performance release. Numerical behaviour is unchanged: every optimisation is either
+bit-identical to 0.2.9 (verified by output hashes and the frozen-reference suites) or
+differs only in float rounding of an interpolation, noted per item below.
+
+- Shader compiler: the native preview is compiled as one node group per unit (a layer
+  channel, a channel source prefix or a mask prefix) instanced from a small top tree,
+  instead of one flat tree. Blender re-validates a tree on every node/link insertion,
+  so construction is now the sum of the squared unit sizes: Worn Painted Metal builds
+  in 0.41 s (was 4.6 s), Post-Apocalyptic Scrap Metal in 0.70 s (was 16.1 s), the
+  artist's 2K project in 0.64 s (was 5.1 s). Parity with the CPU reference is unchanged.
+- Layer visibility and the enabled flag of pointwise effects are shader uniforms: hiding a
+  layer writes one socket (2.8 ms on the 73-unit material, same graph, no shader
+  recompile) where it used to rebuild the whole material. Hidden layers with content that
+  cannot compile pass through as stubs with a warning until they are shown.
+- Structural edits rebuild only the units whose signature changed and whose RNA owners
+  kept their addresses; the rest are adopted: a blend-mode change rebuilds 4 of 73
+  units in 80 ms, adding a mask rebuilds 1 in 127 ms.
+- Undo, redo, reload and re-enabling the add-on rehydrate the shader session from the
+  persisted node groups (bindings, image and boundary samplers, dependency closure) and
+  correct any drifted uniform, instead of rebuilding and recompiling: an undo reaches a
+  current shader in 30 ms with the same material instance.
+- Numeric slider edits bind without re-deriving the graph structure: 0.41-0.73 ms median
+  per traced control on the 2K project (1.45-1.61 ms in 0.2.7). A regression flips every
+  layer, channel, effect, mask and folder field to check that structural fields still
+  flag a rebuild.
+- Scheduler timer: 10 Hz when idle (was 60 Hz for the life of any native project),
+  re-armed immediately by structural edits, pruning only when the live set changes;
+  status writes are change-only. Real-window idle cost: 58.8 -> 9.8 ticks/s, 7.0 -> 1.6 ms
+  CPU per second.
+- Panels: the layer list no longer walks the hierarchy per row (O(n^2) per redraw), bake
+  provenance status is memoised against a depsgraph epoch instead of serialising mesh
+  signatures per redraw, and asset handles are prepared once per file load.
+- Mesh-map bakes and the triplanar geometry raster rasterize all UV triangles of a target
+  in batches (exact same float32 barycentric sequence, later triangle wins), crease
+  detection and UV islands pair shared edges with arrays, border falloff is stamped once
+  per island edge, thickness rays get their frames in NumPy, and the mean-curvature
+  kernel runs per grid cell with zero-kernel samples pruned. On the 2K project:
+  POSITION 2.15 -> 0.79 s, WORLD_NORMAL 2.18 -> 0.80 s, MATERIAL_ID 1.85 -> 0.65 s,
+  UV_ISLAND 2.99 -> 1.31 s, UV_BORDER 9.65 -> 1.78 s, SELECTION 1.72 -> 0.65 s,
+  THICKNESS 2.97 -> 0.83 s, MEAN_CURVATURE 28.7 -> 11.5 s, CURVATURE 28.7 -> 11.0 s,
+  triplanar geometry 2.36 -> 1.24 s. ID, island, border, selection and curvature maps are
+  bit-identical; the interpolated maps differ only in float rounding.
+- CPU reference/export: lattice hashing, fade/mix/gradient chains, cellular and scratch
+  fields, texture gathers and filter sanitising reuse buffers; separable morphology builds
+  its window by doubling (exact). Bit-identical outputs; paired cold worn/2K medians
+  16.03 -> 14.50 s.
+- Developer Mode shows units, node counts, last build/reuse figures and unique images
+  against the fragment sampler limit. New benchmarks: shader_build_scaling,
+  shader_structural_edits, idle_timer, bake_maps; the paired CPU benchmark selects the
+  CPU backend again (native sets have allocated no outputs since 0.2.7).
+
 ## 0.2.9
 
 - Anchor points: Add Anchor Point in a mask stack publishes the coverage before it; Anchor in a channel's filter stack publishes the channel after the filters above it. Published Input masks, fill channel content (with the channel's own detail and filters on top) and generator Micro Height / Micro Normal inputs reference them, on the CPU reference and shader-native evaluators alike.

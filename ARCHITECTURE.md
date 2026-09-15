@@ -17,10 +17,20 @@ Blender user data directory or a user-chosen directory, never the installed exte
 ## Layer evaluation
 
 Default authoring uses a persistent internal Blender material shader graph in
-`evaluation/shader_graph.py`, managed by `shader_preview.py`. Property changes bind
-to existing Value nodes and invalidate their downstream dependency chain. Original
-images remain editable inputs. Numeric shader-compatible edits perform no raster
-composition, channel-image writes or post-drag bake. See the
+`evaluation/shader_graph.py`, managed by `shader_preview.py`. The graph is a small
+top-level node group that instances one node group per compilation unit: a layer
+channel (coverage and blend), a channel source prefix (content after the first
+`count` effects) or a mask prefix (coverage through one mask). Published stages cross
+unit boundaries through group sockets, so anchor consumers and owning layers share
+one chain; Blender inlines groups in shader codegen, so GPU work is unchanged.
+Property changes bind to existing Value nodes and invalidate their downstream
+dependency chain. Layer visibility and pointwise effect enable flags are uniforms.
+Structural edits carry per-unit signatures: only units whose signature or RNA owner
+addresses changed are recompiled, the rest are adopted. Undo, redo and reload
+rehydrate the session from the persisted trees (nodes carry id-keyed descriptors)
+instead of rebuilding. Original images remain editable inputs. Numeric
+shader-compatible edits perform no raster composition, channel-image writes or
+post-drag bake. See the
 [full callback trace, operation boundaries and diagnostics](docs/shader-preview-architecture.md).
 This dependency closure describes add-on binding and resource work. Blender can
 shade the complete material for visible pixels after an edit; the add-on neither
@@ -75,7 +85,11 @@ set's material. Slots are retained to avoid silently reindexing other assignment
 
 ## Baking
 
-Explicit high/low lists are validated before Cycles work. Temporary per-slot materials own active
+Explicit high/low lists are validated before Cycles work. Utility maps and the triplanar
+geometry raster rasterize all UV triangles of a target in batches (`geometry/uv_rasterizer.rasterize`,
+same float32 barycentric sequence as the per-triangle path, later triangle wins);
+`geometry/snapshots.targets` exposes triangle index arrays and builds RNA triangle lists only on
+request. Temporary per-slot materials own active
 bake image nodes. Unassigned slots use a scratch target. Normal and AO are Cycles CPU bakes; curvature
 uses convex creases from the evaluated target mesh. Position, world/object normals, material/object
 IDs, UV islands/borders and raycast thickness use evaluated-mesh utility baking. A `finally` block restores material slots, render engine,
@@ -91,7 +105,10 @@ channels. Parameter-owner bindings and published source stages narrow the shader
 update. Source/geometry identities invalidate affected compatibility inputs.
 Native edits have no debounce or full texture job. CPU reference mode retains its
 cooperative raster scheduler and 80 ms debounce. Runtime shader resources and
-bindings can be reconstructed from persistent authoring data after load/undo.
+bindings are reconstructed from the persisted node groups after load/undo/redo.
+The scheduler timer polls at 10 Hz when idle and is re-armed immediately by a
+structural edit; 60 Hz is used only while painting or while a shader session has
+topology or isolated inputs left to finish.
 
 The paint bridge activates a native essential brush and selects `image_paint.canvas`. Persistent
 paint references identify the layer/channel/mask. Eligible unfiltered float paint

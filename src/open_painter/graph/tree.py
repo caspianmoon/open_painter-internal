@@ -57,6 +57,8 @@ class OP_SocketCoverage(_Socket, bpy.types.NodeSocket):
 class _GraphNode:
     op_id: bpy.props.StringProperty()
     op_kind: bpy.props.StringProperty()
+    op_owner: bpy.props.StringProperty()      # owning layer id of a mask/filter node
+    op_channel: bpy.props.StringProperty()    # channel of a filter node
 
     @classmethod
     def poll(cls, tree):
@@ -85,6 +87,20 @@ class OP_FolderNode(_GraphNode, bpy.types.Node):
     bl_icon = "FILE_FOLDER"
 
 
+class OP_MaskNode(_GraphNode, bpy.types.Node):
+    """One mask of a layer's mask chain: previous coverage in, its coverage out."""
+    bl_idname = "OPMaskNode"
+    bl_label = "Mask"
+    bl_icon = "MOD_MASK"
+
+
+class OP_EffectNode(_GraphNode, bpy.types.Node):
+    """One filter of a channel's filter chain: content in, filtered content out."""
+    bl_idname = "OPEffectNode"
+    bl_label = "Filter"
+    bl_icon = "SHADERFX"
+
+
 class OP_OutputNode(_GraphNode, bpy.types.Node):
     """The texture set's final channels (informational)."""
     bl_idname = "OPOutputNode"
@@ -92,6 +108,7 @@ class OP_OutputNode(_GraphNode, bpy.types.Node):
     bl_icon = "OUTPUT"
 
 
-NODE_TYPES = {"LAYER": OP_LayerNode.bl_idname, "FOLDER": OP_FolderNode.bl_idname, "OUTPUT": OP_OutputNode.bl_idname}
+NODE_TYPES = {"LAYER": OP_LayerNode.bl_idname, "FOLDER": OP_FolderNode.bl_idname, "OUTPUT": OP_OutputNode.bl_idname,
+              "MASK": OP_MaskNode.bl_idname, "EFFECT": OP_EffectNode.bl_idname}
 CLASSES = (OP_GraphTree, OP_SocketContent, OP_SocketScalar, OP_SocketCoverage,
-           OP_LayerNode, OP_FolderNode, OP_OutputNode)
+           OP_LayerNode, OP_FolderNode, OP_MaskNode, OP_EffectNode, OP_OutputNode)

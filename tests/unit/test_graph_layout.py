@@ -26,6 +26,20 @@ class GraphLayout(unittest.TestCase):
         self.assertGreater(height(8), height(0))
         self.assertEqual(positions(rows, [('base', 'child'), ('child', 'top')], output='out', sockets=sockets), result)
 
+    def test_mask_chain_shares_the_row_and_filters_sit_under_it(self):
+        rows = [('layer', 0), ('base', 0)]
+        sockets = {'layer': 3, 'base': 2, 'm1': 9, 'm2': 2, 'f1': 2}
+        links = [('m1', 'm2'), ('m2', 'layer'), ('f1', 'layer')]
+        result = positions(rows, links, output='out', sockets=sockets,
+                           inline={'layer': ['m1', 'm2']}, subrows={'layer': [['f1']]})
+        step = ROW_GAP
+        self.assertEqual(result['layer'], (2 * COLUMN_WIDTH, 0))       # right of its mask chain
+        self.assertEqual(result['m1'], (0, 0))                           # same row, left to right
+        self.assertEqual(result['m2'], (COLUMN_WIDTH, 0))
+        self.assertEqual(result['f1'], (INDENT, -(height(9) + step)))    # the tallest row member sets the step
+        self.assertEqual(result['base'], (0, -(height(9) + height(2) + 2 * step)))
+        self.assertEqual(result['out'], (3 * COLUMN_WIDTH + INDENT, 0))
+
 
 if __name__ == '__main__':
     unittest.main()

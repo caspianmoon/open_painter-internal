@@ -55,24 +55,25 @@ def layer(identifier):
 
 # 1. Dragging from a folder's Composite into a reference mask publishes the folder and sets the anchor.
 assert not layer(folder_id).publish_group
-user_link(folder_id, 'group', reader_id, f'mask#{reference.id}')
+reference_id, wear_id, anchor_id = reference.id, wear.id, anchor_mask.id
+user_link(folder_id, 'group', reference_id, 'ref')
 assert layer(folder_id).publish_group, 'linking the composite socket must publish it'
 assert layer(reader_id).masks[0].reference_anchor == anchors.group_id(folder_id)
 settle()
-assert (folder_id, 'group', reader_id, f'mask#{reference.id}') in link_keys(tree)
+assert (folder_id, 'group', reference_id, 'ref') in link_keys(tree)
 assert socket(by_id()[folder_id], 'group', True).name == 'Composite'
 print('GRAPH_LINKS composite link: PASS', flush=True)
 
 # 2. A mask anchor into a fill channel's content; a layer output into a micro detail slot.
-user_link(base_id, anchor_mask.id, reader_id, 'content#ROUGHNESS')
+user_link(anchor_id, 'out', reader_id, 'content#ROUGHNESS')
 assert stack.channel_for(layer(reader_id), 'ROUGHNESS').anchor == anchor_mask.id
-user_link(child_id, 'out', reader_id, f'detail#{wear.id}#HEIGHT')
+user_link(child_id, 'out', wear_id, 'detail#HEIGHT')
 assert layer(reader_id).masks[1].detail_height_anchor == anchors.output_id(child_id)
 assert layer(child_id).publish_output
 settle()
 keys = link_keys(tree)
-assert (base_id, anchor_mask.id, reader_id, 'content#ROUGHNESS') in keys
-assert (child_id, 'out', reader_id, f'detail#{wear.id}#HEIGHT') in keys
+assert (anchor_id, 'out', reader_id, 'content#ROUGHNESS') in keys
+assert (child_id, 'out', wear_id, 'detail#HEIGHT') in keys
 print('GRAPH_LINKS content and detail links: PASS', flush=True)
 
 # 3. A cycle is refused: the field is reverted, the status explains, the stray link is dropped on sync.
@@ -99,28 +100,112 @@ tree.links.remove(link)
 assert stack.channel_for(layer(reader_id), 'ROUGHNESS').anchor == ''
 legacy = layer(reader_id).masks.add(); legacy.id, legacy.source = new_id(), 'REFERENCE'
 legacy.reference_layer, legacy.reference_channel = base_id, 'ROUGHNESS'
+legacy_id = legacy.id
 settle()
-assert (base_id, 'legacy#ROUGHNESS', reader_id, f'mask#{legacy.id}') in link_keys(tree)
+assert (base_id, 'legacy#ROUGHNESS', legacy_id, 'ref') in link_keys(tree)
 nodes = by_id()
-link = next(l for l in tree.links if l.to_socket.identifier == f'mask#{legacy.id}')
+link = next(l for l in tree.links if l.to_node.op_id == legacy_id and l.to_socket.identifier == 'ref')
 tree.links.remove(link)
 assert layer(reader_id).masks[2].reference_layer == ''
 settle()
 assert not any(key[1] == 'legacy#ROUGHNESS' for key in link_keys(tree)), 'unused legacy output survived'
 # A legacy output cannot be linked; anchors are the way.
-legacy.reference_layer = base_id
+layer(reader_id).masks[2].reference_layer = base_id
 settle()
-user_link(base_id, 'legacy#ROUGHNESS', reader_id, f'mask#{reference.id}')
+user_link(base_id, 'legacy#ROUGHNESS', reference_id, 'ref')
 assert layer(reader_id).masks[0].reference_anchor == anchors.group_id(folder_id)
 assert 'anchor' in scene.open_painter.status.lower()
 print('GRAPH_LINKS removal and legacy: PASS', flush=True)
 
 # 5. Replacing a link on a one-link input swaps the reference in one step.
-user_link(base_id, anchor_mask.id, reader_id, f'mask#{reference.id}')
-assert layer(reader_id).masks[0].reference_anchor == anchor_mask.id
+user_link(anchor_id, 'out', reference_id, 'ref')
+assert layer(reader_id).masks[0].reference_anchor == anchor_id
 settle()
-assert (base_id, anchor_mask.id, reader_id, f'mask#{reference.id}') in link_keys(tree)
-assert (folder_id, 'group', reader_id, f'mask#{reference.id}') not in link_keys(tree)
+assert (anchor_id, 'out', reference_id, 'ref') in link_keys(tree)
+assert (folder_id, 'group', reference_id, 'ref') not in link_keys(tree)
 print('GRAPH_LINKS replacement: PASS', flush=True)
+
+# 6. Structural links reorder: a mask before another, a filter to its chain end, a layer under another.
+scene.open_painter.status = ''
+extra = layer(reader_id).masks.add(); extra.id, extra.name, extra.source = new_id(), 'Noise', 'NOISE'
+extra_id = extra.id
+settle()
+assert [m.id for m in layer(reader_id).masks][-1] == extra_id
+user_link(extra_id, 'out', reference_id, 'prev')            # Noise placed before the reference mask
+assert [m.id for m in layer(reader_id).masks][:2] == [extra_id, reference_id], [m.name for m in layer(reader_id).masks]
+assert not scene.open_painter.status, scene.open_painter.status
+settle()
+user_link(extra_id, 'out', reader_id, 'mask')                # ... and back to the chain end
+assert [m.id for m in layer(reader_id).masks][-1] == extra_id
+settle()
+prop = stack.channel_for(layer(reader_id), 'ROUGHNESS')
+for kind in ('LEVELS', 'INVERT', 'BLUR'):
+    effect = prop.effects.add(); effect.kind = kind
+settle()
+first = mirror.effect_node_id(layer(reader_id), 'ROUGHNESS', 0, prop.effects[0])
+last = mirror.effect_node_id(layer(reader_id), 'ROUGHNESS', 2, prop.effects[2])
+user_link(last, 'out', first, 'in')                            # Blur before Levels
+assert [e.kind for e in stack.channel_for(layer(reader_id), 'ROUGHNESS').effects] == ['BLUR', 'LEVELS', 'INVERT']
+settle()
+# Anchored content enters a filtered channel at its first filter; the layer's channel socket is the chain end.
+blur = mirror.effect_node_id(layer(reader_id), 'ROUGHNESS', 0, prop.effects[0])
+user_link(anchor_id, 'out', blur, 'in')
+assert stack.channel_for(layer(reader_id), 'ROUGHNESS').anchor == anchor_id
+settle()
+keys = link_keys(tree)
+assert (anchor_id, 'out', blur, 'in') in keys
+assert not any(k[2] == reader_id and k[3] == 'content#ROUGHNESS' and k[0] == anchor_id for k in keys)
+scene.open_painter.status = ''
+user_link(anchor_id, 'out', reader_id, 'content#ROUGHNESS')   # refused: filtered channels take anchors at their first filter
+assert 'first filter' in scene.open_painter.status, scene.open_painter.status
+settle()
+order = [l.id for l in ts.layers]
+user_link(reader_id, 'out', base_id, 'below')                  # Reader moves directly under Base
+assert [l.id for l in ts.layers].index(reader_id) == [l.id for l in ts.layers].index(base_id) - 1
+settle()
+user_link(reader_id, 'out', folder_id, 'children')             # ... then becomes the folder's top child
+assert layer(reader_id).parent_id == folder_id and [l.id for l in ts.layers if l.parent_id == folder_id][-1] == reader_id
+settle()
+scene.open_painter.status = ''
+user_link(base_id, 'out', extra_id, 'prev')                    # masks never chain across layers
+assert 'Anchor Point' in scene.open_painter.status
+settle()
+print('GRAPH_LINKS chain reorder: PASS', flush=True)
+
+# 7. Deleting a mask or filter node deletes it; painted masks are kept and their node returns.
+count = len(layer(reader_id).masks)
+tree.nodes.remove(by_id()[extra_id])
+assert len(layer(reader_id).masks) == count - 1 and extra_id not in [m.id for m in layer(reader_id).masks]
+settle()
+painted = layer(reader_id).masks.add(); painted.id, painted.source = new_id(), 'PAINT'
+painted_id = painted.id
+settle()
+scene.open_painter.status = ''
+tree.nodes.remove(by_id()[painted_id])
+assert painted_id in [m.id for m in layer(reader_id).masks] and 'Painter panel' in scene.open_painter.status
+settle()
+assert painted_id in by_id()
+tree.nodes.remove(by_id()[blur])
+assert [e.kind for e in stack.channel_for(layer(reader_id), 'ROUGHNESS').effects] == ['LEVELS', 'INVERT']
+settle()
+print('GRAPH_LINKS node deletion: PASS', flush=True)
+
+# 8. The Add menu operator appends masks and filters to the active layer's chains.
+ts.active_layer = stack.index_of(ts, child_id)
+area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
+with bpy.context.temp_override(area=area):
+    assert bpy.ops.open_painter.graph_add(kind='GENERATOR', choice='EDGE_WEAR') == {'FINISHED'}
+    assert bpy.ops.open_painter.graph_add(kind='SCENE', choice='UP') == {'FINISHED'}
+    assert bpy.ops.open_painter.graph_add(kind='FILTER', choice='LEVELS', channel='ROUGHNESS') == {'FINISHED'}
+    assert bpy.ops.open_painter.graph_add(kind='CHANNEL_ANCHOR', choice='', channel='ROUGHNESS') == {'FINISHED'}
+added = layer(child_id)
+assert [m.source for m in added.masks] == ['GENERATOR', 'SCENE'] and added.masks[1].influence.kind == 'UP'
+assert [e.kind for e in stack.channel_for(added, 'ROUGHNESS').effects] == ['LEVELS', 'ANCHOR']
+settle()
+keys = link_keys(tree)
+assert (mirror.mask_node_id(added, 1, added.masks[1]), 'out', child_id, 'mask') in keys
+channel_anchor = stack.channel_for(added, 'ROUGHNESS').effects[1].id
+assert (channel_anchor, 'out', child_id, 'content#ROUGHNESS') in keys
+print('GRAPH_LINKS add menu: PASS', flush=True)
 print('GRAPH_LINK_EDITS_PASS', flush=True)
 open_painter.unregister()

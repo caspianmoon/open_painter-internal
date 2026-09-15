@@ -35,6 +35,12 @@ Material Director.
   3D-view regions are no longer upsampled for capture.
 - Asset-shelf handles (one image per library material, mask, filter, procedural, brush and
   alpha) are no longer written into saved .blend files; they are rebuilt on load as before.
+- Open Graph is now a node-based editor of the stack: masks and channel filters are nodes with
+  their controls, chained into each layer; composition links show every layer's output feeding the
+  layer above, children feeding their folder and the top layer feeding the Texture Set Output.
+  Shift+A adds masks (generators, procedurals, scene fields, filters, anchors, published inputs)
+  and channel filters to the active layer; dragging chain or backdrop links reorders masks,
+  filters and layers; deleting a mask/filter node deletes it. See [Open Graph](docs/open-graph.md).
 - See [Material Director](docs/material-director.md) for setup and supported scope.
 
 ## 0.7.0

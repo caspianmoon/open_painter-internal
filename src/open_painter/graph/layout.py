@@ -38,22 +38,33 @@ def height(sockets):
     return HEADER_HEIGHT + SOCKET_HEIGHT * sockets
 
 
-def positions(rows, links, output=None, sockets=None):
+def positions(rows, links, output=None, sockets=None, subrows=None, inline=None):
     """{node id: (x, y)} for ``rows`` = [(id, depth)] listed top to bottom.
 
     Rows stack downwards by their estimated heights (``sockets`` = {id: socket
     count}); x is the dependency rank times the column width plus a nesting
     indent, so producers sit left of their consumers and folder contents read
-    as indented rows. The output node, when given, sits one column right of
-    everything.
+    as indented rows. ``inline`` = {row id: [node id, ...]} puts a chain on its
+    layer's own row (masks: ``Mask -> Layer``); ``subrows`` = {row id: [[node
+    id, ...], ...]} draws further chains (per-channel filters) as indented rows
+    under it. The output node, when given, sits one column right of everything.
     """
+    subrows, inline = subrows or {}, inline or {}
     ids = [identifier for identifier, _ in rows]
+    ids += [identifier for members in inline.values() for identifier in members]
+    ids += [identifier for chains in subrows.values() for chain in chains for identifier in chain]
     by_rank = ranks(set(ids), links)
     sockets = sockets or {}
     result, y = {}, 0
     for identifier, depth in rows:
-        result[identifier] = (by_rank.get(identifier, 0) * COLUMN_WIDTH + depth * INDENT, y)
-        y -= height(sockets.get(identifier, 0)) + ROW_GAP
+        members = [identifier, *inline.get(identifier, ())]
+        for member in members:
+            result[member] = (by_rank.get(member, 0) * COLUMN_WIDTH + depth * INDENT, y)
+        y -= max(height(sockets.get(member, 0)) for member in members) + ROW_GAP
+        for chain in subrows.get(identifier, ()):
+            for member in chain:
+                result[member] = (by_rank.get(member, 0) * COLUMN_WIDTH + (depth + 1) * INDENT, y)
+            y -= max((height(sockets.get(member, 0)) for member in chain), default=0) + ROW_GAP
     if output is not None:
         widest = max((rank for rank in by_rank.values()), default=0)
         result[output] = ((widest + 1) * COLUMN_WIDTH + INDENT, 0)

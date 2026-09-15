@@ -37,25 +37,51 @@ assert set(by_id) == set(nodes) | set(frames), (set(by_id) ^ (set(nodes) | set(f
 assert OUTPUT_NODE in by_id and by_id[OUTPUT_NODE].bl_idname == 'OPOutputNode'
 folders = [layer for layer in ts.layers if layer.type == 'FOLDER']
 assert folders and all(mirror.FRAME_PREFIX + f.id in frames for f in folders)
+for identifier, spec in nodes.items():
+    node = by_id[identifier]
+    assert node.label == spec['label'] and node.op_kind == spec['kind'], (node.label, spec)
+    assert [s.identifier for s in node.inputs] == [i for i, _, _ in spec['inputs']]
+    assert [s.identifier for s in node.outputs] == [i for i, _, _ in spec['outputs']]
+    assert all(s.link_limit == 1 for s in node.inputs)
+    parent = node.parent['op_id'] if node.parent is not None else ''
+    assert parent == spec['frame'], (identifier, parent, spec['frame'])
+    if parent:
+        outer = node.parent.parent['op_id'] if node.parent.parent is not None else ''
+        assert outer == frames[parent]['frame'], (identifier, outer, frames[parent]['frame'])
 for layer in ts.layers:
     node = by_id[layer.id]
-    assert node.label == layer.name and node.op_kind == ('FOLDER' if layer.type == 'FOLDER' else 'LAYER')
-    assert [s.identifier for s in node.inputs] == [i for i, _, _ in nodes[layer.id]['inputs']]
-    assert [s.identifier for s in node.outputs] == [i for i, _, _ in nodes[layer.id]['outputs']]
-    assert all(s.link_limit == 1 for s in node.inputs)
     if layer.type == 'FOLDER':
-        assert node.parent is not None and node.parent['op_id'] == mirror.FRAME_PREFIX + layer.id
-        assert (node.parent.parent['op_id'] == mirror.FRAME_PREFIX + layer.parent_id) if layer.parent_id \
-            else node.parent.parent is None
-    elif layer.parent_id:
-        assert node.parent is not None and node.parent['op_id'] == mirror.FRAME_PREFIX + layer.parent_id
-    else:
-        assert node.parent is None
+        assert node.parent['op_id'] == mirror.FRAME_PREFIX + layer.id
+    # Every mask and every channel filter is a node inside the layer's frame.
+    for index, mask in enumerate(layer.masks):
+        assert by_id[mirror.mask_node_id(layer, index, mask)].op_owner == layer.id
+    for prop in layer.channels:
+        for index, effect in enumerate(prop.effects):
+            item = by_id[mirror.effect_node_id(layer, prop.channel, index, effect)]
+            assert item.op_owner == layer.id and item.op_channel == prop.channel
 from open_painter.graph.edits import link_keys
 assert link_keys(tree) == set(links), (link_keys(tree) ^ set(links))
-# The stack result feeds the output node from the top root layer.
+# The stack result feeds the output node from the top root layer; siblings chain
+# bottom to top through Backdrop; the top child feeds its folder's Children.
 top = [layer for layer in ts.layers if not layer.parent_id][-1]
 assert all((top.id, 'out', OUTPUT_NODE, f'final#{c}') in links for c in ('BASE_COLOR', 'ROUGHNESS'))
+folder = folders[0]
+kids = [layer for layer in ts.layers if layer.parent_id == folder.id]
+assert len(kids) > 1
+assert all((a.id, 'out', b.id, 'below') in links for a, b in zip(kids, kids[1:]))
+assert (kids[-1].id, 'out', folder.id, 'children') in links
+# Mask chains end in the layer's Mask input; filter chains in the channel input.
+for layer in ts.layers:
+    if layer.masks:
+        assert (mirror.mask_node_id(layer, len(layer.masks) - 1, layer.masks[-1]), 'out', layer.id, 'mask') in links
+        for i in range(1, len(layer.masks)):
+            assert (mirror.mask_node_id(layer, i - 1, layer.masks[i - 1]), 'out',
+                    mirror.mask_node_id(layer, i, layer.masks[i]), 'prev') in links
+    for prop in layer.channels:
+        if prop.effects:
+            last = mirror.effect_node_id(layer, prop.channel, len(prop.effects) - 1, prop.effects[-1])
+            assert (last, 'out', layer.id, f'content#{prop.channel}') in links
+assert any(spec['kind'] == 'MASK' for spec in nodes.values()) and any(spec['kind'] == 'EFFECT' for spec in nodes.values())
 # Nodes were laid out: no two layer nodes share a position; the output node sits rightmost.
 positions = {identifier: tuple(node.location_absolute) for identifier, node in by_id.items()
              if identifier in nodes}
@@ -89,16 +115,18 @@ producer.publish_output = True
 consumer = stack.add(ts, 'FILL', 'Consumer'); consumer_id = consumer.id
 mask = consumer.masks.add(); mask.id, mask.source = new_id(), 'REFERENCE'
 mask.reference_anchor, mask.reference_channel = anchors.output_id(producer_id), 'ROUGHNESS'
+mask_id = mask.id
 mirror.reconcile(tree, ts)
 by_id = mirror.nodes_by_id(tree)
-assert producer_id in by_id and consumer_id in by_id
-assert (producer_id, 'out', consumer_id, f'mask#{mask.id}') in link_keys(tree)
+assert producer_id in by_id and consumer_id in by_id and mask_id in by_id
+assert (producer_id, 'out', mask_id, 'ref') in link_keys(tree)
+assert (mask_id, 'out', consumer_id, 'mask') in link_keys(tree)
 assert next(s for s in by_id[producer_id].outputs if s.identifier == 'out').name == 'Output'
 # Removing the producer removes its node; the dangling reference draws no link.
 ts.layers.remove(next(i for i, item in enumerate(ts.layers) if item.id == producer_id))
 mirror.reconcile(tree, ts)
 assert producer_id not in mirror.nodes_by_id(tree)
-assert not any(key[2] == consumer_id for key in link_keys(tree))
+assert not any(key[2] == mask_id and key[3] == 'ref' for key in link_keys(tree))
 print('GRAPH_MIRROR structural edits: PASS', flush=True)
 
 # Undo restores stack and tree together; the next reconcile is a no-op.

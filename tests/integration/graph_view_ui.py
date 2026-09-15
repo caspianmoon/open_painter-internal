@@ -129,7 +129,9 @@ def steps():
     space = garea.spaces.active
     tree = space.node_tree
     assert tree is not None and tree['op_graph_set'] == texture_set().id and space.pin
-    assert len(mirror.nodes_by_id(tree)) == len(texture_set().layers) + 2   # layers, frame, output
+    nodes, frames, _ = mirror.project(texture_set())
+    assert len(mirror.nodes_by_id(tree)) == len(nodes) + len(frames)   # layers, mask, output, frames
+    assert mask.id in nodes and nodes[mask.id]['kind'] == 'MASK'
     report['steps'].append('open graph splits the area')
     with bpy.context.temp_override(window=window, area=garea, region=next(r for r in garea.regions if r.type == 'WINDOW')):
         bpy.ops.node.view_all()
@@ -166,9 +168,9 @@ def steps():
     # Drag a link from the folder's Composite output into the reader's mask input.
     nodes = mirror.nodes_by_id(tree)
     source = nodes[by_name('Damage').id]
-    target = nodes[by_name('Reader').id]
+    target = nodes[mask.id]   # the Published Input mask is its own node
     out = next(s for s in source.outputs if s.identifier == 'group')
-    inp = next(s for s in target.inputs if s.identifier == f'mask#{mask.id}')
+    inp = next(s for s in target.inputs if s.identifier == 'ref')
     # Sockets are laid out by Blender; read their positions from the drawn node.
     sx, sy = socket_point(source, out, True)
     tx, ty = socket_point(target, inp, False)
@@ -192,7 +194,7 @@ def steps():
     assert by_name('Reader').masks[0].reference_anchor == anchors.group_id(by_name('Damage').id)
     assert by_name('Damage').publish_group
     yield .6
-    assert (by_name('Damage').id, 'group', by_name('Reader').id, f'mask#{mask.id}') in link_keys(tree)
+    assert (by_name('Damage').id, 'group', mask.id, 'ref') in link_keys(tree)
     report['steps'].append('link becomes an anchor reference')
 
     with bpy.context.temp_override(window=window, area=garea, region=next(r for r in garea.regions if r.type == 'WINDOW')):

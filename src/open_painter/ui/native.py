@@ -164,15 +164,19 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
             from ..baking.bake_manager import refresh_stale_curvature
             ts = require_set(context)
             preset = next((p for p in PRESETS if p[0] == entry[0]), None)
-            if preset and refresh_stale_curvature(ts, required_maps(preset[1])):
-                self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the mask")
+            refreshed = preset and refresh_stale_curvature(ts, required_maps(preset[1]), context)
+            if refreshed:
+                self.report({"INFO"}, "Rebaking the edge map in the background; the mask updates when it lands"
+                            if refreshed == 'QUEUED' else "Edge map rebaked with smooth curvature before adding the mask")
             apply(ts, entry[0], replace=self.replace_masks)
         elif entry[1] == "SMART_RECIPE":
             from ..smart_materials.composer import apply, requirements
             from ..baking.bake_manager import refresh_stale_curvature
             ts = require_set(context)
-            if refresh_stale_curvature(ts, requirements(entry[0])):
-                self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the material")
+            refreshed = refresh_stale_curvature(ts, requirements(entry[0]), context)
+            if refreshed:
+                self.report({"INFO"}, "Rebaking the edge map in the background; the material updates when it lands"
+                            if refreshed == 'QUEUED' else "Edge map rebaked with smooth curvature before adding the material")
             apply(ts, entry[0])
         else:
             assets.apply(context, entry)
@@ -379,6 +383,36 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
 _row_depths = {}
 
 
+def draw_generator_controls(layout, ts, layer):
+    """The controls an artist reaches for right after adding an effect: the
+    generator mask's amount, edge width and contrast, without first selecting
+    the mask. The full mask stack stays behind the Edit button."""
+    generators = [mask for mask in layer.masks if mask.enabled and mask.source in {"GENERATOR", "NOISE"}]
+    if not generators:
+        return
+    from ..baking.bake_manager import stale_curvature
+    from ..baking.jobs import OP_OT_edge_map_refresh
+    for mask in generators[:2]:
+        box = layout.box()
+        title = "Noise" if mask.source == "NOISE" else mask.generator.replace("_", " ").title()
+        row = box.row(align=True)
+        row.label(text=f"{title} Mask", icon="MOD_MASK")
+        op = row.operator("open_painter.native_select", text="Edit Mask", icon="PREFERENCES")
+        op.layer_id, op.mask = layer.id, True
+        box.prop(mask, "amount", slider=True)
+        if mask.source == "GENERATOR" and mask.generator in {"EDGE_WEAR", "CHIPS"}:
+            radius = ts.bake.mean_curvature_distance
+            box.prop(mask, "edge_width", text=f"Edge Width (of {radius * 100:.1f} cm)", slider=True)
+            if OP_OT_edge_map_refresh.running:
+                box.label(text="Rebaking the edge map in the background…", icon="TIME")
+            elif stale_curvature(ts) is not None:
+                box.label(text="Crease-only edge map: rebake for smooth edges", icon="ERROR")
+                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA")
+            elif not any(m.kind == "CURVATURE" and m.image for m in ts.baked_maps):
+                box.label(text="Bake a Curvature map for edge wear", icon="ERROR")
+        box.prop(mask, "contrast", slider=True)
+
+
 class OP_UL_native_layers(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         rows = visible_rows(data)
@@ -547,6 +581,7 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
         layout.prop(layer, "opacity", slider=True)
         if layer.type != "FOLDER":
             layout.prop(layer, "blend_mode", text="Layer Blend")
+        draw_generator_controls(layout, ts, layer)
         if layer.type == "FOLDER":
             layout.prop(layer, "group_mode", text="Blend")
             layout.label(text="Folder masks affect all child layers.")

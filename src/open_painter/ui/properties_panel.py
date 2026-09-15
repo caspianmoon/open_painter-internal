@@ -211,9 +211,7 @@ class OP_PT_masks(bpy.types.Panel):
                 box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
                 box.prop(ts.bake, "curvature_angle")
                 box.prop(ts.bake, "curvature_width")
-                box.operator(
-                    "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
-                ).action = "CURVATURE"
+                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA")
             from ..generators.micro_details import KINDS as MICRO_KINDS
             if mask.generator in MICRO_KINDS:
                 from .anchors import draw_anchor_field

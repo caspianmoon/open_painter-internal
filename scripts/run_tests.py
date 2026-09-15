@@ -79,6 +79,7 @@ if args.gui or args.gui_only:
         ("bake_queue_ui.py", "bake-queue-ui.json"),
         ("shader_preview_ui.py", "shader-preview-ui.json"),
         ("shader_snapshot_ui.py", "shader-snapshot-ui.json"),
+        ("edge_map_refresh_ui.py", "edge-map-refresh-ui.json"),
     ]:
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
@@ -96,12 +97,13 @@ if args.gui or args.gui_only:
                 "bake_queue_ui.py": {"OP_BAKE_QUEUE_REPORT": str(result_path)},
                 "shader_preview_ui.py": {"OP_SHADER_UI_REPORT": str(result_path)},
                 "shader_snapshot_ui.py": {"OP_SNAPSHOT_UI_REPORT": str(result_path)},
+                "edge_map_refresh_ui.py": {"OP_EDGE_MAP_UI_REPORT": str(result_path)},
             }.get(filename, {}))),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
-        if filename == "bake_queue_ui.py":
+        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

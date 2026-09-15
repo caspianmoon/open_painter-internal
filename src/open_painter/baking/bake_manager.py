@@ -87,25 +87,40 @@ def bake_selected(context, ts):
         pass
 
 
-def refresh_stale_curvature(ts, required):
-    """Rebake a crease-only Curvature map before an edge-driven recipe uses it.
-
-    Maps baked before GEOMETRIC_CREASES_V2 are empty on smooth geometry, so an
-    effect that reads them appears to do nothing. Rebaking is an explicit part
-    of the user's Add action, reported back to them; nothing happens when the
-    map is missing (the recipe preflight reports that) or already current.
-    """
-    if "CURVATURE" not in required:
-        return False
+def stale_curvature(ts):
+    """The owned crease-only Curvature map that an edge-driven recipe should replace, or None."""
     prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
     if prop is None:
-        return False
+        return None
     from .maps.curvature import METHOD
     method = prop.image.get("open_painter_curvature_method")
     if method == METHOD:
-        return False
+        return None
     if method is None and "BakedCurvature" not in prop.image.name:
-        return False  # a user-supplied image: never replace it
+        return None  # a user-supplied image: never replace it
+    return prop
+
+
+def refresh_stale_curvature(ts, required, context=None):
+    """Rebake a crease-only Curvature map when an edge-driven recipe uses it.
+
+    Maps baked before GEOMETRIC_CREASES_V2 are empty on smooth geometry, so an
+    effect that reads them appears to do nothing. Nothing happens when the map
+    is missing (the recipe preflight reports that) or already current. With a
+    window context the bake runs as a cooperative modal job and 'QUEUED' is
+    returned; the recipe is added right away and reads the new map when it
+    lands. Without one (background scripts) it bakes synchronously and returns True.
+    """
+    if "CURVATURE" not in required or stale_curvature(ts) is None:
+        return False
+    import bpy
+    if context is not None and context.window is not None and not bpy.app.background:
+        from .jobs import OP_OT_edge_map_refresh
+        if OP_OT_edge_map_refresh.running:
+            return 'QUEUED'
+        result = bpy.ops.open_painter.edge_map_refresh('INVOKE_DEFAULT')
+        if result == {'RUNNING_MODAL'}:
+            return 'QUEUED'
     register_map(ts, "CURVATURE", bake_curvature(ts))
     invalidate(ts)
     return True

@@ -67,14 +67,16 @@ def crease_edges(mesh, world, minimum_angle, concave=False):
     return set(zip((edge_keys // vertices).tolist(), (edge_keys % vertices).tolist()))
 
 
-def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
-    result = np.zeros((n, n), dtype=np.float32)
+def prepare_creases(mesh, world, slots, n, minimum_angle, width, concave=False):
+    """Read crease-carrying triangles into arrays (inside the evaluated-mesh scope)."""
+    from types import SimpleNamespace
     uv_layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
     if uv_layer is None:
         raise ValueError("Curvature requires a render UV map.")
     creases = crease_edges(mesh, world, minimum_angle, concave)
+    prepared = SimpleNamespace(n=n, width=width, uv=None, tri_loops=None, flags=None, selected=np.empty(0, np.int64))
     if not creases:
-        return result
+        return prepared
     mesh.calc_loop_triangles()
     from ...geometry.snapshots import _triangle_arrays
     tri_vertices, tri_loops, tri_material, _ = _triangle_arrays(mesh)
@@ -82,16 +84,30 @@ def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
     uv_layer.data.foreach_get("uv", uv.ravel())
     vertices = len(mesh.vertices)
     crease_keys = np.fromiter((a * vertices + b for a, b in creases), np.int64, len(creases))
-    sides = ((0, 1), (1, 2), (2, 0))
     flags = np.zeros((len(tri_vertices), 3), bool)
-    for column, (i, j) in enumerate(sides):
+    for column, (i, j) in enumerate(SIDES):
         va, vb = tri_vertices[:, i], tri_vertices[:, j]
         flags[:, column] = np.isin(np.minimum(va, vb).astype(np.int64) * vertices + np.maximum(va, vb), crease_keys)
     selected = np.isin(tri_material, np.fromiter(slots, np.int32, len(slots))) & flags.any(axis=1)
+    prepared.uv, prepared.tri_loops, prepared.flags = uv, tri_loops, flags
+    prepared.selected = np.flatnonzero(selected)
+    return prepared
+
+
+SIDES = ((0, 1), (1, 2), (2, 0))
+
+
+def rasterize_steps(prepared):
+    """Crease lines of prepared triangles; yields progress, returns the (n, n) map."""
+    n, width = prepared.n, prepared.width
+    result = np.zeros((n, n), dtype=np.float32)
+    selected = prepared.selected
     # Only triangles touching a crease rasterize; the arithmetic is unchanged.
-    for triangle in np.flatnonzero(selected):
-        edges = [side for column, side in enumerate(sides) if flags[triangle, column]]
-        coords = uv[tri_loops[triangle]] * n - 0.5
+    for position, triangle in enumerate(selected):
+        if position % 256 == 255:
+            yield position / len(selected)
+        edges = [side for column, side in enumerate(SIDES) if prepared.flags[triangle, column]]
+        coords = prepared.uv[prepared.tri_loops[triangle]] * n - 0.5
         lo = np.maximum(np.ceil(coords.min(axis=0)).astype(int), 0)
         hi = np.minimum(np.floor(coords.max(axis=0)).astype(int) + 1, n)
         a, b, c = coords
@@ -123,31 +139,54 @@ def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
     return result
 
 
+def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
+    steps = rasterize_steps(prepare_creases(mesh, world, slots, n, minimum_angle, width, concave))
+    while True:
+        try:
+            next(steps)
+        except StopIteration as done:
+            return done.value
+
+
 METHOD = "GEOMETRIC_CREASES_V2"
 
 
-def bake_curvature(ts):
+def curvature_steps(ts):
+    """Bake the CURVATURE map cooperatively: yields progress (0..1), returns the image.
+
+    Mesh data is read into arrays in one evaluated-mesh scope up front; the
+    crease lines and the smooth convex curvature then accumulate across steps,
+    so a modal operator can keep the interface responsive.
+    """
+    from ...geometry.snapshots import targets
+    from .mean_curvature import convex_map_steps, prepare
     n = int(ts.resolution)
+    radius = ts.bake.mean_curvature_distance
+    with targets(ts) as meshes:
+        # No yields while evaluated meshes are alive: the depsgraph may change between steps.
+        creases = [prepare_creases(target["mesh"], target["object"].matrix_world, target["slots"], n,
+                                   ts.bake.curvature_angle, ts.bake.curvature_width) for target in meshes]
+        fields = [prepare(target, n, radius, radians(ts.bake.curvature_angle)) for target in meshes]
+    yield 0.05
     values = np.zeros((n, n), dtype=np.float32)
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    for obj in dict.fromkeys(ref.object for ref in ts.assignments if ref.object):
-        evaluated = obj.evaluated_get(depsgraph)
-        mesh = evaluated.to_mesh()
-        try:
-            slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
-            current = rasterize(
-                mesh, obj.matrix_world, slots, n, ts.bake.curvature_angle, ts.bake.curvature_width
-            )
-            np.maximum(values, current, out=values)
-        finally:
-            evaluated.to_mesh_clear()
+    for index, prepared in enumerate(creases):
+        steps = rasterize_steps(prepared)
+        while True:
+            try:
+                yield 0.05 + 0.25 * (index + next(steps)) / len(creases)
+            except StopIteration as done:
+                np.maximum(values, done.value, out=values)
+                break
     # Smooth convex curvature within the physical radius: rims, bevels and
     # dense edges that never exceed the crease angle still become edge wear.
-    from ...geometry.snapshots import targets
-    from .mean_curvature import convex_map
-    with targets(ts) as meshes:
-        np.maximum(values, convex_map(meshes, n, ts.bake.mean_curvature_distance,
-                                      radians(ts.bake.curvature_angle)), out=values)
+    steps = convex_map_steps(fields, n, radius)
+    while True:
+        try:
+            yield 0.3 + 0.65 * next(steps)
+        except StopIteration as done:
+            np.maximum(values, done.value, out=values)
+            break
+    yield 0.97
     rgba = np.ones((n, n, 4), dtype=np.float32)
     rgba[..., :3] = values[..., None]
     image = images.create(f"{ts.name}_BakedCurvature", n)
@@ -155,3 +194,12 @@ def bake_curvature(ts):
     image["mean_curvature_distance"] = float(ts.bake.mean_curvature_distance)
     images.write(image, rgba)
     return image
+
+
+def bake_curvature(ts):
+    steps = curvature_steps(ts)
+    while True:
+        try:
+            next(steps)
+        except StopIteration as done:
+            return done.value

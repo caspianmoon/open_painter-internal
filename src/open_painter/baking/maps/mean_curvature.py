@@ -144,25 +144,40 @@ def _encode(cells, origin, span):
     return (shifted[:, 0] * span[1] + shifted[:, 1]) * span[2] + shifted[:, 2]
 
 
-def estimate(target, n, radius, result, covered, exclude_angle=None):
-    """Write turning across ``2 * radius`` per texel of this target into ``result``.
+def prepare(target, n, radius, exclude_angle=None):
+    """Read everything the kernel needs from the evaluated mesh into plain arrays.
+
+    Runs inside the ``targets`` context; the returned object holds no RNA
+    references, so the accumulation can proceed across cooperative steps after
+    the evaluated meshes are released.
+    """
+    from types import SimpleNamespace
+    from ...geometry.uv_rasterizer import interpolate, rasterize
+    turning, area = face_turning(target, exclude_angle)
+    points, turn_w, area_w = _samples(target, turning, area, radius * .5)
+    rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n, unique=False)
+    positions = np.asarray(target["positions"], np.float64)
+    texels = (interpolate(weights, positions[target["tri_vertices"][tri]]) if len(rows)
+              else np.empty((0, 3)))
+    return SimpleNamespace(rows=rows, cols=cols, texels=texels, points=points, turn_w=turn_w, area_w=area_w)
+
+
+def accumulate(prepared, n, radius, result, covered):
+    """Write turning across ``2 * radius`` per texel of one target into ``result``.
 
     Texels are grouped by grid cell (size ``radius``); each group evaluates the
     tent kernel against the samples of its 27 surrounding cells in one block,
     so samples beyond the kernel contribute nothing, exactly as the per-block
     search did, while the Python cost is per cell rather than per triangle.
+    Yields its progress (0..1) between groups so a modal job can stay responsive.
     """
-    from ...geometry.uv_rasterizer import interpolate, rasterize
-    turning, area = face_turning(target, exclude_angle)
-    points, turn_w, area_w = _samples(target, turning, area, radius * .5)
-    rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n, unique=False)
+    rows, cols, texels = prepared.rows, prepared.cols, prepared.texels
+    points, turn_w, area_w = prepared.points, prepared.turn_w, prepared.area_w
     if not len(rows):
         return result
     covered[rows, cols] = True
     if not len(points):
         return result
-    positions = np.asarray(target["positions"], np.float64)
-    texels = interpolate(weights, positions[target["tri_vertices"][tri]])
     cells = np.floor(points / radius).astype(np.int64)
     origin = cells.min(axis=0) - 2
     span = cells.max(axis=0) - origin + 3
@@ -190,6 +205,8 @@ def estimate(target, n, radius, result, covered, exclude_angle=None):
         neighbour_counts[hit, column] = counts[slot[hit]]
     value = np.zeros(len(texels))
     for group in range(len(group_keys)):
+        if group % 32 == 31:
+            yield group / len(group_keys)
         if group_keys[group] < 0:
             continue
         pieces = [(int(s), int(c)) for s, c in zip(neighbour_starts[group], neighbour_counts[group]) if c]
@@ -232,16 +249,38 @@ def estimate(target, n, radius, result, covered, exclude_angle=None):
     return result
 
 
-def field(targets, n, radius, exclude_angle=None):
-    """Relative signed turning per texel; returns (map, coverage, baseline)."""
+def estimate(target, n, radius, result, covered, exclude_angle=None):
+    """Synchronous prepare + accumulate for one target."""
+    for _ in accumulate(prepare(target, n, radius, exclude_angle), n, radius, result, covered):
+        pass
+    return result
+
+
+def field_steps(prepared_targets, n, radius):
+    """Relative signed turning per texel from prepared targets; yields progress.
+
+    Returns (map, coverage, baseline) through StopIteration.
+    """
     result = np.zeros((n, n), np.float64)
     covered = np.zeros((n, n), bool)
-    for target in targets:
-        estimate(target, n, radius, result, covered, exclude_angle)
+    for index, prepared in enumerate(prepared_targets):
+        for fraction in accumulate(prepared, n, radius, result, covered):
+            yield (index + fraction) / len(prepared_targets)
     if not covered.any():
         return result, covered, 0.0
     baseline = float(np.median(result[covered]))
     return np.where(covered, result - baseline, 0.0), covered, baseline
+
+
+def field(targets, n, radius, exclude_angle=None):
+    """Relative signed turning per texel; returns (map, coverage, baseline)."""
+    prepared = [prepare(target, n, radius, exclude_angle) for target in targets]
+    steps = field_steps(prepared, n, radius)
+    while True:
+        try:
+            next(steps)
+        except StopIteration as done:
+            return done.value
 
 
 def signed_map(targets, n, radius, crease_angle=None, crease_width=4.0):
@@ -267,6 +306,12 @@ def signed_map(targets, n, radius, crease_angle=None, crease_width=4.0):
     metadata = dict(mean_curvature_distance=float(radius), mean_curvature_baseline=baseline,
                     mean_curvature_effective_distance=float(radius * stretch))
     return values.astype(np.float32), covered, metadata
+
+
+def convex_map_steps(prepared_targets, n, radius):
+    """Convex turning above the dead zone from prepared targets; yields progress."""
+    rel, covered, _ = yield from field_steps(prepared_targets, n, radius)
+    return np.clip((rel - DEAD_ZONE) / (1.0 - DEAD_ZONE), 0, 1).astype(np.float32)
 
 
 def convex_map(targets, n, radius, exclude_angle=None):

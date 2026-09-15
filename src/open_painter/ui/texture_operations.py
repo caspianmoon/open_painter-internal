@@ -284,8 +284,10 @@ class OP_OT_catalog_material(SearchPicker, SafeOperator, bpy.types.Operator):
         from ..smart_materials.composer import apply, requirements
         from ..baking.bake_manager import refresh_stale_curvature
         ts = require_set(context)
-        if refresh_stale_curvature(ts, requirements(self.choice)):
-            self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the material")
+        refreshed = refresh_stale_curvature(ts, requirements(self.choice), context)
+        if refreshed:
+            self.report({"INFO"}, "Rebaking the edge map in the background; the material updates when it lands"
+                        if refreshed == 'QUEUED' else "Edge map rebaked with smooth curvature before adding the material")
         apply(ts, self.choice)
         _redraw(context, ts, mask=False)
 
@@ -301,8 +303,10 @@ class OP_OT_catalog_effect(SearchPicker, SafeOperator, bpy.types.Operator):
         from ..smart_materials.composer import EFFECTS, apply_effect, requirements
         from ..baking.bake_manager import refresh_stale_curvature
         ts = require_set(context)
-        if refresh_stale_curvature(ts, requirements(EFFECTS[self.choice])):
-            self.report({"INFO"}, "Edge map rebaked with smooth curvature before adding the effect")
+        refreshed = refresh_stale_curvature(ts, requirements(EFFECTS[self.choice]), context)
+        if refreshed:
+            self.report({"INFO"}, "Rebaking the edge map in the background; the effect updates when it lands"
+                        if refreshed == 'QUEUED' else "Edge map rebaked with smooth curvature before adding the effect")
         apply_effect(ts, self.choice)
         _redraw(context, ts, mask=False)
 

@@ -48,6 +48,14 @@ differs only in float rounding of an interpolation, noted per item below.
   fields, texture gathers and filter sanitising reuse buffers; separable morphology builds
   its window by doubling (exact). Bit-identical outputs; paired cold worn/2K medians
   16.03 -> 14.50 s.
+- Adding an edge-driven effect, smart mask or material to a project whose Curvature map
+  is still crease-only (baked before 0.2.8) no longer freezes Blender for the rebake: the
+  effect is added at once and the edge map rebakes as a cooperative modal job with
+  progress in the status line (Esc stops it, the old map is kept); the effect updates
+  when the map lands. The Rebake Edge Map buttons use the same job.
+- The layer view shows a generator mask's Amount, Edge Width (Edge Wear/Chips) and
+  Contrast directly, with the crease-only warning and rebake button, instead of only
+  behind the mask selection.
 - Developer Mode shows units, node counts, last build/reuse figures and unique images
   against the fragment sampler limit. New benchmarks: shader_build_scaling,
   shader_structural_edits, idle_timer, bake_maps; the paired CPU benchmark selects the

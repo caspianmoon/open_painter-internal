@@ -3,7 +3,7 @@
 import bpy
 
 from .preferences import OP_Preferences
-from .baking.jobs import OP_OT_bake_queue
+from .baking.jobs import OP_OT_bake_queue, OP_OT_edge_map_refresh
 from .properties.influencer import OP_Influencer
 from .ui.references import OP_OT_reference_source
 from .ui.anchors import OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer
@@ -80,6 +80,7 @@ CLASSES = (
     OP_PT_masks,
     OP_OT_bake,
     OP_OT_bake_queue,
+    OP_OT_edge_map_refresh,
     OP_UL_high,
     OP_PT_bake,
     OP_OT_save_material,

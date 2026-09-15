@@ -77,3 +77,97 @@ class OP_OT_bake_queue(bpy.types.Operator):
 
     def cancel(self, context):
         self.finish(context)
+
+
+class OP_OT_edge_map_refresh(bpy.types.Operator):
+    """Rebake the Curvature edge map cooperatively so the interface stays responsive."""
+    bl_idname = 'open_painter.edge_map_refresh'
+    bl_label = 'Rebake Edge Map (Background)'
+    bl_options = {'REGISTER', 'INTERNAL'}
+    running = False
+    _timer = None
+    _job = None
+    _set_id = ''
+    _expected = ''
+    _last_timer_duration = 0.
+
+    def _set(self, context):
+        return next((ts for ts in context.scene.open_painter.texture_sets if ts.id == self._set_id), None)
+
+    def finish(self, context):
+        job, timer = self._job, self._timer
+        self._job = self._timer = None
+        OP_OT_edge_map_refresh.running = False
+        try:
+            if job is not None:
+                job.close()
+        finally:
+            if timer is not None:
+                try:
+                    context.window_manager.event_timer_remove(timer)
+                except ReferenceError:
+                    pass
+
+    def invoke(self, context, event):
+        from ..core.project_manager import require_set
+        from ..geometry.provenance import record
+        from .maps.curvature import curvature_steps
+        if OP_OT_edge_map_refresh.running:
+            return {'CANCELLED'}
+        try:
+            ts = require_set(context)
+            self._set_id = ts.id
+            self._expected = record(ts, 'CURVATURE')
+            self._job = curvature_steps(ts)
+            next(self._job)  # reads the evaluated meshes now, while the depsgraph is current
+            context.scene.open_painter.status = 'Rebaking edge map… 5% · Esc stops'
+            self._timer = context.window_manager.event_timer_add(.02, window=context.window)
+            self._last_timer_duration = self._timer.time_duration
+            context.window_manager.modal_handler_add(self)
+            OP_OT_edge_map_refresh.running = True
+        except Exception as exc:
+            self.finish(context)
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        from ..core.layer_stack import invalidate
+        from ..geometry.provenance import record
+        from .bake_manager import register_map
+        if event.type == 'ESC':
+            self.finish(context)
+            context.scene.open_painter.status = 'Edge map rebake stopped; the previous map is kept'
+            return {'FINISHED'}
+        if event.type != 'TIMER' or self._timer is None:
+            return {'PASS_THROUGH'}
+        duration = self._timer.time_duration
+        if duration <= self._last_timer_duration:
+            return {'PASS_THROUGH'}
+        self._last_timer_duration = duration
+        try:
+            fraction = next(self._job)
+            context.scene.open_painter.status = f'Rebaking edge map… {int(fraction * 100)}% · Esc stops'
+        except StopIteration as done:
+            image = done.value
+            self.finish(context)
+            ts = self._set(context)
+            if ts is None or record(ts, 'CURVATURE') != self._expected:
+                bpy.data.images.remove(image)
+                context.scene.open_painter.status = 'Bake inputs changed; edge map rebake discarded'
+                return {'FINISHED'}
+            register_map(ts, 'CURVATURE', image)
+            invalidate(ts)
+            context.scene.open_painter.status = 'Edge map rebaked with smooth curvature'
+            for area in context.screen.areas:
+                area.tag_redraw()
+            return {'FINISHED'}
+        except Exception as exc:
+            self.finish(context)
+            self.report({'ERROR'}, str(exc))
+            context.scene.open_painter.status = f'Edge map rebake failed: {exc}'
+            return {'FINISHED'}
+        return {'PASS_THROUGH'}
+
+    def cancel(self, context):
+        self.finish(context)

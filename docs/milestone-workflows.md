@@ -13,6 +13,15 @@ not replace the editor or the material library.
 - **References:** choose Reference as a mask source and select the source layer,
   channel/mask and stage. Cycles reject before output publication. Publish a mask
   when a stable texture is needed by a geometry effect.
+- **Open Graph (0.4.0):** the node icon in the Layers tool strip splits the Painter
+  area into a live node view of the set. Drag from a layer's *Output*, a folder's
+  *Composite* or any anchor socket into a *Content*, *Mask* or *Micro* input to set
+  that reference; cycles are refused with a status message. Clicking a node selects
+  the layer. [Details](open-graph.md).
+- **Published outputs (0.4.0):** the layer properties' *Published Outputs* box
+  publishes the layer's blended output (*Layer Output*) or, on folders, the child
+  composite (*Folder Composite*) as anchors any Published Input mask, fill Content
+  or Micro Detail can pick; composite consumers choose which channel they read.
 - **Anchor points:** Add Mask Effect → Add Anchor Point places a row that publishes
   the mask coverage above it; FILTERS → Anchor publishes a channel after the
   filters above it. Pick an anchor on a Published Input mask, on a fill channel's

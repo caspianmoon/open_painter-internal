@@ -41,11 +41,20 @@ find-references / locate navigation.
 |---|---|---|---|
 | Mask anchor (`OP_Mask.source == 'ANCHOR'`, identified by the mask id) | coverage of `masks[:position]`; an empty prefix is 1 | Published Input mask (`reference_anchor`), fill content (gray, opaque), Micro Height (gray as height) | mask value 0 before levels; fill content transparent; no micro detail |
 | Channel anchor (`OP_TextureEffect.kind == 'ANCHOR'` with an `id`) | straight RGBA of `effects[:position]`, alpha = paint/tile coverage | Published Input mask (red for scalars, Rec.709 luminance for colour channels, times alpha), fill content, Micro Height (HEIGHT), Micro Normal (NORMAL) | as above |
+| Layer output (`OP_Layer.publish_output`, id `<layer id>:out`) — 0.4.0 | the layer blended over its backdrop, in its group's context: root layers publish the stack composed up to and including them; inside an isolated folder the straight colour with alpha = coverage; inside a passthrough folder the composite over the folder's backdrop. Every channel is available; the consumer picks one (`anchor_channel` on fill content, `reference_channel` on masks, HEIGHT/NORMAL for micro details; Base Color when unspecified). A hidden or disabled producer publishes its backdrop. | the same consumers | as above |
+| Folder composite (`OP_Layer.publish_group` on a folder, id `<folder id>:group`) — 0.4.0 | the folder's child composite before the folder's own opacity, mask and blend: isolated folders publish straight colour with alpha = child coverage; passthrough folders publish the children composed over the folder's backdrop. A folder whose channel is disabled publishes nothing (isolated) or its backdrop (passthrough). | the same consumers | as above |
 
 Ordering rule: any **acyclic** reference is allowed — above, below or inside the
 same layer's stack. The dependency graph is item-granular: a mask depends on the
 items before it in its stack, a channel filter on the filters before it, a
-consumer on the anchor's position. `references.issues()` reports cycles (they
+consumer on the anchor's position. Composite anchors add composition nodes
+(`('OUT', layer, channel)` = the layer's content, mask stack and backdrop;
+`('BELOW', layer, channel)` = the previous sibling's output or a passthrough
+parent's backdrop; `('GROUP', folder, channel)` = the top child's output), so
+the same check derives that a layer output may only feed layers *above* it, a
+layer cannot read its own output, and a folder's composite cannot be read from
+inside that folder — while a folder masked by one of its children's outputs is
+fine, since the child never sees the folder's mask. `references.issues()` reports cycles (they
 are refused when picked and block evaluation); `references.warnings()` reports
 missing anchors and published sources, which evaluate as neutral instead of
 aborting. The legacy layer-granular cycle rule is gone with it: a source mask
@@ -66,13 +75,22 @@ raster once as a boundary resource keyed by the anchor's transitive inputs.
 - CPU reference: `evaluation/anchors.py` indexes anchors; `references.evaluate_anchor`
   evaluates the prefix with the existing evaluators (`evaluate_masks` on a
   derived `layer id:anchor:<id>` snapshot, `channel_eval.source` on the effect
-  prefix). Consumers: `references.evaluate` (masks), `channel_eval._base_source`
-  (fill content), `generators/micro_details.py` (generators).
+  prefix). Composite anchors run the composition loop itself:
+  `evaluation/composite.Composer` (the same code the channel outputs use)
+  composes the producer's group up to the producer (`output`) or the folder's
+  children (`group`) and returns straight RGBA rows. Consumers:
+  `references.evaluate` (masks), `channel_eval._base_source` (fill content),
+  `generators/micro_details.py` (generators).
 - Shader native (`evaluation/shader_graph.py`): `source(layer, channel, count)`
   and `mask(layer, through)` memoize every prefix, so a consumer and the owning
-  layer share one node chain; anchor items compile to nothing. Identity keys of
-  raster boundaries include the anchor's transitive inputs
-  (`_anchor_dependencies`), and any anchor edit is a structural rebuild.
+  layer share one node chain; anchor items compile to nothing. A layer output is
+  the producer's CHANNEL unit's existing `Out`/`Out:Alpha` exports (or, when that
+  layer is untouched for the channel, whatever `_wire` would feed it:
+  `_composite_backdrop`); a folder composite is a `Group`/`Group:Alpha` export
+  added to published folders' channel units. Identity keys of raster boundaries
+  include the anchor's transitive inputs (`_anchor_dependencies`; for composite
+  anchors every contributing layer's blend state, content and masks), and any
+  anchor edit is a structural rebuild scoped to the affected units.
 - Legacy GPU live masks decline stacks with micro-detail anchors (CPU fallback);
   anchored fill channels take the CPU source fallback.
 

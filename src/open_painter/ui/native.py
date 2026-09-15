@@ -652,6 +652,7 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
             tools.operator("open_painter.layer", text="", icon=icon).action = action
         tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
         tools.separator()
+        tools.operator("open_painter.open_graph", text="", icon="NODETREE")
         tools.operator("open_painter.catalog_material", text="", icon="ASSET_MANAGER")
         tools.operator("open_painter.catalog_effect", text="", icon="MODIFIER")
         tools.separator()

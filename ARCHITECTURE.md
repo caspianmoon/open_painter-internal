@@ -160,6 +160,30 @@ Native widget styling follows Blender preferences. Region defaults are applied o
 than continuously overriding the artist's visibility or shading choices. Selecting another editor
 type detaches the adapter; registration does not create workspaces or rearrange other areas.
 
+## Open Graph (0.4.0)
+
+`graph/` holds a second NodeTree subtype, `OpenPainterGraph`, that is a *projection* of a texture
+set rather than a document. `mirror.project(ts)` derives the expected nodes (one per layer, a frame
+per folder containing the folder node and its children, one output node), sockets (anchor
+producers on the right: *Output*, folder *Composite*, mask and channel anchors, read-only legacy
+whole-layer outputs while used; consumers on the left: enabled fill channels, Published Input
+masks, generator micro-detail slots) and links (every consumer field, plus the top root layer's
+output into the output node). `mirror.reconcile` edits the tree in place to match and stores a
+structural signature; the UI lifecycle tick reconciles open graphs whose signature changed and
+mirrors the active selection both ways. `NodeTree.update()` diffs the tree's links against the
+projection and translates the difference into anchor fields through `graph/edits.py`, validated
+by `references.issues`; refused links leave the stack untouched and vanish on the next sync.
+Node identity is the `op_id` property, never a cached RNA reference; the tree is a fake-user
+datablock owned by the set id, so undo restores stack and mirror together. The compiled shader
+graph stays derived from the stack and is never the editing surface.
+
+Composite anchors back the graph's *Output* and *Composite* sockets: `publish_output` /
+`publish_group` on `OP_Layer` own the derived anchor ids `<id>:out` / `<id>:group`;
+`evaluation/anchors.py` indexes them, `references.graph` models the composition chain with
+`OUT`/`BELOW`/`GROUP` nodes so cycle rules follow from the item-granular check,
+`evaluation/composite.Composer` (the shared CPU composition loop) publishes them, and the shader
+imports the producer CHANNEL unit's `Out` or the folder unit's `Group` export.
+
 ## Paint-session ownership
 
 The scene stores the active target's set/layer/channel/mask identity separately from requested UI

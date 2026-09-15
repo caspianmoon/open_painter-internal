@@ -6,7 +6,10 @@ from .preferences import OP_Preferences
 from .baking.jobs import OP_OT_bake_queue, OP_OT_edge_map_refresh
 from .properties.influencer import OP_Influencer
 from .ui.references import OP_OT_reference_source
-from .ui.anchors import OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer
+from .ui.anchors import (OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer,
+                         OP_OT_anchor_channel)
+from .graph.tree import CLASSES as GRAPH_TREE_CLASSES
+from .graph.operators import CLASSES as GRAPH_OPERATOR_CLASSES
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
 from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
@@ -69,6 +72,7 @@ CLASSES = (
     OP_OT_anchor_pick,
     OP_OT_anchor_locate,
     OP_OT_anchor_select_consumer,
+    OP_OT_anchor_channel,
     OP_OT_geometry_effect,
     OP_PT_geometry_effects,
     OP_OT_material_state,
@@ -96,7 +100,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES
 
 
 _registered = False
@@ -113,6 +117,7 @@ def register():
     from .evaluation import cache
     from .ui.dock import lifecycle
     from .ui import editor, workspace
+    from .graph import operators as graph_operators
     from .ui.native import toolbar, asset_type_buttons
     try:
         for cls in CLASSES:
@@ -121,7 +126,8 @@ def register():
         bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
         for initialize, cleanup in ((cache.register,cache.unregister),
                                     (lifecycle.register,lifecycle.unregister),
-                                    (editor.register,editor.unregister)):
+                                    (editor.register,editor.unregister),
+                                    (graph_operators.register,graph_operators.unregister)):
             # Install rollback before initialization, including partial failures.
             _cleanups.append(cleanup)
             initialize()

@@ -16,6 +16,21 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Open Graph and published outputs 0.4.0 — 2026-09-15
+
+First release of the `gamechanger.md` programme (pillar 1: a live node view with real
+branching). Evidence per item:
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Layer output / folder composite anchors, every channel selectable, in root, isolated and passthrough contexts | done; CPU and shader agree to 1.5e-8 | `tests/integration/output_anchors.py`, `shader_output_anchors.py`, `tests/unit/test_output_graph.py` |
+| Cycle rules derived from composition nodes (output feeds layers above only; own output; composite from inside a folder) | done | `test_output_graph.py`, `output_anchors.py` |
+| Scoped rebuilds when publish flags toggle; undo rehydration with composite imports | done | `shader_output_anchors.py` |
+| Graph view: projection, incremental reconcile, positions kept, undo | done | `tests/integration/graph_mirror.py` |
+| Link edits → anchor fields; refusal keeps the stack; replacement; legacy links | done | `tests/integration/graph_link_edits.py` |
+| Real window: split area, node click selects the layer, list selection follows, dragged link becomes a reference | done | `tests/integration/graph_view_ui.py` → [open_graph.png](open_graph.png) |
+| Cross-texture-set references | deferred (UV spaces differ; needs the reprojection of the universal canvas) | plan |
+
 ## Performance release 0.3.0 — 2026-09-15
 
 Measured on Blender 5.2.1 LTS, macOS Apple Silicon; every figure has a script and a

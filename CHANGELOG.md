@@ -1,6 +1,24 @@
 # Changes
 
-## Unreleased
+## 0.4.0
+
+Open Graph release: the first step of the live-graph programme.
+
+- Open Graph: the Layers tool strip's node icon splits the Painter area into a node view of
+  the active texture set. Nodes mirror layers (folders as frames), sockets mirror anchor
+  producers and consumers, and dragging a link sets the corresponding anchor reference —
+  from a layer's Output, a folder's Composite or any anchor point into a fill channel's
+  Content, a Published Input mask or a generator's Micro Details. Cycles and ineligible
+  pairings are refused without touching the stack; deleting a link clears the reference.
+  Clicking a node selects the layer and the list selection selects the node; Auto Layout
+  re-places nodes by stack order and dependency rank. See docs/open-graph.md.
+- Published outputs: Layer Output publishes a layer's blended result (in its group's
+  context) and Folder Composite publishes a folder's child composite before the folder
+  blends, as anchors every existing consumer can pick, choosing the channel it reads.
+  A hidden or disabled producer publishes its backdrop. CPU and shader agree to float
+  precision; toggling a publish flag rebuilds only the affected units and undo rehydrates.
+- Legacy whole-folder channel references now say to publish the folder composite instead.
+- Test fixtures: phase05 expects the four-reach edge map set.
 
 - Layers: drag a row up or down to move the layer (a folder moves with its contents); moving
   sideways while dragging changes how deeply it nests, Esc cancels and the drop is one undo step.

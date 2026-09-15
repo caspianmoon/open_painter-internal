@@ -15,8 +15,11 @@ def tick():
     from .. import editor
     from ..native import focus_area
 
+    from ...graph import mirror
+
     for window in bpy.context.window_manager.windows:
         editor.scan(window)
+        mirror.sync(window)
         if window.scene.open_painter.paint_image:
             from ...painting.paint_session import finish, synchronize
             from ...utils.logging import logger

@@ -25,7 +25,8 @@ Earlier reports below describe their named release's evaluator and measurements.
 | Edits, erase, delete, resolution independence (IoU > .95 at 512 vs 1024), mesh re-projection, undo, reload | done | `vector_strokes.py` |
 | Shader boundary parity, re-identification, rehydration; Vector Strokes mask | done, 2.3/1000 | `stroke_parity.py` |
 | Vector Brush modal with overlay; real-window drag records 25 samples | done | `vector_brush_ui.py` |
-| Precise per-sample occlusion, live stamps while dragging, native multi-set session, UDIM | deferred | plan |
+| Native multi-set session (material paint mode, canvas per set, union of slots, both sets evaluated) | done (0.6.1) | `tests/integration/multi_set_paint.py`, `multi_set_paint_ui.py` |
+| Precise per-sample occlusion, live stamps while dragging, UDIM tile files | deferred | plan |
 
 ## Target renderer 0.5.1 — 2026-09-15
 

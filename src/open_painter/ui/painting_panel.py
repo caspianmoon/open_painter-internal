@@ -20,9 +20,11 @@ class OP_OT_paint(SafeOperator, bpy.types.Operator):
         else:
             if self.channel:
                 context.scene.open_painter.paint_channel = self.channel
-            paint_session.begin(
-                context, require_set(context), context.scene.open_painter.paint_channel, self.mask
-            )
+            project = context.scene.open_painter
+            if project.paint_all_sets and not self.mask:
+                paint_session.begin_multi(context, require_set(context), project.paint_channel)
+            else:
+                paint_session.begin(context, require_set(context), project.paint_channel, self.mask)
 
 
 class OP_PT_paint(bpy.types.Panel):

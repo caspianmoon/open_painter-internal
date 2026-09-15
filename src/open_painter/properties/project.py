@@ -34,6 +34,13 @@ def engine_preview_changed(self, context):
         material_manager.repair(ts)
 
 
+class OP_PaintCanvas(bpy.types.PropertyGroup):
+    """One participating texture set of a multi-set native paint session."""
+    set_id: bpy.props.StringProperty()
+    layer_id: bpy.props.StringProperty()
+    image: bpy.props.PointerProperty(type=bpy.types.Image)
+
+
 class OP_Project(bpy.types.PropertyGroup):
     id: bpy.props.StringProperty()
     # Target renderer (0.5.1): one choice configuring export conventions and the engine preview.
@@ -58,6 +65,11 @@ class OP_Project(bpy.types.PropertyGroup):
     active_stroke: bpy.props.IntProperty(default=0)
     stroke_serial: bpy.props.IntProperty(default=0)
     vector_brush: bpy.props.PointerProperty(type=OP_VectorBrushSettings)
+    # Native painting across texture sets (0.6.1)
+    paint_canvases: bpy.props.CollectionProperty(type=OP_PaintCanvas)
+    paint_all_sets: bpy.props.BoolProperty(name="Paint Across Sets", default=False,
+        description="Native painting writes every texture set assigned to the object: linked paint "
+                    "layers are created where missing and each set's material takes its own canvas")
     format_version: bpy.props.IntProperty(default=1)
     texture_sets: bpy.props.CollectionProperty(type=OP_TextureSet)
     active_texture_set: bpy.props.IntProperty(default=0)

@@ -1,4 +1,4 @@
-# Vector strokes and the universal canvas — 0.6.0
+# Vector strokes and the universal canvas — 0.6.0 / 0.6.1
 
 The **Vector Brush** keeps a brush gesture as data — a spline of samples with
 pressure, radius, tilt and direction, the brush settings and the material values —
@@ -57,3 +57,18 @@ Tests: `tests/unit/test_stroke_raster.py`, `tests/integration/vector_strokes.py`
 (universal canvas, seams, edits, resolution, geometry, undo, reload),
 `stroke_parity.py` (CPU vs shader, re-identification, rehydration),
 `vector_brush_ui.py` (real window).
+
+## Native painting across sets (0.6.1)
+
+Blender's own brush can cross sets too: turn on **Paint Across Sets** in the paint
+layer's properties before *Paint*. The session then runs in Blender's material
+paint mode: every texture set assigned to the object gets a paint layer linked to
+the active layer's key (created where missing), each set's display material gets
+an owned *Paint Canvas* image node pointing at that set's layer image, and the
+face restriction covers the union of the sets' material slots. One stroke down a
+seam writes both canvases; change detection, the shader-native fast path and
+Finish evaluate every participating set; Finish removes the canvas nodes and
+restores image paint mode. Limits: each set paints the same channel; brush undo
+is per image (Blender restores both tiles of one stroke together); seam hairlines
+between islands of different sets are per image — the Vector Brush has no such
+seam. Tests: `tests/integration/multi_set_paint.py`, `multi_set_paint_ui.py`.

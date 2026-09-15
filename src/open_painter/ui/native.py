@@ -765,6 +765,7 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             from ..painting.brush_bridge import draw
 
             layout.prop(context.scene.open_painter, "paint_channel")
+            layout.prop(context.scene.open_painter, "paint_all_sets")
             layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
             layout.operator('open_painter.material_stamp',text='Material Stamp (4 Channels)',icon='BRUSH_DATA')
             from .vector_brush import draw_vector_brush

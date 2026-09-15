@@ -23,7 +23,7 @@ from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
 from .properties.layer import OP_Layer
 from .properties.mask import OP_Mask
-from .properties.project import OP_Project
+from .properties.project import OP_PaintCanvas, OP_Project
 from .properties.stroke import OP_Stroke, OP_VectorBrushSettings
 from .ui.vector_brush import CLASSES as VECTOR_BRUSH_CLASSES
 from .ui.strokes_panel import CLASSES as STROKE_PANEL_CLASSES
@@ -65,6 +65,7 @@ CLASSES = (
     OP_TextureSet,
     OP_Stroke,
     OP_VectorBrushSettings,
+    OP_PaintCanvas,
     OP_Project,
     OP_OT_texture_set,
     OP_UL_texture_sets,

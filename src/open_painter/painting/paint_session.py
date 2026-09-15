@@ -128,6 +128,121 @@ def begin(context: bpy.types.Context, ts, channel: str, mask: bool = False) -> b
     return image
 
 
+CANVAS_ROLE = "Paint Canvas"
+
+
+
+def canvas_node(ts, image):
+    """An unlinked image node in the set's material that Blender's material paint mode targets."""
+    from ..constants import OWNER
+    material = ts.material
+    if material is None or not material.use_nodes:
+        raise ValueError(f"{ts.name} has no display material yet; evaluate it once.")
+    nodes = material.node_tree.nodes
+    node = next((n for n in nodes if n.get(OWNER) and n.get("role") == CANVAS_ROLE), None)
+    if node is None:
+        node = nodes.new("ShaderNodeTexImage")
+        node[OWNER], node["role"] = True, CANVAS_ROLE
+        node.label = "Open Painter · " + CANVAS_ROLE
+        node.location = (-900, -900)
+    if node.image != image:
+        node.image = image
+    nodes.active = node
+    return node
+
+
+def drop_canvas_nodes(ts):
+    from ..constants import OWNER
+    material = ts.material
+    if material is None or not material.use_nodes:
+        return
+    for node in list(material.node_tree.nodes):
+        if node.get(OWNER) and node.get("role") == CANVAS_ROLE:
+            material.node_tree.nodes.remove(node)
+
+
+def participants(project, ts, layer, obj):
+    """(set, layer) pairs painting the same key on this object: the active set first."""
+    from ..core import layer_stack as stack
+    from .strokes import ensure_key
+    key = ensure_key(layer)
+    found = [(ts, layer)]
+    for other in project.texture_sets:
+        if other.id == ts.id or not any(r.object == obj for r in other.assignments):
+            continue
+        linked = next((item for item in other.layers if item.stroke_key == key), None)
+        if linked is None:
+            linked = stack.add(other, "PAINT", layer.name)
+            linked.stroke_key = key
+        found.append((other, linked))
+    return found
+
+
+def begin_multi(context, ts, channel):
+    """Paint one channel of the active paint layer's key across every set assigned to the object.
+
+    Blender's material paint mode writes each face into its material's active
+    image node, so each participating set gets a canvas node pointing at its own
+    layer image; the face restriction covers the union of the sets' slots.
+    """
+    layer = active(ts)
+    if not paintable(ts, layer, False):
+        raise ValueError("Select a visible paint layer first.")
+    obj = context.object
+    assigned = [r.object for r in ts.assignments if r.object]
+    if obj not in assigned:
+        obj = next(iter(assigned), None)
+    if obj is None or not obj.data.uv_layers:
+        raise ValueError("Assign a UV-unwrapped mesh to this texture set first.")
+    project = context.scene.open_painter
+    detect(context.scene, force=True)
+    members = participants(project, ts, layer, obj)
+    if len(members) == 1:
+        return begin(context, ts, channel, False)
+    canvases = []
+    for member_ts, member_layer in members:
+        image = target(member_ts, member_layer, channel, False)
+        canvas_node(member_ts, image)
+        canvases.append((member_ts, member_layer, image))
+    if context.object and context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
+    context.view_layer.objects.active = obj
+    obj.select_set(True)
+    paint = context.scene.tool_settings.image_paint
+    paint.mode = "MATERIAL"
+    try:
+        bpy.ops.object.mode_set(mode="TEXTURE_PAINT")
+        ensure_brush(context)
+        restore_faces(project)
+        mesh = obj.data
+        project.paint_object = obj
+        project.paint_original_face_mask = mesh.use_paint_mask
+        project.paint_face_selection = "".join("1" if p.select else "0" for p in mesh.polygons)
+        slots = {r.slot_index for member_ts, _ in members for r in member_ts.assignments if r.object == obj}
+        mesh.polygons.foreach_set("select", [p.material_index in slots for p in mesh.polygons])
+        mesh.use_paint_mask = True
+        mesh.update()
+    except Exception:
+        finish(context, evaluate=False)
+        raise
+    project.paint_canvases.clear()
+    for member_ts, member_layer, image in canvases:
+        entry = project.paint_canvases.add()
+        entry.set_id, entry.layer_id, entry.image = member_ts.id, member_layer.id, image
+    primary = canvases[0][2]
+    project.paint_image = primary
+    project.paint_set_id, project.paint_layer_id = ts.id, layer.id
+    project.paint_channel = project.paint_target_channel = channel
+    project.paint_mask, project.paint_mask_id = False, ""
+    key = context.scene.as_pointer()
+    _checks[key] = (monotonic(), None)
+    _rasters[key] = (primary.as_pointer(), pixels(primary))
+    for _, _, image in canvases[1:]:
+        _rasters[(key, image.as_pointer())] = (image.as_pointer(), pixels(image))
+    update_editors(context, primary)
+    return primary
+
+
 def finish(context, evaluate: bool = True) -> None:
     """Flush the actual session target even if the active texture set changed."""
     scene = context.scene
@@ -135,6 +250,17 @@ def finish(context, evaluate: bool = True) -> None:
     detect(scene, force=True)
     identifier = project.paint_set_id
     image = project.paint_image
+    extra_sets = []
+    for entry in project.paint_canvases:
+        member = next((s for s in project.texture_sets if s.id == entry.set_id), None)
+        if member is not None:
+            drop_canvas_nodes(member)
+            if member.id != identifier:
+                extra_sets.append(member.id)
+        _rasters.pop((scene.as_pointer(), entry.image.as_pointer() if entry.image else 0), None)
+    project.paint_canvases.clear()
+    if scene.tool_settings.image_paint.mode == "MATERIAL" and extra_sets:
+        scene.tool_settings.image_paint.mode = "IMAGE"
     restore_faces(project)
     if context.object and context.object.mode == "TEXTURE_PAINT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -150,15 +276,18 @@ def finish(context, evaluate: bool = True) -> None:
     _checks.pop(scene.as_pointer(), None)
     _rasters.pop(scene.as_pointer(), None)
     _scratch.pop(scene.as_pointer(), None)
-    if evaluate and any(s.id == identifier for s in project.texture_sets):
+    if evaluate:
         from ..evaluation.evaluator import LayerEvaluator
         from ..evaluation import shader_preview
 
-        target_set = next(s for s in project.texture_sets if s.id == identifier)
-        if shader_preview.requested(target_set):
-            shader_preview.tick(scene, target_set)
-        else:
-            LayerEvaluator(scene).evaluate_texture_set(identifier)
+        for member_id in [identifier, *extra_sets]:
+            target_set = next((s for s in project.texture_sets if s.id == member_id), None)
+            if target_set is None:
+                continue
+            if shader_preview.requested(target_set):
+                shader_preview.tick(scene, target_set)
+            else:
+                LayerEvaluator(scene).evaluate_texture_set(member_id)
     ts = active_set(context)
     preview = (
         next((out.image for out in ts.outputs if out.channel == project.paint_channel), None)
@@ -213,6 +342,38 @@ def synchronize(context, mask: bool | None = None) -> bool:
 
 
 def detect(scene: bpy.types.Scene, force: bool = False) -> bool:
+    changed = _detect_primary(scene, force)
+    for entry in list(scene.open_painter.paint_canvases)[1:]:
+        changed = _detect_canvas(scene, entry, force) or changed
+    return changed
+
+
+def _detect_canvas(scene, entry, force):
+    """Change detection for a secondary canvas of a multi-set session (whole-image marking)."""
+    project = scene.open_painter
+    image = entry.image
+    if image is None:
+        return False
+    key = (scene.as_pointer(), image.as_pointer())
+    if not force and not image.is_dirty:
+        return False
+    raster = pixels(image)
+    previous = _rasters.get(key)
+    _rasters[key] = (image.as_pointer(), raster)
+    if previous is not None and previous[1].shape == raster.shape and np.array_equal(previous[1], raster):
+        return False
+    ts = next((s for s in project.texture_sets if s.id == entry.set_id), None)
+    layer = next((item for item in ts.layers if item.id == entry.layer_id), None) if ts else None
+    if layer is None:
+        return False
+    image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
+    mark_changed(ts, layer, project.paint_target_channel or project.paint_channel, False)
+    from ..evaluation import cache
+    cache._regions.pop(cache.key_for(scene, ts), None)
+    return True
+
+
+def _detect_primary(scene: bpy.types.Scene, force: bool = False) -> bool:
     project = scene.open_painter
     image = project.paint_image
     if not image:

@@ -366,6 +366,19 @@ def native_paint_input(scene):
     image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
     mark_changed(ts, layer, channel, mask=is_mask)
     notify(owner)
+    for entry in list(project.paint_canvases)[1:]:
+        member = next((item for item in project.texture_sets if item.id == entry.set_id), None)
+        member_layer = next((item for item in member.layers if item.id == entry.layer_id), None) if member else None
+        if member is None or member_layer is None or entry.image is None or not entry.image.is_dirty:
+            continue
+        if not requested(member):
+            continue
+        prop = channel_for(member_layer, channel)
+        if prop is None or prop.image != entry.image:
+            continue
+        entry.image['open_painter_pixel_revision'] = entry.image.get('open_painter_pixel_revision', 0) + 1
+        mark_changed(member, member_layer, channel, mask=False)
+        notify(prop)
     metrics.count('shader_native_paint_scan_skips')
     return True
 

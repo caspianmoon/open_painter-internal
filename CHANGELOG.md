@@ -1,5 +1,11 @@
 # Changes
 
+## 0.6.1
+
+- Native painting across texture sets: Paint Across Sets runs the brush in Blender's
+  material paint mode with a canvas per set (linked paint layers created where missing);
+  one stroke down a seam writes every set it crosses, and all of them re-evaluate.
+
 ## 0.6.0
 
 Universal canvas and resolution-independent strokes.

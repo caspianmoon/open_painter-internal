@@ -151,6 +151,9 @@ def undo(ts, *, _single=False):
                                  document.encode(receipt["before"], digest=True),
                                  document.encode(current, digest=True))
     desired = document.decode(desired)
+    # The merge lists pre-AI items first: an artist layer added or moved since
+    # would silently change position, so follow the current order instead.
+    document.keep_order(desired, current, receipt["before"])
     commands.validate_scope(ts, current, desired, "")
     commands.validate_document(ts, current, desired)
     old_history = ts.director_history

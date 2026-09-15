@@ -30,6 +30,9 @@ Material Director.
   instruction; 4K+ mesh-map and reference previews read pixels once instead of seconds per map;
   change reports name removed masks and filters; `set_filter` on a channel requires its
   `effect_id`; linked-object bindings resolve by full name.
+- AI Undo keeps the artist's current layer and mask order (a layer added or moved after the AI
+  change no longer jumps in the stack); an extra generated image is ignored rather than fatal; small
+  3D-view regions are no longer upsampled for capture.
 - See [Material Director](docs/material-director.md) for setup and supported scope.
 
 ## 0.7.0

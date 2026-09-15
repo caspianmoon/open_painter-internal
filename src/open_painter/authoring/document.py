@@ -179,6 +179,26 @@ def apply(ts, desired):
             output.dirty = True
 
 
+def keep_order(desired, current, reference):
+    """Keep the artist's current stack order after a merge; restored items
+    return next to the neighbours they had in ``reference``."""
+    for collection, path in (("layers", ()), ("masks", ("layers",))):
+        pairs = [(desired, current, reference)] if not path else [
+            (d, c, r) for d in desired["layers"]
+            for c in current["layers"] if c["id"] == d["id"]
+            for r in reference["layers"] if r["id"] == d["id"]]
+        for want, have, base in pairs:
+            by_id = {item["id"]: item for item in want[collection] if item.get("id")}
+            if len(by_id) != len(want[collection]):
+                continue  # Positional items: leave the merge result alone.
+            order = [item["id"] for item in have[collection] if item["id"] in by_id]
+            for index, item in enumerate(base[collection]):
+                if item["id"] in by_id and item["id"] not in order:
+                    preceding = [x["id"] for x in base[collection][:index] if x["id"] in order]
+                    order.insert(order.index(preceding[-1]) + 1 if preceding else 0, item["id"])
+            want[collection] = [by_id[key] for key in order]
+
+
 def comparable(value):
     """Flatten keyed collections for diffs, locks and conflict-aware reversal."""
     result = {}

@@ -425,7 +425,9 @@ def handle(event):
     elif kind == "generated_image" and request and request["running"] and event.get("request_id") == request["id"]:
         from . import generated_images
         if len(request["images"]) >= generated_images.MAX_IMAGES:
-            raise schema.AuthoringError("Too many generated textures in one instruction")
+            # The companion already stops a fifth generation; never drop the session over it.
+            state["status"] = "Ignored an extra generated texture (four per instruction)"
+            return
         metadata = {k: event[k] for k in ("image_id", "width", "height", "prompt")}
         generated_images.read(connection.state_directory, metadata)
         request["images"][metadata["image_id"]] = dict(metadata, state_directory=connection.state_directory)

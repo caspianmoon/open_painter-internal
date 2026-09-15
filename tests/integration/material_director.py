@@ -291,6 +291,16 @@ class DirectorTests(unittest.TestCase):
         self.assertAlmostEqual(self.layer(identifier).opacity, 1)
         self.assertTrue(result["conflicts"])
 
+    def test_undo_keeps_later_artist_layer_order(self):
+        stack.add(self.ts, "FILL", "Base")
+        self.apply(batch(dict(op="add_layer", id="new:rust", name="Rust", kind="FILL")))
+        self.ts.active_layer = -1
+        stack.add(self.ts, "FILL", "Artist bottom")
+        self.assertEqual([l.name for l in self.ts.layers], ["Artist bottom", "Base", "Rust"])
+        result = transactions.undo(self.ts)
+        self.assertEqual(result["changes"], ["Removed layer: Rust"])
+        self.assertEqual([l.name for l in self.ts.layers], ["Artist bottom", "Base"])
+
     def test_plan_cancel_and_explain_do_not_mutate(self):
         identifier = self.steel()
         before = document.canonical(document.snapshot(self.ts))

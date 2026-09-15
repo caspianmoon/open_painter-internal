@@ -40,7 +40,7 @@ def capture(context, ts, *, max_side=512, isolate=False, frame_target=False):
                 raise ValueError(f"Fix scene analysis for {layer.name} > {mask.name}: {field.error}")
             if field.mode == "LIVE" and (not field.image or field.provenance != repr(signature(ts, field))):
                 raise ValueError("Wait for scene analysis to finish before sending the 3D view")
-    scale = max_side / max(region.width, region.height)
+    scale = min(1., max_side / max(region.width, region.height))  # never upsample a small region
     width, height = max(1, round(region.width * scale)), max(1, round(region.height * scale))
     offscreen = gpu.types.GPUOffScreen(width, height, format="RGBA8")
     overlays = space.overlay.show_overlays

@@ -1,6 +1,9 @@
 # Material Director: AI authoring for Open Painter
 
-**Status:** Implementation proposal; no application code changed.  
+**Status:** Original implementation proposal. The first implementation is now in 0.8.0;
+see [Material Director setup and implementation status](material-director.md) for delivered scope,
+validation and remaining work. The repository review below records the original planning baseline.
+
 **Reviewed:** 2026-09-15.  
 **Repository baseline:** `41a16a8` (`Material -> Geometry: displacement, curves, detail prototypes, bake back`). `pyproject.toml` and `blender_manifest.toml` report **0.7.0**. The review began at `0b817c0` / 0.6.1 and incorporated the geometry work committed during the session. Version metadata does not establish release or test status; no Blender validation was run here.
 
@@ -271,7 +274,12 @@ Each entry should expose stable identity/version, material family, semantic effe
 
 Add semantic controls such as `wear_extent`, `wear_width`, `rust_extent`, `cavity_bias`, `scratch_density`, `scratch_direction`, `roughness_variation`, and `bottom_grime_height`. Map them to real controls in specific recipes. Not every material supports every control. Keep mappings versioned and show their affected parameters in the diff.
 
-Generated masks and image inputs already in the library remain acceptable editable *sources*. This feature's deliverable is a layered material; it does not need runtime image generation for the first release.
+Generated masks and image inputs are editable sources. Following the artist's revised requirement,
+runtime native Codex image generation is included in the first implementation: generate tileable
+surface textures and grayscale masks, register opaque artifact IDs, and assign verified packed
+images through the same scoped transaction API. Color and scalar inputs use appropriate color
+spaces; Plan allocates no Blender images until Apply. Preserve separate physical material layers
+and geometry-driven placement. Do not interpret albedo pixels as calibrated PBR maps.
 
 ### Worked example: old green industrial steel
 
@@ -503,6 +511,6 @@ Material Director is ready for an initial release when an artist can select an e
 
 The resulting `.blend` must save/reopen and export normally without requiring a live AI session. Login and runtime compatibility must be demonstrated on the shipped configuration. The UI must be usable in a real Blender window, and failure paths must preserve the artist's work.
 
-Defer automatic whole-asset segmentation, runtime image generation, autonomous painting, arbitrary geometry changes, unlimited refinement, and portable live-scene module bindings until the foundation passes those gates.
+Defer automatic whole-asset segmentation, autonomous painting, arbitrary geometry changes, unlimited refinement, and portable live-scene module bindings until the foundation passes those gates. Native runtime image generation, reference input, per-part model/map inspection and coordinated scene authoring across existing material assignments are now implemented within the transactional authoring boundary; see the [image-generation and scene validation](material-director-imagegen-validation.md).
 
 **Build the reliable material editor first. Codex then becomes a director of an existing, understandable authoring system.**

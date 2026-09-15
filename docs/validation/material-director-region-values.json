@@ -1,0 +1,815 @@
+{
+  "resolution": 256,
+  "cases": [
+    {
+      "name": "00-before",
+      "layers": [
+        {
+          "layer": "Steel Substrate",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Dark Soviet Green Enamel",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Edge Chips and Exposed Steel",
+          "opacity": 0.7599999904632568,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.03796849772334099,
+              "max": 0.7599999904632568,
+              "nonzero": 0.05927455789337808
+            },
+            "bottom": {
+              "mean": 0.04236060008406639,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07159493670886076
+            },
+            "upper": {
+              "mean": 0.05002322420477867,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07181286549707602
+            },
+            "Handling": {
+              "mean": 0.5934284925460815,
+              "max": 0.7599999904632568,
+              "nonzero": 0.8392523364485981
+            },
+            "Recessed Screws": {
+              "mean": 0.6566161513328552,
+              "max": 0.7599999904632568,
+              "nonzero": 0.967391304347826
+            }
+          },
+          "fields": [
+            {
+              "name": "Heavy Live Edge Chipping",
+              "kind": "EDGE",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.7599999904632568
+        },
+        {
+          "layer": "Mild Cavity Rust",
+          "opacity": 0.23999999463558197,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.025947561487555504,
+              "max": 0.23999999463558197,
+              "nonzero": 0.17743642700400156
+            },
+            "bottom": {
+              "mean": 0.012441257946193218,
+              "max": 0.23999999463558197,
+              "nonzero": 0.09984810126582279
+            },
+            "upper": {
+              "mean": 0.023558994755148888,
+              "max": 0.23999999463558197,
+              "nonzero": 0.15888888888888889
+            },
+            "Handling": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Live Concavity",
+              "kind": "CONCAVITY",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.23999999463558197
+        },
+        {
+          "layer": "Bottom Accumulated Dirt",
+          "opacity": 0.6000000238418579,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.031422894448041916,
+              "max": 0.5405029654502869,
+              "nonzero": 0.22191816186911062
+            },
+            "bottom": {
+              "mean": 0.11948748677968979,
+              "max": 0.5405029654502869,
+              "nonzero": 0.8278481012658228
+            },
+            "upper": {
+              "mean": 0.0018935162806883454,
+              "max": 0.2041032761335373,
+              "nonzero": 0.02169590643274854
+            },
+            "Handling": {
+              "mean": 0.0161578431725502,
+              "max": 0.2041032761335373,
+              "nonzero": 0.16074766355140188
+            },
+            "Recessed Screws": {
+              "mean": 0.010351846925914288,
+              "max": 0.12490210682153702,
+              "nonzero": 0.17391304347826086
+            }
+          },
+          "fields": [
+            {
+              "name": "Bottom Height Accumulation",
+              "kind": "WORLD_HEIGHT",
+              "image": true,
+              "error": ""
+            },
+            {
+              "name": "Keep Recessed Screws Dirt-Free",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.5405029654502869
+        },
+        {
+          "layer": "Oily Handle Fingerprints",
+          "opacity": 0.6200000047683716,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.0014901236863806844,
+              "max": 0.6200000047683716,
+              "nonzero": 0.01381179811539951
+            },
+            "bottom": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "upper": {
+              "mean": 0.003375435248017311,
+              "max": 0.6200000047683716,
+              "nonzero": 0.03128654970760234
+            },
+            "Handling": {
+              "mean": 0.10788773745298386,
+              "max": 0.6200000047683716,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Handling Region",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.0
+        }
+      ]
+    },
+    {
+      "name": "01-handling",
+      "layers": [
+        {
+          "layer": "Steel Substrate",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Dark Soviet Green Enamel",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Edge Chips and Exposed Steel",
+          "opacity": 0.7599999904632568,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.03796849772334099,
+              "max": 0.7599999904632568,
+              "nonzero": 0.05927455789337808
+            },
+            "bottom": {
+              "mean": 0.04236060008406639,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07159493670886076
+            },
+            "upper": {
+              "mean": 0.05002322420477867,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07181286549707602
+            },
+            "Handling": {
+              "mean": 0.5934284925460815,
+              "max": 0.7599999904632568,
+              "nonzero": 0.8392523364485981
+            },
+            "Recessed Screws": {
+              "mean": 0.6566161513328552,
+              "max": 0.7599999904632568,
+              "nonzero": 0.967391304347826
+            }
+          },
+          "fields": [
+            {
+              "name": "Heavy Live Edge Chipping",
+              "kind": "EDGE",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.7599999904632568
+        },
+        {
+          "layer": "Mild Cavity Rust",
+          "opacity": 0.23999999463558197,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.025947561487555504,
+              "max": 0.23999999463558197,
+              "nonzero": 0.17743642700400156
+            },
+            "bottom": {
+              "mean": 0.012441257946193218,
+              "max": 0.23999999463558197,
+              "nonzero": 0.09984810126582279
+            },
+            "upper": {
+              "mean": 0.023558994755148888,
+              "max": 0.23999999463558197,
+              "nonzero": 0.15888888888888889
+            },
+            "Handling": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Live Concavity",
+              "kind": "CONCAVITY",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.23999999463558197
+        },
+        {
+          "layer": "Bottom Accumulated Dirt",
+          "opacity": 0.6000000238418579,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.031422894448041916,
+              "max": 0.5405029654502869,
+              "nonzero": 0.22191816186911062
+            },
+            "bottom": {
+              "mean": 0.11948748677968979,
+              "max": 0.5405029654502869,
+              "nonzero": 0.8278481012658228
+            },
+            "upper": {
+              "mean": 0.0018935162806883454,
+              "max": 0.2041032761335373,
+              "nonzero": 0.02169590643274854
+            },
+            "Handling": {
+              "mean": 0.0161578431725502,
+              "max": 0.2041032761335373,
+              "nonzero": 0.16074766355140188
+            },
+            "Recessed Screws": {
+              "mean": 0.010351846925914288,
+              "max": 0.12490210682153702,
+              "nonzero": 0.17391304347826086
+            }
+          },
+          "fields": [
+            {
+              "name": "Bottom Height Accumulation",
+              "kind": "WORLD_HEIGHT",
+              "image": true,
+              "error": ""
+            },
+            {
+              "name": "Keep Recessed Screws Dirt-Free",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.5405029654502869
+        },
+        {
+          "layer": "Oily Handle Fingerprints",
+          "opacity": 0.6200000047683716,
+          "enabled_channels": [
+            "ROUGHNESS"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.0014901236863806844,
+              "max": 0.6200000047683716,
+              "nonzero": 0.01381179811539951
+            },
+            "bottom": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "upper": {
+              "mean": 0.003375435248017311,
+              "max": 0.6200000047683716,
+              "nonzero": 0.03128654970760234
+            },
+            "Handling": {
+              "mean": 0.10788773745298386,
+              "max": 0.6200000047683716,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Handling Region",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.0
+        }
+      ]
+    },
+    {
+      "name": "02-clean_screws",
+      "layers": [
+        {
+          "layer": "Steel Substrate",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Dark Soviet Green Enamel",
+          "opacity": 1.0,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "bottom": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "upper": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Handling": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 1.0,
+              "max": 1.0,
+              "nonzero": 1.0
+            }
+          },
+          "fields": [],
+          "outside_handling_max": 1.0
+        },
+        {
+          "layer": "Edge Chips and Exposed Steel",
+          "opacity": 0.7599999904632568,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.03796849772334099,
+              "max": 0.7599999904632568,
+              "nonzero": 0.05927455789337808
+            },
+            "bottom": {
+              "mean": 0.04236060008406639,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07159493670886076
+            },
+            "upper": {
+              "mean": 0.05002322420477867,
+              "max": 0.7599999904632568,
+              "nonzero": 0.07181286549707602
+            },
+            "Handling": {
+              "mean": 0.5934284925460815,
+              "max": 0.7599999904632568,
+              "nonzero": 0.8392523364485981
+            },
+            "Recessed Screws": {
+              "mean": 0.6566161513328552,
+              "max": 0.7599999904632568,
+              "nonzero": 0.967391304347826
+            }
+          },
+          "fields": [
+            {
+              "name": "Heavy Live Edge Chipping",
+              "kind": "EDGE",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.7599999904632568
+        },
+        {
+          "layer": "Mild Cavity Rust",
+          "opacity": 0.23999999463558197,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC",
+            "HEIGHT"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.025947561487555504,
+              "max": 0.23999999463558197,
+              "nonzero": 0.17743642700400156
+            },
+            "bottom": {
+              "mean": 0.012441257946193218,
+              "max": 0.23999999463558197,
+              "nonzero": 0.09984810126582279
+            },
+            "upper": {
+              "mean": 0.023558994755148888,
+              "max": 0.23999999463558197,
+              "nonzero": 0.15888888888888889
+            },
+            "Handling": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Live Concavity",
+              "kind": "CONCAVITY",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.23999999463558197
+        },
+        {
+          "layer": "Bottom Accumulated Dirt",
+          "opacity": 0.6000000238418579,
+          "enabled_channels": [
+            "BASE_COLOR",
+            "ROUGHNESS",
+            "METALLIC"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.03137372061610222,
+              "max": 0.5405029654502869,
+              "nonzero": 0.22109203562669422
+            },
+            "bottom": {
+              "mean": 0.11940353363752365,
+              "max": 0.5405029654502869,
+              "nonzero": 0.826632911392405
+            },
+            "upper": {
+              "mean": 0.0018498578574508429,
+              "max": 0.2041032761335373,
+              "nonzero": 0.020760233918128656
+            },
+            "Handling": {
+              "mean": 0.0161578431725502,
+              "max": 0.2041032761335373,
+              "nonzero": 0.16074766355140188
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Bottom Height Accumulation",
+              "kind": "WORLD_HEIGHT",
+              "image": true,
+              "error": ""
+            },
+            {
+              "name": "Keep Recessed Screws Dirt-Free",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.5405029654502869
+        },
+        {
+          "layer": "Oily Handle Fingerprints",
+          "opacity": 0.6200000047683716,
+          "enabled_channels": [
+            "ROUGHNESS"
+          ],
+          "coverage": {
+            "valid": {
+              "mean": 0.0014901236863806844,
+              "max": 0.6200000047683716,
+              "nonzero": 0.01381179811539951
+            },
+            "bottom": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            },
+            "upper": {
+              "mean": 0.003375435248017311,
+              "max": 0.6200000047683716,
+              "nonzero": 0.03128654970760234
+            },
+            "Handling": {
+              "mean": 0.10788773745298386,
+              "max": 0.6200000047683716,
+              "nonzero": 1.0
+            },
+            "Recessed Screws": {
+              "mean": 0.0,
+              "max": 0.0,
+              "nonzero": 0.0
+            }
+          },
+          "fields": [
+            {
+              "name": "Handling Region",
+              "kind": "VERTEX_GROUP",
+              "image": true,
+              "error": ""
+            }
+          ],
+          "outside_handling_max": 0.0
+        }
+      ]
+    }
+  ],
+  "checks": {}
+}

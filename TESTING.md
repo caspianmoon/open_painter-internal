@@ -214,3 +214,85 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Material Director (0.8.0)
+
+Run `tests/integration/material_director.py` in background Blender and
+`tests/integration/material_director_ui.py` in visible Blender with `--enable-event-simulate`.
+Both are included in `scripts/run_tests.py`. `scripts/run_pure_tests.py` includes the schema,
+protocol and cancellation cases; use a Python interpreter with NumPy (Blender's bundled Python works).
+
+Probe a supported Codex executable without signing in:
+
+```sh
+python3 scripts/probe_director_codex.py --codex /absolute/path/to/codex
+```
+
+This starts a localhost fake Responses endpoint and the real Codex app-server, then checks the
+model-facing capability inventory, context/proposal tool round trips, the companion handshake and
+cleanup. It creates temporary isolated state and uses no real account credentials or paid inference.
+Local port binding must be permitted. Do not claim this verifies live authentication or model quality.
+
+Manual account acceptance: install the ZIP in an isolated Blender profile, enable online access and
+material context sharing, select Codex, sign in through the browser, then Create/Refine/Plan/Explain
+on a test mesh. Check cancellation, unavailable models, account limits, reconnect/logout, optional
+3D-view context, and that ordinary material controls still edit the result. Use a sacrificial project.
+
+### Real model use cases
+
+`python3 scripts/test_director_live.py --use-codex-login` runs real Create/Refine/Explain/Plan turns
+with the current Codex ChatGPT login, native operators, shader evaluation, viewport PNGs and AI Undo.
+This consumes account allowance and requires an existing Codex file credential cache. The opt-in
+launcher uses temporary access-only authentication state and a disposable Blender profile/project.
+There are no fixture model responses. Additional `--cases handling,clean_screws` exercise region follow-ups;
+`--blend` resumes a saved test scene and `--output` preserves separate runs.
+
+Use `--cases image_material,less_rust,bottom,explain` to exercise native account-backed image
+generation, packed color/mask assignment, rendered output and subsequent edits. Resume the saved
+scene with `--cases explain,fix,image_roughness` to test visual refinement and generation of a scalar
+detail image through Plan → Apply → Undo. Image generation can take several minutes per instruction.
+The test records native image events, verified artifact IDs, packed image sizes/color spaces,
+proposals, applied changes, rendered views and save files. The fake-provider probe alone does not
+verify image generation; it is account/provider gated.
+
+### Supplied full-model acceptance
+
+Prepare a disposable copy of `open painter test.blend`, replacing all previous material stacks and
+bakes. The preparation script is specific to this ten-part droid's geometry; it verifies the source
+file hash remains unchanged. `--full-scene` bakes every part at 1024 pixels.
+
+```sh
+blender --background --factory-startup --disable-autoexec --python-exit-code 1 \
+  --python tests/manual/prepare_director_user_model.py -- \
+  'open painter test.blend' .blender-test/director-user-model --full-scene
+
+python3 scripts/test_director_live.py --use-codex-login \
+  --blend .blender-test/director-user-model/fresh-full-scene.blend \
+  --texture-set 'Director Fresh Body' --frame-model --scope SCENE \
+  --reference /absolute/path/to/reference.png \
+  --output .blender-test/director-full-scene \
+  --cases scene_create,scene_explain,scene_plan
+```
+
+This is one real model instruction for all ten regions, followed by full-scene Explain and a grouped
+Plan → Apply → Undo. Assertions require ten empty initial stacks, ten inspected and authored parts,
+six current map previews per part, reference and isolated views, native packed generated textures,
+unchanged geometry, all shader previews ready, no pink shader failure, and exact grouped AI undo.
+Front/rear/side PNGs and saved `.blend` files support visual review. Inspect the result itself;
+successful validation does not establish production material quality.
+
+The primary art-direction check uses the artist's short instruction without a supplied appearance
+reference: omit `--reference` and use `--cases scene_starwars,scene_starwars_explain`. The Create
+instruction is exactly **“Texture this like a Star Wars robot.”** It still receives the full-model
+view, per-part isolated views and all six current map previews. This checks whether the integration
+can choose a coherent design from the artist's intent and model, without a hand-written layer recipe.
+
+After the temporary account cache has been deleted, run `tests/manual/verify_director_images.py`
+in background Blender with `-- result.blend output.json`. It verifies packed pixel availability,
+image hashes, channel assignments and grouped undo after reopening without Codex.
+
+The checked-in `tests/manual/analyze_director_live.py` measures actual generated masks and named
+regions in the saved scenes without further inference. Run it in background Blender with the output
+folder after `--`. The default 256-square UV grid is a sample, not a world-area coverage estimate.
+
+See [real-account acceptance](docs/material-director-live-validation.md) for prompts, timings,
+actual images, failures found, fixes, reruns, and remaining artistic limitations.

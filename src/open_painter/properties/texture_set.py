@@ -44,6 +44,8 @@ class OP_Assignment(bpy.types.PropertyGroup):
 
 
 class OP_TextureSet(bpy.types.PropertyGroup):
+    director_locks: bpy.props.StringProperty(default="[]", description="Protected authoring paths")
+    director_history: bpy.props.StringProperty(default="[]", description="Bounded Material Director change receipts")
     material_state_data: bpy.props.StringProperty()
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Texture Set")

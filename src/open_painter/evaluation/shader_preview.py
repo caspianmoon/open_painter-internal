@@ -7,6 +7,7 @@ it never composites the material into channel images for a supported edit.
 from time import perf_counter
 import json
 import logging
+from contextlib import contextmanager
 
 import bpy
 
@@ -16,6 +17,35 @@ from ..utils.logging import logger
 
 _sessions = {}
 _busy = set()
+_batches = {}
+
+
+def authoring_structure_changed(scene):
+    """Collection mutations have no RNA update callback of their own."""
+    for key, state in _batches.items():
+        if key[0] == scene.as_pointer():
+            state['structural'] = True
+
+
+@contextmanager
+def authoring_batch(ts):
+    """Coalesce a bounded authoring transaction; ordinary slider edits stay immediate."""
+    key = key_for(ts.id_data, ts)
+    state = _batches.setdefault(key, dict(depth=0, structural=False))
+    state['depth'] += 1
+    try:
+        yield
+    finally:
+        state['depth'] -= 1
+        if not state['depth']:
+            _batches.pop(key, None)
+            entry = _sessions.get(key)
+            if entry and entry.get('graph') and _alive(entry, ts) and key not in _busy:
+                _busy.add(key)
+                try:
+                    _update(ts.id_data, ts, entry, check_structure=state['structural'])
+                finally:
+                    _busy.discard(key)
 
 
 def requested(ts):
@@ -255,6 +285,9 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         if not requested(ts):
             continue
         key = key_for(scene, ts)
+        if key in _batches:
+            _batches[key]['structural'] |= structural
+            continue
         entry = _sessions.get(key)
         if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts):
             continue
@@ -411,3 +444,4 @@ def clear():
                 pass
     _sessions.clear()
     _busy.clear()
+    _batches.clear()

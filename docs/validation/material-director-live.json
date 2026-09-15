@@ -1,0 +1,436 @@
+{
+  "date": "2026-09-15",
+  "blender": "5.2.1 LTS",
+  "platform": "macOS Apple Silicon",
+  "runtime": "codex-cli 0.154.0-alpha.6.2",
+  "auth": "Existing user ChatGPT login, temporary isolated Codex file cache; no refresh token copied",
+  "model_selection": "Account default",
+  "advertised_default_model": "gpt-6-astra",
+  "live_model_responses": true,
+  "scene": "Disposable UV-unwrapped recessed industrial housing; named Handling and Recessed Screws vertex groups",
+  "cases": [
+    {
+      "name": "create",
+      "mode": "CREATE",
+      "prompt": "Old Soviet industrial steel. Dark green painted metal, chipped heavily around exposed edges, irregular scratches, mild rust in cavities, dirt accumulated near the bottom, and oily fingerprints around the handle. Keep every layer, mask and parameter editable.",
+      "image_sent": false,
+      "seconds": 65.82,
+      "response": "Proposed an editable six-layer material stack:\n\n- Steel substrate\n- Dark Soviet-green enamel with orange-peel texture\n- Heavy live edge chipping and irregular scratches\n- Mild, broken-up cavity rust\n- Bottom-weighted dirt accumulation\n- Roughness-only oily fingerprints localized to the **Handling** vertex group\n\nAll layers, masks, seeds, thresholds, colors, and surface parameters remain editable.",
+      "status": "Applied: Build an editable old Soviet dark-green painted steel stack with live edge wear, irregular scratches, mild cavity rust, bottom-weighted dirt, and handling-group oily fingerprints.",
+      "outcome": "applied",
+      "changes": [
+        "Added layer: Steel Substrate",
+        "Added layer: Dark Soviet Green Enamel",
+        "Added layer: Edge Chips and Exposed Steel",
+        "Added layer: Mild Cavity Rust",
+        "Added layer: Bottom Accumulated Dirt",
+        "Added layer: Oily Handle Fingerprints",
+        "Added mask: Edge Chips and Exposed Steel > Heavy Live Edge Chipping",
+        "Added mask: Edge Chips and Exposed Steel > Irregular Exposed Scratches",
+        "Added mask: Edge Chips and Exposed Steel > Published Paint Loss",
+        "Added mask: Mild Cavity Rust > Live Concavity",
+        "Added mask: Mild Cavity Rust > Sparse Rust Breakup",
+        "Added mask: Bottom Accumulated Dirt > Bottom Height Accumulation",
+        "Added mask: Bottom Accumulated Dirt > Broad Dirt Breakup",
+        "Added mask: Oily Handle Fingerprints > Handling Region",
+        "Added mask: Oily Handle Fingerprints > Fingerprint Ridges"
+      ],
+      "conversation_sent": [],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 0
+      },
+      "source_run": "director-live-final"
+    },
+    {
+      "name": "less_rust",
+      "mode": "REFINE",
+      "prompt": "Too much rust. Reduce the existing rust by about half, without changing the paint color or the scratch pattern.",
+      "image_sent": false,
+      "seconds": 11.49,
+      "response": "Proposed halving the existing rust layer\u2019s opacity from 48% to 24%. Paint color, scratch pattern, and rust masks remain unchanged.",
+      "status": "Applied: Halve the existing rust effect by reducing Mild Cavity Rust opacity from 0.48 to 0.24; preserve paint color, scratches, and all masks.",
+      "outcome": "applied",
+      "changes": [
+        "Mild Cavity Rust > Opacity: 0.48 \u2192 0.24"
+      ],
+      "conversation_sent": [
+        {
+          "id": "f893fcb6d5194039a1a8628f780438d1",
+          "mode": "CREATE",
+          "instruction": "Old Soviet industrial steel. Dark green painted metal, chipped heavily around exposed edges, irregular scratches, mild rust in cavities, dirt accumulated near the bottom, and oily fingerprints around the handle. Keep every layer, mask and parameter editable.",
+          "response": "Proposed an editable six-layer material stack:\n\n- Steel substrate\n- Dark Soviet-green enamel with orange-peel texture\n- Heavy live edge chipping and irregular scratches\n- Mild, broken-up cavity rust\n- Bottom-weighted dirt accumulation\n- Roughness-only oily fingerprints localized to the **Handling** vertex group\n\nAll layers, masks, seeds, thresholds, colors, and surface parameters remain editable.",
+          "outcome": "applied"
+        }
+      ],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 9
+      },
+      "source_run": "director-live-final"
+    },
+    {
+      "name": "bottom",
+      "mode": "REFINE",
+      "prompt": "Make the bottom dirtier, but keep the recessed screws clean. Keep the rest of the material as it is.",
+      "image_sent": false,
+      "seconds": 18.35,
+      "response": "Proposed stronger bottom dirt: opacity increased from 68% to 90%, with the **Recessed Screws** group excluded from dirt. Everything else remains unchanged.",
+      "status": "Applied: Increase existing bottom dirt opacity from 0.68 to 0.90 and exclude the Recessed Screws vertex group from dirt. Preserve all other layers, channels, and existing mask patterns.",
+      "outcome": "applied",
+      "changes": [
+        "Added mask: Bottom Accumulated Dirt > Keep Recessed Screws Dirt-Free",
+        "Bottom Accumulated Dirt > Opacity: 0.68 \u2192 0.9"
+      ],
+      "conversation_sent": [
+        {
+          "id": "f893fcb6d5194039a1a8628f780438d1",
+          "mode": "CREATE",
+          "instruction": "Old Soviet industrial steel. Dark green painted metal, chipped heavily around exposed edges, irregular scratches, mild rust in cavities, dirt accumulated near the bottom, and oily fingerprints around the handle. Keep every layer, mask and parameter editable.",
+          "response": "Proposed an editable six-layer material stack:\n\n- Steel substrate\n- Dark Soviet-green enamel with orange-peel texture\n- Heavy live edge chipping and irregular scratches\n- Mild, broken-up cavity rust\n- Bottom-weighted dirt accumulation\n- Roughness-only oily fingerprints localized to the **Handling** vertex group\n\nAll layers, masks, seeds, thresholds, colors, and surface parameters remain editable.",
+          "outcome": "applied"
+        },
+        {
+          "id": "45f73d9803da42d390354a43b20dba8b",
+          "mode": "REFINE",
+          "instruction": "Too much rust. Reduce the existing rust by about half, without changing the paint color or the scratch pattern.",
+          "response": "Proposed halving the existing rust layer\u2019s opacity from 48% to 24%. Paint color, scratch pattern, and rust masks remain unchanged.",
+          "outcome": "applied"
+        }
+      ],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 9
+      },
+      "source_run": "director-live-final"
+    },
+    {
+      "name": "explain",
+      "mode": "EXPLAIN",
+      "prompt": "Why does this material still look procedural? Look at the image and identify the two most visible problems and concrete adjustments that would improve it.",
+      "image_sent": true,
+      "seconds": 21.61,
+      "response": "1. **The dirt reads as camouflage blobs, not gravity-driven buildup.**  \n   The **Bottom Accumulated Dirt** is very strong (`opacity 0.90`) and its low-frequency **GRUNGE_DIRT** breakup (`noise_scale 9`) covers much of the front panel in similarly sized patches. Narrow the WORLD_HEIGHT range toward the bottom, reduce opacity to roughly **0.55\u20130.65**, and use broader, less contrasty breakup so coverage fades upward rather than forming repeated islands.\n\n2. **The exposed steel forms an overly uniform bright outline.**  \n   **Edge Chips and Exposed Steel** is almost fully opaque (`0.96`), while the live EDGE mask has a fairly broad `0.025` distance. This creates continuous silver piping around the housing and circular detail. Reduce the edge distance to about **0.01\u20130.015**, tighten the mask thresholds, and lower layer opacity to around **0.7\u20130.8** so only intermittent high-contact edges expose steel.\n\nA secondary setup issue: **Oily Handle Fingerprints** still has Base Color and Metallic enabled. Disabling those would make it genuinely roughness-only and prevent unintended gray/dielectric coloration.",
+      "status": "Ready",
+      "outcome": "response_only",
+      "changes": [],
+      "no_mutation": true,
+      "pink_pixel_fraction": 0.0,
+      "conversation_sent": [],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 10
+      },
+      "source_run": "director-live-verified"
+    },
+    {
+      "name": "fix",
+      "mode": "REFINE",
+      "prompt": "Fix those two problems. Keep the material identity and the protected paint color.",
+      "image_sent": true,
+      "seconds": 22.0,
+      "response": "Proposed both fixes:\n- Softer, broader dirt breakup concentrated nearer the bottom, with opacity reduced to 0.60.\n- Narrower, more selective edge wear, with opacity reduced to 0.76.\n\nProtected green paint, rust, scratch patterns, and screw exclusion remain unchanged.",
+      "status": "Applied: Refine bottom dirt into a softer, lower accumulation and reduce continuous bright edge wear; preserve protected enamel color, rust, scratches, seeds, and screw exclusion.",
+      "outcome": "applied",
+      "changes": [
+        "Edge Chips and Exposed Steel > Heavy Live Edge Chipping > Black: 0.22 \u2192 0.4",
+        "Edge Chips and Exposed Steel > Heavy Live Edge Chipping > Influence > Distance: 0.025 \u2192 0.012",
+        "Edge Chips and Exposed Steel > Heavy Live Edge Chipping > White: 0.58 \u2192 0.75",
+        "Edge Chips and Exposed Steel > Opacity: 0.96 \u2192 0.76",
+        "Bottom Accumulated Dirt > Bottom Height Accumulation > Influence > Bounds: 0.03, 0.3 \u2192 0.03, 0.2",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > Black: 0.28 \u2192 0.1",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > Noise Scale: 9 \u2192 4",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > White: 0.68 \u2192 0.9",
+        "Bottom Accumulated Dirt > Opacity: 0.9 \u2192 0.6"
+      ],
+      "pink_pixel_fraction": 0.0,
+      "conversation_sent": [
+        {
+          "id": "9510278eb4904bd6829d9367764bd6bd",
+          "mode": "EXPLAIN",
+          "instruction": "Why does this material still look procedural? Look at the image and identify the two most visible problems and concrete adjustments that would improve it.",
+          "response": "1. **The dirt reads as camouflage blobs, not gravity-driven buildup.**  \n   The **Bottom Accumulated Dirt** is very strong (`opacity 0.90`) and its low-frequency **GRUNGE_DIRT** breakup (`noise_scale 9`) covers much of the front panel in similarly sized patches. Narrow the WORLD_HEIGHT range toward the bottom, reduce opacity to roughly **0.55\u20130.65**, and use broader, less contrasty breakup so coverage fades upward rather than forming repeated islands.\n\n2. **The exposed steel forms an overly uniform bright outline.**  \n   **Edge Chips and Exposed Steel** is almost fully opaque (`0.96`), while the live EDGE mask has a fairly broad `0.025` distance. This creates continuous silver piping around the housing and circular detail. Reduce the edge distance to about **0.01\u20130.015**, tighten the mask thresholds, and lower layer opacity to around **0.7\u20130.8** so only intermittent high-contact edges expose steel.\n\nA secondary setup issue: **Oily Handle Fingerprints** still has Base Color and Metallic enabled. Disabling those would make it genuinely roughness-only and prevent unintended gray/dielectric coloration.",
+          "outcome": "explained"
+        }
+      ],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 10
+      },
+      "source_run": "director-live-verified"
+    },
+    {
+      "name": "plan",
+      "mode": "PLAN",
+      "prompt": "Make this suitable for a stylized PS2 game: broad color shapes, fewer fine scratches and simpler roughness. Prepare editable changes for me to review first.",
+      "image_sent": false,
+      "seconds": 35.1,
+      "response": "I\u2019ll preserve the protected green paint and existing stack, simplify rust and dirt into broad patches, reduce scratches, and replace fine roughness detail with a few steady values. This will be a review-only draft.\n\nPrepared an editable review draft\u2014not applied:\n- Broader rust and dirt patches.\n- Fewer, less prominent scratches.\n- Constant roughness values instead of orange-peel noise.\n- Subtle handle polish without fingerprint ridges.\n\nProtected green paint, seeds, screw exclusion, and layer structure are preserved.",
+      "status": "Draft ready \u2014 review changes, then Apply Draft",
+      "outcome": "draft",
+      "changes": [
+        "Broad Handle Polish > Base Color > Enabled: True \u2192 False",
+        "Broad Handle Polish > Metallic > Enabled: True \u2192 False",
+        "Broad Handle Polish > Roughness > Value: 0.25 \u2192 0.5",
+        "Broad Handle Polish > Fingerprint Ridges > Enabled: True \u2192 False",
+        "Broad Handle Polish > Name: Oily Handle Fingerprints \u2192 Broad Handle Polish",
+        "Broad Handle Polish > Opacity: 0.62 \u2192 0.3",
+        "Edge Chips and Exposed Steel > Roughness > Value: 0.44 \u2192 0.5",
+        "Edge Chips and Exposed Steel > Irregular Exposed Scratches > Black: 0.48 \u2192 0.62",
+        "Edge Chips and Exposed Steel > Irregular Exposed Scratches > Noise Scale: 42 \u2192 18",
+        "Edge Chips and Exposed Steel > Irregular Exposed Scratches > Strength: 0.82 \u2192 0.25",
+        "Edge Chips and Exposed Steel > Irregular Exposed Scratches > White: 0.73 \u2192 0.82",
+        "Bottom Accumulated Dirt > Roughness > Value: 0.93 \u2192 0.75",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > Black: 0.1 \u2192 0.3",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > Noise Scale: 4 \u2192 3",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > Procedural: GRUNGE_DIRT \u2192 PERLIN",
+        "Bottom Accumulated Dirt > Broad Dirt Breakup > White: 0.9 \u2192 0.65",
+        "Dark Soviet Green Enamel > Roughness > Procedural: ORANGE_PEEL \u2192 ",
+        "Dark Soviet Green Enamel > Roughness > Value: 0.58 \u2192 0.65",
+        "Mild Cavity Rust > Roughness > Value: 0.87 \u2192 0.75",
+        "Mild Cavity Rust > Broad Rust Patches > Black: 0.38 \u2192 0.45",
+        "Mild Cavity Rust > Broad Rust Patches > Name: Sparse Rust Breakup \u2192 Broad Rust Patches",
+        "Mild Cavity Rust > Broad Rust Patches > Noise Scale: 18 \u2192 4",
+        "Mild Cavity Rust > Broad Rust Patches > Procedural: RUST_FLAKES \u2192 PERLIN",
+        "Mild Cavity Rust > Broad Rust Patches > White: 0.7 \u2192 0.62",
+        "Steel Substrate > Roughness > Value: 0.48 \u2192 0.5"
+      ],
+      "no_mutation": true,
+      "undo_restored": true,
+      "pink_pixel_fraction": 0.0,
+      "conversation_sent": [
+        {
+          "id": "9510278eb4904bd6829d9367764bd6bd",
+          "mode": "EXPLAIN",
+          "instruction": "Why does this material still look procedural? Look at the image and identify the two most visible problems and concrete adjustments that would improve it.",
+          "response": "1. **The dirt reads as camouflage blobs, not gravity-driven buildup.**  \n   The **Bottom Accumulated Dirt** is very strong (`opacity 0.90`) and its low-frequency **GRUNGE_DIRT** breakup (`noise_scale 9`) covers much of the front panel in similarly sized patches. Narrow the WORLD_HEIGHT range toward the bottom, reduce opacity to roughly **0.55\u20130.65**, and use broader, less contrasty breakup so coverage fades upward rather than forming repeated islands.\n\n2. **The exposed steel forms an overly uniform bright outline.**  \n   **Edge Chips and Exposed Steel** is almost fully opaque (`0.96`), while the live EDGE mask has a fairly broad `0.025` distance. This creates continuous silver piping around the housing and circular detail. Reduce the edge distance to about **0.01\u20130.015**, tighten the mask thresholds, and lower layer opacity to around **0.7\u20130.8** so only intermittent high-contact edges expose steel.\n\nA secondary setup issue: **Oily Handle Fingerprints** still has Base Color and Metallic enabled. Disabling those would make it genuinely roughness-only and prevent unintended gray/dielectric coloration.",
+          "outcome": "explained"
+        },
+        {
+          "id": "8861bc272ac14eb4b9871a022e7c8b1e",
+          "mode": "REFINE",
+          "instruction": "Fix those two problems. Keep the material identity and the protected paint color.",
+          "response": "Proposed both fixes:\n- Softer, broader dirt breakup concentrated nearer the bottom, with opacity reduced to 0.60.\n- Narrower, more selective edge wear, with opacity reduced to 0.76.\n\nProtected green paint, rust, scratch patterns, and screw exclusion remain unchanged.",
+          "outcome": "applied"
+        }
+      ],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 10
+      },
+      "source_run": "director-live-verified",
+      "proposal": {
+        "version": 1,
+        "summary": "Review-only PS2-style refinement: preserve protected green enamel; broaden rust and bottom dirt, retain selective edge wear with fewer scratches, use simple constant roughness and broad roughness-only handling polish. Preserve seeds, screw exclusion, paint-loss anchor and editable layers.",
+        "commands": [
+          {
+            "op": "set_channel",
+            "layer_id": "md.c0c0af4524a1eaffddf760e859ac82ae",
+            "channel": "ROUGHNESS",
+            "values": {
+              "procedural": "",
+              "value": 0.65
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.e7527b510976088e7ac409231fceb41f",
+            "channel": "ROUGHNESS",
+            "values": {
+              "value": 0.5
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.2889adaa1ff23c52c02dfa6210e930c1",
+            "channel": "ROUGHNESS",
+            "values": {
+              "value": 0.5
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.c5dcdbe425409dd7b455d699dc4bfdaf",
+            "channel": "ROUGHNESS",
+            "values": {
+              "value": 0.75
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.2ecd70888a6b159fe4e94cba12b5e9fd",
+            "channel": "ROUGHNESS",
+            "values": {
+              "value": 0.75
+            }
+          },
+          {
+            "op": "set_mask",
+            "layer_id": "md.2889adaa1ff23c52c02dfa6210e930c1",
+            "mask_id": "md.e1a7b8180e6230bfa77502c7ce90d6de",
+            "values": {
+              "noise_scale": 18,
+              "black": 0.62,
+              "white": 0.82,
+              "strength": 0.25
+            }
+          },
+          {
+            "op": "set_mask",
+            "layer_id": "md.c5dcdbe425409dd7b455d699dc4bfdaf",
+            "mask_id": "md.f9ba9765c6c96417dfeeacabc7f3eb84",
+            "values": {
+              "name": "Broad Rust Patches",
+              "procedural": "PERLIN",
+              "noise_scale": 4,
+              "scale": [
+                1,
+                1
+              ],
+              "black": 0.45,
+              "white": 0.62
+            }
+          },
+          {
+            "op": "set_mask",
+            "layer_id": "md.2ecd70888a6b159fe4e94cba12b5e9fd",
+            "mask_id": "md.b136067e624cd405f5c0ef9e5743ef8c",
+            "values": {
+              "procedural": "PERLIN",
+              "noise_scale": 3,
+              "scale": [
+                1,
+                1
+              ],
+              "black": 0.3,
+              "white": 0.65
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.12bd2dde3ce19ef2e748b946244f8e56",
+            "channel": "BASE_COLOR",
+            "values": {
+              "enabled": false
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.12bd2dde3ce19ef2e748b946244f8e56",
+            "channel": "METALLIC",
+            "values": {
+              "enabled": false
+            }
+          },
+          {
+            "op": "set_channel",
+            "layer_id": "md.12bd2dde3ce19ef2e748b946244f8e56",
+            "channel": "ROUGHNESS",
+            "values": {
+              "value": 0.5
+            }
+          },
+          {
+            "op": "set_mask",
+            "layer_id": "md.12bd2dde3ce19ef2e748b946244f8e56",
+            "mask_id": "md.d7695f064184a326b7b1f5b4581261ee",
+            "values": {
+              "enabled": false
+            }
+          },
+          {
+            "op": "set_layer",
+            "layer_id": "md.12bd2dde3ce19ef2e748b946244f8e56",
+            "values": {
+              "name": "Broad Handle Polish",
+              "opacity": 0.3
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "handling",
+      "mode": "REFINE",
+      "prompt": "Make the existing oily fingerprints affect roughness only, only where the object would be held. Preserve every other layer.",
+      "image_sent": false,
+      "seconds": 21.91,
+      "response": "Proposed disabling Base Color and Metallic on **Oily Handle Fingerprints**. Its Roughness and existing **Handling** vertex-group mask remain unchanged; all other layers are preserved.",
+      "status": "Applied: Make the existing Oily Handle Fingerprints layer roughness-only while preserving its current Handling vertex-group localization, fingerprint pattern, opacity, and every other layer.",
+      "outcome": "applied",
+      "changes": [
+        "Oily Handle Fingerprints > Base Color > Enabled: True \u2192 False",
+        "Oily Handle Fingerprints > Metallic > Enabled: True \u2192 False"
+      ],
+      "pink_pixel_fraction": 0.0,
+      "conversation_sent": [],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 10
+      },
+      "source_run": "director-live-regions"
+    },
+    {
+      "name": "clean_screws",
+      "mode": "REFINE",
+      "prompt": "There is still dirt leaking onto the screw edges. Clean it off the screws without reducing the dirt on the housing.",
+      "image_sent": true,
+      "seconds": 14.44,
+      "response": "Proposed tightening the existing screw-exclusion mask to catch lightly weighted screw edges. Housing dirt strength and pattern remain unchanged.",
+      "status": "Applied: Tighten the existing inverted screw exclusion so low vertex-group weights at screw edges fully suppress dirt. Preserve housing dirt opacity, height distribution, breakup, seeds, and all other layers.",
+      "outcome": "applied",
+      "changes": [
+        "Bottom Accumulated Dirt > Keep Recessed Screws Dirt-Free > White: 1 \u2192 0.01"
+      ],
+      "pink_pixel_fraction": 0.0,
+      "conversation_sent": [
+        {
+          "id": "ff22d0d4f2c9443e858ebcdd870f241f",
+          "mode": "REFINE",
+          "instruction": "Make the existing oily fingerprints affect roughness only, only where the object would be held. Preserve every other layer.",
+          "response": "Proposed disabling Base Color and Metallic on **Oily Handle Fingerprints**. Its Roughness and existing **Handling** vertex-group mask remain unchanged; all other layers are preserved.",
+          "outcome": "applied"
+        }
+      ],
+      "limits_sent": {
+        "commands": 64,
+        "new_layers": 24,
+        "new_items": 128,
+        "shader_texture_inputs": 12,
+        "estimated_current_texture_inputs": 10
+      },
+      "source_run": "director-live-regions"
+    }
+  ],
+  "initial_failures": [
+    "Follow-up lost the Explain response",
+    "Reducing Multiply-mask strength was the wrong direction for less rust",
+    "Scalar attribute interpolation broadcast into a quadratic array",
+    "Unpublished scene fields shared cache identity; changed field parameters could retain old analysis",
+    "A refinement rendered pink with 17 Metal samplers",
+    "A requested roughness-only layer initially retained default color and metallic channels",
+    "Initial screw exclusion left UV-edge leakage",
+    "First-pass realism and visual diagnosis remain weak"
+  ]
+}

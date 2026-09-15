@@ -27,6 +27,23 @@ LayerEvaluator(scene).evaluate_texture_set(ts.id)
 first=images.pixels(field.image).copy()
 assert first[32,32,0]>.7 and first[0,0,0]==0
 assert not ts.baked_maps
+field.resolution='64'
+left=panel.vertex_groups.new(name='Left')
+left.add([v.index for v in panel.data.vertices if v.co.x < 0], 1., 'REPLACE')
+field.kind='VERTEX_GROUP'; field.attribute='Left'
+expected=np.broadcast_to(1-(np.arange(64)+.5)/64,(64,64))
+np.testing.assert_allclose(scene_fields.compute(ts,field),expected,atol=1e-6)
+for domain in ('POINT','CORNER','FACE'):
+    attribute=panel.data.attributes.new('Weight '+domain,'FLOAT',domain)
+    values=([float(v.co.x < 0) for v in panel.data.vertices] if domain=='POINT' else
+            [float(panel.data.vertices[loop.vertex_index].co.x < 0) for loop in panel.data.loops]
+            if domain=='CORNER' else [.3]*len(panel.data.polygons))
+    attribute.data.foreach_set('value',values)
+    field.kind='ATTRIBUTE'; field.attribute=attribute.name
+    np.testing.assert_allclose(scene_fields.compute(ts,field),.3 if domain=='FACE' else expected,atol=1e-6)
+field.kind='CONTACT'
+field.attribute=''
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
 rough.value=.2
 with Metrics() as counters:
     LayerEvaluator(scene).evaluate_texture_set(ts.id)

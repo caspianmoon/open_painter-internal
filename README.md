@@ -3,7 +3,17 @@
 
 A Blender extension for non-destructive PBR texturing: texture sets, paint and fill layers,
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
-Python and Blender's bundled NumPy are the only runtime requirements. GPL-3.0-or-later.
+Python and Blender's bundled NumPy are the core runtime requirements. GPL-3.0-or-later.
+
+**0.8.0 adds Material Director:** describe a material or a refinement and Codex proposes
+ordinary editable layers, masks, scene fields and filters. Native Codex image generation supplies
+surface textures and grayscale masks, packed into the `.blend`. Open the **Director** sidebar tab
+inside Open Painter. Create and Refine apply validated changes; Plan leaves a draft to review;
+Explain discusses the current material. Protected content, Show Changes, one-step Blender undo,
+and conflict-aware **Undo Last AI Change** keep edits reviewable. **Scene Materials** coordinates
+existing material regions in one operation. Model views and mesh-map previews are enabled by default;
+an optional reference image guides generation. This feature requires a separately installed, supported Codex runtime and account.
+See [setup, controls and current limits](docs/material-director.md).
 
 Version **0.2.9** evaluates editable layers and masks through an internal Blender
 material shader graph. Supported sliders update shader values immediately;
@@ -32,7 +42,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.2.9.zip`](dist/open_painter-0.2.9.zip).
+1. Download or build [`dist/open_painter-0.8.0.zip`](dist/open_painter-0.8.0.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
@@ -48,7 +58,8 @@ It is not a new compiled Blender SpaceType. The native editor selector remains a
 backend's selector highlight can read 3D Viewport or Image Editor while Open Painter is active.
 
 The ZIP follows Blender's [extension packaging format](https://docs.blender.org/manual/en/latest/advanced/extensions/getting_started.html).
-No online account, network connection, or separate Python installation is needed.
+Core texturing works offline without an account or separate Python installation.
+Material Director is optional and connects through the user's Codex installation.
 
 ## Texture library
 

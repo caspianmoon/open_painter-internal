@@ -45,6 +45,7 @@ from .ui.native import CLASSES as NATIVE_CLASSES
 from .ui.texture_operations import CLASSES as TEXTURE_UI_CLASSES
 
 from .properties.effect import OP_TextureEffect
+from .ui.material_director import CLASSES as DIRECTOR_CLASSES, OP_DirectorSettings
 
 CLASSES = (
     OP_TextureEffect,
@@ -109,7 +110,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES
 
 
 _registered = False
@@ -128,15 +129,19 @@ def register():
     from .ui import editor, workspace
     from .graph import operators as graph_operators
     from .ui.native import toolbar, asset_type_buttons
+    from .ai import session as director
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
             _registered_classes.append(cls)
         bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
+        bpy.types.WindowManager.open_painter_director = bpy.props.PointerProperty(type=OP_DirectorSettings)
+        _cleanups.append(lambda: delattr(bpy.types.WindowManager, 'open_painter_director'))
         for initialize, cleanup in ((cache.register,cache.unregister),
                                     (lifecycle.register,lifecycle.unregister),
                                     (editor.register,editor.unregister),
-                                    (graph_operators.register,graph_operators.unregister)):
+                                    (graph_operators.register,graph_operators.unregister),
+                                    (director.register,director.unregister)):
             # Install rollback before initialization, including partial failures.
             _cleanups.append(cleanup)
             initialize()

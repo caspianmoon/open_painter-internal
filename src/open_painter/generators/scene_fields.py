@@ -60,7 +60,9 @@ def _attribute(ts, field, n):
                 corners = np.repeat(values[target['tri_polygons'][tri]][:, None], 3, axis=1)
             else:
                 corners = values[(target['tri_vertices'] if domain == 'POINT' else target['tri_loops'])[tri]]
-            result[rows, cols] = interpolate(weights, corners)
+            # Interpolation expects a component axis, even for scalar weights.
+            # Passing (texels, 3) broadcasts into a quadratic texels-by-texels array.
+            result[rows, cols] = interpolate(weights, corners[..., None])[:, 0]
     return result
 
 

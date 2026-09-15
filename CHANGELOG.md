@@ -1,5 +1,37 @@
 # Changes
 
+## 0.8.0
+
+Material Director.
+
+- Native **Director** sidebar with Create, Refine, Plan and Explain; model and isolated-part views up to 768 px, mesh-map previews with provenance, and appearance-reference input.
+- **Scene Materials** scope coordinates up to 16 existing material regions with per-part visual inspection, one validated commit and persisted grouped undo.
+- Native Codex image generation for editable surface textures and masks, enabled by default.
+  Verified generated artifacts import as packed Blender images with channel-appropriate color spaces;
+  Plan, protected content, transactional rollback and AI Undo also cover image assignments.
+- Codex app-server companion with ChatGPT sign-in, account/model discovery, allowance display,
+  cancellation, OS keyring or session-only credentials, and isolated application state.
+- Validated authoring batches create editable fill/folder layers, channel controls, masks, scene
+  fields, filters, shared anchors, and bundled material/effect/module recipes.
+- Scoped edits, protected paint and explicit layer/channel/mask locks, stale-input detection,
+  bounded persisted change receipts, rollback, idempotency, and conflict-aware AI undo.
+- One Blender undo step per committed batch. Numeric edits retain the native shader path without
+  rasterizing texture outputs. Load, undo, disconnect and cancellation invalidate pending drafts.
+- Real ChatGPT-account use cases tested through Codex `0.154.0-alpha.6.2`: creation, refinement,
+  spatial follow-ups, viewport critique, and Plan/Apply/Undo. First-pass realism remains weak;
+  see the [live acceptance report](docs/material-director-live-validation.md).
+- Live testing fixes: recent conversation for follow-ups, accurate mask/default-channel guidance,
+  a conservative proposal texture budget, and scene-analysis readiness checks.
+- Fixed scalar scene-attribute interpolation, distinct unpublished field resources, and live field
+  parameter changes retaining stale analysis.
+- Robustness fixes: a material edited during a Create/Refine turn reports a stale draft instead of
+  disconnecting Codex; the companion queues its output so a stalled Blender main thread (bake,
+  shader compile) no longer ends the session; a late interrupt error cannot cancel the next
+  instruction; 4K+ mesh-map and reference previews read pixels once instead of seconds per map;
+  change reports name removed masks and filters; `set_filter` on a channel requires its
+  `effect_id`; linked-object bindings resolve by full name.
+- See [Material Director](docs/material-director.md) for setup and supported scope.
+
 ## 0.7.0
 
 Material → Geometry.

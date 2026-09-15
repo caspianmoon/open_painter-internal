@@ -60,6 +60,27 @@ with Metrics() as observed:
     assert observed.counts['shader_resource_requests'] == 0
 assert not ts.outputs
 print('INSTALLED_NATIVE_SHADER_PASS', shader_preview.diagnostics(bpy.context.scene, ts))
+director = importlib.import_module(module + '.ai.session')
+document = importlib.import_module(module + '.authoring.document')
+transactions = importlib.import_module(module + '.authoring.transactions')
+assert director.preferences().as_pointer() == bpy.context.preferences.addons[module].preferences.as_pointer()
+assert hasattr(bpy.types.WindowManager, 'open_painter_director')
+assert not director.preferences().director_share_context
+settings = bpy.context.window_manager.open_painter_director
+assert settings.send_view and settings.send_maps and settings.generate_textures
+assert hasattr(settings, 'reference_path')
+settings.scope = 'SCENE'
+assert settings.scope == 'SCENE'
+context_api = importlib.import_module(module + '.authoring.context')
+assert {'get_material_context', 'propose_scene_changes'} <= {tool['name'] for tool in context_api.tools(True)}
+assert 'Coordinating a full scene' in context_api.INSTRUCTIONS
+settings.scope = 'SET'
+receipt = transactions.apply(ts, dict(version=1, summary='Installed Director', commands=[
+    dict(op='set_channel', layer_id=ts.layers[0].id, channel='ROUGHNESS', values=dict(value=.62))]),
+    operation_id='installed-director', expected_digest=document.digest(ts))
+assert receipt['changes'] and abs(stack.channel_for(ts.layers[0], 'ROUGHNESS').value - .62) < 1e-6
+assert shader_preview.current(bpy.context.scene, ts)
+print('INSTALLED_MATERIAL_DIRECTOR_PASS')
 assert bpy.ops.open_painter.texture_set(action="REFRESH") == {"FINISHED"}
 addon_utils.disable(module, default_set=True)
 print(

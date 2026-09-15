@@ -18,6 +18,13 @@ class OP_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
     developer_mode: bpy.props.BoolProperty(name="Developer Mode", update=update_debug)
     library_directory: bpy.props.StringProperty(name="Smart Material Library", subtype="DIR_PATH")
+    director_codex_binary: bpy.props.StringProperty(name="Codex Executable", subtype="FILE_PATH",
+        description="Supported Codex CLI executable; empty finds codex on PATH")
+    director_credentials: bpy.props.EnumProperty(name="Account Storage", default="keyring", items=[
+        ("keyring", "OS Keyring", "Keep Codex credentials in the operating system credential store"),
+        ("ephemeral", "This Connection Only", "Sign in again after disconnecting; keep credentials in memory")])
+    director_share_context: bpy.props.BoolProperty(name="Share Material Context with Codex",
+        description="Allow selected material/mesh summaries, enabled model/map previews and a chosen reference image to be sent through your Codex account")
     texture_cache_mb: bpy.props.IntProperty(
         name="Texture Cache (MiB)", default=256, min=0, max=8192,
         description="Shared disposable CPU cache across all texture sets; excludes editable images and working memory",
@@ -31,5 +38,9 @@ class OP_Preferences(bpy.types.AddonPreferences):
         self.layout.prop(self, "library_directory")
         self.layout.prop(self, "texture_cache_mb")
         self.layout.prop(self, "live_preview_budget_mb")
+        box = self.layout.box()
+        box.label(text="Material Director")
+        from .ui.material_director import connection_settings
+        connection_settings(box, self)
         from .evaluation.memory import shared
         self.layout.label(text=f"Cached CPU data: {shared.used / 1048576:.1f} MiB")

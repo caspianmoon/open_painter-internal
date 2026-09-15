@@ -41,6 +41,7 @@ def _changed(self, context, structural):
 
 
 class OP_Layer(bpy.types.PropertyGroup):
+    director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
     effect_semantic: bpy.props.EnumProperty(name='Age Response',items=[(k,k.replace('_',' ').title(),'Explicit artistic effect role')
         for k in ('NONE','DIRT','DUST','FADE','SCRATCHES','OXIDATION','COATING_LOSS')])
     id: bpy.props.StringProperty()

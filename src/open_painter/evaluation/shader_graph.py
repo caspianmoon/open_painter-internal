@@ -1309,7 +1309,10 @@ class Graph(Math):
             if field_jobs.active():
                 # The published raster is the identity: the field engine analyses
                 # off the evaluation path and republishes (new image) when done.
-                return (field.mode, field.provenance, image_key(field.image), falloff)
+                # Unpublished fields must not all share the same empty resource:
+                # its first factory only queues analysis for one owning mask.
+                inputs = values(field, excluded={'image', 'provenance', 'error'})
+                return (field.mode, field.path_from_id(), inputs, field.provenance, image_key(field.image), falloff)
             from ..generators.scene_fields import signature
             return (field.mode, signature(self.ts, field), falloff)
         return (field.mode, image_key(field.image), field.update_serial, falloff)
@@ -1805,10 +1808,15 @@ class Graph(Math):
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
         self._previous = None
+        # A batch can alter topology and numeric/image inputs together. Adopted
+        # units retain their nodes, but their uniforms and resource identities
+        # must be reconciled before marking this replacement graph current.
+        corrections = self.update(check_structure=False) if self._reused else {}
         from .references import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
-        self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': list(CHANNELS),
-                      'updated_bindings': 0, 'raster_boundaries_queued': len(self.resources.queue),
+        self._last = {'parameter_changes': corrections.get('parameter_changes', []),
+                      'invalidated_nodes': corrections.get('invalidated_nodes', []), 'affected_channels': list(CHANNELS),
+                      'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': len(self.resources.queue),
                       'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
                       'build_ms': (perf_counter() - started) * 1000,
                       'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,

@@ -41,6 +41,10 @@ Material Director.
   Shift+A adds masks (generators, procedurals, scene fields, filters, anchors, published inputs)
   and channel filters to the active layer; dragging chain or backdrop links reorders masks,
   filters and layers; deleting a mask/filter node deletes it. See [Open Graph](docs/open-graph.md).
+- Graph edits are diffed against what the tree last showed, so a link edit made before the graph
+  caught up with a panel change no longer clears a fresh reference; new mask/filter nodes are placed
+  next to their (possibly moved) layer node; duplicated or pasted nodes and deleted frames are
+  reconciled; filter nodes are labelled by kind.
 - See [Material Director](docs/material-director.md) for setup and supported scope.
 
 ## 0.7.0

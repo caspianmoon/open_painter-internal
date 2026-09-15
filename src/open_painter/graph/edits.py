@@ -248,24 +248,19 @@ def on_tree_update(tree):
     ts = mirror.texture_set_of(tree, getattr(bpy.context, 'scene', None))
     if ts is None:
         return
-    nodes, _, projected = mirror.project(ts)
-    expected = {tuple(link) for link in projected}
+    shown_links, shown_nodes = mirror.synced(tree)
     actual = link_keys(tree)
     status, touched = None, set()
-    # A missing mask/filter node is a deletion, but only while the tree was in
-    # sync: a stale tree simply has not drawn a mask added in the panel yet.
-    if tree.get('op_signature') == mirror.signature(ts):
-        present = set(mirror.nodes_by_id(tree))
-        for identifier, spec in nodes.items():
-            if spec['kind'] in {'MASK', 'EFFECT'} and identifier not in present:
-                try:
-                    delete(ts, identifier)
-                except LinkError as error:
-                    status = str(error)
-                tree['op_links_dirty'] = True
-        nodes, _, projected = mirror.project(ts)
-        expected = {tuple(link) for link in projected}
-    for source, from_socket, target, to_socket in sorted(actual - expected):
+    # Diff against what the tree showed after its last sync: a projection the
+    # tree has not caught up with (a mask just added in the panel) is not an edit.
+    present = set(mirror.nodes_by_id(tree))
+    for identifier in sorted(shown_nodes - present):
+        try:
+            delete(ts, identifier)
+        except LinkError as error:
+            status = str(error)
+        tree['op_links_dirty'] = True
+    for source, from_socket, target, to_socket in sorted(actual - shown_links):
         touched.add((target, to_socket))
         try:
             if is_chain_link(ts, source, from_socket, target, to_socket):
@@ -277,7 +272,7 @@ def on_tree_update(tree):
         except ValueError as error:   # layer_stack refusals (folder cycles)
             status = str(error)
         tree['op_links_dirty'] = True
-    for source, from_socket, target, to_socket in sorted(expected - actual):
+    for source, from_socket, target, to_socket in sorted(shown_links - actual):
         tree['op_links_dirty'] = True
         # An input that just received a link was either re-pointed (the field
         # already changed) or kept its reference after a refusal; the sync
@@ -285,6 +280,12 @@ def on_tree_update(tree):
         if target == OUTPUT_NODE or (target, to_socket) in touched:
             continue
         disconnect(ts, target, to_socket)
+    if len(tree.nodes) != tree.get('op_node_count', len(tree.nodes)):
+        tree['op_links_dirty'] = True   # a deleted frame/layer node or a pasted duplicate: redraw
+    # Edits made before the next sync diff against the tree as it is now.
+    tree['op_links'] = ['\t'.join(key) for key in actual]
+    tree['op_nodes'] = sorted(shown_nodes & present)
+    tree['op_node_count'] = len(tree.nodes)
     if status:
         scene = getattr(bpy.context, 'scene', None)
         if scene is not None:

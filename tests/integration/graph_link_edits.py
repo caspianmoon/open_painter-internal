@@ -207,5 +207,26 @@ assert (mirror.mask_node_id(added, 1, added.masks[1]), 'out', child_id, 'mask') 
 channel_anchor = stack.channel_for(added, 'ROUGHNESS').effects[1].id
 assert (channel_anchor, 'out', child_id, 'content#ROUGHNESS') in keys
 print('GRAPH_LINKS add menu: PASS', flush=True)
+
+# 9. Robustness: a stale tree, duplicated nodes and deleted frames.
+scratch = layer(child_id).masks.add(); scratch.id, scratch.source, scratch.reference_anchor = new_id(), 'REFERENCE', anchor_id
+link = next(l for l in tree.links if l.to_node.op_id == child_id and l.to_socket.identifier == 'mask')
+tree.links.remove(link)        # a user edit before the tick reconciled the new mask
+assert layer(child_id).masks[-1].reference_anchor == anchor_id, 'stale-tree edit cleared a fresh reference'
+settle()
+nodes = by_id()
+nodes[child_id].location_absolute = (4000., -2000.)
+extra_mask = layer(child_id).masks.add(); extra_mask.id, extra_mask.source = new_id(), 'NOISE'
+settle()
+x, y = by_id()[extra_mask.id].location_absolute
+assert abs(y + 2000.) < 1 and 0 < 4000. - x < 2000, (x, y)   # placed on its moved layer's row
+duplicate = tree.nodes.new('OPMaskNode'); duplicate.op_id, duplicate.op_kind = extra_mask.id, 'MASK'
+frame = next(n for n in tree.nodes if n.bl_idname == 'NodeFrame')
+tree.nodes.remove(frame)
+assert tree.get('op_links_dirty')
+settle()
+assert sum(1 for n in tree.nodes if getattr(n, 'op_id', '') == extra_mask.id) == 1
+assert any(n.bl_idname == 'NodeFrame' for n in tree.nodes)
+print('GRAPH_LINKS robustness: PASS', flush=True)
 print('GRAPH_LINK_EDITS_PASS', flush=True)
 open_painter.unregister()

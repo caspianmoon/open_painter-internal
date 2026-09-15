@@ -153,9 +153,12 @@ def project(ts):
             for index, effect in enumerate(prop.effects):
                 identifier = effect_node_id(layer, prop.channel, index, effect)
                 kind = _content_socket(prop.channel)
-                label = effect.name or effect.kind.replace('_', ' ').title()
+                # The name property defaults to "Levels" whatever the kind: trust it only
+                # when it was set to something else (anchors are named by the artist).
+                kind_label = effect.kind.replace('_', ' ').title()
+                label = effect.name if effect.name and effect.name != 'Levels' else kind_label
                 if effect.kind == 'ANCHOR':
-                    label = 'Anchor: ' + label
+                    label = 'Anchor: ' + (effect.name or kind_label)
                 nodes[identifier] = {'kind': 'EFFECT', 'label': f'{label} ({CHANNEL_LABELS.get(prop.channel, prop.channel)})',
                                      'inputs': [('in', 'Content', kind)], 'outputs': [('out', 'Content', kind)],
                                      'frame': own_frame, 'owner': layer.id, 'channel': prop.channel}
@@ -272,6 +275,12 @@ def texture_set_of(tree, scene=None):
 
 # ---- reconciliation ------------------------------------------------------------
 
+def synced(tree):
+    """(link keys, mask/filter node ids) the tree showed after its last reconcile."""
+    links = {tuple(item.split('\t')) for item in tree.get('op_links', [])}
+    return links, set(tree.get('op_nodes', []))
+
+
 def nodes_by_id(tree):
     return {node.op_id if hasattr(node, 'op_id') else node.get('op_id', ''): node for node in tree.nodes}
 
@@ -303,6 +312,13 @@ def reconcile(tree, ts, force_layout=False):
     """Edit ``tree`` in place until it equals ``project(ts)``; positions of known nodes survive."""
     nodes, frames, links = project(ts)
     with syncing():
+        # Duplicated or pasted nodes share an id with the original: keep one.
+        seen = set()
+        for node in list(tree.nodes):
+            identifier = node.op_id if hasattr(node, 'op_id') else node.get('op_id', '')
+            if identifier in seen:
+                tree.nodes.remove(node)
+            seen.add(identifier)
         existing = nodes_by_id(tree)
         for identifier, node in list(existing.items()):
             wanted = (identifier in nodes and node.bl_idname == NODE_TYPES[nodes[identifier]['kind']]) or \
@@ -351,6 +367,11 @@ def reconcile(tree, ts, force_layout=False):
         place(tree, ts, existing, nodes, links, only=None if force_layout else set(created))
         tree['op_signature'] = signature(ts)
         tree['op_serial'] = ts.edit_serial
+        # What the tree shows now: user edits are diffed against this, never
+        # against a projection the tree may not have caught up with yet.
+        tree['op_links'] = ['\t'.join(link) for link in links]
+        tree['op_nodes'] = [identifier for identifier, spec in nodes.items() if spec['kind'] in {'MASK', 'EFFECT'}]
+        tree['op_node_count'] = len(tree.nodes)
     return tree
 
 
@@ -384,8 +405,16 @@ def place(tree, ts, existing, nodes, links, only=None):
         if only is not None and identifier not in only:
             continue
         node = existing.get(identifier)
-        if node is not None:
-            node.location_absolute = (x, y)
+        if node is None:
+            continue
+        owner = nodes[identifier].get('owner', '')
+        if only is not None and owner and owner != identifier and owner not in only and owner in existing:
+            # A new mask/filter joins a layer the user may have moved: keep the
+            # layout's offset from the layer, applied to where the layer really is.
+            ox, oy = coordinates.get(owner, (x, y))
+            ax, ay = existing[owner].location_absolute
+            x, y = ax + (x - ox), ay + (y - oy)
+        node.location_absolute = (x, y)
 
 
 # ---- lifecycle -----------------------------------------------------------------
@@ -524,7 +553,10 @@ def draw_mask(layout, ts, layer, mask):
     elif mask.source == 'ANCHOR':
         layout.label(text='Publishes the coverage so far', icon='ANCHOR_CENTER')
     for name in MASK_CONTROLS.get(mask.source, ()):
-        layout.prop(mask, name, text='' if name in {'generator', 'map_type', 'edge_source'} else None)
+        if name in {'generator', 'map_type', 'edge_source'}:
+            layout.prop(mask, name, text='')
+        else:
+            layout.prop(mask, name)
     if mask.source not in {'ANCHOR', 'REFERENCE'}:
         row = layout.row(align=True)
         row.prop(mask, 'black', text='Black')

@@ -100,8 +100,12 @@ class OP_OT_graph_select(SafeOperator, bpy.types.Operator):
                 ui.selected_layers, ui.mask_selected = {self.layer_id}, self.mask_index >= 0
                 area.tag_redraw()
         if is_graph(tree):
-            tree['op_active'] = self.layer_id
-            tree['op_active_node'] = self.layer_id if self.mask_index < 0 and self.effect_index < 0 else ''
+            node_id = self.layer_id
+            if 0 <= self.mask_index < len(layer.masks):
+                node_id = mirror.mask_node_id(layer, self.mask_index, layer.masks[self.mask_index])
+            elif self.channel and 0 <= self.effect_index < len(prop.effects):
+                node_id = mirror.effect_node_id(layer, self.channel, self.effect_index, prop.effects[self.effect_index])
+            tree['op_active'], tree['op_active_node'] = self.layer_id, node_id
 
 
 def _graph_target(context):

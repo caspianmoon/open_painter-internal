@@ -610,6 +610,9 @@ class OP_UL_native_layers(bpy.types.UIList):
             )
             op.layer_id, op.mask = layer.id, True
         row.prop(layer, "name", text="", emboss=False)
+        if layer.type == "FOLDER" and layer.module_id:
+            row.label(text="" if compact else f"v{layer.module_version}",
+                      icon="UNLINKED" if layer.module_detached else "PACKAGE")
         if any(m.source == "ANCHOR" for m in layer.masks) or any(
                 e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
             row.label(text="", icon="ANCHOR_CENTER")
@@ -653,6 +656,7 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
         tools.separator()
         tools.operator("open_painter.open_graph", text="", icon="NODETREE")
+        tools.operator("open_painter.module_insert", text="", icon="PACKAGE")
         tools.operator("open_painter.catalog_material", text="", icon="ASSET_MANAGER")
         tools.operator("open_painter.catalog_effect", text="", icon="MODIFIER")
         tools.separator()
@@ -740,6 +744,8 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             layout.prop(layer, "group_mode", text="Blend")
             layout.label(text="Folder masks affect all child layers.")
             draw_publish_controls(layout, ts, layer)
+            from .modules import draw_module_box
+            draw_module_box(layout, context, ts, layer)
             return
         draw_publish_controls(layout, ts, layer)
         if layer.type == "PAINT":

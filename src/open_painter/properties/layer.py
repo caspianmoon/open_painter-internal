@@ -80,3 +80,12 @@ class OP_Layer(bpy.types.PropertyGroup):
         description="Publish this layer's blended result as an anchor other layers can read")
     publish_group: bpy.props.BoolProperty(name="Publish Folder Composite", default=False, update=changed,
         description="Publish the folder's child composite, before the folder itself blends, as an anchor")
+    # Material module identity on an instance root folder (0.4.1). Metadata only:
+    # ids inside the instance are "<module_instance>.<module id>".
+    module_id: bpy.props.StringProperty(description="Module definition this folder is an instance of")
+    module_version: bpy.props.IntProperty(default=0, description="Module version this instance was inserted from or updated to")
+    module_source: bpy.props.StringProperty(description="library:<file> or catalog:<recipe> the module came from")
+    module_instance: bpy.props.StringProperty(description="Namespace token of this instance's ids")
+    module_name: bpy.props.StringProperty()
+    module_detached: bpy.props.BoolProperty(default=False, name="Detached",
+        description="Keep the module provenance but exclude this instance from updates")

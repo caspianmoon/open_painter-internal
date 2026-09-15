@@ -1,5 +1,23 @@
 # Changes
 
+## 0.4.2
+
+Material modules: reusable, versioned folder subtrees that update in place.
+
+- Save Folder as Module writes a versioned `.openpaintmaterial` (format 4, a `module`
+  block naming the root) with the subtree in the module's own id space; Insert Module
+  places instances under a fresh namespace so several instances coexist and references
+  from outside into an instance survive updates. Update / Update All apply a newer
+  version as a three-way merge: the definition's changes land, your edits stay, both-
+  changed values keep yours and are listed; painted images are always the instance's;
+  layers you added inside stay. Detach opts out; Replace discards local edits.
+- Catalog materials insert as module instances of their recipe (deterministic ids, same
+  pixels) so a recipe version bump updates existing materials the same way. Built-in
+  catalog modules (first: Damage) can be inserted directly or nested in recipes with
+  per-recipe overrides that survive updates of the shared module.
+- Layer rows badge module instances with their version; folder properties carry the
+  module box. See docs/material-modules.md.
+
 ## 0.4.0
 
 Open Graph release: the first step of the live-graph programme.

@@ -5,6 +5,7 @@ import math
 from zipfile import ZipFile, is_zipfile
 
 VERSION = 3  # 3: anchor points (anchor ids on masks, channels and filter items)
+MODULE_VERSION = 4  # 4: optional "module" block (a versioned folder subtree with stable ids)
 MAX_BYTES = 512 * 1024 * 1024
 
 
@@ -29,7 +30,7 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
         if path.stat().st_size > 4 * 1024 * 1024:
             raise ValueError("Smart material JSON is too large.")
         data = json.loads(path.read_text())
-    if data.get("format_version") not in {1, 2, VERSION}:
+    if data.get("format_version") not in {1, 2, VERSION, MODULE_VERSION}:
         raise ValueError("Unsupported smart material version.")
 
     def validate_assets(value):
@@ -84,6 +85,21 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
                 raise ValueError("Invalid smart material folder hierarchy.")
             seen.add(parent)
             parent = by_id[parent].get("parent_id", "")
+    module = data.get("module")
+    if module is not None:
+        if (not isinstance(module, dict) or not isinstance(module.get("id"), str) or not module["id"]
+                or not isinstance(module.get("version"), int) or module["version"] < 1
+                or not isinstance(module.get("name", ""), str)):
+            raise ValueError("Invalid module metadata.")
+        module_root = module.get("root")
+        if module_root not in by_id or by_id[module_root].get("type") != "FOLDER":
+            raise ValueError("Module root must be a folder in the document.")
+        for layer in layers:
+            cursor = layer["id"]
+            while cursor and cursor != module_root:
+                cursor = by_id[cursor].get("parent_id", "")
+            if cursor != module_root:
+                raise ValueError("Every module layer must descend from the module root.")
     # Reference cycles are item-granular and checked by references.issues once
     # the layers exist; the loader rolls back on failure. Anchor ids that do
     # not resolve import verbatim and report as missing rather than rejecting.

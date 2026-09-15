@@ -8,10 +8,15 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import bpy
 
 from ..core.layer_stack import snapshot
-from .format import VERSION
+from .format import MODULE_VERSION, VERSION
 
 
-def save(ts, path: str | Path) -> Path:
+def save(ts, path: str | Path, root_id=None, module=None) -> Path:
+    """Write the whole set, or the subtree under ``root_id`` as a module document.
+
+    A module document stores the subtree in the module's own id space (instance
+    namespaces stripped) with a ``module`` block ``{id, version, name, root, ...}``.
+    """
     from ..evaluation.references import issues
     errors = issues(ts)
     if errors:
@@ -64,13 +69,41 @@ def save(ts, path: str | Path) -> Path:
         for key in ('baseline','resolved'):
             state[key]={k:v for k,v in state.get(key,{}).items() if k in live}
         state['overrides']=[k for k in state.get('overrides',[]) if k in live]
+    if root_id is None:
+        layers = [layer_data(layer) for layer in ts.layers]
+    else:
+        from . import modules
+        from ..utils.ids import new_id
+        root = next((layer for layer in ts.layers if layer.id == root_id), None)
+        if root is None or root.type != 'FOLDER':
+            raise ValueError('Save a folder as a module.')
+        members = modules.subtree(ts, root_id)
+        # Filter items merge by id across versions: every effect needs one.
+        for layer in members:
+            for channel in layer.channels:
+                for effect in channel.effects:
+                    if not effect.id:
+                        effect.id = new_id()
+        layers = [layer_data(layer) for layer in members]
+        layers = modules.remap(layers, modules.denamespace_mapping(layers, root.module_instance))
+        plain_root = modules.plain_id(root_id, root.module_instance)
+        for layer in layers:
+            for key in modules.VOLATILE:
+                if key.startswith('module_'):
+                    layer.pop(key, None)
+            if layer['id'] == plain_root:
+                layer['parent_id'] = ''   # the module's context is not part of the module
+        module = dict(module or {}, root=plain_root)
+        state = {}
     data = {
-        "format_version": VERSION,
-        "name": ts.name,
-        "layers": [layer_data(layer) for layer in ts.layers],
+        "format_version": MODULE_VERSION if root_id is not None else VERSION,
+        "name": ts.name if root_id is None else (module.get('name') or root.name),
+        "layers": layers,
         "surface": {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")},
         'authoring_state': state,
     }
+    if root_id is not None:
+        data['module'] = module
     temp_scene = bpy.data.scenes.new("OP Asset Encoding")
     try:
         fmt = temp_scene.render.image_settings

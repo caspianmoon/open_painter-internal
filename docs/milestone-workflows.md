@@ -22,6 +22,12 @@ not replace the editor or the material library.
   publishes the layer's blended output (*Layer Output*) or, on folders, the child
   composite (*Folder Composite*) as anchors any Published Input mask, fill Content
   or Micro Detail can pick; composite consumers choose which channel they read.
+- **Material modules (0.4.1):** folder properties → *Module* → Save Folder as
+  Module writes a versioned `.openpaintmaterial` to the library; the package icon in
+  the Layers strip inserts instances (library modules and the built-in Damage);
+  Update / Update All merge a newer version into instances keeping your edits and
+  listing conflicts; Detach opts a folder out. Catalog materials are module instances
+  of their recipe and update the same way. [Details](material-modules.md).
 - **Anchor points:** Add Mask Effect → Add Anchor Point places a row that publishes
   the mask coverage above it; FILTERS → Anchor publishes a channel after the
   filters above it. Pick an anchor on a Published Input mask, on a fill channel's

@@ -12,7 +12,9 @@ import bpy
 from ..core import layer_stack as stack
 from ..texture_engine.procedurals import ALIASES, CATALOG as PROCEDURALS
 from ..utils.ids import new_id
-from .catalog import CATALOG, DIRT, DUST, OIL, PATINA, RUST, STEEL, layer, mask
+from uuid import UUID, uuid5
+
+from .catalog import CATALOG, DIRT, DUST, OIL, PATINA, RUST, STEEL, layer, mask, recipe as recipe_block
 from . import generated_sources
 
 SURFACE_DEFAULTS = {"anisotropy": 0, "coat_weight": 0, "coat_roughness": .03,
@@ -244,6 +246,84 @@ def _baked_image(ts, kind):
                  if entry.kind == kind and entry.image and all(entry.image.size)), None)
 
 
+# Reusable catalog modules: recipes can nest them (recipe(..., modules=[(name, overrides)]))
+# and artists insert them directly. Versioned like recipes; instances update in place.
+MODULES = {
+    "Damage": {**recipe_block("Modules", "Scratches, edge wear, cavity dirt and rust in one updatable folder",
+                              EFFECTS["Scratches"], EFFECTS["Edge Wear"], EFFECTS["Dirt"], EFFECTS["Rust"]),
+               "version": 1},
+}
+
+CATALOG_NAMESPACE = UUID("6d1c3d2e-7d5a-4f3a-9b0e-2f0e9a8b5c11")
+
+
+def catalog_module_id(name):
+    """Stable module id of a catalog recipe or catalog module."""
+    return uuid5(CATALOG_NAMESPACE, "catalog:" + name).hex
+
+
+def _stamp_module(ts, folder_id, name, data, token=None, nested=()):
+    """Give a freshly built recipe folder deterministic module ids and an instance namespace.
+
+    Ids derive from the module id and the item's name/position, so the same
+    recipe version builds the same ids every time (the merge on update matches
+    layers by id); the instance token keeps several instances apart. Layers of
+    ``nested`` module instances keep their own ids.
+    """
+    from . import modules
+    module_id = catalog_module_id(name)
+    version = int(data.get("version", 1))
+    token = token or new_id()[:8]
+    members = modules.subtree(ts, folder_id)
+    skip = set()
+    for child in nested:
+        skip.update(layer.id for layer in modules.subtree(ts, child))
+    mapping, seen = {}, {}
+    for layer in members:
+        if layer.id in skip:
+            continue
+        key = "folder" if layer.id == folder_id else layer.name
+        seen[key] = seen.get(key, 0) + 1
+        label = key if seen[key] == 1 else f"{key}#{seen[key]}"
+        mapping[layer.id] = uuid5(UUID(module_id), "layer:" + label).hex
+        for index, item in enumerate(layer.masks):
+            mapping[item.id] = uuid5(UUID(module_id), f"mask:{label}:{index}").hex
+        for prop in layer.channels:
+            for index, effect in enumerate(prop.effects):
+                if not effect.id:
+                    effect.id = new_id()
+                mapping[effect.id] = uuid5(UUID(module_id), f"effect:{label}:{prop.channel}:{index}").hex
+    from ..evaluation.anchors import derived_mapping
+    instance = derived_mapping({old: f"{token}.{new}" for old, new in mapping.items()})
+    for layer in members:
+        if layer.id in skip:
+            if layer.parent_id in instance:
+                layer.parent_id = instance[layer.parent_id]
+            continue
+        layer.id = instance[layer.id]
+        layer.parent_id = instance.get(layer.parent_id, layer.parent_id)
+        for item in layer.masks:
+            item.id = instance[item.id]
+            for field in ("reference_layer", "reference_mask", "reference_anchor",
+                          "detail_height_anchor", "detail_normal_anchor"):
+                value = getattr(item, field)
+                if value:
+                    setattr(item, field, instance.get(value, value))
+        for prop in layer.channels:
+            prop.layer_id = layer.id
+            if prop.anchor:
+                prop.anchor = instance.get(prop.anchor, prop.anchor)
+            for effect in prop.effects:
+                effect.id = instance.get(effect.id, effect.id)
+    folder = next(layer for layer in ts.layers if layer.id == instance[folder_id])
+    folder.module_id, folder.module_version, folder.module_source = module_id, version, "catalog:" + name
+    folder.module_instance, folder.module_name, folder.module_detached = token, name, False
+    snapshots = [stack.snapshot(layer) for layer in modules.subtree(ts, folder.id)]
+    modules.write_base(module_id, version,
+                       modules.comparable(modules.remap(snapshots, modules.denamespace_mapping(snapshots, token))))
+    return folder
+
+
 def _fill(ts, spec, parent_id, seed):
     item = stack.add(ts, "FILL", spec["name"], parent_id)
     item.opacity = spec.get("opacity", 1)
@@ -365,13 +445,22 @@ def apply(ts, name, seed=1):
     return apply_document(ts,CATALOG[name],name,seed)
 
 
-def apply_document(ts,data,name='Declarative Material',seed=1):
-    """Apply validated data without installing code or modifying the catalog."""
+def apply_document(ts,data,name='Declarative Material',seed=1,token=None,parent_id=None,surface=True):
+    """Apply validated data without installing code or modifying the catalog.
+
+    The folder becomes a module instance of the recipe (deterministic ids under
+    the instance ``token``). Nested catalog modules (``data['modules']``) are
+    inserted inside it with their own tokens derived from this instance's.
+    """
     preflight(ts, data, name)
+    for module_name, _ in data.get("modules", ()):
+        preflight(ts, MODULES[module_name], module_name)
     before = _state(ts)
     before_images = {image.as_pointer() for image in bpy.data.images}
     active = stack.active(ts)
-    parent_id = active.parent_id if active else ""
+    if parent_id is None:
+        parent_id = active.parent_id if active else ""
+    token = token or new_id()[:8]
     try:
         folder = stack.add(ts, "FOLDER", name, parent_id)
         folder_id = folder.id
@@ -380,15 +469,54 @@ def apply_document(ts,data,name='Declarative Material',seed=1):
         folder.group_mode = "ISOLATED"
         for index, spec in enumerate(data["layers"]):
             _fill(ts, spec, folder_id, _seed(name, index, seed))
-        for key, default in SURFACE_DEFAULTS.items():
-            setattr(ts, key, data.get("surface", {}).get(key, default))
-        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == folder_id)
+        nested = []
+        for module_name, overrides in data.get("modules", ()):
+            child_token = nested_token(name, token, module_name)
+            child = apply_document(ts, MODULES[module_name], module_name, seed, token=child_token,
+                                   parent_id=folder_id, surface=False)
+            _override(ts, child, overrides)
+            nested.append(child.id)
+        if surface:
+            for key, default in SURFACE_DEFAULTS.items():
+                setattr(ts, key, data.get("surface", {}).get(key, default))
+        folder = _stamp_module(ts, folder_id, name, data, token=token, nested=nested)
+        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == folder.id)
         stack.invalidate(ts)
         return ts.layers[ts.active_layer]
     except Exception:
         _rollback(ts, before)
         generated_sources.discard_unused_new_images(before_images)
         raise
+
+
+def nested_token(name, token, module_name):
+    """Instance token of a catalog module nested in recipe ``name``'s instance ``token``."""
+    return uuid5(UUID(catalog_module_id(name)), f"{token}:{module_name}").hex[:8]
+
+
+def _override(ts, folder, overrides):
+    """Apply per-recipe parameter overrides to a nested module instance: {layer name: {field: value}}.
+
+    They are ordinary local edits relative to the module's base, so updating the
+    module keeps them.
+    """
+    from . import modules
+    by_name = {layer.name: layer for layer in modules.subtree(ts, folder.id)}
+    for layer_name, fields in (overrides or {}).items():
+        target = by_name.get(layer_name)
+        if target is None:
+            raise ValueError(f"Module override names an unknown layer: {layer_name}")
+        for field, value in fields.items():
+            if field.startswith("mask."):
+                for item in target.masks:
+                    setattr(item, field[5:], value)
+            elif "." in field:
+                channel, attribute = field.split(".", 1)
+                prop = stack.channel_for(target, channel)
+                if prop is not None:
+                    setattr(prop, attribute, value)
+            else:
+                setattr(target, field, value)
 
 
 def apply_effect(ts, name, seed=1):

@@ -85,10 +85,13 @@ def layer(name, color, roughness, metallic=0.0, *, procedural=None,
     return result
 
 
-def recipe(category, description, *layers, surface=None):
-    result = {"category": category, "description": description, "layers": list(layers)}
+def recipe(category, description, *layers, surface=None, version=1, modules=()):
+    """A catalog entry; ``modules`` nests catalog modules as (name, {layer: {field: value}})."""
+    result = {"category": category, "description": description, "layers": list(layers), "version": version}
     if surface:
         result["surface"] = surface
+    if modules:
+        result["modules"] = list(modules)
     return result
 
 

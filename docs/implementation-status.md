@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Material modules 0.4.1 / 0.4.2 — 2026-09-15
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Module documents (format 4), subtree save with stable ids, namespaced instances, outside references surviving updates, v1–v3 readers | done | `tests/integration/module_documents.py` |
+| Three-way update: applied, kept, conflict-reported, painted images local, replace, rollback, equals a fresh insert with the same overrides | done | `tests/integration/module_update.py`, `tests/unit/test_module_merge.py` |
+| Catalog recipes as module instances; catalog modules (Damage) nested with overrides; catalog updates preserving nested instances | done, pixels unchanged | `tests/integration/catalog_modules.py` |
+| Graph detail frame (per-mask/effect nodes for the active layer) | deferred to a later release | plan |
+
 ## Open Graph and published outputs 0.4.0 — 2026-09-15
 
 First release of the `gamechanger.md` programme (pillar 1: a live node view with real

@@ -146,6 +146,16 @@ sets, layers and properties occupy the right sidebar; assets use the bottom shel
 shortcuts control the toolbar/sidebar. The modeling toolbar starts hidden. Legacy GPU dock drawing
 and modal input routing remain historical code paths and do not render the active interface.
 
+Layer rows reorder by mouse without custom drawing or event interception. Blender applies a list
+row on mouse press, which updates `active_layer`; that property's update callback, when the row
+under the mouse belongs to the Painter layer list (`context.ui_list`), invokes a modal operator
+from the same press. The operator passes events through until the mouse leaves the drag threshold,
+then maps vertical motion to a gap between the other visible rows and horizontal motion to a
+nesting depth among the candidates `layer_stack.drop_targets` lists for that gap, repositioning the
+layer live. Release finishes as one undo step; Esc restores the saved arrangement. The row widgets
+are non-interactive text and icons so the press reaches the list row itself; the blend menu,
+opacity field and mask button keep their own behaviour.
+
 Native widget styling follows Blender preferences. Region defaults are applied on entry, rather
 than continuously overriding the artist's visibility or shading choices. Selecting another editor
 type detaches the adapter; registration does not create workspaces or rearrange other areas.

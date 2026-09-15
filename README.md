@@ -77,10 +77,13 @@ The native Painter toolbar has **Materials, Smart Materials, Smart Masks, Filter
    **Asset Library** in the sidebar contains portable smart-material import, save and library commands.
 9. Expand **Export Textures**, choose a directory and an export preset, then export.
 
-Layers are displayed top-first and evaluated bottom-first. Use disclosure arrows for folders and
-native arrow buttons to reorder layers. The Parent button moves the selected layer into a folder;
-Delete removes a folder and its descendants. Undo restores them. Folder duplication copies children
-and their paint images. The native panel currently uses single selection and operator-based parenting.
+Layers are displayed top-first and evaluated bottom-first. Press a row to select its content and
+drag it up or down to move the layer (a folder moves with its contents); move the mouse sideways
+while dragging to change how deeply the layer nests, and press Esc to put it back. The arrow
+buttons under the list move one step at a time, and the Parent button moves the selected layer into
+a chosen folder. Each row shows the blend mode and opacity of the channel selected above the list;
+double-click a name to rename it. Delete removes a folder and its descendants. Undo restores them.
+Folder duplication copies children and their paint images. The native panel uses single selection.
 
 **T** toggles Blender’s native left toolbar. **N** toggles the right sidebar containing Painter’s
 Texture Set List, Layers and Properties. These are Blender’s standard shortcuts, with no custom
@@ -176,7 +179,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
   Baking is synchronous and uses Cycles CPU for predictable behavior.
 - Shared mesh datablocks require an explicit single-user copy. Material slot insertion/reordering after
   assignment can invalidate references; use Validate Project and reassign the affected slots.
-- Painter uses native Blender panels, properties, menus and an Asset Shelf, arranged around the native viewport. Asset activation is click-based; layer drag/drop and multi-selection are not implemented in this native interface. The original N-panel remains available outside Painter.
+- Painter uses native Blender panels, properties, menus and an Asset Shelf, arranged around the native viewport. Asset activation is click-based. Layers reorder by dragging their rows; multi-selection is not implemented in this native interface. The original N-panel remains available outside Painter.
 - Anchor points reference within one texture set and ignore projection and UV transforms; folder channels cannot be anchored. A missing anchor evaluates as neutral and is reported, not repaired.
 - Smart-material import is limited to 512 MiB and 256 layers. External paint textures are bundled as EXR;
   missing generator maps must be baked in the destination texture set.

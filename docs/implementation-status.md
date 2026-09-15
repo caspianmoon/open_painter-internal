@@ -42,6 +42,29 @@ one second, so the further gain was not needed), deferred boundary rasters for
 hidden layers, and a compiled CPU path (the CPU reference is now bound by real
 NumPy work on 16-row strips).
 
+Displayed-frame latency is now measured end to end on the shader-native path
+(`tests/performance/shader_native_frame.py`, real window, 3x3 framebuffer fence on the
+ordinary VIEW_3D draw; [shader-native-frame-0.3.0.json](performance/shader-native-frame-0.3.0.json)):
+redraw alone 1.9 ms; slider edit 32 ms to the first fenced frame; hide 32 ms and show
+99 ms to the settled frame; a blend-mode change 7 ms to the first frame and 211 ms to the
+settled frame (about 0.9 s when EEVEE still has to compile the new shader variant); undo
+33 ms. These include Blender's event loop and the 2K Worn material on the default cube;
+they are not presentation or input latency.
+
+### Plan closure — `Open_Painter_Updated_Codex_Plan.md`
+
+All work packages M0–M12 of the plan are implemented with the limits recorded above.
+Of its remaining acceptance items, three were pursued in 0.3.0: the displayed-frame
+measurement (above), lifecycle regressions for undo/redo with a job in flight, full and
+linked scene copies (`tests/integration/shader_lifecycle_edges.py`) and a second window
+(`tests/integration/two_windows_ui.py`), and the M3 interactive targets, which the
+shader-native path supersedes (a numeric edit binds in under a millisecond; the CPU
+reference is the explicit secondary path and its warm-edit target is retired). Not
+pursued, deliberately: UDIM as a product feature (Blender's `Image.pixels` reaches only
+tile 1001), the separate GPU compute backend (redundant with the shader-native path),
+and continuous multi-channel strokes. The plan is closed as a backlog; new work is
+tracked here.
+
 See [shader-preview-architecture.md](shader-preview-architecture.md#units-and-rebuild-scope)
 for the compiler structure and the [changelog](../CHANGELOG.md#030).
 

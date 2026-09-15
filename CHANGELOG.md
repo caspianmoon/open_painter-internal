@@ -56,6 +56,12 @@ differs only in float rounding of an interpolation, noted per item below.
 - The layer view shows a generator mask's Amount, Edge Width (Edge Wear/Chips) and
   Contrast directly, with the crease-only warning and rebake button, instead of only
   behind the mask selection.
+- Undo/redo with a shader boundary job or a CPU job in flight, full and linked scene copies
+  and a second window are covered by regressions; rehydration refuses a top tree that a
+  copied material still shares, so scene copies compile their own graph.
+- Displayed-frame latency is measured end to end (`tests/performance/shader_native_frame.py`):
+  slider 32 ms, hide 32 ms, show 99 ms, blend-mode change 211 ms to the settled frame, undo
+  33 ms, on the 2K Worn material in a real window.
 - Developer Mode shows units, node counts, last build/reuse figures and unique images
   against the fragment sampler limit. New benchmarks: shader_build_scaling,
   shader_structural_edits, idle_timer, bake_maps; the paired CPU benchmark selects the

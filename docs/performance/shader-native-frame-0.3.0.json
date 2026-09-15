@@ -1,0 +1,720 @@
+{
+  "status": "PASS",
+  "samples": [
+    {
+      "kind": "redraw_control",
+      "index": 0,
+      "patch_before": [
+        0.1268378347158432,
+        0.1236572265625,
+        0.1293809711933136,
+        1.0
+      ],
+      "started": 79691.488289333,
+      "first_frame_s": 0.003150791992084123,
+      "shader_current_s": 0.019423291989369318,
+      "patch_changed": false,
+      "settled_frame_s": 0.003150791992084123,
+      "settled_patch": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "frame_count": 90
+    },
+    {
+      "kind": "redraw_control",
+      "index": 1,
+      "patch_before": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "started": 79693.189288833,
+      "first_frame_s": 0.0019077079923590645,
+      "shader_current_s": 0.01312474999576807,
+      "patch_changed": false,
+      "settled_frame_s": 0.0019077079923590645,
+      "settled_patch": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "frame_count": 92
+    },
+    {
+      "kind": "redraw_control",
+      "index": 2,
+      "patch_before": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "started": 79694.9083685,
+      "first_frame_s": 0.0018703750101849437,
+      "shader_current_s": 0.01260362500033807,
+      "patch_changed": false,
+      "settled_frame_s": 0.0018703750101849437,
+      "settled_patch": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "frame_count": 90
+    },
+    {
+      "kind": "redraw_control",
+      "index": 3,
+      "patch_before": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "started": 79696.626340791,
+      "first_frame_s": 0.0019340839935466647,
+      "shader_current_s": 0.013082874997053295,
+      "patch_changed": false,
+      "settled_frame_s": 0.0019340839935466647,
+      "settled_patch": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "frame_count": 91
+    },
+    {
+      "kind": "redraw_control",
+      "index": 4,
+      "patch_before": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "started": 79698.339916166,
+      "first_frame_s": 0.001951083992025815,
+      "shader_current_s": 0.013040708989137784,
+      "patch_changed": false,
+      "settled_frame_s": 0.001951083992025815,
+      "settled_patch": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "frame_count": 90
+    },
+    {
+      "kind": "slider",
+      "index": 0,
+      "patch_before": [
+        0.1256239116191864,
+        0.1230604350566864,
+        0.12933349609375,
+        1.0
+      ],
+      "started": 79700.055936,
+      "first_frame_s": 0.08917325000220444,
+      "shader_current_s": 0.8024203329987358,
+      "patch_changed": false,
+      "settled_frame_s": 0.08917325000220444,
+      "settled_patch": [
+        0.1164143905043602,
+        0.1154107004404068,
+        0.1233723983168602,
+        1.0
+      ],
+      "frame_count": 42
+    },
+    {
+      "kind": "slider",
+      "index": 1,
+      "patch_before": [
+        0.1164143905043602,
+        0.1154107004404068,
+        0.1233723983168602,
+        1.0
+      ],
+      "started": 79701.77794875,
+      "first_frame_s": 0.048257416012347676,
+      "shader_current_s": 0.07142370801011566,
+      "patch_changed": false,
+      "settled_frame_s": 0.048257416012347676,
+      "settled_patch": [
+        0.1170857772231102,
+        0.1160685196518898,
+        0.1241251602768898,
+        1.0
+      ],
+      "frame_count": 88
+    },
+    {
+      "kind": "slider",
+      "index": 2,
+      "patch_before": [
+        0.1170857772231102,
+        0.1160685196518898,
+        0.1241251602768898,
+        1.0
+      ],
+      "started": 79703.493713833,
+      "first_frame_s": 0.026699833004386164,
+      "shader_current_s": 0.07221549999667332,
+      "patch_changed": false,
+      "settled_frame_s": 0.026699833004386164,
+      "settled_patch": [
+        0.1173841655254364,
+        0.1165703684091568,
+        0.1246812641620636,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "slider",
+      "index": 3,
+      "patch_before": [
+        0.1173841655254364,
+        0.1165703684091568,
+        0.1246812641620636,
+        1.0
+      ],
+      "started": 79705.210040666,
+      "first_frame_s": 0.03214529200340621,
+      "shader_current_s": 0.09168745900387876,
+      "patch_changed": false,
+      "settled_frame_s": 0.03214529200340621,
+      "settled_patch": [
+        0.1205105260014534,
+        0.1188625767827034,
+        0.1257392019033432,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "slider",
+      "index": 4,
+      "patch_before": [
+        0.1205105260014534,
+        0.1188625767827034,
+        0.1257392019033432,
+        1.0
+      ],
+      "started": 79706.926464791,
+      "first_frame_s": 0.03088808400207199,
+      "shader_current_s": 0.082406000001356,
+      "patch_changed": false,
+      "settled_frame_s": 0.03088808400207199,
+      "settled_patch": [
+        0.1196695938706398,
+        0.1180080845952034,
+        0.1253322958946228,
+        1.0
+      ],
+      "frame_count": 88
+    },
+    {
+      "kind": "hide",
+      "index": 0,
+      "patch_before": [
+        0.1196695938706398,
+        0.1180080845952034,
+        0.1253322958946228,
+        1.0
+      ],
+      "started": 79708.64391125,
+      "first_frame_s": 0.034753041007206775,
+      "shader_current_s": 0.09477900000638328,
+      "patch_changed": true,
+      "settled_frame_s": 0.034753041007206775,
+      "settled_patch": [
+        0.1765272319316864,
+        0.1658121794462204,
+        0.1626112163066864,
+        1.0
+      ],
+      "frame_count": 85
+    },
+    {
+      "kind": "show",
+      "index": 0,
+      "patch_before": [
+        0.1765272319316864,
+        0.1658121794462204,
+        0.1626112163066864,
+        1.0
+      ],
+      "started": 79710.359859541,
+      "first_frame_s": 0.028665167003055103,
+      "shader_current_s": 0.07509454200044274,
+      "patch_changed": true,
+      "settled_frame_s": 0.10123499999463093,
+      "settled_patch": [
+        0.1209581196308136,
+        0.1190660297870636,
+        0.1256374716758728,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "hide",
+      "index": 1,
+      "patch_before": [
+        0.1209581196308136,
+        0.1190660297870636,
+        0.1256374716758728,
+        1.0
+      ],
+      "started": 79712.078006,
+      "first_frame_s": 0.03240895800990984,
+      "shader_current_s": 0.08536791600636207,
+      "patch_changed": true,
+      "settled_frame_s": 0.03240895800990984,
+      "settled_patch": [
+        0.1776529997587204,
+        0.1668023020029068,
+        0.1631537526845932,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "show",
+      "index": 1,
+      "patch_before": [
+        0.1776529997587204,
+        0.1668023020029068,
+        0.1631537526845932,
+        1.0
+      ],
+      "started": 79713.793575541,
+      "first_frame_s": 0.02475974999833852,
+      "shader_current_s": 0.06876145899877883,
+      "patch_changed": true,
+      "settled_frame_s": 0.12195066700223833,
+      "settled_patch": [
+        0.1217312291264534,
+        0.1199273020029068,
+        0.1270751953125,
+        1.0
+      ],
+      "frame_count": 89
+    },
+    {
+      "kind": "hide",
+      "index": 2,
+      "patch_before": [
+        0.1217312291264534,
+        0.1199273020029068,
+        0.1270751953125,
+        1.0
+      ],
+      "started": 79715.515536,
+      "first_frame_s": 0.03683620798983611,
+      "shader_current_s": 0.08579962499788962,
+      "patch_changed": true,
+      "settled_frame_s": 0.03683620798983611,
+      "settled_patch": [
+        0.1772325336933136,
+        0.1661512553691864,
+        0.1625840961933136,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "show",
+      "index": 2,
+      "patch_before": [
+        0.1772325336933136,
+        0.1661512553691864,
+        0.1625840961933136,
+        1.0
+      ],
+      "started": 79717.226097333,
+      "first_frame_s": 0.025458957999944687,
+      "shader_current_s": 0.07272558299882803,
+      "patch_changed": true,
+      "settled_frame_s": 0.09896729199681431,
+      "settled_patch": [
+        0.1218329519033432,
+        0.1199069544672966,
+        0.1270006000995636,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "hide",
+      "index": 3,
+      "patch_before": [
+        0.1218329519033432,
+        0.1199069544672966,
+        0.1270006000995636,
+        1.0
+      ],
+      "started": 79718.942993166,
+      "first_frame_s": 0.02433262500562705,
+      "shader_current_s": 0.0661269170086598,
+      "patch_changed": true,
+      "settled_frame_s": 0.02433262500562705,
+      "settled_patch": [
+        0.1793891042470932,
+        0.1683485209941864,
+        0.1646728515625,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "show",
+      "index": 3,
+      "patch_before": [
+        0.1793891042470932,
+        0.1683485209941864,
+        0.1646728515625,
+        1.0
+      ],
+      "started": 79720.659491583,
+      "first_frame_s": 0.02557074998912867,
+      "shader_current_s": 0.07209191699803341,
+      "patch_changed": true,
+      "settled_frame_s": 0.09729062499536667,
+      "settled_patch": [
+        0.1222262904047966,
+        0.1202528178691864,
+        0.1270548552274704,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "hide",
+      "index": 4,
+      "patch_before": [
+        0.1222262904047966,
+        0.1202528178691864,
+        0.1270548552274704,
+        1.0
+      ],
+      "started": 79722.377251,
+      "first_frame_s": 0.02492987499863375,
+      "shader_current_s": 0.07464958299533464,
+      "patch_changed": true,
+      "settled_frame_s": 0.02492987499863375,
+      "settled_patch": [
+        0.1770833283662796,
+        0.1665310263633728,
+        0.1631266325712204,
+        1.0
+      ],
+      "frame_count": 83
+    },
+    {
+      "kind": "show",
+      "index": 4,
+      "patch_before": [
+        0.1770833283662796,
+        0.1665310263633728,
+        0.1631266325712204,
+        1.0
+      ],
+      "started": 79724.091811291,
+      "first_frame_s": 0.02483599999686703,
+      "shader_current_s": 0.07232683399342932,
+      "patch_changed": true,
+      "settled_frame_s": 0.09624391699617263,
+      "settled_patch": [
+        0.1205647811293602,
+        0.1190185546875,
+        0.1259901225566864,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "blend_mode",
+      "index": 0,
+      "patch_before": [
+        0.1205647811293602,
+        0.1190185546875,
+        0.1259901225566864,
+        1.0
+      ],
+      "started": 79725.806309958,
+      "first_frame_s": 0.007876167001086287,
+      "shader_current_s": 0.1589615419943584,
+      "patch_changed": true,
+      "settled_frame_s": 0.2329927079990739,
+      "settled_patch": [
+        0.1115451380610466,
+        0.1054890975356102,
+        0.1035224050283432,
+        1.0
+      ],
+      "frame_count": 83
+    },
+    {
+      "kind": "blend_mode",
+      "index": 1,
+      "patch_before": [
+        0.1115451380610466,
+        0.1054890975356102,
+        0.1035224050283432,
+        1.0
+      ],
+      "started": 79727.525533208,
+      "first_frame_s": 0.006445417006034404,
+      "shader_current_s": 0.15498449999722652,
+      "patch_changed": true,
+      "settled_frame_s": 0.24770662499940954,
+      "settled_patch": [
+        0.1584879606962204,
+        0.1571587473154068,
+        0.162353515625,
+        1.0
+      ],
+      "frame_count": 83
+    },
+    {
+      "kind": "blend_mode",
+      "index": 2,
+      "patch_before": [
+        0.1584879606962204,
+        0.1571587473154068,
+        0.162353515625,
+        1.0
+      ],
+      "started": 79729.242398333,
+      "first_frame_s": 0.006292542006121948,
+      "shader_current_s": 0.16733154200483114,
+      "patch_changed": true,
+      "settled_frame_s": 0.21068075000948738,
+      "settled_patch": [
+        0.1458469033241272,
+        0.1425916850566864,
+        0.1444769948720932,
+        1.0
+      ],
+      "frame_count": 84
+    },
+    {
+      "kind": "blend_mode",
+      "index": 3,
+      "patch_before": [
+        0.1458469033241272,
+        0.1425916850566864,
+        0.1444769948720932,
+        1.0
+      ],
+      "started": 79730.961092833,
+      "first_frame_s": 0.006833042003563605,
+      "shader_current_s": 0.14781887500430457,
+      "patch_changed": true,
+      "settled_frame_s": 0.15065541700460017,
+      "settled_patch": [
+        0.1214667409658432,
+        0.1196628138422966,
+        0.1270751953125,
+        1.0
+      ],
+      "frame_count": 84
+    },
+    {
+      "kind": "blend_mode",
+      "index": 4,
+      "patch_before": [
+        0.1214667409658432,
+        0.1196628138422966,
+        0.1270751953125,
+        1.0
+      ],
+      "started": 79732.674530083,
+      "first_frame_s": 0.007173458012402989,
+      "shader_current_s": 0.14047650000429712,
+      "patch_changed": true,
+      "settled_frame_s": 0.18100683300872333,
+      "settled_patch": [
+        0.1045600026845932,
+        0.0995890274643898,
+        0.0990125834941864,
+        1.0
+      ],
+      "frame_count": 83
+    },
+    {
+      "kind": "undo",
+      "index": 0,
+      "patch_before": [
+        0.1045600026845932,
+        0.0995890274643898,
+        0.0990125834941864,
+        1.0
+      ],
+      "started": 79734.902159875,
+      "first_frame_s": 0.3674653330090223,
+      "shader_current_s": 0.45809983300569,
+      "patch_changed": false,
+      "settled_frame_s": 0.3674653330090223,
+      "settled_patch": [
+        0.1064520925283432,
+        0.1005113422870636,
+        0.0989515483379364,
+        1.0
+      ],
+      "frame_count": 63
+    },
+    {
+      "kind": "undo",
+      "index": 1,
+      "patch_before": [
+        0.1064520925283432,
+        0.1005113422870636,
+        0.0989515483379364,
+        1.0
+      ],
+      "started": 79737.116698666,
+      "first_frame_s": 0.03295391700521577,
+      "shader_current_s": 0.10440004200791009,
+      "patch_changed": false,
+      "settled_frame_s": 0.03295391700521577,
+      "settled_patch": [
+        0.1040717214345932,
+        0.0987684428691864,
+        0.0976833775639534,
+        1.0
+      ],
+      "frame_count": 86
+    },
+    {
+      "kind": "undo",
+      "index": 2,
+      "patch_before": [
+        0.1040717214345932,
+        0.0987684428691864,
+        0.0976833775639534,
+        1.0
+      ],
+      "started": 79739.332687291,
+      "first_frame_s": 0.037200792008661665,
+      "shader_current_s": 0.1111055000073975,
+      "patch_changed": false,
+      "settled_frame_s": 0.037200792008661665,
+      "settled_patch": [
+        0.1068996861577034,
+        0.1013387069106102,
+        0.1007147878408432,
+        1.0
+      ],
+      "frame_count": 86
+    },
+    {
+      "kind": "undo",
+      "index": 3,
+      "patch_before": [
+        0.1068996861577034,
+        0.1013387069106102,
+        0.1007147878408432,
+        1.0
+      ],
+      "started": 79741.547398125,
+      "first_frame_s": 0.011644041005638428,
+      "shader_current_s": 0.10226466599851847,
+      "patch_changed": false,
+      "settled_frame_s": 0.011644041005638428,
+      "settled_patch": [
+        0.1076931431889534,
+        0.1017591655254364,
+        0.1001247838139534,
+        1.0
+      ],
+      "frame_count": 87
+    },
+    {
+      "kind": "undo",
+      "index": 4,
+      "patch_before": [
+        0.1076931431889534,
+        0.1017591655254364,
+        0.1001247838139534,
+        1.0
+      ],
+      "started": 79743.7623885,
+      "first_frame_s": 0.030591290997108445,
+      "shader_current_s": 0.10850012498849537,
+      "patch_changed": false,
+      "settled_frame_s": 0.030591290997108445,
+      "settled_patch": [
+        0.1103176549077034,
+        0.1038479283452034,
+        0.1017049178481102,
+        1.0
+      ],
+      "frame_count": 86
+    }
+  ],
+  "blender": "5.2.1 LTS",
+  "gpu_backend": "METAL",
+  "gpu_renderer": "Metal API",
+  "fixture": "Worn Painted Metal on the default cube",
+  "resolution": 2048,
+  "repeats": 5,
+  "region_size": [
+    2477,
+    1364
+  ],
+  "timing_scope": "Property edit, production cache.tick scheduling, native VIEW_3D draw and a 3x3 framebuffer completion fence; not presentation or OS input latency.",
+  "summary": {
+    "redraw_control": {
+      "count": 5,
+      "median_first_frame_ms": 1.9,
+      "median_settled_frame_ms": 1.9,
+      "median_shader_current_ms": 13.1,
+      "patch_changed": 0
+    },
+    "slider": {
+      "count": 5,
+      "median_first_frame_ms": 32.1,
+      "median_settled_frame_ms": 32.1,
+      "median_shader_current_ms": 82.4,
+      "patch_changed": 0
+    },
+    "hide": {
+      "count": 5,
+      "median_first_frame_ms": 32.4,
+      "median_settled_frame_ms": 32.4,
+      "median_shader_current_ms": 85.4,
+      "patch_changed": 5
+    },
+    "show": {
+      "count": 5,
+      "median_first_frame_ms": 25.5,
+      "median_settled_frame_ms": 99.0,
+      "median_shader_current_ms": 72.3,
+      "patch_changed": 5
+    },
+    "blend_mode": {
+      "count": 5,
+      "median_first_frame_ms": 6.8,
+      "median_settled_frame_ms": 210.7,
+      "median_shader_current_ms": 155.0,
+      "patch_changed": 5
+    },
+    "undo": {
+      "count": 5,
+      "median_first_frame_ms": 33.0,
+      "median_settled_frame_ms": 33.0,
+      "median_shader_current_ms": 108.5,
+      "patch_changed": 0
+    }
+  }
+}

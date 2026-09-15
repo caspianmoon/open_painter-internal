@@ -1644,6 +1644,10 @@ class Graph(Math):
         top = instance.node_tree if instance is not None else None
         if top is None or top.get('op_shader_graph') != self.ts.id or not top.get('op_signature'):
             return False
+        if top.users != 1:
+            # A copied material still points at the original's trees; adopting
+            # them would put two sessions on one graph. Compile a separate one.
+            return False
         started = perf_counter()
         plan = self.plan()
         units, by_instance = {}, {}

@@ -1,5 +1,17 @@
 # Changes
 
+## Unreleased
+
+- Layers: drag a row up or down to move the layer (a folder moves with its contents); moving
+  sideways while dragging changes how deeply it nests, Esc cancels and the drop is one undo step.
+  The row's press-to-select now also selects the layer content, as the name button did, and
+  double-clicking a name renames it in place.
+- Layers: rows follow the Substance layout in Blender widgets: visibility, type icon, mask
+  button and name on the left; a compact blend menu and a whole-percent opacity number on the
+  right (`opacity_percent` is now an integer). Short blend names appear in narrow sidebars. The
+  channel selector and add/delete tools form one strip above the list, the list grows with the
+  stack and the reorder/duplicate/parent buttons are icon-only with per-action tooltips.
+
 ## 0.3.0
 
 Performance release. Numerical behaviour is unchanged: every optimisation is either
@@ -53,9 +65,16 @@ differs only in float rounding of an interpolation, noted per item below.
   effect is added at once and the edge map rebakes as a cooperative modal job with
   progress in the status line (Esc stops it, the old map is kept); the effect updates
   when the map lands. The Rebake Edge Map buttons use the same job.
-- The layer view shows a generator mask's Amount, Edge Width (Edge Wear/Chips) and
-  Contrast directly, with the crease-only warning and rebake button, instead of only
-  behind the mask selection.
+- The edge map is baked as a set of four reaches from one Curvature Radius: thin (x0.5),
+  normal (x1), wide (x2) and extreme (x4), sharing the same crease lines. Edge Wear and
+  Chips masks gain a live **Edge Size** control (0 thin, 1 normal, 2 wide, 3 extreme) that
+  blends between the maps in the shader and on the CPU reference alike, and Edge Width then
+  narrows the chosen band; neither needs a rebake. Projects with only the single map keep
+  working (Edge Size is offered once the set is baked); adding an edge-driven effect to such
+  a project queues the background rebake of the set.
+- The layer view shows a generator mask's Amount, Edge Size, Edge Width (Edge Wear/Chips)
+  and Contrast directly, with the rebake warning and button, instead of only behind the
+  mask selection.
 - Undo/redo with a shader boundary job or a CPU job in flight, full and linked scene copies
   and a second window are covered by regressions; rehydration refuses a top tree that a
   copied material still shares, so scene copies compile their own graph.

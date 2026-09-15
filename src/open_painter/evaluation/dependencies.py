@@ -142,7 +142,9 @@ def map_dependencies(mask):
     maps = REQUIRED_MAPS.get(mask.generator)
     if maps is None:
         return None  # Unknown/custom generators conservatively depend on all maps.
-    return set(maps) | ({'AO'} if mask.generator in {'EDGE_WEAR', 'CHIPS'} else set())
+    if mask.generator in {'EDGE_WEAR', 'CHIPS'}:
+        return set(maps) | {'AO', 'CURVATURE_THIN', 'CURVATURE_WIDE', 'CURVATURE_XWIDE'}
+    return set(maps)
 
 
 def image_written(image):

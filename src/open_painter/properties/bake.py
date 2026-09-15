@@ -27,6 +27,7 @@ class OP_BakedMap(bpy.types.PropertyGroup):
         "NORMAL", "AO", "CURVATURE", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL",
         "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER", "THICKNESS",
         "MEAN_CURVATURE", "SELECTION", "BEVEL_NORMAL", "BEVEL_MASK",
+        "CURVATURE_THIN", "CURVATURE_WIDE", "CURVATURE_XWIDE",
     )], update=map_changed)
     image: bpy.props.PointerProperty(type=bpy.types.Image, update=map_changed)
 

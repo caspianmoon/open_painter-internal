@@ -3,7 +3,7 @@
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
 from .cycles_baker import bake
-from .maps.curvature import bake_curvature
+from .maps.curvature import EDGE_MAP_KINDS, bake_curvature_set, edge_map_set_complete
 from .maps.utility import UTILITY_KINDS, bake_utility
 
 
@@ -15,6 +15,11 @@ def register_map(ts, kind, image):
     prop.image = image
     from ..geometry.provenance import record
     prop.provenance = record(ts, kind)
+
+
+def register_maps(ts, produced):
+    for kind, image in produced.items():
+        register_map(ts, kind, image)
 
 
 def bake_steps(context, ts):
@@ -65,7 +70,7 @@ def bake_steps(context, ts):
         tasks.append(("AO", lambda: bake(context, ts, "AO")))
     tasks.extend((kind, lambda kind=kind: bake(context, ts, kind)) for kind in bevel_kinds)
     if settings.curvature:
-        tasks.append(("CURVATURE", lambda: bake_curvature(ts)))
+        tasks.append(("CURVATURE", lambda: bake_curvature_set(ts)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)
     from ..geometry.provenance import record
     expected = {kind: record(ts, kind) for kind, _ in tasks}
@@ -74,11 +79,13 @@ def bake_steps(context, ts):
         if record(ts, kind) != expected[kind]:
             raise ValueError("Bake inputs changed; restart the bake queue")
         image = run()
+        produced = image if isinstance(image, dict) else {kind: image}
         if record(ts, kind) != expected[kind]:
             import bpy
-            bpy.data.images.remove(image)
+            for item in produced.values():
+                bpy.data.images.remove(item)
             raise ValueError("Bake inputs changed; discarded stale map")
-        register_map(ts, kind, image)
+        register_maps(ts, produced)
     invalidate(ts)
 
 
@@ -88,16 +95,20 @@ def bake_selected(context, ts):
 
 
 def stale_curvature(ts):
-    """The owned crease-only Curvature map that an edge-driven recipe should replace, or None."""
+    """The owned Curvature map an edge-driven recipe should replace, or None.
+
+    Stale means crease-only (baked before GEOMETRIC_CREASES_V2) or missing the
+    thin/wide/extreme companions that Edge Size blends between.
+    """
     prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
     if prop is None:
         return None
     from .maps.curvature import METHOD
     method = prop.image.get("open_painter_curvature_method")
-    if method == METHOD:
-        return None
     if method is None and "BakedCurvature" not in prop.image.name:
         return None  # a user-supplied image: never replace it
+    if method == METHOD and edge_map_set_complete(ts):
+        return None
     return prop
 
 
@@ -121,6 +132,6 @@ def refresh_stale_curvature(ts, required, context=None):
         result = bpy.ops.open_painter.edge_map_refresh('INVOKE_DEFAULT')
         if result == {'RUNNING_MODAL'}:
             return 'QUEUED'
-    register_map(ts, "CURVATURE", bake_curvature(ts))
+    register_maps(ts, bake_curvature_set(ts))
     invalidate(ts)
     return True

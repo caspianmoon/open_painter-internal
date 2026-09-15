@@ -258,13 +258,18 @@ def group(ts, identifiers, name="Group"):
     return next(item for item in ts.layers if item.id == folder_id)
 
 
-def remove_tree(ts, identifier):
+def descendants(ts, identifier):
+    """Ids of every layer nested under ``identifier``, at any depth."""
     identifiers = {identifier}
     while True:
         expanded = identifiers | {item.id for item in ts.layers if item.parent_id in identifiers}
         if expanded == identifiers:
-            break
+            return identifiers - {identifier}
         identifiers = expanded
+
+
+def remove_tree(ts, identifier):
+    identifiers = descendants(ts, identifier) | {identifier}
     for i in reversed(range(len(ts.layers))):
         if ts.layers[i].id in identifiers:
             ts.layers.remove(i)
@@ -282,4 +287,99 @@ def move_above(ts, identifiers, target_id):
         target = next(i for i, item in enumerate(ts.layers) if item.id == anchor)
         ts.layers.move(source, target if source < target else target + 1)
         anchor = identifier
+    invalidate(ts)
+
+
+def index_of(ts, identifier):
+    return next(i for i, item in enumerate(ts.layers) if item.id == identifier)
+
+
+def drop_targets(ts, identifier):
+    """Every place a dragged layer (with its subtree) can land in the stack.
+
+    One entry per gap between the remaining visible rows, top to bottom. A gap
+    lists its candidate depths, deepest first, as ``(depth, parent_id, kind,
+    anchor_id)``: directly ABOVE or BELOW a visible row, the FIRST_CHILD of an
+    expanded folder, or the END of an otherwise empty stack. The candidates
+    depend only on the other rows, so they stay valid while the dragged layer
+    is repositioned among them.
+    """
+    excluded = descendants(ts, identifier) | {identifier}
+    by_id = {item.id: item for item in ts.layers}
+    rows = [(ts.layers[index], depth) for index, depth in visible_rows(ts)
+            if ts.layers[index].id not in excluded]
+    gaps = []
+    for gap in range(len(rows) + 1):
+        candidates = []
+        following = rows[gap] if gap < len(rows) else None
+        if gap:
+            layer, depth = rows[gap - 1]
+            if layer.type == "FOLDER" and layer.expanded:
+                candidates.append((depth + 1, layer.id, "FIRST_CHILD", layer.id))
+            # Below the preceding row, or below any of its ancestors down to
+            # the depth of the row that follows: the closing edge of a folder
+            # offers every nesting level it leaves open.
+            floor = following[1] if following else 0
+            while layer is not None and depth >= floor:
+                candidates.append((depth, layer.parent_id, "BELOW", layer.id))
+                layer, depth = by_id.get(layer.parent_id), depth - 1
+        elif following:
+            candidates.append((following[1], following[0].parent_id, "ABOVE", following[0].id))
+        else:
+            candidates.append((0, "", "END", ""))
+        gaps.append(candidates)
+    return gaps
+
+
+def slot(ts, identifier):
+    """The gap and depth ``identifier`` occupies now, in ``drop_targets`` terms."""
+    for gap, (index, depth) in enumerate(visible_rows(ts)):
+        if ts.layers[index].id == identifier:
+            return gap, depth
+    raise ValueError("The layer is not visible.")
+
+
+def place(ts, identifier, target):
+    """Move ``identifier`` (and its subtree) to a ``drop_targets`` candidate."""
+    _, parent_id, kind, anchor_id = target
+    layer = next(item for item in ts.layers if item.id == identifier)
+    if layer.parent_id != parent_id:
+        parent(ts, layer, parent_id)
+    source = index_of(ts, identifier)
+    if kind == "FIRST_CHILD":
+        siblings = [i for i, item in enumerate(ts.layers)
+                    if item.parent_id == anchor_id and item.id != identifier]
+        if siblings:
+            kind, anchor_id = "ABOVE", ts.layers[max(siblings)].id
+        else:
+            kind = "BELOW"
+    if kind == "END":
+        ts.layers.move(source, 0)
+    else:
+        # Layers are stored bottom-first: above a row means a higher index.
+        anchor = index_of(ts, anchor_id)
+        if kind == "ABOVE":
+            ts.layers.move(source, anchor if source < anchor else anchor + 1)
+        else:
+            ts.layers.move(source, anchor - 1 if source < anchor else anchor)
+    invalidate(ts)
+    ts.active_layer = index_of(ts, identifier)
+    return ts.active_layer
+
+
+def arrangement(ts):
+    """Order and parents, enough to put a stack back after a cancelled move."""
+    return [(item.id, item.parent_id) for item in ts.layers]
+
+
+def restore_arrangement(ts, saved):
+    by_id = {item.id: item for item in ts.layers}
+    for identifier, parent_id in saved:
+        if identifier in by_id and by_id[identifier].parent_id != parent_id:
+            by_id[identifier].parent_id = parent_id
+    for target, (identifier, _) in enumerate(saved):
+        if identifier in by_id:
+            source = index_of(ts, identifier)
+            if source != target:
+                ts.layers.move(source, target)
     invalidate(ts)

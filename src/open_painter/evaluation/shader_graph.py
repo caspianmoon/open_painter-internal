@@ -1007,6 +1007,19 @@ class Graph(Math):
                 self.math('MULTIPLY', 2, self.param(mask, 'detail_normal_strength'))))
         return self.clamp(signed), self.clamp(self.math('MULTIPLY', signed, -1))
 
+    EDGE_MAP_KINDS = ('CURVATURE_THIN', 'CURVATURE', 'CURVATURE_WIDE', 'CURVATURE_XWIDE')
+
+    def _edge_curvature(self, mask, red):
+        """Curvature at the mask's Edge Size, the CPU generator's blend across the edge-map set."""
+        if not all(any(m.kind == kind and m.image for m in self.ts.baked_maps) for kind in self.EDGE_MAP_KINDS):
+            return red('CURVATURE')
+        size = self.param(mask, 'edge_size')
+        value = red(self.EDGE_MAP_KINDS[0])
+        for index, kind in enumerate(self.EDGE_MAP_KINDS[1:]):
+            t = self.clamp(self.math('SUBTRACT', size, float(index)))
+            value = self.scalar_mix(value, red(kind), t)
+        return value
+
     def generator(self, mask):
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
         amount, contrast = self.param(mask, 'amount'), self.param(mask, 'contrast')
@@ -1028,9 +1041,10 @@ class Graph(Math):
         if kind == 'NOISE':
             return noise() if mask.source == 'NOISE' else threshold(noise())
         if kind in {'EDGE_WEAR', 'CHIPS'}:
-            # Edge Width narrows the baked band: (curvature - (1 - w)) / w, a live uniform.
+            # Edge Size blends the baked edge-map set live; Edge Width then
+            # narrows the chosen band: (curvature - (1 - w)) / w, both uniforms.
             width = self.param(mask, 'edge_width')
-            band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(red('CURVATURE')),
+            band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(self._edge_curvature(mask, red)),
                 self.math('SUBTRACT', 1, width)), self.math('MAXIMUM', width, 1e-4)))
             if micro is not None:
                 band = self.math('MAXIMUM', band, micro[0])

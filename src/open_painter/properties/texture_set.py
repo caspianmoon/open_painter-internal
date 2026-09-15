@@ -19,6 +19,14 @@ def height_changed(self, context):
     # Export computes their combination at request time, without caching it here.
 
 
+def layer_selected(self, context):
+    """A press on a Painter layer row lands here first; it may start a drag."""
+    if context.region is not None:
+        from ..ui.native import layer_row_pressed
+
+        layer_row_pressed(self, context)
+
+
 def backend_changed(self, context):
     changed(self, context)
     # A still-current cached shader can have been disconnected by explicit CPU
@@ -51,7 +59,11 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     active_assignment: bpy.props.IntProperty()
     material: bpy.props.PointerProperty(type=bpy.types.Material)
     layers: bpy.props.CollectionProperty(type=OP_Layer)
-    active_layer: bpy.props.IntProperty()
+    active_layer: bpy.props.IntProperty(
+        name="Layer",
+        description="Press to select a layer and drag to move it; double-click to rename",
+        update=layer_selected,
+    )
     dirty: bpy.props.BoolProperty(default=True)
     outputs: bpy.props.CollectionProperty(type=OP_Output)
     preview_ao: bpy.props.BoolProperty(name="AO in Preview", default=True, update=surface_changed)

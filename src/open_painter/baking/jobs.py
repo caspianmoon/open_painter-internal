@@ -120,7 +120,7 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
             self._expected = record(ts, 'CURVATURE')
             self._job = curvature_steps(ts)
             next(self._job)  # reads the evaluated meshes now, while the depsgraph is current
-            context.scene.open_painter.status = 'Rebaking edge map… 5% · Esc stops'
+            context.scene.open_painter.status = 'Rebaking edge maps… 2% · Esc stops'
             self._timer = context.window_manager.event_timer_add(.02, window=context.window)
             self._last_timer_duration = self._timer.time_duration
             context.window_manager.modal_handler_add(self)
@@ -134,7 +134,7 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
     def modal(self, context, event):
         from ..core.layer_stack import invalidate
         from ..geometry.provenance import record
-        from .bake_manager import register_map
+        from .bake_manager import register_maps
         if event.type == 'ESC':
             self.finish(context)
             context.scene.open_painter.status = 'Edge map rebake stopped; the previous map is kept'
@@ -147,18 +147,19 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
         self._last_timer_duration = duration
         try:
             fraction = next(self._job)
-            context.scene.open_painter.status = f'Rebaking edge map… {int(fraction * 100)}% · Esc stops'
+            context.scene.open_painter.status = f'Rebaking edge maps… {int(fraction * 100)}% · Esc stops'
         except StopIteration as done:
-            image = done.value
+            produced = done.value
             self.finish(context)
             ts = self._set(context)
             if ts is None or record(ts, 'CURVATURE') != self._expected:
-                bpy.data.images.remove(image)
+                for image in produced.values():
+                    bpy.data.images.remove(image)
                 context.scene.open_painter.status = 'Bake inputs changed; edge map rebake discarded'
                 return {'FINISHED'}
-            register_map(ts, 'CURVATURE', image)
+            register_maps(ts, produced)
             invalidate(ts)
-            context.scene.open_painter.status = 'Edge map rebaked with smooth curvature'
+            context.scene.open_painter.status = 'Edge maps rebaked: thin, normal, wide and extreme reaches'
             for area in context.screen.areas:
                 area.tag_redraw()
             return {'FINISHED'}

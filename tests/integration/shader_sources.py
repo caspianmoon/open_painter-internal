@@ -98,12 +98,12 @@ def run():
     for node in (calibration_uv, calibration_emission, calibration_target):
         tree.nodes.remove(node)
 
-    def create_input(name, alpha=False):
+    def create_input(name, alpha=False, phase=0.0):
         image = images.create(name, N)
         data = np.ones((N, N, 4), np.float32)
-        data[..., 0] = .2 + .5 * u
+        data[..., 0] = .2 + .5 * u * (1 - phase) + phase * (1 - v) ** 2
         data[..., 1] = .1 + .7 * v
-        data[..., 2] = .3 + .35 * np.sin(u * np.pi) * np.cos(v * np.pi)
+        data[..., 2] = .3 + .35 * np.sin(u * np.pi + phase) * np.cos(v * np.pi)
         if alpha:
             data[..., 3] = .2 + .7 * v
         images.write(image, data, pack=False)
@@ -112,10 +112,12 @@ def run():
     rgba = create_input("RGBA source", alpha=True)
     detail = create_input("RGB scalar detail")
     for kind in ("CURVATURE", "AO", "POSITION", "WORLD_NORMAL", "OBJECT_NORMAL", "THICKNESS",
-                 "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER"):
+                 "MATERIAL_ID", "OBJECT_ID", "UV_ISLAND", "UV_BORDER",
+                 "CURVATURE_THIN", "CURVATURE_WIDE", "CURVATURE_XWIDE"):
         item = ts.baked_maps.add()
         item.kind = kind
-        item.image = create_input("Map " + kind)
+        # Distinct edge-map reaches, so Edge Size blends between different content.
+        item.image = create_input("Map " + kind, phase={"CURVATURE_THIN": .8, "CURVATURE_WIDE": .4, "CURVATURE_XWIDE": .95}.get(kind, 0.0))
 
     report = {"source_cases": [], "catalog": [], "failures": [],
               "readback_uv_bias": bias.tolist()}
@@ -223,6 +225,13 @@ def run():
     # Edge Width narrows the baked band identically on both evaluators.
     check("generator_EDGE_WEAR_width",
           lambda l, p: add_mask(l, generator="EDGE_WEAR", amount=.64, contrast=1.3, noise_strength=.38, edge_width=.45))
+    # Edge Size blends the four baked edge maps identically on both evaluators.
+    for size in (0.0, .35, 1.6, 2.7, 3.0):
+        check(f"generator_EDGE_WEAR_size_{size}",
+              lambda l, p, size=size: add_mask(l, generator="EDGE_WEAR", amount=.64, contrast=1.3,
+                                               noise_strength=.38, edge_width=.7, edge_size=size))
+    check("generator_CHIPS_size",
+          lambda l, p: add_mask(l, generator="CHIPS", amount=.5, contrast=1.1, noise_strength=.3, edge_size=2.2))
     for procedural in ("CHECKER", "FBM"):
         check("mask_procedural_" + procedural,
               lambda l,p,kind=procedural: add_mask(l, "PROCEDURAL", procedural=kind, noise_scale=4.25,

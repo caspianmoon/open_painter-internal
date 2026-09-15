@@ -125,12 +125,16 @@ def poll():
             assert prop.image is not None and prop.image.name != state['old_image']
             assert prop.image.get('open_painter_curvature_method') == 'GEOMETRIC_CREASES_V2'
             assert stale_curvature(ts) is None
+            from open_painter.baking.maps.curvature import EDGE_MAP_KINDS, edge_map_set_complete
+            assert edge_map_set_complete(ts), [m.kind for m in ts.baked_maps]
+            state['reach_means'] = {kind: float(images.pixels(next(m.image for m in ts.baked_maps if m.kind == kind))[..., 0].mean())
+                                    for kind in EDGE_MAP_KINDS}
             assert prop.provenance, 'rebaked map has no provenance'
             pixels = images.pixels(prop.image)
             assert pixels.shape == (1024, 1024, 4) and pixels[..., :3].max() > .5, 'edge map is empty'
             assert state['timer_events'] >= 3, state['timer_events']
             assert any('%' in text for text in state['statuses']), state['statuses']
-            assert 'Edge map rebaked with smooth curvature' in state['statuses'][-1], state['statuses'][-1]
+            assert 'Edge maps rebaked' in state['statuses'][-1], state['statuses'][-1]
             assert state['longest_modal_ms'] < 1500, state['longest_modal_ms']
             assert state['queue_ms'] < 3000, state['queue_ms']
             return finish('PASS')

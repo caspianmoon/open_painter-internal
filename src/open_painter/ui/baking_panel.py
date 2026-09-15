@@ -80,13 +80,13 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
             result = create(context, ts, self.cage_offset)
             self.report({'INFO'}, f'Created {len(result)} editable cage(s)')
         elif self.action == "CURVATURE":
-            from ..baking.maps.curvature import bake_curvature
-            from ..baking.bake_manager import register_map
+            from ..baking.maps.curvature import bake_curvature_set
+            from ..baking.bake_manager import register_maps
             from ..core.layer_stack import invalidate
 
             if not any(ref.object for ref in ts.assignments):
                 raise ValueError("Assign the target mesh before baking its edge map.")
-            register_map(ts, "CURVATURE", bake_curvature(ts))
+            register_maps(ts, bake_curvature_set(ts))
             invalidate(ts)
         elif self.action == "ADD_HIGH":
             for obj in context.selected_objects:

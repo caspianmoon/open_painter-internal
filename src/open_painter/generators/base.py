@@ -23,6 +23,26 @@ REQUIRED_MAPS = {
 }
 
 
+EDGE_MAP_KINDS = ('CURVATURE_THIN', 'CURVATURE', 'CURVATURE_WIDE', 'CURVATURE_XWIDE')
+
+
+def edge_curvature(texture_set, parameters, mesh_map):
+    """Curvature at the mask's Edge Size: a live blend across the baked edge-map set.
+
+    Edge Size 0..3 interpolates thin -> normal -> wide -> extreme. Without the
+    companion maps (older projects) the single CURVATURE map is used as is.
+    """
+    if not all(any(m.kind == kind and m.image for m in texture_set.baked_maps) for kind in EDGE_MAP_KINDS):
+        return mesh_map('CURVATURE')[..., 0]
+    size = float(getattr(parameters, 'edge_size', 1.0))
+    maps = [mesh_map(kind)[..., 0] for kind in EDGE_MAP_KINDS]
+    value = maps[0]
+    for index, wider in enumerate(maps[1:]):
+        t = np.float32(min(max(size - index, 0.0), 1.0))
+        value = value + (wider - value) * t
+    return value
+
+
 def required_maps(kind):
     if kind not in REQUIRED_MAPS:
         raise ValueError(f'Unknown generator: {kind}')
@@ -70,8 +90,9 @@ class Generator:
             return n if parameters.source == 'NOISE' else threshold(n)
         if self.id in {'EDGE_WEAR', 'CHIPS'}:
             ao = mesh_map('AO')[..., 0] if any(m.kind == 'AO' and m.image for m in texture_set.baked_maps) else None
-            edges = edge_wear(mesh_map('CURVATURE')[..., 0], ao, breakup_noise(), amount, contrast, strength,
-                              getattr(parameters, 'edge_width', 1.0), None if micro is None else micro[0])
+            edges = edge_wear(edge_curvature(texture_set, parameters, mesh_map), ao, breakup_noise(), amount,
+                              contrast, strength, getattr(parameters, 'edge_width', 1.0),
+                              None if micro is None else micro[0])
             if self.id == 'CHIPS':
                 chips = procedural('VORONOI', u, v, seed=parameters.seed, scale=parameters.noise_scale)
                 edges *= .15 + .85 * threshold(chips)

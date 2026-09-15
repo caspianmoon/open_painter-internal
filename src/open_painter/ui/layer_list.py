@@ -35,6 +35,22 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
     )
     folder: bpy.props.EnumProperty(name="Parent Folder", items=folders)
 
+    @classmethod
+    def description(cls, context, properties):
+        # Icon-only buttons rely on this tooltip.
+        return {
+            "FILL": "Add a fill layer above the selected layer",
+            "PAINT": "Add a paint layer above the selected layer",
+            "FOLDER": "Add a folder above the selected layer",
+            "DELETE": "Delete the selected layer, including a folder's contents",
+            "DUPLICATE": "Duplicate the selected layer",
+            "UP": "Move the selected layer up",
+            "DOWN": "Move the selected layer down",
+            "PARENT": "Move the selected layer into a folder",
+            "GROUP": "Group the selected layers in a new folder",
+            "UNGROUP": "Dissolve the selected folder, keeping its layers",
+        }.get(properties.action, "")
+
     def invoke(self, context, event):
         if self.action == "PARENT":
             return context.window_manager.invoke_props_dialog(self)

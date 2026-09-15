@@ -204,9 +204,12 @@ def accumulate(prepared, n, radius, result, covered):
         neighbour_starts[hit, column] = starts[slot[hit]]
         neighbour_counts[hit, column] = counts[slot[hit]]
     value = np.zeros(len(texels))
+    from time import perf_counter
+    last_yield = perf_counter()
     for group in range(len(group_keys)):
-        if group % 32 == 31:
+        if perf_counter() - last_yield > .03:
             yield group / len(group_keys)
+            last_yield = perf_counter()
         if group_keys[group] < 0:
             continue
         pieces = [(int(s), int(c)) for s, c in zip(neighbour_starts[group], neighbour_counts[group]) if c]

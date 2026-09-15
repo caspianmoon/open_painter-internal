@@ -204,10 +204,15 @@ class OP_PT_masks(bpy.types.Panel):
                     and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
                 ):
                     layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
+                from ..baking.maps.curvature import edge_map_set_complete
                 radius = ts.bake.mean_curvature_distance
-                layout.prop(mask, "edge_width", text=f"Edge Width (of {radius * 100:.1f} cm)", slider=True)
+                if edge_map_set_complete(ts):
+                    layout.prop(mask, "edge_size", text=f"Edge Size (thin {radius * 50:.1f} cm ↔ extreme {radius * 400:.1f} cm)", slider=True)
+                else:
+                    layout.label(text="Rebake the edge maps for a live Edge Size control", icon="INFO")
+                layout.prop(mask, "edge_width", text="Edge Width", slider=True)
                 box = layout.box()
-                box.label(text="Baked edge map (rebake to change the reach)", icon="IMAGE_DATA")
+                box.label(text="Baked edge maps: thin, normal, wide, extreme", icon="IMAGE_DATA")
                 box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
                 box.prop(ts.bake, "curvature_angle")
                 box.prop(ts.bake, "curvature_width")

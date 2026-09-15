@@ -6,11 +6,14 @@ from textwrap import wrap
 import bpy
 from bpy_extras.io_utils import ImportHelper
 
+from ..constants import BLEND_ITEMS
+from ..core import layer_stack
 from ..core.layer_stack import active, channel_for, visible_rows
 from ..core.project_manager import active_set, require_set
 from . import editor
 from .dock import assets, state
 from .operators import SafeOperator
+from ..utils.logging import logger
 from . import library_categories as categories
 
 ASSET_KEY = "open_painter_catalog_entry"
@@ -321,6 +324,119 @@ class OP_OT_native_select(SafeOperator, bpy.types.Operator):
         context.area.tag_redraw()
 
 
+_drag = {"active": False}
+
+
+def layer_row_pressed(ts, context):
+    """Start the modal reorder when a Painter layer row is pressed.
+
+    Blender applies a list row on mouse press, before any drag can be seen;
+    ``active_layer``'s update is that press. Python assignments arrive here
+    too, but with another event state or no list under the mouse, and the
+    operator declines them.
+    """
+    if _drag["active"] or context.window is None:
+        return
+    ui_list = getattr(context, "ui_list", None)
+    if ui_list is None or ui_list.bl_idname != "OP_UL_native_layers":
+        return
+    try:
+        bpy.ops.open_painter.native_layer_drag("INVOKE_DEFAULT")
+    except RuntimeError:
+        pass
+
+
+class OP_OT_native_layer_drag(bpy.types.Operator):
+    """Drag a layer up or down the stack; move sideways to change its folder"""
+
+    bl_idname = "open_painter.native_layer_drag"
+    bl_label = "Move Layer"
+    bl_options = {"UNDO", "INTERNAL"}
+
+    @classmethod
+    def poll(cls, context):
+        return active_set(context) is not None
+
+    def invoke(self, context, event):
+        ts = active_set(context)
+        layer = active(ts)
+        if layer is None or event.type != "LEFTMOUSE" or event.value != "PRESS":
+            return {"CANCELLED"}
+        # The press selects the layer content, as the name button used to.
+        ui = state.get(context.area)
+        ui.mask_selected = False
+        ui.selected_layers = {layer.id}
+        from ..painting.paint_session import synchronize
+
+        synchronize(context, mask=False)
+        context.area.tag_redraw()
+        system = context.preferences.system
+        # A list row is one widget unit tall; folder levels step sideways by one.
+        self.unit = int(round(18 * system.ui_scale) + 2 * system.pixel_size)
+        self.threshold = context.preferences.inputs.drag_threshold_mouse * system.ui_scale
+        self.layer_id = layer.id
+        self.origin = (event.mouse_x, event.mouse_y)
+        self.targets = layer_stack.drop_targets(ts, layer.id)
+        self.gap, self.depth = layer_stack.slot(ts, layer.id)
+        self.saved = layer_stack.arrangement(ts)
+        self.current = None
+        self.dragging = False
+        _drag["active"] = True
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        try:
+            return self.track(context, event)
+        except Exception:
+            # A region that vanished mid-drag must not leave the stack held.
+            logger.debug("Layer drag ended", exc_info=True)
+            return self.finish(context, "CANCELLED")
+
+    def track(self, context, event):
+        ts = active_set(context)
+        if ts is None or not any(item.id == self.layer_id for item in ts.layers):
+            return self.finish(context, "CANCELLED")
+        if event.type in {"MOUSEMOVE", "INBETWEEN_MOUSEMOVE"}:
+            dx, dy = event.mouse_x - self.origin[0], event.mouse_y - self.origin[1]
+            if not self.dragging:
+                if abs(dx) < self.threshold and abs(dy) < self.threshold:
+                    return {"PASS_THROUGH"}
+                self.dragging = True
+                context.window.cursor_modal_set("HAND_CLOSED")
+                context.workspace.status_text_set(
+                    "Drag up or down to reorder, sideways to change folder, Esc to cancel")
+            gap = min(len(self.targets) - 1, max(0, self.gap - round(dy / self.unit)))
+            wanted = self.depth + round(dx / self.unit)
+            target = min(self.targets[gap], key=lambda item: abs(item[0] - wanted))
+            if target != self.current:
+                layer_stack.place(ts, self.layer_id, target)
+                self.current = target
+                context.region.tag_redraw()
+            return {"RUNNING_MODAL"}
+        if event.type == "LEFTMOUSE" and event.value == "RELEASE":
+            return self.finish(context, "FINISHED" if self.dragging else "CANCELLED")
+        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS" and self.dragging:
+            layer_stack.restore_arrangement(ts, self.saved)
+            ts.active_layer = layer_stack.index_of(ts, self.layer_id)
+            return self.finish(context, "CANCELLED")
+        if event.type == "LEFTMOUSE" and event.value == "PRESS":
+            # The release was lost to another window; do not hold the stack.
+            return self.finish(context, "FINISHED" if self.dragging else "CANCELLED")
+        return {"RUNNING_MODAL"} if self.dragging else {"PASS_THROUGH"}
+
+    def finish(self, context, result):
+        _drag["active"] = False
+        if self.dragging:
+            context.window.cursor_modal_restore()
+            context.workspace.status_text_set(None)
+            if context.area is not None:
+                context.area.tag_redraw()
+            return {result}
+        # A plain click: leave the release to the widgets underneath.
+        return {result, "PASS_THROUGH"}
+
+
 class PainterPanel:
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -381,6 +497,31 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
 
 
 _row_depths = {}
+LAYER_ICONS = {"PAINT": "BRUSH_DATA", "FILL": "MATERIAL", "FOLDER": "FILE_FOLDER"}
+BLEND_LABELS = {key: label for key, label, _ in BLEND_ITEMS}
+# Four-letter blend names for rows in a narrow sidebar.
+BLEND_SHORT = {
+    "NORMAL": "Norm", "MULTIPLY": "Mult", "ADD": "Add", "SUBTRACT": "Sub", "OVERLAY": "Ovly",
+    "DIVIDE": "Div", "DARKEN": "Dark", "LIGHTEN": "Lght", "DIFFERENCE": "Diff", "EXCLUSION": "Excl",
+    "SCREEN": "Scrn", "LINEAR_BURN": "LBrn", "COLOR_BURN": "CBrn", "COLOR_DODGE": "CDdg",
+    "SOFT_LIGHT": "SftL", "HARD_LIGHT": "HrdL", "VIVID_LIGHT": "VivL", "LINEAR_LIGHT": "LinL",
+    "PIN_LIGHT": "PinL", "DISABLE": "Off", "HUE": "Hue", "SATURATION": "Sat", "COLOR": "Col",
+    "LUMINOSITY": "Lum", "NORMAL_COMBINE": "NCmb", "RNM": "RNM", "NORMAL_ADD": "NAdd",
+    "NORMAL_REPLACE": "NRpl",
+}
+OPACITY_WIDTH = 52
+
+
+def row_metrics(context):
+    """Unscaled row width, whether rows are compact, and the blend menu width.
+
+    A row is the sidebar minus its tabs, panel and list margins. Below 300 px
+    the blend menu shows short names so the layer name keeps its room.
+    """
+    scale = max(.5, context.preferences.system.ui_scale)
+    width = context.region.width / scale - 80
+    compact = width < 300
+    return width, compact, 50 if compact else 78
 
 
 def draw_generator_controls(layout, ts, layer):
@@ -401,13 +542,16 @@ def draw_generator_controls(layout, ts, layer):
         op.layer_id, op.mask = layer.id, True
         box.prop(mask, "amount", slider=True)
         if mask.source == "GENERATOR" and mask.generator in {"EDGE_WEAR", "CHIPS"}:
+            from ..baking.maps.curvature import edge_map_set_complete
             radius = ts.bake.mean_curvature_distance
-            box.prop(mask, "edge_width", text=f"Edge Width (of {radius * 100:.1f} cm)", slider=True)
+            if edge_map_set_complete(ts):
+                box.prop(mask, "edge_size", text=f"Edge Size ({radius * 50:.1f}–{radius * 400:.1f} cm)", slider=True)
+            box.prop(mask, "edge_width", text="Edge Width", slider=True)
             if OP_OT_edge_map_refresh.running:
                 box.label(text="Rebaking the edge map in the background…", icon="TIME")
             elif stale_curvature(ts) is not None:
-                box.label(text="Crease-only edge map: rebake for smooth edges", icon="ERROR")
-                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA")
+                box.label(text="Edge maps need a rebake (smooth edges, live Edge Size)", icon="ERROR")
+                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Maps", icon="IMAGE_DATA")
             elif not any(m.kind == "CURVATURE" and m.image for m in ts.baked_maps):
                 box.label(text="Bake a Curvature map for edge wear", icon="ERROR")
         box.prop(mask, "contrast", slider=True)
@@ -436,13 +580,18 @@ class OP_UL_native_layers(bpy.types.UIList):
         if depths is None:
             depths = _row_depths[data.as_pointer()] = dict(visible_rows(data))
         depth = depths.get(index, 0)
-        split = layout.split(factor=0.42, align=True)
+        # Everything left of the controls is the row itself: press to select,
+        # drag to reorder, double-click the name to rename. The controls keep
+        # a readable width; the name takes whatever the sidebar adds.
+        width, compact, blend_width = row_metrics(context)
+        controls_width = blend_width + OPACITY_WIDTH
+        split = layout.split(factor=1 - controls_width / max(2 * controls_width, width))
         row = split.row(align=True)
         row.prop(
             layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
         )
-        for _ in range(depth):
-            row.separator(factor=0.5)
+        if depth:
+            row.separator(factor=2.5 * depth)
         if layer.type == "FOLDER":
             row.prop(
                 layer,
@@ -451,13 +600,7 @@ class OP_UL_native_layers(bpy.types.UIList):
                 icon="TRIA_DOWN" if layer.expanded else "TRIA_RIGHT",
                 emboss=False,
             )
-        op = row.operator(
-            "open_painter.native_select",
-            text=layer.name,
-            icon="FILE_FOLDER" if layer.type == "FOLDER" else "MATERIAL",
-            emboss=False,
-        )
-        op.layer_id, op.mask = layer.id, False
+        row.label(text="", icon=LAYER_ICONS[layer.type])
         if layer.masks:
             op = row.operator(
                 "open_painter.native_select",
@@ -466,19 +609,23 @@ class OP_UL_native_layers(bpy.types.UIList):
                 depress=index == data.active_layer and state.get(context.area).mask_selected,
             )
             op.layer_id, op.mask = layer.id, True
+        row.prop(layer, "name", text="", emboss=False)
         if any(m.source == "ANCHOR" for m in layer.masks) or any(
                 e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
             row.label(text="", icon="ANCHOR_CENTER")
-        controls = split.split(factor=0.5, align=True)
-        blend_control = controls.row(align=True)
-        opacity_control = controls.row(align=True)
+        controls = split.split(factor=blend_width / controls_width, align=True)
         if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
-            blend_control.prop_menu_enum(layer, "group_mode", text="Pass")
+            controls.prop_menu_enum(layer, "group_mode", text="Pass" if compact else "Pass Through")
         elif channel:
             blend = layer.blend_mode if channel.blend_mode == "INHERIT" else channel.blend_mode
-            blend_control.prop_menu_enum(channel, "blend_mode", text=blend.replace("_", " ").title())
+            labels = BLEND_SHORT if compact else BLEND_LABELS
+            controls.prop_menu_enum(channel, "blend_mode", text=labels.get(blend, blend.title()))
+        else:
+            controls.label(text="")
         if channel:
-            opacity_control.prop(channel, "opacity_percent", text="", slider=False)
+            controls.prop(channel, "opacity_percent", text="")
+        else:
+            controls.label(text="")
 
 
 class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
@@ -491,20 +638,24 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         if not ts:
             layout.label(text="Create a texture set to start painting.")
             return
-        row = layout.row(align=True)
-        row.prop(context.scene.open_painter, "blend_channel", text="")
-        row = layout.row(align=True)
-        for action, label, icon in [
-            ("PAINT", "Paint", "BRUSH_DATA"),
-            ("FILL", "Fill", "SHADING_RENDERED"),
-            ("FOLDER", "Folder", "FILE_FOLDER"),
+        # Channel selector on the left, add/delete tools on the right, as a
+        # single strip above the stack; a narrow sidebar stacks the two.
+        header = layout.row() if row_metrics(context)[0] >= 280 else layout.column()
+        header.prop(context.scene.open_painter, "blend_channel", text="")
+        tools = header.row(align=True)
+        tools.alignment = "RIGHT"
+        for action, icon in [
+            ("PAINT", LAYER_ICONS["PAINT"]),
+            ("FILL", LAYER_ICONS["FILL"]),
+            ("FOLDER", "NEWFOLDER"),
         ]:
-            row.operator("open_painter.layer", text=label, icon=icon).action = action
-        row.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
-        row.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
-        row = layout.row(align=True)
-        row.operator("open_painter.catalog_material", text="Material", icon="MATERIAL")
-        row.operator("open_painter.catalog_effect", text="Effect", icon="MODIFIER")
+            tools.operator("open_painter.layer", text="", icon=icon).action = action
+        tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
+        tools.separator()
+        tools.operator("open_painter.catalog_material", text="", icon="ASSET_MANAGER")
+        tools.operator("open_painter.catalog_effect", text="", icon="MODIFIER")
+        tools.separator()
+        tools.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
         layout.template_list(
             "OP_UL_native_layers",
             "stack",
@@ -512,18 +663,19 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
             "layers",
             ts,
             "active_layer",
-            rows=3,
-            maxrows=3,
+            rows=4,
+            maxrows=12,
             sort_lock=True,
         )
-        row = layout.row(align=True)
-        for action, label, icon in [
-            ("UP", "", "TRIA_UP"),
-            ("DOWN", "", "TRIA_DOWN"),
-            ("DUPLICATE", "Duplicate", "DUPLICATE"),
-            ("PARENT", "Parent", "FILE_FOLDER"),
+        footer = layout.row(align=True)
+        footer.alignment = "LEFT"
+        for action, icon in [
+            ("UP", "TRIA_UP"),
+            ("DOWN", "TRIA_DOWN"),
+            ("DUPLICATE", "DUPLICATE"),
+            ("PARENT", "FOLDER_REDIRECT"),
         ]:
-            row.operator("open_painter.layer", text=label, icon=icon).action = action
+            footer.operator("open_painter.layer", text="", icon=icon).action = action
 
 
 class OP_MT_native_masks(bpy.types.Menu):
@@ -707,6 +859,7 @@ CLASSES = (
     OP_OT_import_texture,
     VIEW3D_AST_open_painter,
     OP_OT_native_select,
+    OP_OT_native_layer_drag,
     OP_PT_native_sets,
     OP_PT_native_layers,
     OP_MT_native_masks,

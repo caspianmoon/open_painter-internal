@@ -66,9 +66,11 @@ class OP_Mask(bpy.types.PropertyGroup):
             ('SCENE', 'Scene Field', 'Bounded UV analysis of explicit scene inputs'),
             ('REFERENCE', 'Published Input', 'Reference a layer mask or channel in this texture set'),
             ('ANCHOR', 'Anchor Point', 'Publish the mask result at this position for other layers'),
+            ('STROKES', 'Vector Strokes', 'Coverage of the project\'s vector strokes with this mask\'s key'),
         ],
         update=changed,
     )
+    stroke_key: bpy.props.StringProperty(update=changed, description='Key of the vector strokes this mask renders')
     procedural: bpy.props.StringProperty(default="FBM", update=changed)
     effect: bpy.props.PointerProperty(type=OP_TextureEffect)
     id_color: bpy.props.FloatVectorProperty(size=3, subtype="COLOR", default=(1,1,1), min=0,max=1, update=numeric)

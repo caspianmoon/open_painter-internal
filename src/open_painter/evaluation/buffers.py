@@ -24,6 +24,7 @@ def scalar_compatible(channel, layers, properties):
         if mode in RGB_MODES:
             return False
         if prop and (prop.image or prop.image_name or getattr(prop, 'anchor', '')
+                     or getattr(layer, 'stroke_key', '')
                      or any(e.enabled and e.strength > 0 and e.kind not in SCALAR_EFFECTS for e in prop.effects)):
             return False
     return True

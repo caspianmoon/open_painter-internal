@@ -49,6 +49,9 @@ not replace the editor or the material library.
   effect role, then apply Clean/Used/Damaged or custom age/usage/maintenance.
   Paint strokes and untagged layers are preserved. Use separate texture sets for
   separate per-object variations; shared outputs remain shared.
+- **Vector Brush (0.6.0):** paint layer → Vector Brush → Paint Vector Strokes; drag on
+  any assigned surface, across texture sets. Strokes stay editable in the layer's
+  Vector Strokes list and re-render at any Output Resolution. [Details](vector-strokes.md).
 - **Material Stamp (4 Channels):** choose radius, hardness and channel values,
   then click an assigned visible surface. Escape cancels placement; normal
   navigation passes through. This is a discrete stamp, with one undo/redo step.

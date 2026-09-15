@@ -197,6 +197,19 @@ class OP_PT_masks(bpy.types.Panel):
                 ).mask = True
         elif mask.source == "BAKED":
             layout.prop(mask, "map_type")
+        elif mask.source == 'STROKES':
+            from ..painting import strokes as stroke_records
+            keys = {item.stroke_key: item.name for other in context.scene.open_painter.texture_sets
+                    for item in other.layers if item.stroke_key}
+            if mask.stroke_key:
+                count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key))
+                layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, "?")}"', icon='CURVE_BEZCURVE')
+            else:
+                layout.label(text='No strokes linked yet', icon='INFO')
+            row = layout.row(align=True)
+            row.operator('open_painter.mask_strokes', text="This Layer's Strokes", icon='LINKED').action = 'OWN'
+            row.operator('open_painter.mask_strokes', text='New Key', icon='ADD').action = 'NEW'
+            row.operator('open_painter.mask_strokes', text='', icon='X').action = 'CLEAR'
         elif mask.source == "PROCEDURAL":
             op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
             op.target, op.create = "MASK", False

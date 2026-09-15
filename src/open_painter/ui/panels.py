@@ -83,6 +83,12 @@ class OP_PT_texture_set(bpy.types.Panel):
                 box.label(text=f"Rebuild pending: {info['rebuild_scope']}"[:96])
         layout.prop(ts, "name", text="Name")
         layout.prop(ts, "resolution")
+        from .strokes_panel import pending_resample
+        pending = pending_resample(ts)
+        if pending:
+            row = layout.row(align=True)
+            row.label(text=f"{pending} paint image{'s' if pending != 1 else ''} at another size, sampled bilinearly", icon="INFO")
+            layout.operator("open_painter.resample_paint_images", icon="IMAGE_DATA")
         layout.prop(ts, "preview_ao")
         layout.prop(ts, "height_distance")
         row = layout.row(align=True)

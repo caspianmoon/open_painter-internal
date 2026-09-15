@@ -1,5 +1,21 @@
 # Changes
 
+## 0.6.0
+
+Universal canvas and resolution-independent strokes.
+
+- Vector Brush: strokes are recorded as data (samples with pressure, radius, tilt and
+  direction, brush settings, projection, channel values) on the project and rasterised
+  per texture set at its own resolution. One gesture across several sets stays one
+  editable stroke: linked paint layers are created where the stroke reaches. Strokes
+  cross UV seams, follow mesh edits, re-render on resolution change, undo as data and
+  survive reload; edit, reorder, duplicate, erase, rasterise or purge them from the layer.
+- Vector Strokes mask source; native paint keeps working under the strokes.
+- CPU and shader-native parity; stroke edits re-identify the boundary without a rebuild.
+- Output Resolution changes now report paint images at another size with an explicit
+  Resample Paint Images action (everything else already re-renders).
+- See docs/vector-strokes.md.
+
 ## 0.5.1
 
 Target renderer: pick the engine once.

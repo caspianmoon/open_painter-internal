@@ -4,6 +4,7 @@ from ..constants import CHANNEL_ITEMS
 from ..targets import ITEMS as TARGET_ITEMS
 from ..painting.brush_bridge import get_value, set_value
 from .texture_set import OP_TextureSet
+from .stroke import OP_Stroke, OP_VectorBrushSettings
 from ..ui.library_categories import CATEGORY_ITEMS, refresh
 
 
@@ -52,6 +53,11 @@ class OP_Project(bpy.types.PropertyGroup):
                                                options={"PATH_SUPPORTS_BLEND_RELATIVE"})
     export_mesh: bpy.props.BoolProperty(name="Export Mesh", default=True,
                                         description="Also export the assigned objects in the target's mesh format")
+    # Vector strokes (0.6.0)
+    strokes: bpy.props.CollectionProperty(type=OP_Stroke)
+    active_stroke: bpy.props.IntProperty(default=0)
+    stroke_serial: bpy.props.IntProperty(default=0)
+    vector_brush: bpy.props.PointerProperty(type=OP_VectorBrushSettings)
     format_version: bpy.props.IntProperty(default=1)
     texture_sets: bpy.props.CollectionProperty(type=OP_TextureSet)
     active_texture_set: bpy.props.IntProperty(default=0)

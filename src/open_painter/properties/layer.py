@@ -80,6 +80,9 @@ class OP_Layer(bpy.types.PropertyGroup):
         description="Publish this layer's blended result as an anchor other layers can read")
     publish_group: bpy.props.BoolProperty(name="Publish Folder Composite", default=False, update=changed,
         description="Publish the folder's child composite, before the folder itself blends, as an anchor")
+    # Vector strokes (0.6.0): paint layers sharing a key across sets render the same strokes.
+    stroke_key: bpy.props.StringProperty(update=changed,
+        description="Key of the project's vector strokes this paint layer renders")
     # Material module identity on an instance root folder (0.4.1). Metadata only:
     # ids inside the instance are "<module_instance>.<module id>".
     module_id: bpy.props.StringProperty(description="Module definition this folder is an instance of")

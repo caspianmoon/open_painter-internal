@@ -24,6 +24,9 @@ from .properties.export import OP_ExportSettings
 from .properties.layer import OP_Layer
 from .properties.mask import OP_Mask
 from .properties.project import OP_Project
+from .properties.stroke import OP_Stroke, OP_VectorBrushSettings
+from .ui.vector_brush import CLASSES as VECTOR_BRUSH_CLASSES
+from .ui.strokes_panel import CLASSES as STROKE_PANEL_CLASSES
 from .properties.texture_set import OP_Assignment, OP_TextureSet
 from .ui.assets_panel import OP_OT_import_material, OP_OT_library, OP_OT_save_material, OP_PT_assets
 from .ui.baking_panel import OP_OT_bake, OP_PT_bake, OP_UL_high
@@ -60,6 +63,8 @@ CLASSES = (
     OP_BakeSettings,
     OP_ExportSettings,
     OP_TextureSet,
+    OP_Stroke,
+    OP_VectorBrushSettings,
     OP_Project,
     OP_OT_texture_set,
     OP_UL_texture_sets,
@@ -103,7 +108,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES
 
 
 _registered = False

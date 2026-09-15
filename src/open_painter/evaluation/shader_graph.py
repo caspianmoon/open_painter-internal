@@ -61,7 +61,8 @@ def _prop_signature(prop, count=None):
 
 
 def _mask_signature(m):
-    return (m.id, m.enabled, m.source, m.generator, getattr(m, 'edge_source', 'BAKED'), m.procedural, m.map_type, m.operation,
+    return (m.id, m.enabled, m.source, m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
+            m.procedural, m.map_type, m.operation,
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
             m.reference_channel, m.reference_stage, m.reference_anchor, m.detail_height_anchor,
             m.detail_normal_anchor, m.effect.kind,
@@ -649,9 +650,41 @@ class Graph(Math):
             return self.boundary(self._role, owners, identity, factory,
                                  ['channel_prefix', layer.id, prop.channel, count])
 
+    def _strokes_boundary(self, layer, prop, rehydrate=None):
+        """The layer's vector strokes for one channel, composited over its paint image on the CPU."""
+        from ..painting.strokes import stroke_identity
+        channel = prop.channel
+        def owners():
+            return [layer, prop]
+        def identity():
+            return ('strokes', layer.stroke_key, channel, stroke_identity(self.scene.open_painter, layer.stroke_key),
+                    image_key(prop.image) if prop.image else None, self._geometry_stamp(True))
+        def factory(signature):
+            from .snapshots import capture
+            snapshot = capture(prop)
+            def parts():
+                from ..painting.stroke_raster import channel_rows
+                from .channel_eval import _image_source
+                cache, geometry = {}, {}
+                n = self.n
+                for low in range(0, n, 16):
+                    high = min(low + 16, n)
+                    base = (_image_source(snapshot.image, snapshot, 'PAINT', n, low, high, cache, self.ts, geometry)
+                            if snapshot.image else None)
+                    if base is not None:
+                        base = np.broadcast_to(base, (high - low, n, 4))
+                    yield low, channel_rows(self.ts, layer, channel, n, low, high, None, base=base)
+            return parts()
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
+        with self.role(f'Strokes:{layer.id}:{channel}'):
+            return self.boundary(self._role, owners, identity, factory, ['strokes', layer.id, channel])
+
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
-            if layer.type == 'FILL' and prop.anchor:
+            if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
+                value = self._strokes_boundary(layer, prop)
+            elif layer.type == 'FILL' and prop.anchor:
                 # Anchored content is already in texture space: no projection or tiling.
                 value = self.anchor_signal(prop.anchor, prop.anchor_channel or channel)
             elif prop.image:
@@ -894,7 +927,8 @@ class Graph(Math):
             return signature
         if key[0] == 'SRC':
             prop = channel_for(layer, key[2])
-            return (layer.type, _prop_signature(prop, key[3]), refs, self._continuation(key))
+            return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
+                    self._continuation(key))
         masks = list(layer.masks)
         stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
         return (tuple(_mask_signature(m) for m in masks[:stop]), refs, self._continuation(key))
@@ -1234,6 +1268,10 @@ class Graph(Math):
         def identity():
             if mask.source == 'SCENE':
                 return ('scene-field', self._scene_identity(mask.influence))
+            if mask.source == 'STROKES':
+                from ..painting.strokes import stroke_identity
+                return ('strokes-mask', mask.stroke_key, stroke_identity(self.scene.open_painter, mask.stroke_key),
+                        self._geometry_stamp(True))
             if mask.source == 'PROCEDURAL':
                 return ('legacy-mask-field', mask.procedural, mask.noise_scale, mask.seed,
                         mask.projection, tuple(mask.scale), mask.rotation, tuple(mask.offset),
@@ -1319,6 +1357,9 @@ class Graph(Math):
             stamp = values(mask, excluded={'influence'})
             if mask.source == 'SCENE' or (mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE'):
                 stamp += (('scene', self._scene_identity(mask.influence)),)
+            if mask.source == 'STROKES':
+                from ..painting.strokes import stroke_identity
+                stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key), self._geometry_stamp(True)),)
             required = map_dependencies(mask)
             stamp += (('maps', tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps
                                     if required is None or m.kind in required)),)
@@ -1914,6 +1955,9 @@ class Graph(Math):
         if site == 'channel_prefix':
             prop = channel_for(layer, args[1])
             return prop is not None and self._channel_prefix(layer, prop, args[2], rehydrate=node) is not None
+        if site == 'strokes':
+            prop = channel_for(layer, args[1])
+            return prop is not None and self._strokes_boundary(layer, prop, rehydrate=node) is not None
         mask = next((m for m in layer.masks if m.id == args[1]), None)
         if mask is None:
             return False

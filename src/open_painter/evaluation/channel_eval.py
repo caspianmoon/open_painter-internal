@@ -373,6 +373,16 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
             return np.concatenate((np.repeat(value[..., None], 3, axis=-1),
                                    np.ones((y1 - y0, n, 1), np.float32)), axis=-1)
         return value
+    if kind == "PAINT":
+        layer = next((item for item in ts.layers if item.id == getattr(prop, "layer_id", "")), None)
+        key = getattr(layer, "stroke_key", "") if layer is not None else ""
+        if key:
+            from ..painting.stroke_raster import channel_rows
+            base = (_image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache) if prop.image
+                    else None)
+            if base is not None:
+                base = np.broadcast_to(base, (y1 - y0, n, 4))
+            return channel_rows(ts, layer, prop.channel, n, y0, y1, geometry_cache, base=base)
     if prop.image:
         return _image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache)
     if kind == "PAINT":

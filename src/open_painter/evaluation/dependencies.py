@@ -25,9 +25,14 @@ def live_fields(ts):
             or (m.source == 'GENERATOR' and getattr(m, 'edge_source', 'BAKED') == 'LIVE')]
 
 
+def uses_strokes(ts):
+    return any(getattr(l, 'stroke_key', '') for l in ts.layers) or any(
+        m.source == 'STROKES' and m.stroke_key for l in ts.layers for m in l.masks)
+
+
 def uses_geometry(ts):
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
-        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake)
+        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts)
 
 
 @measured('geometry_signature')

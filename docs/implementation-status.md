@@ -16,6 +16,17 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Vector strokes and universal canvas 0.6.0 — 2026-09-15
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Stroke kernel (disc, depth band, facing, pressure, flow/max union, alpha rake, planar) | done | `tests/unit/test_stroke_raster.py` |
+| Universal canvas: one stroke rendered by linked layers of every set it reaches; seam crossing | done | `tests/integration/vector_strokes.py` |
+| Edits, erase, delete, resolution independence (IoU > .95 at 512 vs 1024), mesh re-projection, undo, reload | done | `vector_strokes.py` |
+| Shader boundary parity, re-identification, rehydration; Vector Strokes mask | done, 2.3/1000 | `stroke_parity.py` |
+| Vector Brush modal with overlay; real-window drag records 25 samples | done | `vector_brush_ui.py` |
+| Precise per-sample occlusion, live stamps while dragging, native multi-set session, UDIM | deferred | plan |
+
 ## Target renderer 0.5.1 — 2026-09-15
 
 | Item | Status | Evidence |

@@ -45,6 +45,9 @@ not replace the editor or the material library.
   prototypes and their own materials; Regenerate, Freeze and Remove operate on
   the selected helper. Weld Curve turns an editable curve into a rippled bead.
   See [geometry-effects.md](geometry-effects.md).
+- **Material → Geometry (0.7.0):** Geometry Effects → Displace from Height, Extract
+  Curves (then Stitches / Seam Bead on the curve), Bolts / Scales / Rocks / Bark scatter,
+  and Bake Back to Normal / AO with keep / hide / remove. See [geometry-effects.md](geometry-effects.md).
 - **Age / Environment State:** tag participating fill layers with their semantic
   effect role, then apply Clean/Used/Damaged or custom age/usage/maintenance.
   Paint strokes and untagged layers are preserved. Use separate texture sets for

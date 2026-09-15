@@ -196,8 +196,10 @@ def moss_variants(seed=1):
     return result
 
 
-BUILDERS = {"RUST": rust_flake, "SNOW": snow_clump, "SPLINTERS": splinter, "PEEL": peel_fragment}
-VARIANTS = {"RUST": 6, "SNOW": 4, "SPLINTERS": 5, "PEEL": 4}
+from . import prototypes_detail as detail
+
+BUILDERS = {"RUST": rust_flake, "SNOW": snow_clump, "SPLINTERS": splinter, "PEEL": peel_fragment, **detail.BUILDERS}
+VARIANTS = {"RUST": 6, "SNOW": 4, "SPLINTERS": 5, "PEEL": 4, **detail.VARIANTS}
 
 
 def variants(kind, seed):

@@ -300,7 +300,56 @@ def weld():
     return material
 
 
-BUILDERS = {"RUST": rust, "MOSS": moss, "SNOW": snow, "SPLINTERS": wood, "PEEL": peel, "WELD": weld}
+def _simple(name, color, roughness, metallic=0.0, bump_scale=None):
+    material, principled = _new(name)
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    vector, random = _instance_random(nodes, links)
+    shade = nodes.new("ShaderNodeMix")
+    shade.data_type = "RGBA"
+    shade.inputs["A"].default_value = (*color, 1)
+    shade.inputs["B"].default_value = (*[c * .6 for c in color], 1)
+    links.new(random, shade.inputs["Factor"])
+    links.new(shade.outputs["Result"], principled.inputs["Base Color"])
+    principled.inputs["Roughness"].default_value = roughness
+    principled.inputs["Metallic"].default_value = metallic
+    if bump_scale:
+        noise = nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = bump_scale
+        noise.inputs["Detail"].default_value = 5
+        links.new(vector, noise.inputs["Vector"])
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = .3
+        bump.inputs["Distance"].default_value = .002
+        links.new(noise.outputs["Fac"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], principled.inputs["Normal"])
+    return material
+
+
+def bolt():
+    return _simple("OP Bolt", (.42, .43, .44), .45, metallic=1.0, bump_scale=200)
+
+
+def stitch():
+    material = _simple("OP Stitch Thread", (.72, .6, .35), .75)
+    principled = next(n for n in material.node_tree.nodes if n.bl_idname == "ShaderNodeBsdfPrincipled")
+    principled.inputs["Anisotropic"].default_value = .6
+    return material
+
+
+def scale():
+    return _simple("OP Scale", (.28, .33, .22), .55, bump_scale=60)
+
+
+def rock():
+    return _simple("OP Rock", (.36, .34, .31), .9, bump_scale=30)
+
+
+def bark():
+    return _simple("OP Bark", (.24, .16, .1), .95, bump_scale=45)
+
+
+BUILDERS = {"RUST": rust, "MOSS": moss, "SNOW": snow, "SPLINTERS": wood, "PEEL": peel, "WELD": weld,
+            "BOLT": bolt, "STITCH": stitch, "SCALE": scale, "ROCK": rock, "BARK": bark}
 
 
 def create(kind, ts=None):

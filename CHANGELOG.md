@@ -1,5 +1,21 @@
 # Changes
 
+## 0.7.0
+
+Material → Geometry.
+
+- Displace from Height (or a mask): an owned copy of the evaluated source, subdivided and
+  displaced by Geometry Nodes from the published channel through the set's UVs, with
+  regenerate, apply and an explicit Replace Source Mesh.
+- Extract Curves: a mask's centre lines become an editable world-space curve on the surface
+  (thinning, tracing, simplification, seam-aware projection); Stitches on Curve instances
+  thread prototypes along it; Seam Bead on Curve is a low weld profile.
+- New scatter prototypes with owned materials: Bolts, Scales, Rocks, Bark.
+- Bake Back to Normal / AO: every generated helper of the set is staged as a paired high-poly
+  source (instances realised), the existing Cycles bake runs, the maps read Ready until a
+  helper regenerates, and the geometry is kept, hidden or removed.
+- See docs/geometry-effects.md.
+
 ## 0.6.1
 
 - Native painting across texture sets: Paint Across Sets runs the brush in Blender's

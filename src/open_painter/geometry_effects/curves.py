@@ -109,8 +109,14 @@ def trace(skeleton_mask, min_length=3):
 def simplify(points, tolerance=1.0):
     """Douglas–Peucker on an (N, 2+) polyline."""
     points = np.asarray(points, np.float64)
+    return points[simplify_indices(points, tolerance)]
+
+
+def simplify_indices(points, tolerance=1.0):
+    """Boolean keep-mask of Douglas–Peucker on an (N, 2+) polyline."""
+    points = np.asarray(points, np.float64)
     if len(points) < 3:
-        return points
+        return np.ones(len(points), bool)
     keep = np.zeros(len(points), bool)
     keep[0] = keep[-1] = True
     stack = [(0, len(points) - 1)]
@@ -131,7 +137,7 @@ def simplify(points, tolerance=1.0):
             split = a + 1 + index
             keep[split] = True
             stack.append((a, split)); stack.append((split, b))
-    return points[keep]
+    return keep
 
 
 def split_jumps(points, maximum):
@@ -230,6 +236,13 @@ def extract_steps(ts, mask_image, n=512, threshold=.5, tolerance=1.0):
         except StopIteration as done:
             thin = done.value
             break
-    paths = [simplify(path, tolerance) for path in trace(thin)]
+    paths = trace(thin)
     yield .8
-    return to_world(ts, paths, n, raster.shape)
+    # Project the dense pixel paths first (seam splits need adjacent samples), then
+    # simplify in world space with the tolerance measured in texels.
+    texel = _texel_size(ts, n)
+    result = []
+    for points, normals in to_world(ts, paths, n, raster.shape):
+        keep = simplify_indices(points, tolerance * texel)
+        result.append((points[keep], normals[keep]))
+    return result

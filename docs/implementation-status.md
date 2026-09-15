@@ -16,6 +16,16 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Material → Geometry 0.7.0 — 2026-09-15
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Height/mask → displaced owned copy; seam rule; source untouched; limits; regenerate/apply/replace | done, 2.5e-3 on a gradient | `tests/integration/geometry_displace.py` |
+| Mask → curves (thinning, tracing, simplification, projection) → stitches / seam bead / weld | done | `curve_geometry.py`, `tests/unit/test_curve_extraction.py` |
+| Bolt, scale, rock, bark prototypes and materials | done | `bake_back.py` (bolts), manager KINDS |
+| Bake back into NORMAL/AO with restored settings and provenance | done | `bake_back.py` |
+| Render gallery of the new prototypes | deferred | — |
+
 ## Vector strokes and universal canvas 0.6.0 — 2026-09-15
 
 | Item | Status | Evidence |

@@ -10,18 +10,24 @@ from contextlib import contextmanager
 @contextmanager
 def scope(context, originals):
     scene = bpy.data.scenes.new('OP Bake Geometry Check')
-    owned_objects, owned_meshes = [], []
+    owned_objects, owned_meshes, owned_groups = [], [], []
     try:
-        yield objects(context, originals, scene, owned_objects, owned_meshes)
+        yield objects(context, originals, scene, owned_objects, owned_meshes, owned_groups)
     finally:
         for obj in reversed(owned_objects):
             bpy.data.objects.remove(obj, do_unlink=True)
         for mesh in reversed(owned_meshes):
             bpy.data.meshes.remove(mesh)
+        for group in reversed(owned_groups):
+            try:
+                bpy.data.node_groups.remove(group)
+            except ReferenceError:
+                pass
         bpy.data.scenes.remove(scene)
 
 
-def objects(context, originals, scene, owned_objects, owned_meshes):
+def objects(context, originals, scene, owned_objects, owned_meshes, owned_groups=None):
+    owned_groups = [] if owned_groups is None else owned_groups
     graph = context.evaluated_depsgraph_get()
     scene.render.fps = context.scene.render.fps
     scene.render.fps_base = context.scene.render.fps_base
@@ -53,13 +59,29 @@ def objects(context, originals, scene, owned_objects, owned_meshes):
                             setattr(modifier, prop.identifier, getattr(value, prop.identifier))
                         except (AttributeError, TypeError):
                             pass
-                for key in value.keys() if modifier.type == 'NODES' else ():
-                    if key != '_RNA_UI':
-                        item = value[key]
-                        modifier[key] = item.original if isinstance(item, bpy.types.ID) else item
+                if modifier.type == 'NODES':
+                    try:
+                        items = {key: value[key] for key in value.keys()}
+                    except (TypeError, AttributeError):
+                        # Evaluated modifiers may not expose ID properties: copy the original's.
+                        items = {}
+                    for key, item in items.items():
+                        if key != '_RNA_UI':
+                            modifier[key] = item.original if isinstance(item, bpy.types.ID) else item
             modifier.show_viewport = modifier.show_render
             if modifier.type in {'SUBSURF','MULTIRES'}:
                 modifier.levels = modifier.render_levels
+        if original.get('open_painter_geometry_effect') == 'INSTANCE_HELPER':
+            # Generated geometry is instances: realise them so Cycles bakes real triangles.
+            realize = bpy.data.node_groups.new('OP Realize Instances', 'GeometryNodeTree')
+            realize.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
+            realize.interface.new_socket(name='Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
+            group_in, group_out = realize.nodes.new('NodeGroupInput'), realize.nodes.new('NodeGroupOutput')
+            node = realize.nodes.new('GeometryNodeRealizeInstances')
+            realize.links.new(group_in.outputs['Geometry'], node.inputs['Geometry'])
+            realize.links.new(node.outputs['Geometry'], group_out.inputs['Geometry'])
+            obj.modifiers.new('Open Painter Realize', 'NODES').node_group = realize
+            owned_groups.append(realize)
         scene.collection.objects.link(obj)
         copies[original] = obj
     for obj in copies.values():

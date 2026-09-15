@@ -33,6 +33,11 @@ KINDS = {
     'SNOW': dict(spacing=.42, tilt=2, scale=(.5, 2.2), slope=2.5, triangles=320, flat=False, align=None),
     'SPLINTERS': dict(spacing=.4, tilt=4, scale=(.5, 1.8), slope=0, triangles=128, flat=True, align=14),
     'PEEL': dict(spacing=.6, tilt=5, scale=(.5, 1.5), slope=0, triangles=192, flat=True, align=None),
+    # Material → Geometry kinds (0.7.0): bolts sit square, scales overlap downward, rocks and bark scatter.
+    'BOLT': dict(spacing=1.0, tilt=0, scale=(.9, 1.1), slope=0, triangles=60, flat=False, align=None),
+    'SCALE': dict(spacing=.55, tilt=2, scale=(.85, 1.15), slope=0, triangles=64, flat=True, align=12),
+    'ROCK': dict(spacing=.8, tilt=8, scale=(.4, 1.6), slope=.4, triangles=80, flat=False, align=None),
+    'BARK': dict(spacing=.5, tilt=3, scale=(.8, 1.3), slope=0, triangles=64, flat=True, align=10),
 }
 
 

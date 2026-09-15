@@ -60,3 +60,39 @@ Tests: `tests/integration/geometry_effects.py` (determinism, six flake variants
 with owned material and cleanup, per-point attributes and spacing, moss cluster
 cards with packed textures released on removal, snow on upward faces only,
 rippled sunk weld with owned material).
+
+## Material → Geometry (0.7.0)
+
+Why should height always be fake? The *Material → Geometry* row turns painted and
+generated detail into real geometry — helpers owned like every other effect
+(regenerate, freeze, remove, export) that you can keep or bake back.
+
+- **Displace from Height** (or the active layer's mask): an owned copy of the
+  evaluated source is subdivided (levels 0–4, simple or smooth), samples the
+  published Height output through the set's UV map and offsets each vertex along
+  its normal by `(h − midlevel) × amplitude` (default: the set's Height Distance).
+  The source mesh is never touched, so live scene fields and raster caches keyed on
+  it stay valid; **Regenerate** re-copies a moved or edited source, **Apply** freezes
+  the helper into real mesh data, **Replace Source Mesh** hands that mesh to the
+  source (explicitly destructive).
+- **Extract Curves**: the active layer's mask is thinned to its centre lines
+  (Zhang–Suen), traced into paths and loops, simplified and projected through the
+  set's world-position raster into an editable CURVE object parented to the source,
+  split where a path leaves the surface or jumps between UV islands.
+  **Stitches on Curve** instances thread prototypes along it (spacing, size), aligned
+  to the tangent and the nearest surface normal; **Seam Bead on Curve** is a low,
+  smooth weld profile; **Weld Curve** remains the rippled bead.
+- **Bolts, Scales, Rocks, Bark**: new scatter prototypes with owned materials
+  (hex/round bolt heads on washers, downward-overlapping scale plates, angular
+  flat-based rocks, ridged bark plates).
+- **Bake Back to Normal / AO**: every generated helper of the set is staged as a
+  high-poly source paired to its own object (instances realised for Cycles), the
+  existing NORMAL/AO bake runs with a ray distance covering the relief, the maps
+  are tagged with the helpers they came from and read *Stale* when a helper is
+  regenerated; then keep, hide or remove the geometry. The set's bake settings are
+  restored afterwards.
+
+Files: `geometry_effects/displace.py`, `curves.py`, `stitch.py`,
+`prototypes_detail.py`, `baking/bake_back.py`, `core/published_outputs.publish_channel`.
+Tests: `tests/integration/geometry_displace.py`, `curve_geometry.py`,
+`bake_back.py`, `tests/unit/test_curve_extraction.py`.

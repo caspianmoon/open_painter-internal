@@ -9,3 +9,5 @@ backups/blender-profile-before-update-*/
 
 # Release packages exceed GitHub's 100 MB file limit; attach them to GitHub Releases instead.
 dist/*.zip
+
+/open painter test.blend

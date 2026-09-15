@@ -11,7 +11,7 @@ from bpy.app.handlers import persistent
 
 from ..constants import OWNER
 from .resource_keys import key_for
-from . import dependencies
+from . import dependencies, field_jobs
 from ..utils.logging import logger
 
 _pending = {}
@@ -120,6 +120,7 @@ def cancel_all():
     for key in list(_jobs):
         discard(key)
     _evaluators.clear()
+    field_jobs.cancel_all()
 
 
 def paint_input(scene, pressed):
@@ -139,6 +140,12 @@ def tick():
         if not hasattr(scene, "open_painter"):
             continue
         dependencies.refresh(scene)
+        if field_jobs.tick(scene):
+            running = field_jobs.progress(scene)
+            if running is not None:
+                _set_status(scene, f'Analysing {running[0]}… {int(running[1] * 100)}%')
+            _scene_cursor = scene.as_pointer()
+            return .001
         from ..painting.paint_session import detect
 
         activity = _paint_input.get(scene.as_pointer())
@@ -305,6 +312,7 @@ def tick():
         ACTIVE_INTERVAL
         if any(
             scene.open_painter.paint_image or _paint_input.get(scene.as_pointer())
+            or field_jobs.pending(scene)
             or any(shader_preview.pending_work(scene, ts) for ts in scene.open_painter.texture_sets)
             for scene in bpy.data.scenes
             if hasattr(scene, "open_painter")

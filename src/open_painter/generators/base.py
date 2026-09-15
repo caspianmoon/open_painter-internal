@@ -90,7 +90,12 @@ class Generator:
             return n if parameters.source == 'NOISE' else threshold(n)
         if self.id in {'EDGE_WEAR', 'CHIPS'}:
             ao = mesh_map('AO')[..., 0] if any(m.kind == 'AO' and m.image for m in texture_set.baked_maps) else None
-            edges = edge_wear(edge_curvature(texture_set, parameters, mesh_map), ao, breakup_noise(), amount,
+            if getattr(parameters, 'edge_source', 'BAKED') == 'LIVE':
+                from .scene_fields import evaluate as live_field
+                curvature = live_field(texture_set, parameters, u, v, cache)
+            else:
+                curvature = edge_curvature(texture_set, parameters, mesh_map)
+            edges = edge_wear(curvature, ao, breakup_noise(), amount,
                               contrast, strength, getattr(parameters, 'edge_width', 1.0),
                               None if micro is None else micro[0])
             if self.id == 'CHIPS':

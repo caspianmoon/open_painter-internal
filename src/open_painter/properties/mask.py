@@ -17,6 +17,19 @@ def numeric(self, context):
     invalidate(self, context)
 
 
+def _edge_source_changed(self, context):
+    if self.edge_source == 'LIVE':
+        # A live edge is a scene field of kind EDGE analysed live on this mask's influence.
+        field = self.influence
+        if field.kind != 'EDGE':
+            field.kind = 'EDGE'
+        if field.mode != 'LIVE':
+            field.mode = 'LIVE'
+        if field.resolution == '64':
+            field.resolution = '512'
+    changed(self, context)
+
+
 class OP_Mask(bpy.types.PropertyGroup):
     reference_layer: bpy.props.StringProperty(name='Source Layer ID', update=changed)
     reference_mask: bpy.props.StringProperty(name='Through Mask Effect ID', update=changed)
@@ -116,8 +129,16 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("MULTIPLY", "Multiply", ""),
             ("ADD", "Add", ""),
             ("NORMAL", "Normal", "Replace previous mask coverage according to strength"),
+            ("MAX", "Lighten (Max)", "Keep the larger coverage: an OR of scene fields"),
+            ("MIN", "Darken (Min)", "Keep the smaller coverage: an AND of scene fields"),
         ],
         update=changed,
+    )
+    edge_source: bpy.props.EnumProperty(
+        name="Edges From", default="BAKED", update=lambda self, context: _edge_source_changed(self, context),
+        items=[("BAKED", "Baked Edge Maps", "The four-reach Curvature set, blended by Edge Size"),
+               ("LIVE", "Live Geometry", "Convexity and creases measured on the evaluated mesh: "
+                                         "bevel an edge and the wear follows, no rebake")],
     )
     invert: bpy.props.BoolProperty(name="Invert", update=numeric)
     black: bpy.props.FloatProperty(name="Black Level", min=0, max=1, update=numeric)

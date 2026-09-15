@@ -180,6 +180,7 @@ class OP_PT_bake(bpy.types.Panel):
             layout.prop(settings, "curvature_angle")
             layout.prop(settings, "curvature_width")
             layout.prop(settings, "mean_curvature_distance")
+            layout.prop(settings, "auto_edge_rebake")
             layout.label(text="Creases plus smooth bevels within the radius; target mesh only.")
             layout.operator(
                 "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"

@@ -16,6 +16,18 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Live geometry-aware fields 0.5.0 — 2026-09-15
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Cooperative field jobs (debounce, budget, atomic publish, supersede, edit-mode defer, discard when current) | done | `tests/integration/live_fields.py`, `live_fields_ui.py` (republish 0.33 s after a move, no synchronous analysis) |
+| Geometry Nodes batched proximity/raycast with BVH fallback | done, matches reference to 1e-4 | `live_fields.py` |
+| Kinds: convexity, concavity, edge exposure (live), ground, world height, proximity; scene scope, exclusions, cap, per-object radius, falloff | done | `live_fields.py`, `live_edge_exposure.py` |
+| Live edges for Edge Wear/Chips on CPU and shader; bevel follows; structural/numeric split | done, parity 0.004 | `live_edge_exposure.py` |
+| MAX/MIN combine, presets | done | `live_fields.py` (falloff), presets operator |
+| Auto edge rebake (opt-in, mesh edits only) | done | `auto_edge_rebake.py` |
+| Live curvature semantics vs the baked kernel | documented difference (per-vertex, 25th-percentile baseline) | docs/scene-fields.md |
+
 ## Material modules 0.4.1 / 0.4.2 — 2026-09-15
 
 | Item | Status | Evidence |

@@ -61,7 +61,7 @@ def _prop_signature(prop, count=None):
 
 
 def _mask_signature(m):
-    return (m.id, m.enabled, m.source, m.generator, m.procedural, m.map_type, m.operation,
+    return (m.id, m.enabled, m.source, m.generator, getattr(m, 'edge_source', 'BAKED'), m.procedural, m.map_type, m.operation,
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
             m.reference_channel, m.reference_stage, m.reference_anchor, m.detail_height_anchor,
             m.detail_normal_anchor, m.effect.kind,
@@ -1099,8 +1099,15 @@ class Graph(Math):
 
     EDGE_MAP_KINDS = ('CURVATURE_THIN', 'CURVATURE', 'CURVATURE_WIDE', 'CURVATURE_XWIDE')
 
-    def _edge_curvature(self, mask, red):
-        """Curvature at the mask's Edge Size, the CPU generator's blend across the edge-map set."""
+    def _edge_curvature(self, mask, red, layer=None):
+        """Curvature at the mask's Edge Size, the CPU generator's blend across the edge-map set.
+
+        With ``edge_source == 'LIVE'`` the edges are the live EDGE scene field of the
+        mask's influence: a raster boundary the field engine republishes whenever the
+        geometry changes, so Edge Size does not apply (reach = the field's distance).
+        """
+        if getattr(mask, 'edge_source', 'BAKED') == 'LIVE':
+            return self._scene_boundary(layer, mask)
         if not all(any(m.kind == kind and m.image for m in self.ts.baked_maps) for kind in self.EDGE_MAP_KINDS):
             return red('CURVATURE')
         size = self.param(mask, 'edge_size')
@@ -1110,7 +1117,7 @@ class Graph(Math):
             value = self.scalar_mix(value, red(kind), t)
         return value
 
-    def generator(self, mask):
+    def generator(self, mask, layer=None):
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
         amount, contrast = self.param(mask, 'amount'), self.param(mask, 'contrast')
         strength = self.param(mask, 'noise_strength')
@@ -1134,7 +1141,7 @@ class Graph(Math):
             # Edge Size blends the baked edge-map set live; Edge Width then
             # narrows the chosen band: (curvature - (1 - w)) / w, both uniforms.
             width = self.param(mask, 'edge_width')
-            band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(self._edge_curvature(mask, red)),
+            band = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', self.clamp(self._edge_curvature(mask, red, layer)),
                 self.math('SUBTRACT', 1, width)), self.math('MAXIMUM', width, 1e-4)))
             if micro is not None:
                 band = self.math('MAXIMUM', band, micro[0])
@@ -1252,16 +1259,49 @@ class Graph(Math):
                                            ['mask_source', layer.id, mask.id]).color)[0]
 
     def _scene_identity(self, field):
+        falloff = getattr(field, 'falloff', 'LINEAR')
         if field.mode == 'MANUAL':
             from ..generators.scene_fields import signature
             # First analysis publishes this same provenance token. Its derived
             # image allocation must not invalidate a later Levels-only edit.
             return (field.mode, field.update_serial,
-                    field.provenance or repr(signature(self.ts, field)))
+                    field.provenance or repr(signature(self.ts, field)), falloff)
         if field.mode == 'LIVE':
+            from . import field_jobs
+            if field_jobs.active():
+                # The published raster is the identity: the field engine analyses
+                # off the evaluation path and republishes (new image) when done.
+                return (field.mode, field.provenance, image_key(field.image), falloff)
             from ..generators.scene_fields import signature
-            return (field.mode, signature(self.ts, field))
-        return (field.mode, image_key(field.image), field.update_serial)
+            return (field.mode, signature(self.ts, field), falloff)
+        return (field.mode, image_key(field.image), field.update_serial, falloff)
+
+    def _scene_boundary(self, layer, mask, rehydrate=None):
+        """Raw scene-field raster of a mask's influence (live edges), as a boundary."""
+        def identity():
+            return ('scene-edge', self._scene_identity(mask.influence))
+        def factory(signature):
+            from .snapshots import capture
+            snapshot = capture(mask)
+            def parts():
+                from ..generators.scene_fields import evaluate
+                cache = {}
+                n = self.n
+                for low in range(0, n, 16):
+                    high = min(low + 16, n)
+                    u, v = np.meshgrid((np.arange(n, dtype=np.float32) + .5) / n,
+                                       (np.arange(low, high, dtype=np.float32) + .5) / n)
+                    value = evaluate(self.ts, snapshot, u, v, cache)
+                    rows = np.ones((high - low, n, 4), np.float32)
+                    rows[..., :3] = np.asarray(value, np.float32)[..., None]
+                    yield low, rows
+            return parts()
+        owners = [mask, mask.influence]
+        if rehydrate is not None:
+            return self._rebind(rehydrate, owners, identity, factory)
+        with self.role(f'SceneEdge:{layer.id}:{mask.id}'):
+            return self.separate(self.boundary(self._role, owners, identity, factory,
+                                               ['scene_edge', layer.id, mask.id]).color)[0]
 
     def _mask_dependencies(self, masks, seen=frozenset()):
         """Exact published source stages used by an isolated mask prefix.
@@ -1277,7 +1317,7 @@ class Graph(Math):
                 continue
             owners.extend((mask, mask.effect, mask.influence))
             stamp = values(mask, excluded={'influence'})
-            if mask.source == 'SCENE':
+            if mask.source == 'SCENE' or (mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE'):
                 stamp += (('scene', self._scene_identity(mask.influence)),)
             required = map_dependencies(mask)
             stamp += (('maps', tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps
@@ -1410,7 +1450,7 @@ class Graph(Math):
                 elif mask.source == 'BAKED':
                     value = self.separate(self.mesh_map(mask.map_type).color)[0]
                 elif mask.source in {'GENERATOR', 'NOISE'}:
-                    value = self.generator(mask)
+                    value = self.generator(mask, layer)
                 elif mask.source == 'PROCEDURAL':
                     from ..texture_engine.procedurals import ALIASES
                     kind = ALIASES.get(mask.procedural, mask.procedural)
@@ -1437,6 +1477,9 @@ class Graph(Math):
                     result = self.scalar_mix(result, value, strength)
                 elif mask.operation == 'MULTIPLY':
                     result = self.math('MULTIPLY', result, self.scalar_mix(1, value, strength))
+                elif mask.operation in {'MAX', 'MIN'}:
+                    result = self.scalar_mix(result, self.math('MAXIMUM' if mask.operation == 'MAX' else 'MINIMUM',
+                                                               result, value), strength)
                 else:
                     result = self.clamp(self.math('ADD', result, self.math('MULTIPLY', value, strength)))
         self.unit.flags['empty'] = result is None
@@ -1880,6 +1923,8 @@ class Graph(Math):
             return self._drips(mask, rehydrate=node) is not None
         if site == 'mask_source':
             return self._mask_source_boundary(layer, mask, rehydrate=node) is not None
+        if site == 'scene_edge':
+            return self._scene_boundary(layer, mask, rehydrate=node) is not None
         if site == 'mask_prefix':
             masks = list(layer.masks)
             stop = next(i + 1 for i, m in enumerate(masks) if m.id == args[1])

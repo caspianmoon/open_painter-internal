@@ -32,13 +32,19 @@ def acceleration(scene, objects):
 
 
 def distance(trees, points, maximum):
+    return nearest(trees, points, maximum)[0]
+
+
+def nearest(trees, points, maximum):
+    """(distance clipped to ``maximum``, index of the nearest tree or -1) per point."""
     values = np.full(len(points), maximum, np.float32)
+    which = np.full(len(points), -1, np.int64)
     for index, point in enumerate(points):
-        for tree in trees:
+        for tree_index, tree in enumerate(trees):
             _, _, _, value = tree.find_nearest(point, maximum)
-            if value is not None:
-                values[index] = min(values[index], value)
-    return values
+            if value is not None and value < values[index]:
+                values[index], which[index] = value, tree_index
+    return values, which
 
 
 def exposure(trees, points, normals, direction, maximum):

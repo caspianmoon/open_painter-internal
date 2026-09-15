@@ -84,6 +84,7 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
     bl_idname = 'open_painter.edge_map_refresh'
     bl_label = 'Rebake Edge Map (Background)'
     bl_options = {'REGISTER', 'INTERNAL'}
+    set_id: bpy.props.StringProperty(options={'HIDDEN'}, description='Texture set to rebake; the active set when empty')
     running = False
     _timer = None
     _job = None
@@ -115,7 +116,10 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
         if OP_OT_edge_map_refresh.running:
             return {'CANCELLED'}
         try:
-            ts = require_set(context)
+            ts = (next((item for item in context.scene.open_painter.texture_sets if item.id == self.set_id), None)
+                  if self.set_id else require_set(context))
+            if ts is None:
+                raise ValueError('That texture set no longer exists.')
             self._set_id = ts.id
             self._expected = record(ts, 'CURVATURE')
             self._job = curvature_steps(ts)

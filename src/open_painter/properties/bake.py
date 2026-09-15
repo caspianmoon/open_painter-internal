@@ -34,6 +34,11 @@ class OP_BakedMap(bpy.types.PropertyGroup):
 
 class OP_BakeSettings(bpy.types.PropertyGroup):
     high_objects: bpy.props.CollectionProperty(type=OP_ObjectRef)
+    auto_edge_rebake: bpy.props.BoolProperty(
+        name="Auto-rebake Edge Maps", default=False,
+        description="Rebake the edge map set in the background when a target mesh's geometry changes "
+                    "(not on transforms); the four-reach bake takes seconds to a minute on dense meshes",
+    )
     active_high: bpy.props.IntProperty()
     source_mode: bpy.props.EnumProperty(name="Source Matching", items=[
         ('ALL', 'All Sources', 'Project all listed high-poly objects onto each target (legacy behavior)'),

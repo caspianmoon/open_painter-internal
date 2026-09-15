@@ -6,10 +6,14 @@ not replace the editor or the material library.
 - **Interactive preview:** Texture Set settings → Preview Quality. Full remains
   the default. 512/1024 are disposable previews; saving, rendering and exporting
   flush authored-resolution outputs.
-- **Scene fields:** select a mask, choose Scene as its source, choose the field
-  and explicit influencer object/collection. Start with Distance or Contact and
-  a nearby object. Manual Update computes on demand; Live reacts to dependencies;
-  Freeze stores a portable image. Missing inputs preserve the last good result.
+- **Scene fields (live since 0.5.0):** select a mask, choose Scene as its source,
+  pick a Preset or a kind (orientation, height, ground, proximity to chosen or every
+  other mesh, exposure, live convexity/concavity/edge exposure, attributes). Live
+  fields re-analyse in the background when anything they read moves or changes —
+  the status line shows *Analysing…* and the mask updates when it lands; Manual
+  Update computes on demand; Freeze stores a portable image. Edge Wear and Chips
+  can take their edges from live geometry instead of baked maps (Edges From).
+  [Details](scene-fields.md).
 - **References:** choose Reference as a mask source and select the source layer,
   channel/mask and stage. Cycles reject before output publication. Publish a mask
   when a stable texture is needed by a geometry effect.

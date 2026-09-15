@@ -18,9 +18,16 @@ _known = {}
 _candidates = set()
 
 
+def live_fields(ts):
+    """Masks whose scene field is analysed live: LIVE scene masks and live-edge generators."""
+    return [m for l in ts.layers for m in l.masks
+            if (m.source == 'SCENE' and m.influence.mode == 'LIVE')
+            or (m.source == 'GENERATOR' and getattr(m, 'edge_source', 'BAKED') == 'LIVE')]
+
+
 def uses_geometry(ts):
-    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) or any(
-        m.source == 'SCENE' and m.influence.mode == 'LIVE' for l in ts.layers for m in l.masks)
+    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
+        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake)
 
 
 @measured('geometry_signature')
@@ -81,8 +88,7 @@ def geometry_key(scene, ts):
                         tuple(v for row in obj.matrix_world for v in row),
                         mesh_signature(mesh), modifier_signature(obj)))
     from ..geometry.influencers import signature
-    fields = tuple(signature(ts, m.influence) for layer in ts.layers for m in layer.masks
-                   if m.source == 'SCENE' and m.influence.mode == 'LIVE')
+    fields = tuple(signature(ts, m.influence) for m in live_fields(ts))
     return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields)
 
 
@@ -122,13 +128,44 @@ def refresh(scene):
         return
     _candidates.discard(scene.as_pointer())
     from ..core.layer_stack import invalidate
+    from . import field_jobs
     for ts in scene.open_painter.texture_sets:
         key = key_for(scene, ts)
         if key in _known and uses_geometry(ts):
             current = geometry_key(scene, ts)
-            if current != _known[key]:
+            previous = _known[key]
+            if current == previous:
+                continue
+            _known[key] = current
+            if previous is None or current is None:
                 invalidate(ts)
-                _known[key] = current
+                continue
+            targets_changed = current[:4] != previous[:4]
+            if targets_changed and field_jobs.active() and ts.bake.auto_edge_rebake and _mesh_edited(previous[3], current[3]):
+                from ..baking.bake_manager import owned_curvature
+                if owned_curvature(ts) is not None:
+                    field_jobs.schedule_rebake(scene, ts)
+            if not field_jobs.active():
+                invalidate(ts)   # synchronous analysis re-runs inside the next evaluation
+                continue
+            if targets_changed and (any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
+                                    or not live_fields(ts)):
+                invalidate(ts)
+            # Live fields never block: request their analyses; publication invalidates.
+            from ..generators.scene_fields import signature as field_signature
+            for mask in live_fields(ts):
+                desired = repr(field_signature(ts, mask.influence))
+                if desired != mask.influence.provenance:
+                    field_jobs.request(scene, ts, mask, desired)
+                else:
+                    field_jobs.discard(scene, ts, mask)   # moved back: the published raster is current
+
+
+def _mesh_edited(previous, current):
+    """True when an assigned mesh's own geometry changed (not only its transform or modifiers)."""
+    before = {entry[:2]: entry[4] for entry in previous if entry[0] is not None and len(entry) > 4}
+    after = {entry[:2]: entry[4] for entry in current if entry[0] is not None and len(entry) > 4}
+    return any(before.get(key) != value for key, value in after.items() if key in before)
 
 
 def map_dependencies(mask):
@@ -143,6 +180,8 @@ def map_dependencies(mask):
     if maps is None:
         return None  # Unknown/custom generators conservatively depend on all maps.
     if mask.generator in {'EDGE_WEAR', 'CHIPS'}:
+        if getattr(mask, 'edge_source', 'BAKED') == 'LIVE':
+            return (set(maps) | {'AO'}) - {'CURVATURE'}   # edges come from the live field
         return set(maps) | {'AO', 'CURVATURE_THIN', 'CURVATURE_WIDE', 'CURVATURE_XWIDE'}
     return set(maps)
 

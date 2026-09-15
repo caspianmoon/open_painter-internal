@@ -149,14 +149,40 @@ class OP_PT_masks(bpy.types.Panel):
             layout.label(text='Source layer input, before stack blending')
         elif mask.source == 'SCENE':
             field = mask.influence
-            for name in ('kind','mode','resolution','object','collection','direction','distance','bounds','attribute'):
-                layout.prop(field,name)
+            layout.menu('OP_MT_scene_field_presets', text='Presets', icon='PRESET')
+            layout.prop(field, 'kind')
+            layout.prop(field, 'mode')
+            layout.prop(field, 'resolution')
+            kind = field.kind
+            if kind in {'DISTANCE', 'CONTACT', 'EXPOSURE', 'PROXIMITY'}:
+                layout.prop(field, 'scope')
+                if field.scope == 'SCENE':
+                    layout.prop(field, 'exclude_collection')
+                    layout.prop(field, 'max_objects')
+                else:
+                    layout.prop(field, 'object')
+                    layout.prop(field, 'collection')
+                layout.label(text='Per-object radius: custom property open_painter_field_radius', icon='INFO')
+            elif kind in {'HEIGHT', 'HEAT', 'MOISTURE', 'SOOT'}:
+                layout.prop(field, 'object')
+            elif kind == 'GROUND':
+                layout.prop(field, 'ground_object')
+            if kind in {'UP', 'DOWN', 'HEIGHT', 'WORLD_HEIGHT', 'GROUND', 'EXPOSURE', 'SOOT'}:
+                layout.prop(field, 'direction')
+            if kind in {'HEIGHT', 'WORLD_HEIGHT'}:
+                layout.prop(field, 'bounds')
+            if kind in {'DISTANCE', 'CONTACT', 'PROXIMITY', 'EXPOSURE', 'HEAT', 'MOISTURE', 'SOOT', 'GROUND',
+                        'CONVEXITY', 'CONCAVITY', 'EDGE'}:
+                layout.prop(field, 'distance', text='Reach' if kind in {'CONVEXITY', 'CONCAVITY', 'EDGE'} else 'Distance / Radius')
+            if kind in {'ATTRIBUTE', 'VERTEX_GROUP'}:
+                layout.prop(field, 'attribute')
+            layout.prop(field, 'falloff')
             row = layout.row(align=True)
             row.operator('open_painter.mask',text='Update Analysis').action = 'ANALYZE'
             row.operator('open_painter.mask',text='Freeze Analysis').action = 'FREEZE'
             layout.label(text='Sampled UV field; authored textures unchanged')
             if field.error:
-                layout.label(text=field.error,icon='ERROR')
+                layout.label(text=field.error, icon='TIME' if field.error.startswith('Analysing') else 'ERROR')
         elif mask.source == "FILL":
             layout.template_ID(mask, "image")
             for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):

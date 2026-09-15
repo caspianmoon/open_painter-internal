@@ -20,7 +20,20 @@ class OP_Influencer(bpy.types.PropertyGroup):
             ('HEIGHT','Relative Height'), ('DISTANCE','Object Distance'),
             ('CONTACT','Contact Proximity'), ('EXPOSURE','Directional Exposure'),
             ('HEAT','Radial Heat'), ('MOISTURE','Radial Moisture'), ('SOOT','Directional Soot'),
-            ('ATTRIBUTE','Named Attribute'), ('VERTEX_GROUP','Vertex Group'))])
+            ('ATTRIBUTE','Named Attribute'), ('VERTEX_GROUP','Vertex Group'),
+            # 0.5.0 live kinds (appended: enum indices stay stable)
+            ('CONVEXITY','Convexity (live)'), ('CONCAVITY','Concavity (live)'), ('EDGE','Edge Exposure (live)'),
+            ('GROUND','Distance to Ground'), ('WORLD_HEIGHT','World Height'), ('PROXIMITY','Proximity'))])
+    scope: bpy.props.EnumProperty(name='Influencers', default='EXPLICIT', update=changed,
+        items=[('EXPLICIT','Chosen Object / Collection','Only the referenced object or collection'),
+               ('SCENE','Every Other Mesh','Every visible mesh in the scene except this set\'s targets and exclusions')])
+    exclude_collection: bpy.props.PointerProperty(name='Exclude', type=bpy.types.Collection, update=changed)
+    max_objects: bpy.props.IntProperty(name='Max Objects', default=64, min=1, max=256, update=changed)
+    falloff: bpy.props.EnumProperty(name='Falloff', default='LINEAR', update=changed,
+        items=[('LINEAR','Linear',''), ('SMOOTH','Smooth','Smoothstep'), ('SQUARED','Squared','Fast near, soft far'),
+               ('ROOT','Root','Soft near, fast far')])
+    ground_object: bpy.props.PointerProperty(name='Ground', type=bpy.types.Object, update=changed,
+        description='Object whose origin height is the ground plane (world Z = 0 when empty)')
     object: bpy.props.PointerProperty(name='Reference Object', type=bpy.types.Object, update=changed)
     collection: bpy.props.PointerProperty(name='Influencer Collection', type=bpy.types.Collection, update=changed)
     mode: bpy.props.EnumProperty(name='Analysis', default='MANUAL', update=changed,
@@ -28,7 +41,7 @@ class OP_Influencer(bpy.types.PropertyGroup):
                ('LIVE','Live Preview','Debounced analysis of explicit inputs'),
                ('FROZEN','Frozen','Keep the last valid analysis texture')])
     resolution: bpy.props.EnumProperty(name='Analysis Resolution', default='64', update=changed,
-        items=[(str(n),f'{n} × {n}', 'UV-space sampling grid, independent of authored texture size') for n in (64,128,256)])
+        items=[(str(n),f'{n} × {n}', 'UV-space sampling grid, independent of authored texture size') for n in (64,128,256,512,1024)])
     distance: bpy.props.FloatProperty(name='Distance / Radius', default=.2, min=.00001, subtype='DISTANCE', update=changed)
     bounds: bpy.props.FloatVectorProperty(name='Height Bounds', size=2, default=(0,1), update=changed)
     direction: bpy.props.FloatVectorProperty(name='Direction', size=3, default=(0,0,1), update=changed)

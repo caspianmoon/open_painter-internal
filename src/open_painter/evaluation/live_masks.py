@@ -57,6 +57,8 @@ def validate(ts, layer, n):
             raise UnsupportedMask('Mask combination requires CPU evaluation')
         if mask.generator in {'EDGE_WEAR', 'CHIPS'} and getattr(mask, 'edge_width', 1.0) < 1:
             raise UnsupportedMask('A narrowed edge width requires CPU evaluation')
+        if getattr(mask, 'edge_source', 'BAKED') == 'LIVE':
+            raise UnsupportedMask('Live geometry edges require the CPU evaluator')
         if getattr(mask, 'detail_height_anchor', '') or getattr(mask, 'detail_normal_anchor', ''):
             raise UnsupportedMask('Micro detail anchors require CPU evaluation')
         for name, low, high in (('amount', 0., 1.), ('contrast', .01, 20.),

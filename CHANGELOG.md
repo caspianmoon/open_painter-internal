@@ -1,5 +1,27 @@
 # Changes
 
+## 0.5.0
+
+Geometry-aware materials: the scene is a live input.
+
+- Scene fields analyse cooperatively: a LIVE field whose inputs changed is requested
+  and computed in strips by the scheduler after a 150 ms debounce, published atomically
+  and only then invalidates the set; evaluation never blocks on an analysis and the
+  status line reports progress. Object queries run through Geometry Nodes in a
+  disposable scene (all texels in one multithreaded pass, per-object radii), with the
+  per-point BVH path as the verified fallback. Analysis resolution up to 1024.
+- New kinds: Convexity, Concavity and Edge Exposure measured live on the evaluated
+  mesh (bevel an edge, the wear follows), Distance to Ground, World Height and
+  Proximity with per-object radius (`open_painter_field_radius`). Influencers can be
+  every other visible mesh in the scene (with an exclusion collection and a cap), so a
+  newly added bolt re-triggers the field. Falloff curves apply at sampling time.
+- Edge Wear / Chips: *Edges From → Live Geometry* takes the edges from a live Edge
+  Exposure field on the mask (CPU and shader-native parity ≤ 1/255), no curvature bake.
+- Mask combine modes Lighten (Max) and Darken (Min); scene-field presets (crevice dirt
+  near other parts, radial rust from bolts, ground mud, live edge exposure).
+- Bake settings: opt-in Auto-rebake Edge Maps after a target mesh's geometry changes.
+- See docs/scene-fields.md.
+
 ## 0.4.2
 
 Material modules: reusable, versioned folder subtrees that update in place.

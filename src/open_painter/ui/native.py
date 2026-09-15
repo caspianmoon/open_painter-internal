@@ -544,10 +544,23 @@ def draw_generator_controls(layout, ts, layer):
         if mask.source == "GENERATOR" and mask.generator in {"EDGE_WEAR", "CHIPS"}:
             from ..baking.maps.curvature import edge_map_set_complete
             radius = ts.bake.mean_curvature_distance
-            if edge_map_set_complete(ts):
+            box.prop(mask, "edge_source", text="Edges")
+            if mask.edge_source == "LIVE":
+                field = mask.influence
+                box.prop(field, "distance", text="Edge Reach")
+                box.prop(field, "resolution", text="Analysis")
+                box.prop(mask, "edge_width", text="Edge Width", slider=True)
+                if field.error:
+                    box.label(text=field.error, icon="TIME" if field.error.startswith("Analysing") else "ERROR")
+                else:
+                    box.label(text="Follows the evaluated mesh: bevels and edits update live", icon="INFO")
+            elif edge_map_set_complete(ts):
                 box.prop(mask, "edge_size", text=f"Edge Size ({radius * 50:.1f}–{radius * 400:.1f} cm)", slider=True)
-            box.prop(mask, "edge_width", text="Edge Width", slider=True)
-            if OP_OT_edge_map_refresh.running:
+            if mask.edge_source != "LIVE":
+                box.prop(mask, "edge_width", text="Edge Width", slider=True)
+            if mask.edge_source == "LIVE":
+                pass
+            elif OP_OT_edge_map_refresh.running:
                 box.label(text="Rebaking the edge map in the background…", icon="TIME")
             elif stale_curvature(ts) is not None:
                 box.label(text="Edge maps need a rebake (smooth edges, live Edge Size)", icon="ERROR")

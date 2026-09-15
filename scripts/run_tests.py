@@ -33,7 +33,7 @@ if not args.gui_only and not args.gpu_only:
     started = not args.start_at
     for test in sorted((root / "tests/integration").glob("phase*.py")) + [
         root / "tests/integration" / name
-        for name in ("native_registration.py", "layer_drop.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "material_recipe_masks.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "damaged_bevel.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "anchor_points.py", "micro_detail_anchors.py", "geometry_effects.py", "material_states.py", "material_stamps.py", "production_export.py", "surface_relief_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py", "shader_nodes.py", "shader_sources.py", "shader_preview.py", "shader_boundaries.py", "shader_runtime.py", "shader_bypass.py", "shader_units.py", "shader_structural_fields.py", "shader_undo.py", "shader_lifecycle_edges.py", "edge_map_set.py", "output_anchors.py", "shader_output_anchors.py", "graph_mirror.py", "graph_link_edits.py", "module_documents.py", "module_update.py", "catalog_modules.py")
+        for name in ("native_registration.py", "layer_drop.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "material_recipe_masks.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "damaged_bevel.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "anchor_points.py", "micro_detail_anchors.py", "geometry_effects.py", "material_states.py", "material_stamps.py", "production_export.py", "surface_relief_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py", "shader_nodes.py", "shader_sources.py", "shader_preview.py", "shader_boundaries.py", "shader_runtime.py", "shader_bypass.py", "shader_units.py", "shader_structural_fields.py", "shader_undo.py", "shader_lifecycle_edges.py", "edge_map_set.py", "output_anchors.py", "shader_output_anchors.py", "graph_mirror.py", "graph_link_edits.py", "module_documents.py", "module_update.py", "catalog_modules.py", "live_fields.py", "live_edge_exposure.py", "auto_edge_rebake.py")
     ]:
         if not started:
             started = test.name == args.start_at
@@ -83,6 +83,7 @@ if args.gui or args.gui_only:
         ("layer_drag_ui.py", "layer-drag-ui.json"),
         ("graph_view_ui.py", "graph-view-ui.json"),
         ("module_ui.py", "module-ui.json"),
+        ("live_fields_ui.py", "live-fields-ui.json"),
     ]:
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
@@ -105,12 +106,13 @@ if args.gui or args.gui_only:
                 "layer_drag_ui.py": {"OP_LAYER_DRAG_UI_REPORT": str(result_path)},
                 "graph_view_ui.py": {"OP_GRAPH_UI_REPORT": str(result_path)},
                 "module_ui.py": {"OP_MODULE_UI_REPORT": str(result_path)},
+                "live_fields_ui.py": {"OP_LIVE_FIELDS_UI_REPORT": str(result_path)},
             }.get(filename, {}))),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
-        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py"}:
+        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py", "live_fields_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

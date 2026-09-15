@@ -94,6 +94,16 @@ def bake_selected(context, ts):
         pass
 
 
+def owned_curvature(ts):
+    """The Curvature map this add-on baked (never a user-supplied image), or None."""
+    prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
+    if prop is None:
+        return None
+    if prop.image.get("open_painter_curvature_method") is None and "BakedCurvature" not in prop.image.name:
+        return None
+    return prop
+
+
 def stale_curvature(ts):
     """The owned Curvature map an edge-driven recipe should replace, or None.
 

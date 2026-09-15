@@ -36,6 +36,17 @@ def _effect_signature(effect):
     return result + (_image_identity(effect.image),)
 
 
+def _live_field_identity(ts, mask):
+    """A LIVE field's cache identity: its published image while the job engine
+    runs (publication invalidates), the desired inputs when analysis is synchronous."""
+    from ..evaluation import field_jobs
+    field = mask.influence
+    if field_jobs.active():
+        return (_image_identity(field.image), field.provenance, getattr(field, 'falloff', 'LINEAR'))
+    from ..generators.scene_fields import signature
+    return (signature(ts, field), getattr(field, 'falloff', 'LINEAR'))
+
+
 def _stack_signature(ts, layer, geometry_cache):
     """Parameter identities keep mesh-aware masks reusable across color edits.
 
@@ -67,7 +78,8 @@ def _stack_signature(ts, layer, geometry_cache):
                      mask.noise_strength, mask.seed, tuple(mask.id_color), maps,
                      getattr(mask, "edge_width", 1.0), anchors,
                      (getattr(mask, "detail_radius", 2.0), getattr(mask, "detail_height_strength", 1.0),
-                      getattr(mask, "detail_normal_strength", 1.0), ts.edit_serial) if anchors else None)
+                      getattr(mask, "detail_normal_strength", 1.0), ts.edit_serial) if anchors else None,
+                     _live_field_identity(ts, mask) if getattr(mask, "edge_source", "BAKED") == "LIVE" else None)
         elif mask.source == "PROCEDURAL":
             extra = (mask.procedural, mask.noise_scale, mask.seed, mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
@@ -78,9 +90,9 @@ def _stack_signature(ts, layer, geometry_cache):
         elif mask.source == "FILTER":
             extra = (_effect_signature(mask.effect), ts.edit_serial if mask.effect.image else None)
         elif mask.source == 'SCENE':
-            from ..generators.scene_fields import signature
-            extra = (signature(ts, mask.influence) if mask.influence.mode == 'LIVE' else
-                     (_image_identity(mask.influence.image), mask.influence.update_serial),)
+            extra = (_live_field_identity(ts, mask) if mask.influence.mode == 'LIVE' else
+                     (_image_identity(mask.influence.image), mask.influence.update_serial),
+                     getattr(mask.influence, 'falloff', 'LINEAR'))
         elif mask.source == 'REFERENCE':
             extra = (ts.edit_serial, mask.reference_layer, mask.reference_mask,
                      mask.reference_channel, mask.reference_stage, mask.reference_anchor)
@@ -196,6 +208,10 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
             result = result * (1 - mask.strength) + value * mask.strength
         elif mask.operation == "MULTIPLY":
             result *= 1 - mask.strength + value * mask.strength
+        elif mask.operation == "MAX":
+            result = result + (np.maximum(result, value) - result) * mask.strength
+        elif mask.operation == "MIN":
+            result = result + (np.minimum(result, value) - result) * mask.strength
         else:
             result = np.clip(result + value * mask.strength, 0, 1)
     return result if result is not None else np.ones((y1 - y0, n), dtype=np.float32)

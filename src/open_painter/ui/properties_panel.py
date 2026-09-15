@@ -136,8 +136,10 @@ class OP_PT_masks(bpy.types.Panel):
             layout.label(text='Publishes the mask result up to here; changes nothing itself', icon='INFO')
             return
         if mask.source == 'REFERENCE':
-            from .anchors import draw_anchor_field
-            draw_anchor_field(layout, ts, 'REFERENCE_MASK', mask.reference_anchor, text='Anchor')
+            from .anchors import draw_anchor_field, draw_anchor_channel
+            anchor = draw_anchor_field(layout, ts, 'REFERENCE_MASK', mask.reference_anchor, text='Anchor')
+            if anchor is not None:
+                draw_anchor_channel(layout, anchor, mask)
             if not mask.reference_anchor:
                 source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
                 layout.label(text='Legacy layer source')

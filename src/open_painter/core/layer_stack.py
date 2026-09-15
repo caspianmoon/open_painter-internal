@@ -149,7 +149,8 @@ def duplicate(ts, index):
     mask_mapping = {m['id']: new_id() for item in sources for m in item['masks']}
     effect_mapping = {e['id']: new_id() for item in sources for c in item['channels'] for e in c['effects'] if e['id']}
     # Anchors outside the copied subtree keep their original ids, like layer references.
-    anchor_mapping = {**mask_mapping, **effect_mapping}
+    from ..evaluation.anchors import derived_mapping
+    anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
     for source in sources:
         target = ts.layers.add()
         restore(source, target)

@@ -734,10 +734,13 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
         if layer.type != "FOLDER":
             layout.prop(layer, "blend_mode", text="Layer Blend")
         draw_generator_controls(layout, ts, layer)
+        from .anchors import draw_publish_controls
         if layer.type == "FOLDER":
             layout.prop(layer, "group_mode", text="Blend")
             layout.label(text="Folder masks affect all child layers.")
+            draw_publish_controls(layout, ts, layer)
             return
+        draw_publish_controls(layout, ts, layer)
         if layer.type == "PAINT":
             from ..painting.brush_bridge import draw
 
@@ -760,8 +763,10 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             body = layout.column()
             body.enabled = channel.enabled
             from .anchors import draw_anchor_field
-            draw_anchor_field(body, ts, "CHANNEL", channel.anchor, text="Content Anchor")
+            anchor = draw_anchor_field(body, ts, "CHANNEL", channel.anchor, text="Content Anchor")
             if channel.anchor:
+                from .anchors import draw_anchor_channel
+                draw_anchor_channel(body, anchor, channel)
                 body.label(text="Anchor replaces the color and image; detail and filters still apply", icon="INFO")
             body.prop(
                 channel,

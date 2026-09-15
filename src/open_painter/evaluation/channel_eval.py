@@ -365,7 +365,8 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         )
     if kind == "FILL" and getattr(prop, "anchor", ""):
         from .references import evaluate_anchor
-        value = evaluate_anchor(ts, prop.anchor, n, y0, y1, cache, geometry_cache)
+        value = evaluate_anchor(ts, prop.anchor, n, y0, y1, cache, geometry_cache,
+                                channel=getattr(prop, 'anchor_channel', '') or prop.channel)
         if value is None:
             return np.array([0, 0, 0, 0], dtype=np.float32)  # Missing anchor contributes nothing.
         if value.ndim == 2:

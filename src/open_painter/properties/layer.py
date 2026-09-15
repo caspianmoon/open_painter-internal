@@ -74,3 +74,9 @@ class OP_Layer(bpy.types.PropertyGroup):
     masks: bpy.props.CollectionProperty(type=OP_Mask)
     active_mask: bpy.props.IntProperty()
     expanded: bpy.props.BoolProperty(name="Expand Group", default=True)
+    # Published outputs: derived anchor ids "<id>:out" (this layer blended over
+    # its backdrop) and "<id>:group" (a folder's child composite before it blends).
+    publish_output: bpy.props.BoolProperty(name="Publish Output", default=False, update=changed,
+        description="Publish this layer's blended result as an anchor other layers can read")
+    publish_group: bpy.props.BoolProperty(name="Publish Folder Composite", default=False, update=changed,
+        description="Publish the folder's child composite, before the folder itself blends, as an anchor")

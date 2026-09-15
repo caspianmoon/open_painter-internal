@@ -45,7 +45,9 @@ assert state == (
     tuple(bpy.context.selected_objects),
     low.active_material,
 )
-assert {m.kind for m in ts.baked_maps} == {"NORMAL", "AO", "CURVATURE"}
+# The edge map bakes as a four-reach set around the requested Curvature Radius.
+assert {m.kind for m in ts.baked_maps} == {"NORMAL", "AO", "CURVATURE", "CURVATURE_THIN",
+                                           "CURVATURE_WIDE", "CURVATURE_XWIDE"}, {m.kind for m in ts.baked_maps}
 for m in ts.baked_maps:
     data = images.pixels(m.image)
     assert data.shape == (512, 512, 4) and np.isfinite(data).all()

@@ -4,11 +4,16 @@ Channel references sample the source layer's own channel before composition;
 mask references sample its mask stack (optionally through a selected effect).
 Anchor points publish a stack prefix at their position; a missing anchor reads as
 neutral and is reported by warnings(), while dependency cycles remain errors.
-Folder mask references are supported; folder composite channels are not implied.
+Composite anchors (a layer's blended output, a folder's child composite) are
+modelled with composition nodes ('OUT', layer, channel), ('BELOW', layer,
+channel) and ('GROUP', folder, channel), so "an output may only feed layers
+above it" falls out of the same cycle check. Legacy folder channel references
+are rejected: publish the folder composite instead.
 """
 import numpy as np
 
 LUMA = np.array((.2126, .7152, .0722), np.float32)
+COMPOSITION = frozenset({'OUT', 'BELOW', 'GROUP'})
 
 
 def graph(ts):
@@ -19,18 +24,66 @@ def graph(ts):
     position, and a channel consumer feeds the channel's own effect chain.
     """
     from ..core.layer_stack import channel_for
-    from .anchors import index, consumed
+    from .anchors import index, consumed_channels, channel_of
     registry, by_id = index(ts), {layer.id: layer for layer in ts.layers}
     edges, errors, warnings, seen_ids = {}, [], [], set()
+    children, materialized = {}, set()
+    for layer in ts.layers:
+        children.setdefault(getattr(layer, 'parent_id', ''), []).append(layer)
 
     def add(node, target):
         edges.setdefault(node, set()).add(target)
 
+    def composition(node):
+        """Materialize the composition chain a composite anchor depends on."""
+        if node in materialized:
+            return
+        materialized.add(node)
+        kind, layer_id, channel = node
+        layer = by_id.get(layer_id)
+        if layer is None:
+            return
+        parent_id = getattr(layer, 'parent_id', '')
+        siblings = children.get(parent_id, [])
+        parent = by_id.get(parent_id) if parent_id else None
+        if kind == 'OUT':
+            prop = channel_for(layer, channel)
+            if layer.type != 'FOLDER' and prop is not None:
+                add(node, (layer.id, channel, len(prop.effects)))
+            add(node, (layer.id, 'MASK', len(layer.masks)))
+            if layer.type == 'FOLDER':
+                add(node, ('GROUP', layer.id, channel))
+                composition(('GROUP', layer.id, channel))
+            add(node, ('BELOW', layer.id, channel))
+            composition(('BELOW', layer.id, channel))
+        elif kind == 'BELOW':
+            position = next((i for i, item in enumerate(siblings) if item.id == layer.id), 0)
+            if position > 0:
+                add(node, ('OUT', siblings[position - 1].id, channel))
+                composition(('OUT', siblings[position - 1].id, channel))
+            elif parent is not None and parent.group_mode == 'PASSTHROUGH':
+                add(node, ('BELOW', parent.id, channel))
+                composition(('BELOW', parent.id, channel))
+        else:  # GROUP: the child composite, over the backdrop for passthrough folders
+            own = children.get(layer.id, [])
+            if own:
+                add(node, ('OUT', own[-1].id, channel))
+                composition(('OUT', own[-1].id, channel))
+            if layer.group_mode == 'PASSTHROUGH':
+                add(node, ('BELOW', layer.id, channel))
+                composition(('BELOW', layer.id, channel))
+
     def anchored(node, layer, item):
-        for identifier in consumed(item):
+        for identifier, requested in consumed_channels(item):
             anchor = registry.get(identifier)
             if anchor is None:
                 warnings.append(f'{layer.name}: anchor point is missing')
+                continue
+            if anchor.kind in {'OUTPUT', 'GROUP'}:
+                target = ('OUT' if anchor.kind == 'OUTPUT' else 'GROUP', anchor.layer_id,
+                          channel_of(anchor, requested))
+                add(node, target)
+                composition(target)
                 continue
             add(node, (anchor.layer_id, anchor.channel, anchor.position))
 
@@ -59,7 +112,8 @@ def graph(ts):
                             continue
                     add(node, (target.id, 'MASK', through))
                 elif target.type == 'FOLDER':
-                    errors.append(f'{layer.name}: reference a folder mask, not a folder composite channel')
+                    errors.append(f'{layer.name}: reference a folder mask, or publish the folder composite '
+                                  'and pick its anchor')
                 else:
                     prop = channel_for(target, mask.reference_channel)
                     count = 0 if prop is None or mask.reference_stage == 'PRE_FILTER' else len(prop.effects)
@@ -86,7 +140,8 @@ def graph(ts):
             for target in targets:
                 status = state.get(target)
                 if status == 'visiting':
-                    names = {by_id[n[0]].name for n, _ in stack if n[0] in by_id}
+                    names = {by_id[n[1] if n[0] in COMPOSITION else n[0]].name for n, _ in stack
+                             if (n[1] if n[0] in COMPOSITION else n[0]) in by_id}
                     errors.append('Published inputs contain a reference cycle through ' + ', '.join(sorted(names)))
                     stack.clear()
                     break
@@ -114,13 +169,22 @@ def warnings(ts):
 
 def dependent_channels(ts, source_layer, source_channel=None):
     """Transitive consumers of a changed source, restricted by enabled channels."""
-    from .anchors import index, consumed
+    from .anchors import index, consumed_channels, channel_of, contributors, COMPOSITE_KINDS
     registry = index(ts)
+    composite_sources = {}
 
     def reads(item, identifier, channel):
-        for key in consumed(item):
+        for key, requested in consumed_channels(item):
             anchor = registry.get(key)
-            if anchor and anchor.layer_id == identifier and (channel is None or anchor.channel == channel):
+            if anchor is None:
+                continue
+            if anchor.kind in COMPOSITE_KINDS:
+                if key not in composite_sources:
+                    composite_sources[key] = contributors(ts, anchor)
+                if identifier in composite_sources[key] and (channel is None
+                                                             or channel_of(anchor, requested) == channel):
+                    return True
+            elif anchor.layer_id == identifier and (channel is None or anchor.channel == channel):
                 return True
         return False
 
@@ -151,14 +215,26 @@ def mask_value(rgba, channel):
     return gray * rgba[...,3]
 
 
-def evaluate_anchor(ts, identifier, n, y0, y1, cache, resources):
-    """Straight RGBA rows for a channel anchor, coverage rows for a mask anchor, None if missing."""
+def evaluate_anchor(ts, identifier, n, y0, y1, cache, resources, channel=None):
+    """Straight RGBA rows for a channel anchor, coverage rows for a mask anchor, None if missing.
+
+    ``channel`` selects the channel of a composite anchor (see anchors.channel_of).
+    """
     from ..core.layer_stack import channel_for
-    from .anchors import resolve
+    from .anchors import resolve, channel_of, COMPOSITE_KINDS
     from .snapshots import capture, Parameters
     anchor = resolve(ts, identifier, getattr(resources, 'signatures', None))
     if anchor is None:
         return None
+    if anchor.kind in COMPOSITE_KINDS:
+        from .composite import Composer
+        channel = channel_of(anchor, channel)
+        key = ('anchor_out', identifier, channel, n, y0, y1, getattr(ts, 'edit_serial', 0))
+        if key not in cache:
+            composer = Composer(ts, channel, n, cache, resources)
+            cache[key] = (composer.output(anchor.layer_id, y0, y1) if anchor.kind == 'OUTPUT'
+                          else composer.group(anchor.layer_id, y0, y1))
+        return cache[key]
     layer = anchor.layer if isinstance(anchor.layer, Parameters) else capture(anchor.layer)
     if anchor.kind == 'MASK':
         from .mask_eval import evaluate_masks
@@ -177,14 +253,15 @@ def evaluate(ts, mask, n, y0, y1, cache, resources):
     from ..core.layer_stack import channel_for
     from .snapshots import capture, Parameters
     if mask.reference_anchor:
-        from .anchors import resolve
-        value = evaluate_anchor(ts, mask.reference_anchor, n, y0, y1, cache, resources)
+        from .anchors import resolve, channel_of
+        value = evaluate_anchor(ts, mask.reference_anchor, n, y0, y1, cache, resources,
+                                channel=mask.reference_channel)
         if value is None:
             return np.zeros((y1-y0,n),np.float32)
         if value.ndim == 2:
             return value
         anchor = resolve(ts, mask.reference_anchor, getattr(resources, 'signatures', None))
-        return np.ascontiguousarray(mask_value(value, anchor.channel), np.float32)
+        return np.ascontiguousarray(mask_value(value, channel_of(anchor, mask.reference_channel)), np.float32)
     source_layer = next((layer for layer in ts.layers if layer.id == mask.reference_layer),None)
     if source_layer is None:
         return np.zeros((y1-y0,n),np.float32)

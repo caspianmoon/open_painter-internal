@@ -81,6 +81,8 @@ class OP_Channel(bpy.types.PropertyGroup):
     # Fill content instantiated from an anchor point; replaces image/color/value.
     anchor: bpy.props.StringProperty(name="Anchor", update=changed,
         description="Anchor point whose published result becomes this channel's content")
+    anchor_channel: bpy.props.StringProperty(name="Anchor Channel", update=changed,
+        description="Channel read from a published layer output or folder composite; empty reads this channel")
     procedural: bpy.props.StringProperty(default='',update=changed)
     procedural_scale: bpy.props.FloatProperty(name='Scale',default=8,min=.01,max=512,update=numeric)
     procedural_seed: bpy.props.IntProperty(name='Seed',default=1,min=0,update=numeric)

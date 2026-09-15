@@ -32,6 +32,7 @@ from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combi
 from .shader_effects import apply_effect, is_pointwise, UnsupportedEffect
 from .shader_resources import Resources, RESOURCE, values
 from .resource_keys import image_key
+from .anchors import COMPOSITE_KINDS, channel_of
 from . import metrics
 
 
@@ -55,7 +56,8 @@ def _prop_signature(prop, count=None):
         effects = effects[:count]
     # enabled and blend_mode belong to the channel unit that consumes this content.
     return (prop.channel, bool(prop.image), bool(prop.detail_image), prop.procedural,
-            prop.projection, prop.filtering, prop.tiling, prop.anchor, _effects_signature(effects))
+            prop.projection, prop.filtering, prop.tiling, prop.anchor, getattr(prop, 'anchor_channel', ''),
+            _effects_signature(effects))
 
 
 def _mask_signature(m):
@@ -369,6 +371,12 @@ class Graph(Math):
         return Signal(self._import(producer, 'Color', 'NodeSocketColor'),
                       self._import(producer, 'Alpha', 'NodeSocketFloat'))
 
+    def _import_composite(self, producer, export):
+        """A CHANNEL unit's blended ``Out`` or child ``Group``; alpha is 1 in opaque contexts."""
+        alpha = export + ':Alpha'
+        return Signal(self._import(producer, export, 'NodeSocketColor'),
+                      self._import(producer, alpha, 'NodeSocketFloat') if alpha in producer.exports else 1.0)
+
     def _import_mask(self, producer, public=True):
         if producer.flags.get('empty'):
             return 1.0 if public else None
@@ -594,7 +602,7 @@ class Graph(Math):
         def owners():
             items = [prop, *list(prop.effects)[:count]]
             if anchored:
-                items.extend(self._anchor_dependencies(prop.anchor)[0])
+                items.extend(self._anchor_dependencies(prop.anchor, channel=prop.anchor_channel or prop.channel)[0])
             return items
         def identity():
             return ('channel-prefix', layer.type, prop.channel,
@@ -602,7 +610,8 @@ class Graph(Math):
                     tuple(values(e, excluded={'strength'} if i == count - 1 else ())
                           for i, e in enumerate(list(prop.effects)[:count])),
                     self._geometry_stamp(prop.projection == 'TRIPLANAR'),
-                    ('anchor', self._anchor_dependencies(prop.anchor)[1]) if anchored else None)
+                    ('anchor', self._anchor_dependencies(prop.anchor, channel=prop.anchor_channel or prop.channel)[1])
+                    if anchored else None)
         def factory(signature):
             from .snapshots import capture
             effects = tuple(capture(e).replaced(strength=1.) if i == count - 1 else capture(e)
@@ -644,7 +653,7 @@ class Graph(Math):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
             if layer.type == 'FILL' and prop.anchor:
                 # Anchored content is already in texture space: no projection or tiling.
-                value = self.anchor_signal(prop.anchor)
+                value = self.anchor_signal(prop.anchor, prop.anchor_channel or channel)
             elif prop.image:
                 value = (self.image(prop.image, getter=lambda: prop.image, owner=prop) if layer.type == 'PAINT'
                     else self.projected(prop, lambda uv: self.image(prop.image, uv, prop.filtering, prop.tiling,
@@ -722,17 +731,59 @@ class Graph(Math):
             return 1.0
         return ('MASK', layer.id, '' if stop == len(masks) else masks[stop - 1].id, bool(pre_filter))
 
-    def _anchor_key(self, identifier):
+    def _anchor_key(self, identifier, channel=None):
         anchor = self.anchors.get(identifier)
         if anchor is None:
             return None
         if anchor.kind == 'MASK':
             return self._mask_key(anchor.layer, identifier)
+        if anchor.kind in COMPOSITE_KINDS:
+            source = self._composite_source(anchor, channel)
+            return source[0] if isinstance(source, tuple) else None
         return self._source_key(anchor.layer, anchor.channel, anchor.position)
+
+    # ---- composite anchors: what the top tree wires, resolved to unit exports ----
+
+    def _composite_source(self, anchor, channel=None):
+        """(unit key, export name) publishing a composite anchor, or a constant Signal."""
+        channel = channel_of(anchor, channel)
+        layer = anchor.layer
+        if anchor.kind == 'OUTPUT':
+            return self._composite_output(layer, channel)
+        return self._composite_group(layer, channel)
+
+    def _composite_output(self, layer, channel):
+        """A layer blended over its backdrop: its CHANNEL unit, else its backdrop."""
+        if self._touched(layer, channel):
+            return (('CHANNEL', layer.id, channel), 'Out')
+        return self._composite_backdrop(layer, channel)
+
+    def _composite_backdrop(self, layer, channel):
+        """What a layer's ``In`` sees, following ``_wire``: the previous touched
+        sibling's output, a passthrough parent's backdrop, or a constant."""
+        siblings = [item for item in self.ts.layers if item.parent_id == layer.parent_id]
+        position = next((i for i, item in enumerate(siblings) if item.id == layer.id), 0)
+        for previous in reversed(siblings[:position]):
+            if self._touched(previous, channel):
+                return (('CHANNEL', previous.id, channel), 'Out')
+        parent = self._layer(layer.parent_id) if layer.parent_id else None
+        if parent is None:
+            return Signal(DEFAULTS[channel][:3], 1.0)
+        if parent.group_mode == 'PASSTHROUGH':
+            return self._composite_backdrop(parent, channel)
+        return Signal((0., 0., 0.), 0.0)
+
+    def _composite_group(self, folder, channel):
+        """A folder's child composite before it blends; untouched folders compose nothing."""
+        if folder.type == 'FOLDER' and self._touched(folder, channel):
+            return (('CHANNEL', folder.id, channel), 'Group')
+        if folder.type == 'FOLDER' and folder.group_mode == 'PASSTHROUGH':
+            return self._composite_backdrop(folder, channel)
+        return Signal((0., 0., 0.), 0.0)
 
     def _mask_reference_key(self, mask):
         if mask.reference_anchor:
-            return self._anchor_key(mask.reference_anchor)
+            return self._anchor_key(mask.reference_anchor, mask.reference_channel)
         target = self._layer(mask.reference_layer)
         if target is None:
             return None
@@ -754,7 +805,7 @@ class Graph(Math):
         elif key[0] == 'SRC':
             prop = channel_for(layer, key[2])
             if layer.type == 'FILL' and prop is not None and prop.anchor:
-                refs.append(self._anchor_key(prop.anchor))
+                refs.append(self._anchor_key(prop.anchor, prop.anchor_channel or key[2]))
         elif key[0] == 'MASK':
             masks = list(layer.masks)
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
@@ -835,7 +886,8 @@ class Graph(Math):
         refs = tuple(self._reference_keys(key))
         if key[0] == 'CHANNEL':
             prop = channel_for(layer, key[2])
-            signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs)
+            signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs,
+                         bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None)
             if stub:
                 # A stub stands in while the layer is hidden and its content unchanged.
                 return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
@@ -895,35 +947,46 @@ class Graph(Math):
                                        value.alpha)
         return value
 
-    def _anchor(self, identifier):
-        """(anchor, Signal) published at an anchor point; a missing anchor is transparent."""
+    def _anchor(self, identifier, channel=None):
+        """(anchor, Signal) published at an anchor point; a missing anchor is transparent.
+
+        ``channel`` selects the channel of a composite anchor (anchors.channel_of).
+        """
         anchor = self.anchors.get(identifier)
         if anchor is None:
             return None, Signal((0., 0., 0.), 0)
         if anchor.kind == 'MASK':
             gray = self.mask(anchor.layer, through=identifier)
             return anchor, Signal(self.combine(gray, gray, gray), 1.0)
+        if anchor.kind in COMPOSITE_KINDS:
+            source = self._composite_source(anchor, channel)
+            if not isinstance(source, tuple):
+                return anchor, source
+            key, export = source
+            return anchor, self._import_composite(self.compile_unit(key), export)
         return anchor, self.source(anchor.layer, anchor.channel, count=anchor.position)
 
-    def anchor_signal(self, identifier):
-        return self._anchor(identifier)[1]
+    def anchor_signal(self, identifier, channel=None):
+        return self._anchor(identifier, channel)[1]
 
-    def anchor_scalar(self, identifier):
+    def anchor_scalar(self, identifier, channel=None):
         """Mask coverage read from an anchor: red or luminance times alpha, like references.mask_value."""
-        anchor, signal = self._anchor(identifier)
+        anchor, signal = self._anchor(identifier, channel)
         if anchor is None:
             return 0.0
         if anchor.kind == 'MASK':
             return self.mask(anchor.layer, through=identifier)
-        gray = (luminance(self, signal.color) if anchor.channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
+        gray = (luminance(self, signal.color) if channel_of(anchor, channel) in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
                 else self.separate(signal.color)[0])
         return self.math('MULTIPLY', gray, signal.alpha)
 
-    def _anchor_dependencies(self, identifier, seen=frozenset()):
+    def _anchor_dependencies(self, identifier, seen=frozenset(), channel=None):
         """Owners and repr-stable identity of everything an anchor publishes."""
         anchor = self.anchors.get(identifier)
         if anchor is None:
             return [], ('missing-anchor', identifier)
+        if anchor.kind in COMPOSITE_KINDS:
+            return self._composite_dependencies(anchor, channel_of(anchor, channel), seen)
         node = (anchor.layer_id, anchor.channel, anchor.position)
         if node in seen:
             raise ValueError('Anchor points contain a reference cycle')
@@ -944,10 +1007,36 @@ class Graph(Math):
                values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
                tuple(values(e) for e in effects), self._geometry_stamp(prop.projection == 'TRIPLANAR'))
         if layer.type == 'FILL' and prop.anchor:
-            nested, nested_key = self._anchor_dependencies(prop.anchor, seen)
+            nested, nested_key = self._anchor_dependencies(prop.anchor, seen, prop.anchor_channel or prop.channel)
             owners.extend(nested)
             key += (('anchor', nested_key),)
         return owners, key
+
+    def _composite_dependencies(self, anchor, channel, seen=frozenset()):
+        """Owners and identity of a composite anchor: every contributing layer's
+        blend state, content chain and mask stack for the selected channel."""
+        from .anchors import contributors
+        node = ('OUT' if anchor.kind == 'OUTPUT' else 'GROUP', anchor.layer_id, channel)
+        if node in seen:
+            raise ValueError('Published inputs contain a reference cycle')
+        seen = seen | {node}
+        owners, keys = [], []
+        for layer in self.ts.layers:
+            if layer.id not in contributors(self.ts, anchor):
+                continue
+            owners.append(layer)
+            prop = channel_for(layer, channel)
+            stamp = (layer.id, values(layer, excluded={'channels', 'masks'}))
+            if prop is not None:
+                stamp += ((prop.enabled, prop.opacity, prop.blend_mode),)
+                if layer.type != 'FOLDER':
+                    nested_owners, nested_key = self._channel_identity(layer, prop, len(prop.effects), seen)
+                    owners.extend(nested_owners)
+                    stamp += (nested_key,)
+            nested_owners, nested_keys = self._mask_dependencies(list(layer.masks), seen)
+            owners.extend(nested_owners)
+            keys.append(stamp + (nested_keys,))
+        return owners, ('anchor-composite', anchor.kind, anchor.layer_id, channel, tuple(keys))
 
     def _micro(self, mask, rehydrate=None):
         """(convex, cavity) from anchored micro details, or None without anchors.
@@ -962,12 +1051,13 @@ class Graph(Math):
             return None
         def owners():
             items = [mask]
-            for _, identifier in refs:
-                items.extend(self._anchor_dependencies(identifier)[0])
+            for slot, identifier in refs:
+                items.extend(self._anchor_dependencies(identifier, channel=slot)[0])
             return items
         def identity():
             return ('micro-details', mask.detail_radius,
-                    tuple((slot, identifier, self._anchor_dependencies(identifier)[1]) for slot, identifier in refs))
+                    tuple((slot, identifier, self._anchor_dependencies(identifier, channel=slot)[1])
+                          for slot, identifier in refs))
         def factory(signature):
             from .snapshots import capture
             snapshot = capture(mask)
@@ -1180,7 +1270,7 @@ class Graph(Math):
         channels and masks beyond a published stage cannot invalidate this leaf.
         """
         from .dependencies import map_dependencies
-        from .anchors import consumed
+        from .anchors import consumed_channels
         owners, keys = [], []
         for mask in masks:
             if not mask.enabled or mask.source == 'ANCHOR':
@@ -1219,8 +1309,8 @@ class Graph(Math):
                         nested_owners, nested_key = self._channel_identity(target, prop, count, seen)
                         owners.extend(nested_owners)
                         stamp += (('published-channel', nested_key),)
-            for identifier in consumed(mask):
-                nested_owners, nested_key = self._anchor_dependencies(identifier, seen)
+            for identifier, requested in consumed_channels(mask):
+                nested_owners, nested_key = self._anchor_dependencies(identifier, seen, requested)
                 owners.extend(nested_owners)
                 stamp += (('anchor', identifier, nested_key),)
             keys.append(stamp)
@@ -1299,7 +1389,7 @@ class Graph(Math):
                             value = self.scalar_mix(result, filtered, self.param(mask.effect, 'strength'))
                 elif mask.source == 'REFERENCE':
                     if mask.reference_anchor:
-                        value = self.anchor_scalar(mask.reference_anchor)
+                        value = self.anchor_scalar(mask.reference_anchor, mask.reference_channel)
                     else:
                         target = self._layer(mask.reference_layer)
                         if target is None:
@@ -1517,17 +1607,23 @@ class Graph(Math):
                                  1.0 if opaque else unit.input('Grouped:Alpha', 'NodeSocketFloat'))
                 result = Signal(self.mix(backdrop.color, grouped.color, amount),
                                 self.scalar_mix(backdrop.alpha, grouped.alpha, amount))
+                published = grouped
             elif layer.type == 'FOLDER':
                 child = Signal(unit.input('Grouped', 'NodeSocketColor'), unit.input('Grouped:Alpha', 'NodeSocketFloat'))
                 source = Signal(self.vec('SCALE', child.color,
                     self.math('DIVIDE', self.math('GREATER_THAN', child.alpha, 1e-8),
                               self.math('MAXIMUM', child.alpha, 1e-8))), child.alpha)
                 result = blend(self, backdrop, source, amount, mode, channel)
+                published = source
             else:
                 source = self.source(layer, channel)
                 result = blend(self, backdrop, source, amount, mode, channel)
         self._export('Out', result.color, 'NodeSocketColor')
         self._export('Out:Alpha', result.alpha, 'NodeSocketFloat')
+        if layer.type == 'FOLDER' and getattr(layer, 'publish_group', False):
+            # The child composite before this folder blends, for GROUP anchors.
+            self._export('Group', published.color, 'NodeSocketColor')
+            self._export('Group:Alpha', published.alpha, 'NodeSocketFloat')
 
     def _wire(self, parent, channel, backdrop, ancestors=frozenset()):
         """Chain layer channel instances in the top tree, following the CPU evaluator."""

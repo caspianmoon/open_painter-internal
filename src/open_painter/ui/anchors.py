@@ -1,6 +1,7 @@
 """Anchor points: create them in a stack, pick them from consumers, navigate both ways."""
 import bpy
 
+from ..constants import CHANNEL_ITEMS
 from ..core.layer_stack import active, channel_for, invalidate
 from ..core.project_manager import active_set, require_set
 from ..evaluation import anchors
@@ -50,6 +51,8 @@ def _is_above(ts, anchor, layer, target, item):
     layer_index = next(i for i, candidate in enumerate(ts.layers) if candidate.id == layer.id)
     if anchor.layer_id != layer.id:
         return anchors.sort_key(ts, anchor)[0] > layer_index
+    if anchor.kind in anchors.COMPOSITE_KINDS:
+        return True   # a layer's own blended output always depends on the layer
     if target == "CHANNEL":
         return anchor.kind == "CHANNEL" and anchor.channel == item.channel
     if anchor.kind != "MASK":
@@ -58,10 +61,11 @@ def _is_above(ts, anchor, layer, target, item):
 
 
 def _eligible(anchor, target):
+    composite = anchor.kind in anchors.COMPOSITE_KINDS   # carries every channel
     if target == "DETAIL_HEIGHT":
-        return anchor.kind == "MASK" or anchor.channel == "HEIGHT"
+        return composite or anchor.kind == "MASK" or anchor.channel == "HEIGHT"
     if target == "DETAIL_NORMAL":
-        return anchor.kind == "CHANNEL" and anchor.channel == "NORMAL"
+        return composite or (anchor.kind == "CHANNEL" and anchor.channel == "NORMAL")
     return True
 
 
@@ -180,6 +184,8 @@ class OP_OT_anchor_locate(SafeOperator, bpy.types.Operator):
         if anchor is None:
             raise ValueError("Anchor point is missing. Pick another anchor or clear the reference.")
         layer = _select_layer(context, ts, anchor.layer_id, anchor.kind == "MASK")
+        if anchor.kind in anchors.COMPOSITE_KINDS:
+            return   # the layer itself publishes; there is no stack item to select
         if anchor.kind == "MASK":
             layer.active_mask = next(i for i, mask in enumerate(layer.masks) if mask.id == self.anchor_id)
             return
@@ -227,6 +233,58 @@ def draw_anchor_field(layout, ts, target, anchor_id, text="Anchor"):
     return anchor
 
 
+CHANNEL_CHOICES = [("SAME", "Same Channel", "Read the channel this content belongs to")] + [
+    (key, label, "") for key, label, *_ in CHANNEL_ITEMS]
+
+
+class OP_OT_anchor_channel(SafeOperator, bpy.types.Operator):
+    bl_idname = "open_painter.anchor_channel"
+    bl_label = "Anchor Channel"
+    bl_description = "Which channel of a published layer output or folder composite this content reads"
+    bl_options = {"REGISTER", "UNDO"}
+    bl_property = "channel"
+    channel: bpy.props.EnumProperty(items=CHANNEL_CHOICES)
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_search_popup(self)
+        return {"RUNNING_MODAL"}
+
+    def run(self, context):
+        ts, layer = _layer(context)
+        prop = _channel(context, layer)
+        prop.anchor_channel = "" if self.channel == "SAME" else self.channel
+        _redraw(context, ts, mask=False)
+
+
+def draw_anchor_channel(layout, anchor, owner):
+    """Channel selector for a composite anchor consumer (fill content or reference mask)."""
+    if anchor is None or anchor.kind not in anchors.COMPOSITE_KINDS:
+        return
+    if hasattr(owner, "reference_channel"):
+        row = layout.row(align=True)
+        row.prop(owner, "reference_channel", text="Channel")
+        if owner.reference_channel == "MASK":
+            row.label(text="", icon="INFO")
+            layout.label(text=f"Composite anchors have no mask stack; reading {anchors.DEFAULT_CHANNEL.replace('_', ' ').title()}")
+        return
+    label = dict((key, name) for key, name, _ in CHANNEL_CHOICES).get(owner.anchor_channel or "SAME", "Same Channel")
+    layout.operator("open_painter.anchor_channel", text=f"Channel: {label}", icon="NODE_COMPOSITING")
+
+
+def draw_publish_controls(layout, ts, layer):
+    """Publish toggles with the anchors' consumers, on the layer properties."""
+    box = layout.box()
+    box.label(text="Published Outputs", icon="ANCHOR_CENTER")
+    row = box.row(align=True)
+    row.prop(layer, "publish_output", text="Layer Output", toggle=True)
+    if layer.type == "FOLDER":
+        row.prop(layer, "publish_group", text="Folder Composite", toggle=True)
+    for flag, identifier in (("publish_output", anchors.output_id(layer.id)),
+                             ("publish_group", anchors.group_id(layer.id))):
+        if getattr(layer, flag, False) and (flag == "publish_output" or layer.type == "FOLDER"):
+            draw_used_by(box, ts, identifier)
+
+
 def draw_used_by(layout, ts, anchor_id):
     users = anchors.consumers(ts, anchor_id)
     box = layout.box()
@@ -249,4 +307,5 @@ def draw_anchor_settings(layout, ts, item):
     draw_used_by(layout, ts, item.id)
 
 
-CLASSES = (OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer)
+CLASSES = (OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer,
+           OP_OT_anchor_channel)

@@ -19,7 +19,8 @@ def apply(ts, path: str | Path) -> None:
     effect_mapping = {e['id']: new_id() for layer in data['layers'] for c in layer.get('channels', [])
                       for e in c.get('effects', []) if e.get('id')}
     # Anchor ids are mask or effect ids; unknown ones stay verbatim so they report as missing.
-    anchor_mapping = {**mask_mapping, **effect_mapping}
+    from ..evaluation.anchors import derived_mapping
+    anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
     loaded = []
     decoded_images = {}
     start = len(ts.layers)

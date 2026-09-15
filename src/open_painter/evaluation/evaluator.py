@@ -8,7 +8,6 @@ from ..constants import CHANNELS, DEFAULTS
 from ..core import image_manager, material_manager
 from ..core.layer_stack import channel_for
 from ..utils.logging import logger
-from .blend_modes import blend
 from . import metrics
 from .channel_eval import source, TILE_ROWS, _procedural_tile
 from .raster_cache import RasterCache, for_texture_set
@@ -133,16 +132,10 @@ class LayerEvaluator:
             low, high = region[2], region[3]
             cache = {region[4]: region[5]}
         from .image_snapshots import ImageSnapshots
+        from .composite import Composer
         cache = ImageSnapshots(self.geometry_cache, serial, cache)
-        children = {}
-        channel_properties = {}
-        for layer in ts.layers:
-            children.setdefault(layer.parent_id, []).append(layer)
-            channel_properties[layer.id] = channel_for(layer, channel)
-
-        from .buffers import scalar_compatible
-        scalar = scalar_compatible(channel, ts.layers, channel_properties)
-        components = 1 if scalar else 3
+        composer = Composer(ts, channel, n, cache, self.geometry_cache)
+        children, channel_properties, components = composer.children, composer.props, composer.components
 
         def visible_work(parent_id, ancestry):
             for layer in children.get(parent_id, ()):
@@ -161,69 +154,7 @@ class LayerEvaluator:
         work = tuple(visible_work("", set()))
         from .preview_policy import SlicePolicy
         slices = SlicePolicy()
-
-        def compose(parent_id, y0, y1, initial, ancestry, initial_coverage=0):
-            rgb = np.array(initial, dtype=np.float32)
-            coverage = np.array(initial_coverage, dtype=np.float32)
-            # Source-over cannot reduce opaque coverage. Keep that scalar
-            # invariant rather than allocating and dividing an all-ones map.
-            opaque = coverage.ndim == 0 and coverage == 1
-            for layer in children.get(parent_id, []):
-                if not layer.visible:
-                    continue
-                if layer.id in ancestry:
-                    raise ValueError("Layer hierarchy contains a cycle. Reparent the folder.")
-                prop = channel_properties[layer.id]
-                if prop and not prop.enabled:
-                    continue
-                mode = (
-                    prop.blend_mode if prop and prop.blend_mode != "INHERIT" else layer.blend_mode
-                )
-                if mode == "DISABLE":
-                    continue
-                amount = layer.opacity * (prop.opacity if prop else 1)
-                if layer.masks:
-                    from .mask_eval import evaluate_masks
-
-                    amount = amount * evaluate_masks(ts, layer, n, y0, y1, cache, self.geometry_cache)[..., None]
-                if not np.any(amount):
-                    continue
-                if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
-                    # Evaluate against the actual backdrop, then attenuate the whole
-                    # group's change once. Child opacity must not be applied twice.
-                    grouped, grouped_coverage = compose(
-                        layer.id, y0, y1, rgb, ancestry | {layer.id}, coverage
-                    )
-                    rgb = rgb + amount * (grouped - rgb)
-                    if not opaque:
-                        coverage = coverage + amount * (grouped_coverage - coverage)
-                    continue
-                if layer.type == "FOLDER":
-                    src, alpha = compose(layer.id, y0, y1, (0,) * components, ancestry | {layer.id})
-                    # Child composition is premultiplied against black; recover straight color.
-                    src = np.divide(src, alpha, out=np.zeros_like(src), where=alpha > 1e-8)
-                else:
-                    if not prop or not prop.enabled:
-                        continue
-                    if scalar:
-                        from .buffers import scalar_source
-                        src, alpha = scalar_source(prop, layer.type, n, y0, y1, ts, self.geometry_cache)
-                    else:
-                        rgba = source(prop, layer.type, n, y0, y1, cache, ts, self.geometry_cache)
-                        src, alpha = rgba[..., :3], rgba[..., 3:4]
-                alpha = np.clip(alpha * amount, 0, 1)
-                if opaque:
-                    rgb = blend(rgb, src, alpha, mode)
-                else:
-                    # Premultiplied source-over composition. Blends only interact
-                    # where the backdrop exists; a first Multiply child stays visible.
-                    backdrop = np.divide(
-                        rgb, coverage, out=np.zeros_like(rgb), where=coverage > 1e-8
-                    )
-                    mixed = blend(backdrop, src, 1, mode)
-                    rgb = (1 - alpha) * rgb + alpha * ((1 - coverage) * src + coverage * mixed)
-                    coverage = alpha + coverage * (1 - alpha)
-            return rgb, coverage
+        compose = composer.compose
 
         for y0 in range(low, high, TILE_ROWS):
             y1 = min(high, y0 + TILE_ROWS)

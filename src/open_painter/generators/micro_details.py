@@ -69,7 +69,7 @@ def fields(ts, mask, n, low, high, cache, resources):
         field = None
         for start in range(low, high, 64):
             stop = min(start + 64, high)
-            value = evaluate_anchor(ts, identifier, n, start, stop, cache, resources)
+            value = evaluate_anchor(ts, identifier, n, start, stop, cache, resources, channel=slot)
             if value is None or (slot == 'NORMAL' and value.ndim == 2):
                 field = None
                 break

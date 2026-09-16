@@ -65,6 +65,11 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         for mask in values.get('masks', []):
             if 'mesh' in mask:
                 # Mesh masks re-link by name on import; datablock pointers are not portable.
+                # The names are read from the pointers now: a datablock renamed after it was
+                # picked would otherwise travel under its old name.
+                for name in ('object', 'collection', 'material'):
+                    if mask['mesh'].get(name) is not None:
+                        mask['mesh'][name + '_name'] = mask['mesh'][name].name
                 mask['mesh'].update(object=None, collection=None, material=None)
             if mask.get('source') == 'GRAPH':
                 raise ValueError('Custom Graph masks are not portable; bake the mask stack or replace the graph before saving a material')

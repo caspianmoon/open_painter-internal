@@ -163,6 +163,26 @@ def on_frame(scene, *args):
     _candidates.add(scene.as_pointer())
 
 
+def refresh_names(ts):
+    """Name mirrors follow renamed datablocks: they are the re-link keys of portable materials
+    and the labels shown once a datablock is gone."""
+    for ref in ts.assignments:
+        if ref.object is not None and ref.object_name != ref.object.name:
+            ref.object_name = ref.object.name
+    for layer in ts.layers:
+        obj = layer.decal_object
+        if obj is not None and layer.decal_object_name != obj.name:
+            layer.decal_object_name = obj.name
+        for mask in layer.masks:
+            if mask.source != 'MESH':
+                continue
+            selector = mask.mesh
+            for name in ('object', 'collection', 'material'):
+                value = getattr(selector, name)
+                if value is not None and getattr(selector, name + '_name') != value.name:
+                    setattr(selector, name + '_name', value.name)
+
+
 def refresh(scene):
     if scene.as_pointer() not in _candidates:
         return
@@ -172,6 +192,7 @@ def refresh(scene):
     from ..painting import decals
     decals.adopt_duplicates(scene)
     for ts in scene.open_painter.texture_sets:
+        refresh_names(ts)
         key = key_for(scene, ts)
         if key in _known and uses_geometry(ts):
             current = geometry_key(scene, ts)

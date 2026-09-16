@@ -53,6 +53,14 @@ def repair(ts, image_overrides=None):
         material[OWNER] = True
         material["texture_set_id"] = ts.id
         ts.material = material
+    # A slot another material was dropped on (an importer, a script, a stray click in the
+    # material list) takes the set's material back: that is what Repair Material is for, and
+    # painting refuses to start until it holds.
+    for ref in ts.assignments:
+        obj = ref.object
+        if obj is not None and ref.slot_index < len(obj.material_slots) \
+                and obj.material_slots[ref.slot_index].material != material:
+            obj.material_slots[ref.slot_index].material = material
     if not material.use_nodes:
         material.use_nodes = True
     nodes, links = material.node_tree.nodes, material.node_tree.links

@@ -356,6 +356,10 @@ selection. `tests/integration/artist_file_multiset.py` adds two more parts (one 
 material slots so two sets share the object), exports the authored folder as a module and applies
 it to a part, bakes that part, drops catalog materials, paints one stroke across the two sets of
 the shared object, undoes edits, exports every set and builds the bundle.
+`tests/integration/artist_file_edits.py` covers destructive scene edits — renames (name mirrors
+and portable materials follow), a deleted decal Empty, hidden objects, edit mode, a material slot
+taken over by another material (Repair Material takes it back), the assigned object deleted, sets
+without meshes duplicated and removed — with the scheduler ticking throughout.
 `tests/integration/artist_file_ui.py` (GUI phase) opens the file in a real window with the add-on
 already enabled — the sequence of every Blender start — and drives the session through the
 scheduler's own timer: a native brush stroke on the 2048 canvas, a decal Empty dragged with the

@@ -15,6 +15,12 @@ suites on a real asset file (`docs`: TESTING.md).
   Normal projected from placed high-poly sources. Records written before this stay current.
 - Locking a set's sizes to metres re-identified every shader boundary and layer cache although the
   look is unchanged; the metre fields no longer take part in identities.
+- Repair Material now puts the set's material back on assigned slots another material was dropped
+  on (the message told the artist to repair, but repair left the slot alone and painting stayed
+  refused).
+- Renaming an assigned object, a mesh mask's collection/object/material or a decal Empty left the
+  name mirrors stale, so portable materials saved afterwards carried the old names and "Missing
+  object" messages named a datablock that no longer existed; the mirrors follow renames.
 - Stroke and bake-correction dilation no longer wraps around the canvas: a stroke touching the top
   edge used to bleed onto the bottom row (and left onto right) through `np.roll`; a non-wrapping
   `filters.shift` replaces it.

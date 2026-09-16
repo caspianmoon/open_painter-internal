@@ -1,6 +1,6 @@
-# Ucupaint-derived features integrated on 2026-09-14
+# Node-stack add-on features integrated on 2026-09-14
 
-Source study: [research/ucupaint-study.md](research/ucupaint-study.md). Ucupaint is
+Source study: [research/node-stack-study.md](research/node-stack-study.md). The node-stack add-on is
 GPL-3.0-or-later like Open Painter; ported code keeps its attribution in the module
 docstring. Everything below is implemented outside the shader compiler and the
 smart-material files that were being edited concurrently; the compiler findings are
@@ -13,7 +13,7 @@ shell): the crease-only `CURVATURE` map had 0.018 % of its texels above 0.01, so
 CHIPS/EDGE_WEAR masks of every material were empty and the only visible wear was the
 ungated scratch image — "the flat material applied everywhere".
 
-`baking/maps/mean_curvature.py` keeps Ucupaint's welded edge pairing and signed dihedral
+`baking/maps/mean_curvature.py` keeps the node-stack add-on's welded edge pairing and signed dihedral
 weighting (`bake_common.py:170-262`) but estimates curvature per **texel** as a kernel
 ratio: turning (¼ · angle · length per adjacent face) within Curvature Radius of the
 texel's world position, divided by surface area within it — the integral of mean
@@ -56,7 +56,7 @@ signal). Those live in the smart-material recipes.
 ## Selection map (`SELECTION`) and Reselect Baked Faces
 
 `baking/maps/selection.py` rasterizes the current face selection of the assigned
-meshes (1 selected, 0 otherwise, alpha = assigned-UV coverage), following Ucupaint's
+meshes (1 selected, 0 otherwise, alpha = assigned-UV coverage), following the node-stack add-on's
 `SELECTED_VERTICES` bake (`bake_common.py:4043-4092`) without its temporary vertex
 color. Face flags are authoritative; a modifier that changes the face count is
 refused with an explanation instead of guessed. Selected face indices are recorded on
@@ -78,7 +78,7 @@ the 1001–1100 range. No tiled image is created; see
 
 The staging scene had no World, so Cycles used its implicit 10 m occlusion reach. The
 bake now creates an owned World (removed in `close()`) with
-`light_settings.distance = AO Distance` (`bake_common.py:4394-4403` in Ucupaint).
+`light_settings.distance = AO Distance` (`bake_common.py:4394-4403` in the node-stack add-on).
 Default 10.0 reproduces earlier bakes exactly (asserted with `atol=1e-5`); a shorter
 reach removes occlusion from a roof 0.15 above the floor (mean AO 0.025 → 1.0). The
 distance enters AO provenance only when it differs from the default, so maps baked

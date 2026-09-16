@@ -143,7 +143,7 @@ assert not cube_ts.bake.thickness
 assert len(ts.material.node_tree.nodes) == node_count
 register_map(cube_ts, "THICKNESS", thickness_image)
 
-# Signed mean curvature (ported from Ucupaint): a beveled cube reads convex on
+# Signed mean curvature (ported from the node-stack add-on): a beveled cube reads convex on
 # its rounded edges, flat (0.5) on face centres, and a hole punched inward reads
 # concave along its rim. Coverage alpha matches the other utility maps.
 cube = next(ref.object for ref in cube_ts.assignments if ref.object)

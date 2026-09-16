@@ -1,6 +1,6 @@
 # --- START OF FILE properties.py ---
 
-# gready/properties.py
+# bakeaddon/properties.py
 
 import bpy
 from bpy.props import (
@@ -136,7 +136,7 @@ def update_bevel_preset_assignment(self, context):
         from . import operators_bevel_shader
         operators_bevel_shader.update_preset_assignments(context, self)
     except Exception as exc:
-        print(f"G-Ready 2.1 Warning: Could not update Bevel Shader preset assignment: {exc}")
+        print(f"Bake Addon 2.1 Warning: Could not update Bevel Shader preset assignment: {exc}")
 
 
 BEVEL_UNIT_ITEMS = (
@@ -271,7 +271,7 @@ class EdgeDataProperties(PropertyGroup):
 
 # --- Properties for Vertex Color Ops --- <<< --- NEW SECTION --- <<<
 class VColorOpsSettings(PropertyGroup):
-    """Properties for the Vertex Color Ops Tools addon (Integrated into G-Ready 2.1)"""
+    """Properties for the Vertex Color Ops Tools addon (Integrated into Bake Addon 2.1)"""
     custom_color: FloatVectorProperty(
         name="Custom Color",
         description="Color to apply when using 'Apply'",
@@ -285,7 +285,7 @@ class VColorOpsSettings(PropertyGroup):
 
 
 # --- Action filter for selective FBX export ---
-class GReadyActionFilterItem(PropertyGroup):
+class BakeAddonActionFilterItem(PropertyGroup):
     """Represents a single bpy.data.action for selective export."""
     name: StringProperty(name="Action Name")
     use_export: BoolProperty(name="Export", default=True)
@@ -295,9 +295,9 @@ class GReadyActionFilterItem(PropertyGroup):
 def update_selective_actions(self, context):
     """Sync action list when Filter Actions is toggled."""
     try:
-        if not hasattr(context.scene, 'gready_export_settings'):
+        if not hasattr(context.scene, 'bakeaddon_export_settings'):
             return
-        export_settings = context.scene.gready_export_settings
+        export_settings = context.scene.bakeaddon_export_settings
         existing = {item.name: item for item in export_settings.filtered_actions}
         export_settings.filtered_actions.clear()
         for action in bpy.data.actions:
@@ -309,14 +309,14 @@ def update_selective_actions(self, context):
                 item.use_export = True
             if action.frame_range:
                 item.frame_range = f"{int(action.frame_range[0])}-{int(action.frame_range[1])}"
-        print(f"G-Ready: Synced {len(export_settings.filtered_actions)} actions")
+        print(f"Bake Addon: Synced {len(export_settings.filtered_actions)} actions")
     except Exception as e:
-        print(f"G-Ready Error in update_selective_actions: {e}")
+        print(f"Bake Addon Error in update_selective_actions: {e}")
         import traceback
         traceback.print_exc()
 
 
-class GReadyExportSettings(PropertyGroup):
+class BakeAddonExportSettings(PropertyGroup):
     export_dir: StringProperty(name="", description="Export Directory")
     export_mode: EnumProperty(name="", items=EXPORT_MODE_ITEMS, default="PARENT", update=update_export_mode)
     export_format: EnumProperty(name="", items=EXPORT_FORMAT_ITEMS, default="FBX", update=update_export_format)
@@ -384,12 +384,12 @@ class GReadyExportSettings(PropertyGroup):
         default=False,
         update=update_selective_actions,
     )
-    filtered_actions: CollectionProperty(type=GReadyActionFilterItem)
+    filtered_actions: CollectionProperty(type=BakeAddonActionFilterItem)
     filtered_actions_index: IntProperty(name="Active Index", default=-1, options={'HIDDEN'})
     # --- END NEW ---
 
 
-class GReadySmartApplyProps(PropertyGroup):
+class BakeAddonSmartApplyProps(PropertyGroup):
     apply_location: BoolProperty(name="Location", default=False)
     apply_rotation: BoolProperty(name="Rotation", default=False)
     apply_scale: BoolProperty(name="Scale", default=True)

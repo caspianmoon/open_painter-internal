@@ -1,4 +1,4 @@
-"""Current mesh selection rasterized into a UV mask (Ucupaint's selection bake idea).
+"""Current mesh selection rasterized into a UV mask (the node-stack add-on's selection bake idea).
 
 Selected faces write 1, everything else 0; alpha is assigned-UV coverage. The
 selection is read from the base mesh (edit mode is flushed first) and applied

@@ -191,24 +191,24 @@ The crease-only curvature map left every mesh-aware mask empty on smooth geometr
 looked flatly applied. `CURVATURE` now combines crease lines with a texel-domain
 kernel estimate (turning over area within Curvature Radius, relative to the surface
 median), giving edge wear on bevels and tessellated rims after a rebake; old maps show
-as stale. Before/after renders and measurements: [ucupaint-integration.md](ucupaint-integration.md).
+as stale. Before/after renders and measurements: [node-stack-integration.md](node-stack-integration.md).
 
-## Ucupaint integration — 2026-09-14
+## Node-stack add-on integration — 2026-09-14
 
 Implemented from the study, outside the shader compiler and smart-material files:
 signed mean-curvature and selection utility maps with Reselect Baked Faces, UDIM tile
 enumeration in Inspect Bake Setup, an explicit AO Distance through an owned staging
 World, and opt-in 2× supersampled Cycles bakes with a byte preflight. Details, tests and
-measurements: [ucupaint-integration.md](ucupaint-integration.md). Section 7 of the
+measurements: [node-stack-integration.md](node-stack-integration.md). Section 7 of the
 study measures the 0.2.7 shader compiler (quadratic flat-tree construction, full
-rebuild on layer visibility, 64 fragment samplers on Metal) against Ucupaint's
+rebuild on layer visibility, 64 fragment samplers on Metal) against the node-stack add-on's
 per-layer and library group structure (46 s → 2.5 s → 0.17 s for 3,000 nodes) and
 lists compiler recommendations that were not applied here.
 
-## Ucupaint study — 2026-09-14
+## Node-stack add-on study — 2026-09-14
 
-Research only, no code changes. [What Open Painter can take from Ucupaint 3.0.0](research/ucupaint-study.md)
-compares the GPL-3.0-or-later Ucupaint source (shader-node layer stack) with the CPU evaluator and lists ranked,
+Research only, no code changes. [What Open Painter can take from the node-stack add-on (3.0.0)](research/node-stack-study.md)
+compares the GPL-3.0-or-later node-stack add-on source (shader-node layer stack) with the CPU evaluator and lists ranked,
 source-cited candidates: a signed mean-curvature map to port (M5), UDIM tile enumeration and the file-based tile
 workflow (M11, consistent with the tile-access gate), bevel/SSAA/AO bake options (M5), per-channel mask participation,
 a Previous-Layers adjustment layer and non-destructive freezes (M7), a solo viewer (M3), Empty-driven decals (M10), a
@@ -370,16 +370,16 @@ the preceding implementation, not the new production live compositor.
 
 ## Bake integration follow-up — 2026-09-13
 
-Compared the supplied G-Ready 2.1 source with Open Painter and integrated the
-useful workflow improvements on `task/gready-bake-integration`: explicit/name
+Compared the supplied bake add-on (2.1) source with Open Painter and integrated the
+useful workflow improvements on `task/bake-addon-integration`: explicit/name
 source matching, isolated render-configured staging, assembly/part AO scopes,
 editable cages, evaluated topology validation and independent extrusion/device
 controls. Original materials, nodes, images, scene settings and transforms are
 preserved on success and failure.
 
-The [comparison and validation report](gready-bake-comparison.md) contains source
+The [comparison and validation report](bake-addon-comparison.md) contains source
 evidence, real pixel regressions, commands, usage and limits. No claim of a new
-bake engine or bake speedup is made. G-Ready source/icons are not included in the
+bake engine or bake speedup is made. The bake add-on source/icons are not included in the
 extension package; the user's later `00ccf77` commit added the supplied comparison
 source to the repository separately.
 

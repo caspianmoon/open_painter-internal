@@ -1,6 +1,7 @@
 """Owned evaluated bake scene; source objects, materials and UI stay intact."""
 from contextlib import contextmanager
 import bpy
+import numpy as np
 from ..constants import OWNER
 
 
@@ -12,6 +13,7 @@ class BakeStage:
         self.world = None
         self.objects, self.meshes, self.materials = [], [], []
         self.copies = {}
+        self.cages = {}
 
     def prepare(self):
         if self.context.scene != self.ts.id_data:
@@ -25,7 +27,7 @@ class BakeStage:
         self.scene.cycles.seed = 0
         # A scene created here has no World, so Cycles used its implicit AO
         # distance. An owned World makes that distance an explicit bake setting
-        # (Ucupaint sets world.light_settings.distance the same way).
+        # (the node-stack add-on sets world.light_settings.distance the same way).
         self.world = bpy.data.worlds.new('Open Painter Bake World')
         self.world[OWNER] = True
         self.world.light_settings.distance = self.ts.bake.ao_distance
@@ -56,14 +58,40 @@ class BakeStage:
         self.scene.view_layers[0].update()
         return self
 
+    def restrict(self, group, faces):
+        """Route every face of the target copy outside ``faces`` to the scratch image."""
+        target = self.copies[group.low]
+        material = bpy.data.materials.new('OP Bake Scratch')
+        self.materials.append(material)
+        material[OWNER] = True
+        material.use_nodes = True
+        node = material.node_tree.nodes.new('ShaderNodeTexImage')
+        node.image = self.scratch
+        material.node_tree.nodes.active = node
+        target.data.materials.append(material)
+        index = len(target.data.materials) - 1
+        keep = np.zeros(len(target.data.polygons), bool)
+        keep[list(faces)] = True
+        current = np.empty(len(target.data.polygons), np.int32)
+        target.data.polygons.foreach_get('material_index', current)
+        target.data.polygons.foreach_set('material_index', np.where(keep, current, index).astype(np.int32))
+        target.data.update()
+
+    def add_cage(self, group, cage):
+        """Adopt an owned corrected cage for a part (removed with the stage)."""
+        self.scene.collection.objects.link(cage)
+        self.objects.append(cage)
+        self.meshes.append(cage.data)
+        self.cages[group.low] = cage
+
     @contextmanager
-    def target(self, group, kind):
+    def target(self, group, kind, sources=None, ao_scope=None):
         layer = self.scene.view_layers[0]
         target = self.copies[group.low]
-        sources = [self.copies[obj] for obj in group.sources]
+        sources = [self.copies[obj] for obj in (group.sources if sources is None else sources)]
         selected = [target, *sources]
         visible = set(selected)
-        if kind == 'AO' and self.ts.bake.ao_scope == 'SET':
+        if kind == 'AO' and (ao_scope or self.ts.bake.ao_scope) == 'SET':
             # Assembly contact uses original positions and excludes unrelated
             # scene objects. High-poly parts occlude high-to-low bakes.
             visible.update(self.copies[obj] for part in self.groups

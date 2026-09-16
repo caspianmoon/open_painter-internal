@@ -1,17 +1,17 @@
-# G-Ready bake comparison and integration
+# Bake add-on comparison and integration
 
-Audited the user-supplied `G-Ready_Source` directory on 2026-09-13, against
+Audited the user-supplied `Bake_Addon_Source` directory on 2026-09-13, against
 Open Painter task source `0f44580da6425eec21dc00ff74a93f0b7d6cacf0`.
-G-Ready identifies itself as version 2.1 by Farid Mammadov.
+The bake add-on identifies itself as version 2.1.
 
 ## Finding
 
-G-Ready has useful bake-workflow features missing from Open Painter. It does
+The bake add-on has useful bake-workflow features missing from Open Painter. It does
 not supply a different bake engine: its Closest Hit operation calls ordinary
 `bpy.ops.object.bake(type=...)` (`operators_baking.py:1883`). This audit does
-not establish faster rendering or universally better pixels from G-Ready.
+not establish faster rendering or universally better pixels from the bake add-on.
 
-| G-Ready feature / evidence | Open Painter integration |
+| Bake add-on feature / evidence | Open Painter integration |
 | --- | --- |
 | Per-low `_high(.NNN)` / `_cage` matching (`operators_baking.py:1803–1819`) | Explicit source→target pointers, optional strict name matching, multiple highs per target, scene-local discovery, ambiguity/missing-pair errors. Existing All Sources mode retained. |
 | Matrix separation for non-AO; assembly positions retained for AO (`operators_matrix_bake.py:432–468`) | Temporary evaluated bake scene. Individual normals/pair AO use only the relevant parts; assembly AO uses listed parts at their authored positions. Unrelated scene geometry is excluded. Originals are never moved or joined. |
@@ -27,11 +27,11 @@ marks affected map provenance stale.
 ## What was not imported
 
 The integration is original Blender API code; it does not import or redistribute
-the G-Ready source directory or icons. No package-wide or bake-module license
+the bake add-on source directory or icons. No package-wide or bake-module license
 notice was present in the supplied folder; the separate auto-UV file has its own
 GPL notice. The source folder remains unchanged and untracked.
 
-The standard G-Ready baker modifies source material nodes and scene render/color
+The bake add-on's standard baker modifies source material nodes and scene render/color
 settings. Its matrix placement writes the same local location to each trio,
 which can lose relative offsets. Cage-only Edge Split can break correspondence.
 Its experimental compositor AA clears the user's compositor, and some output
@@ -86,11 +86,11 @@ Open Painter does not enable or reconfigure hardware devices on the user's behal
 ## Validation commands and limits
 
 ```sh
-python3 scripts/build_extension.py --output /private/tmp/open-painter-gready-bake.zip
-python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-gready-bake.zip
+python3 scripts/build_extension.py --output /private/tmp/open-painter-bake-addon.zip
+python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --package /private/tmp/open-painter-bake-addon.zip
 python3 scripts/run_tests.py --blender /Applications/Blender.app/Contents/MacOS/Blender --gui-only
 /Applications/Blender.app/Contents/Resources/5.2/python/bin/python3.13 scripts/run_pure_tests.py
-BLENDER_USER_RESOURCES=/private/tmp/op-gready-persist-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python tests/integration/bake_pairing.py
+BLENDER_USER_RESOURCES=/private/tmp/op-bake-addon-persist-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python tests/integration/bake_pairing.py
 BLENDER_USER_RESOURCES=/private/tmp/op-bake-object-material-user /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python-exit-code 1 --python tests/integration/bake_isolation.py
 python3 -m compileall -q src/open_painter scripts tests
 git diff --check
@@ -98,7 +98,7 @@ git diff --check
 
 The main runner sets isolated `BLENDER_USER_RESOURCES`; it restores bundled
 fixtures after testing. The artist profile and published extension ZIP are not
-replaced. The candidate excludes the supplied G-Ready source.
+replaced. The candidate excludes the supplied bake add-on source.
 
 A single Cycles map remains synchronous, with cancellation between maps. Staging
 copies require additional temporary memory; there is no bake-speed or large-mesh
@@ -111,6 +111,6 @@ and utility-map limitations remain.
 
 Final results: **50 integration scripts, 32 Blender unit tests, 27 pure tests,
 three native GUI scripts, extension validation and isolated installation PASS**.
-Compilation and whitespace checks pass. The [validation record](performance/gready-bake-validation.json)
+Compilation and whitespace checks pass. The [validation record](performance/bake-addon-validation.json)
 contains tested source/package hashes, exact commands, changed files and fixture
 values. No historical Worn Painted Metal timing is presented as a bake result.

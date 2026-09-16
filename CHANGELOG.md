@@ -276,7 +276,7 @@ differs only in float rounding of an interpolation, noted per item below.
 - Geometry effects reworked: variant prototypes with per-instance rotation, lean, size and spacing, owned materials, CC0 Poly Haven `moss_01` scanned moss cards, and a sunk, rippled weld bead. Placeholder box/cone/octahedron shapes are gone.
 - Damaged Bevel and Rounded Edges surface effects from Cycles-baked Bevel Mask and Bevel Normal maps; they render in EEVEE, Cycles and export alike.
 - Bake diagnostics: Inspect Bake Setup (exact UV overlap across the set, sampled cage-ray coverage), Select Problem Faces, UDIM tile enumeration; Mean Curvature and Selected Faces utility maps with Reselect Baked Faces; explicit AO Distance; opt-in 2x supersampled bakes with a memory preflight.
-- Research: UDIM tile-access gate rerun (per-tile files and native paint onto tile 1002 pass), Ucupaint study with measured shader-compiler findings.
+- Research: UDIM tile-access gate rerun (per-tile files and native paint onto tile 1002 pass), node-stack add-on study with measured shader-compiler findings.
 
 ## 0.2.7
 

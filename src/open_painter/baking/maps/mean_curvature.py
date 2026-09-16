@@ -1,8 +1,8 @@
 """Signed surface curvature per texel: turning within a radius over area within it.
 
-Edge pairing and the signed dihedral weighting follow Ucupaint 3.0.0
-``bake_common.py`` ``fill_curvature_vcol`` (Yusuf Umar and contributors,
-GPL-3.0-or-later; see ``docs/research/ucupaint-study.md``). The estimate is
+Edge pairing and the signed dihedral weighting follow the node-stack add-on (3.0.0)
+``bake_common.py`` ``fill_curvature_vcol`` (
+GPL-3.0-or-later; see ``docs/research/node-stack-study.md``). The estimate is
 different: every manifold edge carries ``angle x length`` of turning, a quarter
 of which belongs to each adjacent face; faces are sampled over their area, and
 each texel takes the tent-weighted sum of turning around its world position

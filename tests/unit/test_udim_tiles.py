@@ -15,7 +15,7 @@ class Tiles(unittest.TestCase):
 
     def test_centroid_decides_boundary_faces(self):
         # A quad exactly on the 1001/1002 boundary is split into two triangles;
-        # per-loop filtering (Ucupaint) would drop them, centroids keep them.
+        # per-loop filtering (the node-stack add-on) would drop them, centroids keep them.
         left = [[.5, .2], [1., .2], [1., .8]]
         right = [[1., .2], [1.5, .2], [1.5, .8]]
         tiles, invalid = udim.tile_numbers(np.array([left, right]))

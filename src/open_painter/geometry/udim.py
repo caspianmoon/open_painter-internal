@@ -1,6 +1,6 @@
 """UDIM tile enumeration from evaluated render UVs; a diagnostic, not a painter.
 
-Adapted from Ucupaint 3.0.0 ``UDIM.py`` ``get_tile_numbers`` /
+Adapted from the node-stack add-on (3.0.0) ``UDIM.py`` ``get_tile_numbers`` /
 ``is_uvmap_udim`` (GPL-3.0-or-later), with two changes: tiles are decided by
 triangle centroids instead of per-loop filtering, so a face lying exactly on
 integer boundaries still counts, and ``u`` is bounded to 0-9 so it can never

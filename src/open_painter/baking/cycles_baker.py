@@ -93,8 +93,23 @@ def bevel_graph(material, kind, radius, samples):
 
 
 def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
+    """Bake one map for every part of the set; painted corrections shape the cage and passes."""
+    image = _bake(context, ts, kind)
+    if kind in {'NORMAL', 'AO'}:
+        from . import corrections
+        corrections.remember(ts, kind)
+    return image
+
+
+def bake_faces(context, ts, kind, regions):
+    """Bake ``kind`` with only ``regions`` ({object: faces}) on the real image; the rest hits scratch."""
+    return _bake(context, ts, kind, regions=regions)
+
+
+def _bake(context, ts, kind, regions=None):
     from .pairing import groups
     from .staging import prepared
+    from . import corrections
     if kind not in {'NORMAL', 'AO', *BEVEL_KINDS}:
         raise ValueError('Cycles mesh maps support Normal, AO, Bevel Normal and Bevel Mask')
     settings = ts.bake
@@ -119,14 +134,21 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
     factor = int(settings.supersample)
     resolution = int(ts.resolution)
     working = supersample_preflight(resolution, factor)
-    image = scratch = None
+    projecting = settings.selected_to_active and not bevel
+    geometric = corrections.world_rasters(ts) if projecting else {}
+    ignore = corrections.raster(ts, 'IGNORE') if projecting and kind in {'NORMAL', 'AO'} else None
+    ignorable = {ref.object for ref in settings.high_objects if ref.object and getattr(ref, 'ignorable', False)}
+    if ignore is not None and not any(src in ignorable for part in parts for src in part.sources):
+        ignore = None
+    exclude = corrections.raster(ts, 'AO_EXCLUDE') if projecting and kind == 'AO' and settings.ao_scope == 'SET' else None
+    image = scratch = alternative = None
     try:
         image = create(f"{ts.name}_Baked{kind.title().replace('_', '')}", working, DEFAULT_COLORS[kind])
         scratch = create('OP Bake Unassigned Slots', 32)
         with prepared(context, ts, parts, image, scratch) as stage:
             bake_settings = stage.scene.render.bake
             bake_settings.target = 'IMAGE_TEXTURES'
-            bake_settings.use_selected_to_active = settings.selected_to_active and not bevel
+            bake_settings.use_selected_to_active = projecting
             bake_settings.normal_space = 'TANGENT'
             # Internal normals stay +Y; engine handedness conversion is export-only.
             bake_settings.normal_r = 'POS_X'
@@ -136,19 +158,62 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
             # keeps the same padding after downsampling (Ucupaint does the same).
             bake_settings.margin = settings.margin * factor
             bake_settings.use_clear = False  # Fresh neutral image shared by parts.
-            bake_settings.use_cage = settings.selected_to_active and settings.cage_mode != 'NONE' and not bevel
+            bake_settings.use_cage = projecting and settings.cage_mode != 'NONE'
             if bevel:
                 for material in stage.materials:
                     bevel_graph(material, kind, settings.bevel_radius, int(settings.bevel_samples))
             extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
             bake_settings.cage_extrusion = extrusion if settings.cage_mode == 'AUTO' else 0
             bake_settings.max_ray_distance = settings.ray_distance
-            for part in parts:
-                bake_settings.cage_object = stage.copies[part.cage] if part.cage else None
-                with stage.target(part, kind) as target:
-                    uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
-                    logger.info('Baking %s for %s from %d source(s)', kind, part.low.name, len(part.sources))
-                    _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
+            if regions is not None:
+                for part in parts:
+                    stage.restrict(part, regions.get(part.low, ()))
+            if geometric:
+                # Painted cage corrections become one owned cage per part.
+                for part in parts:
+                    cage = corrections.corrected_cage(ts, stage.copies[part.low], geometric,
+                                                      stage.copies[part.cage] if part.cage else None)
+                    if cage is not None:
+                        stage.add_cage(part, cage)
+
+            def run_pass(target_image, sources_of=None, ao_scope=None):
+                for part in parts:
+                    cage = stage.cages.get(part.low)
+                    if cage is not None:
+                        bake_settings.use_cage = True
+                        bake_settings.cage_object = cage
+                        bake_settings.cage_extrusion = 0
+                    else:
+                        bake_settings.cage_object = stage.copies[part.cage] if part.cage else None
+                    sources = None if sources_of is None else sources_of(part)
+                    with stage.target(part, kind, sources=sources, ao_scope=ao_scope) as target:
+                        for material in target.data.materials:
+                            node = material.node_tree.nodes.active if material and material.use_nodes else None
+                            if node is not None and node.image is image:
+                                node.image = target_image
+                        uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
+                        logger.info('Baking %s for %s from %d source(s)', kind, part.low.name,
+                                    len(sources if sources is not None else part.sources))
+                        _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
+                        for material in target.data.materials:
+                            node = material.node_tree.nodes.active if material and material.use_nodes else None
+                            if node is not None and node.image is target_image:
+                                node.image = image
+
+            run_pass(image)
+            passes = []
+            if ignore is not None:
+                passes.append((ignore, lambda part: tuple(s for s in part.sources if s not in ignorable) or part.sources, None))
+            if exclude is not None:
+                passes.append((exclude, None, 'PAIR'))
+            for weight, sources_of, ao_scope in passes:
+                alternative = create(f'{ts.name} Bake Alternative', working, DEFAULT_COLORS[kind])
+                run_pass(alternative, sources_of, ao_scope)
+                blended = corrections.composite(pixels(image), pixels(alternative), corrections.resample(weight, working))
+                image.pixels.foreach_set(blended.ravel())
+                image.update()
+                bpy.data.images.remove(alternative)
+                alternative = None
         if working != resolution:
             reduced = downsample(pixels(image), factor, 'NORMAL' if kind in {'NORMAL', 'BEVEL_NORMAL'} else kind)
             image.scale(resolution, resolution)  # keep the datablock identity; pixels are replaced below
@@ -158,11 +223,14 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
             image['open_painter_mesh_map'] = kind
             image['bevel_radius'] = float(settings.bevel_radius)
             image['bevel_samples'] = int(settings.bevel_samples)
-        pack_image(image)
+        if regions is None:
+            pack_image(image)
         return image
     except Exception:
         if image:
             bpy.data.images.remove(image)
+        if alternative:
+            bpy.data.images.remove(alternative)
         raise
     finally:
         if scratch:

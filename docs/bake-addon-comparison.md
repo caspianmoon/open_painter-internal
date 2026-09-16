@@ -1,6 +1,6 @@
 # Bake add-on comparison and integration
 
-Audited the user-supplied `Bake_Addon_Source` directory on 2026-09-13, against
+Audited the supplied bake add-on source (now `prototypes/bake_addon/`) on 2026-09-13, against
 Open Painter task source `0f44580da6425eec21dc00ff74a93f0b7d6cacf0`.
 The bake add-on identifies itself as version 2.1.
 

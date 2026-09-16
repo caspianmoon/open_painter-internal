@@ -97,6 +97,18 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Surface filters (0.9.4)
+
+`OP_TextureEffect.space` selects UV or Surface space for neighbourhood effects
+(`operation_contracts.SURFACE_KINDS`). Surface effects report a whole-image footprint, so
+`channel_eval.source`, the mask stack and the shader's isolated filter inputs evaluate the full
+raster once and cache it. `geometry/seams.SeamMap` (cached per set, resolution and evaluated
+geometry) holds island coverage, per-island bands of outside texels mapped across their seams
+(first-order continuation of the adjacent face, corner squares clamped to the edge ends), and
+per-triangle tangent Jacobians. `channel_eval._apply_per_island` pads the image once from the
+closest seams, then filters each island's crop with its own band re-padded and writes back the
+island's texels; directional effects receive a per-texel UV direction of a world vector.
+
 ## Mask architecture (0.9.3)
 
 A mask stack is a flat ordered list where every entry is a source with its own operation,

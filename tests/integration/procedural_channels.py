@@ -64,6 +64,7 @@ effect = base.effects.add()
 effect.kind = 'GAUSSIAN_BLUR'
 effect.radius = 3
 effect.strength = .65
+effect.space = 'UV'   # the bounded-halo contract is UV space (Surface evaluates whole images)
 for output in ts.outputs:
     output.dirty = False
 effect.radius = 3

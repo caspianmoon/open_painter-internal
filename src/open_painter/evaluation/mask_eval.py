@@ -235,10 +235,11 @@ def _stack(ts, layer, masks, start, stop, n, y0, y1, cache, geometry_cache, u, v
         if not mask.enabled or mask.source == "ANCHOR":
             continue
         if mask.source == "FILTER":
-            from .channel_eval import apply_effect
+            from .channel_eval import apply_effect, seam_map_for
             if result is None:
                 result = np.ones((y1 - y0, n), dtype=np.float32)
-            value = apply_effect(result, mask.effect)
+            seams = seam_map_for(ts, n, (mask.effect,)) if (y0, y1) == (0, n) else None
+            value = apply_effect(result, mask.effect, seams)
             if value.ndim == 3:
                 value = np.sum(value[..., :3] * np.array((.2126, .7152, .0722), dtype=np.float32), axis=-1)
             result = _combine(result, mask, _levels(mask, value))

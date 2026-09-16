@@ -214,6 +214,12 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Surface filters (0.9.4)
+
+`tests/integration/surface_filters.py` (background; one 512 shader session) is in
+`scripts/run_tests.py`. Surface space is the default for neighbourhood effects, so older suites
+that blur multi-island meshes now exercise the seam-aware path.
+
 ## Mask architecture (0.9.3)
 
 `tests/integration/mask_groups.py` (background; two Cycles EMIT parity bakes at 32 px and one

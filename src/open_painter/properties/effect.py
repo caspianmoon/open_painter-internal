@@ -79,6 +79,13 @@ class OP_TextureEffect(bpy.types.PropertyGroup):
     bias: bpy.props.FloatVectorProperty(name='Channel Offset',size=3,default=(0,0,0),update=numeric)
     image: bpy.props.PointerProperty(name='Detail Texture',type=bpy.types.Image,update=changed)
     angle: bpy.props.FloatProperty(default=0,subtype='ANGLE',update=numeric)
+    # Seamless surface filters (0.9.4): neighbourhood effects follow the mesh across UV seams.
+    space: bpy.props.EnumProperty(name='Space', default='SURFACE', update=changed, items=[
+        ('UV', 'UV', 'Image space: fast, but seams are visible where islands end'),
+        ('SURFACE', 'Surface', 'Follow the mesh: texels across a UV seam are the neighbours, and '
+                               'directional effects take a world-space direction')])
+    direction: bpy.props.FloatVectorProperty(name='Direction', default=(0., 0., -1.), subtype='DIRECTION', update=numeric,
+        description='World-space direction of a directional blur or warp in Surface space')
     scale: bpy.props.FloatProperty(default=8,min=.01,max=512,update=numeric)
     seed: bpy.props.IntProperty(default=1,min=0,update=numeric)
     color: bpy.props.FloatVectorProperty(size=3,subtype='COLOR',default=(0,0,0),min=0,max=1,update=numeric)

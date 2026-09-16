@@ -1,5 +1,17 @@
 # Changes
 
+## 0.9.4
+
+Seamless surface filters.
+
+- Every neighbourhood effect (blur, sharpen, high pass, dilate/erode, edge detect, warps,
+  directional and slope blur) gains a **Space** switch: *UV* or *Surface* (default). Surface
+  space follows the mesh across UV seams through a per-set seam map and filters each island on
+  its own cross-seam padding; directional effects take a world-space **Direction**.
+  [Details](docs/surface-filters.md).
+- The shader's isolated filter inputs take the same seam-aware path; mesh edits invalidate
+  surface effects.
+
 ## 0.9.3
 
 Mask architecture.

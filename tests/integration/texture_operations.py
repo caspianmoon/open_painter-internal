@@ -21,6 +21,7 @@ layer=stack.add(ts,'FILL')
 mask=layer.masks.add();mask.id=new_id();mask.source='PROCEDURAL';mask.procedural='CHECKER';mask.noise_scale=8
 filter_mask=layer.masks.add();filter_mask.id=new_id();filter_mask.source='FILTER'
 filter_mask.effect.kind='GAUSSIAN_BLUR';filter_mask.effect.radius=3
+filter_mask.effect.space='UV'   # the bounded-halo contract is UV space (Surface evaluates whole images)
 whole=evaluate_masks(ts,layer,512,0,512,{},{})
 shared={}
 tiled=np.concatenate([evaluate_masks(ts,layer,512,y,min(512,y+32),{},shared) for y in range(0,512,32)])

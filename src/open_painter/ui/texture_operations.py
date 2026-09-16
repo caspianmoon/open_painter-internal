@@ -323,8 +323,17 @@ class OP_UL_texture_effects(bpy.types.UIList):
 
 def draw_effect_settings(layout, effect, target="CHANNEL"):
     from ..evaluation.channel_eval import effect_ui_fields
+    from ..evaluation.operation_contracts import SURFACE_KINDS
     layout.use_property_decorate = False
+    if effect.kind in SURFACE_KINDS:
+        # Seamless surface filters (0.9.4): UV Blur vs Surface Blur.
+        row = layout.row(align=True)
+        row.prop(effect, "space", expand=True)
+        if effect.space == "SURFACE" and effect.kind in {"DIRECTIONAL_BLUR", "DIRECTIONAL_WARP"}:
+            layout.prop(effect, "direction")
     for key, label in effect_ui_fields(effect.kind):
+        if key == "angle" and effect.space == "SURFACE" and effect.kind in {"DIRECTIONAL_BLUR", "DIRECTIONAL_WARP"}:
+            continue   # the world direction replaces the image-space angle
         if key == "noise":
             layout.operator("open_painter.effect_noise", text=effect.noise.replace("_", " ").title(), icon="TEXTURE").target = target
         elif key == "image":

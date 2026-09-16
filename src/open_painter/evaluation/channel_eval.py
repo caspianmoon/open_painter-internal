@@ -106,19 +106,35 @@ def effect_parameters(effect):
     return params
 
 
-def apply_effect(data, effect):
+def seam_map_for(ts, n, effects):
+    """The set's seam map when any effect runs in Surface space, else None."""
+    from .operation_contracts import surface
+    if ts is None or not any(surface(effect) for effect in effects if effect.enabled and effect.strength > 0):
+        return None
+    from ..geometry.seams import map_for
+    try:
+        return map_for(ts, n)
+    except ValueError:
+        return None
+
+
+def apply_effect(data, effect, seams=None):
     """Apply one persistent effect to a complete texture; preserve RGBA coverage.
 
     Grayscale colorization/normal conversion can return RGB. Effect opacity blends
     against the original expanded grayscale. Reusable by layer and mask stacks.
+    ``seams`` (a whole-image SeamMap) makes Surface-space neighbourhood effects
+    read across UV seams and directional effects follow a world direction.
     """
     if not effect.enabled or effect.strength <= 0 or effect.kind == "ANCHOR":
         return data  # Anchor points publish the stack here and change nothing.
     source = np.asarray(data, np.float32)
+    from .operation_contracts import footprint, surface
+    seam_aware = seams is not None and surface(effect) and source.shape[:2] == (seams.n, seams.n)
     alpha = source[..., 3:4] if source.ndim == 3 and source.shape[-1] == 4 else None
     original = source[..., :3] if alpha is not None else source
     params = effect_parameters(effect)
-    if effect.kind in {"WARP", "SLOPE_BLUR", "DIRECTIONAL_WARP", "VECTOR_WARP", "UV_DISTORTION"}:
+    if effect.kind in {"WARP", "SLOPE_BLUR", "DIRECTIONAL_WARP", "VECTOR_WARP", "UV_DISTORTION"} and not seam_aware:
         h, w = source.shape[:2]
         y, x = np.indices((h, w), dtype=np.float32)
         u, v = (x + .5) / w, (y + .5) / h
@@ -138,7 +154,14 @@ def apply_effect(data, effect):
             y, x = np.indices((h, w), dtype=np.float32)
             image = sample_uv(image, (x + .5) / w, (y + .5) / h)
         params["detail"] = filters.apply(image, "NORMAL_STRENGTH", strength=params["amount"])
-    filtered = filters.apply(original, effect.kind, **params)
+    if seam_aware:
+        # Filter each island on a crop padded from its own seams (0.9.4).
+        halo = footprint(effect.kind, effect.radius, 'UV')
+        halo = int(seams.halo if halo is None else min(max(halo, 2), seams.halo))
+        direction = seams.uv_direction(tuple(effect.direction)) if effect.kind in {"DIRECTIONAL_BLUR", "DIRECTIONAL_WARP"} else None
+        filtered = _apply_per_island(seams, original, halo, effect, params, direction)
+    else:
+        filtered = filters.apply(original, effect.kind, **params)
     if original.ndim == 2 and filtered.ndim == 3:
         original = original[..., None]
     elif original.ndim == 3 and filtered.ndim == 2:
@@ -151,9 +174,40 @@ def apply_effect(data, effect):
     return np.asarray(result, np.float32)
 
 
-def apply_texture_effects(data, effects):
+def _apply_per_island(seams, original, halo, effect, params, direction):
+    """Per-island seam-aware filtering; warp fields are evaluated on each crop's own UVs."""
+    result = np.array(original, np.float32, copy=True)
+    n = seams.n
+    if not seams.bounds:
+        return filters.apply(original, effect.kind, **params)
+    base = seams.pad(original, halo)
+    for island in seams.bounds:
+        padded, (r0, r1, c0, c1) = seams.island_crop(base, island, halo)
+        local = dict(params)
+        if direction is not None:
+            local["direction_field"] = direction[r0:r1, c0:c1]
+        if effect.kind in {"WARP", "SLOPE_BLUR", "DIRECTIONAL_WARP", "VECTOR_WARP", "UV_DISTORTION"}:
+            y, x = np.indices((r1 - r0, c1 - c0), dtype=np.float32)
+            u, v = (x + c0 + .5) / n, (y + r0 + .5) / n
+            noise = getattr(effect, "noise", "FBM")
+            scale, seed = getattr(effect, "scale", 8), getattr(effect, "seed", 1)
+            field = procedurals.evaluate(noise, u, v, seed=seed, scale=scale)
+            if effect.kind in {"VECTOR_WARP", "UV_DISTORTION"}:
+                field = np.stack((field, procedurals.evaluate(noise, u, v, seed=seed + 37, scale=scale)), axis=-1)
+            local["field"] = field
+        crop = filters.apply(padded, effect.kind, **local)
+        mine = seams.island_of[r0:r1, c0:c1] == island
+        if crop.ndim == 3 and result.ndim == 2:
+            result = np.repeat(result[..., None], crop.shape[-1], axis=-1)
+        elif crop.ndim == 2 and result.ndim == 3:
+            crop = np.repeat(crop[..., None], result.shape[-1], axis=-1)
+        result[r0:r1, c0:c1][mine] = crop[mine]
+    return result
+
+
+def apply_texture_effects(data, effects, seams=None):
     for effect in effects:
-        data = apply_effect(data, effect)
+        data = apply_effect(data, effect, seams)
     return data
 
 
@@ -354,7 +408,7 @@ def source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         for low in range(0, n, TILE_ROWS):
             high = min(low + TILE_ROWS, n)
             raster[low:high] = _raw_source(prop, kind, n, low, high, cache, ts, geometry_cache)
-        cache[key] = apply_texture_effects(raster, effects)
+        cache[key] = apply_texture_effects(raster, effects, seam_map_for(ts, n, effects))
     return cache[key][y0:y1]
 
 

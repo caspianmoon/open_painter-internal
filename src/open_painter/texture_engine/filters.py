@@ -379,6 +379,9 @@ def apply(data, kind, **params):
     elif key in {"DIRECTIONAL_BLUR", "RADIAL_BLUR", "SLOPE_BLUR", "WARP", "DIRECTIONAL_WARP", "VECTOR_WARP", "UV_DISTORTION", "TWIRL", "RIPPLE", "WAVE", "NON_UNIFORM_TRANSFORM"}:
         y, x = np.indices(source.shape[:2], dtype=np.float32)
         angle = np.deg2rad(float(params.get("angle", 0)))
+        # A per-texel direction (surface space) replaces the single angle.
+        direction = params.get("direction_field")
+        cos_a, sin_a = (np.cos(angle), np.sin(angle)) if direction is None else (direction[..., 0], direction[..., 1])
         field = np.asarray(params.get("field", _luma(source)), np.float32)
         if field.shape[:2] != source.shape[:2]:
             raise ValueError("Displacement field must match texture dimensions")
@@ -388,7 +391,7 @@ def apply(data, kind, **params):
             cx, cy = (source.shape[1] - 1) / 2, (source.shape[0] - 1) / 2
             for step in np.linspace(-1, 1, count):
                 if key == "DIRECTIONAL_BLUR":
-                    sx, sy = x + np.cos(angle) * radius * step, y + np.sin(angle) * radius * step
+                    sx, sy = x + cos_a * radius * step, y + sin_a * radius * step
                 else:
                     theta = np.deg2rad(radius * step)
                     sx = cx + (x - cx) * np.cos(theta) - (y - cy) * np.sin(theta)
@@ -409,7 +412,7 @@ def apply(data, kind, **params):
                 dx, dy = (field[..., 0] * 2 - 1) * strength, (field[..., 1] * 2 - 1) * strength
             elif key == "DIRECTIONAL_WARP":
                 distance = (_luma(field) * 2 - 1) * strength
-                dx, dy = np.cos(angle) * distance, np.sin(angle) * distance
+                dx, dy = cos_a * distance, sin_a * distance
             else:
                 dx, dy = _gradient(_luma(field))
                 dx, dy = dx * strength, dy * strength

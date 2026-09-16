@@ -681,7 +681,8 @@ class Graph(Math):
                     data[low:high] = _raw_source(snapshot, layer.type, self.n, low, high, cache, self.ts, geometry)
                     # Source generation yields before the bounded unsupported filter.
                     yield low, data[low:high]
-                filtered = apply_texture_effects(data, snapshot.effects)
+                from .channel_eval import seam_map_for
+                filtered = apply_texture_effects(data, snapshot.effects, seam_map_for(self.ts, self.n, snapshot.effects))
                 yield from self._parts(filtered)
             return parts()
         if rehydrate is not None:

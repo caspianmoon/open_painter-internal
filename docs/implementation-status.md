@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Seamless surface filters 0.9.4 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Seam map (cross-seam correspondence with corner fill, per-island padding, tangent Jacobians), Space switch on every neighbourhood effect | done — blur error at seams 0.18 (UV) → 0.013 (Surface) on a six-island cube, exact on a plane | `tests/integration/surface_filters.py` |
+| Directional blur/warp along a world direction | done | `surface_filters.py` |
+| Shader isolated inputs and mask filters on the seam-aware path | done (boundary equals the CPU result) | `surface_filters.py` |
+| Generator-internal blurs (micro details) in Surface space; non-manifold seams | not covered | — |
+
 ## Mask architecture 0.9.3 — 2026-09-16
 
 | Item | Status | Evidence |

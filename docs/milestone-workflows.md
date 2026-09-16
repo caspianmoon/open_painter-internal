@@ -3,6 +3,9 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Surface filters (0.9.4):** every blur, dilation, warp or directional effect shows a *UV /
+  Surface* switch; Surface (default) follows the mesh across seams, and directional effects take a
+  world direction. [Details](surface-filters.md).
 - **Mask groups and custom graphs (0.9.3):** mask menu → *Add Mask Group* / *Add Custom
   Graph*; with a member active, *Add* joins its group; the list buttons move an entry into the
   group above, out of it, and move groups as blocks. [Details](mask-architecture.md).

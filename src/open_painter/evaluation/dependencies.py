@@ -35,9 +35,23 @@ def mesh_masks(ts):
     return [m for l in ts.layers for m in l.masks if m.source == 'MESH' and m.enabled]
 
 
+def uses_surface_effects(ts):
+    """Surface-space (seam-aware) effects read the mesh through the seam map (0.9.4)."""
+    from .operation_contracts import surface
+    for layer in ts.layers:
+        for prop in layer.channels:
+            if any(surface(e) for e in prop.effects):
+                return True
+        for mask in layer.masks:
+            if mask.source == 'FILTER' and surface(mask.effect):
+                return True
+    return False
+
+
 def uses_geometry(ts):
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
-        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts))
+        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts)) \
+        or uses_surface_effects(ts)
 
 
 @measured('geometry_signature')

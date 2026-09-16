@@ -1118,7 +1118,7 @@ class Graph(Math):
         if key[0] == 'CHANNEL':
             if self._skipped(layer):
                 return []   # a pass-through imports nothing: its content work stops
-            cached = self._cache_effective(layer) != 'LIVE'
+            cached = self._cache_effective(layer, key[2]) != 'LIVE'
             if layer.type == 'FOLDER' or not cached:
                 refs.append(self._mask_key(layer))
             if layer.type != 'FOLDER' and not cached:
@@ -1202,9 +1202,34 @@ class Graph(Math):
             return 'LIVE'
         return mode
 
-    def _cache_effective(self, layer):
-        """CACHED/FROZEN when this layer's channel units sample a cache image, else LIVE."""
-        return 'LIVE' if self._skipped(layer) else self._cache_mode(layer)
+    def _cache_effective(self, layer, channel=None):
+        """CACHED/FROZEN when this layer's channel units sample a cache image, else LIVE.
+
+        A folder channel no descendant touches stays LIVE whatever the mode: it passes
+        its backdrop through, and a cache image of that would cost a full-resolution
+        float texture (64 MiB at 2048) for nothing.
+        """
+        if self._skipped(layer):
+            return 'LIVE'
+        mode = self._cache_mode(layer)
+        if mode != 'LIVE' and channel is not None and layer.type == 'FOLDER' and not self._subtree_touches(layer, channel):
+            return 'LIVE'
+        return mode
+
+    def _subtree_touches(self, folder, channel):
+        """Whether any descendant contributes to ``channel`` (visibility aside: it is a uniform)."""
+        stack, seen = [folder.id], set()
+        while stack:
+            parent = stack.pop()
+            for layer in self.ts.layers:
+                if layer.parent_id != parent or layer.id in seen:
+                    continue
+                seen.add(layer.id)
+                if layer.type == 'FOLDER':
+                    stack.append(layer.id)
+                elif self._touched(layer, channel):
+                    return True
+        return False
 
     @staticmethod
     def _cache_row(layer, channel):
@@ -1250,7 +1275,7 @@ class Graph(Math):
             prop = channel_for(layer, key[2])
             signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs,
                          bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None,
-                         'skip' if self._skipped(layer) else self._cache_effective(layer))
+                         'skip' if self._skipped(layer) else self._cache_effective(layer, key[2]))
             if stub:
                 # A stub stands in while the layer is hidden and its content unchanged.
                 return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
@@ -1936,7 +1961,7 @@ class Graph(Math):
             prop = channel_for(layer, key[2])
             if prop is not None:
                 owners.append(prop)
-            if self._cache_effective(layer) != 'LIVE':
+            if self._cache_effective(layer, key[2]) != 'LIVE':
                 row = self._cache_row(layer, key[2])
                 if row is not None:
                     owners.append(row)
@@ -2093,7 +2118,7 @@ class Graph(Math):
         opaque = self._plan.opaque[layer.id]
         backdrop = Signal(unit.input('In', 'NodeSocketColor'),
                           1.0 if opaque else unit.input('In:Alpha', 'NodeSocketFloat'))
-        cached = self._cache_effective(layer) != 'LIVE'
+        cached = self._cache_effective(layer, channel) != 'LIVE'
         with self.role(f'LayerMix:{layer.id}:{channel}'):
             amount = self.math('MULTIPLY', self.param(layer, 'opacity'), self.param(layer, 'visible'))
             if prop:

@@ -15,9 +15,14 @@ suites on a real asset file (`docs`: TESTING.md).
   Normal projected from placed high-poly sources. Records written before this stay current.
 - Locking a set's sizes to metres re-identified every shader boundary and layer cache although the
   look is unchanged; the metre fields no longer take part in identities.
-- Repair Material now puts the set's material back on assigned slots another material was dropped
-  on (the message told the artist to repair, but repair left the slot alone and painting stayed
-  refused).
+- The Repair Material button now puts the set's material back on assigned slots another material
+  was dropped on (the message told the artist to repair, but repair left the slot alone and
+  painting stayed refused). Render and save handlers still leave a swapped slot alone.
+- Exporting below the authored resolution point-sampled every other texel; it box-filters now
+  (normals renormalised), so fine detail no longer aliases in 1k exports of 2k sets.
+- A cached folder cached all eight channels, including those none of its children touch; those
+  pass-throughs stay live, halving the cache memory and file growth of a typical folder
+  (4 × 64 MiB at 2048 instead of 8 ×).
 - Renaming an assigned object, a mesh mask's collection/object/material or a decal Empty left the
   name mirrors stale, so portable materials saved afterwards carried the old names and "Missing
   object" messages named a datablock that no longer existed; the mirrors follow renames.

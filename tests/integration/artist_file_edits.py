@@ -145,7 +145,11 @@ low.material_slots[0].material = other
 settle()
 issues = validate(ts)
 assert any('Material assignment changed on Wheel' in issue for issue in issues), issues
-material_manager.repair(ts)
+material_manager.repair(ts)   # handlers repair the graph but leave a swapped slot alone
+assert low.material_slots[0].material == other
+project.active_texture_set = next(i for i, t in enumerate(project.texture_sets) if t.id == set_id)
+with bpy.context.temp_override(scene=scene, object=low, active_object=low):
+    assert bpy.ops.open_painter.texture_set(action='REPAIR') == {'FINISHED'}   # the button takes it back
 assert low.material_slots[0].material == ts.material
 assert not validate(ts), validate(ts)
 print('ARTIST_FILE_SLOT_OK', flush=True)

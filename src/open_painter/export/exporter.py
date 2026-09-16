@@ -59,7 +59,17 @@ def export(context: bpy.types.Context, ts, settings, naming=None, directory=None
             if image is None:
                 raise ValueError(f"Output channel {key} is missing. Refresh the texture set.")
             value = images.pixels(image)
-            if value.shape[0] != n:
+            source = value.shape[0]
+            if source > n and source % n == 0:
+                # Exporting below the authored resolution: a box filter over the covered
+                # texels, not a point sample of every other one (which aliases fine detail).
+                factor = source // n
+                value = value.reshape(n, factor, n, factor, 4).mean(axis=(1, 3), dtype=np.float32)
+                if key == "NORMAL":
+                    xyz = value[..., :3] * 2 - 1
+                    xyz /= np.maximum(np.linalg.norm(xyz, axis=-1, keepdims=True), 1e-6)
+                    value[..., :3] = xyz * .5 + .5
+            elif source != n:
                 scaled = np.empty((n, n, 4), dtype=np.float32)
                 for start in range(0, n, 128):
                     u, v = np.meshgrid(

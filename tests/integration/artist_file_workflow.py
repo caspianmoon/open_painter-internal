@@ -259,6 +259,10 @@ timed('folder cache', lambda: layer_cache.flush(scene, ts), 300)
 states = shader_preview.session_graph(scene, ts).cache_states()
 cached_states = {k: v for k, v in states.items() if k.startswith(folder_id)}
 assert cached_states and all(v == 'CURRENT' for v in cached_states.values()), states
+# Only the channels the folder's children touch are cached: no 64 MiB image for a pass-through.
+touched = {p.channel for l in ts.layers if l.parent_id == folder_id for p in l.channels if p.enabled}
+assert {k.split(':')[1] for k in cached_states} == touched, (cached_states, touched)
+assert sum(1 for row in layer_of(folder_id).cache if row.image is not None) == len(touched)
 assert all(row.image is not None and tuple(row.image.size) == (2048, 2048)
            for row in layer_of(folder_id).cache if row.image is not None)
 export_view = cpu(ts, 'BASE_COLOR', 256)
@@ -334,6 +338,13 @@ with TemporaryDirectory(prefix='op-artist-') as directory:
         written = timed('export', lambda: export(bpy.context, ts, ts.export, directory=directory), 600)
     assert written and all(p.exists() and p.stat().st_size > 1000 for p in written), written
     names = sorted(p.name for p in written)
+    # Exporting below the authored resolution box-filters the 2048 outputs (no point sampling).
+    exported = bpy.data.images.load(str(next(p for p in written if p.name.endswith('_BaseColor.png'))))
+    linear = np.clip(downsampled(next(o.image for o in ts.outputs if o.channel == 'BASE_COLOR'), 1024)[..., :3], 0, 1)
+    srgb = np.where(linear <= .0031308, 12.92 * linear, 1.055 * linear ** (1 / 2.4) - .055)   # 8-bit files store sRGB
+    error = float(np.abs(images.pixels(exported)[..., :3] - srgb).mean())
+    assert error < .01, error
+    bpy.data.images.remove(exported)
 print('ARTIST_FILE_EXPORT_OK', names, flush=True)
 
 # ---- 10. removing the set leaves no owned images behind ----------------------------------------

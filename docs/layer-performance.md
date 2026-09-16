@@ -90,7 +90,10 @@ cache still compares current after reload. A resolution change makes the cache
 missing until it is refreshed at the new size. Duplicated layers start without
 images; portable materials serialize cached layers as Live; removing a layer
 removes its images. Each cached channel costs a float RGBA image at the set
-resolution (256 MiB at 4k), shown in the *Performance* section.
+resolution (256 MiB at 4k), shown in the *Performance* section; a folder only
+caches the channels its children touch (a folder of colour, roughness, metallic
+and height layers caches four images, its normal, AO, emission and opacity
+channels pass their backdrop through live).
 
 Limits: an anchor elsewhere that reads a child of a cached folder compiles that
 child without a backdrop (a warning is reported). Cache images serve the shader

@@ -86,6 +86,9 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
         elif self.action in {"REFRESH", "REPAIR", "DUPLICATE"}:
             from ..evaluation.evaluator import LayerEvaluator
 
+            if self.action == "REPAIR":
+                from ..core.material_manager import relink_slots
+                relink_slots(ts)
             LayerEvaluator(context.scene).evaluate_texture_set(ts.id, force=True)
         elif self.action == "VALIDATE":
             issues = validate(ts)

@@ -214,6 +214,11 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Mask architecture (0.9.3)
+
+`tests/integration/mask_groups.py` (background; two Cycles EMIT parity bakes at 32 px and one
+custom-graph bake at 64 px) is in `scripts/run_tests.py`.
+
 ## Mesh masks (0.9.2)
 
 `tests/integration/mesh_masks.py` (background, one Cycles EMIT parity bake at 32 px) is in

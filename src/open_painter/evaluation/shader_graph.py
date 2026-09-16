@@ -61,7 +61,10 @@ def _prop_signature(prop, count=None):
 
 
 def _mask_signature(m):
-    return (m.id, m.enabled, m.source, m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
+    graph = getattr(m, 'node_group', None)
+    return (m.id, m.enabled, m.source, getattr(m, 'parent_id', ''),
+            graph.name if graph is not None and m.source == 'GRAPH' else None,
+            m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
             m.procedural, m.map_type, m.operation,
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
             m.reference_channel, m.reference_stage, m.reference_anchor, m.detail_height_anchor,
@@ -1091,6 +1094,8 @@ class Graph(Math):
             masks = list(layer.masks)
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
             for i in range(stop - 1, 0, -1):
+                if masks[i - 1].parent_id or masks[i - 1].source == 'GROUP':
+                    continue   # a continuation never starts inside a group's member run
                 candidate = self._mask_key(layer, masks[i - 1].id, key[3])
                 if isinstance(candidate, tuple) and candidate != key and candidate in self._plan.keys:
                     return candidate
@@ -1637,6 +1642,9 @@ class Graph(Math):
             if mask.source == 'MESH':
                 from .mesh_masks import signature as mesh_signature
                 stamp += (('mesh', mesh_signature(self.ts, mask)),)
+            if mask.source == 'GRAPH':
+                from .custom_graph import signature as graph_signature
+                stamp += (('graph', graph_signature(mask.node_group)),)
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
                 stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key), self._geometry_stamp(True)),)
@@ -1707,6 +1715,127 @@ class Graph(Math):
             return self.separate(self.boundary(self._role, owners, identity, factory,
                                                ['mask_prefix', layer.id, masks[-1].id, bool(pre_filter)]).color)[0]
 
+    def _mask_chain(self, layer, masks, start, stop, pre_filter, result, prefix):
+        """Fold entries [start, stop) into ``result``; a GROUP folds its member run first (0.9.3)."""
+        from ..core.mask_stack import block
+        index = start
+        while index < stop:
+            mask = masks[index]
+            if mask.source == 'GROUP':
+                _, run_stop = block(masks, index)
+                run_stop = min(run_stop, stop)
+                if self._mask_active(mask, pre_filter):
+                    prefix.append(mask)
+                    value = self._mask_chain(layer, masks, index + 1, run_stop, pre_filter, None, prefix)
+                    if value is None:
+                        value = 1.0
+                    result = self._mask_fold(layer, mask, value, result)
+                index = run_stop
+                continue
+            index += 1
+            if not self._mask_active(mask, pre_filter):
+                continue
+            prefix.append(mask)
+            with self.role(f'MaskSource:{layer.id}:{mask.id}'):
+                value = self._mask_value(layer, mask, result, prefix, pre_filter)
+            result = self._mask_fold(layer, mask, value, result)
+        return result
+
+    def _mask_fold(self, layer, mask, value, result):
+        """Levels, invert and the entry's blend operation."""
+        with self.role(f'MaskLevels:{layer.id}:{mask.id}'):
+            black, white = self.param(mask, 'black'), self.param(mask, 'white')
+            value = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', value, black),
+                self.math('MAXIMUM', self.math('SUBTRACT', white, black), 1e-6)))
+            value = self.scalar_mix(value, self.math('SUBTRACT', 1, value), self.param(mask, 'invert'))
+        with self.role(f'MaskMix:{layer.id}:{mask.id}'):
+            strength = self.param(mask, 'strength')
+            if result is None:
+                return self.scalar_mix(1, value, strength)
+            if mask.source == 'FILTER' or mask.operation == 'NORMAL':
+                return self.scalar_mix(result, value, strength)
+            if mask.operation == 'MULTIPLY':
+                return self.math('MULTIPLY', result, self.scalar_mix(1, value, strength))
+            if mask.operation in {'MAX', 'MIN'}:
+                return self.scalar_mix(result, self.math('MAXIMUM' if mask.operation == 'MAX' else 'MINIMUM',
+                                                         result, value), strength)
+            return self.clamp(self.math('ADD', result, self.math('MULTIPLY', value, strength)))
+
+    def _mask_value(self, layer, mask, result, prefix, pre_filter):
+        """Raw coverage of one non-group entry (filters read the running result)."""
+        if mask.source == 'FILTER':
+            if result is None:
+                result = 1.0
+            if not mask.effect.enabled and not is_pointwise(mask.effect.kind):
+                return result
+            self._compiled_effects[mask.effect.as_pointer()] = mask.effect
+            self.unit.compiled_effects[mask.effect.as_pointer()] = mask.effect
+            try:
+                filtered = apply_effect(self, Signal(result), mask.effect)
+                return luminance(self, filtered.color)
+            except UnsupportedEffect:
+                filtered = self._mask_prefix(layer, prefix, pre_filter)
+                return self.scalar_mix(result, filtered, self.param(mask.effect, 'strength'))
+        if mask.source == 'REFERENCE':
+            if mask.reference_anchor:
+                return self.anchor_scalar(mask.reference_anchor, mask.reference_channel)
+            target = self._layer(mask.reference_layer)
+            if target is None:
+                return 0.0
+            if mask.reference_channel == 'MASK':
+                return self.mask(target, mask.reference_mask, mask.reference_stage == 'PRE_FILTER')
+            sample = self.source(target, mask.reference_channel, 0 if mask.reference_stage == 'PRE_FILTER' else None)
+            gray = (luminance(self, sample.color) if mask.reference_channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
+                    else self.separate(sample.color)[0])
+            return self.math('MULTIPLY', gray, sample.alpha)
+        if mask.source in {'FILL', 'PAINT'}:
+            sample = (self.projected(mask, lambda uv: self.image(mask.image, uv, mask.filtering, mask.tiling,
+                                                getter=lambda mask=mask: mask.image, owner=mask))
+                      if mask.source == 'FILL' else self.image(mask.image, getter=lambda mask=mask: mask.image, owner=mask))
+            return self.separate(sample.color)[0]
+        if mask.source == 'BAKED':
+            return self.separate(self.mesh_map(mask.map_type).color)[0]
+        if mask.source in {'GENERATOR', 'NOISE'}:
+            return self.generator(mask, layer)
+        if mask.source == 'GRAPH':
+            return self._custom_graph(mask)
+        if mask.source == 'PROCEDURAL':
+            from ..texture_engine.procedurals import ALIASES
+            kind = ALIASES.get(mask.procedural, mask.procedural)
+            if kind in self.ANALYTIC:
+                scale = self.param(mask, 'noise_scale')
+                sample = self.projected(mask, lambda uv: Signal(self.analytic(kind, uv, scale)))
+                value = self.separate(sample.color)[0]
+                if mask.projection == 'UV' and mask.tiling == 'NONE':
+                    value = self.math('MULTIPLY', value, self._coverage(self.coordinates(mask)))
+                return value
+            return self._mask_source_boundary(layer, mask)
+        return self._mask_source_boundary(layer, mask)
+
+    def _custom_graph(self, mask):
+        """Instance the artist's shader node group; UV/Position/Normal inputs wire by name (0.9.3)."""
+        tree = mask.node_group
+        if tree is None or tree.bl_idname != 'ShaderNodeTree':
+            raise ValueError(f'Mask "{mask.name}" needs a shader node group')
+        outputs = [item for item in tree.interface.items_tree if item.item_type == 'SOCKET' and item.in_out == 'OUTPUT']
+        if not outputs:
+            raise ValueError(f'Node group "{tree.name}" has no output socket')
+        node = self.node('ShaderNodeGroup')
+        node.node_tree = tree
+        node['op_custom_graph'] = tree.name
+        for socket in node.inputs:
+            name = socket.name.lower()
+            if name in {'uv', 'vector', 'coordinates'}:
+                self.link(self.coord_uv(), socket)
+            elif name == 'position':
+                self.link(self.coord_position(), socket)
+            elif name == 'normal':
+                self.link(self.coord_normal(), socket)
+        output = node.outputs[0]
+        if output.type in {'RGBA', 'VECTOR'}:
+            return self.separate(output)[0]
+        return output
+
     def mask(self, layer, through='', pre_filter=False):
         """Mask coverage after the item `through` (inclusive) or the whole stack.
 
@@ -1728,81 +1857,7 @@ class Graph(Math):
             result = self._import_mask(producer, public=False)
             start = next(i + 1 for i, m in enumerate(masks) if m.id == continued[2]) if continued[2] else len(masks)
         prefix = [m for m in masks[:start] if self._mask_active(m, pre_filter)]
-        for index in range(start, stop):
-            mask = masks[index]
-            if not self._mask_active(mask, pre_filter):
-                continue
-            prefix.append(mask)
-            with self.role(f'MaskSource:{layer.id}:{mask.id}'):
-                if mask.source == 'FILTER':
-                    if result is None:
-                        result = 1.0
-                    if not mask.effect.enabled and not is_pointwise(mask.effect.kind):
-                        value = result
-                    else:
-                        self._compiled_effects[mask.effect.as_pointer()] = mask.effect
-                        self.unit.compiled_effects[mask.effect.as_pointer()] = mask.effect
-                        try:
-                            filtered = apply_effect(self, Signal(result), mask.effect)
-                            value = luminance(self, filtered.color)
-                        except UnsupportedEffect:
-                            filtered = self._mask_prefix(layer, prefix, pre_filter)
-                            value = self.scalar_mix(result, filtered, self.param(mask.effect, 'strength'))
-                elif mask.source == 'REFERENCE':
-                    if mask.reference_anchor:
-                        value = self.anchor_scalar(mask.reference_anchor, mask.reference_channel)
-                    else:
-                        target = self._layer(mask.reference_layer)
-                        if target is None:
-                            value = 0.0
-                        elif mask.reference_channel == 'MASK':
-                            value = self.mask(target, mask.reference_mask, mask.reference_stage == 'PRE_FILTER')
-                        else:
-                            sample = self.source(target, mask.reference_channel,
-                                                 0 if mask.reference_stage == 'PRE_FILTER' else None)
-                            gray = (luminance(self, sample.color) if mask.reference_channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
-                                    else self.separate(sample.color)[0])
-                            value = self.math('MULTIPLY', gray, sample.alpha)
-                elif mask.source in {'FILL', 'PAINT'}:
-                    sample = (self.projected(mask, lambda uv: self.image(mask.image, uv, mask.filtering, mask.tiling,
-                                                        getter=lambda mask=mask: mask.image, owner=mask))
-                              if mask.source == 'FILL' else self.image(mask.image, getter=lambda mask=mask: mask.image, owner=mask))
-                    value = self.separate(sample.color)[0]
-                elif mask.source == 'BAKED':
-                    value = self.separate(self.mesh_map(mask.map_type).color)[0]
-                elif mask.source in {'GENERATOR', 'NOISE'}:
-                    value = self.generator(mask, layer)
-                elif mask.source == 'PROCEDURAL':
-                    from ..texture_engine.procedurals import ALIASES
-                    kind = ALIASES.get(mask.procedural, mask.procedural)
-                    if kind in self.ANALYTIC:
-                        scale = self.param(mask, 'noise_scale')
-                        sample = self.projected(mask, lambda uv: Signal(self.analytic(kind, uv, scale)))
-                        value = self.separate(sample.color)[0]
-                        if mask.projection == 'UV' and mask.tiling == 'NONE':
-                            value = self.math('MULTIPLY', value, self._coverage(self.coordinates(mask)))
-                    else:
-                        value = self._mask_source_boundary(layer, mask)
-                else:
-                    value = self._mask_source_boundary(layer, mask)
-            with self.role(f'MaskLevels:{layer.id}:{mask.id}'):
-                black, white = self.param(mask, 'black'), self.param(mask, 'white')
-                value = self.clamp(self.math('DIVIDE', self.math('SUBTRACT', value, black),
-                    self.math('MAXIMUM', self.math('SUBTRACT', white, black), 1e-6)))
-                value = self.scalar_mix(value, self.math('SUBTRACT', 1, value), self.param(mask, 'invert'))
-            with self.role(f'MaskMix:{layer.id}:{mask.id}'):
-                strength = self.param(mask, 'strength')
-                if result is None:
-                    result = self.scalar_mix(1, value, strength)
-                elif mask.source == 'FILTER' or mask.operation == 'NORMAL':
-                    result = self.scalar_mix(result, value, strength)
-                elif mask.operation == 'MULTIPLY':
-                    result = self.math('MULTIPLY', result, self.scalar_mix(1, value, strength))
-                elif mask.operation in {'MAX', 'MIN'}:
-                    result = self.scalar_mix(result, self.math('MAXIMUM' if mask.operation == 'MAX' else 'MINIMUM',
-                                                               result, value), strength)
-                else:
-                    result = self.clamp(self.math('ADD', result, self.math('MULTIPLY', value, strength)))
+        result = self._mask_chain(layer, masks, start, stop, pre_filter, result, prefix)
         self.unit.flags['empty'] = result is None
         return 1.0 if result is None else result
 

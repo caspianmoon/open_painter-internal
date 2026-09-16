@@ -16,6 +16,14 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Mask architecture 0.9.3 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Mask groups (nested stacks) in the CPU reference and the shader compiler; structure operators | done (exact CPU model; shader parity 1e-4) | `tests/integration/mask_groups.py` |
+| Custom Graph source: native instance in the shader, Cycles bake for the CPU reference, content signature | done | `mask_groups.py` |
+| Open Graph editing of group membership; portable custom graphs | not covered (groups show as ordinary mask nodes; graphs refused by the serializer) | — |
+
 ## Mesh masks 0.9.2 — 2026-09-16
 
 | Item | Status | Evidence |

@@ -70,9 +70,16 @@ class OP_Mask(bpy.types.PropertyGroup):
             ('ANCHOR', 'Anchor Point', 'Publish the mask result at this position for other layers'),
             ('STROKES', 'Vector Strokes', 'Coverage of the project\'s vector strokes with this mask\'s key'),
             ('MESH', 'Mesh Mask', 'Objects, collections, materials, vertex groups, face sets, selection, UV islands, normal direction or attributes of the assigned meshes'),
+            ('GROUP', 'Mask Group', 'A nested mask stack: its members combine among themselves, then the group combines with the stack like any other source'),
+            ('GRAPH', 'Custom Graph', 'A shader node group you author; its first output is the coverage'),
         ],
         update=changed,
     )
+    # Mask groups (0.9.3): members carry the id of their group and follow it in the list.
+    parent_id: bpy.props.StringProperty(update=changed)
+    node_group: bpy.props.PointerProperty(name='Node Group', type=bpy.types.NodeTree, update=changed,
+        poll=lambda self, tree: tree.bl_idname == 'ShaderNodeTree',
+        description='Shader node group whose first output drives the mask; UV, Position and Normal inputs are wired by name')
     stroke_key: bpy.props.StringProperty(update=changed, description='Key of the vector strokes this mask renders')
     procedural: bpy.props.StringProperty(default="FBM", update=changed)
     effect: bpy.props.PointerProperty(type=OP_TextureEffect)

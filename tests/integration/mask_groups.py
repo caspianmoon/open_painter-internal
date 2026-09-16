@@ -1,0 +1,255 @@
+"""Mask architecture (0.9.3): every entry is a source; groups nest so masks feed masks;
+custom shader node groups are sources too. CPU model, structure operators, shader parity."""
+import sys
+from pathlib import Path
+from time import monotonic
+
+import bpy
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
+import open_painter
+from open_painter.core import image_manager as images, layer_stack as stack, mask_stack, material_manager
+from open_painter.core import texture_set_manager as sets
+from open_painter.evaluation import cache, custom_graph, shader_preview
+from open_painter.evaluation.evaluator import LayerEvaluator
+from open_painter.evaluation.mask_eval import evaluate_masks
+from open_painter.evaluation.shader_graph import Graph
+from open_painter.utils.ids import new_id
+
+N = 32
+
+
+class SampledSet:
+    def __init__(self, original):
+        self.original = original
+        self.resolution = str(N)
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
+def gradient(name, axis, n=512):
+    image = images.create(name, n)
+    u, v = np.meshgrid((np.arange(n) + .5) / n, (np.arange(n) + .5) / n)
+    data = np.ones((n, n, 4), np.float32)
+    data[..., 0] = data[..., 1] = data[..., 2] = (u if axis == 0 else v).astype(np.float32)
+    images.write(image, data, pack=False)
+    return image
+
+
+def levels(mask, value):
+    value = np.clip((value - mask.black) / max(1e-6, mask.white - mask.black), 0, 1)
+    return 1 - value if mask.invert else value
+
+
+open_painter.register()
+if bpy.app.timers.is_registered(cache.tick):
+    bpy.app.timers.unregister(cache.tick)
+scene = bpy.context.scene
+bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete(use_global=False)
+bpy.ops.mesh.primitive_plane_add(size=2)
+plane = bpy.context.object
+ts = sets.create(scene, 'Mask groups', 512)
+sets.assign(scene, ts, plane)
+base = stack.add(ts, 'FILL', 'Base')
+stack.channel_for(base, 'BASE_COLOR').color = (.1, .1, .1, 1.)
+layer = stack.add(ts, 'FILL', 'Rust')
+layer_id = layer.id
+stack.channel_for(layer, 'BASE_COLOR').color = (.9, .4, .1, 1.)
+layer_of = lambda: next(l for l in ts.layers if l.id == layer_id)
+u_image, v_image = gradient('U', 0), gradient('V', 1)
+
+
+def add(source, name, **fields):
+    mask = layer_of().masks.add()
+    mask.id, mask.name, mask.source = new_id(), name, source
+    for key, value in fields.items():
+        setattr(mask, key, value)
+    return mask.id
+
+
+def by_id(identifier):
+    return next(m for m in layer_of().masks if m.id == identifier)
+
+
+# Curvature ─┐ Multiply → Levels → MASK   (with gradients standing in for curvature/noise)
+#  Noise   ──┘
+group_id = add('GROUP', 'Wear', operation='MAX', strength=.8)
+a_id = add('FILL', 'Curvature', image=u_image, parent_id=group_id)
+b_id = add('FILL', 'Noise', image=v_image, operation='MULTIPLY', parent_id=group_id)
+lv_id = add('FILTER', 'Levels', parent_id=group_id)
+by_id(lv_id).effect.kind, by_id(lv_id).effect.black, by_id(lv_id).effect.white = 'LEVELS', .1, .9
+c_id = add('FILL', 'Base coverage', image=v_image, strength=.5)
+by_id(group_id).black = .05
+masks = list(layer_of().masks)
+assert mask_stack.rows(masks) == [(0, 0), (1, 1), (2, 1), (3, 1), (4, 0)]
+assert mask_stack.members(masks, 0) == [1, 2, 3] and mask_stack.block(masks, 0) == (0, 4)
+
+# CPU model: the group's members combine first, then the group folds into the stack.
+n = 512
+u, v = np.meshgrid((np.arange(n) + .5) / n, (np.arange(n) + .5) / n)
+u, v = u.astype(np.float32), v.astype(np.float32)
+inner = 1 - 1 + u * 1                                   # A: first entry, strength 1
+inner = inner * (1 - 1 + v * 1)                         # B: multiply, strength 1
+lv = np.clip((inner - .1) / .8, 0, 1)                   # Levels filter (effect black/white)
+inner = inner * 0 + lv                                  # NORMAL fold at strength 1
+g = levels(by_id(group_id), inner)
+result = 1 - .8 + g * .8                                # group is the first outer entry: 1-s+v*s
+result = np.clip(result + 0, 0, 1)
+c = v                                                   # C: v gradient, operation MULTIPLY default
+result = result * (1 - .5 + c * .5)
+actual = np.concatenate([evaluate_masks(ts, layer_of(), n, y0, min(n, y0 + 128), {}, {}) for y0 in range(0, n, 128)])
+assert actual.shape == (n, n) and np.abs(actual - result).max() < 2e-3, float(np.abs(actual - result).max())
+# Disabling the group removes its whole run from the stack.
+by_id(group_id).enabled = False
+actual = evaluate_masks(ts, layer_of(), n, 0, n, {}, {})
+assert np.abs(actual - (1 - .5 + v * .5)).max() < 2e-3
+by_id(group_id).enabled = True
+print('MASK_GROUPS_MODEL_OK', flush=True)
+
+# Structure operators keep member runs contiguous.
+masks = layer_of().masks
+c_index = next(i for i, m in enumerate(masks) if m.id == c_id)
+assert mask_stack.into_group_above(layer_of(), c_index) == 0 and by_id(c_id).parent_id == group_id
+assert mask_stack.block(list(layer_of().masks), 0) == (0, 5)
+out = mask_stack.out_of_group(layer_of(), 4)
+assert out == 4 and by_id(c_id).parent_id == '' and mask_stack.block(list(layer_of().masks), 0) == (0, 4)
+moved = mask_stack.move(layer_of(), 0, 1)               # the group block passes C
+assert [m.id for m in layer_of().masks] == [c_id, group_id, a_id, b_id, lv_id] and moved == 1
+moved = mask_stack.move(layer_of(), 1, -1)
+assert [m.id for m in layer_of().masks] == [group_id, a_id, b_id, lv_id, c_id] and moved == 0
+assert mask_stack.move(layer_of(), 2, -1) == 1          # B above A inside the group
+assert [m.id for m in layer_of().masks][:3] == [group_id, b_id, a_id]
+assert mask_stack.move(layer_of(), 1, 1) == 2
+assert mask_stack.move(layer_of(), 3, 1) == 3            # Levels is the last member: stays
+# Adding while a member is active joins its group at the end of the run (mask_stack.adopt).
+nested_id = add('GROUP', 'Inner')
+assert mask_stack.adopt(layer_of(), 5, 3) == 4 and by_id(nested_id).parent_id == group_id
+d_id = add('FILL', 'D', image=u_image)
+assert mask_stack.adopt(layer_of(), 6, 4) == 5 and by_id(d_id).parent_id == nested_id
+assert [m.id for m in layer_of().masks] == [group_id, a_id, b_id, lv_id, nested_id, d_id, c_id]
+assert mask_stack.rows(list(layer_of().masks))[4:6] == [(4, 1), (5, 2)]
+assert mask_stack.block(list(layer_of().masks), 0) == (0, 6)
+ts.active_layer = stack.index_of(ts, layer_id)
+layer_of().active_mask = 5
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.mask(action='OUT_OF_GROUP') == {'FINISHED'}
+assert by_id(d_id).parent_id == group_id and mask_stack.block(list(layer_of().masks), 0) == (0, 6)
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.mask(action='ADD', source='PROCEDURAL') == {'FINISHED'}
+added = layer_of().masks[layer_of().active_mask]
+assert added.parent_id == group_id and mask_stack.block(list(layer_of().masks), 0) == (0, 7)
+layer_of().active_mask = next(i for i, m in enumerate(layer_of().masks) if m.id == added.id)
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.mask(action='DELETE') == {'FINISHED'}
+layer_of().active_mask = next(i for i, m in enumerate(layer_of().masks) if m.id == nested_id)
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.mask(action='DISSOLVE') == {'FINISHED'}
+assert not any(m.id == nested_id for m in layer_of().masks) and by_id(d_id).parent_id == group_id
+layer_of().active_mask = next(i for i, m in enumerate(layer_of().masks) if m.id == d_id)
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.mask(action='DELETE') == {'FINISHED'}
+assert [m.id for m in layer_of().masks] == [group_id, a_id, b_id, lv_id, c_id]
+print('MASK_GROUPS_STRUCTURE_OK', flush=True)
+
+# Shader parity of the nested stack against the CPU reference (smooth sources).
+ts.preview_backend = 'CPU'
+shader_preview.clear()
+bpy.context.view_layer.update()
+scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = 1
+scene.render.bake.margin = 0; scene.render.bake.use_clear = True
+target = bpy.data.images.new('Mask groups readback', width=N, height=N, float_buffer=True)
+target.colorspace_settings.name = 'Non-Color'
+small = SampledSet(ts)
+
+
+def bake_channel(graph):
+    tree = ts.material.node_tree
+    output = next(node for node in tree.nodes if node.bl_idname == 'ShaderNodeOutputMaterial')
+    emission = tree.nodes.new('ShaderNodeEmission')
+    bake_node = tree.nodes.new('ShaderNodeTexImage')
+    bake_node.image = target
+    tree.nodes.active = bake_node
+    tree.links.new(emission.outputs[0], output.inputs['Surface'])
+    tree.links.new(graph.outputs['BASE_COLOR'], emission.inputs['Color'])
+    bpy.ops.object.bake(type='EMIT')
+    result = images.pixels(target)[..., :3].copy()
+    tree.nodes.remove(bake_node); tree.nodes.remove(emission)
+    return result
+
+
+def cpu_channel():
+    steps = LayerEvaluator(scene).channel_steps(ts.id, 'BASE_COLOR', preview_resolution=N)
+    try:
+        while True:
+            next(steps)
+    except StopIteration as done:
+        return images.pixels(done.value)[..., :3].copy()
+
+
+graph = Graph(scene, small, ts.material)
+graph.build()
+while graph.pending_resources:
+    graph.step_resources(.1)
+error = float(np.abs(bake_channel(graph) - cpu_channel()).max())
+assert error < 3e-4, error
+nodes = graph.node_count
+graph.close()
+material_manager.repair(ts)
+print('MASK_GROUPS_PARITY', error, flush=True)
+
+# Custom Graph: native in the shader, baked with Cycles for the CPU reference.
+graph_id = add('GRAPH', 'Custom', operation='MULTIPLY')
+tree = bpy.data.node_groups.new('Mask ramp', 'ShaderNodeTree')
+tree.interface.new_socket(name='UV', in_out='INPUT', socket_type='NodeSocketVector')
+tree.interface.new_socket(name='Coverage', in_out='OUTPUT', socket_type='NodeSocketFloat')
+group_in, group_out = tree.nodes.new('NodeGroupInput'), tree.nodes.new('NodeGroupOutput')
+separate = tree.nodes.new('ShaderNodeSeparateXYZ')
+tree.links.new(group_in.outputs['UV'], separate.inputs[0])
+tree.links.new(separate.outputs['X'], group_out.inputs['Coverage'])
+by_id(graph_id).node_group = tree
+before = custom_graph.signature(tree)
+raster = custom_graph.raster(ts, by_id(graph_id), 64)
+uu = (np.arange(64) + .5) / 64
+assert np.abs(raster - uu[None, :]).max() < .03, float(np.abs(raster - uu[None, :]).max())
+graph = Graph(scene, small, ts.material)
+graph.build()
+while graph.pending_resources:
+    graph.step_resources(.1)
+assert any(node.get('op_custom_graph') == 'Mask ramp' for node in graph.nodes())
+assert graph.node_count > nodes
+shader_result = bake_channel(graph)
+# The custom ramp multiplies the rust coverage by u: the right side is rustier than the left.
+assert shader_result[:, -4:, 0].mean() > shader_result[:, :4, 0].mean() + .1
+graph.close()
+material_manager.repair(ts)
+separate.outputs['X'].default_value = 0.0
+tree.links.remove(tree.links[-1])
+tree.links.new(separate.outputs['Y'], group_out.inputs['Coverage'])
+assert custom_graph.signature(tree) != before, 'editing the group changes its signature'
+raster = custom_graph.raster(ts, by_id(graph_id), 64)
+assert np.abs(raster - uu[:, None]).max() < .03
+# The live session adopts the graph and reports it in the structural signature.
+ts.preview_backend = 'LIVE'
+material_manager.repair(ts)
+deadline = monotonic() + 60
+while monotonic() < deadline and not shader_preview.current(scene, ts):
+    shader_preview.tick(scene, ts)
+    assert not shader_preview.diagnostics(scene, ts)['error'], shader_preview.diagnostics(scene, ts)
+assert shader_preview.current(scene, ts)
+builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+by_id(graph_id).node_group = None
+assert shader_preview.diagnostics(scene, ts)['error'] or shader_preview.diagnostics(scene, ts)['rebuild_pending']
+by_id(graph_id).node_group = tree
+# Portable materials refuse custom graphs explicitly.
+from open_painter.smart_materials.serializer import save
+try:
+    save(ts, ROOT / '.blender-test' / 'mask-groups-material.zip')
+except ValueError as exc:
+    assert 'Custom Graph' in str(exc)
+else:
+    raise AssertionError('a custom graph must be refused by the serializer')
+print('MASK_GROUPS_PASS', flush=True)
+open_painter.unregister()

@@ -3,6 +3,9 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Mask groups and custom graphs (0.9.3):** mask menu → *Add Mask Group* / *Add Custom
+  Graph*; with a member active, *Add* joins its group; the list buttons move an entry into the
+  group above, out of it, and move groups as blocks. [Details](mask-architecture.md).
 - **Mesh masks (0.9.2):** Layers → mask menu → *Add Mesh Mask*, then *Select By* Object,
   Collection, Material, Vertex Group, Face Set, Face Selection, UV Island, Normal Direction or
   Geometry Attribute. A Collection mask follows the collection: add an object to it and the

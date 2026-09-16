@@ -56,12 +56,21 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     bl_label = "Edit Mask"
     bl_options = {"REGISTER", "UNDO"}
     action: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE", 'ANALYZE', 'FREEZE')]
+        items=[(x, x.replace('_', ' ').title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE", 'ANALYZE', 'FREEZE',
+                                                              'INTO_GROUP', 'OUT_OF_GROUP', 'DISSOLVE', 'NEW_GRAPH')]
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER", 'SCENE', 'REFERENCE', 'MESH')]
+        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER", 'SCENE', 'REFERENCE', 'MESH', 'GROUP', 'GRAPH')]
     )
+
+    @classmethod
+    def description(cls, context, properties):
+        return {'INTO_GROUP': 'Move the mask into the group directly above it (masks feed masks)',
+                'OUT_OF_GROUP': 'Lift the mask out of its group, after the group',
+                'DISSOLVE': 'Remove the group but keep its members in place',
+                'NEW_GRAPH': 'Create a starter shader node group for this Custom Graph mask',
+                'ADD': f'Add a {properties.source.replace("_", " ").title()} mask source'}.get(properties.action, '')
 
     def run(self, context):
         ts = require_set(context)
@@ -94,6 +103,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             mask.image = image
             layer.active_mask = 0
         elif self.action == "ADD":
+            anchor = layer.active_mask if layer.masks else None
             mask = layer.masks.add()
             mask.id, mask.source = new_id(), self.source
             mask.name = self.source.title() + " Mask"
@@ -104,6 +114,11 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
                 mask.name = 'Mesh Mask'
                 mask.mesh.kind = 'COLLECTION'
                 mask.mesh.object = next((r.object for r in ts.assignments if r.object == context.object), None)
+            elif self.source == 'GROUP':
+                mask.name = 'Group'
+            elif self.source == 'GRAPH':
+                mask.name = 'Custom Graph'
+                mask.node_group = starter_graph(f'{ts.name} {layer.name} Mask Graph')
             elif self.source == "PROCEDURAL":
                 mask.procedural = "FBM"
                 mask.name = "FBM"
@@ -114,19 +129,35 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
                     (0, 0, 0, 1) if self.black else (1, 1, 1, 1),
                 )
                 mask.image.pack()
-            layer.active_mask = len(layer.masks) - 1
+            from ..core import mask_stack
+            layer.active_mask = mask_stack.adopt(layer, len(layer.masks) - 1, anchor)
         elif layer.masks:
+            from ..core import mask_stack
             i = max(0, min(layer.active_mask, len(layer.masks) - 1))
             if self.action == "DELETE":
                 from .anchors import broken_labels, report_broken
-                broken = broken_labels(ts, [layer.masks[i].id] if layer.masks[i].source == "ANCHOR" else [])
-                layer.masks.remove(i)
+                start, stop = mask_stack.block(layer.masks, i)
+                broken = broken_labels(ts, [m.id for m in list(layer.masks)[start:stop] if m.source == "ANCHOR"])
+                mask_stack.remove_block(layer, i)
                 layer.active_mask = max(0, i - 1)
                 report_broken(self, context, broken)
+            elif self.action == 'INTO_GROUP':
+                if mask_stack.into_group_above(layer, i) is None:
+                    raise ValueError('Place the mask directly under a group (or its members) first')
+            elif self.action == 'OUT_OF_GROUP':
+                layer.active_mask = mask_stack.out_of_group(layer, i)
+            elif self.action == 'DISSOLVE':
+                if layer.masks[i].source != 'GROUP':
+                    raise ValueError('Select a mask group to dissolve')
+                mask_stack.dissolve(layer, i)
+                layer.active_mask = min(i, len(layer.masks) - 1)
+            elif self.action == 'NEW_GRAPH':
+                mask = layer.masks[i]
+                if mask.source != 'GRAPH':
+                    raise ValueError('Select a Custom Graph mask first')
+                mask.node_group = starter_graph(f'{ts.name} {layer.name} Mask Graph')
             else:
-                j = max(0, min(len(layer.masks) - 1, i + (-1 if self.action == "UP" else 1)))
-                layer.masks.move(i, j)
-                layer.active_mask = j
+                layer.active_mask = mask_stack.move(layer, i, -1 if self.action == "UP" else 1)
         invalidate(ts)
         from ..painting.paint_session import synchronize
         from .dock import state
@@ -138,14 +169,43 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         synchronize(context, mask=True)
 
 
+MASK_ICONS = {'GROUP': 'FILE_FOLDER', 'GRAPH': 'NODETREE', 'MESH': 'OUTLINER_COLLECTION', 'PAINT': 'BRUSH_DATA',
+              'FILTER': 'MODIFIER', 'SCENE': 'WORLD', 'REFERENCE': 'LINKED', 'STROKES': 'GREASEPENCIL',
+              'GENERATOR': 'PHYSICS', 'PROCEDURAL': 'TEXTURE', 'BAKED': 'IMAGE_DATA'}
+
+
+def starter_graph(name):
+    """A shader node group whose first output is coverage: UV in, a checker out, ready to edit."""
+    tree = bpy.data.node_groups.new(name, 'ShaderNodeTree')
+    tree.interface.new_socket(name='UV', in_out='INPUT', socket_type='NodeSocketVector')
+    tree.interface.new_socket(name='Coverage', in_out='OUTPUT', socket_type='NodeSocketFloat')
+    group_in = tree.nodes.new('NodeGroupInput')
+    group_out = tree.nodes.new('NodeGroupOutput')
+    checker = tree.nodes.new('ShaderNodeTexChecker')
+    checker.inputs['Scale'].default_value = 8.0
+    group_in.location, checker.location, group_out.location = (-400, 0), (-150, 0), (150, 0)
+    tree.links.new(group_in.outputs['UV'], checker.inputs['Vector'])
+    tree.links.new(checker.outputs['Fac'], group_out.inputs['Coverage'])
+    tree.use_fake_user = True
+    return tree
+
+
 class OP_UL_masks(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        from ..core.mask_stack import depth
+        level = depth(data.masks, index)
+        row = layout.row(align=True)
+        if level:
+            row.separator(factor=2.0 * level)
         if item.source == "ANCHOR":
-            layout.label(text="", icon="BLANK1")
-            layout.prop(item, "name", text="", emboss=False, icon="ANCHOR_CENTER")
+            row.label(text="", icon="BLANK1")
+            row.prop(item, "name", text="", emboss=False, icon="ANCHOR_CENTER")
             return
-        layout.prop(item, "enabled", text="")
-        layout.prop(item, "name", text="", emboss=False, icon="MOD_MASK")
+        row.prop(item, "enabled", text="")
+        row.prop(item, "name", text="", emboss=False, icon=MASK_ICONS.get(item.source, 'MOD_MASK'))
+        if item.source not in {'GROUP', 'FILTER'} or index:
+            row.label(text='', icon={'MULTIPLY': 'X', 'ADD': 'ADD', 'NORMAL': 'IPO_LINEAR', 'MAX': 'SORT_DESC',
+                                     'MIN': 'SORT_ASC'}.get(item.operation, 'DOT'))
 
 
 class OP_PT_masks(bpy.types.Panel):
@@ -169,11 +229,31 @@ class OP_PT_masks(bpy.types.Panel):
         op.target, op.create = "MASK", True
         layout.template_list("OP_UL_masks", "", layer, "masks", layer, "active_mask", rows=2)
         row = layout.row(align=True)
-        for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ("DELETE", "TRASH")):
+        for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ('INTO_GROUP', 'IMPORT'),
+                             ('OUT_OF_GROUP', 'EXPORT'), ("DELETE", "TRASH")):
             row.operator("open_painter.mask", text="", icon=icon).action = action
         if not layer.masks:
             return
         mask = layer.masks[min(layer.active_mask, len(layer.masks) - 1)]
+        if mask.source == 'GROUP':
+            layout.prop(mask, 'source', text='Source')
+            from ..core.mask_stack import members
+            count = len(members(layer.masks, min(layer.active_mask, len(layer.masks) - 1)))
+            layout.label(text=f'{count} member(s) combine first, then the group blends into the stack', icon='INFO')
+            layout.operator('open_painter.mask', text='Dissolve Group').action = 'DISSOLVE'
+            for name in ('operation', 'strength', 'black', 'white', 'invert'):
+                layout.prop(mask, name)
+            return
+        if mask.source == 'GRAPH':
+            layout.prop(mask, 'source', text='Source')
+            row = layout.row(align=True)
+            row.template_ID(mask, 'node_group')
+            row.operator('open_painter.mask', text='', icon='ADD').action = 'NEW_GRAPH'
+            layout.label(text='First output drives the mask; UV, Position, Normal inputs wire by name', icon='INFO')
+            layout.label(text='Native in the viewport; export bakes the group with Cycles', icon='INFO')
+            for name in ('operation', 'strength', 'black', 'white', 'invert'):
+                layout.prop(mask, name)
+            return
         layout.operator(
             "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
         ).action = "BAKE"

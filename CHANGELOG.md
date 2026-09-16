@@ -1,5 +1,17 @@
 # Changes
 
+## 0.9.3
+
+Mask architecture.
+
+- **Mask Groups**: a nested mask stack as a source — members combine first, then the group blends
+  into the stack with its own operation, strength, levels and invert. Groups nest; list buttons
+  move entries into and out of groups and move groups as blocks. Both evaluators walk the same
+  tree. [Details](docs/mask-architecture.md).
+- **Custom Graph** mask source: your own shader node group, native in the viewport and baked with
+  Cycles for export.
+- Mask list shows nesting, source icons and each entry's blend operation.
+
 ## 0.9.2
 
 Mesh masks.

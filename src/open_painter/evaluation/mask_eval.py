@@ -68,7 +68,8 @@ def _stack_signature(ts, layer, geometry_cache):
         required = map_dependencies(mask)
         maps = tuple((item.kind, _image_identity(item.image)) for item in ts.baked_maps
                      if item.image and (required is None or item.kind in required))
-        common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength)
+        common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength,
+                  getattr(mask, 'parent_id', ''))
         if mask.source == "ANCHOR":
             extra = ()  # Pass-through; binding it to the edit serial would defeat generator caching.
         elif mask.source in {"GENERATOR", "NOISE"}:
@@ -103,6 +104,11 @@ def _stack_signature(ts, layer, geometry_cache):
         elif mask.source == 'MESH':
             from .mesh_masks import signature as mesh_signature
             extra = (mesh_signature(ts, mask), getattr(geometry_cache, "geometry_stamp", None))
+        elif mask.source == 'GRAPH':
+            from .custom_graph import signature as graph_signature
+            extra = (graph_signature(mask.node_group), getattr(geometry_cache, "geometry_stamp", None))
+        elif mask.source == 'GROUP':
+            extra = ()
         else:
             # Bundled detail images are shared, read-only authoring inputs.
             # Managed writes still advance their image revision. Keep the old
@@ -139,94 +145,116 @@ def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
 
 
 
-@measured('masking')
-def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
-    u, v = np.meshgrid(
-        (np.arange(n, dtype=np.float32) + 0.5) / n, (np.arange(y0, y1, dtype=np.float32) + 0.5) / n
-    )
+def _combine(result, mask, value):
+    """Fold one entry's coverage into the running result with its operation and strength."""
+    if result is None:
+        return 1 - mask.strength + value * mask.strength
+    if mask.source == "FILTER" or mask.operation == "NORMAL":
+        return result * (1 - mask.strength) + value * mask.strength
+    if mask.operation == "MULTIPLY":
+        return result * (1 - mask.strength + value * mask.strength)
+    if mask.operation == "MAX":
+        return result + (np.maximum(result, value) - result) * mask.strength
+    if mask.operation == "MIN":
+        return result + (np.minimum(result, value) - result) * mask.strength
+    return np.clip(result + value * mask.strength, 0, 1)
+
+
+def _levels(mask, value):
+    value = np.clip((value - mask.black) / max(1e-6, mask.white - mask.black), 0, 1)
+    return 1 - value if mask.invert else value
+
+
+def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
+    """Raw coverage of one non-group, non-filter entry."""
+    if mask.source == 'REFERENCE':
+        from .references import evaluate
+        return evaluate(ts, mask, n, y0, y1, cache, geometry_cache)
+    if mask.source == 'SCENE':
+        from ..generators.scene_fields import evaluate
+        return evaluate(ts, mask, u, v, cache)
+    if mask.source == 'STROKES':
+        from ..painting.stroke_raster import mask_rows
+        return mask_rows(ts, mask, n, y0, y1, geometry_cache)
+    if mask.source == 'MESH':
+        from .mesh_masks import evaluate as evaluate_mesh_mask
+        return evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache)
+    if mask.source == 'GRAPH':
+        from .custom_graph import evaluate as evaluate_graph
+        return evaluate_graph(ts, mask, n, y0, y1, geometry_cache)
+    if mask.source == "PROCEDURAL":
+        from types import SimpleNamespace
+        from .channel_eval import _procedural_tile, _coordinates
+        prop = SimpleNamespace(procedural=mask.procedural,
+            procedural_scale=mask.noise_scale, procedural_seed=mask.seed,
+            projection=mask.projection, scale=mask.scale, rotation=mask.rotation,
+            offset=mask.offset, triplanar_hardness=mask.triplanar_hardness)
+        value = _procedural_tile(prop, n, y0, y1, ts, geometry_cache)
+        if mask.projection == "UV" and mask.tiling == "NONE":
+            pu, pv = _coordinates(prop, n, y0, y1)
+            value = value * ((pu >= 0) & (pu <= 1) & (pv >= 0) & (pv <= 1))
+        return value
+    if mask.source == "FILL":
+        if not mask.image:
+            raise ValueError(f"Fill mask image is missing on {layer.name}.")
+        from .channel_eval import source
+        return source(mask, "FILL", n, y0, y1, cache, ts,
+                      geometry_cache if geometry_cache is not None else {})[..., 0]
+    if mask.source == "PAINT":
+        if not mask.image:
+            raise ValueError(f"Painted mask image is missing on {layer.name}.")
+        key = mask.image.as_pointer()
+        if key not in cache:
+            cache[key] = read(cache, mask.image)
+        data = cache[key]
+        return data[y0:y1, :, 0] if data.shape[:2] == (n, n) else sample_uv(data, u, v)[..., 0]
+    if mask.source == "BAKED":
+        return sample_uv(map_pixels(ts, mask.map_type, cache), u, v)[..., 0]
+    from ..generators.base import evaluate
+    return evaluate(ts, mask, u, v, cache, resources=geometry_cache, rows=(n, y0, y1))
+
+
+def _stack(ts, layer, masks, start, stop, n, y0, y1, cache, geometry_cache, u, v):
+    """Coverage of entries [start, stop): groups evaluate their member run recursively."""
+    from ..core.mask_stack import block
     result = None
-    for mask in layer.masks:
+    index = start
+    while index < stop:
+        mask = masks[index]
+        if mask.source == 'GROUP':
+            _, run_stop = block(masks, index)
+            run_stop = min(run_stop, stop)
+            if mask.enabled:
+                value = _stack(ts, layer, masks, index + 1, run_stop, n, y0, y1, cache, geometry_cache, u, v)
+                if value is None:
+                    value = np.ones((y1 - y0, n), dtype=np.float32)
+                result = _combine(result, mask, _levels(mask, value))
+            index = run_stop
+            continue
+        index += 1
         if not mask.enabled or mask.source == "ANCHOR":
             continue
         if mask.source == "FILTER":
             from .channel_eval import apply_effect
             if result is None:
-                result = np.ones((y1-y0, n), dtype=np.float32)
+                result = np.ones((y1 - y0, n), dtype=np.float32)
             value = apply_effect(result, mask.effect)
             if value.ndim == 3:
-                value = np.sum(value[..., :3] * np.array((.2126,.7152,.0722), dtype=np.float32), axis=-1)
-            value = np.clip((value-mask.black)/max(1e-6,mask.white-mask.black),0,1)
-            if mask.invert:
-                value = 1-value
-            result = result * (1-mask.strength) + value * mask.strength
+                value = np.sum(value[..., :3] * np.array((.2126, .7152, .0722), dtype=np.float32), axis=-1)
+            result = _combine(result, mask, _levels(mask, value))
             continue
-        if mask.source == 'REFERENCE':
-            from .references import evaluate
-            value = evaluate(ts,mask,n,y0,y1,cache,geometry_cache)
-        elif mask.source == 'SCENE':
-            from ..generators.scene_fields import evaluate
-            value = evaluate(ts, mask, u, v, cache)
-        elif mask.source == 'STROKES':
-            from ..painting.stroke_raster import mask_rows
-            value = mask_rows(ts, mask, n, y0, y1, geometry_cache)
-        elif mask.source == 'MESH':
-            from .mesh_masks import evaluate as evaluate_mesh_mask
-            value = evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache)
-        elif mask.source == "PROCEDURAL":
-            from types import SimpleNamespace
-            from .channel_eval import _procedural_tile, _coordinates
-            prop = SimpleNamespace(procedural=mask.procedural,
-                procedural_scale=mask.noise_scale, procedural_seed=mask.seed,
-                projection=mask.projection, scale=mask.scale, rotation=mask.rotation,
-                offset=mask.offset, triplanar_hardness=mask.triplanar_hardness)
-            value = _procedural_tile(prop,n,y0,y1,ts,geometry_cache)
-            if mask.projection == "UV" and mask.tiling == "NONE":
-                pu,pv = _coordinates(prop,n,y0,y1)
-                value = value * ((pu>=0)&(pu<=1)&(pv>=0)&(pv<=1))
-        elif mask.source == "FILL":
-            if not mask.image:
-                raise ValueError(f"Fill mask image is missing on {layer.name}.")
-            from .channel_eval import source
+        value = _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v)
+        result = _combine(result, mask, _levels(mask, value))
+    return result
 
-            value = source(
-                mask,
-                "FILL",
-                n,
-                y0,
-                y1,
-                cache,
-                ts,
-                geometry_cache if geometry_cache is not None else {},
-            )[..., 0]
-        elif mask.source == "PAINT":
-            if not mask.image:
-                raise ValueError(f"Painted mask image is missing on {layer.name}.")
-            key = mask.image.as_pointer()
-            if key not in cache:
-                cache[key] = read(cache, mask.image)
-            data = cache[key]
-            value = data[y0:y1, :, 0] if data.shape[:2] == (n, n) else sample_uv(data, u, v)[..., 0]
-        elif mask.source == "BAKED":
-            value = sample_uv(map_pixels(ts, mask.map_type, cache), u, v)[..., 0]
-        else:
-            from ..generators.base import evaluate
 
-            value = evaluate(ts, mask, u, v, cache, resources=geometry_cache, rows=(n, y0, y1))
-        value = np.clip((value - mask.black) / max(1e-6, mask.white - mask.black), 0, 1)
-        if mask.invert:
-            value = 1 - value
-        if result is None:
-            result = 1 - mask.strength + value * mask.strength
-        elif mask.operation == "NORMAL":
-            result = result * (1 - mask.strength) + value * mask.strength
-        elif mask.operation == "MULTIPLY":
-            result *= 1 - mask.strength + value * mask.strength
-        elif mask.operation == "MAX":
-            result = result + (np.maximum(result, value) - result) * mask.strength
-        elif mask.operation == "MIN":
-            result = result + (np.minimum(result, value) - result) * mask.strength
-        else:
-            result = np.clip(result + value * mask.strength, 0, 1)
+@measured('masking')
+def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
+    u, v = np.meshgrid(
+        (np.arange(n, dtype=np.float32) + 0.5) / n, (np.arange(y0, y1, dtype=np.float32) + 0.5) / n
+    )
+    masks = list(layer.masks)
+    result = _stack(ts, layer, masks, 0, len(masks), n, y0, y1, cache, geometry_cache, u, v)
     return result if result is not None else np.ones((y1 - y0, n), dtype=np.float32)
 
 

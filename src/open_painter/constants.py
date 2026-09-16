@@ -1,6 +1,6 @@
 """Stable on-disk identifiers and ownership markers."""
 
-VERSION = "0.9.2"
+VERSION = "0.9.3"
 # Keep the first five enum positions stable for existing .blend projects.
 BLEND_ITEMS = [
     (key, label, "")

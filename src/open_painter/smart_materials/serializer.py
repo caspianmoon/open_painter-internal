@@ -63,6 +63,8 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
             if 'mesh' in mask:
                 # Mesh masks re-link by name on import; datablock pointers are not portable.
                 mask['mesh'].update(object=None, collection=None, material=None)
+            if mask.get('source') == 'GRAPH':
+                raise ValueError('Custom Graph masks are not portable; bake the mask stack or replace the graph before saving a material')
             if mask.get('source') == 'SCENE':
                 field = mask['influence']
                 if field['mode'] != 'FROZEN' or not field['image']:

@@ -97,6 +97,18 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Mask architecture (0.9.3)
+
+A mask stack is a flat ordered list where every entry is a source with its own operation,
+strength, levels and invert. `source == 'GROUP'` entries are followed by their contiguous member
+run (`parent_id` chains; `core/mask_stack.py` keeps runs contiguous through moves, adoption,
+lifting and dissolving). `mask_eval._stack` and `shader_graph._mask_chain` walk the list
+recursively: a group's members fold among themselves, then the group folds into the outer
+result like any source; continuations of published prefixes never start inside a run.
+`source == 'GRAPH'` instances the artist's `ShaderNodeTree` natively in the mask unit
+(`_custom_graph`) and, for the CPU reference, bakes its first output with Cycles through the
+bake staging (`evaluation/custom_graph.py`) under a content signature of the tree.
+
 ## Mesh masks (0.9.2)
 
 `OP_Mask.source == 'MESH'` reads an `OP_MeshSelector` (kind plus object/collection/material

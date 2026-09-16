@@ -24,6 +24,9 @@ suites on a real asset file (`docs`: TESTING.md).
   CPU boundary (a blur, a generator's noise, a triplanar image), failed the session with
   "could not broadcast input array" — units moved between graph builds kept rastering at the
   previous resolution. Units are recompiled across a resolution change.
+- Bypassing a folder whose child composite is published (a GROUP anchor another layer reads)
+  failed the shader session ('key "Group" not found'): the pass-through unit now exports the
+  Group sockets (transparent), so consumers keep their wiring.
 - Deleting a decal layer (or its set) left its Empty in the scene; the Empty the layer created
   goes with it unless another layer still projects from it (a hand-picked Empty stays).
 - A cached folder cached all eight channels, including those none of its children touch; those

@@ -228,6 +228,25 @@ def run():
     set_bypass(ts, {layer.id for layer in ts.layers if layer.bypass}, False)
     ready(scene, ts)
     assert not any(layer.bypass for layer in ts.layers)
+    # A folder whose child composite is published: a consumer reads its GROUP anchor while
+    # the folder is bypassed (its pass-through unit still exports the Group sockets, and the
+    # consumer unit adopted from the previous build wires them by name).
+    layer_by_id(ts, folder_id).publish_group = True
+    reader = stack.add(ts, 'FILL', 'Reads the folder')
+    reader_id = reader.id
+    stack.channel_for(reader, 'BASE_COLOR').color = (.9, .9, .1, 1.)
+    reading = reader.masks.add()
+    reading.id, reading.source, reading.reference_anchor, reading.reference_channel = new_id(), 'REFERENCE', folder_id + ':group', 'BASE_COLOR'
+    info = ready(scene, ts)
+    assert not info['warnings'], info['warnings']
+    layer_by_id(ts, folder_id).bypass = True
+    info = ready(scene, ts)
+    assert not info.get('error') and not info['warnings'], info
+    layer_by_id(ts, folder_id).bypass = False
+    ready(scene, ts)
+    stack.remove(ts, stack.index_of(ts, reader_id))
+    layer_by_id(ts, folder_id).publish_group = False
+    ready(scene, ts)
     print('LAYER_BYPASS_PASS', flush=True)
     open_painter.unregister()
 

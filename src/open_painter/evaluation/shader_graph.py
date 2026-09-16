@@ -2082,6 +2082,11 @@ class Graph(Math):
                     self._export('Out', unit.input('In', 'NodeSocketColor'), 'NodeSocketColor')
                     if not self._plan.opaque[layer.id]:
                         self._export('Out:Alpha', unit.input('In:Alpha', 'NodeSocketFloat'), 'NodeSocketFloat')
+                    if layer.type == 'FOLDER' and getattr(layer, 'publish_group', False):
+                        # GROUP anchors still import these sockets (consumers adopted from the
+                        # previous build wire them by name): a skipped folder composes nothing.
+                        self._export('Group', self.combine(0., 0., 0.), 'NodeSocketColor')
+                        self._export('Group:Alpha', self.math('ADD', 0., 0.), 'NodeSocketFloat')
                 elif key[0] == 'SRC':
                     signal = self.source(layer, key[2], key[3])
                     self._export('Color', signal.color, 'NodeSocketColor')

@@ -1981,6 +1981,10 @@ class Graph(Math):
         unit = previous.units.get(key) if previous is not None else None
         if unit is None or unit.tree is None:
             return None
+        if previous.n != self.n:
+            # Boundary factories and identities are closures over the graph they were compiled
+            # in, so an adopted unit would keep rastering at the previous resolution.
+            return None
         try:
             if unit.signature != self._unit_signature(key, stub=unit.flags.get('stub')):
                 return None

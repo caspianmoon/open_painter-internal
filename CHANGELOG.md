@@ -20,6 +20,10 @@ suites on a real asset file (`docs`: TESTING.md).
   painting stayed refused). Render and save handlers still leave a swapped slot alone.
 - Exporting below the authored resolution point-sampled every other texel; it box-filters now
   (normals renormalised), so fine detail no longer aliases in 1k exports of 2k sets.
+- Changing a set's resolution while the shader session was live, then editing a layer with a
+  CPU boundary (a blur, a generator's noise, a triplanar image), failed the session with
+  "could not broadcast input array" — units moved between graph builds kept rastering at the
+  previous resolution. Units are recompiled across a resolution change.
 - A cached folder cached all eight channels, including those none of its children touch; those
   pass-throughs stay live, halving the cache memory and file growth of a typical folder
   (4 × 64 MiB at 2048 instead of 8 ×).

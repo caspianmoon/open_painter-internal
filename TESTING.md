@@ -368,3 +368,6 @@ that catches a non-persistent handler.
 The file is not in git (`OP_ARTIST_FILE` points at another copy); every artist-file suite prints
 `ARTIST_FILE_SKIPPED` and passes when it is absent. The workflow suite writes
 `.blender-test/artist-file-roundtrip.blend` (about 130 MB).
+
+`tests/integration/resolution_switch.py` (background) switches a live set between 512, 1024 and
+2048 and edits boundary inputs after each switch: every recomputed raster has the new size.

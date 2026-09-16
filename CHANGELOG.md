@@ -1,5 +1,16 @@
 # Changes
 
+## 0.9.5
+
+Physical scale awareness.
+
+- Texture sets know their **density** (metres per UV tile) and texel size from the assigned meshes.
+- Channels, masks and effects gain **Physical** units: procedural feature sizes and filter radii in
+  metres, resolved to repeats and texels per asset and kept in sync through geometry, assignment,
+  resolution and projection changes. [Details](docs/physical-scale.md).
+- **Lock Sizes to Metres** converts an existing material without changing its look; imported
+  materials re-normalize to the new asset automatically.
+
 ## 0.9.4
 
 Seamless surface filters.

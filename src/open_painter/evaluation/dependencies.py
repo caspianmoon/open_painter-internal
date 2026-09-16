@@ -49,9 +49,10 @@ def uses_surface_effects(ts):
 
 
 def uses_geometry(ts):
+    from . import physical
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
         or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts)) \
-        or uses_surface_effects(ts)
+        or uses_surface_effects(ts) or physical.uses(ts)
 
 
 @measured('geometry_signature')
@@ -166,6 +167,9 @@ def refresh(scene):
             if current == previous:
                 continue
             _known[key] = current
+            from . import physical
+            physical.forget(ts)
+            physical.sync(ts)   # metre sizes follow the surface (0.9.5)
             if previous is None or current is None:
                 invalidate(ts)
                 continue

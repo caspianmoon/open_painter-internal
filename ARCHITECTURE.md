@@ -97,6 +97,17 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Physical scale (0.9.5)
+
+`evaluation/physical.density(ts)` is √(world area / UV area) over the assigned faces, cached by
+assignment records; `texel_size` divides by the resolution. Owners with `units == 'PHYSICAL'`
+carry metre fields (`feature_size`, `physical_radius`); `expected(owner, ts)` maps them to the
+texture fields the evaluators and shader bindings read, and `sync` writes them through RNA (their
+own callbacks notify). Sync runs from the metre fields' callbacks, from the owners' structural
+callbacks (projection/source/kind change the mapping), from `dependencies.refresh` (geometry;
+`uses_geometry` covers Physical sets), assignment changes, `resolution_changed`, material import
+and file load. `lock`/`unlock` convert between the two authoring modes without changing values.
+
 ## Surface filters (0.9.4)
 
 `OP_TextureEffect.space` selects UV or Surface space for neighbourhood effects

@@ -27,6 +27,13 @@ def layer_selected(self, context):
         layer_row_pressed(self, context)
 
 
+def resolution_changed(self, context):
+    changed(self, context)
+    # Texel size moved: physical filter radii resolve to new texel counts (0.9.5).
+    from ..evaluation import physical
+    physical.sync(self)
+
+
 def backend_changed(self, context):
     # Work deferred by a stroke is applied (or dropped with the shader session) first.
     from ..evaluation.shader_preview import resume, tick
@@ -51,7 +58,7 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     material_state_data: bpy.props.StringProperty()
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Texture Set")
-    resolution: bpy.props.EnumProperty(items=RESOLUTIONS, default="2048", update=changed)
+    resolution: bpy.props.EnumProperty(items=RESOLUTIONS, default="2048", update=resolution_changed)
     preview_backend: bpy.props.EnumProperty(name="Evaluation", default="LIVE", update=backend_changed,
         items=[('LIVE', 'Shader Native', 'Edit the material shader directly; bake texture outputs explicitly'),
                ('CPU', 'CPU Reference', 'Evaluate and publish complete texture outputs after edits')])

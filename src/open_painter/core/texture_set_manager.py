@@ -57,6 +57,9 @@ def assign(
     else:
         ref.original_material = obj.material_slots[index].material
         obj.material_slots[index].material = ts.material
+    from ..evaluation import physical
+    physical.forget(ts)
+    physical.sync(ts)
 
 
 def unassign(ts, index: int) -> None:
@@ -68,6 +71,9 @@ def unassign(ts, index: int) -> None:
             # Retain the slot to avoid reindexing other texture-set assignments.
             slot.material = ref.original_material
     ts.assignments.remove(index)
+    from ..evaluation import physical
+    physical.forget(ts)
+    physical.sync(ts)
 
 
 def remove(scene: bpy.types.Scene, index: int) -> None:

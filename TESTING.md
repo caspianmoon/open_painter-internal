@@ -214,6 +214,11 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Physical scale (0.9.5)
+
+`tests/integration/physical_scale.py` (background) is in `scripts/run_tests.py`; it writes
+`.blender-test/physical-scale-material.zip`.
+
 ## Surface filters (0.9.4)
 
 `tests/integration/surface_filters.py` (background; one 512 shader session) is in

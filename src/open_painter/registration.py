@@ -32,6 +32,7 @@ from .properties.texture_set import OP_Assignment, OP_TextureSet
 from .ui.assets_panel import OP_OT_import_material, OP_OT_library, OP_OT_save_material, OP_PT_assets
 from .ui.baking_panel import OP_OT_bake, OP_OT_bake_doctor, OP_PT_bake, OP_UL_high
 from .ui.bake_corrections import CLASSES as BAKE_CORRECTION_CLASSES
+from .ui.physical_scale import CLASSES as PHYSICAL_SCALE_CLASSES
 from .ui.brush_operators import OP_OT_brush_action, OP_OT_import_alpha
 from .ui.dock.interaction import OP_OT_dock_events, OP_OT_dock_popup
 from .ui.editor import OP_EditorType, OP_OT_close_editor, OP_OT_open_editor
@@ -117,7 +118,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES
 
 
 _registered = False

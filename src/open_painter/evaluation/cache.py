@@ -416,6 +416,8 @@ def on_load(_):
     cancel_all()
     _live_checks.clear()
     _regions.clear()
+    from . import physical
+    physical.forget()
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             for ts in scene.open_painter.texture_sets:
@@ -425,6 +427,10 @@ def on_load(_):
                 ts.dirty = True
                 for output in ts.outputs:
                     output.dirty = True
+                try:
+                    physical.sync(ts)   # the asset may differ from where the material was authored
+                except Exception:
+                    pass
 
 
 @persistent

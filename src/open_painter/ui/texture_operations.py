@@ -331,9 +331,24 @@ def draw_effect_settings(layout, effect, target="CHANNEL"):
         row.prop(effect, "space", expand=True)
         if effect.space == "SURFACE" and effect.kind in {"DIRECTIONAL_BLUR", "DIRECTIONAL_WARP"}:
             layout.prop(effect, "direction")
+    from ..evaluation.operation_contracts import POINTWISE
+    from ..core.project_manager import active_set
+    ts = active_set(bpy.context)
+    physical_fields = {}
+    if effect.kind not in POINTWISE and effect.kind != "ANCHOR" and ts is not None:
+        physical_fields = {"radius": ("physical_radius", "Radius"), "scale": ("feature_size", "Noise Feature Size")}
     for key, label in effect_ui_fields(effect.kind):
         if key == "angle" and effect.space == "SURFACE" and effect.kind in {"DIRECTIONAL_BLUR", "DIRECTIONAL_WARP"}:
             continue   # the world direction replaces the image-space angle
+        if key in physical_fields:
+            from .physical_scale import draw_size
+            if key == "radius":
+                draw_size(layout, ts, effect, "radius", *physical_fields[key])
+            elif effect.units == "PHYSICAL":
+                layout.prop(effect, physical_fields[key][0], text=physical_fields[key][1])
+            else:
+                layout.prop(effect, key, text=label)
+            continue
         if key == "noise":
             layout.operator("open_painter.effect_noise", text=effect.noise.replace("_", " ").title(), icon="TEXTURE").target = target
         elif key == "image":

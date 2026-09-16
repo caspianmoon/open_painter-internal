@@ -5,6 +5,10 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the core runtime requirements. GPL-3.0-or-later.
 
+**0.9.5 adds physical scale:** author scratch widths, rust spot sizes and blur radii in
+millimetres; Open Painter measures the mesh and resolves them per asset, so a material looks the
+same on a mug and a truck. [Details](docs/physical-scale.md).
+
 **0.9.4 makes filters seamless:** blur, dilation, warps and directional effects run in *Surface*
 space by default — they follow the mesh across UV seams and take world directions.
 [Details](docs/surface-filters.md).
@@ -66,7 +70,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.9.4.zip`](dist/open_painter-0.9.4.zip).
+1. Download or build [`dist/open_painter-0.9.5.zip`](dist/open_painter-0.9.5.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu

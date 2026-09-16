@@ -16,6 +16,13 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Physical scale awareness 0.9.5 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Density per set, Physical units on channels/masks/effects, sync on every relevant change, lock/unlock, import re-normalization | done | `tests/integration/physical_scale.py` |
+| Per-island density, edge-wear widths and micro-detail radii in metres | not covered | — |
+
 ## Seamless surface filters 0.9.4 — 2026-09-16
 
 | Item | Status | Evidence |

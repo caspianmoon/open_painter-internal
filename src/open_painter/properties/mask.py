@@ -9,6 +9,8 @@ def changed(self, context):
     from .layer import changed as invalidate
 
     invalidate(self, context)
+    from .channel import _resolve_physical
+    _resolve_physical(self)
 
 
 def numeric(self, context):
@@ -29,6 +31,11 @@ def _edge_source_changed(self, context):
         if field.resolution == '64':
             field.resolution = '512'
     changed(self, context)
+
+
+def physical_changed(self, context):
+    from .channel import physical_changed as resolve
+    resolve(self, context)
 
 
 class OP_Mask(bpy.types.PropertyGroup):
@@ -170,6 +177,12 @@ class OP_Mask(bpy.types.PropertyGroup):
     noise_scale: bpy.props.FloatProperty(
         name="Noise Scale", default=12, min=1, max=512, update=numeric
     )
+    # Physical scale (0.9.5): sizes in metres, resolved to texture units per asset.
+    units: bpy.props.EnumProperty(name='Units', default='TEXTURE', update=physical_changed, items=[
+        ('TEXTURE', 'Texture', 'Sizes in UV repeats and texels'),
+        ('PHYSICAL', 'Physical', 'Sizes in world distance; the texture values follow the assigned mesh')])
+    feature_size: bpy.props.FloatProperty(name='Feature Size', default=.02, min=1e-5, soft_max=10, subtype='DISTANCE',
+        unit='LENGTH', update=physical_changed, description='World size of one noise cell, scratch or spot')
     noise_strength: bpy.props.FloatProperty(
         name="Noise Strength", default=0.2, min=0, max=1, update=numeric
     )

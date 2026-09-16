@@ -496,6 +496,8 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
             layout.prop(ts, 'preview_backend')
             if ts.preview_backend == 'CPU':
                 layout.prop(ts, 'preview_quality')
+            from .physical_scale import draw_set_scale
+            draw_set_scale(layout, context, ts)
             if ts.preview_backend == 'LIVE':
                 from .performance import draw_freeze_status
                 draw_freeze_status(layout, context, ts)
@@ -868,8 +870,9 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             row.operator("open_painter.choose_procedural", text=source_label, icon="TEXTURE")
             if channel.procedural and not channel.detail_image:
                 row.operator("open_painter.clear_procedural", text="", icon="X")
-                for key in ("procedural_scale", "procedural_seed"):
-                    body.prop(channel, key)
+                from .physical_scale import draw_size
+                draw_size(body, ts, channel, "procedural_scale", "feature_size", "Feature Size")
+                body.prop(channel, "procedural_seed")
             if channel.detail_image or channel.procedural:
                 if channel.channel not in {"HEIGHT", "NORMAL"}:
                     body.prop(channel, "procedural_detail")

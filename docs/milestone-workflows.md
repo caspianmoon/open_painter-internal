@@ -3,6 +3,9 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Physical scale (0.9.5):** Texture Set List shows *Texel … · UV tile …*; switch a
+  procedural, mask or filter to *Physical* and type a size in metres; the lock button converts a
+  whole set so its sizes travel with the material. [Details](physical-scale.md).
 - **Surface filters (0.9.4):** every blur, dilation, warp or directional effect shows a *UV /
   Surface* switch; Surface (default) follows the mesh across seams, and directional effects take a
   world direction. [Details](surface-filters.md).

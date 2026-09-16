@@ -343,7 +343,11 @@ class OP_PT_masks(bpy.types.Panel):
         elif mask.source == "PROCEDURAL":
             op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
             op.target, op.create = "MASK", False
-            for name in ("projection", "tiling", "noise_scale", "seed", "scale", "rotation", "offset"):
+            from .physical_scale import draw_size
+            for name in ("projection", "tiling"):
+                layout.prop(mask, name)
+            draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
+            for name in ("seed", "scale", "rotation", "offset"):
                 layout.prop(mask, name)
             if mask.projection == "TRIPLANAR":
                 layout.prop(mask,"triplanar_hardness")
@@ -403,7 +407,11 @@ class OP_PT_masks(bpy.types.Panel):
                     box.prop(mask, "detail_radius", text="Micro Radius (px)")
 
         if mask.source in {"GENERATOR", "NOISE"}:
-            for name in ("amount", "contrast", "noise_scale", "noise_strength", "seed"):
+            from .physical_scale import draw_size
+            for name in ("amount", "contrast"):
+                layout.prop(mask, name)
+            draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
+            for name in ("noise_strength", "seed"):
                 layout.prop(mask, name)
         for name in ("operation", "invert", "black", "white", "strength"):
             layout.prop(mask, name)

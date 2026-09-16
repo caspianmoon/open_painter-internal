@@ -4,6 +4,8 @@ import bpy
 
 def changed(self, context):
     _changed(self, context, True)
+    from .channel import _resolve_physical
+    _resolve_physical(self)
 
 
 def numeric(self, context):
@@ -47,6 +49,11 @@ def _changed(self, context, structural):
 
 
 # Stable string identifiers are serialized; the menu selects these through an operator.
+def physical_changed(self, context):
+    from .channel import physical_changed as resolve
+    resolve(self, context)
+
+
 class OP_TextureEffect(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default='Levels')
     # Only ANCHOR items carry an id: consumers reference the capture position by it.
@@ -55,6 +62,14 @@ class OP_TextureEffect(bpy.types.PropertyGroup):
     enabled: bpy.props.BoolProperty(default=True, update=changed)
     strength: bpy.props.FloatProperty(name='Opacity',default=1,min=0,max=1,update=numeric)
     radius: bpy.props.FloatProperty(default=2,min=0,max=64,update=numeric)
+    # Physical scale (0.9.5): sizes in metres, resolved to texture units per asset.
+    units: bpy.props.EnumProperty(name='Units', default='TEXTURE', update=physical_changed, items=[
+        ('TEXTURE', 'Texture', 'Sizes in UV repeats and texels'),
+        ('PHYSICAL', 'Physical', 'Sizes in world distance; the texture values follow the assigned mesh')])
+    physical_radius: bpy.props.FloatProperty(name='Radius', default=.002, min=0, soft_max=1, subtype='DISTANCE',
+        unit='LENGTH', update=physical_changed, description='World radius of the filter (blur, dilation, displacement)')
+    feature_size: bpy.props.FloatProperty(name='Noise Feature Size', default=.05, min=1e-5, soft_max=10, subtype='DISTANCE',
+        unit='LENGTH', update=physical_changed, description='World size of one cell of the driving noise')
     amount: bpy.props.FloatProperty(default=.5,min=-10,max=10,update=numeric)
     contrast: bpy.props.FloatProperty(default=1,min=0,max=10,update=numeric)
     gamma: bpy.props.FloatProperty(default=1,min=.01,max=10,update=numeric)

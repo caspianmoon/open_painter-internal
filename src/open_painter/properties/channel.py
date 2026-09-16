@@ -6,11 +6,39 @@ from .effect import OP_TextureEffect
 
 def changed(self, context):
     _changed(self, context, True)
+    _resolve_physical(self)
 
 
 def numeric(self, context):
     """A uniform or resource-identity edit; graph structure is unchanged."""
     _changed(self, context, False)
+
+
+def owning_set(owner):
+    """The texture set holding a channel, mask or effect (by address)."""
+    project = getattr(owner.id_data, 'open_painter', None)
+    if project is None:
+        return None
+    pointer = owner.as_pointer()
+    for ts in project.texture_sets:
+        for layer in ts.layers:
+            for prop in layer.channels:
+                if prop.as_pointer() == pointer or any(e.as_pointer() == pointer for e in prop.effects):
+                    return ts
+            for mask in layer.masks:
+                if mask.as_pointer() == pointer or mask.effect.as_pointer() == pointer:
+                    return ts
+    return None
+
+
+def _resolve_physical(owner):
+    """A structural edit (projection, source, kind) can change how metre sizes map to texture units."""
+    if getattr(owner, 'units', 'TEXTURE') != 'PHYSICAL':
+        return
+    ts = owning_set(owner)
+    if ts is not None:
+        from ..evaluation import physical
+        physical.sync_owner(owner, ts)
 
 
 def _changed(self, context, structural):
@@ -41,6 +69,14 @@ def image_changed(self, context):
 def detail_image_changed(self, context):
     self.detail_image_name = self.detail_image.name if self.detail_image else ""
     changed(self, context)
+
+
+def physical_changed(self, context):
+    """A metre size or the units switch: derive the texture values (their own callbacks notify)."""
+    from ..evaluation import physical
+    ts = owning_set(self)
+    if ts is not None:
+        physical.sync_owner(self, ts)
 
 
 class OP_Channel(bpy.types.PropertyGroup):
@@ -85,6 +121,12 @@ class OP_Channel(bpy.types.PropertyGroup):
         description="Channel read from a published layer output or folder composite; empty reads this channel")
     procedural: bpy.props.StringProperty(default='',update=changed)
     procedural_scale: bpy.props.FloatProperty(name='Scale',default=8,min=.01,max=512,update=numeric)
+    # Physical scale (0.9.5): sizes in metres, resolved to texture units per asset.
+    units: bpy.props.EnumProperty(name='Units', default='TEXTURE', update=physical_changed, items=[
+        ('TEXTURE', 'Texture', 'Sizes in UV repeats and texels'),
+        ('PHYSICAL', 'Physical', 'Sizes in world distance; the texture values follow the assigned mesh')])
+    feature_size: bpy.props.FloatProperty(name='Feature Size', default=.05, min=1e-5, soft_max=10, subtype='DISTANCE',
+        unit='LENGTH', update=physical_changed, description='World size of one procedural cell (noise period)')
     procedural_seed: bpy.props.IntProperty(name='Seed',default=1,min=0,update=numeric)
     procedural_detail: bpy.props.FloatProperty(name='Variation',default=.15,min=0,max=2,update=numeric)
     procedural_height: bpy.props.FloatProperty(name='Height Amplitude',default=.02,min=-1,max=1,update=numeric)

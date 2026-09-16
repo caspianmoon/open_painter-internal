@@ -352,6 +352,15 @@ outputs are the oracle for the evaluation pipeline; then painting, mesh-driven a
 a surface-space filter, mask groups, folder caching, metre sizes, Bake Check, save/reopen,
 export, set removal; and, in the baking suite, a 512 rebake of Normal/AO/Curvature/utility
 maps, placement-aware map staleness, the correction brush with a region rebake, and finding
-selection. The file is not in git (`OP_ARTIST_FILE` points at another copy); both suites print
-`ARTIST_FILE_SKIPPED` and pass when it is absent. The workflow suite writes
+selection. `tests/integration/artist_file_multiset.py` adds two more parts (one split over two
+material slots so two sets share the object), exports the authored folder as a module and applies
+it to a part, bakes that part, drops catalog materials, paints one stroke across the two sets of
+the shared object, undoes edits, exports every set and builds the bundle.
+`tests/integration/artist_file_ui.py` (GUI phase) opens the file in a real window with the add-on
+already enabled — the sequence of every Blender start — and drives the session through the
+scheduler's own timer: a native brush stroke on the 2048 canvas, a decal Empty dragged with the
+transform operator (numeric update, no rebuild), an unrelated part moved, Ctrl+S. It is the probe
+that catches a non-persistent handler.
+The file is not in git (`OP_ARTIST_FILE` points at another copy); every artist-file suite prints
+`ARTIST_FILE_SKIPPED` and passes when it is absent. The workflow suite writes
 `.blender-test/artist-file-roundtrip.blend` (about 130 MB).

@@ -2,8 +2,19 @@
 
 ## 0.9.7
 
-Bug fixes from a full-tree audit (all background, GUI and GPU suites pass).
+Bug fixes from a full-tree audit (all background, GUI and GPU suites pass) and two artist-session
+suites on a real asset file (`docs`: TESTING.md).
 
+- **Opening a .blend file silently stopped scene tracking.** The depsgraph handler was not marked
+  persistent (the decorator sat on a helper), so after the artist opened any file, mesh masks,
+  decal drags, live scene fields, triplanar re-projection and baked-map staleness on transforms no
+  longer followed the scene until the add-on was re-enabled. Found by the artist-file suite.
+- Moving or rotating a prop no longer marks its Normal (baked from itself), Curvature, Thickness,
+  ID, UV and bevel maps stale: bake records keep only the world scale for maps that read the
+  surface alone, and the full placement for AO (assembly occluders), World Normal, Position and
+  Normal projected from placed high-poly sources. Records written before this stay current.
+- Locking a set's sizes to metres re-identified every shader boundary and layer cache although the
+  look is unchanged; the metre fields no longer take part in identities.
 - Stroke and bake-correction dilation no longer wraps around the canvas: a stroke touching the top
   edge used to bleed onto the bottom row (and left onto right) through `np.roll`; a non-wrapping
   `filters.shift` replaces it.

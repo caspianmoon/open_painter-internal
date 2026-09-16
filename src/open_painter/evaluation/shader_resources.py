@@ -165,10 +165,12 @@ def values(group, excluded=()):
     """Stable authoring inputs without UI state or the global dirty serial."""
     from .resource_keys import image_key, datablock_key
     # Cache state (0.9.0) never enters an identity: a cache publication must
-    # not re-identify the layer it was built for.
+    # not re-identify the layer it was built for. Metre sizes (0.9.5) act only
+    # through the texture fields they derive, so locking a set to metres
+    # re-identifies nothing.
     skip = {'rna_type', 'id_data', 'id', 'name', 'dirty', 'order', 'active_effect',
             'active_mask', 'expanded', 'image_name', 'detail_image_name', 'cache', 'cache_mode',
-            *excluded}
+            'units', 'feature_size', 'physical_radius', *excluded}
     result = []
     for field in group.bl_rna.properties:
         name = field.identifier

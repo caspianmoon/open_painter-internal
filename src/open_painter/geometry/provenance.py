@@ -26,12 +26,37 @@ def parameters(group):
     return result
 
 
-def object_record(obj):
+def object_record(obj, transform='FULL'):
+    """What a bake reads from an object. ``transform`` names how much of the world matrix
+    matters: 'FULL' (position and orientation feed the map), 'SCALE' (only world sizes do:
+    the scale part plus the mirroring sign), so moving or rotating the object leaves such maps
+    current."""
     if obj is None:
         return None
-    return dict(identity=identity(obj), matrix=[list(row) for row in obj.matrix_world],
+    matrix = obj.matrix_world
+    if transform == 'SCALE':
+        placement = dict(scale=[round(float(v), 6) for v in matrix.to_scale()],
+                         mirrored=matrix.to_3x3().determinant() < 0)
+    elif transform == 'LEGACY':
+        placement = [list(row) for row in matrix]   # exact floats, as records were written before 0.9.7
+    else:
+        placement = [[round(float(v), 6) + 0.0 for v in row] for row in matrix]   # a move back lands on the record (no -0.0)
+    return dict(identity=identity(obj), matrix=placement,
                 mesh=mesh_signature(obj.data) if obj.type == 'MESH' else None,
                 modifiers=[parameters(modifier) for modifier in obj.modifiers])
+
+
+# Maps that read where the object stands (occluders of the assembly, world axes); every other
+# kind sees the surface alone, so only its world size takes part in its record.
+PLACED_KINDS = {'AO', 'WORLD_NORMAL', 'POSITION', 'SCENE_FIELD'}
+
+
+def transform_of(ts, kind):
+    if kind in PLACED_KINDS:
+        return 'FULL'
+    if kind == 'NORMAL' and any(ref.object for ref in ts.bake.high_objects):
+        return 'FULL'   # projected from high-poly sources placed around the target
+    return 'SCALE'
 
 
 def settings_of(ts, kind):
@@ -81,21 +106,24 @@ def corrections_signature(ts, kind):
     return result
 
 
-def record(ts, kind):
+def record(ts, kind, legacy=False):
+    """The bake inputs of ``kind`` as a JSON string. ``legacy`` writes every transform in full,
+    the form maps baked before placement-aware records carry; ``status`` accepts both."""
     scene = ts.id_data
     settings = settings_of(ts, kind)
+    transform = 'LEGACY' if legacy else transform_of(ts, kind)
     extra = {}
     if kind in {'NORMAL','AO'}:
-        extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object),
-                     source_bindings=[(identity(ref.object), identity(ref.target), object_record(ref.cage))
+        extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object, transform),
+                     source_bindings=[(identity(ref.object), identity(ref.target), object_record(ref.cage, transform))
                                       for ref in ts.bake.high_objects])
         corrections = corrections_signature(ts, kind)
         if corrections:
             extra['corrections'] = corrections
     return json.dumps(dict(version=ALGORITHM_VERSION, kind=kind,
         resolution=int(ts.resolution), frame=(scene.frame_current, scene.frame_subframe),
-        targets=[(object_record(ref.object), ref.slot_index) for ref in ts.assignments],
-        sources=[object_record(ref.object) for ref in ts.bake.high_objects] if kind in {'NORMAL','AO'} else [],
+        targets=[(object_record(ref.object, transform), ref.slot_index) for ref in ts.assignments],
+        sources=[object_record(ref.object, transform) for ref in ts.bake.high_objects] if kind in {'NORMAL','AO'} else [],
         settings=settings, **extra), sort_keys=True, separators=(',', ':'))
 
 
@@ -123,7 +151,8 @@ def status(ts, prop):
     cached = _status_cache.get(slot)
     if cached is not None and cached[0] == token:
         return cached[1]
-    result = 'Ready' if prop.provenance == record(ts, prop.kind) else 'Stale · update bake'
+    current = prop.provenance == record(ts, prop.kind) or prop.provenance == record(ts, prop.kind, legacy=True)
+    result = 'Ready' if current else 'Stale · update bake'
     if len(_status_cache) > 64:
         _status_cache.clear()
     _status_cache[slot] = (token, result)

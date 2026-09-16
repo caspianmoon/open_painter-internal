@@ -341,3 +341,17 @@ folder after `--`. The default 256-square UV grid is a sample, not a world-area 
 
 See [real-account acceptance](docs/material-director-live-validation.md) for prompts, timings,
 actual images, failures found, fixes, reruns, and remaining artistic limitations.
+
+## Artist sessions on a real asset file (0.9.7)
+
+`tests/integration/artist_file_workflow.py` and `tests/integration/artist_file_baking.py`
+(background, in `scripts/run_tests.py`) open `open painter test.blend` at the repository root —
+a ten-object imported prop with a 2048 Worn Painted Metal set, baked maps and saved outputs — the
+way an artist does (add-on registered first, `load_post` running) and work on it: the saved
+outputs are the oracle for the evaluation pipeline; then painting, mesh-driven and decal layers,
+a surface-space filter, mask groups, folder caching, metre sizes, Bake Check, save/reopen,
+export, set removal; and, in the baking suite, a 512 rebake of Normal/AO/Curvature/utility
+maps, placement-aware map staleness, the correction brush with a region rebake, and finding
+selection. The file is not in git (`OP_ARTIST_FILE` points at another copy); both suites print
+`ARTIST_FILE_SKIPPED` and pass when it is absent. The workflow suite writes
+`.blender-test/artist-file-roundtrip.blend` (about 130 MB).

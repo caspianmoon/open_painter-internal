@@ -7,7 +7,7 @@ import open_painter
 from open_painter.core import texture_set_manager as sets, image_manager as images
 from open_painter.baking.diagnostics import inspect
 from open_painter.baking.bake_manager import register_map, bake_steps
-from open_painter.geometry.provenance import status
+from open_painter.geometry.provenance import record, status
 open_painter.register()
 scene=bpy.context.scene
 obj=bpy.context.active_object
@@ -22,22 +22,37 @@ assert status(ts,prop)=='Ready'
 ts.name='Material-only rename'
 assert status(ts,prop)=='Ready'
 obj.location.x+=1; bpy.context.view_layer.update()
-assert status(ts,prop).startswith('Stale')
-obj.location.x-=1; bpy.context.view_layer.update()
+assert status(ts,prop)=='Ready', 'moving the object does not change a curvature map'
+obj.scale=(2,2,2); bpy.context.view_layer.update()
+assert status(ts,prop).startswith('Stale'), 'resizing it does'
+obj.scale=(1,1,1); obj.location.x-=1; bpy.context.view_layer.update()
 assert status(ts,prop)=='Ready'
+ao_image=images.create('Recorded AO',512,(1,1,1,1))
+register_map(ts,'AO',ao_image)
+ao_prop=next(m for m in ts.baked_maps if m.kind=='AO')
+obj.location.x+=1; bpy.context.view_layer.update()
+assert status(ts,ao_prop).startswith('Stale'), 'occlusion reads where the parts stand'
+obj.location.x-=1; bpy.context.view_layer.update()
+assert status(ts,ao_prop)=='Ready'
+# Maps recorded before placement-aware records (every transform in full) stay current.
+ao_prop.provenance=record(ts,'AO',legacy=True); prop.provenance=record(ts,'CURVATURE',legacy=True)
+assert status(ts,prop)=='Ready' and status(ts,ao_prop)=='Ready'
+ts.baked_maps.remove(next(i for i,m in enumerate(ts.baked_maps) if m.kind=='AO'))
+prop=ts.baked_maps[0]
 verts=tuple(v.co[:] for v in obj.data.vertices)
 job=bake_steps(bpy.context,ts)
 assert next(job)=='CURVATURE'
 job.close()
 assert prop.image==image and tuple(v.co[:] for v in obj.data.vertices)==verts
 # Reject changes made while paused before the bake, without replacing a good map.
-job=bake_steps(bpy.context,ts); next(job); obj.location.z+=1; bpy.context.view_layer.update()
+job=bake_steps(bpy.context,ts); next(job); obj.scale.z*=2; bpy.context.view_layer.update()
 try:
     next(job)
     raise AssertionError('Stale inputs accepted')
 except ValueError as exc:
     assert 'inputs changed' in str(exc)
 assert prop.image==image
+obj.scale.z/=2; bpy.context.view_layer.update()
 # Exact UV overlap: the default cube's cross layout has none. A second object
 # sharing the texture set, with copied UVs, stacks every island (deliberate on
 # symmetric assets), one mirrored face is counted, and a shifted face overlaps
@@ -88,7 +103,7 @@ assert 'Twin' in skipped and obj.name in counts
 twin.modifiers.remove(modifier)
 # Enum-flag modifier settings (Decimate's delimit is a set) record as sorted lists: the
 # provenance JSON and the geometry key must accept them.
-from open_painter.geometry.provenance import parameters, record
+from open_painter.geometry.provenance import parameters
 from open_painter.evaluation.dependencies import modifier_signature
 decimate=twin.modifiers.new('Decimate','DECIMATE'); decimate.decimate_type='DISSOLVE'; decimate.delimit={'NORMAL','SEAM'}
 assert parameters(decimate)['delimit']==['NORMAL','SEAM']

@@ -133,12 +133,12 @@ def remember(scene, ts, signature):
     _known[key_for(scene, ts)] = signature
 
 
-@persistent
 def epoch():
     """Counts geometry/transform depsgraph updates; a cheap cache token for mesh-derived state."""
     return _epoch
 
 
+@persistent   # opening a file drops non-persistent handlers: the artist's session must keep tracking
 def on_depsgraph(scene, depsgraph):
     global _epoch
     relevant = False

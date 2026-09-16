@@ -93,9 +93,11 @@ def steps():
     yield .3
     with bpy.context.temp_override(window=window, area=area, region=region):
         bpy.ops.open_painter.paint()
+        bpy.ops.ed.undo_push(message='Paint Selected Channel')   # what the button click records
     yield .5
     assert project.paint_image is not None and low.mode == 'TEXTURE_PAINT', (project.paint_image, low.mode)
     canvas = project.paint_image
+    canvas_name = canvas.name
     assert tuple(canvas.size) == (2048, 2048)
     brush = scene.tool_settings.image_paint.brush
     unified = scene.tool_settings.image_paint.unified_paint_settings
@@ -121,6 +123,33 @@ def steps():
     report['frozen_observations'] = frozen_seen
     assert report['canvas_alpha_max'] > .5, 'the drag must paint the canvas'
     report['steps'].append('native stroke painted the 2048 canvas')
+    # Ctrl+Z takes the stroke back through Blender's image undo; the session follows, and
+    # Ctrl+Shift+Z brings it back.
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        bpy.ops.ed.undo()
+    yield .5
+    scene, project = bpy.context.scene, bpy.context.scene.open_painter
+    ts = project.texture_sets[0]
+    canvas = bpy.data.images[canvas_name]
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not shader_preview.current(scene, ts):
+        yield .1
+    assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
+    report['canvas_alpha_after_undo'] = float(images.pixels(canvas)[..., 3].max())
+    assert report['canvas_alpha_after_undo'] < .01, 'undo must take the stroke back'
+    with bpy.context.temp_override(window=window, area=area, region=region):
+        bpy.ops.ed.redo()
+    yield .5
+    scene, project = bpy.context.scene, bpy.context.scene.open_painter
+    ts = project.texture_sets[0]
+    canvas = bpy.data.images[canvas_name]
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not shader_preview.current(scene, ts):
+        yield .1
+    assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
+    assert float(images.pixels(canvas)[..., 3].max()) > .5, 'redo must bring the stroke back'
+    low = next(r.object for r in ts.assignments if r.object)
+    report['steps'].append('undo and redo of the stroke kept the session current')
     with bpy.context.temp_override(window=window, area=area, region=region):
         bpy.ops.open_painter.paint(stop=True)
     yield .3

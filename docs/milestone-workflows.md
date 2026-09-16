@@ -3,6 +3,10 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Mesh masks (0.9.2):** Layers → mask menu → *Add Mesh Mask*, then *Select By* Object,
+  Collection, Material, Vertex Group, Face Set, Face Selection, UV Island, Normal Direction or
+  Geometry Attribute. A Collection mask follows the collection: add an object to it and the
+  material updates. [Details](mesh-masks.md).
 - **Bake Doctor (0.9.1):** Bake Mesh Maps → *Bake Check* runs before every bake; click a
   finding to select the offending faces, vertices, edges or objects. *Bake Corrections* →
   choose a correction, press *Bake Correction Brush*, paint the problem area, set the value

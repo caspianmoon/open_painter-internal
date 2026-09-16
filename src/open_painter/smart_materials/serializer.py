@@ -60,6 +60,9 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         values['cache_mode'] = 'LIVE'
         values['bypass'] = False
         for mask in values.get('masks', []):
+            if 'mesh' in mask:
+                # Mesh masks re-link by name on import; datablock pointers are not portable.
+                mask['mesh'].update(object=None, collection=None, material=None)
             if mask.get('source') == 'SCENE':
                 field = mask['influence']
                 if field['mode'] != 'FROZEN' or not field['image']:

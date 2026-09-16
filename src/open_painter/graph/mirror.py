@@ -542,6 +542,14 @@ def draw_mask(layout, ts, layer, mask):
     elif mask.source == 'SCENE':
         layout.prop(mask.influence, 'kind', text='')
         layout.prop(mask.influence, 'mode', text='')
+    elif mask.source == 'MESH':
+        selector = mask.mesh
+        layout.prop(selector, 'kind', text='')
+        field = {'OBJECT': 'object', 'UV_ISLAND': 'object', 'COLLECTION': 'collection', 'MATERIAL': 'material',
+                 'VERTEX_GROUP': 'attribute', 'ATTRIBUTE': 'attribute', 'FACE_SET': 'face_set',
+                 'NORMAL_DIRECTION': 'direction'}.get(selector.kind)
+        if field:
+            layout.prop(selector, field, text='')
     elif mask.source == 'FILTER':
         layout.label(text=mask.effect.kind.replace('_', ' ').title(), icon='SHADERFX')
         for name in EFFECT_CONTROLS.get(mask.effect.kind, ('amount',)):

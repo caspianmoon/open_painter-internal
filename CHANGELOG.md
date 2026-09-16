@@ -1,5 +1,16 @@
 # Changes
 
+## 0.9.2
+
+Mesh masks.
+
+- **Mesh Mask** source: object, collection (children included), material (including the slot's
+  original material), vertex group, face set, face selection, UV island, normal direction or a
+  named geometry attribute of the assigned meshes, rasterized exactly through the render UVs.
+  Collection membership, slot materials, weights and attributes are tracked through the
+  depsgraph, so adding a screw to the collection updates the material. [Details](docs/mesh-masks.md).
+- Open Graph mask nodes show the mesh selector; portable materials re-link selectors by name.
+
 ## 0.9.1
 
 Bake Doctor.

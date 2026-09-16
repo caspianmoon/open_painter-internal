@@ -761,6 +761,7 @@ class OP_MT_native_masks(bpy.types.Menu):
             ("GENERATOR", "Add Generator"),
             ("BAKED", "Add Mesh Map Mask"),
             ('SCENE', 'Add Scene Field'),
+            ('MESH', 'Add Mesh Mask'),
             ('REFERENCE', 'Add Published Input'),
         ]:
             op = self.layout.operator("open_painter.mask", text=label)

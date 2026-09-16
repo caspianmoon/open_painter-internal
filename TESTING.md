@@ -214,6 +214,11 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Mesh masks (0.9.2)
+
+`tests/integration/mesh_masks.py` (background, one Cycles EMIT parity bake at 32 px) is in
+`scripts/run_tests.py`; it writes `.blender-test/mesh-mask-material.zip`.
+
 ## Bake Doctor (0.9.1)
 
 `tests/integration/bake_doctor.py` and `bake_corrections.py` run in background Blender (Cycles CPU

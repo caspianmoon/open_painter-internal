@@ -5,6 +5,7 @@ import bpy
 from .preferences import OP_Preferences
 from .baking.jobs import OP_OT_bake_queue, OP_OT_edge_map_refresh
 from .properties.influencer import OP_Influencer
+from .properties.mesh_selector import OP_MeshSelector
 from .ui.references import OP_OT_reference_source
 from .ui.anchors import (OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer,
                          OP_OT_anchor_channel)
@@ -58,6 +59,7 @@ CLASSES = (
     OP_Channel,
     OP_Output,
     OP_Influencer,
+    OP_MeshSelector,
     OP_Mask,
     OP_LayerCache,
     OP_Layer,

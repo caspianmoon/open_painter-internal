@@ -305,6 +305,8 @@ class Graph(Math):
                 key = ['mask_effect', *key[1:]]
             elif name == 'influence':
                 key = ['influence', *key[1:]]
+            elif name == 'mesh':
+                key = ['mesh', *key[1:]]
             elif name == 'cache':
                 cursor = cursor.cache[int(index)]
                 key = ['cache', key[1], cursor.channel]
@@ -343,7 +345,7 @@ class Graph(Math):
         mask = next((m for m in layer.masks if m.id == key[2]), None)
         if mask is None:
             return None
-        return {'mask': mask, 'mask_effect': mask.effect, 'influence': mask.influence}.get(kind)
+        return {'mask': mask, 'mask_effect': mask.effect, 'influence': mask.influence, 'mesh': mask.mesh}.get(kind)
 
     def param(self, owner, field, index=None):
         key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
@@ -1541,6 +1543,9 @@ class Graph(Math):
                 from ..painting.strokes import stroke_identity
                 return ('strokes-mask', mask.stroke_key, stroke_identity(self.scene.open_painter, mask.stroke_key),
                         self._geometry_stamp(True))
+            if mask.source == 'MESH':
+                from .mesh_masks import signature as mesh_signature
+                return ('mesh-mask', mesh_signature(self.ts, mask), self._geometry_stamp(True))
             if mask.source == 'PROCEDURAL':
                 return ('legacy-mask-field', mask.procedural, mask.noise_scale, mask.seed,
                         mask.projection, tuple(mask.scale), mask.rotation, tuple(mask.offset),
@@ -1559,7 +1564,7 @@ class Graph(Math):
                 for low in range(0, self.n, 16):
                     yield low, _evaluate_masks(self.ts, source_layer, self.n, low, min(low + 16, self.n), cache, geometry)
             return parts()
-        owners = [mask, mask.influence]
+        owners = [mask, mask.influence, mask.mesh]
         if rehydrate is not None:
             return self._rebind(rehydrate, owners, identity, factory)
         return self.separate(self.boundary(self._role, owners, identity, factory,
@@ -1625,10 +1630,13 @@ class Graph(Math):
         for mask in masks:
             if not mask.enabled or mask.source == 'ANCHOR':
                 continue
-            owners.extend((mask, mask.effect, mask.influence))
+            owners.extend((mask, mask.effect, mask.influence, mask.mesh))
             stamp = values(mask, excluded={'influence'})
             if mask.source == 'SCENE' or (mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE'):
                 stamp += (('scene', self._scene_identity(mask.influence)),)
+            if mask.source == 'MESH':
+                from .mesh_masks import signature as mesh_signature
+                stamp += (('mesh', mesh_signature(self.ts, mask)),)
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
                 stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key), self._geometry_stamp(True)),)
@@ -1825,7 +1833,7 @@ class Graph(Math):
             masks = list(layer.masks)
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
             for mask in masks[:stop]:
-                owners.extend((mask, mask.effect, mask.influence))
+                owners.extend((mask, mask.effect, mask.influence, mask.mesh))
         return tuple(item.as_pointer() for item in owners)
 
     def _adopt(self, previous, key):

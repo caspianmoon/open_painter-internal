@@ -100,6 +100,9 @@ def _stack_signature(ts, layer, geometry_cache):
             from ..painting.strokes import stroke_identity
             extra = (stroke_identity(ts.id_data.open_painter, mask.stroke_key),
                      getattr(geometry_cache, "geometry_stamp", None))
+        elif mask.source == 'MESH':
+            from .mesh_masks import signature as mesh_signature
+            extra = (mesh_signature(ts, mask), getattr(geometry_cache, "geometry_stamp", None))
         else:
             # Bundled detail images are shared, read-only authoring inputs.
             # Managed writes still advance their image revision. Keep the old
@@ -166,6 +169,9 @@ def _evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache):
         elif mask.source == 'STROKES':
             from ..painting.stroke_raster import mask_rows
             value = mask_rows(ts, mask, n, y0, y1, geometry_cache)
+        elif mask.source == 'MESH':
+            from .mesh_masks import evaluate as evaluate_mesh_mask
+            value = evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache)
         elif mask.source == "PROCEDURAL":
             from types import SimpleNamespace
             from .channel_eval import _procedural_tile, _coordinates

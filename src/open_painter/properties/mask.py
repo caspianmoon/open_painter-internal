@@ -1,6 +1,7 @@
 import bpy
 from .effect import OP_TextureEffect
 from .influencer import OP_Influencer
+from .mesh_selector import OP_MeshSelector
 from ..constants import CHANNEL_ITEMS
 
 
@@ -51,6 +52,7 @@ class OP_Mask(bpy.types.PropertyGroup):
     detail_radius: bpy.props.FloatProperty(name='Micro Radius', default=2, min=.5, max=16, update=numeric,
         description='Texel radius over which micro details are measured; also the micro cavity reach')
     influence: bpy.props.PointerProperty(type=OP_Influencer)
+    mesh: bpy.props.PointerProperty(type=OP_MeshSelector)
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Mask")
     enabled: bpy.props.BoolProperty(default=True, update=changed)
@@ -67,6 +69,7 @@ class OP_Mask(bpy.types.PropertyGroup):
             ('REFERENCE', 'Published Input', 'Reference a layer mask or channel in this texture set'),
             ('ANCHOR', 'Anchor Point', 'Publish the mask result at this position for other layers'),
             ('STROKES', 'Vector Strokes', 'Coverage of the project\'s vector strokes with this mask\'s key'),
+            ('MESH', 'Mesh Mask', 'Objects, collections, materials, vertex groups, face sets, selection, UV islands, normal direction or attributes of the assigned meshes'),
         ],
         update=changed,
     )

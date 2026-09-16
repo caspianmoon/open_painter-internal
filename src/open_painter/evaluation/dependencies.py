@@ -30,9 +30,14 @@ def uses_strokes(ts):
         m.source == 'STROKES' and m.stroke_key for l in ts.layers for m in l.masks)
 
 
+def mesh_masks(ts):
+    """Mesh masks (0.9.2) whose coverage follows the scene structure."""
+    return [m for l in ts.layers for m in l.masks if m.source == 'MESH' and m.enabled]
+
+
 def uses_geometry(ts):
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
-        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts)
+        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts))
 
 
 @measured('geometry_signature')
@@ -94,7 +99,9 @@ def geometry_key(scene, ts):
                         mesh_signature(mesh), modifier_signature(obj)))
     from ..geometry.influencers import signature
     fields = tuple(signature(ts, m.influence) for m in live_fields(ts))
-    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields)
+    from .mesh_masks import signature as mesh_mask_signature
+    selectors = tuple(mesh_mask_signature(ts, m) for m in mesh_masks(ts))
+    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields, selectors)
 
 
 def remember(scene, ts, signature):
@@ -117,6 +124,9 @@ def on_depsgraph(scene, depsgraph):
             _mesh_epochs[pointer] = _mesh_epochs.get(pointer, 0)+1
             relevant = True
         elif isinstance(item, bpy.types.Object) and (update.is_updated_geometry or update.is_updated_transform):
+            relevant = True
+        elif isinstance(item, (bpy.types.Collection, bpy.types.Material, bpy.types.Object)):
+            # Collection membership, material slots and selection feed mesh masks (0.9.2).
             relevant = True
     if relevant:
         _epoch += 1
@@ -144,6 +154,9 @@ def refresh(scene):
             _known[key] = current
             if previous is None or current is None:
                 invalidate(ts)
+                continue
+            if current[5:] != previous[5:]:
+                invalidate(ts)   # a mesh mask's membership, selection or attribute changed
                 continue
             targets_changed = current[:4] != previous[:4]
             if targets_changed and field_jobs.active() and ts.bake.auto_edge_rebake and _mesh_edited(previous[3], current[3]):

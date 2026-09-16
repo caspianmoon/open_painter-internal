@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Mesh masks 0.9.2 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Mesh Mask source with nine selector kinds, exact UV rasterization, signature-keyed CPU cache and shader boundary | done (shader/CPU parity 0.0 off the edge band) | `tests/integration/mesh_masks.py` |
+| Live updates through the depsgraph (collection membership, materials, weights, attributes) | done | `mesh_masks.py` (simulated depsgraph update re-evaluates the session) |
+| Graph node selector, portable re-linking by name | done | `mesh_masks.py` |
+| Object-mode face selection without a depsgraph update; per-object island picking by click | not covered | — |
+
 ## Bake Doctor 0.9.1 — 2026-09-16
 
 | Item | Status | Evidence |

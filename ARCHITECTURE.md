@@ -97,6 +97,17 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Mesh masks (0.9.2)
+
+`OP_Mask.source == 'MESH'` reads an `OP_MeshSelector` (kind plus object/collection/material
+pointers mirrored by name, attribute name, face set, island, direction). `evaluation/mesh_masks`
+rasterizes the assigned faces through the render UVs with per-face membership or per-corner
+weights and caches the raster under `signature(ts, mask)`, which names collection membership,
+slot and original materials, mesh epochs, selection tokens and transforms as the kind needs.
+The CPU stack and the shader boundary (`_mask_source_boundary`) key on that signature;
+`dependencies.geometry_key` carries the signatures and `on_depsgraph` treats collection,
+material and object updates as relevant, so `refresh` invalidates a set whose masks changed.
+
 ## Bake Doctor (0.9.1)
 
 `baking/doctor.py` runs exact, non-destructive checks whose `Finding`s carry base-mesh

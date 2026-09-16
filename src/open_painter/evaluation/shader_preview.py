@@ -290,7 +290,8 @@ def _owners(owner):
                 yield scene, ts
                 return
             if any(mask.as_pointer() == pointer or mask.effect.as_pointer() == pointer
-                   or mask.influence.as_pointer() == pointer for mask in layer.masks):
+                   or mask.influence.as_pointer() == pointer or mask.mesh.as_pointer() == pointer
+                   for mask in layer.masks):
                 yield scene, ts
                 return
             if any(row.as_pointer() == pointer for row in layer.cache):

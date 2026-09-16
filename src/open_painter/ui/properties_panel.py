@@ -7,6 +7,50 @@ from ..utils.ids import new_id
 from .operators import SafeOperator
 
 
+def draw_mesh_selector(layout, ts, mask):
+    """Mesh mask (0.9.2): pick what Blender structure drives the coverage."""
+    selector = mask.mesh
+    layout.prop(selector, 'kind')
+    kind = selector.kind
+    if kind in {'OBJECT', 'UV_ISLAND'}:
+        layout.prop(selector, 'object', text='Object' if kind == 'OBJECT' else 'On Object')
+        if selector.object is None and selector.object_name:
+            layout.label(text=f"'{selector.object_name}' is not in this file", icon='ERROR')
+    if kind == 'COLLECTION':
+        layout.prop(selector, 'collection')
+        layout.prop(selector, 'include_children')
+        collection = selector.resolve('collection')
+        if collection is not None:
+            assigned = {r.object for r in ts.assignments if r.object}
+            members = [o for o in (collection.all_objects if selector.include_children else collection.objects)
+                       if o in assigned]
+            layout.label(text=f'{len(members)} assigned object(s) in the collection', icon='OUTLINER_COLLECTION')
+        elif selector.collection_name:
+            layout.label(text=f"'{selector.collection_name}' is not in this file", icon='ERROR')
+    elif kind == 'MATERIAL':
+        layout.prop(selector, 'material')
+    elif kind in {'VERTEX_GROUP', 'ATTRIBUTE'}:
+        objects = [r.object for r in ts.assignments if r.object]
+        if kind == 'VERTEX_GROUP' and objects:
+            layout.prop_search(selector, 'attribute', objects[0], 'vertex_groups', text='Group')
+        elif objects:
+            layout.prop_search(selector, 'attribute', objects[0].data, 'attributes', text='Attribute')
+        else:
+            layout.prop(selector, 'attribute')
+    elif kind == 'FACE_SET':
+        layout.prop(selector, 'face_set')
+    elif kind == 'UV_ISLAND':
+        layout.prop(selector, 'island')
+        layout.label(text='-1 uses the islands of the selected faces', icon='INFO')
+    elif kind == 'NORMAL_DIRECTION':
+        layout.prop(selector, 'direction')
+        layout.prop(selector, 'angle')
+        layout.prop(selector, 'softness')
+    elif kind == 'FACE_SELECTION':
+        layout.label(text='Follows the face selection of the assigned meshes', icon='RESTRICT_SELECT_OFF')
+    layout.label(text='Exact through the render UVs; follows scene changes live', icon='INFO')
+
+
 class OP_OT_mask(SafeOperator, bpy.types.Operator):
     bl_idname = "open_painter.mask"
     bl_label = "Edit Mask"
@@ -16,7 +60,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
-        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER", 'SCENE', 'REFERENCE')]
+        items=[(x, x.title(), "") for x in ("PAINT", "FILL", "BAKED", "GENERATOR", "NOISE", "PROCEDURAL", "FILTER", 'SCENE', 'REFERENCE', 'MESH')]
     )
 
     def run(self, context):
@@ -56,6 +100,10 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
             if self.source == "FILTER":
                 mask.name = "Levels"
                 mask.effect.kind = "LEVELS"
+            elif self.source == 'MESH':
+                mask.name = 'Mesh Mask'
+                mask.mesh.kind = 'COLLECTION'
+                mask.mesh.object = next((r.object for r in ts.assignments if r.object == context.object), None)
             elif self.source == "PROCEDURAL":
                 mask.procedural = "FBM"
                 mask.name = "FBM"
@@ -147,6 +195,8 @@ class OP_PT_masks(bpy.types.Panel):
                 layout.prop(mask,'reference_channel')
                 layout.prop(mask,'reference_stage')
             layout.label(text='Source layer input, before stack blending')
+        elif mask.source == 'MESH':
+            draw_mesh_selector(layout, ts, mask)
         elif mask.source == 'SCENE':
             field = mask.influence
             layout.menu('OP_MT_scene_field_presets', text='Presets', icon='PRESET')

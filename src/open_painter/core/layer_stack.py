@@ -84,7 +84,9 @@ def remove(ts, index: int) -> None:
         if child.parent_id == layer.id:
             child.parent_id = layer.parent_id
     from ..evaluation.layer_cache import release_layer
+    from ..painting.decals import release as release_decal
     release_layer(layer)
+    release_decal(layer)
     ts.layers.remove(index)
     ts.active_layer = min(index, len(ts.layers) - 1)
     invalidate(ts)
@@ -285,9 +287,11 @@ def descendants(ts, identifier):
 def remove_tree(ts, identifier):
     identifiers = descendants(ts, identifier) | {identifier}
     from ..evaluation.layer_cache import release_layer
+    from ..painting.decals import release as release_decal
     for i in reversed(range(len(ts.layers))):
         if ts.layers[i].id in identifiers:
             release_layer(ts.layers[i])
+            release_decal(ts.layers[i])
             ts.layers.remove(i)
     ts.active_layer = min(ts.active_layer, max(0, len(ts.layers) - 1))
     invalidate(ts)

@@ -190,6 +190,25 @@ def sync(ts):
     return moved
 
 
+def release(layer):
+    """Remove the Empty a layer being deleted created, unless another layer still projects
+    from it. An Empty the artist made and picked by hand carries no marker and stays."""
+    obj = getattr(layer, 'decal_object', None)
+    if obj is None or obj.get(MARKER) != layer.id:
+        return False
+    for scene in bpy.data.scenes:
+        project = getattr(scene, 'open_painter', None)
+        if project is None:
+            continue
+        for ts in project.texture_sets:
+            for other in ts.layers:
+                if other.as_pointer() != layer.as_pointer() and other.decal_object == obj:
+                    return False
+    layer.decal_object = None
+    bpy.data.objects.remove(obj)
+    return True
+
+
 def adopt_duplicates(scene):
     """A duplicated decal Empty (Shift+D) becomes its own layer, a copy of the original's."""
     project = scene.open_painter

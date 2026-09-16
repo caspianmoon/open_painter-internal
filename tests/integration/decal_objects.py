@@ -276,6 +276,24 @@ ts.active_layer = stack.index_of(ts, layer_id)
 with bpy.context.temp_override(scene=scene):
     assert bpy.ops.open_painter.decal(action='DUPLICATE') == {'FINISHED'}
 assert len(decals.layers_of(ts)) == 3
+# Deleting a decal layer removes the Empty it owns; a shared Empty and a hand-picked one stay.
+third_id = ts.layers[ts.active_layer].id
+third_empty = decals.resolve(ts.layers[ts.active_layer])
+empty_name = third_empty.name
+assert third_empty.get(decals.MARKER) == third_id
+sharing_id = stack.duplicate(ts, stack.index_of(ts, third_id)).id   # a layer copy shares the Empty
+assert next(l for l in ts.layers if l.id == sharing_id).decal_object == third_empty
+stack.remove(ts, stack.index_of(ts, sharing_id))
+assert empty_name in bpy.data.objects, 'still driven by the other layer'
+stack.remove(ts, stack.index_of(ts, third_id))
+assert empty_name not in bpy.data.objects, 'the layer\'s own Empty goes with it'
+hand_made = decals.create_object(bpy.context, 'OP_Decal_Handmade')
+picked_id = stack.add(ts, 'FILL', 'Picked').id
+next(l for l in ts.layers if l.id == picked_id).decal_object = hand_made
+stack.remove(ts, stack.index_of(ts, picked_id))
+assert hand_made.name in bpy.data.objects, 'an Empty the artist picked is theirs'
+bpy.data.objects.remove(hand_made)
+assert len(decals.layers_of(ts)) == 2
 print('DECAL_DUPLICATE_OK', flush=True)
 
 # Portable materials keep the Empty's name and re-link on import.

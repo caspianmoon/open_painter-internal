@@ -83,8 +83,10 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
     # Cache images and correction canvases belong to this set alone: a removed set
     # must not leave packed 4k floats behind in the file.
     from ..evaluation.layer_cache import release_layer
+    from ..painting.decals import release as release_decal
     for layer in ts.layers:
         release_layer(layer)
+        release_decal(layer)
     from ..baking.corrections import clear as clear_corrections
     clear_corrections(ts)
     scene.open_painter.texture_sets.remove(index)

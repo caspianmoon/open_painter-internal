@@ -24,6 +24,8 @@ suites on a real asset file (`docs`: TESTING.md).
   CPU boundary (a blur, a generator's noise, a triplanar image), failed the session with
   "could not broadcast input array" — units moved between graph builds kept rastering at the
   previous resolution. Units are recompiled across a resolution change.
+- Deleting a decal layer (or its set) left its Empty in the scene; the Empty the layer created
+  goes with it unless another layer still projects from it (a hand-picked Empty stays).
 - A cached folder cached all eight channels, including those none of its children touch; those
   pass-throughs stay live, halving the cache memory and file growth of a typical folder
   (4 × 64 MiB at 2048 instead of 8 ×).

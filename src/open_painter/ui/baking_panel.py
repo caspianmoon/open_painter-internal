@@ -121,6 +121,109 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
             self.report({"INFO"}, "Mesh maps baked. Add them to a fill layer or generator mask.")
 
 
+class OP_OT_bake_doctor(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.bake_doctor'
+    bl_label = 'Bake Doctor'
+    bl_options = {'REGISTER', 'UNDO'}
+    action: bpy.props.EnumProperty(items=[
+        ('CHECK', 'Bake Check', 'Run every exact pre-bake check (the same ones that run before a bake)'),
+        ('FULL', 'Full Check', 'Pre-bake checks plus the sampled cage-ray coverage'),
+        ('SELECT', 'Select', 'Select the geometry or objects this finding reports'),
+        ('SELECT_ALL', 'Select All Findings', 'Select everything the last check reported'),
+        ('CLEAR', 'Clear', 'Forget the last report')], default='CHECK')
+    index: bpy.props.IntProperty(default=-1)
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.action == 'SELECT' and properties.index >= 0:
+            from ..baking import doctor
+            ts = active_set(context)
+            report = doctor.last(ts) if ts else None
+            if report and properties.index < len(report.findings):
+                finding = report.findings[properties.index]
+                return f'Select: {finding.object_name + ": " if finding.object_name else ""}{finding.message}'
+        return dict(CHECK='Run every exact pre-bake check', FULL='Pre-bake checks plus sampled cage-ray coverage',
+                    SELECT='Select what this finding reports', SELECT_ALL='Select everything the last check reported',
+                    CLEAR='Forget the last report')[properties.action]
+
+    def run(self, context):
+        from ..baking import doctor
+        ts = require_set(context)
+        if self.action in {'CHECK', 'FULL'}:
+            report = doctor.examine(ts, 'FULL' if self.action == 'FULL' else 'PRE_BAKE')
+            errors, warnings = len(report.errors), len(report.warnings)
+            level = 'ERROR' if errors else 'WARNING' if warnings else 'INFO'
+            text = (f'{errors} error(s), {warnings} warning(s) in {report.elapsed_ms:.0f} ms' if report.findings
+                    else f'Bake check passed in {report.elapsed_ms:.0f} ms')
+            self.report({level}, text)
+            context.scene.open_painter.status = 'Bake check: ' + text
+        elif self.action == 'CLEAR':
+            doctor.forget(ts)
+        else:
+            report = doctor.last(ts)
+            if report is None:
+                raise ValueError('Run Bake Check first')
+            if self.action == 'SELECT_ALL':
+                message = doctor.select_all(ts, report, context)
+            else:
+                if not 0 <= self.index < len(report.findings):
+                    raise ValueError('That finding is gone; run Bake Check again')
+                message = doctor.select(ts, report.findings[self.index], context)
+            self.report({'INFO'}, message)
+            context.scene.open_painter.status = message
+        if context.area is not None:
+            context.area.tag_redraw()
+
+
+STATUS_ICONS = {'PASS': 'CHECKMARK', 'INFO': 'CHECKMARK', 'WARN': 'ERROR', 'FAIL': 'CANCEL', 'SKIP': 'BLANK1'}
+SEVERITY_ICONS = {'ERROR': 'CANCEL', 'WARNING': 'ERROR', 'INFO': 'DOT'}
+
+
+def draw_bake_doctor(layout, context, ts):
+    """The Bake Check box: one line per check, then clickable findings."""
+    from ..baking import doctor
+    box = layout.box()
+    row = box.row(align=True)
+    row.label(text='Bake Check', icon='VIEWZOOM')
+    row.operator('open_painter.bake_doctor', text='Check').action = 'CHECK'
+    row.operator('open_painter.bake_doctor', text='', icon='SHADING_RENDERED').action = 'FULL'
+    report = doctor.last(ts)
+    if report is None:
+        box.label(text='Runs before every bake; click a finding to select its geometry', icon='INFO')
+        return
+    column = box.column(align=True)
+    for key, label in doctor.CHECKS:
+        status = report.status(key)
+        if status == 'SKIP' and key == 'coverage':
+            column.label(text=f'{label} (Full Check)', icon='BLANK1')
+            continue
+        count = sum(1 for f in report.findings if f.check == key and f.severity != 'INFO')
+        text = label if status in {'PASS', 'INFO', 'SKIP'} else f'{label} · {count}'
+        column.label(text=text, icon=STATUS_ICONS[status])
+    if report.findings:
+        column = box.column(align=True)
+        row = column.row(align=True)
+        row.label(text=f'{len(report.findings)} finding(s) · {report.elapsed_ms:.0f} ms')
+        if any(f.selectable for f in report.findings):
+            row.operator('open_painter.bake_doctor', text='', icon='RESTRICT_SELECT_OFF').action = 'SELECT_ALL'
+        for index, finding in enumerate(report.findings[:12]):
+            text = finding.message
+            if finding.object_name:
+                text = f'{finding.object_name}: {text}'
+            if finding.count and not finding.objects:
+                text = f'{finding.count} · {text}'
+            if finding.selectable:
+                op = column.operator('open_painter.bake_doctor', text=text[:90], icon=SEVERITY_ICONS[finding.severity],
+                                     emboss=False)
+                op.action, op.index = 'SELECT', index
+            else:
+                column.label(text=text[:90], icon=SEVERITY_ICONS[finding.severity])
+        if len(report.findings) > 12:
+            column.label(text=f'{len(report.findings) - 12} more finding(s)')
+    else:
+        column.label(text=f'No findings · {report.elapsed_ms:.0f} ms', icon='CHECKMARK')
+
+
 class OP_UL_high(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         layout.label(
@@ -143,6 +246,7 @@ class OP_PT_bake(bpy.types.Panel):
         if not ts:
             return
         settings = ts.bake
+        draw_bake_doctor(layout, context, ts)
         layout.label(text=f"Low Poly: {len(ts.assignments)} assigned slots")
         layout.prop(settings, "selected_to_active")
         layout.template_list(
@@ -208,22 +312,8 @@ class OP_PT_bake(bpy.types.Panel):
             section.prop(settings, "thickness_max_distance")
             section.label(text="Closed surfaces; sampled inward rays.")
         section.label(text="Utility maps use evaluated target UVs.")
-        from ..baking import diagnostics
-        row = layout.row(align=True)
-        row.operator('open_painter.bake', text='Inspect Bake Setup', icon='VIEWZOOM').action = 'INSPECT'
-        findings = diagnostics.last(ts)
-        if any(issue.faces for issue in findings):
-            row.operator('open_painter.bake', text='', icon='RESTRICT_SELECT_OFF').action = 'SELECT_ISSUES'
-        for issue in findings[:8]:
-            icon = {'ERROR': 'ERROR', 'WARNING': 'INFO'}.get(issue.severity, 'DOT')
-            text = issue.message
-            if issue.object_name:
-                text = f'{issue.object_name}: {text}'
-            if issue.faces:
-                text += f' [{len(issue.faces)} faces]'
-            layout.label(text=text, icon=icon)
-        if len(findings) > 8:
-            layout.label(text=f'{len(findings) - 8} more finding(s)')
+        from .bake_corrections import draw_corrections
+        draw_corrections(layout, context, ts)
         layout.operator('open_painter.bake_queue', icon='RENDER_STILL')
         layout.label(text='Esc stops between maps; Cycles maps block.')
         layout.operator(

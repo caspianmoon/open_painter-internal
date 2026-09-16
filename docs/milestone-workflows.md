@@ -3,6 +3,11 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Bake Doctor (0.9.1):** Bake Mesh Maps → *Bake Check* runs before every bake; click a
+  finding to select the offending faces, vertices, edges or objects. *Bake Corrections* →
+  choose a correction, press *Bake Correction Brush*, paint the problem area, set the value
+  (ctrl-scroll steps by 0.001); the painted region rebakes when the stroke ends.
+  [Details](bake-doctor.md).
 - **Layer performance (0.9.0):** Layers tool strip → hourglass (*Profile Layers*) fills cost
   badges in the rows; the row toggle next to the eye bypasses a layer in the preview only;
   Properties → *Performance* sets a layer or isolated folder to Cached or Frozen and refreshes

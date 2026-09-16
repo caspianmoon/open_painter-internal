@@ -6,6 +6,69 @@ class OP_ObjectRef(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty()
     target: bpy.props.PointerProperty(name="Low Poly Target", type=bpy.types.Object)
     cage: bpy.props.PointerProperty(name="Target Cage", type=bpy.types.Object)
+    ignorable: bpy.props.BoolProperty(name="Ignore Brush Excludes", default=False,
+        description="Where the Ignore High Poly correction is painted, this source is left out of the projection")
+
+
+CORRECTION_KINDS = (
+    ('OFFSET', 'Projection Distance', 'Signed world-space distance added to the cage extrusion'),
+    ('SKEW', 'Skew Correction', 'Straighten rays toward the dominant face normal (0 keeps the smooth normal)'),
+    ('DIRECTION', 'Projection Direction', 'Turn rays toward the chosen direction vector'),
+    ('IGNORE', 'Ignore High Poly', 'Leave the sources marked "Ignore Brush Excludes" out of the projection'),
+    ('AO_EXCLUDE', 'AO Exclusion', 'Bake occlusion from the part alone, without the rest of the assembly'),
+)
+NEUTRAL = {'OFFSET': .5, 'SKEW': 0., 'DIRECTION': 0., 'IGNORE': 0., 'AO_EXCLUDE': 0.}
+
+
+def _brush_value(self):
+    from ..painting.brush_bridge import get_value
+    grey = get_value(self.id_data.open_painter)
+    if self.active == 'OFFSET':
+        return (grey - .5) * 2 * self.offset_range
+    return grey
+
+
+def _set_brush_value(self, value):
+    from ..painting.brush_bridge import set_value
+    if self.active == 'OFFSET':
+        limit = max(self.offset_range, 1e-9)
+        set_value(self.id_data.open_painter, min(1., max(0., .5 + value / (2 * limit))))
+    else:
+        set_value(self.id_data.open_painter, min(1., max(0., value)))
+
+
+def _active_changed(self, context):
+    """Switching the painted map re-targets a running correction session."""
+    project = self.id_data.open_painter
+    if project.paint_correction and project.paint_correction != self.active:
+        from ..baking.corrections import begin_brush
+        from ..core.project_manager import active_set
+        ts = active_set(context)
+        if ts is not None:
+            try:
+                begin_brush(context, ts, self.active)
+            except Exception as exc:
+                project.status = str(exc)
+
+
+class OP_BakeCorrections(bpy.types.PropertyGroup):
+    """Painted per-region bake fixes (0.9.1): images at the set resolution, neutral where unpainted."""
+    offset_image: bpy.props.PointerProperty(type=bpy.types.Image)
+    skew_image: bpy.props.PointerProperty(type=bpy.types.Image)
+    direction_image: bpy.props.PointerProperty(type=bpy.types.Image)
+    ignore_image: bpy.props.PointerProperty(type=bpy.types.Image)
+    ao_exclude_image: bpy.props.PointerProperty(type=bpy.types.Image)
+    active: bpy.props.EnumProperty(name="Correction", items=CORRECTION_KINDS, default='OFFSET', update=_active_changed)
+    offset_range: bpy.props.FloatProperty(name="Distance Range", default=.05, min=1e-5, subtype='DISTANCE',
+        description="World-space distance a fully white or black Projection Distance stroke adds or removes")
+    direction_vector: bpy.props.FloatVectorProperty(name="Direction", default=(0., 0., 1.), subtype='DIRECTION',
+        description="World-space direction rays turn toward where Projection Direction is painted")
+    value: bpy.props.FloatProperty(name="Value", get=_brush_value, set=_set_brush_value, step=0.1, precision=4,
+        description="What the brush paints: a signed distance for Projection Distance, a 0-1 weight otherwise")
+    live_rebake: bpy.props.BoolProperty(name="Rebake Painted Region After Stroke", default=True,
+        description="After each correction stroke, rebake only the faces the stroke touched into the existing maps")
+    show_cage: bpy.props.BoolProperty(name="Show Corrected Cage", default=True,
+        description="Draw the cage the corrections produce as a wire overlay while painting")
 
 
 def map_changed(self, context):
@@ -34,6 +97,7 @@ class OP_BakedMap(bpy.types.PropertyGroup):
 
 class OP_BakeSettings(bpy.types.PropertyGroup):
     high_objects: bpy.props.CollectionProperty(type=OP_ObjectRef)
+    corrections: bpy.props.PointerProperty(type=OP_BakeCorrections)
     auto_edge_rebake: bpy.props.BoolProperty(
         name="Auto-rebake Edge Maps", default=False,
         description="Rebake the edge map set in the background when a target mesh's geometry changes "

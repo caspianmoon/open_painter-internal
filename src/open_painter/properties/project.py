@@ -101,6 +101,8 @@ class OP_Project(bpy.types.PropertyGroup):
     )
     paint_mask: bpy.props.BoolProperty()
     paint_mask_id: bpy.props.StringProperty()
+    # Bake Correction Brush (0.9.1): the correction map a native paint session targets, or ''.
+    paint_correction: bpy.props.StringProperty()
     paint_target_channel: bpy.props.StringProperty()
     paint_object: bpy.props.PointerProperty(type=bpy.types.Object)
     paint_face_selection: bpy.props.StringProperty()

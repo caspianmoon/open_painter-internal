@@ -16,6 +16,15 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Bake Doctor 0.9.1 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Bake Check: nine checks with element/object selection, pre-bake gate (errors stop, warnings pass), full tier with ray coverage | done, 8–14 ms pre-bake tier on the fixtures | `tests/integration/bake_doctor.py` |
+| Correction brush: Projection Distance / Skew / Direction as an owned per-part cage; Ignore High Poly and AO Exclusion as composited passes; provenance marks maps stale | done (plate appears only where painted; region rebake restores baseline) | `bake_corrections.py` |
+| Live region rebake from the scheduler after a real brush stroke; corrected-cage overlay | done | `bake_correction_ui.py` (1305 texels rebaked in ~1 s at 512) |
+| Margin-vs-island-gap and anti-aliasing checks; per-texel (rather than per-vertex) cage distances | not covered | — |
+
 ## Layer performance 0.9.0 — 2026-09-16
 
 | Item | Status | Evidence |

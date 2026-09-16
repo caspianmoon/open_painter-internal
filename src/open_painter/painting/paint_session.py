@@ -280,6 +280,10 @@ def finish(context, evaluate: bool = True) -> None:
     project.paint_mask_id = ""
     project.paint_target_channel = ""
     project.paint_mask = False
+    if project.paint_correction:
+        project.paint_correction = ""
+        from ..baking.corrections import remove_overlay
+        remove_overlay(scene)
     _checks.pop(scene.as_pointer(), None)
     _rasters.pop(scene.as_pointer(), None)
     _scratch.pop(scene.as_pointer(), None)
@@ -321,6 +325,9 @@ def synchronize(context, mask: bool | None = None) -> bool:
     if not context.object or context.object.mode != "TEXTURE_PAINT":
         finish(context, evaluate=False)
         return False
+    if project.paint_correction:
+        # A bake-correction session follows no layer selection; it ends explicitly.
+        return True
     ts = active_set(context)
     layer = active(ts) if ts else None
     mask = project.paint_mask if mask is None else mask

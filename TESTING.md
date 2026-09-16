@@ -214,6 +214,13 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Bake Doctor (0.9.1)
+
+`tests/integration/bake_doctor.py` and `bake_corrections.py` run in background Blender (Cycles CPU
+bakes at 512); `bake_correction_ui.py` drives a real brush stroke with `--enable-event-simulate` and
+waits for the scheduler's live region rebake, reporting `.blender-test/bake-correction-ui.json`.
+All three are in `scripts/run_tests.py`.
+
 ## Layer performance (0.9.0)
 
 Background suites `tests/integration/layer_bypass.py`, `layer_cache.py`, `layer_profile.py` and

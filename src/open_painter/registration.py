@@ -18,7 +18,7 @@ from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
 from .ui.offline_analysis import OP_OT_offline_analysis,OP_PT_offline_analysis
-from .properties.bake import OP_BakedMap, OP_BakeSettings, OP_ObjectRef
+from .properties.bake import OP_BakeCorrections, OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
 from .properties.layer import OP_Layer, OP_LayerCache
@@ -29,7 +29,8 @@ from .ui.vector_brush import CLASSES as VECTOR_BRUSH_CLASSES
 from .ui.strokes_panel import CLASSES as STROKE_PANEL_CLASSES
 from .properties.texture_set import OP_Assignment, OP_TextureSet
 from .ui.assets_panel import OP_OT_import_material, OP_OT_library, OP_OT_save_material, OP_PT_assets
-from .ui.baking_panel import OP_OT_bake, OP_PT_bake, OP_UL_high
+from .ui.baking_panel import OP_OT_bake, OP_OT_bake_doctor, OP_PT_bake, OP_UL_high
+from .ui.bake_corrections import CLASSES as BAKE_CORRECTION_CLASSES
 from .ui.brush_operators import OP_OT_brush_action, OP_OT_import_alpha
 from .ui.dock.interaction import OP_OT_dock_events, OP_OT_dock_popup
 from .ui.editor import OP_EditorType, OP_OT_close_editor, OP_OT_open_editor
@@ -63,6 +64,7 @@ CLASSES = (
     OP_Assignment,
     OP_ObjectRef,
     OP_BakedMap,
+    OP_BakeCorrections,
     OP_BakeSettings,
     OP_ExportSettings,
     OP_TextureSet,
@@ -95,6 +97,7 @@ CLASSES = (
     OP_UL_masks,
     OP_PT_masks,
     OP_OT_bake,
+    OP_OT_bake_doctor,
     OP_OT_bake_queue,
     OP_OT_edge_map_refresh,
     OP_UL_high,
@@ -112,7 +115,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES
 
 
 _registered = False

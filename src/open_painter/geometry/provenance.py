@@ -56,6 +56,27 @@ def settings_of(ts, kind):
     return settings
 
 
+def corrections_signature(ts, kind):
+    """Painted bake corrections (0.9.1) that shape this map; empty when none exist."""
+    corrections = getattr(ts.bake, 'corrections', None)
+    if corrections is None:
+        return {}
+    keys = ['offset', 'skew', 'direction']
+    if kind == 'NORMAL':
+        keys.append('ignore')
+    if kind == 'AO':
+        keys.extend(['ignore', 'ao_exclude'])
+    result = {}
+    for key in keys:
+        image = getattr(corrections, key + '_image', None)
+        if image is not None and image.get('open_painter_bake_correction_used'):
+            result[key] = (image.name, image.get('open_painter_pixel_revision', 0))
+    if 'ignore' in result:
+        result['ignored_sources'] = sorted(identity(ref.object) for ref in ts.bake.high_objects
+                                           if ref.object and getattr(ref, 'ignorable', False))
+    return result
+
+
 def record(ts, kind):
     scene = ts.id_data
     settings = settings_of(ts, kind)
@@ -64,6 +85,9 @@ def record(ts, kind):
         extra = dict(bake_algorithm=2, cage=object_record(ts.bake.cage_object),
                      source_bindings=[(identity(ref.object), identity(ref.target), object_record(ref.cage))
                                       for ref in ts.bake.high_objects])
+        corrections = corrections_signature(ts, kind)
+        if corrections:
+            extra['corrections'] = corrections
     return json.dumps(dict(version=ALGORITHM_VERSION, kind=kind,
         resolution=int(ts.resolution), frame=(scene.frame_current, scene.frame_subframe),
         targets=[(object_record(ref.object), ref.slot_index) for ref in ts.assignments],
@@ -89,7 +113,7 @@ def status(ts, prop):
     scene = ts.id_data
     slot = (ts.as_pointer(), prop.kind)
     token = (prop.provenance, ts.edit_serial, epoch(), int(ts.resolution), scene.frame_current,
-             scene.frame_subframe, repr(settings_of(ts, prop.kind)),
+             scene.frame_subframe, repr(settings_of(ts, prop.kind)), repr(corrections_signature(ts, prop.kind)),
              tuple((identity(ref.object), ref.slot_index) for ref in ts.assignments),
              tuple((identity(ref.object), identity(ref.target), identity(ref.cage)) for ref in ts.bake.high_objects))
     cached = _status_cache.get(slot)

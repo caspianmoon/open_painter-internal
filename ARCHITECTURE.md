@@ -97,6 +97,20 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Bake Doctor (0.9.1)
+
+`baking/doctor.py` runs exact, non-destructive checks whose `Finding`s carry base-mesh
+faces, vertices, edges or object names; `select` highlights them (selection is the only
+change). `bake_manager.bake_steps` runs the pre-bake tier first. `baking/corrections.py`
+turns painted correction images into geometry and passes at bake time: distance, skew and
+direction are sampled per vertex of the staged render-evaluated target (corners nudged inside
+their faces) into an owned cage per part that Cycles bakes with; source and AO exclusions are
+second passes composited by the painted weight; `rebake_region` routes untouched faces to the
+scratch image and composites the result into the registered map. The brush is the native paint
+session targeting a correction image (`project.paint_correction`); the shader ignores it, the
+scheduler rebuilds the cage overlay and triggers the live region rebake once a stroke settles,
+and correction revisions enter map provenance.
+
 ## Caching and painting
 
 Dirty flags describe explicit baked outputs independently of native shader state.

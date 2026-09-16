@@ -1,5 +1,19 @@
 # Changes
 
+## 0.9.1
+
+Bake Doctor.
+
+- **Bake Check** before every bake: UVs, normals, applied scale, low/high naming (including
+  near-miss suffixes), duplicate vertices, render-modifier mismatches, cage intersections and UV
+  island seams; a full check adds sampled cage-ray coverage. Click a finding to select the faces,
+  vertices, edges or objects it reports. [Details](docs/bake-doctor.md).
+- **Bake Correction Brush**: paint Projection Distance, Skew Correction, Projection Direction,
+  Ignore High Poly and AO Exclusion per region with the native brush. Painted distances and
+  directions become an owned cage per part; exclusions are composited second passes. A wire overlay
+  shows the corrected cage and the painted region is rebaked into the existing maps when a stroke
+  ends.
+
 ## 0.9.0
 
 Layer performance.

@@ -483,6 +483,8 @@ def native_paint_input(scene):
     image = project.paint_image
     if image is None:
         return False
+    if project.paint_correction:
+        return True   # bake corrections are read at bake time, not by the shader
     ts = next((item for item in project.texture_sets if item.id == project.paint_set_id), None)
     if ts is None or not requested(ts):
         return False

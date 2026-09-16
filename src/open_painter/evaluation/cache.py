@@ -156,7 +156,35 @@ def stroke_finished(scene):
     from . import shader_preview
     _paint_input.pop(scene.as_pointer(), None)
     shader_preview.resume(scene)
+    if scene.open_painter.paint_correction:
+        from ..baking import corrections
+        corrections.stroke_finished(scene)
     wake()
+
+
+def _rebake_pending(scene):
+    """Run the live region rebake a correction stroke asked for (needs a window context)."""
+    from ..baking import corrections
+    ts = corrections.pending_rebake(scene)
+    if ts is None or _modal_painting(scene):
+        return False
+    corrections.consume_pending(scene)
+    window = next((w for w in bpy.context.window_manager.windows if w.scene == scene), None)
+    if window is None:
+        return False
+    area = next((a for a in window.screen.areas if a.type == 'VIEW_3D'), None)
+    region = next((r for r in area.regions if r.type == 'WINDOW'), None) if area else None
+    try:
+        with bpy.context.temp_override(window=window, screen=window.screen, area=area, region=region, scene=scene):
+            result = bpy.ops.open_painter.bake_correction(action='REBAKE_REGION')
+        if 'FINISHED' not in result:
+            logger.error('Live region rebake cancelled: %s', scene.open_painter.status)
+        else:
+            logger.info('Live region rebake: %s', scene.open_painter.status)
+    except Exception as exc:
+        logger.error('Live region rebake: %s', exc)
+        scene.open_painter.status = f'Region rebake failed: {exc}'
+    return True
 
 
 def tick():
@@ -207,7 +235,11 @@ def tick():
         elif not activity and not busy and scene.open_painter.paint_image:
             from ..ui.editor import is_area
 
-            if not any(is_area(area) for w in windows for area in w.screen.areas):
+            if scene.open_painter.paint_correction:
+                from ..baking import corrections
+                corrections.poll(scene)
+                _rebake_pending(scene)
+            elif not any(is_area(area) for w in windows for area in w.screen.areas):
                 detect(scene)
         texture_sets = list(scene.open_painter.texture_sets)
         active = scene.open_painter.active_texture_set
@@ -377,6 +409,8 @@ def on_load(_):
     _set_cursors.clear()
     from ..baking.diagnostics import forget
     forget()
+    from ..baking.doctor import forget as forget_doctor
+    forget_doctor()
     _pending.clear()
     _paint_input.clear()
     cancel_all()
@@ -481,6 +515,8 @@ def unregister():
     _set_cursors.clear()
     from ..baking.diagnostics import forget
     forget()
+    from ..baking.doctor import forget as forget_doctor
+    forget_doctor()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

@@ -1,6 +1,6 @@
 [project]
 name = "blender-open-painter"
-version = "0.9.0"
+version = "0.9.1"
 description = "A Blender-native non-destructive PBR painting extension"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"

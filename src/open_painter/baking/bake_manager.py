@@ -23,11 +23,16 @@ def register_maps(ts, produced):
 
 
 def bake_steps(context, ts):
-    """Yield between maps; each individual Cycles bake is still synchronous."""
-    from .diagnostics import inspect
-    errors = [i.message for i in inspect(ts) if i.severity == "ERROR"]
-    if errors:
-        raise ValueError(" | ".join(errors))
+    """Yield between maps; each individual Cycles bake is still synchronous.
+
+    The Bake Doctor's pre-bake tier runs first: errors stop the bake with the
+    report retained for the panel, warnings do not.
+    """
+    from . import doctor
+    report = doctor.examine(ts, 'PRE_BAKE')
+    if report.errors:
+        raise ValueError("Bake check failed: " + " | ".join(
+            (f.object_name + ': ' if f.object_name else '') + f.message for f in report.errors))
     issues = [
         issue
         for issue in validate(ts)

@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "open_painter"
-version = "0.9.0"
+version = "0.9.1"
 name = "Open Painter"
 tagline = "Layer, bake, paint and export PBR texture sets"
 maintainer = "Open Painter contributors"

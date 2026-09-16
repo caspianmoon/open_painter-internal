@@ -98,6 +98,8 @@ def modifier_signature(obj):
                 continue
             value = getattr(modifier, prop.identifier, None)
             if prop.type in {'BOOLEAN','INT','FLOAT','STRING','ENUM'}:
+                if isinstance(value, (set, frozenset)):
+                    value = tuple(sorted(value))   # enum flags: unordered and unhashable otherwise
                 values.append((prop.identifier, tuple(value) if getattr(prop, "is_array", False) else value))
             elif prop.type == 'POINTER':
                 values.append((prop.identifier, value.as_pointer() if value else None))

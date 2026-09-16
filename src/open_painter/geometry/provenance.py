@@ -16,6 +16,10 @@ def parameters(group):
             continue
         value = getattr(group, field.identifier)
         if field.type in {'BOOLEAN', 'INT', 'FLOAT', 'STRING', 'ENUM'}:
+            if isinstance(value, (set, frozenset)):
+                # Enum flags (Decimate delimit, Boolean debug options, Data Transfer types) are
+                # sets: unordered and not JSON serialisable; a sorted list records them stably.
+                value = sorted(value)
             result[field.identifier] = tuple(value) if getattr(field, 'is_array', False) else value
         elif field.type == 'POINTER':
             result[field.identifier] = identity(value)

@@ -86,6 +86,15 @@ issues=diagnostics.run(ts)
 counts,skipped=diagnostics.select_faces(ts,issues)
 assert 'Twin' in skipped and obj.name in counts
 twin.modifiers.remove(modifier)
+# Enum-flag modifier settings (Decimate's delimit is a set) record as sorted lists: the
+# provenance JSON and the geometry key must accept them.
+from open_painter.geometry.provenance import parameters, record
+from open_painter.evaluation.dependencies import modifier_signature
+decimate=twin.modifiers.new('Decimate','DECIMATE'); decimate.decimate_type='DISSOLVE'; decimate.delimit={'NORMAL','SEAM'}
+assert parameters(decimate)['delimit']==['NORMAL','SEAM']
+assert '"delimit":["NORMAL","SEAM"]' in record(ts,'NORMAL')
+assert hash(modifier_signature(twin)) is not None
+twin.modifiers.remove(decimate)
 # Native operator path: inspection reports, selection selects, results retained for the panel.
 bpy.context.view_layer.objects.active=obj
 assert bpy.ops.open_painter.bake(action='INSPECT')=={'FINISHED'}

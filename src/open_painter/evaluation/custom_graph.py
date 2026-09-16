@@ -41,6 +41,8 @@ def signature(tree, seen=None):
                 continue
             if prop.type in {'BOOLEAN', 'INT', 'FLOAT', 'STRING', 'ENUM'}:
                 value = getattr(node, prop.identifier)
+                if isinstance(value, (set, frozenset)):
+                    value = tuple(sorted(value))   # enum flags: unordered otherwise
                 entry.append((prop.identifier, tuple(value) if getattr(prop, 'is_array', False) else value))
             elif prop.type == 'POINTER':
                 value = getattr(node, prop.identifier)

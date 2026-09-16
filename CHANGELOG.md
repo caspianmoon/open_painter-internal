@@ -37,6 +37,10 @@ Bug fixes from a full-tree audit (all background, GUI and GPU suites pass).
   load; they are cleared on load, unregister and when a correction session ends.
 - The physical-scale density cache keyed on the full object matrix, so a drag or an animation
   re-measured the surface; it keys on the scale part only.
+- An assigned, high-poly or cage object carrying a Decimate, Boolean or Data Transfer modifier
+  broke bake provenance: their enum-flag settings are Python sets, which the provenance JSON could
+  not serialise (the bake panel raised on every redraw and bakes could not record their inputs).
+  They are recorded as sorted lists; geometry keys and custom-graph signatures do the same.
 
 ## 0.9.6
 

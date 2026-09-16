@@ -50,9 +50,10 @@ def uses_surface_effects(ts):
 
 def uses_geometry(ts):
     from . import physical
+    from ..painting import decals
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
         or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts)) \
-        or uses_surface_effects(ts) or physical.uses(ts)
+        or uses_surface_effects(ts) or physical.uses(ts) or bool(decals.layers_of(ts))
 
 
 @measured('geometry_signature')
@@ -116,7 +117,9 @@ def geometry_key(scene, ts):
     fields = tuple(signature(ts, m.influence) for m in live_fields(ts))
     from .mesh_masks import signature as mesh_mask_signature
     selectors = tuple(mesh_mask_signature(ts, m) for m in mesh_masks(ts))
-    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields, selectors)
+    from ..painting import decals
+    frames = tuple(decals.signature(layer) for layer in decals.layers_of(ts))
+    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields, selectors, frames)
 
 
 def remember(scene, ts, signature):
@@ -159,6 +162,8 @@ def refresh(scene):
     _candidates.discard(scene.as_pointer())
     from ..core.layer_stack import invalidate
     from . import field_jobs
+    from ..painting import decals
+    decals.adopt_duplicates(scene)
     for ts in scene.open_painter.texture_sets:
         key = key_for(scene, ts)
         if key in _known and uses_geometry(ts):
@@ -170,6 +175,7 @@ def refresh(scene):
             from . import physical
             physical.forget(ts)
             physical.sync(ts)   # metre sizes follow the surface (0.9.5)
+            decals.sync(ts)     # decal frames follow their objects (0.9.6)
             if previous is None or current is None:
                 invalidate(ts)
                 continue

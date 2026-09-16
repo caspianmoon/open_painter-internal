@@ -437,6 +437,13 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
             if base is not None:
                 base = np.broadcast_to(base, (y1 - y0, n, 4))
             return channel_rows(ts, layer, prop.channel, n, y0, y1, geometry_cache, base=base)
+    if kind == "FILL" and getattr(prop, "projection", "UV") == "DECAL":
+        # Decal objects (0.9.6): the layer's Empty is the projection frame.
+        from ..painting import decals
+        layer = next((item for item in ts.layers if item.id == getattr(prop, "layer_id", "")), None)
+        if layer is None or decals.resolve(layer) is None or not prop.image:
+            return np.array([0, 0, 0, 0], dtype=np.float32)
+        return decals.sample(prop, layer, n, y0, y1, ts, geometry_cache if geometry_cache is not None else {}, cache)
     if prop.image:
         return _image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache)
     if kind == "PAINT":

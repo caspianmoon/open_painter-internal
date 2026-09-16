@@ -55,6 +55,9 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                 if getattr(channel, field + "_name") and not getattr(channel, field):
                     raise ValueError(f"Missing texture on {layer.name}: {getattr(channel, field + '_name')}")
         values = snapshot(layer)
+        if values.get('decal_object') is not None:
+            values['decal_object_name'] = values['decal_object'].name
+        values['decal_object'] = None   # decal Empties re-link by name on import (0.9.6)
         # Preview-only state (0.9.0) is not part of a portable material.
         values.pop('cache', None)
         values['cache_mode'] = 'LIVE'

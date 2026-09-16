@@ -16,6 +16,13 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Decal objects 0.9.6 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Decal Empties driving fill layers: move/rotate/scale/duplicate, depth, facing, softness, tangent-frame normals, native shader path, live sync, graph node transforms, portable re-link | done (shader parity 0.0 / 6e-8) | `tests/integration/decal_objects.py` |
+| Wrapping around strongly curved geometry beyond the planar projection depth; mirrored-island bitangent sign | not covered | — |
+
 ## Physical scale awareness 0.9.5 — 2026-09-16
 
 | Item | Status | Evidence |

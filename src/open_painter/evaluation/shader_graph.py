@@ -472,7 +472,7 @@ class Graph(Math):
         return result
 
     def projected(self, owner, sampler):
-        if owner.projection == 'UV':
+        if owner.projection != 'TRIPLANAR':
             return sampler(self.coordinates(owner))
         position = self.separate(self.coord_position())
         normal = self.separate(self.coord_normal())
@@ -911,10 +911,63 @@ class Graph(Math):
             states[f'{binding.layer_id}:{binding.channel}'] = state
         return states
 
+    def _decal_signal(self, layer, prop, channel):
+        """A decal channel (0.9.6): the image through the Empty's frame, natively.
+
+        Texture Coordinate bound to the object gives decal-local positions, so
+        moving, rotating or scaling the Empty updates the viewport without
+        Python work; depth, facing, softness and the frame axes are uniforms.
+        """
+        from ..painting import decals
+        obj = decals.resolve(layer)
+        coordinates = self.node('ShaderNodeTexCoord')
+        coordinates.object = obj
+        coordinates['op_decal'] = layer.id
+        size = float(getattr(obj, 'empty_display_size', 1.0)) or 1.0
+        offset = tuple(getattr(obj, 'empty_image_offset', (-.5, -.5)))
+        local = self.separate(coordinates.outputs['Object'])
+        u = self.math('SUBTRACT', self.math('DIVIDE', local[0], size), offset[0])
+        v = self.math('SUBTRACT', self.math('DIVIDE', local[1], size), offset[1])
+        sample = self.image(prop.image, self.combine(u, v, 0.0), prop.filtering, 'NONE',
+                            getter=lambda: prop.image, owner=prop)
+        depth = self.math('MAXIMUM', self.param(layer, 'decal_depth'), 1e-6)
+        distance = self.math('MULTIPLY', self.math('ABSOLUTE', local[2]), self.param(layer, 'decal_scale', 2))
+        coverage = self.math('MULTIPLY', sample.alpha, self.math('LESS_THAN', distance, depth))
+        axis_z = self.combine(*(self.param(layer, 'decal_axes', 6 + i) for i in range(3)))
+        facing = self.math('GREATER_THAN', self.vec('DOT_PRODUCT', self.coord_normal(), axis_z), 0.0)
+        facing = self.math('MAXIMUM', facing, self.math('SUBTRACT', 1.0, self.param(layer, 'decal_facing')))
+        coverage = self.math('MULTIPLY', coverage, facing)
+        border = self.math('MINIMUM', self.math('MINIMUM', u, self.math('SUBTRACT', 1.0, u)),
+                           self.math('MINIMUM', v, self.math('SUBTRACT', 1.0, v)))
+        soft = self.clamp(self.math('DIVIDE', border, self.math('MAXIMUM', self.param(layer, 'decal_falloff'), 1e-6)))
+        coverage = self.math('MULTIPLY', coverage, soft)
+        color = sample.color
+        if channel == 'NORMAL':
+            nx, ny, nz = self.separate(self.vec('SUBTRACT', self.vec('SCALE', color, 2.0), (1., 1., 1.)))
+            axis_x = self.combine(*(self.param(layer, 'decal_axes', i) for i in range(3)))
+            axis_y = self.combine(*(self.param(layer, 'decal_axes', 3 + i) for i in range(3)))
+            world = self.vec('ADD', self.vec('ADD', self.vec('SCALE', axis_x, nx), self.vec('SCALE', axis_y, ny)),
+                             self.vec('SCALE', axis_z, nz))
+            tangent = self.node('ShaderNodeTangent')
+            tangent.direction_type = 'UV_MAP'
+            normal = self.coord_normal()
+            t = tangent.outputs['Tangent']
+            b = self.vec('CROSS_PRODUCT', normal, t)
+            components = self.combine(self.vec('DOT_PRODUCT', world, t), self.vec('DOT_PRODUCT', world, b),
+                                      self.vec('DOT_PRODUCT', world, normal))
+            color = self.vec('ADD', self.vec('SCALE', components, .5), (.5, .5, .5))
+        return Signal(color, coverage)
+
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
             if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
                 value = self._strokes_boundary(layer, prop)
+            elif layer.type == 'FILL' and prop.projection == 'DECAL' and prop.image and not prop.anchor:
+                from ..painting import decals
+                if decals.resolve(layer) is None:
+                    value = Signal((0., 0., 0.), 0.0)
+                else:
+                    value = self._decal_signal(layer, prop, channel)
             elif layer.type == 'FILL' and prop.anchor:
                 # Anchored content is already in texture space: no projection or tiling.
                 value = self.anchor_signal(prop.anchor, prop.anchor_channel or channel)
@@ -1204,8 +1257,14 @@ class Graph(Math):
             return signature
         if key[0] == 'SRC':
             prop = channel_for(layer, key[2])
+            decal = None
+            if prop is not None and prop.projection == 'DECAL':
+                from ..painting import decals
+                obj = decals.resolve(layer)
+                decal = (obj.name, round(float(getattr(obj, 'empty_display_size', 1.0)), 6),
+                         tuple(round(float(x), 6) for x in getattr(obj, 'empty_image_offset', (0, 0)))) if obj else None
             return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
-                    self._continuation(key))
+                    self._continuation(key), decal)
         masks = list(layer.masks)
         stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
         return (tuple(_mask_signature(m) for m in masks[:stop]), refs, self._continuation(key))

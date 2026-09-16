@@ -97,6 +97,18 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Decal objects (0.9.6)
+
+`OP_Layer.decal_object` (an image Empty, `open_painter_decal` = layer id) is the projection frame
+of channels with `projection == 'DECAL'`. CPU: `painting/decals.sample` maps the world-position
+raster into decal-local coordinates, gates by depth, facing and softness, samples the image
+(clipped) and rotates normal images through the Empty's axes into the per-texel tangent frame
+(`painting/projection.tangents`). Shader: `_decal_signal` compiles a Texture Coordinate node bound
+to the Empty with depth/facing/softness/axes uniforms (`decal_axes`, `decal_scale`, mirrored by
+`decals.sync` from `dependencies.refresh`, which also adopts duplicated Empties as new layers).
+`geometry_key` carries every decal frame so moves invalidate the set; the Empty's display size and
+image offset are part of the SRC unit signature.
+
 ## Physical scale (0.9.5)
 
 `evaluation/physical.density(ts)` is √(world area / UV area) over the assigned faces, cached by

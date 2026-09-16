@@ -145,6 +145,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
         # Sizes authored in metres resolve to this asset's texel density (0.9.5).
         from ..evaluation import physical
         physical.sync(ts)
+        from ..painting import decals
+        decals.sync(ts)   # decal layers re-link their Empties by name (0.9.6)
         if module is not None:
             root = next(layer for layer in ts.layers if layer.id == mapping[module['root']])
             root.module_id, root.module_version = module['id'], int(module['version'])

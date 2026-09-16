@@ -131,6 +131,21 @@ class OP_Layer(bpy.types.PropertyGroup):
         ('CACHED', 'Cached', 'Sample a cached image; refresh it once edits inside the layer settle'),
         ('FROZEN', 'Frozen', 'Sample the cached image until Refresh Cache')])
     cache: bpy.props.CollectionProperty(type=OP_LayerCache)
+    # Decal objects (0.9.6): a layer whose channels project from an Empty; its matrix is the frame.
+    decal_object: bpy.props.PointerProperty(name="Decal Object", type=bpy.types.Object, update=changed,
+        poll=lambda self, obj: obj.type == 'EMPTY',
+        description="Empty whose local XY plane carries the decal images and whose -Z is the projection direction")
+    decal_object_name: bpy.props.StringProperty()
+    decal_depth: bpy.props.FloatProperty(name="Projection Depth", default=.25, min=0., soft_max=10., subtype='DISTANCE',
+        unit='LENGTH', update=numeric, description="How far above and below the decal plane surfaces still receive it")
+    decal_falloff: bpy.props.FloatProperty(name="Edge Softness", default=0., min=0., max=.5, update=numeric,
+        description="Fade of the decal border, as a fraction of its size")
+    decal_facing: bpy.props.BoolProperty(name="Front Faces Only", default=True, update=numeric,
+        description="Skip surfaces facing away from the decal")
+    # World axes of the decal frame, mirrored from the object by the scheduler so the shader
+    # can rotate decal normals and test facing with uniforms (moving the object updates them).
+    decal_axes: bpy.props.FloatVectorProperty(size=9, default=(1, 0, 0, 0, 1, 0, 0, 0, 1), update=numeric)
+    decal_scale: bpy.props.FloatVectorProperty(size=3, default=(1, 1, 1), update=numeric)
     # Vector strokes (0.6.0): paint layers sharing a key across sets render the same strokes.
     stroke_key: bpy.props.StringProperty(update=changed,
         description="Key of the project's vector strokes this paint layer renders")

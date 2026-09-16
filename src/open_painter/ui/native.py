@@ -722,6 +722,7 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
             tools.operator("open_painter.layer", text="", icon=icon).action = action
         tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
         tools.separator()
+        tools.operator("open_painter.decal", text="", icon="OUTLINER_OB_IMAGE").action = "ADD"
         tools.operator("open_painter.open_graph", text="", icon="NODETREE")
         tools.operator("open_painter.profile_layers", text="", icon="SORTTIME").action = "PROFILE"
         tools.menu("OP_MT_native_performance", text="", icon="DOWNARROW_HLT")
@@ -822,6 +823,8 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             draw_performance_section(layout, context, ts, layer)
             return
         draw_publish_controls(layout, ts, layer)
+        from .decals import draw_decal_controls
+        draw_decal_controls(layout, context, ts, layer)
         if layer.type == "PAINT":
             from ..painting.brush_bridge import draw
 

@@ -1,5 +1,17 @@
 # Changes
 
+## 0.9.6
+
+Decal objects.
+
+- **Add Decal** creates an image Empty (`OP_Decal_<name>`) and a fill layer projecting from it:
+  move, rotate, scale or Shift+D the Empty in the viewport and the decal follows, with projection
+  depth, edge softness and front-face gating. Base Color, Roughness, Metallic, Normal, Height and
+  Emission channels; decal normals rotate into the target's tangent frame.
+  [Details](docs/decal-objects.md).
+- The shader projects decals natively (Texture Coordinate bound to the object); the Open Graph
+  layer node exposes the Empty's transform.
+
 ## 0.9.5
 
 Physical scale awareness.

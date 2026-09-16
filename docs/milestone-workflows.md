@@ -3,6 +3,9 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Decal objects (0.9.6):** Layers tool strip → *Add Decal* (image icon); move, rotate, scale or
+  Shift+D the `OP_Decal_…` Empty in the viewport; the layer's Decal box sets depth, softness and
+  facing; the graph node shows the Empty's transform. [Details](decal-objects.md).
 - **Physical scale (0.9.5):** Texture Set List shows *Texel … · UV tile …*; switch a
   procedural, mask or filter to *Physical* and type a size in metres; the lock button converts a
   whole set so its sizes travel with the material. [Details](physical-scale.md).

@@ -614,4 +614,14 @@ def draw_node(node, context, layout):
     row.prop(layer, 'publish_output', text='Publish', toggle=True, icon='ANCHOR_CENTER')
     if layer.type == 'FOLDER':
         row.prop(layer, 'publish_group', text='Composite', toggle=True)
+    from ..painting import decals
+    decal = decals.resolve(layer) if layer.type == 'FILL' else None
+    if decal is not None:
+        # Decal objects (0.9.6): the Empty's transform is the decal's transform, edited here too.
+        box = layout.box()
+        box.label(text=decal.name, icon='OUTLINER_OB_IMAGE')
+        box.prop(decal, 'location', text='Location')
+        box.prop(decal, 'rotation_euler', text='Rotation')
+        box.prop(decal, 'scale', text='Scale')
+        box.prop(layer, 'decal_depth', text='Depth')
     _edit_button(layout, layer)

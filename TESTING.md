@@ -214,6 +214,11 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Decal objects (0.9.6)
+
+`tests/integration/decal_objects.py` (background; two Cycles EMIT parity bakes at 32 px) is in
+`scripts/run_tests.py`; it writes `.blender-test/decal-material.zip`.
+
 ## Physical scale (0.9.5)
 
 `tests/integration/physical_scale.py` (background) is in `scripts/run_tests.py`; it writes

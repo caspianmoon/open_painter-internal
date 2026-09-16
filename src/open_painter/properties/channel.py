@@ -144,6 +144,7 @@ class OP_Channel(bpy.types.PropertyGroup):
         items=[
             ("UV", "UV", ""),
             ("TRIPLANAR", "Triplanar", "World-space projection rasterized through mesh UVs"),
+            ("DECAL", "Decal", "Projected from the layer's decal object: move, rotate, scale or duplicate it in the viewport"),
         ],
         update=changed,
     )

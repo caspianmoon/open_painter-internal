@@ -170,6 +170,8 @@ def duplicate(ts, index):
             row.provenance = ''
         for mask in target.masks:
             mask.id = mask_mapping[mask.id]
+            if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
+                mask.parent_id = mask_mapping.get(mask.parent_id, '')
             if mask.source == 'REFERENCE':
                 mask.reference_layer = mapping.get(mask.reference_layer,mask.reference_layer)
                 mask.reference_mask = mask_mapping.get(mask.reference_mask,mask.reference_mask)

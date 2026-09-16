@@ -80,6 +80,13 @@ class OP_LayerCache(bpy.types.PropertyGroup):
     refresh_serial: bpy.props.IntProperty(default=0)
 
 
+def decal_object_changed(self, context):
+    """The name mirrors the pointer so a re-link after load (or a deleted Empty) never falls
+    back to an object chosen earlier."""
+    self.decal_object_name = self.decal_object.name if self.decal_object is not None else ''
+    changed(self, context)
+
+
 class OP_Layer(bpy.types.PropertyGroup):
     director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
     effect_semantic: bpy.props.EnumProperty(name='Age Response',items=[(k,k.replace('_',' ').title(),'Explicit artistic effect role')
@@ -132,7 +139,7 @@ class OP_Layer(bpy.types.PropertyGroup):
         ('FROZEN', 'Frozen', 'Sample the cached image until Refresh Cache')])
     cache: bpy.props.CollectionProperty(type=OP_LayerCache)
     # Decal objects (0.9.6): a layer whose channels project from an Empty; its matrix is the frame.
-    decal_object: bpy.props.PointerProperty(name="Decal Object", type=bpy.types.Object, update=changed,
+    decal_object: bpy.props.PointerProperty(name="Decal Object", type=bpy.types.Object, update=decal_object_changed,
         poll=lambda self, obj: obj.type == 'EMPTY',
         description="Empty whose local XY plane carries the decal images and whose -Z is the projection direction")
     decal_object_name: bpy.props.StringProperty()

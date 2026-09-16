@@ -70,8 +70,11 @@ def signature(ts, mask):
                       tuple((ref.object_name, ref.slot_index, ref.original_material.name if ref.original_material else None)
                             for ref in ts.assignments)))
     elif kind in {'VERTEX_GROUP', 'ATTRIBUTE', 'FACE_SET'}:
+        # Weights, attribute values and face sets are not part of the mesh signature (positions,
+        # topology, UVs); the mesh's update epoch moves when they are painted, so it stands in.
+        from .dependencies import mesh_epoch
         parts.append((selector.attribute, selector.face_set,
-                      tuple((obj.name, mesh_signature(obj.data),
+                      tuple((obj.name, mesh_signature(obj.data), mesh_epoch(obj.data),
                              _attribute_token(obj, selector.attribute if kind != 'FACE_SET' else '.sculpt_face_set'),
                              tuple(g.name for g in obj.vertex_groups)) for obj in targets)))
     elif kind == 'FACE_SELECTION':

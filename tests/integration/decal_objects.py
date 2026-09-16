@@ -228,8 +228,35 @@ assert ts.edit_serial != serial
 axes = np.asarray(layer_of().decal_axes).reshape(3, 3)
 assert abs(axes[0, 0] - math.cos(math.radians(45))) < 1e-4 and abs(axes[0, 1] - math.sin(math.radians(45))) < 1e-4
 ready(scene, ts)
+builds = shader_preview.diagnostics(scene, ts)['graph_builds']
 empty.rotation_euler = Euler((0., 0., 0.))
 bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+ready(scene, ts)
+assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds, 'a drag is a numeric update, not a rebuild'
+# The display size is a compiled constant: changing it restructures the session.
+empty.empty_display_size = 2.
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+ready(scene, ts)
+assert shader_preview.diagnostics(scene, ts)['graph_builds'] > builds or shader_preview.diagnostics(scene, ts)['rebuild_pending']
+empty.empty_display_size = 1.
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+ready(scene, ts)
+# Choosing another Empty mirrors its name (the re-link key), and clearing it clears the name.
+other_empty = decals.create_object(bpy.context, 'OP_Decal_Other')
+layer_of().decal_object = other_empty
+assert layer_of().decal_object_name == 'OP_Decal_Other'
+layer_of().decal_object = None
+assert layer_of().decal_object_name == ''
+layer_of().decal_object = empty
+assert layer_of().decal_object_name == empty.name
+bpy.data.objects.remove(other_empty)
+ready(scene, ts)
 print('DECAL_LIVE_OK', flush=True)
 
 # Duplicate: Shift+D on the Empty becomes its own layer; the operator does the same.

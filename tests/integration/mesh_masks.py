@@ -132,6 +132,15 @@ group.add(top_vertices, 1.0, 'REPLACE')
 mask_of().mesh.kind = 'VERTEX_GROUP'; mask_of().mesh.attribute = 'Worn'
 values = cpu_mask(ts, mask_of(), n)
 assert values.max() > .99 and 0 < coverage_of(ts, mask_of(), body, n) < .5, coverage_of(ts, mask_of(), body, n)
+# Painting weights changes no vertex, but the mesh update it reports moves the signature.
+weight_signature = mesh_masks.signature(ts, mask_of())
+group.add(top_vertices, 0.0, 'REPLACE')
+assert mesh_masks.signature(ts, mask_of()) == weight_signature, 'weights are not hashed'
+dependencies._mesh_epochs[body.data.as_pointer()] = dependencies.mesh_epoch(body.data) + 1   # what the stroke's depsgraph update reports
+assert mesh_masks.signature(ts, mask_of()) != weight_signature
+assert cpu_mask(ts, mask_of(), n).max() < .01
+group.add(top_vertices, 1.0, 'REPLACE')
+dependencies._mesh_epochs[body.data.as_pointer()] = dependencies.mesh_epoch(body.data) + 1
 mask_of().mesh.kind = 'NORMAL_DIRECTION'; mask_of().mesh.direction = (0, 0, 1)
 mask_of().mesh.angle, mask_of().mesh.softness = math.radians(30), math.radians(10)
 top_cover = coverage_of(ts, mask_of(), body, n)
@@ -273,5 +282,14 @@ mask_of().mesh.collection = None            # as restore() does, pointer first..
 mask_of().mesh.collection_name = 'Screws'   # ...then the mirrored name
 assert mask_of().mesh.resolve('collection') == screws
 assert coverage_of(ts, mask_of(), screw_a, 512) > .99
+# The real loader: every selector field replays its callback after the names are restored.
+from open_painter.smart_materials.loader import apply as load
+other = sets.create(scene, 'Imported', 512)
+load(other, archive)
+imported = next(m for layer in other.layers for m in layer.masks if m.source == 'MESH')
+assert imported.mesh.collection_name == 'Screws' and mesh_masks.resolve(imported.mesh, 'collection') == screws
+# Clearing a pointer clears its name too, so the mask does not fall back to the old datablock.
+imported.mesh.collection = None
+assert imported.mesh.collection_name == '' and mesh_masks.resolve(imported.mesh, 'collection') is None
 print('MESH_MASKS_PASS', flush=True)
 open_painter.unregister()

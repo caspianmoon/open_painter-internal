@@ -83,6 +83,11 @@ def mesh_signature(mesh):
     return signature
 
 
+def mesh_epoch(mesh):
+    """How many geometry updates Blender reported for the mesh this session (0 before the first)."""
+    return _mesh_epochs.get(mesh.as_pointer(), 0)
+
+
 def modifier_signature(obj):
     # Core RNA values capture ordinary modifier edits without retaining modifiers.
     result = []
@@ -173,16 +178,17 @@ def refresh(scene):
                 continue
             _known[key] = current
             from . import physical
-            physical.forget(ts)
-            physical.sync(ts)   # metre sizes follow the surface (0.9.5)
+            physical.sync(ts)   # metre sizes follow the surface (0.9.5); its cache keys on mesh and scale
             decals.sync(ts)     # decal frames follow their objects (0.9.6)
             if previous is None or current is None:
                 invalidate(ts)
                 continue
-            if current[:6] == previous[:6] and current[6:] != previous[6:]:
+            if current[:6] == previous[:6] and current[6:] != previous[6:] \
+                    and _decal_shapes(current[6]) == _decal_shapes(previous[6]):
                 # Only decal frames moved: the shader reads them natively, so a numeric
                 # notification (no structural repair per drag frame) keeps the session current
-                # while outputs and CPU caches are marked stale.
+                # while outputs and CPU caches are marked stale. (The Empty's name, display
+                # size and image offset are compiled constants: those still restructure.)
                 from .shader_preview import notify
                 ts.dirty = True
                 ts.edit_serial += 1
@@ -213,6 +219,11 @@ def refresh(scene):
                     field_jobs.request(scene, ts, mask, desired)
                 else:
                     field_jobs.discard(scene, ts, mask)   # moved back: the published raster is current
+
+
+def _decal_shapes(frames):
+    """The compiled part of decal signatures: object name, display size, image offset."""
+    return tuple((frame[0], frame[2], frame[3]) if frame else None for frame in frames)
 
 
 def _mesh_edited(previous, current):

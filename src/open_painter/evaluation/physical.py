@@ -19,8 +19,16 @@ TOLERANCE = 1e-4
 
 def _key(ts):
     from ..geometry.provenance import object_record
-    return (ts.id_data.as_pointer(), ts.id,
-            tuple((repr(object_record(ref.object)), ref.slot_index) for ref in ts.assignments if ref.object))
+    records = []
+    for ref in ts.assignments:
+        if not ref.object:
+            continue
+        record = object_record(ref.object)
+        # Moving or rotating the object leaves its surface area alone: only the scale part
+        # of the matrix takes part, so a drag (or an animation) never re-measures the mesh.
+        record['matrix'] = [round(float(np.linalg.norm([row[i] for row in record['matrix'][:3]])), 6) for i in range(3)]
+        records.append((repr(record), ref.slot_index))
+    return (ts.id_data.as_pointer(), ts.id, tuple(records))
 
 
 def measure(ts):

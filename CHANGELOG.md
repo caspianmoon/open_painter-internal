@@ -19,6 +19,24 @@ Bug fixes from a full-tree audit (all background, GUI and GPU suites pass).
   the viewport follows the transform without rebuilding the shader.
 - The test runner read `material_director_ui.py`'s report with the wrong key and reported a false
   GUI-phase failure.
+- Loading a portable material with a mesh mask lost the selector's collection/object/material name
+  (the other selector fields' callbacks re-mirrored the still-empty pointers), so the mask came back
+  empty; only the edited pointer mirrors its name now, and clearing a pointer clears its name.
+- Duplicating a layer, duplicating a texture set or loading a material did not remap mask group
+  membership: the copied members pointed at the original group's id and fell out of their group.
+- Duplicating a texture set shared the source's layer cache images and bake-correction canvases
+  (clearing either set orphaned the other) and did not remap layer output/folder anchors.
+- Removing a texture set left its cache images and correction canvases packed in the file.
+- Picking another decal Empty did not update the re-link name, so a deleted Empty fell back to the
+  one chosen before; the name now follows the pointer.
+- Changing a decal Empty's display size or image offset (compiled constants) only sent a numeric
+  update; it restructures again while drags stay numeric.
+- Painting vertex-group weights, attribute values or sculpt face sets did not re-evaluate mesh masks
+  (the mesh signature covers positions, topology and UVs only); the mesh update epoch now takes part.
+- Bake-correction snapshots, rasters and seam maps keyed by scene/image addresses survived a file
+  load; they are cleared on load, unregister and when a correction session ends.
+- The physical-scale density cache keyed on the full object matrix, so a drag or an animation
+  re-measured the surface; it keys on the scale part only.
 
 ## 0.9.6
 

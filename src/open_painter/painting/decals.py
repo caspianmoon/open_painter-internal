@@ -69,7 +69,6 @@ def coverage(layer, positions, normals):
     """(u, v, coverage 0..1) of the decal on texels with these world positions and normals."""
     u, v, z = local_coordinates(layer, positions)
     obj = resolve(layer)
-    size = float(getattr(obj, 'empty_display_size', 1.0)) or 1.0
     world_axes, lengths = axes(obj)
     inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)).astype(np.float32)
     depth = float(layer.decal_depth)

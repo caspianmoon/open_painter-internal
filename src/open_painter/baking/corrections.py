@@ -386,10 +386,22 @@ def consume_pending(scene):
 
 def end_brush(context):
     from ..painting import paint_session
-    project = context.scene.open_painter
+    scene = context.scene
+    project = scene.open_painter
+    image = project.paint_image
     if project.paint_correction:
         paint_session.finish(context, evaluate=False)
-    remove_overlay(context.scene)
+    if image is not None:
+        _snapshots.pop((scene.as_pointer(), image.as_pointer()), None)
+    _watch.pop(scene.as_pointer(), None)
+    remove_overlay(scene)
+
+
+def forget():
+    """Drop every runtime record (file load, unregister): rasters keyed by scene and image
+    addresses must not survive into a file whose datablocks may reuse those addresses."""
+    for table in (_baked, _pending, _snapshots, _polls, _watch):
+        table.clear()
 
 
 # ---- overlay -----------------------------------------------------------------

@@ -411,6 +411,10 @@ def on_load(_):
     forget()
     from ..baking.doctor import forget as forget_doctor
     forget_doctor()
+    from ..baking.corrections import forget as forget_corrections
+    forget_corrections()
+    from ..geometry.seams import clear as clear_seams
+    clear_seams()
     _pending.clear()
     _paint_input.clear()
     cancel_all()
@@ -523,6 +527,10 @@ def unregister():
     forget()
     from ..baking.doctor import forget as forget_doctor
     forget_doctor()
+    from ..baking.corrections import forget as forget_corrections
+    forget_corrections()
+    from ..geometry.seams import clear as clear_seams
+    clear_seams()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

@@ -119,6 +119,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                             effect['id'] = effect_mapping.get(effect['id'], effect['id'])
                 for mask in values.get("masks", []):
                     mask['id'] = mask_mapping.get(mask.get('id'), new_id())
+                    if mask.get('parent_id'):   # mask group membership (0.9.3) follows the new ids
+                        mask['parent_id'] = mask_mapping.get(mask['parent_id'], '')
                     if mask.get('source') == 'REFERENCE':
                         mask['reference_layer'] = mapping.get(mask.get('reference_layer'), '')
                         mask['reference_mask'] = mask_mapping.get(mask.get('reference_mask'), '')

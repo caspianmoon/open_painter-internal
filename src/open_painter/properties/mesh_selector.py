@@ -20,14 +20,24 @@ def changed(self, context):
         return
     for ts in project.texture_sets:
         if any(m.mesh.as_pointer() == self.as_pointer() for layer in ts.layers for m in layer.masks):
-            for name in ('object', 'collection', 'material'):
-                value = getattr(self, name)
-                setattr(self, name + '_name', value.name if value is not None else '')
             from ..core.layer_stack import invalidate
             invalidate(ts)
             from ..evaluation.shader_preview import notify
             notify(self, context)
             return
+
+
+def _pointer_changed(name):
+    """Mirror one pointer into its name field, then restructure.
+
+    Only the edited pointer's name moves: a loaded material restores the pointers
+    (None) before the names, and its other fields' callbacks must not erase them.
+    """
+    def update(self, context):
+        value = getattr(self, name)
+        setattr(self, name + '_name', value.name if value is not None else '')
+        changed(self, context)
+    return update
 
 
 def numeric(self, context):
@@ -45,9 +55,9 @@ def numeric(self, context):
 
 class OP_MeshSelector(bpy.types.PropertyGroup):
     kind: bpy.props.EnumProperty(name='Select By', items=KINDS, default='COLLECTION', update=changed)
-    object: bpy.props.PointerProperty(name='Object', type=bpy.types.Object, update=changed)
-    collection: bpy.props.PointerProperty(name='Collection', type=bpy.types.Collection, update=changed)
-    material: bpy.props.PointerProperty(name='Material', type=bpy.types.Material, update=changed)
+    object: bpy.props.PointerProperty(name='Object', type=bpy.types.Object, update=_pointer_changed('object'))
+    collection: bpy.props.PointerProperty(name='Collection', type=bpy.types.Collection, update=_pointer_changed('collection'))
+    material: bpy.props.PointerProperty(name='Material', type=bpy.types.Material, update=_pointer_changed('material'))
     # Names mirror the pointers so portable materials can re-link by name.
     object_name: bpy.props.StringProperty()
     collection_name: bpy.props.StringProperty()

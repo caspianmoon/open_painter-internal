@@ -467,7 +467,6 @@ def check_seams(ts):
         next_loop = np.arange(loops_total) + 1
         ends = poly_start + poly_total - 1
         next_loop[ends] = poly_start
-        edge_key = np.empty((loops_total, 2), np.int64)
         edge_vertices = np.empty((len(mesh.edges), 2), np.int32)
         mesh.edges.foreach_get('vertices', edge_vertices.ravel())
         # UV of the edge oriented from the lower vertex index: comparable across faces.

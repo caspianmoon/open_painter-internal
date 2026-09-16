@@ -80,6 +80,13 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
     ts = scene.open_painter.texture_sets[index]
     while ts.assignments:
         unassign(ts, len(ts.assignments) - 1)
+    # Cache images and correction canvases belong to this set alone: a removed set
+    # must not leave packed 4k floats behind in the file.
+    from ..evaluation.layer_cache import release_layer
+    for layer in ts.layers:
+        release_layer(layer)
+    from ..baking.corrections import clear as clear_corrections
+    clear_corrections(ts)
     scene.open_painter.texture_sets.remove(index)
     scene.open_painter.active_texture_set = max(0, index - 1)
 
@@ -102,12 +109,17 @@ def duplicate(scene, index):
     mapping = {item["id"]: new_id() for item in layers}
     mask_mapping = {mask['id']: new_id() for item in layers for mask in item['masks']}
     effect_mapping = {e['id']: new_id() for item in layers for c in item['channels'] for e in c['effects'] if e['id']}
-    anchor_mapping = {**mask_mapping, **effect_mapping}
+    from ..evaluation.anchors import derived_mapping
+    anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
     for data in layers:
         layer = ts.layers.add()
         restore(data, layer)
         layer.id = mapping[data["id"]]
         layer.parent_id = mapping.get(data["parent_id"], "")
+        for row in layer.cache:
+            # A cached image belongs to one layer; the copy rebuilds its own.
+            row.image = None
+            row.provenance = ''
         for channel in layer.channels:
             channel.layer_id = layer.id
             if channel.anchor:
@@ -119,6 +131,8 @@ def duplicate(scene, index):
                 channel.image = channel.image.copy()
         for mask in layer.masks:
             mask.id = mask_mapping[mask.id]
+            if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
+                mask.parent_id = mask_mapping.get(mask.parent_id, '')
             if mask.source == 'REFERENCE':
                 mask.reference_layer = mapping.get(mask.reference_layer, mask.reference_layer)
                 mask.reference_mask = mask_mapping.get(mask.reference_mask, mask.reference_mask)
@@ -133,5 +147,11 @@ def duplicate(scene, index):
         prop.kind = kind
         prop.image = image.copy() if image else None
     restore(settings, ts.bake)
+    from ..baking.corrections import FIELDS
+    for field in FIELDS.values():
+        # Correction canvases belong to one set: clearing them in either would orphan the other.
+        image = getattr(ts.bake.corrections, field)
+        if image is not None:
+            setattr(ts.bake.corrections, field, image.copy())
     invalidate(ts)
     return ts

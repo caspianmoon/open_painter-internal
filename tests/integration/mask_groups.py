@@ -243,10 +243,37 @@ builds = shader_preview.diagnostics(scene, ts)['graph_builds']
 by_id(graph_id).node_group = None
 assert shader_preview.diagnostics(scene, ts)['error'] or shader_preview.diagnostics(scene, ts)['rebuild_pending']
 by_id(graph_id).node_group = tree
-# Portable materials refuse custom graphs explicitly.
+# Group membership follows the fresh mask ids of a duplicated layer and of a loaded material.
+from open_painter.smart_materials.loader import apply
 from open_painter.smart_materials.serializer import save
+copy = stack.duplicate(ts, stack.index_of(ts, layer_id))
+copy_masks = list(copy.masks)
+assert copy_masks[0].source == 'GROUP' and copy_masks[0].id != group_id
+assert all(m.parent_id == copy_masks[0].id for m in copy_masks[1:4]), [m.parent_id for m in copy_masks]
+assert mask_stack.block(copy_masks, 0) == (0, 4)
+assert not any(m.parent_id == group_id for m in copy_masks)
+stack.remove(ts, stack.index_of(ts, copy.id))
+by_id(graph_id).node_group = None
+copy_masks = [m for m in layer_of().masks if m.id != graph_id]
+layer_of().masks.remove(next(i for i, m in enumerate(layer_of().masks) if m.id == graph_id))
+archive = ROOT / '.blender-test' / 'mask-groups-material.zip'
+archive.unlink(missing_ok=True)
+start = len(ts.layers)
+save(ts, archive)
+loaded_ids = [l.id for l in apply(ts, archive)]
+loaded = [l for l in ts.layers[start:] if l.name == 'Rust']
+assert len(loaded) == 1, [l.name for l in ts.layers]
+loaded_masks = list(loaded[0].masks)
+assert loaded_masks[0].source == 'GROUP' and loaded_masks[0].id != group_id
+assert all(m.parent_id == loaded_masks[0].id for m in loaded_masks[1:4]), [m.parent_id for m in loaded_masks]
+assert mask_stack.block(loaded_masks, 0) == (0, 4)
+while len(ts.layers) > start:
+    stack.remove(ts, len(ts.layers) - 1)
+graph_id = add('GRAPH', 'Custom', operation='MULTIPLY', node_group=tree)
+# Portable materials refuse custom graphs explicitly.
+archive.unlink(missing_ok=True)
 try:
-    save(ts, ROOT / '.blender-test' / 'mask-groups-material.zip')
+    save(ts, archive)
 except ValueError as exc:
     assert 'Custom Graph' in str(exc)
 else:

@@ -109,6 +109,11 @@ tree of N nodes costs O(N²) to construct. `Graph.build` therefore emits one
 | `('SRC', layer_id, channel, count)` | channel content after the first `count` effects; continues from the longest shorter published prefix | coordinates, `Ref*` → `Color`, `Alpha` |
 | `('MASK', layer_id, through, pre_filter)` | mask coverage through one mask (or the whole stack) | coordinates, `Ref*` → `Value` |
 
+A bypassed layer (0.9.0) compiles its CHANNEL units as pass-throughs with no imports; a
+cached layer's CHANNEL unit samples an `op_cache` image (content and mask coverage, or an
+isolated folder's child composite) in place of its SRC/MASK imports, with opacity, visibility
+and blend still live. Both are part of the unit signature.
+
 Every `source()`/`mask()` call from another unit imports the producer through group
 sockets (`Ref<n>` inputs), so an anchor consumer and the owning layer share one
 chain; constants are inlined. The import graph is a DAG by construction (a cycle is
@@ -173,6 +178,7 @@ shader group and referenced images in the material.
 | Height shading and authored tangent normal composition | The fixed surface adapter uses Normal Map plus Bump nodes; coat/anisotropy/height distance are direct sockets. | Generating a tangent normal image from a procedural/detail source remains a derivative boundary. Exported normals combine evaluated height explicitly. |
 | Scene analysis fields | The graph samples their isolated analysis result. Manual/live/frozen analysis rules remain meaningful. | Changed geometry or explicit analysis inputs can refresh the bounded analysis/source resource. |
 | Published layer channel/mask references, folders and blend modes | The compiler links the actual source stage and native composition math; it tracks their dependency closure. | Layer order, parenting, enable/visibility, operation type and reference target/stage changes may rebuild topology. |
+| Bypassed or cached layers (0.9.0) | Bypass removes the layer's units from the preview; a cache samples a persisted image and refreshes off the evaluation path. | Toggling either rebuilds that layer's units. Export, bakes and snapshots evaluate the full live stack regardless. |
 | 2D composite or exported textures | These are explicit pixel consumers. A 2D snapshot evaluates one channel; the current exporter evaluates every dirty output channel before encoding its selected preset. | Their cost depends on requested resolution and recipe. They are never silently invoked by a native slider. |
 
 These boundaries preserve the existing CPU definitions instead of replacing

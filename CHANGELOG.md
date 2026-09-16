@@ -1,5 +1,22 @@
 # Changes
 
+## 0.9.0
+
+Layer performance.
+
+- **Profile Layers**: per-layer compile time, node and sampler counts, attributed CPU input work
+  and a bounded CPU composite pass; cost badges in the layer rows and a Performance section in the
+  layer properties. [Details](docs/layer-performance.md).
+- **Bypass in Preview**: a preview-only per-layer (and per-folder) switch that removes the layer's
+  units and CPU work from the shader; export, bakes and snapshots still include it.
+- **Layer caches**: Cached (auto-refresh once edits settle) and Frozen (explicit Refresh) modes
+  sample a persisted managed image per channel instead of compiling a layer or an isolated folder.
+- **Freeze While Painting** (on by default): a brush stroke no longer restarts full-resolution
+  boundary regenerations every 33 ms; the material catches up once after release. Scene-field
+  analysis and cache refreshes wait for the stroke too.
+- Stroke-time paint inputs skip the structural signature walk; a frozen set never spins the
+  scheduler timer.
+
 ## 0.8.0
 
 Material Director.

@@ -214,6 +214,18 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Layer performance (0.9.0)
+
+Background suites `tests/integration/layer_bypass.py`, `layer_cache.py`, `layer_profile.py` and
+`paint_freeze.py` (emulated strokes: pixel writes plus the scheduler tick with the brush check
+patched) are in `scripts/run_tests.py`, as is the real-window probe `paint_freeze_ui.py`, which
+drives an actual brush drag with `--enable-event-simulate` and reports
+`.blender-test/paint-freeze-ui.json` (frozen observations, requests during the stroke, resumes,
+p95 tick time). `shader_structural_fields.py` gained the `bypass` and `cache_mode` probes.
+`tests/performance/layer_performance.py` writes `.blender-test/layer-performance.json`; the
+curated copy is `docs/performance/layer-performance-0.9.0.json`. `layer_cache.py` writes
+`.blender-test/layer-cache.blend` and `layer-cache-material.zip`.
+
 ## Material Director (0.8.0)
 
 Run `tests/integration/material_director.py` in background Blender and

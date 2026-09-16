@@ -18,6 +18,7 @@ from ..utils.logging import logger
 _sessions = {}
 _busy = set()
 _batches = {}
+_deferred = {}   # session key -> {owner pointer: owner} touched by a stroke while frozen (0.9.0)
 
 
 def authoring_structure_changed(scene):
@@ -86,11 +87,27 @@ def pending_work(scene, ts):
         return False
     return bool(entry.get('rebuild') or not entry.get('attached', False)
                 or entry.get('serial') != ts.edit_serial
-                or (entry.get('graph') is not None and _pending(entry['graph'])))
+                or (entry.get('graph') is not None and _pending(entry['graph']))
+                or bool(_deferred.get(key_for(scene, ts))))
+
+
+def frozen(scene, ts):
+    """A stroke is deferring this set's boundary work (freeze while painting)."""
+    from . import cache
+    return bool(_deferred.get(key_for(scene, ts))) and cache.painting_active(scene)
+
+
+def session_graph(scene, ts):
+    """The live compiled graph of a set, or None."""
+    entry = _sessions.get(key_for(scene, ts))
+    if entry and entry.get('graph') and _alive(entry, ts):
+        return entry['graph']
+    return None
 
 
 def diagnostics(scene, ts):
-    entry = _sessions.get(key_for(scene, ts), {})
+    key = key_for(scene, ts)
+    entry = _sessions.get(key, {})
     graph = entry.get('graph')
     pending = _pending(graph) if graph is not None else False
     state = ('CPU' if not requested(ts) else 'FAILED' if entry.get('error') else
@@ -105,7 +122,10 @@ def diagnostics(scene, ts):
             'graph_rehydrations': entry.get('graph_rehydrations', 0),
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
-            'resource_steps': entry.get('resource_steps', 0)}
+            'resource_steps': entry.get('resource_steps', 0),
+            'frozen': frozen(scene, ts),
+            'deferred_owners': len(_deferred.get(key, ())),
+            'cache_states': graph.cache_states() if graph is not None and hasattr(graph, 'cache_states') else {}}
 
 
 def mark_attached(scene, ts, graph=None):
@@ -123,6 +143,8 @@ def status(scene, ts):
     info = diagnostics(scene, ts)
     if info['error']:
         return 'Shader preview: ' + info['error']
+    if info['frozen']:
+        return 'Frozen while painting · catches up after the stroke'
     return {'CPU': 'CPU texture reference', 'SHADER': 'Shader native · textures bake on request',
             'BOUNDARY': 'Preparing isolated texture input…',
             'QUEUED': 'Preparing shader graph…'}[info['state']]
@@ -153,10 +175,10 @@ def _redraw(scene):
                     area.tag_redraw()
 
 
-def _update(scene, ts, entry, owner=None, check_structure=True):
+def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
     from .shader_graph import RebuildRequired
     try:
-        result = entry['graph'].update(owner, check_structure=check_structure)
+        result = entry['graph'].update(owner, check_structure=check_structure, resources=resources)
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
         metrics.count('shader_topology_invalidations')
@@ -241,6 +263,8 @@ def ensure(scene, ts):
         if previous is not None:
             previous.close()
         metrics.count('shader_runtime_builds')
+        from . import profile
+        profile.record_graph(scene, ts, candidate)
         return candidate
     finally:
         _busy.discard(key)
@@ -267,6 +291,9 @@ def _owners(owner):
                 return
             if any(mask.as_pointer() == pointer or mask.effect.as_pointer() == pointer
                    or mask.influence.as_pointer() == pointer for mask in layer.masks):
+                yield scene, ts
+                return
+            if any(row.as_pointer() == pointer for row in layer.cache):
                 yield scene, ts
                 return
 
@@ -311,7 +338,7 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
     return result
 
 
-def tick(scene, ts, *, force_repair=False):
+def tick(scene, ts, *, force_repair=False, ignore_gate=False):
     """Advance topology/source preparation only, never full channel rasters."""
     if not requested(ts):
         return False
@@ -319,6 +346,15 @@ def tick(scene, ts, *, force_repair=False):
     entry = _sessions.get(key)
     if not force_repair and entry and entry.get('error') and entry.get('serial') == ts.edit_serial:
         return False
+    from . import cache
+    if (not force_repair and not ignore_gate and cache.painting_active(scene) and entry and entry.get('graph')
+            and _alive(entry, ts) and entry.get('attached', False) and not entry.get('rebuild')
+            and not entry.get('error') and entry.get('serial') == ts.edit_serial):
+        # Frozen while painting: no repair, no isolated-input steps until release.
+        text = status(scene, ts)
+        if scene.open_painter.status != text:
+            scene.open_painter.status = text
+        return current(scene, ts)
     if (force_repair or not entry or not entry.get('graph') or not _alive(entry, ts)
             or not entry.get('attached', False)
             or entry.get('rebuild') or entry.get('serial') != ts.edit_serial):
@@ -336,6 +372,8 @@ def tick(scene, ts, *, force_repair=False):
             result = entry['graph'].step_resources(budget=.006)
             entry['resource_steps'] = entry.get('resource_steps', 0) + 1
             if isinstance(result, dict):
+                from . import profile
+                profile.record_boundary(scene, ts, result.pop('owner_timings', None) or {})
                 entry['diagnostics'] = {**entry.get('diagnostics', {}), **result}
                 _log(ts, 'resource step', result)
             metrics.count('shader_resource_steps')
@@ -357,12 +395,14 @@ def retry(scene, ts):
 
 def flush(scene, ts):
     """Finish isolated resource jobs before save/render; never bake the stack."""
-    tick(scene, ts)
+    _resume_set(scene, ts, key_for(scene, ts))
+    tick(scene, ts, force_repair=False, ignore_gate=True)
     entry = _sessions.get(key_for(scene, ts))
     if not entry:
         raise RuntimeError('Shader graph was not prepared')
     if entry.get('error'):
         raise RuntimeError(entry['error'])
+    from . import profile
     while _pending(entry['graph']):
         try:
             result = entry['graph'].step_resources(budget=.006)
@@ -372,8 +412,69 @@ def flush(scene, ts):
             raise
         entry['resource_steps'] = entry.get('resource_steps', 0) + 1
         if isinstance(result, dict):
+            profile.record_boundary(scene, ts, result.pop('owner_timings', None) or {})
             entry['diagnostics'] = {**entry.get('diagnostics', {}), **result}
     return entry['graph']
+
+
+def paint_touch(owner):
+    """A native brush wrote ``owner``'s image while the project freezes (0.9.0).
+
+    The image binding is refreshed so the canvas shows, but no structural walk,
+    boundary re-identification or resource request happens; the owner is
+    remembered for one catch-up update after the stroke (``resume``).
+    """
+    for scene, ts in _owners(owner):
+        if not requested(ts):
+            continue
+        key = key_for(scene, ts)
+        entry = _sessions.get(key)
+        if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts):
+            continue
+        _busy.add(key)
+        try:
+            if not entry.get('rebuild'):
+                _update(scene, ts, entry, owner, check_structure=False, resources=False)
+            _deferred.setdefault(key, {})[owner.as_pointer()] = owner
+            metrics.count('shader_paint_deferrals')
+            text = status(scene, ts)
+            if scene.open_painter.status != text:
+                scene.open_painter.status = text
+        finally:
+            _busy.discard(key)
+
+
+def _resume_set(scene, ts, key):
+    owners = _deferred.pop(key, None)
+    if not owners or not requested(ts):
+        return False
+    entry = _sessions.get(key)
+    if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts) or entry.get('rebuild'):
+        return False
+    targets = list(owners.values())
+    try:
+        for owner in targets:
+            owner.as_pointer()
+    except ReferenceError:
+        targets = [None]   # a removed owner: one full binding pass instead
+    _busy.add(key)
+    try:
+        for owner in targets:
+            _update(scene, ts, entry, owner, check_structure=False)
+        metrics.count('shader_paint_resumes')
+        scene.open_painter.status = status(scene, ts)
+    finally:
+        _busy.discard(key)
+    return True
+
+
+def resume(scene):
+    """Apply every update deferred during a stroke: one boundary regeneration per changed input."""
+    project = getattr(scene, 'open_painter', None)
+    if project is None:
+        return
+    for ts in project.texture_sets:
+        _resume_set(scene, ts, key_for(scene, ts))
 
 
 def native_paint_input(scene):
@@ -396,9 +497,11 @@ def native_paint_input(scene):
              if is_mask else channel_for(layer, channel))
     if owner is None or getattr(owner, 'image', None) != image:
         return False
+    from . import cache
+    touch = paint_touch if cache.painting_active(scene) else notify
     image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
     mark_changed(ts, layer, channel, mask=is_mask)
-    notify(owner)
+    touch(owner)
     for entry in list(project.paint_canvases)[1:]:
         member = next((item for item in project.texture_sets if item.id == entry.set_id), None)
         member_layer = next((item for item in member.layers if item.id == entry.layer_id), None) if member else None
@@ -411,12 +514,14 @@ def native_paint_input(scene):
             continue
         entry.image['open_painter_pixel_revision'] = entry.image.get('open_painter_pixel_revision', 0) + 1
         mark_changed(member, member_layer, channel, mask=False)
-        notify(prop)
+        touch(prop)
     metrics.count('shader_native_paint_scan_skips')
     return True
 
 
 def prune(live):
+    for key in set(_deferred) - set(live):
+        _deferred.pop(key, None)
     for key in set(_sessions) - set(live):
         entry = _sessions.pop(key)
         if entry.get('graph'):
@@ -445,3 +550,4 @@ def clear():
     _sessions.clear()
     _busy.clear()
     _batches.clear()
+    _deferred.clear()

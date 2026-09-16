@@ -111,6 +111,32 @@ class ResourceBinding:
     signature: object
     pending_image: object = None
     owner_factory: object = None
+    layer_id: str = ''   # profile attribution of the CPU work (0.9.0)
+
+
+def _descriptor_layer(descriptor):
+    """The layer id a boundary descriptor belongs to, for per-layer profiling."""
+    if not descriptor:
+        return ''
+    site, *args = descriptor
+    if site == 'field':
+        owner_key = args[0] if args else None
+        return owner_key[1] if isinstance(owner_key, (list, tuple)) and len(owner_key) > 1 else ''
+    return args[0] if args else ''
+
+
+@dataclass
+class CacheBinding:
+    """A cached layer's channel sampler (0.9.0): the content identity it must match."""
+    layer_id: str
+    channel: str
+    identifier: str
+    owners: set
+    identity: object
+    node: object
+    signature: object
+    owner_factory: object = None
+    stale: bool = False
 
 
 @dataclass
@@ -130,6 +156,7 @@ class Unit:
     bindings: dict = field(default_factory=dict)
     resource_bindings: list = field(default_factory=list)
     image_bindings: list = field(default_factory=list)
+    cache_bindings: list = field(default_factory=list)
     compiled_effects: dict = field(default_factory=dict)
     input_consumers: dict = field(default_factory=dict)   # input name -> roles reading it
     output_producer: dict = field(default_factory=dict)   # output name -> role or ('input', name)
@@ -166,6 +193,7 @@ class Graph(Math):
         self.owner_bindings = defaultdict(list)
         self.resource_bindings = []
         self.image_bindings = []
+        self.cache_bindings = []
         self.resources = Resources(self.n)
         self.reverse = defaultdict(set)
         self.channels = {}
@@ -277,6 +305,9 @@ class Graph(Math):
                 key = ['mask_effect', *key[1:]]
             elif name == 'influence':
                 key = ['influence', *key[1:]]
+            elif name == 'cache':
+                cursor = cursor.cache[int(index)]
+                key = ['cache', key[1], cursor.channel]
             elif name == 'baked_maps':
                 key = ['baked', self.ts.baked_maps[int(index)].kind]
             elif name == 'bake':
@@ -299,6 +330,8 @@ class Graph(Math):
             return None
         if kind == 'layer':
             return layer
+        if kind == 'cache':
+            return self._cache_row(layer, key[2])
         if kind in {'channel', 'effect'}:
             prop = channel_for(layer, key[2])
             if prop is None:
@@ -470,7 +503,8 @@ class Graph(Math):
         rebuilt from the persisted node after undo.
         """
         signature = identity()
-        image = self.resources.request(signature, lambda: factory(signature))
+        layer_id = _descriptor_layer(descriptor)
+        image = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
         node = self.node('ShaderNodeTexImage')
         node.image = image
         node.interpolation, node.extension = 'Linear', 'EXTEND'
@@ -480,7 +514,7 @@ class Graph(Math):
         owner_factory = owners if callable(owners) else None
         items = owners() if callable(owners) else owners
         binding = ResourceBinding(identifier, {o.as_pointer() for o in items}, identity, factory,
-                                  node, signature, owner_factory=owner_factory)
+                                  node, signature, owner_factory=owner_factory, layer_id=layer_id)
         self.resource_bindings.append(binding)
         if self.unit is not None:
             self.unit.resource_bindings.append(binding)
@@ -491,13 +525,14 @@ class Graph(Math):
         signature = identity()
         owner_factory = owners if callable(owners) else None
         items = owners() if callable(owners) else owners
+        layer_id = _descriptor_layer(json.loads(node['op_boundary']) if node.get('op_boundary') else None)
         binding = ResourceBinding(node.get('op_dependency'), {o.as_pointer() for o in items}, identity,
-                                  factory, node, signature, owner_factory=owner_factory)
+                                  factory, node, signature, owner_factory=owner_factory, layer_id=layer_id)
         key = sha256(repr((self.n, signature)).encode()).hexdigest()
         image = node.image
         if (image is None or image.get(RESOURCE) != key or not image.get('op_shader_resource_ready')
                 or not image.has_data):
-            fresh = self.resources.request(signature, lambda: factory(signature))
+            fresh = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
             if fresh.get('op_shader_resource_ready'):
                 node.image = fresh
             else:
@@ -680,6 +715,196 @@ class Graph(Math):
         with self.role(f'Strokes:{layer.id}:{channel}'):
             return self.boundary(self._role, owners, identity, factory, ['strokes', layer.id, channel])
 
+    # ---- cached layers (0.9.0) ----------------------------------------------
+
+    def _find_layer(self, identifier):
+        """Resolve a layer from the live collection (closures must not keep RNA references)."""
+        return next((item for item in self.ts.layers if item.id == identifier), None)
+
+    def _subtree_identity(self, folder, channel):
+        """Owners and identity of an isolated folder's child composite for one
+        channel: every descendant's blend state, content chain and mask stack.
+        The folder's own opacity, visibility, blend and mask stay live."""
+        from ..core.layer_stack import descendants
+        inside = descendants(self.ts, folder.id)
+        owners, keys = [], []
+        for layer in self.ts.layers:
+            if layer.id not in inside:
+                continue
+            owners.append(layer)
+            prop = channel_for(layer, channel)
+            stamp = (layer.id, values(layer, excluded={'channels', 'masks'}))
+            if prop is not None:
+                stamp += ((prop.enabled, prop.opacity, prop.blend_mode),)
+                if layer.type != 'FOLDER':
+                    nested_owners, nested_key = self._channel_identity(layer, prop, len(prop.effects))
+                    owners.extend(nested_owners)
+                    stamp += (nested_key,)
+            nested_owners, nested_keys = self._mask_dependencies(list(layer.masks))
+            owners.extend(nested_owners)
+            keys.append(stamp + (nested_keys,))
+        return owners, ('subtree', folder.id, channel, tuple(keys))
+
+    def _cache_identity(self, layer, channel):
+        """Owners and identity of what a cache image of ``layer``/``channel`` holds.
+
+        Built with stable (name-based) datablock keys: the identity is persisted
+        as the row's provenance and compared again after the file is reopened.
+        """
+        from .resource_keys import stable_keys
+        with stable_keys():
+            if layer.type == 'FOLDER':
+                owners, key = self._subtree_identity(layer, channel)
+            else:
+                prop = channel_for(layer, channel)
+                owners, key = ([], None) if prop is None else self._channel_identity(layer, prop, len(prop.effects))
+                mask_owners, mask_key = self._mask_dependencies(list(layer.masks))
+                owners = [*owners, *mask_owners]
+                key = (key, mask_key)
+        return owners, ('layer-cache', self.n, layer.type, channel, key)
+
+    def _layer_cache(self, layer, channel, rehydrate=None):
+        """One managed image sampled in place of a cached layer's content (0.9.0).
+
+        The sampler is an image binding on the layer's cache row (a publication
+        swaps the image through ``update``) and a CacheBinding whose identity
+        is compared with the row's provenance to detect a stale cache. Neither
+        allocates: refreshes go through ``layer_cache.request``.
+        """
+        from . import layer_cache
+        layer_id = layer.id
+        row = self._cache_row(layer, channel)
+        if row is None:
+            raise ValueError(f'Layer "{layer.name}" has no cache row for {channel}')
+
+        def owners():
+            current = self._find_layer(layer_id)
+            if current is None:
+                return [self.ts]
+            items = [current, *self._cache_identity(current, channel)[0]]
+            current_row = self._cache_row(current, channel)
+            if current_row is not None:
+                items.append(current_row)
+            return items
+
+        def identity():
+            current = self._find_layer(layer_id)
+            if current is None:
+                return ('layer-cache', 'missing', layer_id, channel)
+            return self._cache_identity(current, channel)[1]
+
+        def getter():
+            current = self._find_layer(layer_id)
+            current_row = self._cache_row(current, channel) if current is not None else None
+            image = current_row.image if current_row is not None else None
+            if image is None or tuple(image.size) != (self.n, self.n) or not image.has_data:
+                return layer_cache.placeholder()
+            return image
+
+        image = getter()
+        if rehydrate is not None:
+            node = rehydrate
+            node.image = image
+        else:
+            node = self.node('ShaderNodeTexImage')
+            node.image = image
+            node.interpolation, node.extension = 'Linear', 'EXTEND'
+            self.link(self.coord_uv(), node.inputs['Vector'])
+            node['op_cache'] = json.dumps([layer_id, channel])
+        entry = (row.as_pointer(), self._role, getter, node, image_key(image))
+        self.image_bindings.append(entry)
+        binding = CacheBinding(layer_id, channel, self._role, {o.as_pointer() for o in owners()},
+                               identity, node, identity(), owner_factory=owners)
+        self.cache_bindings.append(binding)
+        if self.unit is not None:
+            self.unit.image_bindings.append(entry)
+            self.unit.cache_bindings.append(binding)
+        return Signal(node.outputs['Color'], node.outputs['Alpha'])
+
+    def _cache_factory(self, layer_id, channel):
+        """Strips of the layer's cache content, evaluated by the CPU reference path."""
+        layer = self._find_layer(layer_id)
+        if layer is None:
+            raise ValueError('The cached layer no longer exists')
+        n = self.n
+        if layer.type == 'FOLDER':
+            from .composite import Composer
+            composer = Composer(self.ts, channel, n, {}, {})
+
+            def parts():
+                for low in range(0, n, 16):
+                    high = min(low + 16, n)
+                    yield low, composer.group(layer_id, low, high)
+            return parts()
+        from .snapshots import capture
+        snapshot = capture(layer)
+        prop = channel_for(snapshot, channel)
+        kind = layer.type
+
+        def parts():
+            from .channel_eval import source
+            from .mask_eval import evaluate_masks
+            cache, geometry = {}, {}
+            for low in range(0, n, 16):
+                high = min(low + 16, n)
+                if prop is None:
+                    rows = np.zeros((high - low, n, 4), np.float32)
+                else:
+                    rows = np.array(np.broadcast_to(source(prop, kind, n, low, high, cache, self.ts, geometry),
+                                                    (high - low, n, 4)), np.float32)
+                if snapshot.masks:
+                    rows[..., 3] *= evaluate_masks(self.ts, snapshot, n, low, high, cache, geometry)
+                yield low, rows
+        return parts()
+
+    def _reconcile_cache(self, binding, force=False):
+        """Compare a cache binding with its row; request a refresh when CACHED (or forced).
+
+        Returns the number of requests made.
+        """
+        from . import layer_cache
+        layer = self._find_layer(binding.layer_id)
+        row = self._cache_row(layer, binding.channel) if layer is not None else None
+        if layer is None or row is None:
+            binding.stale = True
+            return 0
+        image = row.image
+        missing = image is None or tuple(image.size) != (self.n, self.n) or not image.has_data
+        binding.stale = missing or row.provenance != repr(binding.signature)
+        if not binding.stale and not force:
+            layer_cache.discard(self.scene, self.ts, layer.id, binding.channel)
+            return 0
+        if layer.cache_mode != 'CACHED' and not force:
+            return 0
+        layer_id, channel = binding.layer_id, binding.channel
+        layer_cache.request(self.scene, self.ts, layer_id, channel, repr(binding.signature), self.n,
+                            factory=lambda: self._cache_factory(layer_id, channel),
+                            current=lambda: repr(binding.identity()), name=layer.name, immediate=force)
+        return 1
+
+    def request_caches(self, layer_id, force=False):
+        """Request every cache image of a layer (explicit Refresh); returns how many."""
+        count = 0
+        for binding in self.cache_bindings:
+            if binding.layer_id == layer_id:
+                binding.signature = binding.identity()
+                count += self._reconcile_cache(binding, force=force)
+        return count
+
+    def cache_states(self):
+        """'CURRENT' | 'STALE' | 'MISSING' per cached layer channel, for diagnostics and the UI."""
+        states = {}
+        for binding in self.cache_bindings:
+            layer = self._find_layer(binding.layer_id)
+            row = self._cache_row(layer, binding.channel) if layer is not None else None
+            image = row.image if row is not None else None
+            if image is None or tuple(image.size) != (self.n, self.n) or not image.has_data:
+                state = 'MISSING'
+            else:
+                state = 'STALE' if binding.stale else 'CURRENT'
+            states[f'{binding.layer_id}:{binding.channel}'] = state
+        return states
+
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
             if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
@@ -832,8 +1057,12 @@ class Graph(Math):
             return []
         refs = []
         if key[0] == 'CHANNEL':
-            refs.append(self._mask_key(layer))
-            if layer.type != 'FOLDER':
+            if self._skipped(layer):
+                return []   # a pass-through imports nothing: its content work stops
+            cached = self._cache_effective(layer) != 'LIVE'
+            if layer.type == 'FOLDER' or not cached:
+                refs.append(self._mask_key(layer))
+            if layer.type != 'FOLDER' and not cached:
                 refs.append(self._source_key(layer, key[2]))
         elif key[0] == 'SRC':
             prop = channel_for(layer, key[2])
@@ -881,6 +1110,45 @@ class Graph(Math):
             layer = self._layer(layer.parent_id) if layer.parent_id else None
         return True
 
+    # ---- layer performance (0.9.0): bypass and cached layers --------------
+
+    def _skipped(self, layer):
+        """The layer compiles as a pass-through: it or an ancestor is bypassed,
+        or an ancestor is cached (its subtree is sampled from the cache image)."""
+        seen, cursor, own = set(), layer, True
+        while cursor is not None and cursor.id not in seen:
+            if getattr(cursor, 'bypass', False):
+                return True
+            if not own and self._cache_mode(cursor) != 'LIVE':
+                return True
+            seen.add(cursor.id)
+            own = False
+            cursor = self._layer(cursor.parent_id) if cursor.parent_id else None
+        return False
+
+    def _cache_mode(self, layer):
+        """The layer's own cache mode, or LIVE when it cannot be cached."""
+        mode = getattr(layer, 'cache_mode', 'LIVE')
+        if mode == 'LIVE' or not len(layer.cache):
+            return 'LIVE'
+        if layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
+            # A passthrough composite depends on its backdrop: no backdrop-
+            # independent image exists for it.
+            message = (f'Passthrough folder "{layer.name}" cannot be cached; set it to Isolated '
+                       'or cache its children')
+            if message not in self._warnings:
+                self._warnings.append(message)
+            return 'LIVE'
+        return mode
+
+    def _cache_effective(self, layer):
+        """CACHED/FROZEN when this layer's channel units sample a cache image, else LIVE."""
+        return 'LIVE' if self._skipped(layer) else self._cache_mode(layer)
+
+    @staticmethod
+    def _cache_row(layer, channel):
+        return next((row for row in layer.cache if row.channel == channel), None)
+
     def plan(self):
         """Resolve the unit set, wiring and opacity contexts from authoring data."""
         layers = {l.id: l for l in self.ts.layers}
@@ -920,7 +1188,8 @@ class Graph(Math):
         if key[0] == 'CHANNEL':
             prop = channel_for(layer, key[2])
             signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs,
-                         bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None)
+                         bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None,
+                         'skip' if self._skipped(layer) else self._cache_effective(layer))
             if stub:
                 # A stub stands in while the layer is hidden and its content unchanged.
                 return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
@@ -1544,6 +1813,10 @@ class Graph(Math):
             prop = channel_for(layer, key[2])
             if prop is not None:
                 owners.append(prop)
+            if self._cache_effective(layer) != 'LIVE':
+                row = self._cache_row(layer, key[2])
+                if row is not None:
+                    owners.append(row)
         elif key[0] == 'SRC':
             prop = channel_for(layer, key[2])
             owners.append(prop)
@@ -1577,7 +1850,7 @@ class Graph(Math):
             if binding.pending_image is not None or not binding.node.image.get('op_shader_resource_ready'):
                 # The previous graph closes its unfinished jobs; queue this input again.
                 image = self.resources.request(binding.signature,
-                                               lambda b=binding: b.factory(b.signature))
+                                               lambda b=binding: b.factory(b.signature), owner=binding.layer_id)
                 if image.get('op_shader_resource_ready'):
                     binding.node.image, binding.pending_image = image, None
                 else:
@@ -1587,6 +1860,10 @@ class Graph(Math):
             self.owner_bindings[binding.owner.as_pointer()].append(binding)
         self.resource_bindings.extend(unit.resource_bindings)
         self.image_bindings.extend(unit.image_bindings)
+        for binding in unit.cache_bindings:
+            if binding.owner_factory is not None:
+                binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+        self.cache_bindings.extend(unit.cache_bindings)
         self._compiled_effects.update(unit.compiled_effects)
         self._plan.keys.add(key)
         self.units[key] = unit
@@ -1610,7 +1887,12 @@ class Graph(Math):
         started = perf_counter()
         layer = self._layer(key[1])
         try:
-            unit = self._compile(key, layer)
+            if key[0] == 'CHANNEL' and self._skipped(layer):
+                # Bypassed (or inside a cached folder): the backdrop passes
+                # through and invalid content never raises.
+                unit = self._compile(key, layer, bypass=True)
+            else:
+                unit = self._compile(key, layer)
         except ValueError as error:
             if key[0] != 'CHANNEL' or self._visible(layer):
                 self._building_units.discard(key)
@@ -1629,7 +1911,7 @@ class Graph(Math):
         self.units[key] = unit
         return unit
 
-    def _compile(self, key, layer, stub=None):
+    def _compile(self, key, layer, stub=None, bypass=False):
         unit = Unit(key)
         unit.tree = bpy.data.node_groups.new(self._unit_name(key), 'ShaderNodeTree')
         unit.tree[OWNER] = True
@@ -1639,9 +1921,12 @@ class Graph(Math):
             with self.enter(unit):
                 unit.group_input = self.node('NodeGroupInput')
                 unit.group_output = self.node('NodeGroupOutput')
-                if stub is not None:
-                    unit.flags['stub'] = stub
-                    self._warnings.append(f'Hidden layer "{layer.name}" is not compiled: {stub}')
+                if stub is not None or bypass:
+                    if bypass:
+                        unit.flags['bypass'] = True
+                    else:
+                        unit.flags['stub'] = stub
+                        self._warnings.append(f'Hidden layer "{layer.name}" is not compiled: {stub}')
                     self._export('Out', unit.input('In', 'NodeSocketColor'), 'NodeSocketColor')
                     if not self._plan.opaque[layer.id]:
                         self._export('Out:Alpha', unit.input('In:Alpha', 'NodeSocketFloat'), 'NodeSocketFloat')
@@ -1668,6 +1953,7 @@ class Graph(Math):
                     owners.remove(binding)
         self.resource_bindings = [b for b in self.resource_bindings if b not in unit.resource_bindings]
         self.image_bindings = [b for b in self.image_bindings if b not in unit.image_bindings]
+        self.cache_bindings = [b for b in self.cache_bindings if b not in unit.cache_bindings]
         for pointer in unit.compiled_effects:
             self._compiled_effects.pop(pointer, None)
         try:
@@ -1684,12 +1970,19 @@ class Graph(Math):
         opaque = self._plan.opaque[layer.id]
         backdrop = Signal(unit.input('In', 'NodeSocketColor'),
                           1.0 if opaque else unit.input('In:Alpha', 'NodeSocketFloat'))
+        cached = self._cache_effective(layer) != 'LIVE'
         with self.role(f'LayerMix:{layer.id}:{channel}'):
             amount = self.math('MULTIPLY', self.param(layer, 'opacity'), self.param(layer, 'visible'))
             if prop:
                 amount = self.math('MULTIPLY', amount, self.param(prop, 'opacity'))
-            amount = self.math('MULTIPLY', amount, self.mask(layer))
-            if layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
+            if layer.type == 'FOLDER' or not cached:
+                # A cached paint/fill layer bakes its mask into the image alpha.
+                amount = self.math('MULTIPLY', amount, self.mask(layer))
+            if cached:
+                content = self._layer_cache(layer, channel)
+                result = blend(self, backdrop, content, amount, mode, channel)
+                published = content
+            elif layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
                 grouped = Signal(unit.input('Grouped', 'NodeSocketColor'),
                                  1.0 if opaque else unit.input('Grouped:Alpha', 'NodeSocketFloat'))
                 result = Signal(self.mix(backdrop.color, grouped.color, amount),
@@ -1812,6 +2105,8 @@ class Graph(Math):
         # units retain their nodes, but their uniforms and resource identities
         # must be reconciled before marking this replacement graph current.
         corrections = self.update(check_structure=False) if self._reused else {}
+        for binding in self.cache_bindings:
+            self._reconcile_cache(binding)
         from .references import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
         self._last = {'parameter_changes': corrections.get('parameter_changes', []),
@@ -1824,6 +2119,8 @@ class Graph(Math):
                       'reused_units': len(self._reused), 'rebuilt_units': len(self.units) - len(self._reused),
                       'unique_images': len(self.unique_images()), 'max_textures_frag': _sampler_limit(),
                       'pending_resources': self.pending_resources,
+                      'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
+                      'cache_states': self.cache_states(),
                       'warnings': list(warnings(self.ts)) + self._warnings}
         metrics.count('shader_graph_builds')
         from .dependencies import remember, geometry_key
@@ -1889,6 +2186,7 @@ class Graph(Math):
                 # Leave the persisted trees untouched; forget partial bookkeeping.
                 self.units, self.bindings, self.owner_bindings = {}, {}, defaultdict(list)
                 self.resource_bindings, self.image_bindings, self._compiled_effects = [], [], {}
+                self.cache_bindings = []
                 self.resources.close()
         self.tree, self.instance = top, instance
         self.geometry = next(n for n in top.nodes if n.bl_idname == 'ShaderNodeNewGeometry')
@@ -1900,6 +2198,8 @@ class Graph(Math):
         self._structure = self.structural_signature()
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.resources.used = {b.node.image.get(RESOURCE) for b in self.resource_bindings if b.node.image}
+        for binding in self.cache_bindings:
+            self._reconcile_cache(binding)
         from .references import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
         self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': [],
@@ -1910,7 +2210,10 @@ class Graph(Math):
                       'largest_unit': max(unit_nodes.values(), default=0),
                       'reused_units': len(self.units), 'rebuilt_units': 0,
                       'unique_images': len(self.unique_images()), 'max_textures_frag': _sampler_limit(),
-                      'pending_resources': self.pending_resources, 'warnings': list(warnings(self.ts))}
+                      'pending_resources': self.pending_resources,
+                      'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
+                      'cache_states': self.cache_states(),
+                      'warnings': list(warnings(self.ts)) + self._warnings}
         metrics.count('shader_graph_rehydrations')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
@@ -1942,6 +2245,12 @@ class Graph(Math):
                 elif node.get('op_boundary'):
                     if not self._rehydrate_boundary(unit, node, json.loads(node['op_boundary'])):
                         return False
+                elif node.get('op_cache'):
+                    layer_id, channel = json.loads(node['op_cache'])
+                    layer = self._layer(layer_id)
+                    if layer is None or self._cache_row(layer, channel) is None:
+                        return False
+                    self._layer_cache(layer, channel, rehydrate=node)
             for owner_key in json.loads(unit.tree.get('op_effects', '[]')):
                 effect = self._resolve(owner_key)
                 if effect is None:
@@ -2108,15 +2417,21 @@ class Graph(Math):
         changed.extend(key for key in before if key not in after)
         return changed or 'wiring'
 
-    def update(self, owner=None, check_structure=True):
-        """Write changed bindings; ``check_structure`` is False for numeric-only edits."""
+    def update(self, owner=None, check_structure=True, resources=True):
+        """Write changed bindings; ``check_structure`` is False for numeric-only edits.
+
+        ``resources=False`` is the stroke-time path (freeze while painting): image
+        bindings are refreshed so the canvas shows, but no structural walk,
+        boundary re-identification or cache reconciliation happens until release.
+        """
         started = perf_counter()
-        if check_structure or self._stubs:
+        if resources and (check_structure or self._stubs):
             # A stub stands in for hidden content, so visibility is structural for it.
             scope = self.rebuild_scope()
             if scope is not None:
                 raise RebuildRequired('Shader graph topology changed', scope)
-        self.validate_parameters()
+        if resources:
+            self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None
         bindings = self.owner_bindings.get(pointer, ()) if pointer is not None else self.bindings.values()
         changed = []
@@ -2129,13 +2444,17 @@ class Graph(Math):
                     changed.append(binding.identifier)
         invalidated = set(changed)
         queued = 0
+        cache_requests = 0
         for binding in self.resource_bindings:
+            if not resources:
+                break
             if pointer is not None and pointer not in binding.owners:
                 continue
             signature = binding.identity()
             if signature != binding.signature:
                 before = len(self.resources.queue)
-                image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s))
+                image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
+                                               owner=binding.layer_id)
                 if image.get('op_shader_resource_ready'):
                     binding.node.image, binding.pending_image = image, None
                 else:
@@ -2152,8 +2471,19 @@ class Graph(Math):
                 node.image = image
                 self.image_bindings[index] = (p, identifier, getter, node, identity)
                 invalidated.add(identifier)
-        self.resources.used = {(b.pending_image or b.node.image).get(RESOURCE)
-                               for b in self.resource_bindings if b.pending_image or b.node.image}
+        for binding in self.cache_bindings:
+            if not resources:
+                break
+            if pointer is not None and pointer not in binding.owners:
+                continue
+            signature = binding.identity()
+            if signature != binding.signature or binding.stale:
+                # A publication does not change the identity; it clears staleness.
+                binding.signature = signature
+                cache_requests += self._reconcile_cache(binding)
+        if resources:
+            self.resources.used = {(b.pending_image or b.node.image).get(RESOURCE)
+                                   for b in self.resource_bindings if b.pending_image or b.node.image}
         pending = list(invalidated)
         while pending:
             for downstream in self.reverse.get(pending.pop(), ()):
@@ -2164,6 +2494,7 @@ class Graph(Math):
         report = {'parameter_changes': changed, 'invalidated_nodes': sorted(invalidated),
                   'affected_channels': channels, 'updated_bindings': len(changed),
                   'raster_boundaries_queued': queued, 'texture_bake_triggered': False,
+                  'cache_requests': cache_requests, 'deferred': not resources,
                   'submission_ms': (perf_counter() - started) * 1000,
                   'pending_resources': self.pending_resources,
                   'gpu_execution_scope': 'Blender evaluates the material shader; per-node execution is not exposed'}

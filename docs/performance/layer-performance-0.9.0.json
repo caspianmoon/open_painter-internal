@@ -1,0 +1,71 @@
+{
+  "blender": "5.2.1 LTS",
+  "resolution": 2048,
+  "inputs": 60,
+  "layers": 14,
+  "live": {
+    "build_ms": 260.4,
+    "settle_ms": 2454.5,
+    "nodes": 2098,
+    "units": 94
+  },
+  "stroke": {
+    "gate_on": {
+      "p50_ms": 0.966,
+      "p95_ms": 6.543,
+      "max_ms": 9.083,
+      "count": 60,
+      "resource_requests": 0,
+      "deferrals": 60,
+      "catch_up_ms": 2260.2
+    },
+    "gate_off": {
+      "p50_ms": 17.273,
+      "p95_ms": 28.742,
+      "max_ms": 61.515,
+      "count": 60,
+      "resource_requests": 60,
+      "deferrals": 0,
+      "catch_up_ms": 2182.2
+    }
+  },
+  "cached_folder": {
+    "build_ms": 110.1,
+    "settle_ms": 137.7,
+    "refresh_ms": 12258.9,
+    "nodes": 288,
+    "units": 46,
+    "inner_edit_callback_ms": 23.59
+  },
+  "bypassed_folder": {
+    "settle_ms": 48.0,
+    "nodes": 184,
+    "units": 46
+  },
+  "profile": {
+    "pass_ms": 929.5,
+    "total_ms": 9482.2,
+    "heaviest": [
+      {
+        "name": "Painted roughness",
+        "cost_ms": 3861.9
+      },
+      {
+        "name": "Fill 3",
+        "cost_ms": 2445.3
+      },
+      {
+        "name": "Fill 8",
+        "cost_ms": 2330.3
+      },
+      {
+        "name": "Fill 10",
+        "cost_ms": 88.7
+      },
+      {
+        "name": "Fill 11",
+        "cost_ms": 88.0
+      }
+    ]
+  }
+}

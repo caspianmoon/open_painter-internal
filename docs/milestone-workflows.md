@@ -3,6 +3,11 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Layer performance (0.9.0):** Layers tool strip → hourglass (*Profile Layers*) fills cost
+  badges in the rows; the row toggle next to the eye bypasses a layer in the preview only;
+  Properties → *Performance* sets a layer or isolated folder to Cached or Frozen and refreshes
+  or clears its image; Texture Set List → *Freeze While Painting* (on by default) defers
+  expensive recomputation until the stroke ends. [Details](layer-performance.md).
 - **Interactive preview:** Texture Set settings → Preview Quality. Full remains
   the default. 512/1024 are disposable previews; saving, rendering and exporting
   flush authored-resolution outputs.

@@ -497,8 +497,8 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
             if ts.preview_backend == 'CPU':
                 layout.prop(ts, 'preview_quality')
             if ts.preview_backend == 'LIVE':
-                from ..evaluation.shader_preview import status
-                layout.label(text=status(context.scene, ts), icon='INFO')
+                from .performance import draw_freeze_status
+                draw_freeze_status(layout, context, ts)
                 if context.area.type == 'IMAGE_EDITOR':
                     from ..evaluation.composite_snapshot import MARKER, stale
                     image = context.space_data.image
@@ -592,12 +592,28 @@ def draw_generator_controls(layout, ts, layer):
         box.prop(mask, "contrast", slider=True)
 
 
+_profile_cache = {}
+
+
+def _profile_rows(scene, ts):
+    """(rows by id, total) of the set's profile, rebuilt once per redraw pass."""
+    from ..evaluation import profile
+    key = (scene.as_pointer(), ts.id)
+    entry = _profile_cache.get(key)
+    serial = (ts.edit_serial, len(ts.layers))
+    if entry is None or entry[0] != serial:
+        rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
+        entry = _profile_cache[key] = (serial, rows, sum(row['cost_ms'] for row in rows.values()))
+    return entry[1], entry[2]
+
+
 class OP_UL_native_layers(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         rows = visible_rows(data)
         # filter_items runs once per redraw before the items draw; keep the
         # depths so draw_item does not walk the hierarchy again per row.
         _row_depths[data.as_pointer()] = dict(rows)
+        _profile_cache.pop((context.scene.as_pointer(), data.id), None)
         visible = {index for index, _ in rows}
         ordered = [index for index, _ in rows] + [
             i for i in range(len(data.layers)) if i not in visible
@@ -625,6 +641,15 @@ class OP_UL_native_layers(bpy.types.UIList):
         row.prop(
             layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
         )
+        from .performance import badge, cache_icon
+        scene = context.scene
+        profile_rows = _profile_rows(scene, data)
+        mark = badge(scene, data, layer, profile_rows[0], profile_rows[1])
+        if layer.bypass or not compact or mark:
+            # Preview-only bypass, distinct from the artistic eye.
+            row.prop(layer, "bypass", text="",
+                     icon="RESTRICT_VIEW_ON" if layer.bypass else "RESTRICT_VIEW_OFF", emboss=False)
+        row.active = not layer.bypass
         if depth:
             row.separator(factor=2.5 * depth)
         if layer.type == "FOLDER":
@@ -651,6 +676,11 @@ class OP_UL_native_layers(bpy.types.UIList):
         if any(m.source == "ANCHOR" for m in layer.masks) or any(
                 e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
             row.label(text="", icon="ANCHOR_CENTER")
+        icon = cache_icon(scene, data, layer)
+        if icon:
+            row.label(text="", icon=icon)
+        if mark:
+            row.label(text="" if compact else mark[0], icon=mark[1])
         controls = split.split(factor=blend_width / controls_width, align=True)
         if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
             controls.prop_menu_enum(layer, "group_mode", text="Pass" if compact else "Pass Through")
@@ -691,6 +721,8 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
         tools.separator()
         tools.operator("open_painter.open_graph", text="", icon="NODETREE")
+        tools.operator("open_painter.profile_layers", text="", icon="SORTTIME").action = "PROFILE"
+        tools.menu("OP_MT_native_performance", text="", icon="DOWNARROW_HLT")
         tools.operator("open_painter.module_insert", text="", icon="PACKAGE")
         tools.operator("open_painter.catalog_material", text="", icon="ASSET_MANAGER")
         tools.operator("open_painter.catalog_effect", text="", icon="MODIFIER")
@@ -775,12 +807,14 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             layout.prop(layer, "blend_mode", text="Layer Blend")
         draw_generator_controls(layout, ts, layer)
         from .anchors import draw_publish_controls
+        from .performance import draw_performance_section
         if layer.type == "FOLDER":
             layout.prop(layer, "group_mode", text="Blend")
             layout.label(text="Folder masks affect all child layers.")
             draw_publish_controls(layout, ts, layer)
             from .modules import draw_module_box
             draw_module_box(layout, context, ts, layer)
+            draw_performance_section(layout, context, ts, layer)
             return
         draw_publish_controls(layout, ts, layer)
         if layer.type == "PAINT":
@@ -797,6 +831,7 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             draw(layout, context)
             from .texture_operations import draw_channel_effects
             draw_channel_effects(layout, context, layer)
+            draw_performance_section(layout, context, ts, layer)
             return
         layout.separator()
         layout.label(text="MATERIAL", icon="MATERIAL")
@@ -856,6 +891,7 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
         if panel:
             for key in ("anisotropy", "coat_weight", "coat_roughness", "height_distance"):
                 panel.prop(ts, key)
+        draw_performance_section(layout, context, ts, layer)
 
 
 class OP_PT_native_library(PainterPanel, bpy.types.Panel):

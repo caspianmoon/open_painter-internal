@@ -21,10 +21,34 @@ def _layers(ts, n):
     return tuple(layer if isinstance(layer, Parameters) else capture(layer, scale) for layer in layers)
 
 
+class LayerProfiler:
+    """Inclusive/exclusive wall time per layer id while a Composer runs (0.9.0 profiling)."""
+
+    def __init__(self):
+        from collections import defaultdict
+        self.inclusive = defaultdict(float)
+        self.exclusive = defaultdict(float)
+        self._stack = []
+
+    def enter(self, layer_id):
+        from time import perf_counter
+        self._stack.append([layer_id, perf_counter(), 0.0])
+
+    def exit(self):
+        from time import perf_counter
+        layer_id, started, nested = self._stack.pop()
+        elapsed = perf_counter() - started
+        self.inclusive[layer_id] += elapsed
+        self.exclusive[layer_id] += elapsed - nested
+        if self._stack:
+            self._stack[-1][2] += elapsed
+
+
 class Composer:
-    def __init__(self, ts, channel, n, cache, resources):
+    def __init__(self, ts, channel, n, cache, resources, profiler=None):
         from .buffers import scalar_compatible
         self.ts, self.channel, self.n, self.cache, self.resources = ts, channel, n, cache, resources
+        self.profiler = profiler
         self.layers = _layers(ts, n)
         self.children, self.props, self.by_id = {}, {}, {}
         for layer in self.layers:
@@ -49,9 +73,23 @@ class Composer:
         return rgb, coverage
 
     def _blend_one(self, layer, y0, y1, rgb, coverage, opaque, ancestry):
+        if self.profiler is None:
+            return self._blend_layer(layer, y0, y1, rgb, coverage, opaque, ancestry)
+        self.profiler.enter(layer.id)
+        try:
+            return self._blend_layer(layer, y0, y1, rgb, coverage, opaque, ancestry)
+        finally:
+            self.profiler.exit()
+
+    def _blend_layer(self, layer, y0, y1, rgb, coverage, opaque, ancestry):
         ts, n, cache, resources = self.ts, self.n, self.cache, self.resources
         if not layer.visible:
             return rgb, coverage
+        if getattr(layer, 'bypass', False):
+            from . import purpose
+            if purpose.is_preview():
+                # Bypass is preview-only: export and snapshots keep the layer.
+                return rgb, coverage
         if layer.id in ancestry:
             raise ValueError("Layer hierarchy contains a cycle. Reparent the folder.")
         prop = self.props[layer.id]

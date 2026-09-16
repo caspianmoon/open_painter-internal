@@ -8,7 +8,7 @@ import hashlib
 import bpy
 import numpy as np
 from bpy.app.handlers import persistent
-from .resource_keys import key_for
+from .resource_keys import datablock_key, key_for
 from .metrics import measured
 
 _mesh_epochs = {}
@@ -89,7 +89,7 @@ def geometry_key(scene, ts):
             objects.append((None, ref.slot_index))
             continue
         mesh = obj.data
-        objects.append((obj.as_pointer(), mesh.as_pointer(), ref.slot_index,
+        objects.append((datablock_key(obj), datablock_key(mesh), ref.slot_index,
                         tuple(v for row in obj.matrix_world for v in row),
                         mesh_signature(mesh), modifier_signature(obj)))
     from ..geometry.influencers import signature

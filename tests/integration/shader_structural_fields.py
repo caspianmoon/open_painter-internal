@@ -153,5 +153,13 @@ field(mask_effect_of, 'enabled', True, False)  # pointwise mask filter: a unifor
 field(folder_of, 'group_mode', 'PASSTHROUGH', True)
 field(layer_of, 'parent_id', folder_id, True)
 field(layer_of, 'parent_id', '', True)
+# Layer performance (0.9.0): preview-only state restructures the layer's units.
+field(layer_of, 'bypass', True, True)
+field(layer_of, 'bypass', False, True)
+field(layer_of, 'cache_mode', 'CACHED', True)
+field(layer_of, 'cache_mode', 'FROZEN', True)
+field(layer_of, 'cache_mode', 'LIVE', True)
+field(folder_of, 'bypass', True, True)
+field(folder_of, 'bypass', False, True)
 print('SHADER_STRUCTURAL_FIELDS_PASS', flush=True)
 open_painter.unregister()

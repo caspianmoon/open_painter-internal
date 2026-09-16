@@ -11,7 +11,7 @@ from bpy.app.handlers import persistent
 
 from ..constants import OWNER
 from .resource_keys import key_for
-from . import dependencies, field_jobs
+from . import dependencies, field_jobs, layer_cache
 from ..utils.logging import logger
 
 _pending = {}
@@ -54,6 +54,9 @@ def _prune(live, now):
     shader_preview.prune(live)
     dependencies.prune(live)
     live_scenes = {scene.as_pointer() for scene in bpy.data.scenes}
+    layer_cache.prune(live_scenes)
+    from . import profile
+    profile.prune(live)
     for table in (_paint_input, _live_checks, _set_cursors):
         for key in set(table) - live_scenes:
             table.pop(key, None)
@@ -121,10 +124,39 @@ def cancel_all():
         discard(key)
     _evaluators.clear()
     field_jobs.cancel_all()
+    layer_cache.cancel_all()
 
 
 def paint_input(scene, pressed):
     _paint_input[scene.as_pointer()] = (pressed, monotonic())
+
+
+def _modal_painting(scene):
+    """Blender's brush operator is modal in a window showing this scene (a stroke is in progress)."""
+    windows = [w for w in bpy.context.window_manager.windows if w.scene == scene]
+    return any(op.bl_idname == "PAINT_OT_image_paint" for w in windows for op in w.modal_operators)
+
+
+def painting_active(scene):
+    """Freeze-while-painting gate (0.9.0): a brush is down, or was released less
+    than the settle window ago, in a paint session of a project that freezes.
+
+    Membership in ``_paint_input`` (not its pressed flag) defines the release
+    window: the post-release branch of ``tick`` pops it when the stroke counts
+    as finished.
+    """
+    project = getattr(scene, 'open_painter', None)
+    if project is None or not project.paint_image or not project.freeze_while_painting:
+        return False
+    return scene.as_pointer() in _paint_input or _modal_painting(scene)
+
+
+def stroke_finished(scene):
+    """The single "stroke ended" point: apply deferred shader updates and resume paused work."""
+    from . import shader_preview
+    _paint_input.pop(scene.as_pointer(), None)
+    shader_preview.resume(scene)
+    wake()
 
 
 def tick():
@@ -146,13 +178,17 @@ def tick():
                 _set_status(scene, f'Analysing {running[0]}… {int(running[1] * 100)}%')
             _scene_cursor = scene.as_pointer()
             return .001
+        if layer_cache.tick(scene):
+            running = layer_cache.progress(scene)
+            if running is not None:
+                _set_status(scene, f'Caching {running[0]}… {int(running[1] * 100)}%')
+            _scene_cursor = scene.as_pointer()
+            return .001
         from ..painting.paint_session import detect
 
         activity = _paint_input.get(scene.as_pointer())
         windows = [w for w in bpy.context.window_manager.windows if w.scene == scene]
-        painting = any(
-            op.bl_idname == "PAINT_OT_image_paint" for w in windows for op in w.modal_operators
-        )
+        painting = _modal_painting(scene)
         scene_key = scene.as_pointer()
         busy = any(key_for(scene, ts) in _jobs for ts in scene.open_painter.texture_sets)
         if painting:
@@ -167,7 +203,7 @@ def tick():
             pressed, when = activity
             if monotonic() - when > 0.12:
                 detect(scene, force=True)
-                _paint_input.pop(scene.as_pointer(), None)
+                stroke_finished(scene)
         elif not activity and not busy and scene.open_painter.paint_image:
             from ..ui.editor import is_area
 
@@ -188,7 +224,8 @@ def tick():
                 info = shader_preview.diagnostics(scene, ts)
                 set_state(scene, ts, 'SHADER' if ready else
                           'FAILED' if info['error'] else 'PREPARING_INPUT', info['error'])
-                if info['pending_resources']:
+                if info['pending_resources'] and not info.get('frozen'):
+                    # A set frozen by a stroke waits at the painting rate, never spins.
                     _scene_cursor = scene_key
                     _set_cursors[scene_key] = ts.id
                     return .001
@@ -312,7 +349,7 @@ def tick():
         ACTIVE_INTERVAL
         if any(
             scene.open_painter.paint_image or _paint_input.get(scene.as_pointer())
-            or field_jobs.pending(scene)
+            or field_jobs.pending(scene) or layer_cache.pending(scene)
             or any(shader_preview.pending_work(scene, ts) for ts in scene.open_painter.texture_sets)
             for scene in bpy.data.scenes
             if hasattr(scene, "open_painter")
@@ -374,6 +411,7 @@ def on_save(_):
         if not hasattr(scene, "open_painter"):
             continue
         detect(scene, force=True)
+        stroke_finished(scene)
         for ts in scene.open_painter.texture_sets:
             sources = [item.image for item in ts.baked_maps]
             for layer in ts.layers:
@@ -420,6 +458,8 @@ def register():
     bpy.app.handlers.redo_post.append(on_load)
     bpy.app.handlers.save_pre.append(on_save)
     bpy.app.handlers.render_pre.append(on_save)
+    field_jobs.paused = painting_active
+    layer_cache.paused = painting_active
     if not bpy.app.background:
         bpy.app.timers.register(tick, first_interval=0.5, persistent=True)
 
@@ -458,6 +498,8 @@ def unregister():
             handlers.remove(fn)
     if bpy.app.timers.is_registered(tick):
         bpy.app.timers.unregister(tick)
+    field_jobs.paused = None
+    layer_cache.paused = None
     from ..painting.paint_session import reset
 
     reset()

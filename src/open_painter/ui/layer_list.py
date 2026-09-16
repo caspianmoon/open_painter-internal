@@ -135,6 +135,8 @@ class OP_UL_layers(bpy.types.UIList):
         )
         if hasattr(item, "masks") and item.masks:
             layout.label(text="", icon="MOD_MASK")
+        if getattr(item, "bypass", False):
+            layout.label(text="", icon="RESTRICT_VIEW_ON")
 
 
 class OP_PT_layers(bpy.types.Panel):

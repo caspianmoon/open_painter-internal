@@ -5,6 +5,11 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the core runtime requirements. GPL-3.0-or-later.
 
+**0.9.0 adds layer performance tools:** *Profile Layers* shows what each layer costs the preview,
+a row toggle bypasses a layer in the preview only, layers and isolated folders can be **Cached** or
+**Frozen** as persisted images, and **Freeze While Painting** defers expensive recomputation until a
+brush stroke ends. [Details](docs/layer-performance.md).
+
 **0.8.0 adds Material Director:** describe a material or a refinement and Codex proposes
 ordinary editable layers, masks, scene fields and filters. Native Codex image generation supplies
 surface textures and grayscale masks, packed into the `.blend`. Open the **Director** sidebar tab
@@ -42,7 +47,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.8.0.zip`](dist/open_painter-0.8.0.zip).
+1. Download or build [`dist/open_painter-0.9.0.zip`](dist/open_painter-0.9.0.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu

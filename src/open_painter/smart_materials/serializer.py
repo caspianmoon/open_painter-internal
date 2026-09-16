@@ -55,6 +55,10 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                 if getattr(channel, field + "_name") and not getattr(channel, field):
                     raise ValueError(f"Missing texture on {layer.name}: {getattr(channel, field + '_name')}")
         values = snapshot(layer)
+        # Preview-only state (0.9.0) is not part of a portable material.
+        values.pop('cache', None)
+        values['cache_mode'] = 'LIVE'
+        values['bypass'] = False
         for mask in values.get('masks', []):
             if mask.get('source') == 'SCENE':
                 field = mask['influence']

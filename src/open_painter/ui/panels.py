@@ -81,6 +81,14 @@ class OP_PT_texture_set(bpy.types.Panel):
                 box.label(text=f"Unique images {info.get('unique_images')} / {limit if limit else '?'} fragment samplers")
             if info.get('rebuild_scope'):
                 box.label(text=f"Rebuild pending: {info['rebuild_scope']}"[:96])
+            box.label(text=f"Frozen {info.get('frozen', False)} · deferred owners {info.get('deferred_owners', 0)}")
+            from ..evaluation import profile
+            rows = [row for row in profile.rows(context.scene, ts) if row['profiled'] or row['cost_ms']]
+            if rows:
+                total = sum(row['cost_ms'] for row in rows)
+                box.label(text=f"Layer profile · {total:.0f} ms total")
+                for row in rows:
+                    box.label(text=f"{row['name'][:22]} · {row['cost_ms']:.1f} ms · {row['state'].lower()}"[:96])
         layout.prop(ts, "name", text="Name")
         layout.prop(ts, "resolution")
         from .strokes_panel import pending_resample

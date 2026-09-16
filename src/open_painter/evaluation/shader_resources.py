@@ -12,7 +12,7 @@ import bpy
 import numpy as np
 
 from ..constants import OWNER
-from . import metrics
+from . import metrics, purpose
 
 RESOURCE = 'open_painter_shader_resource'
 
@@ -22,6 +22,7 @@ class Entry:
     image: object
     job: object = None
     error: str = ''
+    owner: str = ''   # layer id the work is attributed to (0.9.0 profiling)
 
 
 class Resources:
@@ -31,12 +32,14 @@ class Resources:
         self.used = set()
         self.queue = []
         self.completed = 0
+        self.timings = {}   # owner layer id -> seconds of factory work since the last step report
 
-    def request(self, signature, factory):
+    def request(self, signature, factory, owner=''):
         """Return a cached image or queue just this immutable source snapshot.
 
         factory() returns an iterator yielding (low_row, HxWxC float data).
         The iterator must finish with all rows populated. Publication is atomic.
+        ``owner`` names the layer whose profile the work is attributed to.
         """
         key = sha256(repr((self.size, signature)).encode()).hexdigest()
         self.used.add(key)
@@ -48,7 +51,7 @@ class Resources:
                       if item.get(RESOURCE) == key and tuple(item.size) == (self.size, self.size)
                       and item.get('op_shader_resource_ready')), None)
         if image:
-            self.entries[key] = Entry(image)
+            self.entries[key] = Entry(image, owner=owner)
             metrics.count('shader_resource_cache_hits')
             return image
         image = bpy.data.images.new('OP Shader Source · ' + key[:12],
@@ -58,7 +61,7 @@ class Resources:
         image['op_shader_resource_ready'] = False
         image.colorspace_settings.name = 'Non-Color'
         image.generated_color = (.5, .5, .5, 1)
-        entry = Entry(image)
+        entry = Entry(image, owner=owner)
         entry.job = self._produce(entry, factory())
         self.entries[key] = entry
         self.queue.append(key)
@@ -115,8 +118,10 @@ class Resources:
                 if not entry.image.users:
                     bpy.data.images.remove(entry.image)
                 continue
+            job_started = perf_counter()
             try:
-                next(entry.job)
+                with purpose.preview():
+                    next(entry.job)
             except StopIteration:
                 entry.job = None
                 self.queue.pop(0)
@@ -125,6 +130,8 @@ class Resources:
                 entry.job = None
                 self.queue.pop(0)
                 raise
+            finally:
+                self.timings[entry.owner] = self.timings.get(entry.owner, 0.0) + perf_counter() - job_started
             if perf_counter() - started >= budget:
                 break
         # Retain at most 64 MiB of unused completed leaves for undo/slider
@@ -135,9 +142,11 @@ class Resources:
         for key in unused[:max(0, len(unused) - keep)]:
             entry = self.entries.pop(key)
             bpy.data.images.remove(entry.image)
+        timings, self.timings = self.timings, {}
         return {'resource_publications': self.completed - published,
                 'pending_resources': len(self.queue),
-                'resource_step_ms': (perf_counter() - started) * 1000}
+                'resource_step_ms': (perf_counter() - started) * 1000,
+                'owner_timings': timings}
 
     def close(self):
         for entry in self.entries.values():
@@ -154,9 +163,12 @@ class Resources:
 
 def values(group, excluded=()):
     """Stable authoring inputs without UI state or the global dirty serial."""
-    from .resource_keys import image_key
+    from .resource_keys import image_key, datablock_key
+    # Cache state (0.9.0) never enters an identity: a cache publication must
+    # not re-identify the layer it was built for.
     skip = {'rna_type', 'id_data', 'id', 'name', 'dirty', 'order', 'active_effect',
-            'active_mask', 'expanded', 'image_name', 'detail_image_name', *excluded}
+            'active_mask', 'expanded', 'image_name', 'detail_image_name', 'cache', 'cache_mode',
+            *excluded}
     result = []
     for field in group.bl_rna.properties:
         name = field.identifier
@@ -171,7 +183,7 @@ def values(group, excluded=()):
             elif isinstance(value, bpy.types.Image):
                 value = image_key(value)
             else:
-                value = value.as_pointer() if value else None
+                value = datablock_key(value)
         elif getattr(field, 'is_array', False):
             value = tuple(value)
         result.append((name, value))

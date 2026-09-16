@@ -83,6 +83,8 @@ def remove(ts, index: int) -> None:
     for child in ts.layers:
         if child.parent_id == layer.id:
             child.parent_id = layer.parent_id
+    from ..evaluation.layer_cache import release_layer
+    release_layer(layer)
     ts.layers.remove(index)
     ts.active_layer = min(index, len(ts.layers) - 1)
     invalidate(ts)
@@ -124,8 +126,13 @@ def restore(data: dict, target) -> None:
     for key, value in data.items():
         prop = target.bl_rna.properties[key]
         if prop.type == "COLLECTION":
+            collection = getattr(target, key)
+            if len(collection) and value:
+                # An update callback replayed above may have seeded rows
+                # (cache_mode creates the cache rows); the snapshot wins.
+                collection.clear()
             for item in value:
-                restore(item, getattr(target, key).add())
+                restore(item, collection.add())
         elif prop.type == "POINTER" and isinstance(value, dict):
             restore(value, getattr(target, key))
         else:
@@ -157,6 +164,10 @@ def duplicate(ts, index):
         target.id = mapping[source["id"]]
         target.name += " Copy"
         target.parent_id = mapping.get(source["parent_id"], source["parent_id"])
+        for row in target.cache:
+            # A cached image belongs to one layer; the copy rebuilds its own.
+            row.image = None
+            row.provenance = ''
         for mask in target.masks:
             mask.id = mask_mapping[mask.id]
             if mask.source == 'REFERENCE':
@@ -271,8 +282,10 @@ def descendants(ts, identifier):
 
 def remove_tree(ts, identifier):
     identifiers = descendants(ts, identifier) | {identifier}
+    from ..evaluation.layer_cache import release_layer
     for i in reversed(range(len(ts.layers))):
         if ts.layers[i].id in identifiers:
+            release_layer(ts.layers[i])
             ts.layers.remove(i)
     ts.active_layer = min(ts.active_layer, max(0, len(ts.layers) - 1))
     invalidate(ts)

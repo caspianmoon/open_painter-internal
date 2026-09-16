@@ -16,6 +16,20 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Layer performance 0.9.0 — 2026-09-16
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Freeze while painting: zero boundary regenerations during a stroke, one catch-up per touched owner on release; multi-set, save, undo, backend switch, session end | done | `tests/integration/paint_freeze.py`, `paint_freeze_ui.py` (real brush drag: 30 frozen ticks, 0 requests, 1 resume, p95 tick 0.6 ms) |
+| Bypass in Preview: pass-through units, no content/mask units, shader parity with the layer hidden (0.0), export and snapshots unchanged, folder semantics, scoped rebuild, rehydration | done | `layer_bypass.py`, `shader_structural_fields.py` |
+| Layer caches: Cached/Frozen, parity with the live compile (3e-6 layer, 2e-5 folder), stale detection, debounced refresh, explicit Refresh, paused while painting, persistence across undo and reopen, resolution change, passthrough refusal, lifecycle hygiene | done | `layer_cache.py` |
+| Profile Layers: compile/boundary/CPU columns, badges, states, Clear | done | `layer_profile.py` |
+| Benchmark (2048, 14 layers, 60 emulated inputs) | stroke tick p50 0.97 ms / p95 6.5 ms and 0 regenerations with the gate on, versus 17.3 / 28.7 ms and 60 regenerations off; heavy folder 260 ms · 2098 nodes live, 110 ms · 288 nodes cached (refresh 12.3 s, cooperative), 184 nodes bypassed | [layer-performance-0.9.0.json](performance/layer-performance-0.9.0.json) |
+| Open Graph badges for bypass/cache; anchors into a cached folder with a backdrop | deferred | — |
+
+Figures come from emulated strokes and a bounded CPU pass; no GPU frame time is measured
+(Blender does not expose per-node shader execution). See [layer-performance.md](layer-performance.md).
+
 ## Material → Geometry 0.7.0 — 2026-09-15
 
 | Item | Status | Evidence |

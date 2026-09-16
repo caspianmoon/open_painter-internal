@@ -20,7 +20,8 @@ from ..evaluation.anchors import derived_mapping
 
 VOLATILE = frozenset({'dirty', 'order', 'active_mask', 'active_effect', 'expanded', 'image_name',
                       'detail_image_name', 'revision', 'module_id', 'module_version', 'module_source',
-                      'module_instance', 'module_name', 'module_detached', 'layer_id'})
+                      'module_instance', 'module_name', 'module_detached', 'layer_id',
+                      'bypass', 'cache_mode', 'cache'})
 BASE_TEXT_PREFIX = 'OP Module Base · '
 
 

@@ -28,10 +28,12 @@ def layer_selected(self, context):
 
 
 def backend_changed(self, context):
+    # Work deferred by a stroke is applied (or dropped with the shader session) first.
+    from ..evaluation.shader_preview import resume, tick
+    resume(self.id_data)
     changed(self, context)
     # A still-current cached shader can have been disconnected by explicit CPU
     # preview. Switching back must reattach it, even if no recipe input changed.
-    from ..evaluation.shader_preview import tick
     tick(self.id_data, self, force_repair=True)
 
 

@@ -21,7 +21,7 @@ from .ui.offline_analysis import OP_OT_offline_analysis,OP_PT_offline_analysis
 from .properties.bake import OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
-from .properties.layer import OP_Layer
+from .properties.layer import OP_Layer, OP_LayerCache
 from .properties.mask import OP_Mask
 from .properties.project import OP_PaintCanvas, OP_Project
 from .properties.stroke import OP_Stroke, OP_VectorBrushSettings
@@ -42,6 +42,7 @@ from .ui.properties_panel import OP_OT_mask, OP_PT_masks, OP_UL_masks
 from .ui.workspace import OP_OT_workspace
 
 from .ui.native import CLASSES as NATIVE_CLASSES
+from .ui.performance import CLASSES as PERFORMANCE_CLASSES
 from .ui.texture_operations import CLASSES as TEXTURE_UI_CLASSES
 
 from .properties.effect import OP_TextureEffect
@@ -57,6 +58,7 @@ CLASSES = (
     OP_Output,
     OP_Influencer,
     OP_Mask,
+    OP_LayerCache,
     OP_Layer,
     OP_Assignment,
     OP_ObjectRef,
@@ -110,7 +112,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES
 
 
 _registered = False

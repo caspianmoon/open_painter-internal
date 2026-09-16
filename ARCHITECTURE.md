@@ -108,7 +108,10 @@ cooperative raster scheduler and 80 ms debounce. Runtime shader resources and
 bindings are reconstructed from the persisted node groups after load/undo/redo.
 The scheduler timer polls at 10 Hz when idle and is re-armed immediately by a
 structural edit; 60 Hz is used only while painting or while a shader session has
-topology or isolated inputs left to finish.
+topology or isolated inputs left to finish. While a brush stroke is in progress
+the project is frozen by default: boundary re-identification, cache refreshes and
+scene-field analysis wait and catch up once on release (see
+[Layer performance](#layer-performance-090)).
 
 The paint bridge activates a native essential brush and selects `image_paint.canvas`. Persistent
 paint references identify the layer/channel/mask. Eligible unfiltered float paint
@@ -183,6 +186,36 @@ Composite anchors back the graph's *Output* and *Composite* sockets: `publish_ou
 `OUT`/`BELOW`/`GROUP` nodes so cycle rules follow from the item-granular check,
 `evaluation/composite.Composer` (the shared CPU composition loop) publishes them, and the shader
 imports the producer CHANNEL unit's `Out` or the folder unit's `Group` export.
+
+## Layer performance (0.9.0)
+
+Preview-side state on `OP_Layer` — `bypass` and `cache_mode` with `OP_LayerCache` rows — is
+structural for the shader and invisible to export: its callback bumps the authoring serial
+without dirtying outputs, `values()` never folds it into an identity, and portable materials
+serialize it as live. `evaluation/purpose.preview()` marks CPU work done for the preview
+(resource steps, cache jobs); only there does `Composer` skip bypassed layers.
+
+A bypassed layer, and everything under a bypassed folder, compiles as a pass-through CHANNEL
+unit with no imports, so its SRC/MASK units and their boundaries leave the plan. A cached layer's
+CHANNEL unit samples one managed image per channel (`op_cache` descriptor) through an image
+binding on the cache row plus a `CacheBinding` whose content identity — `_channel_identity` and
+mask dependencies for a layer, the descendants' stamps for an isolated folder — is built with
+name-based datablock keys and compared with the row's persisted provenance. A mismatch marks the
+binding stale; CACHED rows request a job from `evaluation/layer_cache.py` (debounced 0.3 s, 16-row
+strips under the scheduler budget, atomic publish of a new packed image plus provenance, superseded
+when the identity moves on), FROZEN rows wait for the explicit operator. Passthrough folders are
+refused because their composite depends on the backdrop. A publication notifies the row, which
+swaps the sampler through the ordinary image-binding update.
+
+`cache.painting_active(scene)` is the single freeze predicate (brush operator modal, or released
+less than 120 ms ago, in a project with *Freeze While Painting*); `cache.stroke_finished(scene)`
+is the single resume point. While active, `shader_preview.paint_touch` runs `Graph.update` with
+`resources=False` — image bindings only — and records the owner in a deferred table;
+`shader_preview.tick` neither repairs nor steps resources; `field_jobs` and `layer_cache` consult
+the same predicate. Resume runs one owner-scoped update per deferred owner. `evaluation/profile.py`
+keeps the per-layer table: unit build times and node/sampler counts from every build, boundary
+seconds attributed by the owning layer id carried on each resource entry, and the explicit
+profile pass (`Composer` with a `LayerProfiler`). Details and limits: [layer-performance.md](docs/layer-performance.md).
 
 ## Paint-session ownership
 

@@ -18,6 +18,7 @@ REBAKE_DEBOUNCE = 2.0
 _requests = {}   # (scene pointer, set id, mask id) -> {'signature', 'since'}
 _jobs = {}       # same key -> {'signature', 'steps', 'progress', 'name'}
 _rebakes = {}    # (scene pointer, set id) -> time of the last mesh edit
+paused = None    # predicate(scene) -> bool: analysis waits while it holds (freeze while painting)
 
 
 def active():
@@ -80,6 +81,8 @@ def _editing(ts):
 def tick(scene, budget=.008):
     """Advance this scene's field work; returns True when something ran."""
     from ..generators import scene_fields
+    if paused is not None and paused(scene):
+        return False
     pointer = scene.as_pointer()
     worked = False
     now = monotonic()

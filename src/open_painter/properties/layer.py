@@ -1,6 +1,6 @@
 import bpy
 
-from ..constants import BLEND_ITEMS
+from ..constants import BLEND_ITEMS, CHANNELS
 from .channel import OP_Channel
 from .mask import OP_Mask
 
@@ -38,6 +38,46 @@ def _changed(self, context, structural):
                 from ..evaluation.shader_preview import notify
                 notify(self, context, previous_dirty=previous_dirty, structural=structural)
                 return
+
+
+def _texture_set_of(self):
+    project = getattr(self.id_data, "open_painter", None)
+    if not project:
+        return None
+    pointer = self.as_pointer()
+    return next((ts for ts in project.texture_sets
+                 if any(layer.as_pointer() == pointer for layer in ts.layers)), None)
+
+
+def preview_only(self, context):
+    """A preview-side edit (bypass, cache mode): the shader restructures, export output is unchanged.
+
+    The authoring serial moves so sessions notice, but no output is marked dirty.
+    """
+    ts = _texture_set_of(self)
+    if ts is None:
+        return
+    ts.edit_serial += 1
+    from ..evaluation.shader_preview import notify
+    notify(self, context, structural=True)
+
+
+def cache_changed(self, context):
+    if self.cache_mode != 'LIVE' and not len(self.cache):
+        # Every channel row at once: the collection is never reallocated later,
+        # so compiled bindings may keep the rows' addresses.
+        for channel in CHANNELS:
+            row = self.cache.add()
+            row.channel = channel
+    preview_only(self, context)
+
+
+class OP_LayerCache(bpy.types.PropertyGroup):
+    """One channel of a cached layer: the published image and what it was built from."""
+    channel: bpy.props.StringProperty()
+    image: bpy.props.PointerProperty(type=bpy.types.Image)
+    provenance: bpy.props.StringProperty()
+    refresh_serial: bpy.props.IntProperty(default=0)
 
 
 class OP_Layer(bpy.types.PropertyGroup):
@@ -81,6 +121,16 @@ class OP_Layer(bpy.types.PropertyGroup):
         description="Publish this layer's blended result as an anchor other layers can read")
     publish_group: bpy.props.BoolProperty(name="Publish Folder Composite", default=False, update=changed,
         description="Publish the folder's child composite, before the folder itself blends, as an anchor")
+    # Layer performance (0.9.0): preview-only state. Export, bakes and 2D
+    # snapshots evaluate the full stack regardless.
+    bypass: bpy.props.BoolProperty(name="Bypass", default=False, update=preview_only,
+        description="Skip this layer (and its children) in the shader preview only; export, bakes and "
+                    "2D snapshots still include it")
+    cache_mode: bpy.props.EnumProperty(name="Cache", default='LIVE', update=cache_changed, items=[
+        ('LIVE', 'Live', 'Compile the layer into the shader'),
+        ('CACHED', 'Cached', 'Sample a cached image; refresh it once edits inside the layer settle'),
+        ('FROZEN', 'Frozen', 'Sample the cached image until Refresh Cache')])
+    cache: bpy.props.CollectionProperty(type=OP_LayerCache)
     # Vector strokes (0.6.0): paint layers sharing a key across sets render the same strokes.
     stroke_key: bpy.props.StringProperty(update=changed,
         description="Key of the project's vector strokes this paint layer renders")

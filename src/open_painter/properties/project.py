@@ -34,6 +34,12 @@ def engine_preview_changed(self, context):
         material_manager.repair(ts)
 
 
+def freeze_changed(self, context):
+    if not self.freeze_while_painting:
+        from ..evaluation import cache
+        cache.stroke_finished(self.id_data)
+
+
 class OP_PaintCanvas(bpy.types.PropertyGroup):
     """One participating texture set of a multi-set native paint session."""
     set_id: bpy.props.StringProperty()
@@ -70,6 +76,11 @@ class OP_Project(bpy.types.PropertyGroup):
     paint_all_sets: bpy.props.BoolProperty(name="Paint Across Sets", default=False,
         description="Native painting writes every texture set assigned to the object: linked paint "
                     "layers are created where missing and each set's material takes its own canvas")
+    # Layer performance (0.9.0): defer boundary regeneration, layer caches and
+    # scene-field analysis during a brush stroke; catch up once after release.
+    freeze_while_painting: bpy.props.BoolProperty(name="Freeze While Painting", default=True, update=freeze_changed,
+        description="Pause expensive recomputation (cached inputs, layer caches, scene fields) during a "
+                    "brush stroke and catch up once after the stroke ends")
     format_version: bpy.props.IntProperty(default=1)
     texture_sets: bpy.props.CollectionProperty(type=OP_TextureSet)
     active_texture_set: bpy.props.IntProperty(default=0)

@@ -97,6 +97,8 @@ def begin(context: bpy.types.Context, ts, channel: str, mask: bool = False) -> b
     project = context.scene.open_painter
     # Flush the old target before changing channel or mask identity.
     detect(context.scene, force=True)
+    from ..evaluation.cache import stroke_finished
+    stroke_finished(context.scene)
     image = target(ts, layer, channel, mask)
     if context.object and context.object.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -196,6 +198,8 @@ def begin_multi(context, ts, channel):
         raise ValueError("Assign a UV-unwrapped mesh to this texture set first.")
     project = context.scene.open_painter
     detect(context.scene, force=True)
+    from ..evaluation.cache import stroke_finished
+    stroke_finished(context.scene)
     members = participants(project, ts, layer, obj)
     if len(members) == 1:
         return begin(context, ts, channel, False)
@@ -248,6 +252,9 @@ def finish(context, evaluate: bool = True) -> None:
     scene = context.scene
     project = scene.open_painter
     detect(scene, force=True)
+    # Deferred stroke work catches up while every participating set is still resolvable.
+    from ..evaluation.cache import stroke_finished
+    stroke_finished(scene)
     identifier = project.paint_set_id
     image = project.paint_image
     extra_sets = []

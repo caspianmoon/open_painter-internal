@@ -125,7 +125,7 @@ if args.gui or args.gui_only:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue
-        if filename in {"shader_preview_ui.py", "shader_snapshot_ui.py"}:
+        if filename in {"shader_preview_ui.py", "shader_snapshot_ui.py", "material_director_ui.py"}:
             if report.get("result") != "PASS":
                 raise RuntimeError(result)
             continue

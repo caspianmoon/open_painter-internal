@@ -320,14 +320,20 @@ def begin_brush(context, ts, key):
     return image
 
 
-def stroke_finished(scene):
-    """Called by the scheduler when a stroke ends; notices correction edits."""
+def stroke_finished(scene, watch=True):
+    """Called by the scheduler when a stroke ends; notices correction edits.
+
+    ``watch`` opens the short idle re-check window (``poll``); the polls
+    themselves pass False so the window closes on its own.
+    """
     project = scene.open_painter
     key = project.paint_correction
     image = project.paint_image
     if not key or image is None:
         return False
     snapshot_key = (scene.as_pointer(), image.as_pointer())
+    if watch:
+        _watch[scene.as_pointer()] = monotonic()
     current = pixels(image)
     previous = _snapshots.get(snapshot_key)
     if previous is not None and previous.shape == current.shape and np.array_equal(previous, current):
@@ -345,16 +351,20 @@ def stroke_finished(scene):
 
 
 _polls = {}   # scene pointer -> last idle comparison
+_watch = {}   # scene pointer -> when a stroke last ended (idle re-checks stop WATCH seconds later)
 POLL = .4
+WATCH = 2.0
 
 
 def poll(scene):
-    """Idle re-check of the correction canvas: brush pixels can land after the release tick."""
+    """Idle re-check of the correction canvas shortly after a stroke: brush pixels can land
+    after the release tick. Reading a 4k canvas every tick forever would not be idle."""
     key = scene.as_pointer()
-    if monotonic() - _polls.get(key, 0.0) < POLL:
+    now = monotonic()
+    if now - _watch.get(key, -1e9) > WATCH or now - _polls.get(key, 0.0) < POLL:
         return False
-    _polls[key] = monotonic()
-    return stroke_finished(scene)
+    _polls[key] = now
+    return stroke_finished(scene, watch=False)
 
 
 def pending_rebake(scene):
@@ -468,15 +478,16 @@ def face_map(ts):
 
 
 def dilate(mask, radius):
-    """Binary dilation by ``radius`` texels (separable, exact for a square kernel)."""
+    """Binary dilation by ``radius`` texels (separable square kernel; never across the image border)."""
     if radius <= 0:
         return mask
+    from ..texture_engine.filters import shift
     out = mask.copy()
     for axis in (0, 1):
         acc = out.copy()
         for step in range(1, radius + 1):
-            acc |= np.roll(out, step, axis=axis)
-            acc |= np.roll(out, -step, axis=axis)
+            acc |= shift(out, step if axis == 0 else 0, step if axis == 1 else 0, False)
+            acc |= shift(out, -step if axis == 0 else 0, -step if axis == 1 else 0, False)
         out = acc
     return out
 

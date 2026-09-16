@@ -123,10 +123,17 @@ def _from_issue(check, issue):
 
 # ---- checks ------------------------------------------------------------------
 
-def check_uvs(ts):
-    """Assignment, UV map, degenerate/outside faces and exact overlaps (diagnostics.inspect)."""
+def check_uvs(ts, tier='PRE_BAKE'):
+    """Assignment, UV map, degenerate/outside faces and exact overlaps (diagnostics.inspect).
+
+    The exact overlap analysis is bounded but not free; before a bake it runs
+    only for targets up to ``LARGE_MESH`` faces, the Full tier always.
+    """
     findings = []
-    for issue in diagnostics.inspect(ts, evaluated=True):
+    evaluated = tier == 'FULL' or all(len(obj.data.polygons) <= LARGE_MESH for obj in _lows(ts))
+    if not evaluated:
+        findings.append(Finding('uvs', 'INFO', 'large targets: exact UV overlap is checked by Full Check'))
+    for issue in diagnostics.inspect(ts, evaluated=evaluated):
         key = 'uvs'
         text = issue.message.lower()
         if 'scale' in text:
@@ -139,41 +146,58 @@ def check_uvs(ts):
     return findings
 
 
-def check_normals(ts):
+LARGE_MESH = 250_000   # faces; per-face checks on bigger meshes wait for the Full tier
+
+
+def _face_normals(mesh):
+    normals = np.empty((len(mesh.polygons), 3), np.float32)
+    mesh.polygons.foreach_get('normal', normals.ravel())
+    return normals
+
+
+def check_normals(ts, tier='PRE_BAKE'):
     """Faces whose winding disagrees with a consistent recalculation, on targets and sources.
 
     Inside-out sources give dark AO and inverted normal detail; inconsistent
-    target faces flip the tangent frame of the normal map.
+    target faces flip the tangent frame of the normal map. Meshes above
+    ``LARGE_MESH`` faces are checked on the Full tier only, so a bake never
+    waits on a multi-million-face source.
     """
+    import bmesh
     findings = []
     roles = [(obj, 'target') for obj in _lows(ts)]
     if _projecting(ts):
         roles.extend((obj, 'source') for obj in _highs(ts))
     for obj, role in roles:
         mesh = obj.data
-        if not len(mesh.polygons):
+        count = len(mesh.polygons)
+        if not count:
             continue
+        if count > LARGE_MESH and tier != 'FULL':
+            findings.append(Finding('normals', 'INFO', f'{count} faces: normals are checked by Full Check', obj.name))
+            continue
+        before = _face_normals(mesh)
         bm = _bmesh(mesh)
+        temp = bpy.data.meshes.new('OP Normals Check')
         try:
-            import bmesh
-            before = np.asarray([face.normal[:] for face in bm.faces], np.float64)
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-            after = np.asarray([face.normal[:] for face in bm.faces], np.float64)
+            bm.to_mesh(temp)
+            after = _face_normals(temp)
         finally:
             bm.free()
-        dots = np.einsum('ij,ij->i', before, after)
-        flipped = np.flatnonzero(dots < -1e-6)
+            bpy.data.meshes.remove(temp)
+        flipped = np.flatnonzero(np.einsum('ij,ij->i', before, after) < -1e-6)
         if not len(flipped):
             continue
-        if len(flipped) > len(mesh.polygons) / 2:
-            message = (f'{len(flipped)} of {len(mesh.polygons)} faces point inward: the mesh normals are flipped'
+        faces = tuple(int(f) for f in flipped)
+        if len(flipped) > count / 2:
+            message = (f'{len(flipped)} of {count} faces point inward: the mesh normals are flipped'
                        + ('; the AO bake sees its back faces' if role == 'source' else ''))
-            findings.append(Finding('normals', 'WARNING', message, obj.name, faces=tuple(int(f) for f in flipped)))
         else:
             message = f'{len(flipped)} faces have inconsistent normals'
             if role == 'source':
                 message += ' (dark AO and inverted detail where the bake hits them)'
-            findings.append(Finding('normals', 'WARNING', message, obj.name, faces=tuple(int(f) for f in flipped)))
+        findings.append(Finding('normals', 'WARNING', message, obj.name, faces=faces))
     return findings
 
 
@@ -281,13 +305,16 @@ def check_naming(ts):
     return findings
 
 
-def check_doubles(ts):
+def check_doubles(ts, tier='PRE_BAKE'):
     """Coincident vertices on the targets (split seams and broken smoothing in normal bakes)."""
     import bmesh
     findings = []
     for obj in _lows(ts):
         mesh = obj.data
         if len(mesh.vertices) < 2:
+            continue
+        if len(mesh.polygons) > LARGE_MESH and tier != 'FULL':
+            findings.append(Finding('doubles', 'INFO', f'{len(mesh.polygons)} faces: duplicates are checked by Full Check', obj.name))
             continue
         bm = _bmesh(mesh)
         try:
@@ -453,12 +480,10 @@ def check_seams(ts):
         border = np.zeros(len(mesh.edges), bool)
         starts = np.flatnonzero(np.r_[True, sorted_edges[1:] != sorted_edges[:-1]])
         counts = np.diff(np.r_[starts, len(sorted_edges)])
-        for start, count in zip(starts, counts):
-            if count < 2:
-                continue
-            members = order[start:start + count]
-            if (np.abs(a[members] - a[members[0]]).max() > 1e-5 or np.abs(b[members] - b[members[0]]).max() > 1e-5):
-                border[sorted_edges[start]] = True
+        # Every loop compared with the first loop of its edge group, vectorized.
+        first = np.repeat(order[starts], counts)
+        differs = (np.abs(a[order] - a[first]).max(axis=1) > 1e-5) | (np.abs(b[order] - b[first]).max(axis=1) > 1e-5)
+        border[sorted_edges[differs]] = True
         seams = np.empty(len(mesh.edges), bool)
         mesh.edges.foreach_get('use_seam', seams)
         missing = np.flatnonzero(border & ~seams)
@@ -494,7 +519,7 @@ def examine(ts, tier='PRE_BAKE'):
         if check is check_coverage and any(f.severity == 'ERROR' for f in findings):
             continue
         try:
-            findings.extend(check(ts))
+            findings.extend(check(ts, tier) if check in {check_uvs, check_normals, check_doubles} else check(ts))
         except Exception as exc:   # one broken check must not hide the others
             findings.append(Finding(key, 'INFO', f'check skipped: {exc}'))
         ran.append(key)

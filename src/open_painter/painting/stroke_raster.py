@@ -138,8 +138,9 @@ def dilate(mask, coverage, iterations=1):
     result = mask.copy()
     for _ in range(iterations):
         grown = result.copy()
+        from ..texture_engine.filters import shift
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            shifted = np.roll(result, (dy, dx), axis=(0, 1))
+            shifted = shift(result, dy, dx)   # never across the image border
             grown = np.maximum(grown, np.where(coverage, 0.0, shifted))
         result = grown
     return result

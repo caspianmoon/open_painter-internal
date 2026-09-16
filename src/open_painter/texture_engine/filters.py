@@ -96,6 +96,16 @@ def _convolve_axis(data, kernel, axis):
     return result
 
 
+def shift(data, dy, dx, fill=0.0):
+    """``data`` moved by (dy, dx) texels without wrapping; vacated texels take ``fill``."""
+    result = np.full_like(data, fill)
+    h, w = data.shape[:2]
+    ys, yd = (slice(0, h - dy), slice(dy, h)) if dy >= 0 else (slice(-dy, h), slice(0, h + dy))
+    xs, xd = (slice(0, w - dx), slice(dx, w)) if dx >= 0 else (slice(-dx, w), slice(0, w + dx))
+    result[yd, xd] = data[ys, xs]
+    return result
+
+
 def gaussian_blur(data, radius=2):
     """Radius is the Gaussian sigma in pixels; support is ceil(3*sigma)."""
     radius = max(float(radius), 0)

@@ -17,7 +17,7 @@ see each other — padding never overwrites covered texels.
 import numpy as np
 
 _maps = {}
-MAX_MAPS = 6
+MAX_MAPS = 3
 DEFAULT_HALO = 48
 
 
@@ -32,9 +32,9 @@ class SeamMap:
         self.depth = np.zeros(0, np.float32)       # texels outside the island
         self.normal = np.zeros((0, 2), np.float32) # outward seam normal per band texel (diagnostics)
         self.island = np.zeros(0, np.int64)        # island each band texel pads (entries are per island)
-        self.island_of = np.full((n, n), -1, np.int64)   # island id per covered texel
+        self.island_of = np.full((n, n), -1, np.int32)   # island id per covered texel
         self.bounds = {}                            # island id -> (r0, r1, c0, c1) of its covered texels
-        self.triangle = np.full((n, n), -1, np.int64)
+        self.triangle = np.full((n, n), -1, np.int32)
         self.jacobians = np.zeros((0, 2, 3), np.float32)   # dUV (in texels) / dWorld per triangle
         self.seam_edges = 0
 

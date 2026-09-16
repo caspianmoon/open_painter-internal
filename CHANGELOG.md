@@ -1,5 +1,25 @@
 # Changes
 
+## 0.9.7
+
+Bug fixes from a full-tree audit (all background, GUI and GPU suites pass).
+
+- Stroke and bake-correction dilation no longer wraps around the canvas: a stroke touching the top
+  edge used to bleed onto the bottom row (and left onto right) through `np.roll`; a non-wrapping
+  `filters.shift` replaces it.
+- The bake-correction brush polled the full correction canvas every 0.4 s for as long as a
+  correction session stayed open (a 4k session read 64 MiB per tick while idle); polling now stops
+  2 s after the last stroke.
+- Bake Check's pre-bake tier no longer stalls on dense sources: exact UV-overlap, normal-consistency
+  and duplicate-vertex analysis are bounded to 250k faces there (the full report keeps them), the
+  seam check is vectorised, and normals are compared with `foreach_get` instead of per-face loops.
+- Seam maps for surface filters use `int32` rasters and keep at most three cached maps, halving
+  their memory at 4k.
+- Dragging a decal Empty issues a numeric graph update instead of a structural repair per frame, so
+  the viewport follows the transform without rebuilding the shader.
+- The test runner read `material_director_ui.py`'s report with the wrong key and reported a false
+  GUI-phase failure.
+
 ## 0.9.6
 
 Decal objects.

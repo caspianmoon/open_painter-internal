@@ -179,6 +179,18 @@ def refresh(scene):
             if previous is None or current is None:
                 invalidate(ts)
                 continue
+            if current[:6] == previous[:6] and current[6:] != previous[6:]:
+                # Only decal frames moved: the shader reads them natively, so a numeric
+                # notification (no structural repair per drag frame) keeps the session current
+                # while outputs and CPU caches are marked stale.
+                from .shader_preview import notify
+                ts.dirty = True
+                ts.edit_serial += 1
+                for output in ts.outputs:
+                    output.dirty = True
+                for layer in decals.layers_of(ts):
+                    notify(layer, structural=False)
+                continue
             if current[5:] != previous[5:]:
                 invalidate(ts)   # a mesh mask's membership, selection or attribute changed
                 continue

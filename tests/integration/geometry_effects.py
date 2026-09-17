@@ -201,6 +201,7 @@ from open_painter.ui.geometry_effects import OP_PT_geometry_effects
 class Layout:
     def __init__(self, calls): self.calls = calls
     def row(self, **_): return self
+    def box(self): return self
     def label(self, **_): pass
     def prop(self, data, path, **_): self.calls.append(('prop', path))
     def operator(self, idname, text='', **_):
@@ -213,7 +214,7 @@ assert 'Regenerate' not in panel_actions(None)[0] and 'Regenerate' not in panel_
 for regenerable in (body_helper, manager.create(ts, obj, mask, 'RUST', 10, .02, 5)):
     actions, props = panel_actions(regenerable)
     assert {'Regenerate', 'Freeze', 'Remove Helper'} <= actions and 'Unfreeze' not in actions, (regenerable['kind'], actions)
-    assert props == {'["density"]', '["size"]', '["seed"]', '["lift"]'}, props
+    assert props == {'["follow"]', '["density"]', '["size"]', '["seed"]', '["lift"]', '["match"]'}, props
     regenerable['frozen'] = True
     assert 'Unfreeze' in panel_actions(regenerable)[0]
     if regenerable is not body_helper: manager.remove(regenerable)

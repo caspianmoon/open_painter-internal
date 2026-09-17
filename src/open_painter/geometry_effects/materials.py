@@ -351,8 +351,55 @@ def bark():
 BUILDERS = {"RUST": rust, "MOSS": moss, "SNOW": snow, "SPLINTERS": wood, "PEEL": peel, "WELD": weld,
             "BOLT": bolt, "STITCH": stitch, "SCALE": scale, "ROCK": rock, "BARK": bark}
 
+# How much each kind's colour follows the surface under it by default (0.10.1): rust scale is
+# the rust it lifts from, a paint chip is the paint it left, a splinter is the wood; snow,
+# moss, bolts and thread are their own things.
+MATCH = {"RUST": .2, "PEEL": 1.0, "SPLINTERS": .8, "SCALE": .5, "BARK": .6, "ROCK": .35, "MOSS": 0.0, "SNOW": 0.0, "BOLT": 0.0}
+
+
+def match_surface(material):
+    """Mix the material's base colour toward the instance's ``op_color`` (the surface colour under
+    it) by the attribute's alpha, which the helper sets to its Match Surface amount. A peel
+    fragment keeps its primer underside: only the painted face takes the colour."""
+    tree = material.node_tree
+    nodes, links = tree.nodes, tree.links
+    principled = next(n for n in nodes if n.bl_idname == "ShaderNodeBsdfPrincipled")
+    into = principled.inputs["Base Color"]
+    attribute = nodes.new("ShaderNodeAttribute")
+    attribute.attribute_type = "INSTANCER"
+    attribute.attribute_name = "op_color"
+    attribute.name = "OP Surface Color"
+    mix = nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.name = "OP Match Surface"
+    link = next((l for l in links if l.to_socket == into), None)
+    if link is not None:
+        links.new(link.from_socket, mix.inputs["A"])
+        links.remove(link)
+    else:
+        mix.inputs["A"].default_value = into.default_value[:]
+    links.new(attribute.outputs["Color"], mix.inputs["B"])
+    links.new(attribute.outputs["Alpha"], mix.inputs["Factor"])
+    links.new(mix.outputs["Result"], into)
+    return material
+
 
 def create(kind, ts=None):
     if kind == "PEEL":
-        return peel(ts=ts)
-    return BUILDERS[kind]()
+        material = peel(ts=ts)
+        # The painted face only: the primer underside stays primer.
+        nodes, links = material.node_tree.nodes, material.node_tree.links
+        color = next(n for n in nodes if n.bl_idname == "ShaderNodeMix" and n.data_type == "RGBA")
+        attribute = nodes.new("ShaderNodeAttribute")
+        attribute.attribute_type = "INSTANCER"
+        attribute.attribute_name = "op_color"
+        attribute.name = "OP Surface Color"
+        face = nodes.new("ShaderNodeMix")
+        face.data_type = "RGBA"
+        face.name = "OP Match Surface"
+        face.inputs["A"].default_value = color.inputs["A"].default_value[:]
+        links.new(attribute.outputs["Color"], face.inputs["B"])
+        links.new(attribute.outputs["Alpha"], face.inputs["Factor"])
+        links.new(face.outputs["Result"], color.inputs["A"])
+        return material
+    return match_surface(BUILDERS[kind]())

@@ -83,12 +83,27 @@ def _thin(positions, minimum, rng, limit=None):
     return keep
 
 
+def field_of(mask):
+    """A density raster from an Image or a 2-D array."""
+    if isinstance(mask, np.ndarray):
+        return mask if mask.ndim == 2 else mask[..., 0]
+    return pixels(mask)[..., 0]
+
+
 def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None):
     """Return world positions and normals; kind settings add slope bias and spacing."""
+    result = scatter_points(ts, obj, mask, density, seed, replacing, kind, size)
+    return result['positions'], result['normals']
+
+
+def scatter_points(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None, direction=None, slope=True):
+    """World positions, normals and UVs of the instances (and, with a ``direction`` field, the
+    world direction each one faces); kind settings add spacing and, unless ``slope`` is off
+    (a material placement already knows which faces it wants), the kind's upward-facing bias."""
     if density < 0:
         raise ValueError('Density cannot be negative')
     settings = KINDS.get(kind, KINDS['RUST'])
-    values = pixels(mask)[..., 0]
+    values = field_of(mask)
     with targets(ts) as entries:
         target = next((entry for entry in entries if entry['object'] == obj), None)
         if target is None:
@@ -101,7 +116,8 @@ def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None
         if count > 4_000_000:
             raise ValueError('Density times surface area exceeds four million candidate points')
         if not count or total <= 1e-12:
-            return np.empty((0, 3), np.float32), np.empty((0, 3), np.float32)
+            return dict(positions=np.empty((0, 3), np.float32), normals=np.empty((0, 3), np.float32),
+                        uv=np.empty((0, 2), np.float32), facing=None)
         rng = np.random.default_rng(seed)
         selected = rng.choice(len(indices), count, p=areas / total)
         root = np.sqrt(rng.random(count))
@@ -112,31 +128,55 @@ def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None
         probability = sample_uv(values[..., None], uv[:, 0], uv[:, 1])[..., 0]
         normal = np.sum(target['world_normals'][loops] * weights[..., None], axis=1)
         normal /= np.maximum(np.linalg.norm(normal, axis=1, keepdims=True), 1e-8)
-        if settings['slope']:
+        if settings['slope'] and slope:
             # Snow settles and moss thrives on faces that look up; the mask still rules.
             probability = probability * np.clip(normal[:, 2], 0, 1) ** settings['slope']
         keep = rng.random(count) < np.clip(probability, 0, 1)
         positions = np.sum(coords[selected] * weights[..., None], axis=1)[keep]
         normal = normal[keep]
+        uv_kept = uv[keep]
+        facing = None
+        if direction is not None:
+            # A UV-space direction becomes a world direction through the triangle's tangent frame.
+            st = target['uv'][loops[keep]].astype(np.float64)
+            p = coords[selected][keep].astype(np.float64)
+            e1, e2 = p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]
+            f1, f2 = st[:, 1] - st[:, 0], st[:, 2] - st[:, 0]
+            det = f1[:, 0] * f2[:, 1] - f1[:, 1] * f2[:, 0]
+            det = np.where(np.abs(det) < 1e-12, 1e-12, det)
+            tangent = (e1 * f2[:, 1:2] - e2 * f1[:, 1:2]) / det[:, None]
+            bitangent = (e2 * f1[:, 0:1] - e1 * f2[:, 0:1]) / det[:, None]
+            d = sample_uv(direction, uv_kept[:, 0], uv_kept[:, 1])
+            facing = tangent * d[:, 0:1] + bitangent * d[:, 1:2]
+            facing -= normal * np.sum(facing * normal, axis=1, keepdims=True)
+            length = np.linalg.norm(facing, axis=1, keepdims=True)
+            facing = np.where(length > 1e-8, facing / np.maximum(length, 1e-8), 0).astype(np.float32)
         if size and settings['spacing']:
             instances_left, triangles_left = limits.headroom(ts.id_data, replacing)
             limit = max(0, min(instances_left, triangles_left // settings['triangles']))
             thinned = _thin(positions, settings['spacing'] * size, rng, limit)
-            positions, normal = positions[thinned], normal[thinned]
+            positions, normal, uv_kept = positions[thinned], normal[thinned], uv_kept[thinned]
+            if facing is not None:
+                facing = facing[thinned]
         # Limits apply to the instances that survive the mask and spacing, not
         # to the candidate points the mask rejected.
         limits.check(ts.id_data, len(positions), len(positions) * settings['triangles'], replacing=replacing)
-        return positions, normal
+        return dict(positions=positions, normals=normal, uv=uv_kept.astype(np.float32), facing=facing)
 
 
-def _orientations(normals, rng, settings, grain=Vector((1, 0, 0))):
-    """Euler per point: surface alignment, yaw (random or grain-aligned), small lean."""
+def _orientations(normals, rng, settings, grain=Vector((1, 0, 0)), facing=None):
+    """Euler per point: surface alignment, yaw (random, grain-aligned or toward a per-point
+    ``facing`` direction with a little jitter and no flips), small lean."""
     result = np.empty((len(normals), 3), np.float32)
     lean = math.radians(settings['tilt'])
     jitter = math.radians(settings['align']) if settings.get('align') is not None else None
     for index, normal in enumerate(normals):
         rotation = Vector(normal).to_track_quat('Z', 'Y')
-        if jitter is None:
+        if facing is not None and any(facing[index]):
+            # The prototype's +Y (its hinge, its attached edge) turns toward the direction given.
+            local = rotation.inverted() @ Vector(facing[index])
+            yaw = math.atan2(local.y, local.x) - math.pi / 2 + rng.uniform(-1, 1) * math.radians(settings.get('facing_jitter', 8))
+        elif jitter is None:
             yaw = rng.uniform(0, math.tau)
         else:
             # Grain direction: the source's X axis (``grain``) projected onto the
@@ -150,6 +190,16 @@ def _orientations(normals, rng, settings, grain=Vector((1, 0, 0))):
             rotation = rotation @ Quaternion(axis, rng.uniform(0, lean))
         result[index] = rotation.to_euler()[:]
     return result
+
+
+def _collection_prototypes(collection):
+    """The artist's own prototypes: the collection's mesh objects, each with the factor that
+    brings its largest dimension to one unit so Size means the same as for built-in shapes."""
+    objects = [obj for obj in collection.all_objects if obj.type == 'MESH' and len(obj.data.polygons)]
+    if not objects:
+        raise ValueError(f'{collection.name} has no mesh objects to instance')
+    factors = [1.0 / max(max(obj.dimensions), 1e-6) for obj in objects]
+    return objects, factors
 
 
 def _prototype_objects(kind, seed, material, created):
@@ -209,11 +259,43 @@ def _node_group(kind, variant_objects, created):
     return group
 
 
-def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, material=None, replacing=None):
+def _surface_colors(ts, uv, n=512):
+    """The set's Base Color under each instance, so a flake, chip or plate matches the
+    surface it sits on (linear RGB, one per point)."""
+    from . import sources
+    if uv is None or not len(uv):
+        return None
+    raster = sources.channel_raster(ts, 'BASE_COLOR', min(n, int(ts.resolution)))
+    return sample_uv(raster, uv[:, 0], uv[:, 1]).astype(np.float32)
+
+
+def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, material=None, replacing=None,
+           placement=None, prototypes=None, match=None, follow=False, layer_id=''):
+    """Scatter ``kind`` on ``obj``: from a mask image (the pre-0.10.1 call) or a ``placement``
+    (``sources.Placement``: a density field, an optional facing direction, or painted spots).
+    ``prototypes`` is a collection of the artist's own meshes instead of the built-in shapes;
+    ``match`` (0–1) tints each instance toward the surface colour under it; ``follow`` lets the
+    helper regenerate when the material changes."""
     if kind not in KINDS or size <= 0:
         raise ValueError('Choose a supported geometry effect and a positive instance size')
     settings = KINDS[kind]
-    positions, normals = scatter(ts, obj, mask, density, seed, replacing, kind, size)
+    field = placement.density if placement is not None else mask
+    facing = None
+    if placement is not None and placement.spots:
+        # One instance per painted spot: its centre, its normal, its size.
+        positions = np.array([spot[0] for spot in placement.spots], np.float32)
+        normals = np.array([spot[1] for spot in placement.spots], np.float32)
+        diameters = np.array([spot[2] for spot in placement.spots], np.float32) * size
+        uv = np.array([spot[3] for spot in placement.spots], np.float32)
+        instances_left, triangles_left = limits.headroom(ts.id_data, replacing)
+        if len(positions) > min(instances_left, triangles_left // settings['triangles']):
+            raise ValueError(f'{len(positions)} spots exceed the project instance limit')
+    else:
+        scattered = scatter_points(ts, obj, field, density, seed, replacing, kind, size,
+                                   direction=placement.direction if placement is not None else None,
+                                   slope=placement is None or placement.source != 'MATERIAL')
+        positions, normals, uv, facing = scattered['positions'], scattered['normals'], scattered['uv'], scattered['facing']
+        diameters = None
     if not len(positions):
         return None
     triangles = len(positions) * settings['triangles']
@@ -221,11 +303,17 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
     identifier = new_id()
     created = []
     rng = np.random.default_rng(seed * 7 + 3)
+    if match is None:
+        match = materials.MATCH.get(kind, 0.0)
     try:
         owned_material = material or materials.create(kind, ts=ts)
         if material is None:
             created.append(owned_material)
-        variant_objects = _prototype_objects(kind, seed, owned_material, created)
+        if prototypes is not None:
+            variant_objects, factors = _collection_prototypes(prototypes)
+        else:
+            variant_objects = _prototype_objects(kind, seed, owned_material, created)
+            factors = [1.0] * len(variant_objects)
         point_mesh = bpy.data.meshes.new('OP Effect Points')
         created.append(point_mesh)
         # Points, lift and scale are world metres: the helper's world matrix is the
@@ -235,20 +323,41 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         count = len(positions)
         grain = (obj.matrix_world.to_3x3() @ Vector((1, 0, 0))).normalized()
         rotation = point_mesh.attributes.new('op_rotation', 'FLOAT_VECTOR', 'POINT')
-        rotation.data.foreach_set('vector', _orientations(normals, rng, settings, grain).ravel())
-        low, high = settings['scale']
-        # Many small pieces and a few large ones, as debris distributes.
-        uniform = low + (high - low) * rng.random(count) ** 1.6
-        uniform = uniform * size
-        # Flat prototypes vary their footprint anisotropically; clumps stay proportional.
-        aspect = rng.uniform(.75, 1.3, count) if settings['flat'] else np.ones(count)
+        rotation.data.foreach_set('vector', _orientations(normals, rng, settings, grain, facing).ravel())
+        variants = rng.integers(0, len(variant_objects), count)
+        if diameters is not None:
+            uniform = diameters
+            aspect = np.ones(count)
+        else:
+            low, high = settings['scale']
+            # Many small pieces and a few large ones, as debris distributes.
+            uniform = (low + (high - low) * rng.random(count) ** 1.6) * size
+            # Flat prototypes vary their footprint anisotropically; clumps stay proportional.
+            aspect = rng.uniform(.75, 1.3, count) if settings['flat'] else np.ones(count)
+        uniform = uniform * np.asarray(factors, np.float32)[variants]
         scales = np.stack((uniform * aspect, uniform / aspect, uniform), 1).astype(np.float32)
         scale = point_mesh.attributes.new('op_scale', 'FLOAT_VECTOR', 'POINT')
         scale.data.foreach_set('vector', scales.ravel())
         variant = point_mesh.attributes.new('op_variant', 'INT', 'POINT')
-        variant.data.foreach_set('value', rng.integers(0, len(variant_objects), count).tolist())
+        variant.data.foreach_set('value', variants.tolist())
         random = point_mesh.attributes.new('op_random', 'FLOAT', 'POINT')
         random.data.foreach_set('value', rng.random(count).astype(np.float32).tolist())
+        colors = None
+        if match > 0 and placement is not None and placement.color is not None:
+            colors = np.tile(np.asarray(placement.color, np.float32), (count, 1))
+        elif match > 0:
+            sample_uv_at = uv
+            if placement is not None and placement.direction is not None and placement.color_offset and len(uv):
+                # Read the colour a little way toward where the piece came from (a chip: the paint beside it).
+                step = sample_uv(placement.direction, uv[:, 0], uv[:, 1]) * (placement.color_offset / placement.n)
+                sample_uv_at = uv + step.astype(np.float32)
+            colors = _surface_colors(ts, sample_uv_at)
+        color = point_mesh.attributes.new('op_color', 'FLOAT_COLOR', 'POINT')
+        rgba = np.ones((count, 4), np.float32)
+        if colors is not None:
+            rgba[:, :3] = colors[:, :3]
+        rgba[:, 3] = match       # the material mixes toward op_color by this much
+        color.data.foreach_set('color', rgba.ravel())
         helper = bpy.data.objects.new('OP ' + kind + ' · ' + obj.name, point_mesh)
         created.append(helper)
         ts.id_data.collection.objects.link(helper)
@@ -267,7 +376,15 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         helper['size'] = size
         helper['seed'] = seed
         helper['lift'] = lift
-        helper['mask_image'] = mask   # an ID pointer follows renames; older files hold the name
+        helper['match'] = match
+        helper['follow'] = follow
+        helper['source'] = placement.source if placement is not None else 'MASK'
+        helper['source_layer'] = placement.layer_id if placement is not None else layer_id
+        helper['source_label'] = placement.label if placement is not None else 'the published mask'
+        if prototypes is not None:
+            helper['prototypes'] = prototypes
+        if not isinstance(mask, np.ndarray) and mask is not None:
+            helper['mask_image'] = mask   # an ID pointer follows renames; older files hold the name
         helper['variants'] = len(variant_objects)
         helper['frozen'] = False
         return helper
@@ -376,16 +493,94 @@ def texture_set_of(ts, helper):
     return match
 
 
+def placement_of(ts, helper):
+    """The placement a helper was made from, evaluated again on the material as it is now."""
+    from . import sources
+    source = helper.get('source', 'MASK')
+    layer_id = helper.get('source_layer', '')
+    layer = next((l for l in ts.layers if l.id == layer_id), None) if layer_id else None
+    if source in {'MASK', 'SPOTS'} and layer is None:
+        mask = _image(helper.get('mask_image'))
+        if mask is None:
+            raise ValueError('The layer this helper followed is gone and no published mask remains')
+        return None, mask     # the layer is gone: the snapshot it left behind still regenerates
+    return sources.placement(ts, helper['kind'], source, layer), None
+
+
 def regenerate(ts, helper):
     if helper.get('frozen'):
         raise ValueError('Unfreeze the helper before regenerating')
     ts = texture_set_of(ts, helper)
-    mask = _image(helper.get('mask_image'))
-    if not mask or not helper.parent:
-        raise ValueError('Effect source or published mask is missing')
+    if not helper.parent:
+        raise ValueError('Effect source is missing')
+    placement, mask = placement_of(ts, helper)
+    prototypes = helper.get('prototypes')
+    prototypes = prototypes if isinstance(prototypes, bpy.types.Collection) else None
     # Replacing first would lose a good result on failure. Reserve against the
     # existing result conservatively until the replacement succeeds.
     replacement = create(ts, helper.parent, mask, helper['kind'], helper['density'], helper['size'],
-                         helper['seed'], helper['lift'], replacing=helper)
+                         helper['seed'], helper['lift'], replacing=helper, placement=placement, prototypes=prototypes,
+                         match=helper.get('match'), follow=bool(helper.get('follow')), layer_id=helper.get('source_layer', ''))
     remove(helper)
     return replacement
+
+
+def helpers_of(ts, scene=None, following=False):
+    """The instance helpers generated for ``ts`` (optionally only those that follow the material)."""
+    scene = scene or ts.id_data
+    return [obj for obj in scene.objects if obj.get(TAG) == 'INSTANCE_HELPER' and obj.get('source_texture_set') == ts.id
+            and obj.get('kind') in KINDS and (not following or obj.get('follow')) and not obj.get('frozen')]
+
+
+def follow(ts):
+    """Regenerate every helper of the set that follows the material; returns the new helpers."""
+    result = []
+    for helper in helpers_of(ts, following=True):
+        replacement = regenerate(ts, helper)
+        if replacement is not None:
+            result.append(replacement)
+    return result
+
+
+_pending = {}      # (scene name, set id) -> monotonic deadline; one timer per key
+
+
+def schedule_follow(ts, delay=.6):
+    """Regenerate the set's following helpers once the edits settle (a slider drag re-drives
+    the aging folder many times a second; the instances catch up ``delay`` after the last edit).
+    Returns whether anything follows."""
+    from time import monotonic
+    if not helpers_of(ts, following=True):
+        return False
+    scene_name, set_id = ts.id_data.name, ts.id
+    key = (scene_name, set_id)
+    armed = key in _pending
+    _pending[key] = monotonic() + delay
+    if armed:
+        return True
+
+    def run():
+        deadline = _pending.get(key)
+        if deadline is None:
+            return None
+        remaining = deadline - monotonic()
+        if remaining > 0:
+            return remaining
+        _pending.pop(key, None)
+        scene_now = bpy.data.scenes.get(scene_name)
+        set_now = next((s for s in scene_now.open_painter.texture_sets if s.id == set_id), None) if scene_now else None
+        if set_now is not None:
+            try:
+                follow(set_now)
+            except Exception:
+                from ..utils.logging import logger
+                logger.exception('Geometry effects could not follow the material')
+        return None
+    bpy.app.timers.register(run, first_interval=delay)
+    return True
+
+
+def follow_now(ts):
+    """Run a pending follow immediately (tests, save)."""
+    _pending.pop((ts.id_data.name, ts.id), None)
+    return follow(ts)

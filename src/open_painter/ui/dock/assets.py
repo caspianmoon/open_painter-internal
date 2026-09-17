@@ -119,8 +119,10 @@ def apply(context, entry):
         and kind != "FILE"
     ):
         from ...core.surface_presets import apply as apply_surface
+        from ...aging import recipes
 
         apply_surface(require_set(context), name)
+        recipes.adopt(require_set(context), name)      # the aging knows what it is (0.10.1)
     elif kind in {"SMART", "FILE"}:
         ts = require_set(context)
         path = (
@@ -135,6 +137,10 @@ def apply(context, entry):
         from ...core.layer_stack import group
 
         group(ts, {item.id for item in ts.layers if item.id not in before}, name)
+        if not ts.aging.folder_id:
+            # A document saved with aging restored its own settings; otherwise its name says what it is.
+            from ...aging import recipes
+            recipes.adopt(ts, name.replace("_", " "))
     elif kind == "FILL":
         layer = add(require_set(context), "FILL", name)
         channel_for(layer, "BASE_COLOR").color = (*value[:3], 1)

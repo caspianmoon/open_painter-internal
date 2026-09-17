@@ -50,6 +50,12 @@ COATINGS = {c.id: c for c in (
             flexibility=.8, barrier=.7, hardness=.45, thickness=.3),
     Coating("ANODIZING", "Anodizing", "CONVERSION", .30, metallic=.9, color=(0.62, 0.64, 0.66), uv_sensitivity=.2, adhesion=.95,
             flexibility=.9, barrier=.8, hardness=.85, thickness=.2),
+    Coating("CHROME_PLATING", "Chrome Plating", "CONVERSION", .08, metallic=1.0, color=(0.55, 0.56, 0.55), uv_sensitivity=.0, adhesion=.85,
+            flexibility=.3, barrier=.75, hardness=.9, thickness=.15),
+    Coating("ENAMEL", "Vitreous Enamel", "PAINT", .12, uv_sensitivity=.15, adhesion=.6, flexibility=.05, barrier=.95, hardness=.95,
+            chalking=.0, yellowing=.05, thickness=.6),
+    Coating("OIL_FINISH", "Oil Finish", "TOPCOAT", .45, color=None, uv_sensitivity=.6, adhesion=.4, flexibility=.9, barrier=.35,
+            hardness=.2, chalking=.0, yellowing=.3, thickness=.1),
 )}
 
 ROLES = ("PRIMER", "PAINT", "TOPCOAT", "CONVERSION")

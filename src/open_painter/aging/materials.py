@@ -52,6 +52,14 @@ def _mineral(id, name, color, roughness, **kw):
     return Material(id, name, "MINERAL", color, roughness, 0.0, **kw)
 
 
+def _textile(id, name, color, roughness, *, relief="fabric_weave", **kw):
+    return Material(id, name, "TEXTILE", color, roughness, 0.0, relief=relief, **kw)
+
+
+def _leather(id, name, color, roughness, **kw):
+    return Material(id, name, "LEATHER", color, roughness, 0.0, relief="leather_relief_v2", **kw)
+
+
 STEEL = (0.68, 0.69, 0.68)
 RUST = (0.230, 0.059, 0.018)
 VERDIGRIS = (0.055, 0.260, 0.175)
@@ -150,9 +158,23 @@ MATERIALS = {m.id: m for m in (
     _mineral("CERAMIC", "Ceramic", (0.90, 0.88, 0.84), .25, uv_sensitivity=.05, moisture_sensitivity=.1, patina="GREY",
              patina_color=(0.55, 0.53, 0.50), hardness=.8, porosity=.05, thermal_sensitivity=.4, bio_susceptibility=.1,
              processes=("SOIL_DEPOSITION", "ABRASION", "IMPACT", "HANDLING")),
+    # Textiles and leather: dyes fade, fibres fray and pill where rubbed, hides burnish where
+    # handled and crack when they dry out; all of them soak, stain and mildew.
+    _textile("CANVAS", "Canvas", (0.55, 0.47, 0.34), .92, uv_sensitivity=.65, moisture_sensitivity=.8, patina="GREY",
+             patina_color=(0.70, 0.66, 0.58), hardness=.15, porosity=.8, thermal_sensitivity=.1, bio_susceptibility=.7,
+             processes=("BLEACHING", "ABRASION", "SOIL_DEPOSITION", "WATER_ABSORPTION", "BIOLOGICAL_GROWTH")),
+    _textile("DENIM", "Denim", (0.06, 0.10, 0.20), .88, relief="denim_twill_v2", uv_sensitivity=.8, moisture_sensitivity=.75, patina="GREY",
+             patina_color=(0.42, 0.50, 0.60), hardness=.2, porosity=.7, thermal_sensitivity=.1, bio_susceptibility=.6,
+             processes=("BLEACHING", "ABRASION", "SOIL_DEPOSITION", "WATER_ABSORPTION", "BIOLOGICAL_GROWTH")),
+    _textile("WOOL", "Wool", (0.50, 0.45, 0.38), .95, uv_sensitivity=.55, moisture_sensitivity=.7, patina="GREY",
+             patina_color=(0.62, 0.58, 0.52), hardness=.1, porosity=.85, thermal_sensitivity=.1, bio_susceptibility=.8,
+             processes=("BLEACHING", "ABRASION", "SOIL_DEPOSITION", "WATER_ABSORPTION", "BIOLOGICAL_GROWTH")),
+    _leather("LEATHER", "Leather", (0.26, 0.12, 0.05), .55, uv_sensitivity=.6, moisture_sensitivity=.6, patina="TARNISH",
+             patina_color=(0.14, 0.07, 0.03), hardness=.3, porosity=.5, thermal_sensitivity=.7, bio_susceptibility=.5,
+             processes=("BLEACHING", "ABRASION", "HANDLING", "COATING_CRACKING", "SOIL_DEPOSITION", "WATER_ABSORPTION", "BIOLOGICAL_GROWTH")),
 )}
 
-FAMILIES = ("METAL", "WOOD", "POLYMER", "MINERAL")
+FAMILIES = ("METAL", "WOOD", "POLYMER", "MINERAL", "TEXTILE", "LEATHER")
 
 
 def items():

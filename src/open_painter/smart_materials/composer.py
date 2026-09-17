@@ -451,8 +451,20 @@ def _rollback(ts, before):
 
 
 def apply(ts, name, seed=1):
-    """Insert an editable material folder above the active layer, transactionally."""
-    return apply_document(ts,CATALOG[name],name,seed)
+    """Insert an editable material folder above the active layer, transactionally.
+
+    The set's Material Aging construction follows the recipe (canvas is canvas, automotive
+    paint is steel under primer, base coat and clear coat), and a set not aged yet takes the
+    history the recipe depicts, so *Age Material* continues the look (0.10.1)."""
+    folder = apply_document(ts,CATALOG[name],name,seed)
+    from ..aging import recipes
+    try:
+        recipes.adopt(ts, name, CATALOG[name])
+    except Exception as exc:     # the material is in; an aging folder that could not follow says why
+        from ..utils.logging import logger
+        logger.exception("The aging construction could not follow %s", name)
+        ts.id_data.open_painter.status = f"Material Aging did not follow {name}: {exc}"
+    return folder
 
 
 def apply_document(ts,data,name='Declarative Material',seed=1,token=None,parent_id=None,surface=True):

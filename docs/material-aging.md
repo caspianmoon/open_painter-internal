@@ -19,7 +19,7 @@ artist changes inside the aging folder stays theirs.
 copper, brass, bronze, zinc, galvanized steel, titanium; oak, pine, walnut,
 mahogany, plywood, MDF, treated wood; ABS, PVC, polycarbonate, polypropylene,
 polyethylene, nylon, rubber, silicone; concrete, brick, plaster, marble, granite,
-ceramic (`aging/materials.py`). A material is described by how it *responds* —
+ceramic; canvas, denim, wool; leather (`aging/materials.py`). A material is described by how it *responds* —
 sensitivity to light, moisture, salts and heat, oxidation and corrosion rates,
 its oxide (rust, verdigris, tarnish, white oxide, grey), hardness, porosity,
 brittleness, biological susceptibility — and by the processes it subscribes to
@@ -31,12 +31,28 @@ description, inputs, outcomes per process). Nothing in a material says which
 wear to show; the processes decide from the history.
 
 **Construction** is the protection on top of it (`aging/coatings.py`): an
-optional *conversion coating* (galvanization, anodizing), a *primer* (zinc,
-epoxy), a *paint* (oil, acrylic, powder coat, polyurethane, epoxy) with the
-artist's paint colour, and a *top coat* (clear coat, varnish). Each coating has
+optional *conversion coating* (galvanization, anodizing, chrome plating), a
+*primer* (zinc, epoxy), a *paint* (oil, acrylic, powder coat, polyurethane, epoxy,
+vitreous enamel) with the artist's paint colour, and a *top coat* (clear coat,
+varnish, oil finish). Each coating has
 its own UV sensitivity, adhesion, flexibility, moisture barrier, hardness,
 chalking and yellowing. **Coating Condition** starts the history with a coat
 that is already worn.
+
+**Smart materials say what they are (0.10.1).** Applying a catalog recipe or a
+shelf preset sets the construction: *Canvas Fabric* is canvas, *Automotive
+Painted Metal* is steel under an epoxy primer, a red base coat and a clear coat,
+*Polished Chrome* is chrome-plated steel, *Heavy Chipped Paint* starts with its
+coating half gone. A set that is not aged yet also takes the history the recipe
+depicts (*Heavy Rust*: twenty-five coastal years; *Fresh Oak*: new), so *Age
+Material* continues the look; a set with an aging folder keeps its history and
+rebuilds the folder for the new construction. `aging/recipes.py` names every
+recipe and preset; a material it does not know is read from its name and
+category ("aluminium", "leather", a layer named like paint).
+
+Textiles fade, fray and pill where they rub, soak, stain and mildew; leather
+also burnishes where handled and cracks as it dries (the *Cracking* line reads
+the humidity). Neither dents.
 
 ## How old, where, how used
 

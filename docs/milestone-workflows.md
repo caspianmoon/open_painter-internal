@@ -3,6 +3,11 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Geometry effects that follow the material (0.10.1):** *Painter* sidebar → *Geometry Effects*:
+  age the material, then *Rust Flakes*, *Peel Fragments*, *Moss*, *Splinters* or *Snow* with
+  *Where: What the material shows*; paint dots on a mask and *Bolts on Spots*; name a
+  collection under *Own Pieces* to use your own meshes; leave *Follow the Material* on and
+  scrub the age. [Details](geometry-effects.md#placement-from-the-material-0101).
 - **Material aging (0.10.0):** *Painter* sidebar → *Material Aging*: pick the material and its
   coats, set the age, an environment (or a history of periods), use and care, add events such as
   a repaint, read the *Predicted State*, then *Age Material* (bake AO and Curvature first); move

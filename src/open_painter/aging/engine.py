@@ -321,6 +321,8 @@ def apply(ts, rebuild=False):
                                    "label": result["label"], "years": float(aging.age_years)}, sort_keys=True)
     from ..core.layer_stack import invalidate
     invalidate(ts)
+    from ..geometry_effects import manager as geometry
+    geometry.schedule_follow(ts)     # rust flakes, peel and moss that follow the material catch up (0.10.1)
     return result
 
 

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-from open_painter.aging import coatings, document, environments, materials, model
+from open_painter.aging import coatings, document, environments, materials, model, recipes
 from open_painter.aging.environments import ENVIRONMENTS, MAINTENANCE, USAGE
 from open_painter.aging.model import Construction, Event, Segment, State
 
@@ -176,6 +176,62 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(louder.fade, state.fade)          # untouched groups keep the physics
         self.assertEqual(state.salt, aged(PAINTED_STEEL, 10, "COASTAL").salt)   # the physical state is not mutated
         self.assertEqual([name for _, name in model.LABELS], ["PRISTINE", "LIGHTLY USED", "WEATHERED", "WORN", "DAMAGED", "DERELICT"])
+
+
+class RecipeTests(unittest.TestCase):
+    def test_every_catalog_material_says_what_it_is(self):
+        from open_painter.smart_materials.catalog import CATALOG
+        from open_painter.ui.dock.assets import MATERIALS as PRESETS
+        for name in list(CATALOG) + [entry[0] for entry in PRESETS]:
+            data = recipes.construction_for(name, CATALOG.get(name))
+            self.assertIsNotNone(data, name)
+            self.assertIn(data["material"], materials.MATERIALS, name)
+            for coat in data["coats"]:
+                self.assertTrue(coat is None or coat in coatings.COATINGS, (name, coat))
+            self.assertIn(data["environment"], ENVIRONMENTS, name)
+            self.assertIn(data["usage"], USAGE, name)
+            self.assertTrue(0 <= data["condition"] <= 1)
+        canvas = recipes.construction_for("Canvas Fabric")
+        self.assertEqual((canvas["material"], canvas["coats"]), ("CANVAS", (None, None, None, None)))
+        car = recipes.construction_for("Automotive Painted Metal")
+        self.assertEqual(car["coats"], (None, "EPOXY_PRIMER", "POLYURETHANE_PAINT", "CLEAR_COAT"))
+        self.assertEqual(recipes.construction_for("Polished Chrome")["coats"][0], "CHROME_PLATING")
+        self.assertLess(recipes.construction_for("Heavy Chipped Paint")["condition"], .5)
+
+    def test_unknown_recipes_are_read_from_their_names(self):
+        painted = recipes.construction_for("My Green Aluminium Panel",
+                                           {"category": "Metals", "layers": [{"name": "Stock", "color": (.9, .9, .9)}, {"name": "Green paint", "color": (.1, .4, .1)}]})
+        self.assertEqual(painted["material"], "ALUMINUM")
+        self.assertEqual(painted["coats"][1:3], ("EPOXY_PRIMER", "ACRYLIC_PAINT"))
+        self.assertEqual(painted["paint_color"], (.1, .4, .1))
+        self.assertIsNone(painted["environment"])
+        self.assertEqual(recipes.construction_for("Tweed", {"category": "Fabric and Leather", "layers": []})["material"], "CANVAS")
+        self.assertEqual(recipes.construction_for("Old Saddle", {"category": "Fabric and Leather"})["material"], "CANVAS")
+        self.assertEqual(recipes.construction_for("Saddle leather")["material"], "LEATHER")
+        self.assertIsNone(recipes.construction_for("Something", {"category": "Unknown"}))
+
+    def test_textiles_and_leather_age_their_own_way(self):
+        canvas = aged(Construction("CANVAS"), 5, "OUTDOOR_URBAN", "HEAVY", "NONE")
+        lines = dict(model.readout(canvas, Construction("CANVAS")))
+        self.assertIn("Fraying", lines)
+        self.assertIn("Fading", lines)
+        self.assertNotIn("Impact damage", lines)
+        self.assertNotIn("Micro scratching", lines)
+        self.assertEqual(canvas.oxidation, 0)
+        self.assertGreater(canvas.micro_scratching, .3)
+        dry = aged(Construction("LEATHER"), 15, "ARID", "MODERATE", "NONE")
+        damp = aged(Construction("LEATHER"), 15, "HUMID_INTERIOR", "MODERATE", "NONE")
+        self.assertGreater(dry.coating_cracking, damp.coating_cracking * 2, "leather cracks as it dries")
+        self.assertGreater(damp.biological, dry.biological)
+        leather = dict(model.readout(dry, Construction("LEATHER")))
+        for name in ("Cracking", "Burnish", "Scuffing", "Fading"):
+            self.assertIn(name, leather)
+        roles = document.build(dry, Construction("LEATHER"))["roles"]
+        self.assertIn("handling_polish", roles)
+        self.assertIn("cracking", roles)
+        self.assertNotIn("impact", roles)
+        self.assertNotIn("oxidation", roles)
+        self.assertEqual(document.build(canvas, Construction("CANVAS"))["roles"][:2], ["substrate", "micro_scratching"])
 
 
 class DocumentTests(unittest.TestCase):

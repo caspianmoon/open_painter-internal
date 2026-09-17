@@ -214,6 +214,16 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Geometry effects follow the material (0.10.1)
+
+`tests/integration/geometry_sources.py` (background, in `scripts/run_tests.py`) builds an aged
+steel set on the default cube with synthetic maps and checks that rust flakes land only on the
+corrosion, peel fragments in the band outside the intact paint facing it, that an empty outcome
+is refused, bolts land one per painted spot sized by it and follow the mask on regenerate, the
+artist's collection is instanced with consistent sizing, following helpers regenerate after an
+age change while others stay, and a set without aging places by mesh features.
+`scripts/render_material_geometry.py` renders the effects on a baked plate and plank for review.
+
 ## Material aging (0.10.0)
 
 `tests/unit/test_aging_model.py` runs in `scripts/run_pure_tests.py` (no Blender).

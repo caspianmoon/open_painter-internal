@@ -109,6 +109,7 @@ from open_painter.ui.geometry_effects import OP_PT_geometry_effects
 class Layout:
     def __init__(self, calls): self.calls = calls
     def row(self, **_): return self
+    def box(self): return self
     def label(self, **_): pass
     def prop(self, data, path, **_): self.calls.append(('prop', path))
     def operator(self, idname, text='', **_):

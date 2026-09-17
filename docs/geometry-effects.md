@@ -1,5 +1,13 @@
 # Geometry effects: real prototypes, variation and materials
 
+> **0.10.1 — pieces where the material shows them.** Every effect now takes a *Where*: **What the
+> material shows** (the default; the aging outcome the effect materialises, or the mesh features
+> that stand for it when the set is not aged), **Active layer mask**, **Painted spots** (one piece
+> per blob, sized by the blob) or **Whole surface**. Pieces take the colour of the surface under
+> them (*Match Surface*), can be the artist's own meshes (*Own Pieces*, a collection) and
+> **follow the material**: change the age or the environment and the flakes, chips and moss
+> regenerate once the edit settles. See [Placement from the material](#placement-from-the-material-0101).
+
 The M8 geometry effects had placeholder prototypes: a box for a rust flake, a
 six-sided cone for moss, an octahedron for snow, a pentagon for a splinter, two
 quads for a peel fragment, all instanced at one size and one orientation and
@@ -96,3 +104,68 @@ Files: `geometry_effects/displace.py`, `curves.py`, `stitch.py`,
 `prototypes_detail.py`, `baking/bake_back.py`, `core/published_outputs.publish_channel`.
 Tests: `tests/integration/geometry_displace.py`, `curve_geometry.py`,
 `bake_back.py`, `tests/unit/test_curve_extraction.py`.
+
+## Placement from the material (0.10.1)
+
+The effects used to scatter inside whatever mask the active layer had. That made them random
+generators: a rust flake had nothing to do with the rust under it, moss grew wherever a mask
+said, bolts landed anywhere. `geometry_effects/sources.py` now builds a **placement** — a
+density raster over the set's UV space, an optional facing direction, or one point per painted
+spot — from what the material shows, and the manager scatters from it.
+
+| Effect | *What the material shows* on an aged set (`OUTCOMES`) | …on a set without aging |
+| --- | --- | --- |
+| Rust Flakes | corrosion + ½ surface rust coverage × opacity, weighted to upward faces | curvature edges and AO cavities |
+| Peel Fragments | the band just outside the intact paint (the paint layer's coverage, smoothed and thresholded), each chip's hinge turned toward the paint that holds; its painted face takes the paint colour beside it | curvature edges |
+| Moss | biological growth, more in cavities, rarely on the underside | cavities, shade (faces that do not look up) and the ground (low position) |
+| Splinters | wood checking and dents, more along edges | curvature edges |
+| Snow | upward faces (`up^2.5`), deeper in hollows | the same |
+| Bolts | *Painted spots* by default: one bolt per blob of the active layer's mask, its head sized by the blob's radius (Size is a multiplier); regenerate follows the mask | — |
+| Scales, Bark | *Whole surface* by default | — |
+| Rocks | the active layer's mask | — |
+
+Fields come from `mask_field` (the layer's mask stack evaluated at ≤1024² through the CPU
+reference path, no publishing), `features` (world normals and positions rasterised from the
+assigned faces — `up`, `down`, `low` need no bake — plus `cavity` and `edges` from the AO and
+Curvature maps when they exist), summed-area-table blurs, `boundary_band`, `direction_toward`
+(the gradient of the smoothed coverage) and `label_runs` (run-length union-find connected
+components for spots). A material placement is normalised to its 98th percentile so a faint
+outcome still reaches the density the artist chose in its strongest places; the status line says
+how many pieces went where ("312 pieces on corrosion and surface rust"), and an empty outcome is
+refused with "Nothing to place" rather than scattered. For material placements the kind's own
+upward-facing bias is off — the field already knows which faces it wants.
+
+**Colour.** Every point carries `op_color`: the set's Base Color under it (composited at 512²,
+`sources.channel_raster`), alpha = the helper's *Match Surface*. The owned materials mix their
+base colour toward it through an Instancer attribute (`materials.match_surface`); the peel
+material tints only its painted face, which is the aging paint layer's colour as it is now (the
+paint that left), while its underside stays primer.
+Defaults per kind: rust 0.2, peel 1.0, splinters 0.8, scales 0.5, bark 0.6, rocks 0.35; moss,
+snow and bolts 0.
+
+**Own pieces.** *Own Pieces* names a collection; its mesh objects are instanced instead of the
+built-in shapes (picked per point like variants), each scaled so its largest dimension is one
+unit — *Size* means the same for a bolt from the kit as for a procedural one. The objects stay
+the artist's (not owned, not removed with the helper).
+
+**Follow the material.** A helper remembers its source (`source`, `source_layer`, `prototypes`,
+`match`, `follow`). *Regenerate* evaluates the placement again on the material as it is now
+(a repainted spot mask moves the bolts); *Regenerate All* does every helper of the set. When
+the Material Aging engine re-drives its folder it calls `manager.schedule_follow(ts)`: helpers
+with *Follow the Material* regenerate 0.6 s after the last edit, so scrubbing the age grows
+the flakes and the peel without regenerating on every slider step. A helper that does not
+follow (or is frozen) keeps its pieces. A helper made from a published mask image before
+0.10.1 still regenerates from that snapshot.
+
+**Aging document changes that make this work.** The coating stack shares one delamination
+pattern: the paint opens a grunge (fixed seed) with its coating loss, cracking and corrosion,
+the primer opens the same pattern more strictly, and the corrosion layer rusts exactly where
+the film above is gone (chips at the edges plus the delaminated flats). Cracks are hairline and
+only where film remains; salt, soil, growth, patina and dust sit on a soft grunge the state
+opens (levels matched to each procedural's range) with the cavities, the ground and upward faces
+added when the maps exist — a plank without cavities still gathers them.
+
+Render for review: `scripts/render_material_geometry.py` (a baked, aged steel plate with a boss
+and a slot: rust flakes, peel, bolts on painted spots, snow; a tropical oak plank: moss,
+splinters); four of its images are in [validation/material-geometry](validation/material-geometry/).
+Tests: `tests/integration/geometry_sources.py`, `tests/integration/geometry_effects_ui.py` (GUI).

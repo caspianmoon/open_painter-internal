@@ -250,6 +250,11 @@ def step(state, construction, exposure, usage, maintenance, dt, seed=0):
         state.wood_checking = _grow(state.wood_checking, swing * m.thermal_sensitivity * m.moisture_sensitivity * 0.10 * reach * vary(15), dt)
     if "POLYMER_EMBRITTLEMENT" in processes and not film:
         pass   # accumulated above through embrittlement / cracking
+    if "COATING_CRACKING" in processes and not film and m.family != "POLYMER":
+        # A bare hide or plaster cracks as it dries and as the temperature swings.
+        dryness = max(0.0, 0.45 - exposure.humidity) * 1.2 + exposure.uv * 0.3
+        swing = exposure.temperature_cycles * 0.5
+        state.coating_cracking = _grow(state.coating_cracking, (dryness + swing) * m.thermal_sensitivity * 0.09 * protect * vary(16), dt)
     if "THERMAL_CYCLING" in processes:
         state.coating_cracking = _grow(state.coating_cracking, exposure.temperature_cycles * m.thermal_sensitivity * 0.05 * vary(16), dt)
     if "WATER_ABSORPTION" in processes:
@@ -405,14 +410,22 @@ def readout(state, construction):
                   ("Water staining", o["water_staining"])]
     if m.family == "MINERAL":
         lines += [("Water staining", o["water_staining"]), ("Erosion", o["erosion"])]
+    if m.family == "TEXTILE":
+        lines = [line for line in lines if line[0] != "Micro scratching"]
+        lines += [("Fading", o["bleaching"]), ("Fraying", o["micro_scratching"]), ("Water staining", o["water_staining"])]
+    if m.family == "LEATHER":
+        lines = [line for line in lines if line[0] != "Micro scratching"]
+        lines += [("Fading", o["bleaching"]), ("Scuffing", o["micro_scratching"]), ("Cracking", o["coating_cracking"]),
+                  ("Burnish", o["handling_polish"]), ("Water staining", o["water_staining"])]
     lines += [("Dust", o["dust"]), ("Soil", o["soil"])]
     if o["salt"] > 0.01:
         lines.append(("Salt deposits", o["salt"]))
     if o["biological"] > 0.01:
         lines.append(("Biological growth", o["biological"]))
-    if o["impact"] > 0.01:
+    soft = m.family in {"TEXTILE", "LEATHER"}        # cloth and hide do not dent; a hide's polish is its burnish
+    if o["impact"] > 0.01 and not soft:
         lines.append(("Impact damage", o["impact"]))
-    if o["handling_polish"] > 0.02:
+    if o["handling_polish"] > 0.02 and not soft:
         lines.append(("Handling polish", o["handling_polish"]))
     return lines
 

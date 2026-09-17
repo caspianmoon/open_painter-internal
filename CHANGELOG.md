@@ -1,5 +1,39 @@
 # Changes
 
+## 0.10.1
+
+Geometry effects follow the material. The Geometry Effects panel scattered prototypes inside
+whatever mask the active layer had; the pieces had nothing to do with the surface under them.
+
+- **Where:** every effect takes a placement — *What the material shows* (rust flakes where the
+  Material Aging folder shows corrosion, peel fragments along the edge of the coating loss
+  facing the paint that holds, moss where growth is, splinters where wood checks and dents,
+  snow on upward faces and in hollows; mesh edges, cavities, shade and the ground on a set
+  without aging), *Active layer mask*, *Painted spots* (one bolt per painted dot, sized by it)
+  or *Whole surface*. The status says how many pieces went where; an empty outcome is refused.
+- **Colour:** pieces take the colour of the surface under them (*Match Surface*); a paint chip
+  reads the paint beside it and keeps its primer underside.
+- **Own pieces:** a collection of the artist's meshes instances instead of the built-in shapes,
+  sized consistently.
+- **Follow the material:** helpers remember their source and regenerate on the material as it
+  is now — *Regenerate*, *Regenerate All*, and automatically 0.6 s after the aging settles.
+- The aging document's coating stack shares one delamination pattern (paint, primer and the
+  corrosion under them agree on where the film is gone), cracks are hairline and only in film
+  that remains, and deposits sit on grunges matched to each procedural's range so a plank
+  without cavities still gathers salt, soil and growth.
+- **Smart materials say what they are:** applying a catalog recipe or a shelf preset sets the
+  Material Aging construction (*Canvas Fabric* is canvas, *Automotive Painted Metal* is steel under
+  primer, base coat and clear coat, *Polished Chrome* is chrome plating, *Heavy Chipped Paint*
+  starts half gone), and a set not aged yet takes the history the recipe depicts. The taxonomy
+  gains canvas, denim, wool and leather (fading, fraying, scuffing, burnish, dry cracking, no
+  dents), chrome plating, vitreous enamel and oil finish. Unknown materials are read from their
+  names and categories.
+- Tests: `tests/integration/geometry_sources.py`, `tests/integration/geometry_effects_ui.py`,
+  `tests/unit/test_aging_model.py` (recipes, textiles, leather).
+  Render: `scripts/render_material_geometry.py`.
+  Docs: [geometry-effects.md](docs/geometry-effects.md#placement-from-the-material-0101),
+  [material-aging.md](docs/material-aging.md).
+
 ## 0.10.0
 
 Material aging: a material-specific aging simulation replaces the Age Response presets.

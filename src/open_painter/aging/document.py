@@ -44,6 +44,12 @@ def _level(closed, open_, value):
     return closed + (open_ - closed) * max(0.0, min(1.0, value))
 
 
+def _grunge(value, low=.33, high=.66, width=.12):
+    """Levels that sweep a soft grunge (GRUNGE_MEDIUM spans about 0.33-0.66) from closed to open."""
+    black = high - (high - low) * max(0.0, min(1.0, value))
+    return dict(black=black, white=min(1.0, black + width))
+
+
 def build(state, construction, seed=0):
     """The recipe document: {'layers': [...], 'roles': [...]} for the state.
 
@@ -71,6 +77,10 @@ def build(state, construction, seed=0):
     if m.family == "POLYMER" and not coats:
         substrate["color"] = _mix(_lighten(m.color, o["fade"] * 0.5), m.patina_color, o["yellowing"] * 0.8)
         substrate["roughness"] = _rough(m.roughness, o["gloss_loss"] * 0.6 + o["chalking"] * 0.3)
+    if m.family in {"TEXTILE", "LEATHER"}:
+        # Dyes fade toward the fibre's own pale; a hide dries lighter and duller.
+        substrate["color"] = _mix(m.color, m.patina_color if m.family == "TEXTILE" else _lighten(m.color, .45), o["bleaching"] * 0.8)
+        substrate["roughness"] = min(1.0, m.roughness + o["bleaching"] * (0.05 if m.family == "TEXTILE" else 0.25))
     detail = surface_detail(m.relief, scale=(1.5, 1.5), color=.05, roughness=.08, height=0.025) if m.relief else None
     add("substrate", layer(f"{m.name} substrate", substrate["color"], substrate["roughness"], substrate["metallic"],
                            procedural=m.procedural or None, scale=m.procedural_scale, height=0.025 if detail else None,
@@ -87,8 +97,8 @@ def build(state, construction, seed=0):
                                mask_effects=(mask("NOISE", generated_source={"id": "rust_detail", "scale": (2, 2)}, black=.30, white=.75),)))
         if "PATINATION" in m.processes:
             add("patina", layer("Patina", m.patina_color, .70, 0.0, opacity=o["patina"],
-                                mask=mask("CAVITY_DIRT", _amount(o["patina"], .15, .95), 30, noise_strength=.55, contrast=1.6),
-                                mask_effects=(mask("NOISE", scale=18, procedural="GRUNGE_MEDIUM", black=.25, white=.80),)))
+                                mask=mask("NOISE", scale=18, procedural="GRUNGE_MEDIUM", **_grunge(o["patina"])),
+                                mask_effects=(mask("CAVITY_DIRT", .25, 30, noise_strength=.55, contrast=1.4, optional=True, operation="ADD", black=.0, white=.8),)))
     if m.family == "WOOD":
         # Greying is strongest where sun and rain reach: upward faces when World Normal is baked.
         add("wood_greying", layer("Weathered grey", m.patina_color, .80, 0.0, opacity=o["wood_greying"],
@@ -103,13 +113,29 @@ def build(state, construction, seed=0):
                              mask=mask("EDGE_WEAR", _amount(o["erosion"], .1, .8), 40, noise_strength=.5, contrast=1.5)))
 
     # --- the protection stack, bottom to top ---------------------------------------------
+    # A film fails two ways: chips at edges and impacts (Chips reads the curvature) and
+    # delamination over the flats where cracks let moisture under it. One grunge pattern
+    # (fixed seed and scale) is the delamination map of the whole stack: the paint opens it
+    # first, the primer opens the same pattern more strictly, so where the primer is gone the
+    # paint is gone too, and the corrosion above rusts exactly there.
+    paint_delam = min(1.0, o["coating_loss"] * 0.7 + o["corrosion"] * 0.5 + o["coating_cracking"] * 0.3)
+    primer_delam = min(1.0, o["primer_loss"] * 0.9 + o["corrosion"] * 0.4) if primer is not None else paint_delam
+    substrate_delam = primer_delam if (primer is not None or paint is not None or conversion is not None) else 1.0
+
+    def delamination(level, width=.3):
+        black = 1.0 - max(0.0, min(1.0, level))
+        return mask("NOISE", scale=5, procedural="GRUNGE_HEAVY", seed=4183, black=black, white=min(1.0, black + width),
+                    invert=True, operation="MULTIPLY")
+
     if conversion is not None:
         add("conversion", layer(conversion.name, conversion.color, _rough(conversion.roughness, o["gloss_loss"] * .5), conversion.metallic,
                                 opacity=1.0, generated_source=surface_detail("zinc_spangle", color=.06, roughness=.06),
-                                mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 45, invert=True, noise_strength=.5, contrast=1.4)))
+                                mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 45, seed=42, invert=True, noise_strength=.5, contrast=1.4),
+                                mask_effects=(delamination(primer_delam * 0.8),)))
     if primer is not None:
         add("primer", layer(f"{primer.name}", primer.color, _rough(primer.roughness, o["chalking"] * .5), 0.0, opacity=1.0,
-                            mask=mask("CHIPS", _amount(o["primer_loss"], .0, .8), 42, invert=True, noise_strength=.45, contrast=1.4)))
+                            mask=mask("CHIPS", _amount(o["primer_loss"], .0, .8), 42, seed=42, invert=True, noise_strength=.45, contrast=1.4),
+                            mask_effects=(delamination(primer_delam),)))
     if paint is not None:
         color = construction.paint_color
         color = _lighten(color, o["fade"] * 0.55)
@@ -117,38 +143,67 @@ def build(state, construction, seed=0):
         color = _mix(color, (0.80, 0.68, 0.36), o["yellowing"] * 0.4)
         add("paint", layer(f"{paint.name}", color, _rough(paint.roughness, o["gloss_loss"] + o["chalking"] * .5), 0.0, opacity=1.0,
                            generated_source=surface_detail("polymer_grain", color=.02, roughness=.05) if paint.id == "POWDER_COAT" else None,
-                           mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 42, invert=True, noise_strength=.45, contrast=1.4),
-                           mask_effects=(mask("NOISE", scale=5, procedural="GRUNGE_HEAVY", black=.0, white=1.0,
-                                              strength=min(1.0, o["corrosion"] * 0.9 + o["coating_loss"] * 0.4), invert=True, operation="MULTIPLY"),)))
+                           mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 42, seed=42, invert=True, noise_strength=.45, contrast=1.4),
+                           mask_effects=(delamination(paint_delam),)))
     if topcoat is not None:
         tint = _mix((0.5, 0.5, 0.5), (0.62, 0.52, 0.28), o["yellowing"] * 0.6)
         add("topcoat", layer(f"{topcoat.name}", tint, _rough(topcoat.roughness, o["gloss_loss"]), 0.0,
                              channels=("ROUGHNESS",) if o["yellowing"] < 0.02 else ("BASE_COLOR", "ROUGHNESS"), opacity=0.85,
                              blend_mode="OVERLAY" if o["yellowing"] >= 0.02 else None,
-                             mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 42, invert=True, noise_strength=.45, contrast=1.4)))
+                             mask=mask("CHIPS", _amount(o["coating_loss"], .0, .8), 42, seed=42, invert=True, noise_strength=.45, contrast=1.4),
+                             mask_effects=(delamination(paint_delam),)))
 
     # --- what happens to the film ----------------------------------------------------------
-    if coats or m.family == "POLYMER":
+    if m.family == "LEATHER" and not coats:
+        add("cracking", layer("Dry cracking", _mix(m.color, (0.02, 0.01, 0.0), .7), .85, 0.0, channels=("BASE_COLOR", "ROUGHNESS", "HEIGHT"),
+                              opacity=o["coating_cracking"], height_value=.42,
+                              mask=mask("NOISE", scale=11, procedural="CRACKS", black=.55, white=.95, contrast=2.2),
+                              mask_effects=(mask("EDGE_WEAR", .5, 60, noise_strength=.4, contrast=1.3, optional=True, operation="ADD", black=.0, white=.9),)))
+    elif coats or m.family == "POLYMER":
+        # Hairline cracks in the film that is still there: the delamination pattern takes them away with it.
+        effects = [mask("DUST", .6, 30, noise_strength=.4, contrast=1.2, optional=True, operation="MULTIPLY", black=.0, white=.6)]
+        if coats:
+            effects.insert(0, delamination(paint_delam))
         add("cracking", layer("Coating cracks", (0.05, 0.04, 0.03), .9, 0.0, channels=("BASE_COLOR", "ROUGHNESS", "HEIGHT"),
-                              opacity=o["coating_cracking"], height_value=.40,
-                              mask=mask("NOISE", scale=9, procedural="CRACKS", black=.45, white=.92, contrast=2.5),
-                              mask_effects=(mask("DUST", .6, 30, noise_strength=.4, contrast=1.2, optional=True, operation="MULTIPLY", black=.0, white=.6),)))
-    add("micro_scratching", layer("Micro scratches", _lighten(construction.paint_color if paint else m.color, .3),
-                                  .55 if paint else max(.35, m.roughness - .1), m.metallic if not paint else 0.0,
-                                  channels=("ROUGHNESS", "HEIGHT"), opacity=o["micro_scratching"], height_value=.485,
-                                  mask=mask("NOISE", generated_source={"id": "abrasion_mask_v2", "scale": (.85, .85)}, black=.035, white=.62,
-                                            projection="TRIPLANAR", triplanar_hardness=8)))
+                              opacity=o["coating_cracking"], height_value=.44,
+                              mask=mask("NOISE", scale=14, procedural="CRACKS", black=.6, white=.95, contrast=2.2),
+                              mask_effects=tuple(effects)))
+    if m.family == "TEXTILE" and not coats:
+        # Fibres fray and pill where the cloth rubs: lighter, fuzzier, strongest along edges.
+        add("micro_scratching", layer("Frayed fibres", _lighten(m.color, .45), 1.0, 0.0, channels=("BASE_COLOR", "ROUGHNESS"),
+                                      opacity=o["micro_scratching"],
+                                      mask=mask("NOISE", generated_source={"id": "abrasion_mask_v2", "scale": (.85, .85)}, black=.035, white=.62,
+                                                projection="TRIPLANAR", triplanar_hardness=8),
+                                      mask_effects=(mask("EDGE_WEAR", .45, 70, noise_strength=.45, contrast=1.3, optional=True, operation="ADD", black=.0, white=.8),)))
+    elif m.family == "LEATHER" and not coats:
+        add("micro_scratching", layer("Scuffing", _lighten(m.color, .4), .8, 0.0, channels=("BASE_COLOR", "ROUGHNESS"),
+                                      opacity=o["micro_scratching"],
+                                      mask=mask("NOISE", generated_source={"id": "abrasion_mask_v2", "scale": (.85, .85)}, black=.035, white=.62,
+                                                projection="TRIPLANAR", triplanar_hardness=8)))
+        add("handling_polish", layer("Burnish", _mix(m.color, (0.02, 0.01, 0.0), .35), max(0.15, m.roughness - .3), 0.0,
+                                     channels=("BASE_COLOR", "ROUGHNESS"), opacity=o["handling_polish"],
+                                     mask=mask("EDGE_WEAR", _amount(o["handling_polish"], .1, .5), 90, noise_strength=.4, contrast=1.3)))
+    else:
+        add("micro_scratching", layer("Micro scratches", _lighten(construction.paint_color if paint else m.color, .3),
+                                      .55 if paint else max(.35, m.roughness - .1), m.metallic if not paint else 0.0,
+                                      channels=("ROUGHNESS", "HEIGHT"), opacity=o["micro_scratching"], height_value=.485,
+                                      mask=mask("NOISE", generated_source={"id": "abrasion_mask_v2", "scale": (.85, .85)}, black=.035, white=.62,
+                                                projection="TRIPLANAR", triplanar_hardness=8)))
     if m.family == "METAL":
         add("handling_polish", layer("Handling polish", m.color, max(0.05, m.roughness - .2), m.metallic, channels=("BASE_COLOR", "ROUGHNESS", "METALLIC"),
                                      opacity=o["handling_polish"], mask=mask("EDGE_WEAR", _amount(o["handling_polish"], .1, .5), 90, noise_strength=.4, contrast=1.3)))
         rust_color = m.patina_color if m.patina == "RUST" else _mix(m.patina_color, (0.02, 0.02, 0.02), .3)
+        # Rust at the chips, and over the flats wherever the film above has delaminated.
+        exposed = delamination(substrate_delam)
+        exposed.update(invert=False, operation="ADD")
         add("corrosion", layer("Corrosion at damage", rust_color, .95, 0.0, opacity=o["corrosion"], height=0.03,
                                generated_source=surface_detail("rust_relief_v2", scale=(1.6, 1.6), color=.3, roughness=.08, height=.05),
-                               mask=mask("CHIPS", _amount(o["coating_loss"] + o["corrosion"] * .5 + (.2 if not coats else 0), .05, .9), 42, noise_strength=.5, contrast=1.3),
-                               mask_effects=(mask("NOISE", generated_source={"id": "rust_detail", "scale": (2, 2)}, black=.25, white=.70),)))
-    add("impact", layer("Impact dents", _mix(m.color, (0.1, 0.1, 0.1), .2), min(1.0, m.roughness + .2), m.metallic if not coats else 0.0,
-                        channels=("ROUGHNESS", "HEIGHT"), opacity=o["impact"], height_value=.44,
-                        mask=mask("NOISE", scale=70, procedural="CONCRETE_PORES", black=.72, white=.98, contrast=2)))
+                               mask=mask("CHIPS", _amount(o["coating_loss"] + o["corrosion"] * .5 + (.2 if not coats else 0), .05, .9), 42, seed=42, noise_strength=.5, contrast=1.3),
+                               mask_effects=(exposed, mask("NOISE", generated_source={"id": "rust_detail", "scale": (2, 2)}, black=.25, white=.70))))
+    if m.family not in {"TEXTILE", "LEATHER"}:
+        add("impact", layer("Impact dents", _mix(m.color, (0.1, 0.1, 0.1), .2), min(1.0, m.roughness + .2), m.metallic if not coats else 0.0,
+                            channels=("ROUGHNESS", "HEIGHT"), opacity=o["impact"], height_value=.44,
+                            mask=mask("NOISE", scale=70, procedural="CONCRETE_PORES", black=.72, white=.98, contrast=2)))
 
     # --- what settles on it ------------------------------------------------------------------
     # Streaks run down from cavities and along the height when Position is baked; procedural streaks otherwise.
@@ -157,21 +212,24 @@ def build(state, construction, seed=0):
                                 mask=mask("NOISE", scale=6, procedural="GRUNGE_STREAKS", black=_level(.75, .30, o["water_staining"]), white=.95),
                                 mask_effects=(mask("DRIPS", _amount(o["water_staining"], .1, .9), 28, noise_strength=.35, contrast=2,
                                                    optional=True, operation="MULTIPLY", black=.0, white=.8),)))
-    add("salt", layer("Salt deposits", SALT, .95, 0.0, opacity=o["salt"],
-                      mask=mask("CAVITY_DIRT", _amount(o["salt"], .1, .8), 36, noise_strength=.5, contrast=2),
-                      mask_effects=(mask("NOISE", scale=24, procedural="GRUNGE_SPOTS", black=.35, white=.85),)))
-    # Growth and soil favour shade, the ground and downward faces (Position and World Normal when baked).
+    # Deposits: a grunge the state opens carries each one everywhere (a plank has no cavities
+    # and still gathers salt and soil); the cavities add to it when an AO map exists, and soil
+    # favours the ground (Position). Growth keeps to the grunge and the cavities: a position
+    # rule would put it under a plank, since Position is relative to the object's own bounds.
+    add("salt", layer("Salt deposits", SALT, .95, 0.0, opacity=o["salt"] * .7,
+                      mask=mask("NOISE", scale=24, procedural="GRUNGE_SPOTS", black=_level(.9, .35, o["salt"]), white=.95),
+                      mask_effects=(mask("CAVITY_DIRT", .2, 36, noise_strength=.5, contrast=1.5, optional=True, operation="ADD", black=.0, white=.8),)))
     add("biological", layer("Biological growth", MOSS, .9, 0.0, opacity=o["biological"],
-                            mask=mask("CAVITY_DIRT", _amount(o["biological"], .2, .9), 22, noise_strength=.6, contrast=1.8),
-                            mask_effects=(mask("DUST", .5, 30, noise_strength=.3, contrast=1.2, invert=True, optional=True, operation="MULTIPLY", black=.0, white=.7),
-                                          mask("POSITION", .6, 1, contrast=1.5, invert=True, optional=True, operation="MULTIPLY", black=.0, white=.85))))
+                            mask=mask("NOISE", scale=6, procedural="GRUNGE_MEDIUM", **_grunge(o["biological"], width=.15)),
+                            mask_effects=(mask("CAVITY_DIRT", .25, 22, noise_strength=.6, contrast=1.6, optional=True, operation="ADD", black=.0, white=.7),)))
     add("soil", layer("Soil", DIRT, .92, 0.0, opacity=o["soil"],
-                      mask=mask("CAVITY_DIRT", _amount(o["soil"], .15, .9), 32, noise_strength=.55, contrast=2.2),
-                      mask_effects=(mask("NOISE", generated_source={"id": "concrete_pores", "scale": (2, 2)}, black=.3, white=.65),
+                      mask=mask("NOISE", scale=8, procedural="GRUNGE_MEDIUM", **_grunge(o["soil"], width=.18)),
+                      mask_effects=(mask("NOISE", generated_source={"id": "concrete_pores", "scale": (2, 2)}, black=.0, white=.5, strength=.5),
+                                    mask("CAVITY_DIRT", .2, 32, noise_strength=.55, contrast=1.6, optional=True, operation="ADD", black=.0, white=.8),
                                     mask("POSITION", .5, 1, contrast=1.2, invert=True, optional=True, operation="MULTIPLY", black=.0, white=.9))))
     # Dust settles on upward faces when World Normal is baked; a dust grunge carries it otherwise.
     add("dust", layer("Dust", DUST, .95, 0.0, opacity=o["dust"],
-                      mask=mask("NOISE", scale=40, procedural="GRUNGE_DUST", black=_level(.6, .1, o["dust"]), white=.9),
+                      mask=mask("NOISE", scale=12, procedural="GRUNGE_MEDIUM", **_grunge(o["dust"], width=.2)),
                       mask_effects=(mask("DUST", _amount(o["dust"], .2, .9), 48, noise_strength=.35, contrast=1.4,
                                          optional=True, operation="MULTIPLY", black=.0, white=.8),)))
     return {"layers": layers, "roles": roles, "version": 1}

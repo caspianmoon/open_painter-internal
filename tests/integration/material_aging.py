@@ -234,6 +234,45 @@ assert json.loads(aging.state_data)["years"] == 40 and opacities(ts) != frozen
 aging.live = True
 aging.age_years = 12
 
+# A smart material says what it is: the construction follows the recipe, the history stays.
+from open_painter.aging import recipes
+from open_painter.smart_materials import composer
+composer.apply(ts, "Canvas Fabric")
+ts = next(s for s in scene.open_painter.texture_sets if s.name == "Aged prop")
+aging = ts.aging
+assert (aging.material, aging.primer, aging.paint) == ("CANVAS", "NONE", "NONE") and aging.environment == "COASTAL" and aging.age_years == 12
+roles_now = list(engine.roles_of(ts, engine.folder_of(ts)))
+assert "oxidation" not in roles_now and roles_now[:2] == ["substrate", "micro_scratching"], roles_now
+assert engine.folder_of(ts).id != folder_id, "another family rebuilds the folder"
+assert dict(engine.prediction(ts)["directed"]).get("Fraying") is not None
+composer.apply(ts, "Automotive Painted Metal")
+ts = next(s for s in scene.open_painter.texture_sets if s.name == "Aged prop")
+aging = ts.aging
+assert (aging.material, aging.primer, aging.paint, aging.topcoat) == ("CARBON_STEEL", "EPOXY_PRIMER", "POLYURETHANE_PAINT", "CLEAR_COAT")
+assert abs(aging.paint_color[0] - .31) < 1e-3 and "topcoat" in engine.roles_of(ts, engine.folder_of(ts))
+fresh = sets.create(scene, "Fresh set", 512)
+bake_synthetic(fresh)
+composer.apply(fresh, "Heavy Chipped Paint")
+fresh = next(s for s in scene.open_painter.texture_sets if s.name == "Fresh set")
+assert fresh.aging.material == "CARBON_STEEL" and fresh.aging.coating_condition < .5, "a recipe that depicts damage starts worn"
+assert (fresh.aging.environment, fresh.aging.age_years, fresh.aging.usage) == ("INDUSTRIAL", 20, "HEAVY"), "a set not aged yet takes the recipe's history"
+from open_painter.ui.dock import assets as shelf_assets
+scene.open_painter.active_texture_set = list(scene.open_painter.texture_sets).index(fresh)
+shelf_assets.apply(bpy.context, next(e for e in shelf_assets.MATERIALS if e[0] == "Copper"))
+fresh = next(s for s in scene.open_painter.texture_sets if s.name == "Fresh set")
+assert fresh.aging.material == "COPPER" and fresh.aging.paint == "NONE"
+sets.remove(scene, list(scene.open_painter.texture_sets).index(fresh))
+ts = next(s for s in scene.open_painter.texture_sets if s.name == "Aged prop")
+aging = ts.aging
+scene.open_painter.active_texture_set = list(scene.open_painter.texture_sets).index(ts)
+# Back to the plain painted steel the rest of the suite reads.
+aging.topcoat = "NONE"
+aging.paint_color = (0.18, 0.32, 0.58)
+folder_id = engine.folder_of(ts).id
+for name in ("Canvas Fabric", "Automotive Painted Metal"):
+    stack.remove_tree(ts, next(l.id for l in ts.layers if l.name == name and l.type == "FOLDER"))
+assert engine.folder_of(ts) is not None and engine.folder_of(ts).id == folder_id
+
 # A keyframed age follows the timeline through the dependency refresh.
 from open_painter.evaluation import dependencies
 path = f'open_painter.texture_sets[{list(scene.open_painter.texture_sets).index(ts)}].aging.age_years'
@@ -330,9 +369,9 @@ scene.open_painter.active_texture_set = list(scene.open_painter.texture_sets).in
 bpy.ops.open_painter.aging(action="APPLY")
 two = next(s for s in scene.open_painter.texture_sets if s.name == "Two-map prop")
 kinds = lambda layer: [(m.source, m.generator if m.source == "GENERATOR" else "") for m in layer.masks]
-assert kinds(role(two, "dust")) == [("PROCEDURAL", "")] and role(two, "dust").masks[0].procedural == "GRUNGE_DUST", kinds(role(two, "dust"))
+assert kinds(role(two, "dust")) == [("PROCEDURAL", "")] and role(two, "dust").masks[0].procedural == "GRUNGE_MEDIUM", kinds(role(two, "dust"))
 assert [k for k, _ in kinds(role(two, "water_staining"))] == ["PROCEDURAL"]
-assert [g for s_, g in kinds(role(two, "soil"))] == ["CAVITY_DIRT", ""] and len(role(two, "soil").masks) == 2
+assert [g for s_, g in kinds(role(two, "soil"))] == ["", "", "CAVITY_DIRT"] and len(role(two, "soil").masks) == 3, kinds(role(two, "soil"))
 assert engine.rebuild_pending(two) == []
 black = role(two, "dust").masks[0].black
 two.aging.age_years = 0
@@ -345,7 +384,7 @@ assert engine.optional_maps(two) == [] and set(engine.rebuild_pending(two)) == {
 bpy.ops.open_painter.aging(action="REBUILD")
 two = next(s for s in scene.open_painter.texture_sets if s.name == "Two-map prop")
 assert engine.rebuild_pending(two) == []
-assert [g for s_, g in kinds(role(two, "dust"))] == ["", "DUST"] and [g for s_, g in kinds(role(two, "soil"))] == ["CAVITY_DIRT", "", "POSITION"]
+assert [g for s_, g in kinds(role(two, "dust"))] == ["", "DUST"] and [g for s_, g in kinds(role(two, "soil"))] == ["", "", "CAVITY_DIRT", "POSITION"]
 assert [g for s_, g in kinds(role(two, "water_staining"))] == ["", "DRIPS"]
 drips_amount = role(two, "water_staining").masks[1].amount
 two.aging.age_years = 5

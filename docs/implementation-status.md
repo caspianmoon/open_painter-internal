@@ -16,6 +16,16 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Geometry effects follow the material 0.10.1 — 2026-09-17
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Placements from aging outcomes, mesh features, layer masks, painted spots and the whole surface; facing along the coating-loss edge | done | `tests/integration/geometry_sources.py` |
+| Surface colour per piece, the artist's own prototypes, follow-the-material regeneration (manual, all, after aging) | done | `tests/integration/geometry_sources.py` |
+| Aging document: shared delamination pattern, hairline cracks in remaining film, deposits on range-matched grunges | done | `tests/unit/test_aging_model.py`, `scripts/render_material_geometry.py` |
+| Smart materials and shelf presets set the aging construction and, on an unaged set, the depicted history; textiles and leather in the taxonomy | done | `tests/unit/test_aging_model.py`, `tests/integration/material_aging.py` |
+| Placement by scene context (neighbouring objects casting shade, real ground plane) | not covered — shade and the ground are the set's own faces | — |
+
 ## Material aging 0.10.0 — 2026-09-17
 
 | Item | Status | Evidence |

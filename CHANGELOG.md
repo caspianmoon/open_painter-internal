@@ -102,6 +102,13 @@ that second pass, by subsystem:
   masks that cannot map through a topology-changing modifier are reported as warnings; portable
   materials carry the vector strokes their layers render and module updates keep instance-local
   stroke keys; switching a layer back to Live retires its cache images.
+- The asset shelf's built-in entries (materials, smart materials and masks, filters, procedurals,
+  brushes, No Alpha) no longer exist as image datablocks in the artist's file: they are written once
+  per version to a per-user asset library ("Open Painter", `painter_assets.blend`, built by a
+  background Blender at registration) that the shelf reads alongside the file's own texture and
+  alpha handles. The Image Editor's browse menu, the outliner and saved files stop listing hundreds
+  of `F Polished Chrome`-style previews; handles an older version wrote into a file are removed on
+  the next shelf refresh.
 - The Painter header has its close button back (an X next to the 3D/2D toggles) that returns the
   area to a plain 3D Viewport; the native header rewrite had dropped it.
 - Switching an area to Open Painter no longer turns the viewport overlays off; the editor only

@@ -20,9 +20,13 @@ ts = sets.create(bpy.context.scene, "Texture operations", 512)
 sets.assign(bpy.context.scene, ts, bpy.context.object)
 layer = stack.add(ts, "FILL", "Editable procedural")
 prop = stack.channel_for(layer, "BASE_COLOR")
+from open_painter.ui import shelf_library
 native.prepare_assets()
+# Built-in entries live in the shelf library, never as local images; every catalog material is there.
+assert shelf_library.current()
+assert set(CATALOG) <= set(shelf_library.manifest()["names"].values())
 handles = [image for image in bpy.data.images if native.ASSET_KEY in image]
-assert set(CATALOG) <= {image[native.ASSET_KEY] for image in handles}
+assert not any(shelf_library.is_builtin(e) for e in native.catalog() if native.categories.key(e) in {h[native.ASSET_KEY] for h in handles})
 count = len(handles)
 native.prepare_assets()
 assert sum(native.ASSET_KEY in image for image in bpy.data.images) == count

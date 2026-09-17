@@ -74,25 +74,61 @@ def run():
     alpha = bpy.data.textures.new("Library alpha", type="IMAGE")
     alpha.image = source
     native.prepare_assets()
+    from open_painter.ui import shelf_library
+    assert shelf_library.current(), "the built-in catalog is written to the shelf library"
+    library_names = shelf_library.manifest()["names"]          # image name -> catalog key
+    assert len(library_names) > 100
+    assert not any(image.get(native.ASSET_KEY) in set(library_names.values()) for image in bpy.data.images), \
+        "built-in entries must not exist as local images"
 
 
     def handle(key):
         return next(image for image in bpy.data.images if image.get(native.ASSET_KEY) == key)
 
 
+    def library_asset(key):
+        """What Blender hands asset_poll / the activation for a library entry."""
+        name = next(n for n, k in library_names.items() if k == key)
+        category = native.categories.KIND_CATEGORY[next(e for e in native.catalog() if native.categories.key(e) == key)[1]]
+        tags = [SimpleNamespace(name=shelf_library.KEY_TAG + key), SimpleNamespace(name=shelf_library.CATEGORY_TAG + category)]
+        return SimpleNamespace(local_id=None, name=name, full_library_path=str(shelf_library.library_path()),
+                               metadata=SimpleNamespace(tags=tags))
+
+
     def apply(key):
-        image = handle(key)
-        result = bpy.ops.open_painter.native_asset(relative_asset_identifier="Image/" + image.name)
+        if key in library_names.values():
+            name = next(n for n, k in library_names.items() if k == key)
+            result = bpy.ops.open_painter.native_asset(asset_library_type="CUSTOM", asset_library_identifier=shelf_library.LIBRARY_NAME,
+                                                       relative_asset_identifier=shelf_library.LIBRARY_FILE + "/Image/" + name)
+        else:
+            image = handle(key)
+            result = bpy.ops.open_painter.native_asset(relative_asset_identifier="Image/" + image.name)
         assert result == {"FINISHED"}, (key, result)
 
 
     def visible():
-        return {image.get(native.ASSET_KEY) for image in bpy.data.images
-                if image.asset_data and native.VIEW3D_AST_open_painter.asset_poll(SimpleNamespace(local_id=image))}
+        local = {image.get(native.ASSET_KEY) for image in bpy.data.images
+                 if image.asset_data and native.VIEW3D_AST_open_painter.asset_poll(SimpleNamespace(local_id=image))}
+        library = {key for key in library_names.values() if native.VIEW3D_AST_open_painter.asset_poll(library_asset(key))}
+        foreign = SimpleNamespace(local_id=None, name="Other", full_library_path="/somewhere/else.blend",
+                                  metadata=SimpleNamespace(tags=[SimpleNamespace(name=shelf_library.KEY_TAG + "Copper")]))
+        assert not native.VIEW3D_AST_open_painter.asset_poll(foreign), "other libraries stay out of the Painter shelf"
+        return local | library
 
 
-    fingerprint = handle("PROCEDURAL:FINGERPRINTS")
-    fingerprint_pixels = verify_fingerprint_preview(fingerprint)
+    def library_preview(key):
+        name = next(n for n, k in library_names.items() if k == key)
+        with bpy.data.libraries.load(str(shelf_library.library_path()), link=True) as (available, loaded):
+            loaded.images = [name]
+        image = loaded.images[0]
+        try:
+            return SimpleNamespace(preview=SimpleNamespace(image_size=tuple(image.preview.image_size),
+                                                            image_pixels_float=list(image.preview.image_pixels_float)))
+        finally:
+            bpy.data.images.remove(image)
+
+
+    fingerprint_pixels = verify_fingerprint_preview(library_preview("PROCEDURAL:FINGERPRINTS"))
     initial_serial = ts.edit_serial
     groups = {}
     for identifier, *_ in categories.CATEGORY_ITEMS:
@@ -157,8 +193,7 @@ def run():
     assert proxy[categories.SOURCE_KEY] == source
     native.prepare_assets()
     assert len(bpy.data.images) == count
-    assert handle("PROCEDURAL:FINGERPRINTS") == fingerprint
-    np.testing.assert_array_equal(verify_fingerprint_preview(fingerprint), fingerprint_pixels)
+    np.testing.assert_array_equal(verify_fingerprint_preview(library_preview("PROCEDURAL:FINGERPRINTS")), fingerprint_pixels)
     source.pixels.foreach_set(np.tile(np.array((.8, .4, .2, 1), dtype=np.float32), 16 * 16))
     source.update()
     assert bpy.ops.open_painter.refresh_assets() == {"FINISHED"}
@@ -219,9 +254,16 @@ def run():
     native.prepare_assets()
     assert not alpha_proxy.asset_data
 
-    # Shelf handles are runtime state: saving must not write hundreds of
-    # library images into the artist's file, and the imported texture stays.
-    assert len(native.handles()) > 100
+    # Shelf handles are runtime state for the file's own textures and alphas only:
+    # saving must not write them into the artist's file, and a handle a previous
+    # version wrote for a built-in entry is removed on the next refresh.
+    assert 0 < len(native.handles()) < 20, [image.name for image in native.handles()]
+    legacy = bpy.data.images.new("Copper", width=32, height=32)
+    legacy[native.ASSET_KEY] = "Copper"
+    legacy.use_fake_user = True
+    legacy.asset_mark()
+    native.prepare_assets()
+    assert bpy.data.images.get("Copper") is None, "a built-in handle from an older version is dropped"
     saved = Path(bpy.app.tempdir) / "asset-handles.blend"
     bpy.ops.wm.save_as_mainfile(filepath=str(saved))
     assert not any(image.use_fake_user or image.asset_data for image in native.handles())
@@ -229,7 +271,7 @@ def run():
     assert not native.handles(), [image.name for image in native.handles()][:5]
     assert bpy.data.images.get("category-source.png").packed_file
     native.prepare_assets()
-    assert len(native.handles()) > 100
+    assert 0 < len(native.handles()) < 20
     open_painter.unregister()
     open_painter.register()
     open_painter.unregister()

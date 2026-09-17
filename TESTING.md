@@ -371,3 +371,8 @@ The file is not in git (`OP_ARTIST_FILE` points at another copy); every artist-f
 
 `tests/integration/resolution_switch.py` (background) switches a live set between 512, 1024 and
 2048 and edits boundary inputs after each switch: every recomputed raster has the new size.
+
+`tests/integration/asset_categories.py` and `native_ui.py` cover the shelf library
+(`src/open_painter/ui/shelf_library.py`): background suites build `painter_assets.blend` in
+process into the test profile's datafiles; the GUI probe waits for the background build the
+registration spawns and refreshes the shelf before clicking a library asset.

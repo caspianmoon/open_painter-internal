@@ -53,15 +53,42 @@ def remark_handles(_):
         prepare_assets()
 
 
+def description_of(entry, CATALOG):
+    return (
+        "Smart mask: apply to the selected layer or folder"
+        if entry[1] == "SMART_MASK"
+        else CATALOG[entry[0]]["description"] if entry[1] == "SMART_RECIPE"
+        else "Apply to the selected channel or mask" if entry[1] in {"FILTER", "PROCEDURAL", "TEXTURE"}
+        else "Texture painting brush" if entry[1] == "BRUSH"
+        else "Brush alpha" if entry[1] == "ALPHA"
+        else "Open Painter material"
+    )
+
+
 def prepare_assets(*, refresh_sources=False):
     # Images are asset handles only; activation always routes through Painter.
+    # Only entries that point at data of the open file (imported textures and
+    # alphas) get a local handle: the built-in catalog is read from the shelf
+    # library (shelf_library.py), so it never crowds the file's image lists.
     from ..smart_materials.catalog import CATALOG
     from ..constants import VERSION
+    from . import shelf_library
     handles = {image.get(ASSET_KEY): image for image in bpy.data.images if ASSET_KEY in image}
     entries = catalog()
     for entry in entries:
         entry_key = categories.key(entry)
         category = categories.KIND_CATEGORY[entry[1]]
+        if shelf_library.is_builtin(entry):
+            stale = handles.pop(entry_key, None)
+            if stale is not None:
+                # A handle a previous version wrote into this file (or made in
+                # this session): the library carries the entry now.
+                if stale.asset_data:
+                    stale.asset_clear()
+                stale.use_fake_user = False
+                if not stale.users:
+                    bpy.data.images.remove(stale)
+            continue
         path = (
             Path(__file__).resolve().parents[1]
             / "assets/previews"
@@ -94,15 +121,7 @@ def prepare_assets(*, refresh_sources=False):
         image.name = entry[0] if source is None else entry[0] + " · Painter Asset"
         if not image.asset_data:
             image.asset_mark()
-        description = (
-            "Smart mask: apply to the selected layer or folder"
-            if entry[1] == "SMART_MASK"
-            else CATALOG[entry[0]]["description"] if entry[1] == "SMART_RECIPE"
-            else "Apply to the selected channel or mask" if entry[1] in {"FILTER", "PROCEDURAL", "TEXTURE"}
-            else "Texture painting brush" if entry[1] == "BRUSH"
-            else "Brush alpha" if entry[1] == "ALPHA"
-            else "Open Painter material"
-        )
+        description = description_of(entry, CATALOG)
         if (path.exists() or category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}) and "open_painter_preview_kind" in image:
             del image["open_painter_preview_kind"]
         image.asset_data.description = description + (
@@ -135,7 +154,7 @@ def prepare_assets(*, refresh_sources=False):
             with bpy.context.temp_override(id=image):
                 bpy.ops.ed.lib_id_load_custom_preview(filepath=str(path))
             image["open_painter_preview_version"] = VERSION
-    valid = {categories.key(entry) for entry in entries}
+    valid = {categories.key(entry) for entry in entries if not shelf_library.is_builtin(entry)}
     for handle in handles.values():
         if handle.get(ASSET_KEY) not in valid and handle.asset_data:
             handle.asset_clear()
@@ -167,17 +186,30 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
 
     # Blender's shelf invokes this with the active AssetRepresentation in context.
     def run(self, context):
-        handle = context.asset.local_id if context.asset else None
-        if handle is None and self.asset_library_type == "LOCAL":
+        from . import shelf_library
+        asset = context.asset
+        handle = asset.local_id if asset else None
+        entry_key, source = None, None
+        if asset is not None and handle is None and shelf_library.is_library_asset(asset):
+            entry_key = shelf_library.key_of(asset)
+        elif handle is None and self.asset_library_type == "LOCAL":
             handle = bpy.data.images.get(self.relative_asset_identifier.split("/", 1)[-1])
-        if not handle or ASSET_KEY not in handle:
+        elif handle is None and self.asset_library_identifier == shelf_library.LIBRARY_NAME:
+            # Activation without an asset in context (scripts, tests): the
+            # identifier ends in the library image's name.
+            entry_key = shelf_library.key_for_name(self.relative_asset_identifier.rsplit("/", 1)[-1])
+        if handle is not None:
+            if ASSET_KEY not in handle:
+                raise ValueError("Select an Open Painter asset.")
+            entry_key, source = handle[ASSET_KEY], handle.get(categories.SOURCE_KEY)
+        if entry_key is None:
             raise ValueError("Select an Open Painter asset.")
-        entry = next((e for e in catalog() if categories.key(e) == handle[ASSET_KEY]), None)
+        entry = next((e for e in catalog() if categories.key(e) == entry_key), None)
         if entry is None:
             raise ValueError("This asset is no longer available. Refresh the library.")
         region = next(r for r in context.area.regions if r.type == "WINDOW")
         with context.temp_override(region=region):
-            self.apply_entry(context, entry, handle.get(categories.SOURCE_KEY))
+            self.apply_entry(context, entry, source)
         context.area.tag_redraw()
 
     def apply_entry(self, context, entry, source):
@@ -226,10 +258,17 @@ class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
 
     @classmethod
     def asset_poll(cls, asset):
-        handle = asset.local_id
-        if not handle or ASSET_KEY not in handle:
-            return False
+        from . import shelf_library
         category = bpy.context.scene.open_painter.asset_category
+        handle = asset.local_id
+        if handle is None:
+            # The built-in catalog comes from the shelf library; every other
+            # library the artist registered stays out of the Painter shelf.
+            if not shelf_library.is_library_asset(asset):
+                return False
+            return category == "ALL" or shelf_library.category_of(asset) == category
+        if ASSET_KEY not in handle:
+            return False
         return category == "ALL" or handle.get(categories.ASSET_CATEGORY_KEY) == category
 
 
@@ -254,7 +293,10 @@ class OP_OT_refresh_assets(SafeOperator, bpy.types.Operator):
     bl_label = "Refresh Painter Assets"
 
     def run(self, context):
+        from . import shelf_library
+        shelf_library.ensure()
         categories.refresh(None, context, refresh_sources=True)
+        shelf_library.refresh_shelves()
 
 
 class OP_OT_import_texture(SafeOperator, bpy.types.Operator, ImportHelper):
@@ -1045,7 +1087,9 @@ def focus_area(window, area):
         with bpy.context.temp_override(window=window, area=area, region=shelf_region):
             shelf = bpy.context.asset_shelf
             if shelf:
-                shelf.asset_library_reference = "LOCAL"
+                # Local handles (imported textures, alphas) plus the shelf library;
+                # asset_poll keeps every other library out.
+                shelf.asset_library_reference = "ALL"
                 shelf.show_names = True
         region.tag_redraw()
         area.tag_redraw()

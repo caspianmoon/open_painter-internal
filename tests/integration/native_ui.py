@@ -106,7 +106,10 @@ def check():
         bpy.context.window.event_simulate(
             type="MOUSEMOVE", value="NOTHING", x=shelf.x + 60, y=shelf.y + 60
         )
-        bpy.app.timers.register(click_asset, first_interval=1)
+        # The shelf reads the library asynchronously: give it a few seconds before the click.
+        from open_painter.ui import shelf_library
+        shelf_library.refresh_shelves()
+        bpy.app.timers.register(click_asset, first_interval=6)
     except Exception:
         result.write_text(traceback.format_exc())
         traceback.print_exc()
@@ -232,4 +235,17 @@ def quit_test():
     bpy.ops.wm.quit_blender()
 
 
-bpy.app.timers.register(setup, first_interval=1)
+def wait_for_library():
+    """The built-in shelf entries come from the shelf library a background Blender writes at
+    registration; the click below needs it on disk and re-read by the shelf."""
+    from open_painter.ui import shelf_library
+    if not shelf_library.current():
+        wait_for_library.elapsed = getattr(wait_for_library, "elapsed", 0) + 1
+        assert wait_for_library.elapsed < 180, "shelf library build did not finish"
+        return 1.0
+    shelf_library.refresh_shelves()
+    bpy.app.timers.register(setup, first_interval=1)
+    return None
+
+
+bpy.app.timers.register(wait_for_library, first_interval=1)

@@ -160,6 +160,12 @@ def register():
             _cleanups.append(cleanup)
             initialize()
         _cleanups.append(workspace.unregister)
+        from .ui import shelf_library
+        try:
+            shelf_library.ensure()   # the built-in shelf entries, outside the artist's file
+        except Exception:
+            from .utils.logging import logger
+            logger.exception('Shelf library unavailable; the shelf shows local handles only')
         for owner, method, callback in ((bpy.types.VIEW3D_HT_tool_header,'prepend',asset_type_buttons),
                                         (bpy.types.IMAGE_HT_tool_header,'prepend',asset_type_buttons),
                                         (bpy.types.VIEW3D_HT_tool_header,'append',toolbar)):

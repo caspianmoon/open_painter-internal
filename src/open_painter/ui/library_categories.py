@@ -30,7 +30,10 @@ def key(entry):
     return entry[0] if entry[1] in {"FILL", "SMART", "SMART_RECIPE", "SMART_MASK"} else entry[1] + ":" + str(entry[2])
 
 
-def extras():
+def extras(local=True):
+    """Filters, brushes, procedurals and, with ``local``, the open file's alpha textures and
+    images. ``local=False`` reads nothing from ``bpy.data``: the shelf library is built at
+    registration, when startup keeps the data restricted."""
     from ..texture_engine.filters import CATALOG as filters
     from ..texture_engine.procedurals import CATALOG as procedurals
     from .dock.assets import BRUSHES
@@ -41,14 +44,16 @@ def extras():
     result = [item(name.replace("_", " ").title(), "FILTER", name) for name in filters]
     result += BRUSHES
     result += [item("No Alpha", "ALPHA", "")]
-    result += [item(texture.name, "ALPHA", texture.name) for texture in bpy.data.textures
-               if texture.type == "IMAGE" and texture.image and all(texture.image.size)]
+    if local:
+        result += [item(texture.name, "ALPHA", texture.name) for texture in bpy.data.textures
+                   if texture.type == "IMAGE" and texture.image and all(texture.image.size)]
     result += [item(name.replace("_", " ").title(), "PROCEDURAL", name) for name in procedurals]
-    result += [item(image.name, "TEXTURE", image.name) for image in bpy.data.images
-               if not image.library and not image.get("open_painter_catalog_entry")
-               and not image.get(OWNER) and image.type in {"IMAGE", "UV_TEST"}
-               and all(image.size)
-               and (image.filepath or image.get("open_painter_library_texture"))]
+    if local:
+        result += [item(image.name, "TEXTURE", image.name) for image in bpy.data.images
+                   if not image.library and not image.get("open_painter_catalog_entry")
+                   and not image.get(OWNER) and image.type in {"IMAGE", "UV_TEST"}
+                   and all(image.size)
+                   and (image.filepath or image.get("open_painter_library_texture"))]
     return result
 
 

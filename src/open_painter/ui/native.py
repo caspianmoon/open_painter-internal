@@ -20,7 +20,8 @@ from . import library_categories as categories
 ASSET_KEY = "open_painter_catalog_entry"
 
 
-def catalog():
+def catalog(local=True):
+    """Every shelf entry; ``local=False`` leaves out the open file's textures (and never reads ``bpy.data``)."""
     from ..smart_masks.library import PRESETS
     from ..smart_materials.catalog import CATALOG
 
@@ -29,7 +30,7 @@ def catalog():
         for name, data in CATALOG.items()
     ] + [
         (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
-    ] + categories.extras()
+    ] + categories.extras(local)
 
 
 def handles():

@@ -57,7 +57,7 @@ def is_builtin(entry):
 
 def builtin_entries():
     from .native import catalog
-    return [entry for entry in catalog() if is_builtin(entry)]
+    return [entry for entry in catalog(local=False) if is_builtin(entry)]   # no bpy.data: registration may run restricted
 
 
 def manifest():
@@ -186,6 +186,11 @@ def ensure(background=None):
     jobs) builds in place. Returns True when the library is ready now.
     """
     global _process
+    if not isinstance(bpy.data, bpy.types.BlendData):
+        # Registration at startup keeps bpy.data restricted (a headless render, an extension
+        # enabled from the command line): build once the session is up, when timers run.
+        bpy.app.timers.register(_deferred_ensure, first_interval=0.5)
+        return False
     try:
         register_library()
     except Exception as exc:   # preferences can be read-only (factory startup); the shelf still works from LOCAL
@@ -210,6 +215,15 @@ def ensure(background=None):
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     bpy.app.timers.register(_poll_build, first_interval=1.0)
     return False
+
+
+def _deferred_ensure():
+    try:
+        ensure()
+    except Exception:
+        from ..utils.logging import logger
+        logger.exception("Shelf library unavailable; the shelf shows local handles only")
+    return None
 
 
 def _poll_build():

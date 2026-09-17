@@ -42,8 +42,12 @@ Material aging: a material-specific aging simulation replaces the Age Response p
 - **Removed.** Age Response (`effect_semantic` UI, the Age / Environment State dialog,
   `core/material_states.py`, `core/environment_profiles.py`, its suite). The layer field and
   `material_state_data` stay hidden for older files.
-- Tests: `tests/unit/test_aging_model.py`, `tests/integration/material_aging.py`.
-  Docs: [material-aging.md](docs/material-aging.md).
+- Tests: `tests/unit/test_aging_model.py`, `tests/integration/material_aging.py`,
+  `tests/integration/material_aging_ui.py`. Docs: [material-aging.md](docs/material-aging.md).
+- Fixed: duplicating a texture set read the source through a reference that was stale once the
+  collection had grown, which deadlocks Blender 5.2 on the next pointer-property read; the shelf
+  library build no longer touches `bpy.data` during a restricted startup registration (a headless
+  render or an extension enabled from the command line printed a traceback) and defers to a timer.
 
 ## 0.9.7
 

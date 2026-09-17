@@ -103,7 +103,13 @@ def _islands(target):
 
 
 def _border_coverage(rows, cols, texel_island, borders, n, width):
-    """Distance falloff from an island's own border edges, evaluated for every edge at once."""
+    """Distance falloff from an island's own border edges, evaluated for every edge at once.
+
+    Each edge only touches the band of texels within `width` of it, so the
+    work is walked along the edge's major axis with a fixed-width strip across
+    the minor axis: an edge spanning a 4k tile costs a few thousand texels,
+    not a square grid of its bounding box.
+    """
     ids = {island: index for index, island in enumerate(borders)}
     if not ids or not len(rows):
         return np.zeros(len(rows), np.float32)
@@ -118,29 +124,45 @@ def _border_coverage(rows, cols, texel_island, borders, n, width):
     y0 = np.clip(np.floor(np.minimum(start[:, 1], end[:, 1])).astype(np.int64) - reach, 0, n)
     y1 = np.clip(np.ceil(np.maximum(start[:, 1], end[:, 1])).astype(np.int64) + reach + 1, 0, n)
     valid = (length >= 1e-12) & (x1 > x0) & (y1 > y0)
-    extent = np.maximum(x1 - x0, y1 - y0)
+    # Walk the axis the edge is longest along; its slope across the other axis
+    # is then at most 45°, so every texel within `width` of the edge sits within
+    # width·√2 of where the edge crosses that step (the nearer endpoint past the
+    # ends). The strip is padded by a texel on each side for rounding.
+    major = (np.abs(delta[:, 1]) > np.abs(delta[:, 0])).astype(np.int64)
+    minor = 1 - major
+    lo = np.where(major == 1, y0, x0)
+    hi = np.where(major == 1, y1, x1)
+    band = int(math.ceil(width * math.sqrt(2))) + 1
+    strip = np.arange(-band, band + 2, dtype=np.int64)
+    steps = hi - lo
     keys, values = [], []
     block, previous = 8, 0
-    while previous < extent.max(initial=0):
-        chosen = np.flatnonzero(valid & (extent > previous) & (extent <= block))
+    while previous < steps.max(initial=0):
+        chosen = np.flatnonzero(valid & (steps > previous) & (steps <= block))
         previous, block = block, block * 2
         if not len(chosen):
             continue
-        offsets = np.arange(previous, dtype=np.float32)
-        chunk = max(64, (1 << 21) // (previous * previous))
+        offsets = np.arange(previous, dtype=np.int64)
+        chunk = max(1, (1 << 21) // (previous * len(strip)))
         for at in range(0, len(chosen), chunk):
             sub = chosen[at:at + chunk]
-            x = x0[sub].astype(np.float32)[:, None, None] + offsets[None, None, :]
-            y = y0[sub].astype(np.float32)[:, None, None] + offsets[None, :, None]
+            vertical = (major[sub] == 1)[:, None, None]
+            along = lo[sub][:, None] + offsets[None, :]
+            crossing = start[sub, minor[sub]][:, None] + delta[sub, minor[sub]][:, None] * np.clip(
+                (along.astype(np.float32) - start[sub, major[sub]][:, None]) / delta[sub, major[sub]][:, None], 0, 1)
+            across = np.floor(crossing).astype(np.int64)[:, :, None] + strip[None, None, :]
+            along = along[:, :, None]
+            x = np.where(vertical, across, along)
+            y = np.where(vertical, along, across)
             sx, sy = start[sub, 0, None, None], start[sub, 1, None, None]
             dx, dy = delta[sub, 0, None, None], delta[sub, 1, None, None]
-            t = np.clip(((x - sx) * dx + (y - sy) * dy) / length[sub, None, None], 0, 1)
-            distance = np.hypot(x - sx - t * dx, y - sy - t * dy)
+            fx, fy = x.astype(np.float32), y.astype(np.float32)
+            t = np.clip(((fx - sx) * dx + (fy - sy) * dy) / length[sub, None, None], 0, 1)
+            distance = np.hypot(fx - sx - t * dx, fy - sy - t * dy)
             value = np.clip(1 - distance / width, 0, 1)
-            inside = (x < x1[sub, None, None]) & (y < y1[sub, None, None]) & (value > 0)
-            index, yy, xx = np.nonzero(inside)
-            texel = (y0[sub][index] + yy) * n + (x0[sub][index] + xx)
-            keys.append(texel * len(ids) + edge_island[sub][index])
+            inside = (along < hi[sub, None, None]) & (across >= 0) & (across < n) & (value > 0)
+            index = np.nonzero(inside)[0]
+            keys.append((y[inside] * n + x[inside]) * len(ids) + edge_island[sub][index])
             values.append(value[inside])
     result = np.zeros(len(rows), np.float32)
     if not keys:
@@ -150,7 +172,13 @@ def _border_coverage(rows, cols, texel_island, borders, n, width):
     keys, values = keys[order], values[order]
     unique, first = np.unique(keys, return_index=True)
     peak = np.maximum.reduceat(values, first)
-    wanted = (rows * n + cols) * len(ids) + np.array([ids.get(int(island), -1) for island in texel_island])
+    # Texel islands map to their ids through a sorted lookup: a Python dict
+    # visit per covered texel is tens of seconds on a 4k tile.
+    labels = np.fromiter(ids, np.int64, len(ids))
+    label_order = np.argsort(labels)
+    slot = np.minimum(np.searchsorted(labels[label_order], texel_island), len(labels) - 1)
+    texel_id = np.where(labels[label_order][slot] == texel_island, label_order[slot], -1)
+    wanted = (rows * n + cols) * len(ids) + texel_id
     position = np.searchsorted(unique, wanted)
     position = np.minimum(position, len(unique) - 1)
     matched = unique[position] == wanted
@@ -158,19 +186,39 @@ def _border_coverage(rows, cols, texel_island, borders, n, width):
     return result
 
 
-def _id_color(key, palette):
+def _id_color(key, palette, taken=None):
+    """The palette colour of `key`; `taken` (colour tuples already in the palette) saves a rescan per key."""
     if key not in palette:
+        if taken is None:
+            taken = {tuple(color) for color in palette.values()}
         digest = hashlib.sha256(key.encode("utf8")).digest()
         # ID colors are data, not display colors; avoid pure black reserved for invalid pixels.
         color = [max(1, value) / 255.0 for value in digest[:3]]
         # Deterministically avoid even rare hash collisions within this bake.
         nonce = 0
-        while color in palette.values():
+        while tuple(color) in taken:
             nonce += 1
             digest = hashlib.sha256(f"{key}:{nonce}".encode("utf8")).digest()
             color = [max(1, value) / 255.0 for value in digest[:3]]
         palette[key] = color
+        taken.add(tuple(color))
     return palette[key]
+
+
+def _id_colors(labels, key_of, palette):
+    """One palette colour per distinct label, gathered per triangle.
+
+    Keys enter the palette in triangle order, as the sequential bake did, so
+    collision nonces stay stable; the per-triangle work is an integer gather
+    rather than a string comparison per island.
+    """
+    unique, first, inverse = np.unique(labels, return_index=True, return_inverse=True)
+    order = np.argsort(first, kind="stable")
+    rank = np.empty(len(unique), np.int64)
+    rank[order] = np.arange(len(unique))
+    taken = {tuple(color) for color in palette.values()}
+    colors = np.array([_id_color(key_of(unique[index]), palette, taken) for index in order], np.float32)
+    return colors.reshape(-1, 3)[rank[inverse.ravel()]]
 
 
 def _material_key(ts, obj, slot):
@@ -230,19 +278,15 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
         elif kind in {"WORLD_NORMAL", "OBJECT_NORMAL"}:
             corners = target["world_normals" if kind == "WORLD_NORMAL" else "object_normals"][tri_loops[tri]]
             result[rows, cols, :3] = _unit(_interpolate(weights, corners)) * 0.5 + 0.5
-        elif kind in {"MATERIAL_ID", "OBJECT_ID", "UV_ISLAND"}:
-            # Keys enter the palette in triangle order, as the sequential bake did.
-            if kind == "OBJECT_ID":
-                keys = np.full(len(tri_loops), _object_key(obj), dtype=object)
-            elif kind == "MATERIAL_ID":
-                slots_seen = {int(slot): _material_key(ts, obj, int(slot)) for slot in np.unique(target["tri_material"])}
-                keys = np.array([slots_seen[int(slot)] for slot in target["tri_material"]], dtype=object)
-            else:
-                keys = np.array([f"{_object_key(obj)}|island:{int(islands[int(polygon)])}" for polygon in tri_polygons],
-                                dtype=object)
-            colors = np.empty((len(tri_loops), 3), np.float32)
-            for key in dict.fromkeys(keys.tolist()):
-                colors[keys == key] = _id_color(key, palette)
+        elif kind == "OBJECT_ID":
+            colors = _id_colors(np.zeros(len(tri_loops), np.int64), lambda _label: _object_key(obj), palette)
+            result[rows, cols, :3] = colors[tri]
+        elif kind == "MATERIAL_ID":
+            colors = _id_colors(target["tri_material"], lambda slot: _material_key(ts, obj, int(slot)), palette)
+            result[rows, cols, :3] = colors[tri]
+        elif kind == "UV_ISLAND":
+            prefix = _object_key(obj)
+            colors = _id_colors(islands[tri_polygons], lambda island: f"{prefix}|island:{int(island)}", palette)
             result[rows, cols, :3] = colors[tri]
         result[rows, cols, 3] = 1
     return result

@@ -30,13 +30,19 @@ def coverage(ts,obj,center,normal,radius,pressure=1,hardness=.8):
         if target is None:
             raise ValueError('Stamp target is not assigned to this texture set')
         mesh=target['mesh']; positions=target['positions']
-        tree=BVHTree.FromPolygons(positions,[tuple(t.vertices) for t in mesh.loop_triangles],all_triangles=True)
-        for tri in target['triangles']:
-            coords=positions[list(tri.vertices)]
-            if np.any(coords.max(axis=0)<center-radius) or np.any(coords.min(axis=0)>center+radius):
-                continue
-            normals=target['world_normals'][list(tri.loops)]
-            for region,inside,weights,_,_ in tiles(target['uv'][list(tri.loops)],n):
+        # Every evaluated triangle occludes, including unassigned slots: the
+        # visibility test must not paint through protected geometry.
+        occluders=np.empty(len(mesh.loop_triangles)*3,np.int32)
+        mesh.loop_triangles.foreach_get('vertices',occluders)
+        tree=BVHTree.FromPolygons(positions,occluders.reshape(-1,3).tolist(),all_triangles=True)
+        # Cull with the Target arrays; per-triangle RNA work would cost seconds
+        # per click on dense assets no matter how small the stamp is.
+        tri_loops=target['tri_loops']; corners=positions[target['tri_vertices']]
+        chosen=np.flatnonzero(np.all(corners.max(axis=1)>=center-radius,axis=1)&np.all(corners.min(axis=1)<=center+radius,axis=1))
+        for i in chosen:
+            coords=corners[i]
+            normals=target['world_normals'][tri_loops[i]]
+            for region,inside,weights,_,_ in tiles(target['uv'][tri_loops[i]],n):
                 points=weights@coords
                 relative=points-center
                 depth=relative@normal

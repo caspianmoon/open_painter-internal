@@ -1,5 +1,6 @@
 """Preflight and register texture mesh maps."""
 
+from ..constants import OWNER
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
 from .cycles_baker import bake
@@ -12,7 +13,17 @@ def register_map(ts, kind, image):
     if prop is None:
         prop = ts.baked_maps.add()
         prop.kind = kind
+    previous = prop.image
     prop.image = image
+    if previous is not None and previous != image and previous.get(OWNER):
+        # The superseded map would otherwise stay in the file through its fake
+        # user and be packed on every save. A user-supplied image is never
+        # ours to drop; a live shader node may still bind an owned one, which
+        # then goes once the graph rebinds.
+        previous.use_fake_user = False
+        if not previous.users:
+            import bpy
+            bpy.data.images.remove(previous)
     from ..geometry.provenance import record
     prop.provenance = record(ts, kind)
 
@@ -141,12 +152,32 @@ def refresh_stale_curvature(ts, required, context=None):
         return False
     import bpy
     if context is not None and context.window is not None and not bpy.app.background:
-        from .jobs import OP_OT_edge_map_refresh
-        if OP_OT_edge_map_refresh.running:
-            return 'QUEUED'
-        result = bpy.ops.open_painter.edge_map_refresh('INVOKE_DEFAULT')
-        if result == {'RUNNING_MODAL'}:
+        if queue_edge_refresh(ts, context.scene):
             return 'QUEUED'
     register_maps(ts, bake_curvature_set(ts))
     invalidate(ts)
+    return True
+
+
+def queue_edge_refresh(ts, scene):
+    """Start the cooperative edge-map rebake of ``ts``, or defer it behind the
+    running one; False when it has to bake here.
+
+    The modal job serves one set at a time and its ``running`` flag is global:
+    a job started for another set (auto rebake, the panel button) must not
+    pass for this set's rebake, or the recipe added on that promise reads the
+    crease-only map for good. The scheduler's rebake tick starts the deferred
+    one once the job ends; a synchronous bake under a live job would stall
+    the interface the job exists to keep responsive.
+    """
+    import bpy
+    from .jobs import OP_OT_edge_map_refresh
+    if not OP_OT_edge_map_refresh.running:
+        return bpy.ops.open_painter.edge_map_refresh('INVOKE_DEFAULT', set_id=ts.id) == {'RUNNING_MODAL'}
+    if OP_OT_edge_map_refresh.running_set_id == ts.id:
+        return True
+    from ..evaluation import field_jobs
+    if not field_jobs.active():
+        return False
+    field_jobs.schedule_rebake(scene, ts)
     return True

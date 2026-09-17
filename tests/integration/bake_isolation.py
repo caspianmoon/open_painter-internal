@@ -295,6 +295,20 @@ with patch.object(cycles_baker, '_run_bake', side_effect=AssertionError('Invalid
 assert resources() == before_cage_resources
 assert low_subdivision.levels == 0 and low_subdivision.render_levels == 1
 
+# A matching cage is checked once, on the staged copies Cycles receives: no extra
+# render-evaluation scope per map (a render-subdivided target paid it three times).
+from open_painter.baking import cages
+render_low.modifiers.remove(low_subdivision)
+bpy.context.view_layer.update()
+with patch.object(cages, 'validate_topology', wraps=cages.validate_topology) as validated, \
+        patch.object(cages, 'topology_signature', wraps=cages.topology_signature) as signed:
+    render_caged = bake_pixels(render_ts, 'NORMAL')
+assert not validated.called, 'Cycles map re-validated the cage against a fresh render evaluation'
+assert signed.call_count == 2, signed.call_count
+np.testing.assert_allclose(render_caged, render_reference, atol=3e-5, rtol=0)
+render_ts.bake.cage_mode = 'AUTO'
+render_ts.bake.cage_object = None
+
 # Separate fixture: the roof occludes the floor strongly, but is initially an
 # unrelated author object and must not affect its AO. Once assigned, SET includes
 # contact between targets while PAIR deliberately removes it.
@@ -315,6 +329,20 @@ assert float(left(contact).mean()) < float(left(unrelated).mean()) - 0.2, 'SET s
 ao_ts.bake.ao_scope = 'PAIR'
 isolated = bake_pixels(ao_ts, 'AO')
 assert float(left(isolated).mean()) > 0.98, 'PAIR scope retained other target AO'
+# AO Exclusion is the PAIR pass composited where painted. A set baked from its
+# lows sees the same contact under SET scope, so the stroke must work there too.
+from open_painter.baking import corrections
+ao_ts.bake.ao_scope = 'SET'
+exclude = corrections.image_of(ao_ts, 'AO_EXCLUDE', create_missing=True)
+weights = images.pixels(exclude)
+weights[:, :256, :3] = 1.0   # the floor's island: the roof's, to the right, keeps its contact
+images.write(exclude, weights, pack=False)
+assert corrections.refresh_used(exclude) and corrections.active_keys(ao_ts) == ['AO_EXCLUDE']
+excluded = bake_pixels(ao_ts, 'AO')
+assert float(left(excluded).mean()) > 0.98, 'AO Exclusion was dropped for a set baked from its lows'
+np.testing.assert_allclose(left(excluded), left(isolated), atol=1e-5, rtol=0)
+corrections.clear(ao_ts)
+assert not corrections.active_keys(ao_ts)
 # AO distance is an explicit setting through an owned staging World. The roof
 # sits 0.15 above the floor: a reach shorter than that gap removes its contact
 # occlusion, a reach beyond it restores it, and the World never leaks.

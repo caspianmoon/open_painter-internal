@@ -10,9 +10,12 @@ class OP_OT_paint(SafeOperator, bpy.types.Operator):
     bl_label = "Paint Selected Channel"
     bl_description = "Paint the selected layer image with Blender’s native brush"
     bl_options = {"REGISTER", "UNDO"}
-    channel: bpy.props.StringProperty()
-    mask: bpy.props.BoolProperty(default=False)
-    stop: bpy.props.BoolProperty(default=False)
+    # SKIP_SAVE: a button click stores the properties it set as the operator's last-used
+    # values, and later clicks that leave them unset inherit them (Finish would turn every
+    # later Paint button into a Finish).
+    channel: bpy.props.StringProperty(options={"SKIP_SAVE"})
+    mask: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
+    stop: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
 
     def run(self, context):
         if self.stop:

@@ -42,9 +42,9 @@ def _active_changed(self, context):
     project = self.id_data.open_painter
     if project.paint_correction and project.paint_correction != self.active:
         from ..baking.corrections import begin_brush
-        from ..core.project_manager import active_set
-        ts = active_set(context)
-        if ts is not None:
+        # Only the painted set's selector: the dock may show another set while the session runs.
+        ts = next((item for item in project.texture_sets if item.id == project.paint_set_id), None)
+        if ts is not None and ts.bake.corrections.as_pointer() == self.as_pointer():
             try:
                 begin_brush(context, ts, self.active)
             except Exception as exc:

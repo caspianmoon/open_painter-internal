@@ -49,8 +49,11 @@ class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
             values=result.pop('contact_fraction'); result.pop('mean_proximity')
             n=values.shape[0]; rgba=np.ones((n,n,4),np.float32); rgba[...,:3]=values[...,None]
             image=images.create('Offline Contact Duration',n); images.write(image,rgba)
+            previous=mask.influence.image
             mask.influence.image=image; mask.influence.mode='FROZEN'
             mask.influence.provenance=json.dumps(result); invalidate(ts)
+            # Each run rasters a fresh fake-user image; release the last one like scene_fields.publish does.
+            if previous and previous.users<=1: bpy.data.images.remove(previous)
         elif self.action=='MARK':
             obj=context.active_object
             if not obj or obj.type!='MESH': raise ValueError('Select a mesh')

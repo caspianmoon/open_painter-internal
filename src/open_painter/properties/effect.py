@@ -1,11 +1,23 @@
 """Persistent texture effects shared by channel and adjustment-layer stacks."""
 import bpy
 
+from ..core.layer_stack import replaying
+
 
 def changed(self, context):
+    _detail_colorspace(self)
     _changed(self, context, True)
     from .channel import _resolve_physical
     _resolve_physical(self)
+
+
+def _detail_colorspace(effect):
+    """A Normal Combine detail map is data: an sRGB tag (the default of an opened
+    PNG) would have the shader's Image Texture node decode it while the CPU
+    reference reads the stored values, so the two combines disagree."""
+    image = effect.image
+    if effect.kind == 'NORMAL_COMBINE' and image is not None and image.colorspace_settings.name != 'Non-Color':
+        image.colorspace_settings.name = 'Non-Color'
 
 
 def numeric(self, context):
@@ -15,7 +27,7 @@ def numeric(self, context):
 
 def _changed(self, context, structural):
     project = getattr(self.id_data, 'open_painter', None)
-    if not project:
+    if not project or replaying():
         return
     pointer = self.as_pointer()
     for ts in project.texture_sets:

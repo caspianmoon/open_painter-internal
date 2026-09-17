@@ -238,6 +238,32 @@ def run():
     assert counters(observed).get('shader_paint_resumes', 0) == 2, counters(observed)
     print('PAINT_FREEZE_MULTI_OK', flush=True)
 
+    # ---- a gated set without deferred owners waits, never spins (0.9.7) ------
+    # Set A has a boundary queued when a stroke starts on set B: the gate holds
+    # A without freezing it, so the tick must keep the painting rate instead of
+    # returning the 1 kHz stepping interval for a queue nothing steps.
+    end_session()
+    settle([a, b])
+    blur.radius = 3.
+    assert shader_preview.diagnostics(scene, a)['pending_resources'], shader_preview.diagnostics(scene, a)
+    steps_before = shader_preview.diagnostics(scene, a)['resource_steps']
+    session(b, b_paint_id, b_image)
+    intervals = stroke([b_image], 6)
+    assert all(abs(i - cache.ACTIVE_INTERVAL) < 1e-9 for i in intervals), intervals
+    info = shader_preview.diagnostics(scene, a)
+    assert info['pending_resources'] and not info['frozen'] and info['resource_steps'] == steps_before, info
+    release()
+    settle([a, b])
+    # A failed boundary keeps its siblings queued; the scheduler idles instead of spinning.
+    end_session()
+    blur.radius = 4.   # a radius the raster cache has not seen: a real queue
+    assert shader_preview.diagnostics(scene, a)['pending_resources']
+    shader_preview._sessions[(pointer, a.id)]['error'] = 'boundary failed'
+    assert abs(cache.tick() - cache.IDLE_INTERVAL) < 1e-9
+    shader_preview.retry(scene, a)
+    settle([a])
+    print('PAINT_FREEZE_GATE_RATE_OK', flush=True)
+
     # ---- save, undo, backend switch and finish during a stroke ----------------
     end_session()
     session(a, a_paint_id, a_image)

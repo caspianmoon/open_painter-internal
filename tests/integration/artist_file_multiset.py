@@ -193,7 +193,7 @@ project.active_texture_set = next(i for i, t in enumerate(project.texture_sets) 
 with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0], object=small, active_object=small):
     canvas = paint_session.begin_multi(bpy.context, front, 'BASE_COLOR')
 back = set_by_id(back_id)
-linked = next((l for l in back.layers if l.type == 'PAINT' and l.stroke_key and l.stroke_key == grime.stroke_key), None)
+linked = next((l for l in back.layers if l.type == 'PAINT' and l.paint_link and l.paint_link == grime.paint_link), None)
 assert linked is not None, 'the other set of the object gets a linked paint layer'
 assert len(project.paint_canvases) == 2
 partner = next(entry.image for entry in project.paint_canvases if entry.image != canvas)

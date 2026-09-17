@@ -9,14 +9,26 @@ from contextlib import contextmanager
 
 import bpy
 
+from ..geometry_effects import displace
 from ..geometry_effects.manager import TAG
 
 
 def helpers_of(ts, scene=None):
     scene = scene or ts.id_data
-    return [obj for obj in scene.objects if obj.get(TAG) == 'INSTANCE_HELPER'
-            and (obj.get('source_texture_set') == ts.id or _source_of(obj) is not None
-                 and any(ref.object == _source_of(obj) for ref in ts.assignments))]
+    found = []
+    for obj in scene.objects:
+        if obj.get(TAG) != 'INSTANCE_HELPER':
+            continue
+        recorded = obj.get('source_texture_set')
+        # A helper that records its set is that set's alone: several sets can own slots
+        # of one object, and a displaced copy carries one set's relief. Helpers without
+        # the record (stitches, welds, older files) follow their source's assignment.
+        if recorded:
+            if recorded == ts.id:
+                found.append(obj)
+        elif _source_of(obj) is not None and any(ref.object == _source_of(obj) for ref in ts.assignments):
+            found.append(obj)
+    return found
 
 
 def _source_of(helper):
@@ -29,9 +41,24 @@ def _source_of(helper):
     return parent
 
 
+def _row(ref):
+    return (ref.object, ref.name, ref.target, ref.cage, ref.ignorable)
+
+
+def _restore_rows(settings, rows):
+    settings.high_objects.clear()
+    for obj, name, target, cage, ignorable in rows:
+        ref = settings.high_objects.add()
+        ref.object, ref.name, ref.target, ref.cage, ref.ignorable = obj, name, target, cage, ignorable
+
+
 @contextmanager
 def staged(ts, helpers, ray_margin=1.5):
-    """Temporarily list the helpers as high-poly sources of their targets."""
+    """Temporarily list the helpers as high-poly sources of their targets.
+
+    Yields the settings saved on entry (``selected_to_active``, ``ray_distance``,
+    ``rows``) so a caller that removes the helpers afterwards can put the set back.
+    """
     settings = ts.bake
     # Rows of helpers that were regenerated or removed dangle: drop them first.
     for index in range(len(settings.high_objects) - 1, -1, -1):
@@ -39,13 +66,15 @@ def staged(ts, helpers, ray_margin=1.5):
             settings.high_objects.remove(index)
     saved = dict(selected_to_active=settings.selected_to_active, ray_distance=settings.ray_distance,
                  normal=settings.normal, ao=settings.ao, curvature=settings.curvature,
-                 rows=[(ref.object, ref.name, ref.target, ref.cage) for ref in settings.high_objects])
+                 rows=[_row(ref) for ref in settings.high_objects])
     saved_utility = {name: getattr(settings, name) for name in ('position', 'world_normal', 'thickness', 'uv_border',
                                                                  'object_normal', 'material_id', 'object_id',
-                                                                 'uv_island', 'mean_curvature', 'selected_faces',
+                                                                 'uv_island', 'mean_curvature', 'selection',
                                                                  'bevel_normal', 'bevel_mask')
                      if hasattr(settings, name)}
-    added = []
+    # Names, not row references: every add() may reallocate the collection, so a row
+    # reference kept across the next add() reads freed memory.
+    added = set()
     try:
         for helper in helpers:
             target = _source_of(helper)
@@ -53,24 +82,22 @@ def staged(ts, helpers, ray_margin=1.5):
                 continue
             ref = settings.high_objects.add()
             ref.object, ref.name, ref.target = helper, helper.name, target
-            added.append(ref)
+            added.add(helper.name)
         settings.selected_to_active = True
-        reach = max(float(helper.get('amplitude', 0.0)) for helper in helpers) if helpers else 0.0
+        # The modifier's live amplitude, not the creation-time one the helper records.
+        reach = max(displace.settings(helper)['amplitude'] for helper in helpers) if helpers else 0.0
         sizes = [float(helper.get('size', 0.0)) * 2 for helper in helpers]
         settings.ray_distance = max(settings.ray_distance, reach * ray_margin, max(sizes, default=0.0) * ray_margin)
         settings.normal, settings.ao, settings.curvature = True, True, False
         for name in saved_utility:
             setattr(settings, name, False)
-        yield added
+        yield saved
     finally:
         # The helpers stay listed as sources (keep/hide) so the maps' provenance matches
         # until a helper regenerates; a removed helper's row would dangle, so drop it.
-        kept = [(ref.object, ref.name, ref.target, ref.cage) for ref in added
-                if ref.object is not None and ref.object.name in bpy.data.objects]
-        settings.high_objects.clear()
-        for obj, name, target, cage in saved['rows'] + kept:
-            ref = settings.high_objects.add()
-            ref.object, ref.name, ref.target, ref.cage = obj, name, target, cage
+        kept = [_row(ref) for ref in settings.high_objects
+                if ref.object is not None and ref.object.name in added]
+        _restore_rows(settings, saved['rows'] + kept)
         # Sources kept ⇒ the maps' provenance (sources, ray distance, projection) must keep matching.
         settings.selected_to_active = saved['selected_to_active'] or bool(kept)
         if not kept:
@@ -86,7 +113,7 @@ def steps(context, ts, helpers, then='KEEP'):
     if not helpers:
         raise ValueError('Generate geometry on this set first (Material → Geometry).')
     context.view_layer.update()   # freshly generated helpers join the view layer on the next update
-    with staged(ts, helpers):
+    with staged(ts, helpers) as saved:
         for kind in bake_steps(context, ts):
             yield kind
     for entry in ts.baked_maps:
@@ -97,11 +124,24 @@ def steps(context, ts, helpers, then='KEEP'):
             helper.hide_viewport = helper.hide_render = True
     elif then == 'REMOVE':
         from ..geometry_effects.manager import remove
+        from ..geometry.provenance import record
+        settings = ts.bake
+        remaining = [row[0] for row in saved['rows'] if row[0] not in helpers]
         for helper in helpers:
             remove(helper)
-        for index in range(len(ts.bake.high_objects) - 1, -1, -1):
-            if ts.bake.high_objects[index].object is None:
-                ts.bake.high_objects.remove(index)
+        for index in range(len(settings.high_objects) - 1, -1, -1):
+            if settings.high_objects[index].object is None:
+                settings.high_objects.remove(index)
+        if [ref.object for ref in settings.high_objects] == remaining:
+            # Nothing projects from the helpers any more: the set bakes the way it did before
+            # (projection cannot stay on over an empty list), and the maps just baked are
+            # recorded against that state so they read current rather than asking for a
+            # rebake that would only lose the relief.
+            settings.selected_to_active = saved['selected_to_active'] and bool(remaining)
+            settings.ray_distance = saved['ray_distance']
+            for entry in ts.baked_maps:
+                if entry.kind in {'NORMAL', 'AO'} and entry.image:
+                    entry.provenance = record(ts, entry.kind)
 
 
 def run(context, ts, helpers, then='KEEP'):

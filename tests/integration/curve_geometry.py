@@ -75,5 +75,36 @@ bead = weld.create(scene, curve, radius=.01)
 assert bead.get(manager.TAG) == 'INSTANCE_HELPER' and bead['kind'] == 'WELD'
 manager.remove(bead); manager.remove(helper)
 print('CURVE_GEOMETRY stitches and bead: PASS', flush=True)
+
+# A blockout plate (cube scaled to Z = 0) has a singular matrix: extraction must not raise
+# after the curve is linked, and the curve stays on the surface instead of being
+# re-transformed by the parent.
+bpy.ops.mesh.primitive_cube_add()
+plate = bpy.context.object
+plate.scale = (1.0, 1.0, 0.0)
+bpy.context.view_layer.update()
+plate_set = sets.create(scene, 'Plate', 512); sets.assign(scene, plate_set, plate)
+plate_set.preview_backend = 'CPU'
+plate_layer = stack.add(plate_set, 'FILL', 'Scribe')
+plate_mask = plate_layer.masks.add(); plate_mask.id, plate_mask.source = new_id(), 'PAINT'
+plate_mask.image = line
+bpy.context.view_layer.update()
+steps = curves.extract_steps(plate_set, publish_mask(plate_set, plate_layer), n=512, threshold=.5, tolerance=1.5)
+while True:
+    try:
+        next(steps)
+    except StopIteration as done:
+        plate_lines = done.value
+        break
+assert plate_lines, 'no curve extracted from the plate'
+before = {o.name for o in bpy.data.objects}
+plate_curve = curves.create_curve(scene, plate, plate_lines, 'OP Curves · Scribe', manager.TAG)
+assert {o.name for o in bpy.data.objects} - before == {plate_curve.name}
+bpy.context.view_layer.update()
+expected = np.concatenate([p for p, _ in plate_lines])
+placed = np.array([(plate_curve.matrix_world @ point.co.to_3d())[:] for spline in plate_curve.data.splines for point in spline.points])
+assert np.abs(placed - expected).max() < 1e-4, np.abs(placed - expected).max()
+assert np.abs(placed[:, 2]).max() < 1e-4, placed[:, 2]   # flat on the plate
+print('CURVE_GEOMETRY singular source: PASS', flush=True)
 print('CURVE_GEOMETRY_PASS', flush=True)
 open_painter.unregister()

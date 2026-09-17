@@ -333,13 +333,18 @@ class OP_PT_masks(bpy.types.Panel):
                     for item in other.layers if item.stroke_key}
             if mask.stroke_key:
                 count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key))
-                layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, "?")}"', icon='CURVE_BEZCURVE')
+                # A key minted for the mask (New Key) is named after the mask itself.
+                layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, mask.name)}"', icon='CURVE_BEZCURVE')
             else:
                 layout.label(text='No strokes linked yet', icon='INFO')
             row = layout.row(align=True)
             row.operator('open_painter.mask_strokes', text="This Layer's Strokes", icon='LINKED').action = 'OWN'
             row.operator('open_painter.mask_strokes', text='New Key', icon='ADD').action = 'NEW'
             row.operator('open_painter.mask_strokes', text='', icon='X').action = 'CLEAR'
+            if mask.stroke_key and hasattr(bpy.types, 'OP_OT_vector_brush'):
+                from .strokes_panel import draw_strokes
+                layout.operator('open_painter.vector_brush', text='Paint Vector Strokes', icon='BRUSH_DATA').mask = True
+                draw_strokes(layout, context, ts, layer, mask=mask)
         elif mask.source == "PROCEDURAL":
             op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
             op.target, op.create = "MASK", False
@@ -391,7 +396,7 @@ class OP_PT_masks(bpy.types.Panel):
                 box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
                 box.prop(ts.bake, "curvature_angle")
                 box.prop(ts.bake, "curvature_width")
-                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA")
+                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA").set_id = ts.id
             from ..generators.micro_details import KINDS as MICRO_KINDS
             if mask.generator in MICRO_KINDS:
                 from .anchors import draw_anchor_field

@@ -1,6 +1,7 @@
 import bpy
 
 from ..constants import BLEND_ITEMS, CHANNEL_ITEMS
+from ..core.layer_stack import replaying
 from .effect import OP_TextureEffect
 
 
@@ -33,7 +34,7 @@ def owning_set(owner):
 
 def _resolve_physical(owner):
     """A structural edit (projection, source, kind) can change how metre sizes map to texture units."""
-    if getattr(owner, 'units', 'TEXTURE') != 'PHYSICAL':
+    if getattr(owner, 'units', 'TEXTURE') != 'PHYSICAL' or replaying():
         return
     ts = owning_set(owner)
     if ts is not None:
@@ -43,10 +44,15 @@ def _resolve_physical(owner):
 
 def _changed(self, context, structural):
     self.dirty = True
-    # Resolve by stable ID, without coupling properties to UI selection.
+    if replaying():
+        return   # a snapshot replay invalidates its set once (layer_stack.replay)
+    # Resolve the owner by address, like layer.py and effect.py: a replayed
+    # snapshot carries its source's layer_id until the copy is re-keyed, and a
+    # lookup by that id would dirty the source set instead.
+    pointer = self.as_pointer()
     for ts in self.id_data.open_painter.texture_sets:
         for layer in ts.layers:
-            if layer.id == self.layer_id:
+            if any(prop.as_pointer() == pointer for prop in layer.channels):
                 previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 layer.dirty = True
                 ts.dirty = True
@@ -73,6 +79,8 @@ def detail_image_changed(self, context):
 
 def physical_changed(self, context):
     """A metre size or the units switch: derive the texture values (their own callbacks notify)."""
+    if replaying():
+        return
     from ..evaluation import physical
     ts = owning_set(self)
     if ts is not None:

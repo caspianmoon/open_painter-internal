@@ -27,8 +27,16 @@ shared={}
 tiled=np.concatenate([evaluate_masks(ts,layer,512,y,min(512,y+32),{},shared) for y in range(0,512,32)])
 np.testing.assert_array_equal(whole,tiled)
 mask_blocks = [k for k in shared if isinstance(k,tuple) and k[0]=='mask_stack']
-assert len(mask_blocks) == 16
-assert all(k[-1] - k[-2] <= 50 for k in mask_blocks), 'Blur cached a full-image mask'
+# Aligned 64-row strips retain only their own rows: a sweep keeps n / 64 entries
+# (one image in total), not an overlapping halo strip per request.
+assert len(mask_blocks) == 8, len(mask_blocks)
+assert all(k[-1] - k[-2] == 64 for k in mask_blocks), 'Blur cached a full-image mask'
+assert sum(shared[k].shape[0] for k in mask_blocks) == 512
+sweep_cache = {}
+swept = np.concatenate([evaluate_masks(ts,layer,512,y,y+16,sweep_cache,shared) for y in range(0,512,16)])
+np.testing.assert_array_equal(whole, swept)
+assert len([k for k in shared if isinstance(k,tuple) and k[0]=='mask_stack']) == 8, 'the 16-row sweep added strips'
+assert len([k for k in sweep_cache if isinstance(k,tuple) and k[0]=='mask_stack']) == 1, 'the job retained every strip'
 assert whole.min()<.01 and whole.max()>.99 and ((whole>.1)&(whole<.9)).any()
 filter_mask.effect.kind='INVERT'
 actual=evaluate_masks(ts,layer,512,0,512,{},{})

@@ -19,10 +19,15 @@ def create(scene, curve, radius=.015, resolution=4, ripple=.3, period=1.35):
     # Bounded curve evaluation; this initial tube supports poly/Bezier paths.
     if any(s.type not in {'POLY','BEZIER'} for s in curve.data.splines):
         raise ValueError('Weld paths support Poly and Bezier splines')
-    count = sum(len(s.bezier_points) if s.type=='BEZIER' else len(s.points) for s in curve.data.splines)
     profile_points = max(8, min(32, resolution * 4))
-    # Resampling by length bounds the segment count through the curve's extent.
-    estimate = max(1, count) * max(1, curve.data.resolution_u) * 16 * profile_points
+    # The tube is a length resample swept by the profile, so its size follows the
+    # arc length and the ripple step, not the control-point count (an extracted
+    # seam keeps hundreds of points for a few thousand triangles). calc_length
+    # falls back to the spline's own resolution_u for Bezier paths.
+    step = radius * period / 14
+    length = sum(s.calc_length() for s in curve.data.splines)
+    segments = int(length / step) + len(curve.data.splines)
+    estimate = segments * profile_points * 2 + 2 * len(curve.data.splines) * (profile_points - 2)  # plus filled caps
     limits.check(scene, 0, estimate)
     identifier = new_id()
     from . import materials

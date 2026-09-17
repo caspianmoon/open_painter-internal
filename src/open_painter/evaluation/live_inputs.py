@@ -16,6 +16,7 @@ from . import metrics
 from .channel_eval import TILE_ROWS, _procedural_tile, _detail_tile, source
 from .image_snapshots import ImageSnapshots
 from .mask_eval import _effect_signature, _stack_signature, evaluate_masks, map_pixels
+from .operation_contracts import surface
 from .preview_policy import SlicePolicy, resolution, resources as preview_resources
 from .raster_cache import for_texture_set
 from .resource_keys import image_key, key_for
@@ -143,7 +144,9 @@ class Builder:
                 prop.filtering, prop.tiling, tuple(prop.scale), prop.rotation,
                 tuple(prop.offset), prop.triplanar_hardness,
                 tuple(_effect_signature(effect) for effect in _effects(prop)),
-                self.geometry_stamp if prop.projection == 'TRIPLANAR' else None,
+                # Surface-space effects pad each island from the set's seam map.
+                self.geometry_stamp if prop.projection == 'TRIPLANAR'
+                or any(surface(effect) for effect in _effects(prop)) else None,
                 getattr(prop, 'anchor', ''), self.ts.edit_serial if getattr(prop, 'anchor', '') else None)
 
     def _texture(self, key, components, tile, resolve=True, gpu_source=None):

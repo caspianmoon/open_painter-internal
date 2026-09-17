@@ -162,5 +162,115 @@ bpy.data.scenes.remove(linked)
 cache.tick()
 assert shader_preview.current(bpy.context.scene, find(bpy.context.scene, ts_id))
 print('LIFECYCLE_EDGE linked scene copy: PASS', flush=True)
+
+# --- The status line: messages from other subsystems outlive shader ticks (0.9.7).
+scene = bpy.context.scene
+ts = find(scene, ts_id)
+ready(scene, ts)
+scene.open_painter.status = 'Layer cache failed: probe'
+for _ in range(3):
+    cache.tick()
+    shader_preview.tick(scene, ts)
+assert scene.open_painter.status == 'Layer cache failed: probe', scene.open_painter.status
+noisy = next(l for l in ts.layers if l.id == layer_id)
+noisy.opacity = .8   # a numeric edit changes nothing the shader would report
+assert scene.open_painter.status == 'Layer cache failed: probe', scene.open_painter.status
+noisy.blend_mode = 'MULTIPLY'   # the shader's own text changes: it is written again
+assert scene.open_painter.status == 'Preparing shader graph…', scene.open_painter.status
+ready(scene, ts)
+assert scene.open_painter.status == 'Shader native · textures bake on request', scene.open_painter.status
+cache._set_progress(scene, 'Caching probe… 50%')   # a finished job's progress line is handed back
+cache.tick()
+assert scene.open_painter.status == 'Shader native · textures bake on request', scene.open_painter.status
+print('LIFECYCLE_EDGE status line: PASS', flush=True)
+
+# --- A numeric-only batch must not service a rebuild queued before it (0.9.7).
+noisy = next(l for l in ts.layers if l.id == layer_id)
+noisy.bypass = True
+assert shader_preview.diagnostics(scene, ts)['rebuild_pending']
+with shader_preview.authoring_batch(ts):
+    noisy.opacity = .5
+info = shader_preview.diagnostics(scene, ts)
+assert info['rebuild_pending'] and not shader_preview.current(scene, ts), info
+ready(scene, ts)
+graph = shader_preview.ensure(scene, ts)
+assert graph.matches_structure()
+assert any(key[1] == layer_id and unit.flags.get('bypass') for key, unit in graph.units.items()), sorted(graph.units)
+noisy.bypass = False
+noisy.opacity = 1.
+ready(scene, ts)
+print('LIFECYCLE_EDGE batch after structural edit: PASS', flush=True)
+
+# --- texture_sets.add()/remove() relocate the set structs: a session follows its set (0.9.7).
+bpy.ops.mesh.primitive_cube_add(size=1)
+second = sets.create(scene, 'Second object')   # native, no layers: the natural add-then-delete-the-old-one flow
+sets.assign(scene, second, bpy.context.object)
+second_id = second.id
+ready(scene, second)
+first = find(scene, ts_id)
+ready(scene, first)   # a reallocated array is followed, never read through the old address
+assert shader_preview.ensure(scene, first).ts.as_pointer() == first.as_pointer()
+sets.remove(scene, next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == ts_id))
+second = find(scene, second_id)
+live = shader_preview.session_graph(scene, second)
+assert live is None or live.ts.as_pointer() == second.as_pointer(), 'the session still reads the deleted slot'
+cache.tick()
+fill = stack.add(second, 'FILL', 'Colour')
+fill_id = fill.id
+stack.channel_for(fill, 'BASE_COLOR').color = (.2, .7, .3, 1.)
+info = ready(scene, second)
+graph = shader_preview.ensure(scene, second)
+assert graph.ts.as_pointer() == second.as_pointer()
+assert any(key[1] == fill_id for key in graph.units), sorted(graph.units)
+assert graph.matches_structure(), info
+# A removal that bypasses the manager (export/atlas.py) heals on the next tick.
+third = sets.create(scene, 'Third')
+third_id = third.id
+base = stack.add(third, 'FILL', 'Base')
+base_id = base.id
+stack.channel_for(base, 'BASE_COLOR').color = (.4, .4, .1, 1.)
+info = ready(scene, third)
+rehydrations = info['graph_rehydrations']
+scene.open_painter.texture_sets.remove(next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == second_id))
+third = find(scene, third_id)
+assert shader_preview.session_graph(scene, third) is None, 'a moved graph was handed out'
+assert not shader_preview.current(scene, third)
+info = ready(scene, third)
+graph = shader_preview.ensure(scene, third)
+assert graph.ts.as_pointer() == third.as_pointer() and graph.matches_structure()
+assert info['graph_rehydrations'] == rehydrations + 1, info   # its trees were still on the material
+print('LIFECYCLE_EDGE relocated texture sets: PASS', flush=True)
+
+# --- A failed replacement build keeps its rebuild requirement (0.9.7).
+from unittest.mock import patch
+from open_painter.evaluation.shader_graph import Graph
+original_build = Graph.build
+attempts = []
+
+
+def failing_build(self, reuse=None):
+    attempts.append(reuse)
+    if len(attempts) == 1:
+        raise RuntimeError('simulated compile failure')
+    return original_build(self, reuse=reuse)
+
+
+with patch.object(Graph, 'build', failing_build):
+    extra = stack.add(third, 'FILL', 'Extra')
+    extra_id = extra.id
+    for _ in range(3):
+        shader_preview.tick(scene, third)
+    info = shader_preview.diagnostics(scene, third)
+    assert info['state'] == 'FAILED' and 'simulated' in info['error'] and info['rebuild_pending'], info
+    assert len(attempts) == 1, 'a parked failure was retried without an edit'
+    stack.channel_for(next(l for l in third.layers if l.id == base_id), 'BASE_COLOR').color = (.5, .5, .5, 1.)
+    info = shader_preview.diagnostics(scene, third)
+    assert not shader_preview.current(scene, third) and info['rebuild_pending'], info
+    assert 'simulated' in info['error'], 'a numeric edit masked the failed build'
+    info = ready(scene, third)
+assert len(attempts) == 2, attempts
+graph = shader_preview.ensure(scene, third)
+assert any(key[1] == extra_id for key in graph.units) and graph.matches_structure()
+print('LIFECYCLE_EDGE failed replacement build: PASS', flush=True)
 print('SHADER_LIFECYCLE_EDGES_PASS', flush=True)
 open_painter.unregister()

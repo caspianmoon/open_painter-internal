@@ -61,8 +61,108 @@ half = edge_curvature(ts, SimpleNamespace(edge_size=1.5), mesh_map)
 lo, hi = mesh_map('CURVATURE')[..., 0], mesh_map('CURVATURE_WIDE')[..., 0]
 assert np.all(half >= np.minimum(lo, hi) - 1e-6) and np.all(half <= np.maximum(lo, hi) + 1e-6)
 assert means['CURVATURE'] < float(half.mean()) < means['CURVATURE_WIDE']
+# An Edge Size edit re-rasters an Edge Wear mask through the shared, edit-surviving
+# CPU cache (0.9.7): the generator signature carries edge_size.
+from open_painter.core import layer_stack as stack
+from open_painter.evaluation.mask_eval import evaluate_masks
+from open_painter.evaluation.raster_cache import for_texture_set
+from open_painter.utils.ids import new_id
+worn_id = stack.add(ts, 'FILL', 'Wear').id
+worn_of = lambda: next(l for l in ts.layers if l.id == worn_id)
+wear = worn_of().masks.add()
+wear.id, wear.source, wear.generator = new_id(), 'GENERATOR', 'EDGE_WEAR'
+wear.amount, wear.noise_strength, wear.edge_size = 1., 0., 1.
+normal = evaluate_masks(ts, worn_of(), 512, 0, 512, {}, for_texture_set(scene, ts))
+worn_of().masks[0].edge_size = 3.
+extreme = evaluate_masks(ts, worn_of(), 512, 0, 512, {}, for_texture_set(scene, ts))
+fresh = evaluate_masks(ts, worn_of(), 512, 0, 512, {}, {})
+np.testing.assert_array_equal(extreme, fresh)
+assert float(extreme.mean()) > float(normal.mean()), (float(normal.mean()), float(extreme.mean()))
+stack.remove(ts, next(i for i, l in enumerate(ts.layers) if l.id == worn_id))
 # Without companions the generator falls back to the single map.
 ts.baked_maps.remove(next(i for i, m in enumerate(ts.baked_maps) if m.kind == 'CURVATURE_WIDE'))
 np.testing.assert_array_equal(edge_curvature(ts, SimpleNamespace(edge_size=2.5), mesh_map), mesh_map('CURVATURE')[..., 0])
+
+# A rebake releases the maps it supersedes (0.9.7): they used to survive on
+# their fake user and were packed into the .blend on every save. A map a node
+# still binds loses the fake user and goes once unbound; a user-supplied
+# image is left alone.
+from open_painter.constants import OWNER
+superseded = {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
+material = bpy.data.materials.new('binds the old map')
+material.use_nodes = True
+node = material.node_tree.nodes.new('ShaderNodeTexImage')
+node.image = bpy.data.images[superseded['CURVATURE_THIN']]
+picked = bpy.data.images.new('artist curvature', 8, 8)
+picked.use_fake_user = True
+register_map(ts, 'CURVATURE_XWIDE', picked)
+assert superseded['CURVATURE_XWIDE'] not in bpy.data.images
+register_maps(ts, bake_curvature_set(ts))
+assert edge_map_set_complete(ts)
+assert superseded['CURVATURE'] not in bpy.data.images, 'the superseded map kept its fake user'
+bound = bpy.data.images[superseded['CURVATURE_THIN']]
+assert bound.users == 1 and not bound.use_fake_user, (bound.users, bound.use_fake_user)
+node.image = None
+assert bound.users == 0
+assert picked.name in bpy.data.images and picked.use_fake_user and not picked.get(OWNER)
+assert all(m.image.users == 2 and m.image.use_fake_user for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS)
+bpy.data.materials.remove(material)
+bpy.data.images.remove(picked)
+
+# The four reaches share one face-turning pass and one raster (0.9.7): they
+# were prepared four times over and all held for the whole job, which at 4k
+# blocked the invoke step for seconds and retained gigabytes.
+from open_painter.baking.maps import mean_curvature
+from open_painter.geometry import uv_rasterizer
+counted = {'rasterize': 0, 'face_turning': 0}
+original_rasterize, original_turning = uv_rasterizer.rasterize, mean_curvature.face_turning
+def counting_rasterize(*args, **kwargs):
+    counted['rasterize'] += 1
+    return original_rasterize(*args, **kwargs)
+def counting_turning(*args, **kwargs):
+    counted['face_turning'] += 1
+    return original_turning(*args, **kwargs)
+uv_rasterizer.rasterize, mean_curvature.face_turning = counting_rasterize, counting_turning
+try:
+    shared = bake_curvature_set(ts)
+finally:
+    uv_rasterizer.rasterize, mean_curvature.face_turning = original_rasterize, original_turning
+assert counted == {'rasterize': 1, 'face_turning': 1}, counted
+for kind, image in shared.items():
+    assert abs(float(images.pixels(image)[..., 0].mean()) - means[kind]) < 1e-4, kind
+    bpy.data.images.remove(image)
+
+# The pair matrix of a cell (its texels against the nearby samples) is sliced
+# (0.9.7): unbounded, a dense 4k asset at the XWIDE reach allocated gigabytes
+# per octant and the modal froze for the whole cell. Slices sum to the same map.
+from open_painter.geometry.snapshots import targets
+largest = [0]
+original_einsum = np.einsum
+def measuring_einsum(subscripts, *operands, **kwargs):
+    if subscripts == 'ijk,ijk->ij':
+        largest[0] = max(largest[0], operands[0].shape[0] * operands[0].shape[1])
+    return original_einsum(subscripts, *operands, **kwargs)
+with targets(ts) as meshes:
+    reference = mean_curvature.convex_map(meshes, 128, 1.0)
+    mean_curvature.TEXEL_CHUNK, mean_curvature.SAMPLE_CHUNK, np.einsum = 32, 64, measuring_einsum
+    try:
+        sliced = mean_curvature.convex_map(meshes, 128, 1.0)
+    finally:
+        mean_curvature.TEXEL_CHUNK, mean_curvature.SAMPLE_CHUNK, np.einsum = 1024, 4096, original_einsum
+    assert 0 < largest[0] <= 32 * 64, largest[0]
+    np.testing.assert_allclose(sliced, reference, atol=1e-5)
+# A zero-scaled axis (a plate flattened with S Z 0) is a singular matrix: face
+# turning takes the safe inverse like every other normal transform instead of
+# raising 'Singular matrix' from the bake and the live field.
+from open_painter.geometry import live_curvature
+cube.scale = (1., 1., 0.)
+bpy.context.view_layer.update()
+with targets(ts) as meshes:
+    flat = mean_curvature.convex_map(meshes, 128, .05)
+    assert np.isfinite(flat).all()
+    density, used = live_curvature.vertex_density(meshes[0], .05, np.radians(30))
+    assert np.isfinite(density).all() and used.any()
+cube.scale = (1., 1., 1.)
+bpy.context.view_layer.update()
 print('EDGE_MAP_SET_PASS', flush=True)
 open_painter.unregister()

@@ -24,7 +24,10 @@ class OP_OT_export_target(SafeOperator, bpy.types.Operator):
     bl_description = ("Export textures (and the mesh) for the project's target renderer in one step: "
                       "the target's packing, naming, normal convention and mesh format, plus a manifest")
     bl_options = {"REGISTER"}
-    all_sets: bpy.props.BoolProperty(name="Sets of Selected Objects", default=False)
+    # SKIP_SAVE: the plain export buttons set nothing, and Blender would otherwise reuse the last
+    # run's value, so one "Selected Objects" click would make every later plain click export
+    # the selected objects' sets (or every set when nothing is selected).
+    all_sets: bpy.props.BoolProperty(name="Sets of Selected Objects", default=False, options={"SKIP_SAVE"})
 
     def run(self, context):
         from ..export.exporter import export

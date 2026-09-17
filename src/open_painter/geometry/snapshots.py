@@ -16,6 +16,64 @@ def _object_key(obj):
     return f"{obj.library.filepath if obj.library else ''}|{obj.name_full}"
 
 
+def _view_layers(scene):
+    """The scene's view layers, the artist's own first: the CPU reference must read the
+    geometry the viewport (and the native shader preview) draws."""
+    active = getattr(bpy.context, 'view_layer', None)
+    if active is None or active.id_data != scene:
+        return list(scene.view_layers)
+    return [active] + [layer for layer in scene.view_layers if layer != active]
+
+
+def _enabled_collections(layer_collection, found):
+    """Collections whose objects have an enabled base under ``layer_collection``."""
+    if layer_collection.exclude or layer_collection.collection.hide_viewport:
+        return found
+    found.add(layer_collection.collection)
+    for child in layer_collection.children:
+        _enabled_collections(child, found)
+    return found
+
+
+def _enabled_in(layer, objects):
+    """The first object without an enabled base in ``layer``, or None.
+
+    Read from the collection tree rather than ``ViewLayer.objects``, which lags behind an
+    exclude toggle until something syncs the layer, and which still lists an object that is
+    disabled in viewports.
+    """
+    enabled = _enabled_collections(layer.layer_collection, set())
+    master = layer.layer_collection.collection   # ``users_collection`` leaves the scene collection out
+    return next((obj for obj in objects if obj.hide_viewport or not (
+        obj.name in master.objects or any(owner in enabled for owner in obj.users_collection))), None)
+
+
+def depsgraph_for(scene, objects):
+    """Depsgraph of the first view layer (the artist's own first) that evaluates every object.
+
+    An object without an enabled base in a layer (excluded collection, disabled in viewports)
+    is not evaluated there: ``evaluated_get`` hands back the original, or a copy nothing
+    keeps current when the set's pointer to the object gave it a depsgraph node, and
+    ``to_mesh`` the base mesh without modifiers; nothing raises. Such a layer is skipped;
+    when no layer evaluates an object the caller gets a ValueError instead of the wrong
+    geometry.
+    """
+    objects = list(objects)
+    missing = None
+    for layer in _view_layers(scene):
+        # Bases first: building another layer's depsgraph is the expensive part.
+        absent = _enabled_in(layer, objects)
+        if absent is None:
+            with bpy.context.temp_override(scene=scene, view_layer=layer):
+                depsgraph = bpy.context.evaluated_depsgraph_get()
+            absent = next((obj for obj in objects if not obj.evaluated_get(depsgraph).is_evaluated), None)
+            if absent is None:
+                return depsgraph
+        missing = missing or absent
+    raise ValueError(f'{missing.name} is not evaluated in any view layer of {scene.name} '
+                     '(excluded collection or disabled in viewports).')
+
+
 class Target(dict):
     """One evaluated mesh's arrays; the RNA triangle list is built only on request."""
 
@@ -52,14 +110,14 @@ def targets(ts):
     scene = getattr(ts, 'id_data', bpy.context.scene)
     if not isinstance(scene, bpy.types.Scene):
         scene = bpy.context.scene
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+    objects = sorted({ref.object for ref in ts.assignments}, key=_object_key)
+    for obj in objects:
+        if obj.type != "MESH":
+            raise ValueError(f"{obj.name} is not a mesh.")
+    depsgraph = depsgraph_for(scene, objects)
     temporary, targets = [], []
     try:
-        objects = sorted({ref.object for ref in ts.assignments}, key=_object_key)
         for obj in objects:
-            if obj.type != "MESH":
-                raise ValueError(f"{obj.name} is not a mesh.")
             evaluated = obj.evaluated_get(depsgraph)
             mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
             temporary.append(evaluated)

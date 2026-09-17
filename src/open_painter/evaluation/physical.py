@@ -50,18 +50,19 @@ def density(ts):
     if not any(ref.object for ref in ts.assignments):
         return None
     key = _key(ts)
-    found = _density.get(key)
-    if found is None:
-        try:
-            world, uv_area = measure(ts)
-        except ValueError:
-            return None
-        if world <= 1e-12 or uv_area <= 1e-12:
-            return None
-        found = float(np.sqrt(world / uv_area))
-        if len(_density) > 64:
-            _density.clear()
-        _density[key] = found
+    if key in _density:
+        return _density[key]
+    # An unresolvable set (no faces in the assigned slot, evaluated mesh without a UV map,
+    # degenerate UVs) is remembered too: measuring copies every evaluated mesh, and the panel
+    # asks on each redraw. The key carries the mesh signature, so fixing the mesh re-measures.
+    try:
+        world, uv_area = measure(ts)
+        found = float(np.sqrt(world / uv_area)) if world > 1e-12 and uv_area > 1e-12 else None
+    except ValueError:
+        found = None
+    if len(_density) > 64:
+        _density.clear()
+    _density[key] = found
     return found
 
 

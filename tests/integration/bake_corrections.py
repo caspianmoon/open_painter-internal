@@ -42,6 +42,7 @@ plate.scale = (.5, .5, .02)
 plate.location = (0, 0, 1.3)   # entirely above the 0.1 cage, below a 0.5 one
 plate.rotation_euler = (math.radians(25), 0, 0)
 bpy.ops.object.transform_apply(scale=True, rotation=True)
+sets.create(scene, 'Other set', 512)   # selected in the dock later, while the session stays on ts
 ts = sets.create(scene, 'Corrections', 512)
 sets.assign(scene, ts, low)
 for obj in (high, plate):
@@ -155,15 +156,245 @@ assert corrections.stroke_finished(scene) and offset['open_painter_pixel_revisio
 assert corrections.pending_rebake(scene) is None
 import time; time.sleep(corrections.SETTLE + .05)
 assert corrections.pending_rebake(scene).id == ts.id
+# The live rebake targets the set that owns the canvas, not the one selected in
+# the dock: the session survives selecting another set to inspect it (0.9.7).
+from unittest.mock import patch
+from open_painter.evaluation import cache
+project.active_texture_set = 0
+assert paint_session.synchronize(bpy.context) and project.paint_set_id == ts.id
+rebaked = []
+with patch.object(corrections, 'rebake_region', lambda context, target, kinds=None: rebaked.append(target.id) or {}):
+    assert cache._rebake_pending(scene), 'the settled stroke must run its rebake'
+assert rebaked == [ts.id], rebaked
+assert corrections.pending_rebake(scene) is None and scene.as_pointer() not in corrections._pending
+# The operator and the brush panel follow the session too, while the dock shows the other set.
+from open_painter.ui import bake_corrections as correction_ui
+other = project.texture_sets[0]
+assert correction_ui.session_set(bpy.context) is not None and correction_ui.session_set(bpy.context).id == ts.id
+rebaked.clear()
+with patch.object(corrections, 'rebake_region', lambda context, target, kinds=None: rebaked.append(target.id) or {}), \
+        bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.bake_correction(action='REBAKE_REGION') == {'FINISHED'}
+    assert rebaked == [ts.id], f'Rebake Region ran on the set selected in the dock ({rebaked})'
+    assert bpy.ops.open_painter.bake_correction(action='REBAKE_REGION', set_id=other.id) == {'FINISHED'}
+    assert rebaked == [ts.id, other.id], 'a button drawn in a set\'s panel acts on that set'
+other.bake.corrections.active = 'SKEW'   # the other set's selector must not re-target the session
+assert project.paint_correction == 'OFFSET' and project.paint_set_id == ts.id and project.paint_image is offset
+with bpy.context.temp_override(scene=scene):
+    assert bpy.ops.open_painter.bake_correction(action='CLEAR', kind='OFFSET', set_id=other.id) == {'FINISHED'}
+    assert bpy.ops.open_painter.bake_correction(action='CLEAR_ALL', set_id=other.id) == {'FINISHED'}
+assert project.paint_correction == 'OFFSET' and project.paint_image is offset and low.mode == 'TEXTURE_PAINT', \
+    'clearing another set\'s corrections ended the session'
+assert corrections.image_of(ts, 'OFFSET') is offset
+project.active_texture_set = 1
 overlays = [o for o in scene.objects if o.get(corrections.OVERLAY)]
 assert overlays and overlays[0].hide_select
 ts.bake.corrections.active = 'SKEW'
 assert project.paint_correction == 'SKEW' and project.paint_image is corrections.image_of(ts, 'SKEW')
+ts.bake.corrections.active = 'DIRECTION'
+# Re-targeting the session replaces its canvas snapshot: one per scene, never one per kind visited.
+assert list(corrections._snapshots) == [scene.as_pointer()]
+assert corrections._snapshots[scene.as_pointer()][0] == project.paint_image.as_pointer()
 corrections.end_brush(bpy.context)
 assert not project.paint_correction and project.paint_image is None and low.mode == 'OBJECT'
+assert not corrections._snapshots, 'ending the session drops the canvas snapshot'
 assert not [o for o in scene.objects if o.get(corrections.OVERLAY)]
+# Paint on a layer while the correction brush runs: the layer session replaces it outright
+# (the stale key would pin the brush to the correction path: no retargeting, live rebakes).
+from open_painter.core import layer_stack as stack
+marks = stack.add(ts, 'PAINT', 'Marks')
+ts.active_layer = stack.index_of(ts, marks.id)
+corrections.begin_brush(bpy.context, ts, 'OFFSET')
+assert project.paint_correction == 'OFFSET' and corrections._snapshots
+layer_image = paint_session.begin(bpy.context, ts, 'ROUGHNESS')
+assert not project.paint_correction and project.paint_image is layer_image
+assert project.paint_layer_id == marks.id and low.mode == 'TEXTURE_PAINT'
+assert not corrections._snapshots and not [o for o in scene.objects if o.get(corrections.OVERLAY)]
+data = images.pixels(layer_image); data[0:8, 0:8, :3] = .9
+layer_image.pixels.foreach_set(data.ravel()); layer_image.update()
+assert paint_session.detect(scene, force=True)
+assert not corrections.stroke_finished(scene) and corrections.pending_rebake(scene) is None
+paint_session.finish(bpy.context, evaluate=False)
+stack.remove(ts, stack.index_of(ts, marks.id))
+print('BAKE_CORRECTIONS_HANDOVER_OK', flush=True)
 with bpy.context.temp_override(scene=scene):
     assert bpy.ops.open_painter.bake_correction(action='CLEAR_ALL') == {'FINISHED'}
 assert not corrections.active_keys(ts) and ts.bake.corrections.offset_image is None
+print('BAKE_CORRECTIONS_SESSION_OK', flush=True)
+
+
+def nonneutral(values, region):
+    return int((np.abs(values[region] - (.5, .5, 1.)).max(-1) > .05).sum())
+
+
+def paint(key, value, region_rows, region_cols):
+    image = corrections.image_of(ts, key, create_missing=True)
+    values = images.pixels(image)
+    values[region_rows, region_cols, :3] = value
+    images.write(image, values, pack=False)
+    corrections.refresh_used(image)
+    return image
+
+
+# A low bump on the top face: high-poly detail at the surface that the default projection captures.
+bpy.ops.mesh.primitive_uv_sphere_add(radius=.5, location=(0, 0, 1.0))
+bump = bpy.context.object
+bump.name = 'Bump_high'
+bump.scale = (1, 1, .1)
+bpy.ops.object.transform_apply(scale=True)
+ref = ts.bake.high_objects.add(); ref.object, ref.name = bump, bump.name
+
+# Shared ray distance (the defaults): a painted lift must not move the rays' reach off the surface.
+settings.separate_cage_distance, settings.ray_distance = False, .1
+ts.bake.corrections.offset_range = .05
+baseline = images.pixels(bake(bpy.context, ts, 'NORMAL'))[..., :3].copy()
+detail = nonneutral(baseline, inside)
+assert detail > 500, detail
+paint('OFFSET', 1.0, rows, cols)
+lifted_map = images.pixels(bake(bpy.context, ts, 'NORMAL'))[..., :3]
+kept = nonneutral(lifted_map, inside)
+assert kept > detail * .9, f'lifting the cage by the painted distance lost the bump ({kept} of {detail} texels)'
+with scope(bpy.context, [low]) as frozen:
+    cage = corrections.corrected_cage(ts, frozen[low], corrections.world_rasters(ts))
+    assert abs(cage[corrections.LIFT] - .05) < 1e-3, cage[corrections.LIFT]
+    bpy.data.meshes.remove(cage.data)
+print('BAKE_CORRECTIONS_REACH_OK', flush=True)
+
+# Distance Range scales every painted texel: changing it stales the map and dirties the stroke.
+register_map(ts, 'NORMAL', bake(bpy.context, ts, 'NORMAL'))
+prop = next(m for m in ts.baked_maps if m.kind == 'NORMAL')
+assert status(ts, prop) == 'Ready'
+ts.bake.corrections.direction_vector = (1., 0., 0.)   # no Projection Direction painted: not a bake input yet
+assert status(ts, prop) == 'Ready' and not corrections.changed_texels(ts, 'NORMAL').any()
+# Undo keeps the record the region diff needs (0.9.7): without it the next
+# stroke would fall back to a full bake of every enabled kind.
+cache.on_undo(None)
+assert corrections.changed_texels(ts, 'NORMAL') is not None, 'undo forgot the last bake\'s corrections'
+assert not corrections.changed_texels(ts, 'NORMAL').any()
+ts.bake.corrections.offset_range = .06
+assert status(ts, prop).startswith('Stale'), 'a new distance range is a bake input of the painted map'
+dirty = corrections.changed_texels(ts, 'NORMAL')
+assert dirty[rows, cols].all() and not dirty[~inside].any()
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'])
+assert result['NORMAL'] > 0 and status(ts, prop) == 'Ready', (result, status(ts, prop))
+print('BAKE_CORRECTIONS_RANGE_OK', flush=True)
+
+# Region rebakes keep the neighbours' texels: their faces went to scratch in the restricted bake.
+settings.margin = 16
+corrections.clear(ts)
+# Mode switches re-allocated the mesh: resolve the top face and its UVs afresh.
+centre = next(p for p in low.data.polygons if p.normal.z > .9 and abs(p.center.x) < .1 and abs(p.center.y) < .1)
+cu, cv = np.asarray([low.data.uv_layers.active.data[i].uv[:] for i in centre.loop_indices], np.float32).mean(0)
+dab_rows, dab_cols = slice(int(cv * n) - 1, int(cv * n) + 1), slice(int(cu * n) - 1, int(cu * n) + 1)
+paint('OFFSET', .5 + .002, dab_rows, dab_cols)   # a used canvas: the next dab dirties only its face
+register_map(ts, 'NORMAL', bake(bpy.context, ts, 'NORMAL'))
+prop = next(m for m in ts.baked_maps if m.kind == 'NORMAL')
+truth = images.pixels(prop.image)[..., :3].copy()
+paint('OFFSET', .5 + .004, dab_rows, dab_cols)   # dirties the centre face; the cage barely moves
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'])
+assert 0 < result['NORMAL'] <= 4, result
+after = images.pixels(prop.image)[..., :3]
+worst = float(np.abs(after - truth).max())
+assert worst < .05, f'the rebaked face\'s margin overwrote its neighbours ({worst})'
+print('BAKE_CORRECTIONS_HALO_OK', flush=True)
+
+# Render subdivision differs from the viewport: the region's face ids must name the staged faces.
+settings.margin = 2
+subsurf = low.modifiers.new('Subdivision', 'SUBSURF')
+subsurf.subdivision_type = 'SIMPLE'
+subsurf.levels, subsurf.render_levels = 1, 2
+register_map(ts, 'NORMAL', bake(bpy.context, ts, 'NORMAL'))
+prop = next(m for m in ts.baked_maps if m.kind == 'NORMAL')
+truth = images.pixels(prop.image)[..., :3].copy()
+paint('OFFSET', .5 + .006, dab_rows, dab_cols)
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'])
+assert 0 < result['NORMAL'] <= 16, result   # the centre face is four render faces
+worst = float(np.abs(images.pixels(prop.image)[..., :3] - truth).max())
+assert worst < .05, f'region faces were taken from the viewport evaluation ({worst})'
+subsurf.levels, subsurf.render_levels = 2, 1
+paint('OFFSET', .5 + .008, dab_rows, dab_cols)
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'])   # must not index past the render mesh
+assert 0 < result['NORMAL'] <= 4, result
+assert float(np.abs(images.pixels(prop.image)[..., :3] - truth).max()) < .05
+low.modifiers.remove(subsurf)
+print('BAKE_CORRECTIONS_RENDER_FACES_OK', flush=True)
+
+# Changing the set resolution keeps the painted corrections (rescaled) and their map registered.
+corrections.clear(ts)
+offset = paint('OFFSET', 1.0, rows, cols)
+register_map(ts, 'NORMAL', bake(bpy.context, ts, 'NORMAL'))
+prop = next(m for m in ts.baked_maps if m.kind == 'NORMAL')
+ts.resolution = '1024'
+assert corrections.active_keys(ts) == ['OFFSET']
+assert corrections.image_of(ts, 'OFFSET') is offset and tuple(offset.size) == (1024, 1024)
+assert corrections.raster(ts, 'OFFSET').shape == (1024, 1024) and corrections.raster(ts, 'OFFSET').max() > .99
+assert corrections.rebake_region(bpy.context, ts, ['NORMAL']) == {'NORMAL': -1}, 'a map of another size is baked fully'
+assert tuple(prop.image.size) == (1024, 1024) and status(ts, prop) == 'Ready'
+assert len([i for i in bpy.data.images if i.get(corrections.TAG) == 'OFFSET']) == 1, 'no orphaned canvas'
+ts.resolution = '512'
+assert corrections.image_of(ts, 'OFFSET') is offset and tuple(offset.size) == (512, 512)
+# The panel header asks on every redraw: the answer comes from the flag, not the canvas.
+read = corrections.pixels
+corrections.pixels = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('active_keys read a canvas'))
+try:
+    assert corrections.active_keys(ts) == ['OFFSET']
+
+    class Header:   # a collapsed section: the header's count is all the redraw computes
+        def panel(self, *args, **kwargs):
+            return self, None
+
+        def label(self, text='', **kwargs):
+            self.text = text
+
+    header = Header()
+    correction_ui.draw_corrections(header, bpy.context, ts)
+    assert header.text == 'Bake Corrections · 1 painted', header.text
+finally:
+    corrections.pixels = read
+print('BAKE_CORRECTIONS_RESOLUTION_OK', flush=True)
+
+# Cage: None (a surface bake) keeps baking under a Skew stroke: the cage sits a hair off the surface.
+corrections.clear(ts)
+bpy.data.objects.remove(bump, do_unlink=True)
+ts.bake.high_objects.remove(len(ts.bake.high_objects) - 1)
+bevel = high.modifiers.new('Bevel', 'BEVEL')
+bevel.width, bevel.segments = .3, 4
+settings.cage_mode, settings.ray_distance = 'NONE', 0.0
+surface = images.pixels(bake(bpy.context, ts, 'NORMAL'))[..., :3]
+detail = nonneutral(surface, np.ones((n, n), bool))
+assert detail > 1000, detail
+paint('SKEW', 1.0, dab_rows, dab_cols)
+skewed = images.pixels(bake(bpy.context, ts, 'NORMAL'))[..., :3]
+kept = nonneutral(skewed, np.ones((n, n), bool))
+assert kept > detail * .8, f'a correction under Cage: None wiped the map ({kept} of {detail} texels)'
+print('BAKE_CORRECTIONS_SURFACE_CAGE_OK', flush=True)
+
+# Duplicating the set replays its bake settings. The brush value reads and writes the paint
+# colour, so replaying it must not collapse the artist's RGB to a grey of its red channel.
+from open_painter.painting.brush_bridge import color_owner
+ts_id = ts.id
+owner = color_owner(scene)
+assert owner is not None, 'the brush session left a paint brush behind'
+owner.color = (1., .1, .1)
+copy = sets.duplicate(scene, next(i for i, t in enumerate(project.texture_sets) if t.id == ts_id))
+copy_id = copy.id
+assert np.allclose(tuple(owner.color), (1., .1, .1), atol=1e-4), tuple(owner.color)
+assert copy.bake.corrections.offset_range == ts.bake.corrections.offset_range
+sets.remove(scene, next(i for i, t in enumerate(project.texture_sets) if t.id == copy_id))
+ts = next(t for t in project.texture_sets if t.id == ts_id)
+# Deleting the set that owns a running correction session ends the session with it: the mesh
+# leaves Texture Paint, its face mask and selection come back, no canvas snapshot lingers.
+corrections.begin_brush(bpy.context, ts, 'OFFSET')
+assert project.paint_correction == 'OFFSET' and low.mode == 'TEXTURE_PAINT' and low.data.use_paint_mask
+baked_names = {m.image.name for m in ts.baked_maps if m.image}
+sets.remove(scene, next(i for i, t in enumerate(project.texture_sets) if t.id == ts_id))
+assert not project.paint_correction and project.paint_image is None and not project.paint_set_id
+assert low.mode == 'OBJECT' and not low.data.use_paint_mask
+assert scene.tool_settings.image_paint.canvas is None
+assert not corrections._snapshots and not [o for o in scene.objects if o.get(corrections.OVERLAY)]
+assert not [i for i in bpy.data.images if i.get(corrections.TAG)]
+remaining = {i.name for i in bpy.data.images}
+assert not baked_names & remaining and not [i for i in bpy.data.images if i.get('texture_set_id') == ts_id]
+print('BAKE_CORRECTIONS_SET_REMOVED_OK', flush=True)
 print('BAKE_CORRECTIONS_PASS', flush=True)
 open_painter.unregister()

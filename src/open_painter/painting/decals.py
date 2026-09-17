@@ -18,18 +18,44 @@ from ..constants import OWNER
 
 MARKER = 'open_painter_decal'      # on the Empty: the layer id it drives
 PREFIX = 'OP_Decal_'
+_linked = {}   # layer id -> (name, session_uid) of the Empty its pointer held while this session ran
 
 
 def layers_of(ts):
     return [layer for layer in ts.layers if layer.type == 'FILL' and (layer.decal_object is not None or layer.decal_object_name)]
 
 
+def forget():
+    _linked.clear()
+
+
+def lost_pointer(layer):
+    """True when the layer's Empty was freed under it (Delete Global, the outliner, a script):
+    Blender nulls the pointer without its update callback, so the name mirror survives and
+    would otherwise re-link the layer to the next Empty that takes the name. A layer loaded
+    or imported with a name and no pointer (its Empty is not in this file, or a module update
+    re-created the layer while the Empty stayed) is not this."""
+    if getattr(layer, 'decal_object', None) is not None:
+        return False
+    held = _linked.get(getattr(layer, 'id', ''))
+    name = getattr(layer, 'decal_object_name', '')
+    if held is None or held[0] != name:
+        return False
+    namesake = bpy.data.objects.get(name)
+    if namesake is not None and namesake.session_uid == held[1]:
+        return False
+    return not any(obj.session_uid == held[1] for obj in bpy.data.objects)
+
+
 def resolve(layer):
     obj = getattr(layer, 'decal_object', None)
     if obj is not None:
+        _linked[layer.id] = (obj.name, obj.session_uid)
         return obj
     name = getattr(layer, 'decal_object_name', '')
-    return bpy.data.objects.get(name) if name else None
+    if not name or lost_pointer(layer):
+        return None
+    return bpy.data.objects.get(name)
 
 
 def axes(obj):
@@ -40,15 +66,36 @@ def axes(obj):
     return unit.T.copy(), lengths
 
 
+def aspect(obj):
+    """Fraction of the display size the drawn picture spans along local X and Y. Blender keeps
+    the displayed image's aspect (its longer side spans the display size, pixel size times
+    ``display_aspect``); no image, or one without pixels yet, draws a square."""
+    image = obj.data if obj.type == 'EMPTY' and obj.empty_display_type == 'IMAGE' else None
+    if image is None or not image.size[0] or not image.size[1]:
+        return 1.0, 1.0
+    w = float(image.size[0]) * float(image.display_aspect[0])
+    h = float(image.size[1]) * float(image.display_aspect[1])
+    return (1.0, h / w) if w >= h else (w / h, 1.0)
+
+
+def extent(obj):
+    """Local X and Y spans of the drawn picture: display size scaled by the image aspect."""
+    size = float(getattr(obj, 'empty_display_size', 1.0)) or 1.0
+    ax, ay = aspect(obj)
+    return size * ax, size * ay
+
+
 def signature(layer):
-    """Repr-stable transform identity of a decal layer (world matrix and image empty size)."""
+    """Repr-stable transform identity of a decal layer (world matrix, image empty size and
+    the aspect of the picture it draws)."""
     obj = resolve(layer)
     if obj is None:
         return None
     return (obj.name, tuple(round(v, 6) for row in obj.matrix_world for v in row),
             round(float(getattr(obj, 'empty_display_size', 1.0)), 6),
             tuple(round(float(v), 6) for v in getattr(obj, 'empty_image_offset', (0., 0.))),
-            round(float(layer.decal_depth), 6), round(float(layer.decal_falloff), 6), bool(layer.decal_facing))
+            round(float(layer.decal_depth), 6), round(float(layer.decal_falloff), 6), bool(layer.decal_facing),
+            tuple(round(v, 6) for v in aspect(obj)))
 
 
 def local_coordinates(layer, positions):
@@ -57,11 +104,11 @@ def local_coordinates(layer, positions):
     inverse = np.asarray(obj.matrix_world.inverted_safe(), np.float64)
     flat = positions.reshape(-1, 3).astype(np.float64)
     local = flat @ inverse[:3, :3].T + inverse[:3, 3]
-    size = float(getattr(obj, 'empty_display_size', 1.0)) or 1.0
+    width, height = extent(obj)
     offset = np.asarray(getattr(obj, 'empty_image_offset', (-.5, -.5)), np.float64)
-    # Image empties draw the image from offset*size; -0.5 centres it on the origin.
-    u = local[:, 0] / size - offset[0]
-    v = local[:, 1] / size - offset[1]
+    # Image empties draw the image from offset*extent; -0.5 centres it on the origin.
+    u = local[:, 0] / width - offset[0]
+    v = local[:, 1] / height - offset[1]
     return u.reshape(positions.shape[:-1]), v.reshape(positions.shape[:-1]), local[:, 2].reshape(positions.shape[:-1])
 
 
@@ -176,11 +223,20 @@ def sync_axes(layer):
     return moved
 
 
+def show_images(ts):
+    for layer in layers_of(ts):
+        show_image(layer)
+
+
 def sync(ts):
     """Mirror axes and viewport images for every decal layer; returns the layers whose frame moved."""
     moved = []
     for layer in layers_of(ts):
         if layer.decal_object is None and layer.decal_object_name:
+            if lost_pointer(layer):
+                layer.decal_object_name = ''
+                _linked.pop(layer.id, None)
+                continue
             obj = bpy.data.objects.get(layer.decal_object_name)
             if obj is not None:
                 layer.decal_object = obj
@@ -192,7 +248,9 @@ def sync(ts):
 
 def release(layer):
     """Remove the Empty a layer being deleted created, unless another layer still projects
-    from it. An Empty the artist made and picked by hand carries no marker and stays."""
+    from it (a copy of the layer shares the Empty: it inherits the marker, so deleting it
+    last still removes the Empty). An Empty the artist made and picked by hand carries no
+    marker and stays."""
     obj = getattr(layer, 'decal_object', None)
     if obj is None or obj.get(MARKER) != layer.id:
         return False
@@ -203,6 +261,7 @@ def release(layer):
         for ts in project.texture_sets:
             for other in ts.layers:
                 if other.as_pointer() != layer.as_pointer() and other.decal_object == obj:
+                    obj[MARKER] = other.id
                     return False
     layer.decal_object = None
     bpy.data.objects.remove(obj)

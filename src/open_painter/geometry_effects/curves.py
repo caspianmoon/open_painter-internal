@@ -202,7 +202,9 @@ def _texel_size(ts, n):
 def create_curve(scene, obj, polylines, name, tag):
     """A POLY-spline CURVE object (editable, parented to the source) from world polylines."""
     import bpy
-    from mathutils import Vector
+    # Before any datablock exists: inverted() raises on a zero-scaled source and would
+    # leave the linked curve behind, re-transformed by the parent; inverted_safe never does.
+    inverse = obj.matrix_world.inverted_safe()
     data = bpy.data.curves.new(name, 'CURVE')
     data.dimensions = '3D'
     for points, normals in polylines:
@@ -215,7 +217,7 @@ def create_curve(scene, obj, polylines, name, tag):
     curve[tag] = 'CURVE'
     scene.collection.objects.link(curve)
     curve.parent = obj
-    curve.matrix_parent_inverse = obj.matrix_world.inverted()
+    curve.matrix_parent_inverse = inverse
     return curve
 
 

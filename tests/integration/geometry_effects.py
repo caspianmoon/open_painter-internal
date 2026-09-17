@@ -102,6 +102,150 @@ assert not [m for m in bpy.data.materials if m.get('effect_owner')==weld_owner]
 assert curve.type=='CURVE' and len(curve.data.splines[0].points)==2
 masks=weld.coating_depth(np.array([0,.4,.9],np.float32))
 np.testing.assert_array_equal(sum(masks),1)
+# The triangle estimate follows the resampled arc length, not the control-point count: an
+# extracted 1 m seam with 200 points is a few thousand triangles, so it fits the budget with room
+# for a second bead, and its record matches a 2-point line of the same length.
+dense_data=bpy.data.curves.new('Extracted seam','CURVE'); dense_data.dimensions='3D'
+dense_spline=dense_data.splines.new('POLY'); dense_spline.points.add(199)
+for index,point in enumerate(dense_spline.points): point.co=(index/199,0,0,1)
+dense=bpy.data.objects.new('Dense seam',dense_data); scene.collection.objects.link(dense)
+seam=weld.create(scene,dense,radius=.008,ripple=.05,period=8.0)
+bpy.context.view_layer.update(); mesh=seam.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
+actual=sum(len(polygon.vertices)-2 for polygon in mesh.polygons)
+assert 1000<actual<20000 and .5<seam['estimated_triangles']/actual<2, (seam['estimated_triangles'],actual)
+sparse=weld.create(scene,curve,radius=.008,ripple=.05,period=8.0)
+assert sparse['estimated_triangles']==seam['estimated_triangles'], (sparse['estimated_triangles'],seam['estimated_triangles'])
+assert limits.headroom(scene)[1]>limits.MAX_TRIANGLES-4*actual
+manager.remove(sparse); manager.remove(seam); bpy.data.objects.remove(dense); bpy.data.curves.remove(dense_data)
+# A scaled, rotated source: instances keep their metric size and stay orthogonal (no shear),
+# the helper's world matrix is the identity and it still follows the source afterwards.
+from mathutils import Matrix
+bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 6, 0))
+scaled = bpy.context.object; scaled.scale = (3, 1, .5); scaled.rotation_euler = (0, 0, .4)
+bpy.context.view_layer.update()
+scaled_set = sets.create(scene, 'Scaled', 512); sets.assign(scene, scaled_set, scaled)
+scaled_helper = manager.create(scaled_set, scaled, mask, 'SPLINTERS', 40, .05, 7)
+assert scaled_helper and scaled_helper['instance_count'] > 0
+assert all(abs(a - b) < 1e-5 for ra, rb in zip(scaled_helper.matrix_world, Matrix.Identity(4)) for a, b in zip(ra, rb))
+bpy.context.view_layer.update(); graph = bpy.context.evaluated_depsgraph_get()
+matrices = [inst.matrix_world.copy() for inst in graph.object_instances if inst.is_instance and inst.parent.original == scaled_helper]
+assert len(matrices) == scaled_helper['instance_count']
+low, high = manager.KINDS['SPLINTERS']['scale']
+for m in matrices:
+    extents = m.to_scale()
+    assert .05 * low * .75 - 1e-6 <= min(extents) and max(extents) <= .05 * high / .75 + 1e-6, tuple(extents)   # aspect .75..1.3
+    axes = [m.col[i].xyz.normalized() for i in range(3)]
+    assert all(abs(axes[i].dot(axes[j])) < 1e-3 for i in range(3) for j in range(i + 1, 3)), 'sheared instance'
+centres = np.array([m.translation[:] for m in matrices])
+pairwise = np.linalg.norm(centres[:, None] - centres[None], axis=-1) + np.eye(len(centres)) * 9
+assert pairwise.min() >= manager.KINDS['SPLINTERS']['spacing'] * .05 - 1e-6, 'instances closer than the spacing in world space'
+scaled.location.x += 1; bpy.context.view_layer.update()
+assert abs(scaled_helper.matrix_world.translation.x - 1) < 1e-6
+# Deleting a helper with X (never through remove) leaves prototype data an orphan purge can reap.
+prototype_objects = [n.inputs['Object'].default_value for n in scaled_helper.modifiers[0].node_group.nodes if n.bl_idname == 'GeometryNodeObjectInfo']
+assert prototype_objects and all(not p.use_fake_user and p.users == 1 for p in prototype_objects)
+scaled_owner = scaled_helper['effect_owner']
+bpy.data.objects.remove(scaled_helper, do_unlink=True)
+bpy.data.orphans_purge(do_recursive=True)
+assert not any(item.get('effect_owner') == scaled_owner for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.materials, bpy.data.node_groups) for item in collection), 'X-deleted helper leaked its prototypes'
+# Prototypes from files saved while they carried a fake user survive a purge; the next remove() reaps them.
+legacy = manager.create(scaled_set, scaled, mask, 'PEEL', 20, .05, 9)
+legacy_owner = legacy['effect_owner']
+for node in legacy.modifiers[0].node_group.nodes:
+    if node.bl_idname == 'GeometryNodeObjectInfo': node.inputs['Object'].default_value.use_fake_user = True
+bpy.data.objects.remove(legacy, do_unlink=True)
+bpy.data.orphans_purge(do_recursive=True)
+assert any(o.get('effect_owner') == legacy_owner for o in bpy.data.objects)
+other = manager.create(scaled_set, scaled, mask, 'PEEL', 20, .05, 10)
+manager.remove(other)
+assert not any(item.get('effect_owner') == legacy_owner for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.materials, bpy.data.node_groups) for item in collection), 'legacy prototypes were not reaped'
+# Published mask snapshots: the helper links the image (renames follow), a regenerate reuses it,
+# a legacy name record still resolves, and the last helper using it releases it.
+from open_painter.core import layer_stack as stack
+from open_painter.core.published_outputs import publish_mask
+from open_painter.utils.ids import new_id
+ts.preview_backend = 'CPU'
+layer = stack.add(ts, 'FILL', 'Rusty')
+paint = layer.masks.add(); paint.id, paint.source = new_id(), 'PAINT'
+paint.image = images.create('Rust spots', 512, (1, 1, 1, 1))
+bpy.context.view_layer.update()
+published = publish_mask(ts, layer)
+rust = manager.create(ts, obj, published, 'RUST', 10, .02, 3)
+twin = manager.create(ts, obj, published, 'RUST', 10, .02, 4)
+assert rust['mask_image'] == published and published.use_fake_user
+published.name = 'rust density'
+rust = manager.regenerate(ts, rust)
+assert rust is not None and bpy.data.images.get('rust density') == published
+twin['mask_image'] = published.name   # helpers from older files hold the name
+twin = manager.regenerate(ts, twin)
+assert twin is not None and twin['mask_image'] == published
+manager.remove(rust)
+assert bpy.data.images.get('rust density') == published, 'a snapshot another helper still uses was released'
+manager.remove(twin)
+assert not any(img.get('open_painter_published_layer') for img in bpy.data.images), 'published mask snapshot leaked after removal'
+# Regenerate stays on the faces of the set the helper was generated for, whichever set is active.
+bpy.ops.mesh.primitive_cube_add(size=2, location=(0, -6, 0))
+split = bpy.context.object
+split.data.materials.append(bpy.data.materials.new('Body')); split.data.materials.append(bpy.data.materials.new('Straps'))
+for face in split.data.polygons: face.material_index = 0 if face.index < 3 else 1
+body = sets.create(scene, 'Body', 512); sets.assign(scene, body, split, 0)
+straps = sets.create(scene, 'Straps', 512); sets.assign(scene, straps, split, 1)
+def slots_of(helper):
+    inverse = split.matrix_world.inverted()
+    return {split.data.polygons[split.closest_point_on_mesh(inverse @ (helper.matrix_world @ v.co))[3]].material_index for v in helper.data.vertices}
+body_helper = manager.create(body, split, mask, 'BOLT', 20, .05, 2)
+assert body_helper and slots_of(body_helper) == {0}, slots_of(body_helper)
+# The sidebar panel draws for any active object and offers Regenerate / Freeze for every
+# helper kind the operator can regenerate (not only the five original ones); weld has no path.
+from open_painter.ui.geometry_effects import OP_PT_geometry_effects
+class Layout:
+    def __init__(self, calls): self.calls = calls
+    def row(self, **_): return self
+    def label(self, **_): pass
+    def prop(self, data, path, **_): self.calls.append(('prop', path))
+    def operator(self, idname, text='', **_):
+        self.calls.append(('operator', text)); return type('Props', (), {'action': None})()
+def panel_actions(active):
+    calls = []
+    OP_PT_geometry_effects.draw(type('Panel', (), {'layout': Layout(calls)})(), type('Context', (), {'active_object': active})())
+    return {text for kind, text in calls if kind == 'operator'}, {path for kind, path in calls if kind == 'prop'}
+assert 'Regenerate' not in panel_actions(None)[0] and 'Regenerate' not in panel_actions(split)[0]
+for regenerable in (body_helper, manager.create(ts, obj, mask, 'RUST', 10, .02, 5)):
+    actions, props = panel_actions(regenerable)
+    assert {'Regenerate', 'Freeze', 'Remove Helper'} <= actions and 'Unfreeze' not in actions, (regenerable['kind'], actions)
+    assert props == {'["density"]', '["size"]', '["seed"]', '["lift"]'}, props
+    regenerable['frozen'] = True
+    assert 'Unfreeze' in panel_actions(regenerable)[0]
+    if regenerable is not body_helper: manager.remove(regenerable)
+body_helper['frozen'] = False
+bead = weld.create(scene, curve, radius=.02)
+actions, props = panel_actions(bead)
+assert 'Remove Helper' in actions and not ({'Regenerate', 'Freeze'} & actions) and not props, (actions, props)
+manager.remove(bead)
+body_helper = manager.regenerate(straps, body_helper)
+assert body_helper['source_texture_set'] == body.id and slots_of(body_helper) == {0}, slots_of(body_helper)
+body_helper['source_texture_set'] = 'gone'
+try:
+    manager.regenerate(straps, body_helper)
+    raise AssertionError('regenerated against a set that no longer exists')
+except ValueError as error:
+    assert 'no longer exists' in str(error), error
+body_helper['source_texture_set'] = body.id
+manager.remove(body_helper)
+# Refusing an over-limit scatter must not walk every candidate first.
+import time
+bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 30, 0))   # 400 m² at the moss preset: 1.2M candidates
+slab = bpy.context.object
+slab_set = sets.create(scene, 'Slab', 512); sets.assign(scene, slab_set, slab)
+started = time.perf_counter()
+try:
+    manager.create(slab_set, slab, mask, 'MOSS', 3000, .08, 1)
+    raise AssertionError('project limits ignored on a slab')
+except ValueError as error:
+    assert 'limit' in str(error), error
+elapsed = time.perf_counter() - started
+assert elapsed < 8, f'refusing an over-limit scatter stalled for {elapsed:.1f} s'
+assert manager._thin(np.random.default_rng(0).random((5000, 3)), .01, np.random.default_rng(1), limit=20).sum() == 21
 open_painter.unregister()
 assert obj.name in bpy.data.objects and curve.name in bpy.data.objects
 print('GEOMETRY_EFFECTS_PASS',flush=True)

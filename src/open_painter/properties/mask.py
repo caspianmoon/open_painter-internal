@@ -24,11 +24,15 @@ def _edge_source_changed(self, context):
     if self.edge_source == 'LIVE':
         # A live edge is a scene field of kind EDGE analysed live on this mask's influence.
         field = self.influence
-        if field.kind != 'EDGE':
+        # The resolution bump replaces OP_Influencer's generic default on the
+        # first switch only: a field already set up as a live edge (a snapshot
+        # restore replays edge_source after influence) keeps the chosen grid.
+        fresh = field.kind != 'EDGE'
+        if fresh:
             field.kind = 'EDGE'
         if field.mode != 'LIVE':
             field.mode = 'LIVE'
-        if field.resolution == '64':
+        if fresh and field.resolution == '64':
             field.resolution = '512'
     changed(self, context)
 

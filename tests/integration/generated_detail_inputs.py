@@ -188,7 +188,12 @@ np.testing.assert_allclose(leaves[0]['source']['field'], .83, atol=1e-7)
 assert device.uploads == 3
 
 # Scalar working buffers must remain exactly equal to the full RGB reference.
-LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+# The evaluator's per-tile source pre-warm must also honour the detail image:
+# the retained procedural is never generated, only to be discarded.
+with patch.object(procedurals, 'evaluate', side_effect=AssertionError('Evaluator pre-warmed unused noise')), \
+     patch.object(channel_eval, '_detail_tile', wraps=channel_eval._detail_tile) as detail_tile:
+    LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert detail_tile.call_count, 'Evaluator skipped pre-warming the detail image'
 expected = {out.channel: images.pixels(out.image) for out in ts.outputs}
 with patch.object(buffers, 'scalar_compatible', return_value=False):
     LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
@@ -271,6 +276,28 @@ rough.detail_image_name = ''
 rough.procedural = ''
 legacy = channel_eval.source(rough, 'FILL', n, 0, n, {}, ts, {})
 np.testing.assert_allclose(legacy[:3], .3, atol=1e-7)
+
+# Images an artist picks arrive sRGB-tagged (image.open's default for PNG/JPG):
+# a Normal Combine detail map is data and is retagged Non-Color on assignment,
+# a painted mask is decoded like the shader's Image Texture node samples it.
+from open_painter.evaluation.mask_eval import evaluate_masks
+from open_painter.utils.ids import new_id
+opened = bpy.data.images.new('Opened normal map', width=8, height=8)
+opened.colorspace_settings.name = 'sRGB'
+normal = stack.channel_for(layer, 'NORMAL')
+combine = normal.effects.add()
+combine.kind = 'NORMAL_COMBINE'
+combine.image = opened
+assert opened.colorspace_settings.name == 'Non-Color', opened.colorspace_settings.name
+grey = bpy.data.images.new('Opened mask', width=8, height=8)
+grey.colorspace_settings.name = 'sRGB'
+grey.pixels.foreach_set(np.full(8 * 8 * 4, .5, np.float32))
+painted = layer.masks.add()
+painted.id, painted.source, painted.image = new_id(), 'PAINT', grey
+coverage = evaluate_masks(ts, layer, 8, 0, 8, {}, {})
+assert abs(float(coverage.mean()) - .214) < .01, float(coverage.mean())   # .5 decoded from sRGB
+layer.masks.clear()
+normal.effects.remove(len(normal.effects) - 1)
 
 open_painter.unregister()
 print('GENERATED_DETAIL_INPUTS_PASS', flush=True)

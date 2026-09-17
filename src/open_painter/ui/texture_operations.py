@@ -142,8 +142,10 @@ class OP_OT_choose_procedural(SearchPicker, SafeOperator, bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
     bl_property = "choice"
     choice: bpy.props.EnumProperty(name="Procedural", items=procedural_items)
-    target: bpy.props.EnumProperty(items=[("CHANNEL", "Channel", ""), ("MASK", "Mask", "")])
-    create: bpy.props.BoolProperty(default=False, options={"HIDDEN"})
+    # SKIP_SAVE: a button that leaves these unset must not inherit the mask
+    # panel's target from the previous click and rewrite the active mask.
+    target: bpy.props.EnumProperty(items=[("CHANNEL", "Channel", ""), ("MASK", "Mask", "")], options={"SKIP_SAVE"})
+    create: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
 
     def run(self, context):
         ts, layer = _layer(context)
@@ -181,8 +183,8 @@ class OP_OT_choose_filter(SearchPicker, SafeOperator, bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
     bl_property = "choice"
     choice: bpy.props.EnumProperty(name="Filter", items=filter_items)
-    target: bpy.props.EnumProperty(items=[("CHANNEL", "Channel", ""), ("MASK", "Mask", "")])
-    create: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
+    target: bpy.props.EnumProperty(items=[("CHANNEL", "Channel", ""), ("MASK", "Mask", "")], options={"SKIP_SAVE"})
+    create: bpy.props.BoolProperty(default=True, options={"HIDDEN", "SKIP_SAVE"})
 
     def run(self, context):
         ts, layer = _layer(context)
@@ -363,7 +365,8 @@ def draw_channel_effects(layout, context, layer):
     layout.separator()
     row = layout.row(align=True)
     row.label(text="FILTERS", icon="MODIFIER")
-    row.operator("open_painter.choose_filter", text="Add Filter", icon="ADD")
+    op = row.operator("open_painter.choose_filter", text="Add Filter", icon="ADD")
+    op.target, op.create = "CHANNEL", True
     row.operator("open_painter.anchor", text="Anchor", icon="ANCHOR_CENTER").action = "ADD_CHANNEL"
     if not prop.effects:
         return
@@ -378,7 +381,8 @@ def draw_channel_effects(layout, context, layer):
         draw_anchor_settings(layout, require_set(context), effect)
         layout.label(text="Publishes this channel after the filters above it", icon="INFO")
         return
-    row.operator("open_painter.choose_filter", text=effect.kind.replace("_", " ").title()).create = False
+    op = row.operator("open_painter.choose_filter", text=effect.kind.replace("_", " ").title())
+    op.target, op.create = "CHANNEL", False
     body = layout.column()
     body.enabled = effect.enabled
     draw_effect_settings(body, effect)

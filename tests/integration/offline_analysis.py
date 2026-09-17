@@ -44,6 +44,13 @@ np.testing.assert_allclose(strain(rest,rest*2,[(0,1),(1,2)]),1)
 np.testing.assert_array_equal(strain(rest,rest,[(0,1),(1,2)]),0)
 mark_faces(obj,[0,2]); assert obj.data.attributes['open_painter_cut_surface'].data[0].value==1
 assert obj.data.attributes['open_painter_cut_surface'].data[1].value==0
+# Marking from Edit Mode (where faces are selected) writes the BMesh layer.
+bpy.ops.object.mode_set(mode='EDIT'); obj.update_from_editmode()
+marked=mark_faces(obj,[1,3]); assert marked is not None and marked.domain=='FACE'
+bpy.ops.object.mode_set(mode='OBJECT')
+values=[v.value for v in obj.data.attributes['open_painter_cut_surface'].data]
+assert values==[0,1,0,1,0,0],values
+mark_faces(obj,[5]); assert [v.value for v in obj.data.attributes['open_painter_cut_surface'].data]==[0,0,0,0,0,1]
 base={'layers':[{'id':'a','opacity':1.,'paint':'unchanged'}]}
 parent={'layers':[{'id':'a','opacity':.5,'paint':'unchanged'}]}
 local={'layers':[{'id':'a','opacity':.7,'paint':'artist edit'}]}
@@ -59,6 +66,25 @@ result=contact_history(ts,field,1,3)
 assert result['frames']==[1,2,3] and result['relative_origin_travel']>2
 assert scene.frame_current==saved_frame
 assert np.any(result['contact_fraction']>0)
+# Re-running Sample Contact History replaces the frozen raster instead of stacking fake-user images.
+def contact_images(): return sorted(i.name for i in bpy.data.images if i.name.startswith('Offline Contact Duration'))
+def by_id(identifier): return next(i for i,item in enumerate(ts.layers) if item.id==identifier)
+layer_id=layer.id; ts.active_layer=by_id(layer_id); layer.active_mask=len(layer.masks)-1
+bpy.ops.open_painter.offline_analysis(action='CONTACT',first_frame=1,last_frame=3,step=1)
+first=field.image.name; assert field.mode=='FROZEN' and contact_images()==[first],contact_images()
+bpy.ops.open_painter.offline_analysis(action='CONTACT',first_frame=1,last_frame=2,step=1)
+assert field.image is not None and field.image.name!=first
+assert contact_images()==[field.image.name],contact_images()
+# A raster still referenced elsewhere (a duplicated set's field) survives the swap.
+shared=field.image.name
+other=stack.add(ts,'FILL'); other_mask=other.masks.add(); other_mask.id=new_id(); other_mask.source='SCENE'
+other_mask.influence.image=bpy.data.images[shared]
+layer=ts.layers[by_id(layer_id)]; mask=layer.masks[layer.active_mask]; field=mask.influence  # stack.add invalidated the RNA references
+ts.active_layer=by_id(layer_id)
+bpy.ops.open_painter.offline_analysis(action='CONTACT',first_frame=1,last_frame=3,step=1)
+other=next(item for item in ts.layers if item.id==other.id)
+assert field.image.name!=shared and other.masks[0].influence.image.name==shared
+assert contact_images()==sorted([shared,field.image.name]),contact_images()
 assert report(ts)['estimated_image_buffer_bytes']>0
 from open_painter.analysis.lod import create
 original_mesh=part.data

@@ -6,6 +6,8 @@ from pathlib import Path
 from time import monotonic
 from types import SimpleNamespace
 
+from unittest.mock import patch
+
 import bpy
 import numpy as np
 
@@ -14,7 +16,8 @@ sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
-from open_painter.evaluation import cache, shader_preview
+from open_painter.evaluation import cache, layer_cache, shader_preview
+from open_painter.painting import stroke_raster
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph
 from open_painter.painting import strokes as records
@@ -143,7 +146,45 @@ project.strokes[0].roughness = .7
 info = shader_preview.diagnostics(scene, ts)
 assert shader_preview.ensure(scene, ts) is graph and info['graph_builds'] == builds, info
 assert info['pending_resources'] or info['raster_boundaries_queued'], info
+# The Vector Strokes mask is re-identified through the layers the stroke notifies (0.9.7).
+mask_binding = next(b for b in graph.resource_bindings if b.identifier.startswith('MaskSource:'))
+assert mask_binding.signature == mask_binding.identity(), 'the strokes mask kept its old raster'
+with patch.object(stroke_raster, 'unpack_samples', wraps=stroke_raster.unpack_samples) as spy:
+    ready()
+# Each boundary job rasters every stroke once, not once per 16-row strip.
+assert spy.call_count <= 3 * len(project.strokes), spy.call_count
+paint_id, masked_id = paint.id, masked.id
+layer_by = lambda identifier: next(l for l in ts.layers if l.id == identifier)
+records.record(project, ts, layer_by(paint_id), diagonal(count=6, radius=.15), settings(roughness=.9))
+assert mask_binding.signature == mask_binding.identity(), 'a new stroke did not reach the strokes mask'
 ready()
+# A stroke layer behind a spatial filter (or a cache) follows its strokes too.
+prop = stack.channel_for(layer_by(paint_id), 'ROUGHNESS')
+blur = prop.effects.add(); blur.kind, blur.radius = 'GAUSSIAN_BLUR', 2.
+stack.invalidate(ts)
+ready()
+graph = shader_preview.ensure(scene, ts)
+prefix = next(b for b in graph.resource_bindings if b.identifier.startswith(f'RasterChannelPrefix:{paint_id}:'))
+records.record(project, ts, layer_by(paint_id), diagonal(count=5, radius=.12), settings(roughness=.3))
+info = shader_preview.diagnostics(scene, ts)
+assert prefix.signature == prefix.identity() and (info['pending_resources'] or info['raster_boundaries_queued']), info
+ready()
+layer_by(paint_id).cache_mode = 'CACHED'
+ready()
+layer_cache.flush(scene)
+ready()
+states = shader_preview.diagnostics(scene, ts)['cache_states']
+assert states[paint_id + ':ROUGHNESS'] == 'CURRENT', states
+records.record(project, ts, layer_by(paint_id), diagonal(count=5, radius=.1), settings(roughness=.6))
+states = shader_preview.diagnostics(scene, ts)['cache_states']
+assert states[paint_id + ':ROUGHNESS'] == 'STALE' and layer_cache.pending(scene, ts, paint_id), states
+layer_cache.flush(scene)
+ready()
+layer_by(paint_id).cache_mode = 'LIVE'
+stack.channel_for(layer_by(paint_id), 'ROUGHNESS').effects.remove(0)
+stack.invalidate(ts)
+ready()
+print('STROKE_IDENTITY_OK', flush=True)
 bpy.ops.ed.undo_push(message='before')
 project.strokes[0].roughness = .2
 bpy.ops.ed.undo_push(message='edit')

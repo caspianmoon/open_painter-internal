@@ -41,37 +41,50 @@ KINDS = {
 }
 
 
-def _thin(positions, minimum, rng):
-    """Greedy blue-noise thinning: keep points at least ``minimum`` apart."""
+_NEIGHBOURS = [(dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)]
+
+
+def _thin(positions, minimum, rng, limit=None):
+    """Greedy blue-noise thinning: keep points at least ``minimum`` apart.
+
+    The pass is sequential by nature (each decision depends on the points kept
+    before it), so the per-point work runs on plain Python numbers prepared in
+    one vectorised step rather than on per-point numpy arrays. ``limit`` stops
+    the pass as soon as one more point than the project can take has been kept:
+    the caller's limit check then refuses without walking the remaining
+    candidates, which is where a large masked area used to freeze Blender.
+    """
     if minimum <= 0 or len(positions) < 2:
         return np.ones(len(positions), bool)
     order = rng.permutation(len(positions))
-    cells = {}
     keep = np.zeros(len(positions), bool)
-    for index in order:
-        cell = tuple(np.floor(positions[index] / minimum).astype(np.int64))
+    cells = np.floor(positions / minimum).astype(np.int64).tolist()
+    coords = positions.tolist()
+    occupied = {}
+    threshold = minimum * minimum
+    kept = 0
+    for index in order.tolist():
+        cx, cy, cz = cells[index]
+        x, y, z = coords[index]
         near = False
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    for other in cells.get((cell[0] + dx, cell[1] + dy, cell[2] + dz), ()):
-                        if np.linalg.norm(positions[other] - positions[index]) < minimum:
-                            near = True
-                            break
-                    if near:
-                        break
-                if near:
+        for dx, dy, dz in _NEIGHBOURS:
+            for ox, oy, oz in occupied.get((cx + dx, cy + dy, cz + dz), ()):
+                if (x - ox) * (x - ox) + (y - oy) * (y - oy) + (z - oz) * (z - oz) < threshold:
+                    near = True
                     break
             if near:
                 break
         if not near:
             keep[index] = True
-            cells.setdefault(cell, []).append(index)
+            occupied.setdefault((cx, cy, cz), []).append((x, y, z))
+            kept += 1
+            if limit is not None and kept > limit:
+                break
     return keep
 
 
 def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None):
-    """Return local positions and normals; kind settings add slope bias and spacing."""
+    """Return world positions and normals; kind settings add slope bias and spacing."""
     if density < 0:
         raise ValueError('Density cannot be negative')
     settings = KINDS.get(kind, KINDS['RUST'])
@@ -80,8 +93,7 @@ def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None
         target = next((entry for entry in entries if entry['object'] == obj), None)
         if target is None:
             raise ValueError('Effect source must be assigned to the texture set')
-        triangles = target['triangles']
-        indices = np.asarray([tuple(t.vertices) for t in triangles])
+        indices = target['tri_vertices']
         coords = target['positions'][indices]
         areas = np.linalg.norm(np.cross(coords[:, 1] - coords[:, 0], coords[:, 2] - coords[:, 0]), axis=1) * .5
         total = areas.sum()
@@ -91,11 +103,11 @@ def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None
         if not count or total <= 1e-12:
             return np.empty((0, 3), np.float32), np.empty((0, 3), np.float32)
         rng = np.random.default_rng(seed)
-        selected = rng.choice(len(triangles), count, p=areas / total)
+        selected = rng.choice(len(indices), count, p=areas / total)
         root = np.sqrt(rng.random(count))
         second = rng.random(count)
         weights = np.stack((1 - root, root * (1 - second), root * second), axis=1)
-        loops = np.asarray([tuple(triangles[i].loops) for i in selected])
+        loops = target['tri_loops'][selected]
         uv = np.sum(target['uv'][loops] * weights[..., None], axis=1)
         probability = sample_uv(values[..., None], uv[:, 0], uv[:, 1])[..., 0]
         normal = np.sum(target['world_normals'][loops] * weights[..., None], axis=1)
@@ -107,19 +119,17 @@ def scatter(ts, obj, mask, density, seed, replacing=None, kind='RUST', size=None
         positions = np.sum(coords[selected] * weights[..., None], axis=1)[keep]
         normal = normal[keep]
         if size and settings['spacing']:
-            thinned = _thin(positions, settings['spacing'] * size, rng)
+            instances_left, triangles_left = limits.headroom(ts.id_data, replacing)
+            limit = max(0, min(instances_left, triangles_left // settings['triangles']))
+            thinned = _thin(positions, settings['spacing'] * size, rng, limit)
             positions, normal = positions[thinned], normal[thinned]
         # Limits apply to the instances that survive the mask and spacing, not
         # to the candidate points the mask rejected.
         limits.check(ts.id_data, len(positions), len(positions) * settings['triangles'], replacing=replacing)
-        inverse = np.asarray(obj.matrix_world.inverted_safe())
-        local_positions = positions @ inverse[:3, :3].T + inverse[:3, 3]
-        local_normals = normal @ np.asarray(obj.matrix_world)[:3, :3]
-        local_normals /= np.maximum(np.linalg.norm(local_normals, axis=1, keepdims=True), 1e-8)
-        return local_positions, local_normals
+        return positions, normal
 
 
-def _orientations(normals, rng, settings):
+def _orientations(normals, rng, settings, grain=Vector((1, 0, 0))):
     """Euler per point: surface alignment, yaw (random or grain-aligned), small lean."""
     result = np.empty((len(normals), 3), np.float32)
     lean = math.radians(settings['tilt'])
@@ -129,9 +139,9 @@ def _orientations(normals, rng, settings):
         if jitter is None:
             yaw = rng.uniform(0, math.tau)
         else:
-            # Grain direction: local +X projected onto the surface, in the
-            # frame the track quaternion established, plus jitter and flips.
-            local_x = rotation.inverted() @ Vector((1, 0, 0))
+            # Grain direction: the source's X axis (``grain``) projected onto the
+            # surface, in the frame the track quaternion established, plus jitter and flips.
+            local_x = rotation.inverted() @ grain
             yaw = math.atan2(local_x.y, local_x.x) - math.pi / 2 + rng.uniform(-jitter, jitter)
             yaw += math.pi if rng.random() < .5 else 0
         rotation = rotation @ Quaternion((0, 0, 1), yaw)
@@ -160,9 +170,11 @@ def _prototype_objects(kind, seed, material, created):
             mesh.polygons.foreach_set('use_smooth', [True] * len(mesh.polygons))
         mesh.materials.append(material)
         mesh.update()
+        # Data-only: the node group's Object Info sockets hold the users that keep
+        # these saved while a helper exists. No fake user, so a helper deleted with
+        # X (never through remove()) leaves prototypes that orphan purge can reap.
         obj = bpy.data.objects.new('OP ' + kind.title() + ' · ' + name, mesh)
         created.append(obj)
-        obj.use_fake_user = True  # data-only: Object Info can read it without linking it to the scene
         objects.append(obj)
     return objects
 
@@ -216,10 +228,14 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         variant_objects = _prototype_objects(kind, seed, owned_material, created)
         point_mesh = bpy.data.meshes.new('OP Effect Points')
         created.append(point_mesh)
+        # Points, lift and scale are world metres: the helper's world matrix is the
+        # identity (parent inverse below), so a scaled or sheared source neither
+        # resizes the instances nor shears them, and spacing stays comparable to size.
         point_mesh.from_pydata((positions + normals * lift).tolist(), [], [])
         count = len(positions)
+        grain = (obj.matrix_world.to_3x3() @ Vector((1, 0, 0))).normalized()
         rotation = point_mesh.attributes.new('op_rotation', 'FLOAT_VECTOR', 'POINT')
-        rotation.data.foreach_set('vector', _orientations(normals, rng, settings).ravel())
+        rotation.data.foreach_set('vector', _orientations(normals, rng, settings, grain).ravel())
         low, high = settings['scale']
         # Many small pieces and a few large ones, as debris distributes.
         uniform = low + (high - low) * rng.random(count) ** 1.6
@@ -237,6 +253,7 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         created.append(helper)
         ts.id_data.collection.objects.link(helper)
         helper.parent = obj
+        helper.matrix_parent_inverse = obj.matrix_world.inverted()
         group = _node_group(kind, variant_objects, created)
         helper.modifiers.new('Open Painter Instances', 'NODES').node_group = group
         for item in created:
@@ -250,7 +267,7 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         helper['size'] = size
         helper['seed'] = seed
         helper['lift'] = lift
-        helper['mask_image'] = mask.name
+        helper['mask_image'] = mask   # an ID pointer follows renames; older files hold the name
         helper['variants'] = len(variant_objects)
         helper['frozen'] = False
         return helper
@@ -267,10 +284,36 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         raise
 
 
+def _image(reference):
+    """The image an ID pointer or a legacy name property refers to, if it still exists."""
+    if isinstance(reference, bpy.types.Image):
+        return reference
+    return bpy.data.images.get(reference) if isinstance(reference, str) and reference else None
+
+
+def release_snapshot(reference):
+    """Drop a published mask/height snapshot once no helper keeps it for Regenerate.
+
+    Published images carry a fake user (they are packed, artist-visible data),
+    so they outlive every helper unless released here. An image the artist has
+    wired into something else keeps its users and stays.
+    """
+    image = _image(reference)
+    if image is None or not (image.get('open_painter_published_layer') or image.get('open_painter_published_channel')):
+        return
+    for obj in bpy.data.objects:
+        if obj.get(TAG) == 'INSTANCE_HELPER' and any(_image(obj.get(key)) == image for key in ('mask_image', 'source_image')):
+            return
+    if image.users <= int(image.use_fake_user):
+        image.use_fake_user = False
+        bpy.data.images.remove(image)
+
+
 def remove(helper):
     if helper.get(TAG) != 'INSTANCE_HELPER':
         raise ValueError('Select an Open Painter effect helper')
     owner = helper.get('effect_owner')
+    snapshots = [helper.get('mask_image'), helper.get('source_image')]
     bpy.data.objects.remove(helper, do_unlink=True)
     shared = any(obj.get('effect_owner') == owner and obj.get(TAG) == 'INSTANCE_HELPER' for obj in bpy.data.objects)
     if shared:
@@ -292,12 +335,52 @@ def remove(helper):
     for image in list(bpy.data.images):
         if image.get('open_painter_geometry_texture') and image.users == 0:
             bpy.data.images.remove(image)
+    # The displacement group sampled its snapshot; with it gone the image is free.
+    for reference in snapshots:
+        release_snapshot(reference)
+    reap_orphans()
+
+
+def reap_orphans():
+    """Release owned data whose helper went away without remove(): deleted with X or
+    with its source, or saved by a version whose prototypes carried a fake user, which
+    Purge Unused Data honours. The node group goes first so the prototypes it
+    instanced lose their last user."""
+    live = {obj.get('effect_owner') for obj in bpy.data.objects if obj.get(TAG) == 'INSTANCE_HELPER'}
+    def orphaned(item):
+        return item.get(TAG) == 'OWNED_RESOURCE' and item.get('effect_owner') not in live and not item.library
+    for group in list(bpy.data.node_groups):
+        if orphaned(group) and group.users == 0:
+            bpy.data.node_groups.remove(group)
+    for obj in list(bpy.data.objects):
+        if orphaned(obj):
+            obj.use_fake_user = False
+            if obj.users == 0:
+                bpy.data.objects.remove(obj, do_unlink=True)
+    for collection in (bpy.data.meshes, bpy.data.node_groups, bpy.data.materials):
+        for item in list(collection):
+            if orphaned(item) and item.users == 0:
+                collection.remove(item)
+
+
+def texture_set_of(ts, helper):
+    """The set the helper was generated for, so a regenerate stays on its faces and
+    keeps its attribution whichever set the panel has active; ``ts`` serves helpers
+    from files that predate the record."""
+    recorded = helper.get('source_texture_set')
+    if not recorded:
+        return ts
+    match = next((s for s in ts.id_data.open_painter.texture_sets if s.id == recorded), None)
+    if match is None:
+        raise ValueError('The texture set this helper was generated for no longer exists')
+    return match
 
 
 def regenerate(ts, helper):
     if helper.get('frozen'):
         raise ValueError('Unfreeze the helper before regenerating')
-    mask = bpy.data.images.get(helper.get('mask_image', ''))
+    ts = texture_set_of(ts, helper)
+    mask = _image(helper.get('mask_image'))
     if not mask or not helper.parent:
         raise ValueError('Effect source or published mask is missing')
     # Replacing first would lose a good result on failure. Reserve against the

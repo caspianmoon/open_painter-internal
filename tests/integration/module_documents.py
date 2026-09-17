@@ -161,5 +161,193 @@ with TemporaryDirectory() as directory:
         for copy in copies:
             copy.unlink()
     print('MODULE_DOCUMENTS library index: PASS', flush=True)
+
+    # 6. Datablock pointers (a decal Empty, a mesh mask's Object) are no obstacle to saving a
+    # folder as a module or to inserting it where those datablocks exist (0.9.7).
+    from open_painter.painting import decals
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    bolts = bpy.context.object; bolts.name = 'Bolts'
+    deco = stack.add(ts, 'FOLDER', 'Deco'); deco_id = deco.id
+    sticker = stack.add(ts, 'FILL', 'Sticker'); sticker_id = sticker.id
+    sticker.parent_id = deco_id
+    empty = decals.create_object(bpy.context, 'OP_Decal_Sticker')
+    sticker.decal_object = empty
+    empty[decals.MARKER] = sticker_id
+    assert sticker.decal_object_name == 'OP_Decal_Sticker'
+    bolted = stack.add(ts, 'FILL', 'Bolted'); bolted_id = bolted.id
+    bolted.parent_id = deco_id
+    mesh_mask = bolted.masks.add(); mesh_mask.id, mesh_mask.source = new_id(), 'MESH'
+    mesh_mask.mesh.kind = 'OBJECT'; mesh_mask.mesh.object = bolts
+    assert mesh_mask.mesh.object_name == 'Bolts'
+    deco_path, deco_block = modules.save_module(bpy.context, ts, layer_by_id(deco_id), Path(directory) / 'Deco v1.openpaintmaterial', 'Deco')
+    origin = layer_by_id(deco_id)
+    assert origin.module_id == deco_block['id'] and origin.module_version == 1
+    deco_base = modules.read_base(deco_block['id'], 1)
+    assert deco_base is not None, 'the base snapshot was not written'
+    assert next(layer for layer in deco_base if layer['id'] == sticker_id)['decal_object'] == \
+        {'__datablock__': 'OBJECT', 'name': 'OP_Decal_Sticker'}
+    count = len(ts.layers)
+    deco_instance = loader.apply(ts, deco_path)[0]
+    deco_instance_id, deco_token = deco_instance.id, deco_instance.module_instance
+    assert len(ts.layers) == count + 3
+    inserted_sticker = layer_by_id(deco_token + '.' + sticker_id)
+    assert inserted_sticker.decal_object == empty and inserted_sticker.decal_object_name == 'OP_Decal_Sticker'
+    inserted_mask = layer_by_id(deco_token + '.' + bolted_id).masks[0]
+    assert inserted_mask.mesh.object is None and inserted_mask.mesh.object_name == 'Bolts'
+    assert inserted_mask.mesh.resolve('object') == bolts
+    # Updating the instance keeps the links: the pointer values merge as markers.
+    layer_by_id(bolted_id).opacity = .5
+    deco_path2, _ = modules.save_module(bpy.context, ts, layer_by_id(deco_id), Path(directory) / 'Deco v2.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(deco_instance_id), deco_path2)
+    assert version == 2 and conflicts == [], conflicts
+    decals.sync(ts)
+    inserted_sticker = layer_by_id(deco_token + '.' + sticker_id)
+    assert inserted_sticker.decal_object == empty and inserted_sticker.decal_object_name == 'OP_Decal_Sticker'
+    inserted_mask = layer_by_id(deco_token + '.' + bolted_id).masks[0]
+    assert inserted_mask.mesh.object_name == 'Bolts' and inserted_mask.mesh.resolve('object') == bolts
+    assert abs(layer_by_id(deco_token + '.' + bolted_id).opacity - .5) < 1e-6
+    assert empty.name in bpy.data.objects, 'the update released an Empty a rebuilt layer still projects from'
+    print('MODULE_DOCUMENTS datablock pointers: PASS', flush=True)
+
+    # 7. Material Director ids ('md.' + hash) are plain ids: a folder holding them saves and
+    # inserts as a module like any other, and two instances do not collide.
+    director = stack.add(ts, 'FOLDER', 'Directed'); director_id = director.id
+    made = stack.add(ts, 'FILL', 'Made'); made.parent_id = director_id
+    made.id = 'md.' + new_id(); made_id = made.id
+    for prop in made.channels:
+        prop.layer_id = made_id
+    only(made, 'ROUGHNESS')
+    made_mask = made.masks.add(); made_mask.id, made_mask.source = 'md.' + new_id(), 'NOISE'
+    made_effect = stack.channel_for(made, 'ROUGHNESS').effects.add()
+    made_effect.kind, made_effect.id = 'LEVELS', 'md.' + new_id()
+    director_path, director_block = modules.save_module(bpy.context, ts, layer_by_id(director_id), Path(directory) / 'Directed.openpaintmaterial', 'Directed')
+    first_directed = loader.apply(ts, director_path)[0]
+    second_directed = loader.apply(ts, director_path)[0]
+    for instance in (first_directed, second_directed):
+        made_copy = layer_by_id(instance.module_instance + '.' + made_id)
+        assert made_copy.parent_id == instance.id
+        assert made_copy.masks[0].id == instance.module_instance + '.' + made_mask.id
+        assert stack.channel_for(made_copy, 'ROUGHNESS').effects[0].id == instance.module_instance + '.' + made_effect.id
+    assert first_directed.module_instance != second_directed.module_instance
+    assert modules.read_base(director_block['id'], 1) is not None
+    assert not issues(ts), issues(ts)
+    print('MODULE_DOCUMENTS director ids: PASS', flush=True)
+
+    # 8. A legacy layer/mask reference (no anchor) pointing outside the folder is refused
+    # before anything is written or stamped: the set resolves it, a module document could
+    # not (0.9.7: the save succeeded and every insert or update of that version failed).
+    leaky = stack.add(ts, 'FOLDER', 'Leaky'); leaky_id = leaky.id
+    inside = stack.add(ts, 'FILL', 'Inside'); inside_id = inside.id
+    inside.parent_id = leaky_id
+    only(inside, 'ROUGHNESS')
+    inside_mask = inside.masks.add(); inside_mask.id, inside_mask.source = new_id(), 'NOISE'
+    inside_mask_id = inside_mask.id
+    reader2 = stack.add(ts, 'FILL', 'Outside reader'); reader2_id = reader2.id
+    reader2.parent_id = leaky_id
+    only(reader2, 'ROUGHNESS')
+    legacy = reader2.masks.add(); legacy.id, legacy.source = new_id(), 'REFERENCE'
+    legacy.reference_layer, legacy.reference_channel = base_id, 'ROUGHNESS'
+    assert not issues(ts), issues(ts)
+    leaky_path = Path(directory) / 'Leaky.openpaintmaterial'
+    try:
+        modules.save_module(bpy.context, ts, layer_by_id(leaky_id), leaky_path, 'Leaky')
+    except ValueError as error:
+        assert 'outside Leaky' in str(error) and 'Outside reader' in str(error), error
+    else:
+        raise AssertionError('a module reading a layer outside the folder was saved')
+    assert not leaky_path.exists() and layer_by_id(leaky_id).module_id == '', 'the folder was stamped'
+    # Through a mask that the member source layer does not own: refused the same way.
+    legacy = layer_by_id(reader2_id).masks[0]
+    legacy.reference_layer, legacy.reference_mask = inside_id, mask_id
+    try:
+        modules.save_module(bpy.context, ts, layer_by_id(leaky_id), leaky_path, 'Leaky')
+    except ValueError as error:
+        assert 'outside Leaky' in str(error), error
+    else:
+        raise AssertionError('a module reading a mask outside the folder was saved')
+    assert not leaky_path.exists() and layer_by_id(leaky_id).module_id == ''
+    # A reference within the folder saves and inserts as before.
+    layer_by_id(reader2_id).masks[0].reference_mask = inside_mask_id
+    leaky_path, leaky_block = modules.save_module(bpy.context, ts, layer_by_id(leaky_id), leaky_path, 'Leaky')
+    read(leaky_path)
+    assert layer_by_id(leaky_id).module_id == leaky_block['id']
+    token = loader.apply(ts, leaky_path)[0].module_instance
+    inserted_legacy = layer_by_id(token + '.' + reader2_id).masks[0]
+    assert (inserted_legacy.reference_layer, inserted_legacy.reference_mask) == (token + '.' + inside_id, token + '.' + inside_mask_id)
+    assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
+    print('MODULE_DOCUMENTS legacy references: PASS', flush=True)
+
+    # 8. A module's id space is its own: a folder holding another instance (live or detached)
+    # is refused as a module, and a document that nests one is refused on insert, both before
+    # anything changes (0.9.7). Inserting such a document used to collide with the original.
+    weathering = stack.add(ts, 'FOLDER', 'Weathering'); weathering_id = weathering.id
+    nested_id = loader.apply(ts, path2, parent_id=weathering_id)[0].id
+    assert layer_by_id(nested_id).parent_id == weathering_id
+    for detached in (False, True):
+        if detached:
+            modules.detach(layer_by_id(nested_id))
+        try:
+            modules.save_module(bpy.context, ts, layer_by_id(weathering_id), Path(directory) / 'Weathering.openpaintmaterial', 'Weathering')
+        except ValueError as error:
+            assert 'module instance inside' in str(error), error
+        else:
+            raise AssertionError('a folder nesting a module instance was saved as a module')
+    assert not (Path(directory) / 'Weathering.openpaintmaterial').exists()
+    assert layer_by_id(weathering_id).module_id == ''
+    with ZipFile(path) as archive:
+        nesting = json.loads(archive.read('material.json'))
+    nesting['layers'].append({'id': 'abcd1234.' + new_id(), 'type': 'FILL', 'name': 'Nested',
+                              'parent_id': damage_id, 'masks': [], 'channels': []})
+    nesting_path = Path(directory) / 'nesting.json'
+    nesting_path.write_text(json.dumps(nesting))
+    before_ids = [layer.id for layer in ts.layers]
+    try:
+        loader.apply(ts, nesting_path)
+    except ValueError as error:
+        assert 'nests another module instance' in str(error), error
+    else:
+        raise AssertionError('a module document with namespaced ids was inserted')
+    assert [layer.id for layer in ts.layers] == before_ids
+    print('MODULE_DOCUMENTS nested instances refused: PASS', flush=True)
+
+    # 9. A whole-set document imported elsewhere keeps its instances updatable: each lands
+    # under a fresh token with its ids namespaced (like Duplicate), so Update and Replace merge
+    # it instead of committing an unstamped folder and failing afterwards. A stamped folder
+    # whose ids are not under its token (a copy made before 0.9.7) is refused untouched.
+    whole = serializer.save(ts, Path(directory) / 'whole2.openpaintmaterial')
+    other = sets.create(scene, 'Imported set', 512)
+    other.preview_backend = 'CPU'
+    loader.apply(other, whole)
+    imported = {layer.module_instance: layer for layer in other.layers
+                if layer.module_id == block['id'] and not layer.module_detached}
+    assert len(imported) == 2 and not any(token in {'', first_token} for token in imported), list(imported)
+    for token, root in imported.items():
+        assert root.id == token + '.' + damage_id, (root.id, token)
+        assert root.module_id == block['id'] and root.module_version == 2
+        assert {layer.id for layer in modules.subtree(other, root.id)} == {token + '.' + i for i in (damage_id, scratches_id, dirt_id)}
+    imported_reader = next(layer for layer in other.layers if layer.name == 'Reader')
+    assert imported_reader.masks[0].reference_anchor in {token + '.' + anchor_id for token in imported}
+    assert not issues(other) and not warnings(other), (issues(other), warnings(other))
+    imported_root_id, imported_token = next((root.id, token) for token, root in imported.items()
+                                            if imported_reader.masks[0].reference_anchor.startswith(token + '.'))
+    imported_ids = [layer.id for layer in other.layers]
+    for replace in (False, True):
+        version, conflicts = modules.update(other, next(l for l in other.layers if l.id == imported_root_id), path2, replace=replace)
+        assert version == 2 and conflicts == [], conflicts
+        assert sorted(layer.id for layer in other.layers) == sorted(imported_ids), 'the update rewrote the imported instance ids'
+        updated = next(l for l in other.layers if l.id == imported_root_id)
+        assert updated.module_id == block['id'] and updated.module_instance == imported_token
+        assert not issues(other) and not warnings(other), (issues(other), warnings(other))
+    unstamped = stack.add(other, 'FOLDER', 'Old copy'); unstamped_id = unstamped.id
+    unstamped.module_id, unstamped.module_version, unstamped.module_instance = block['id'], 2, 'deadbeef'
+    unstamped_ids = [layer.id for layer in other.layers]
+    try:
+        modules.update(other, next(l for l in other.layers if l.id == unstamped_id), path2)
+    except ValueError as error:
+        assert 'not namespaced' in str(error), error
+    else:
+        raise AssertionError('an instance whose ids are not under its token was updated')
+    assert [layer.id for layer in other.layers] == unstamped_ids
+    print('MODULE_DOCUMENTS whole-set import keeps instances: PASS', flush=True)
 print('MODULE_DOCUMENTS_PASS', flush=True)
 open_painter.unregister()

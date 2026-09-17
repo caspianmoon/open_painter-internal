@@ -5,12 +5,14 @@ synthetic map lookup when loading the otherwise unchanged generator modules.
 """
 
 import ast
+import gc
 import hashlib
 import importlib.util
 import itertools
 import json
 import sys
 import unittest
+import weakref
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -163,6 +165,33 @@ class ProceduralOptimizationTests(unittest.TestCase):
                 for enabled, before, after in zip(flags, expected, actual):
                     if enabled:
                         np.testing.assert_array_equal(after, before)
+
+    def test_lattice_memo_does_not_outlive_the_evaluation(self):
+        # The memo pins full-raster floor arrays; it must be released when
+        # evaluate() returns (or raises), not held until later work evicts it.
+        u, v = np.meshgrid(np.linspace(0, 1, 64, dtype=np.float32),
+                           np.linspace(0, 1, 48, dtype=np.float32))
+        seen = []
+        original = procedurals._to_lattice
+
+        def observed(values):
+            if isinstance(values, np.ndarray) and values.ndim:
+                seen.append(weakref.ref(values))
+            return original(values)
+
+        for source in ("FBM", "WORLEY", "GRUNGE_MEDIUM", "SCRATCHES"):
+            seen.clear()
+            with patch.object(procedurals, "_to_lattice", side_effect=observed):
+                procedurals.evaluate(source, u, v, seed=3, scale=6)
+            self.assertTrue(seen, source)
+            self.assertEqual(procedurals._recent_lattice, [], source)
+            gc.collect()
+            self.assertTrue(all(ref() is None for ref in seen), source)
+        # GRUNGE_SPOTS hashes its octaves before shaping them with _smooth.
+        with patch.object(procedurals, "_smooth", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                procedurals.evaluate("GRUNGE_SPOTS", u, v, seed=3, scale=6)
+        self.assertEqual(procedurals._recent_lattice, [])
 
     def test_identity_is_hashed_only_for_the_winning_cell(self):
         x = np.array([-.37, .4, 1.8], np.float32)

@@ -14,6 +14,7 @@ MORPHOLOGICAL_EXPAND MORPHOLOGICAL_CONTRACT ANCHOR'''.split())
 
 
 def scalar_compatible(channel, layers, properties):
+    from .operation_contracts import stack_footprint
     if channel not in SCALAR_CHANNELS:
         return False
     for layer in layers:
@@ -25,7 +26,11 @@ def scalar_compatible(channel, layers, properties):
             return False
         if prop and (prop.image or prop.image_name or getattr(prop, 'anchor', '')
                      or getattr(layer, 'stroke_key', '')
-                     or any(e.enabled and e.strength > 0 and e.kind not in SCALAR_EFFECTS for e in prop.effects)):
+                     or getattr(prop, 'projection', 'UV') == 'DECAL'   # a decal covers its footprint only
+                     or any(e.enabled and e.strength > 0 and e.kind not in SCALAR_EFFECTS for e in prop.effects)
+                     # Surface-space filters need the whole image and the seam map,
+                     # which only the reference path provides.
+                     or stack_footprint(prop.effects) is None):
             return False
     return True
 

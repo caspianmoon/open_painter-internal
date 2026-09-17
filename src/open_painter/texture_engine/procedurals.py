@@ -111,7 +111,8 @@ def _to_lattice(values):
 
     Noise primitives hash the same coordinate arrays several times with
     different seeds; the last few conversions are kept by array identity (the
-    cache holds the arrays alive, so an id cannot be recycled underneath it).
+    cache holds the arrays alive, so an id cannot be recycled underneath it)
+    until the enclosing evaluate() call returns.
     """
     if isinstance(values, np.ndarray) and values.ndim:
         for source, converted in _recent_lattice:
@@ -448,6 +449,16 @@ def evaluate(kind, u, v, seed=1, scale=8, **params):
     anisotropy, warp, value. Pattern scale counts repetitions per coordinate unit.
     Unknown sources fail explicitly instead of silently substituting a noise.
     """
+    try:
+        return _evaluate(kind, u, v, seed, scale, **params)
+    finally:
+        # Every call floors fresh coordinate arrays, so the lattice memo can
+        # never hit across calls; kept alive it pins full-raster floors (six
+        # float32+uint32 pairs, 768 MiB at 4k) long after evaluation ends.
+        _recent_lattice.clear()
+
+
+def _evaluate(kind, u, v, seed, scale, **params):
     key = str(kind).strip().upper().replace("-", "_").replace(" ", "_")
     key = ALIASES.get(key, key)
     if key not in CATALOG:

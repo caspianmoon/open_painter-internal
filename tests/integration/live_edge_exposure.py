@@ -97,6 +97,53 @@ assert not np.allclose(sharp, bevelled), 'a bevel did not change live edge wear'
 assert (bevelled > .5).mean() > (sharp > .5).mean() * .8, ((bevelled > .5).mean(), (sharp > .5).mean())
 print('LIVE_EDGE cpu: PASS', flush=True)
 
+# 2b. The cooperative engine owns live edges as it owns LIVE scene masks: with the scheduler
+# timer registered an evaluation requests the analysis instead of running it (the masked layer
+# reads 0 meanwhile) and the job publishes it — a generator mask must not be dropped as 'not SCENE'.
+from open_painter.evaluation import field_jobs
+from open_painter.evaluation.metrics import Metrics
+bpy.app.timers.register(cache.tick, first_interval=1000)   # registered → the engine is active; driven by hand
+assert field_jobs.active()
+edges_id = edges.id
+chips = wear.masks.add(); chips.id, chips.source, chips.generator = new_id(), 'GENERATOR', 'CHIPS'
+chips.amount, chips.contrast, chips.noise_strength = .6, 2., 0.
+chips.edge_source = 'LIVE'
+chips.influence.distance = .1
+dependencies.refresh(scene)
+with Metrics() as counters:
+    LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert counters.phases.get('scene_analysis', {}).get('calls', 0) == 0, 'the evaluation analysed synchronously'
+assert chips.influence.image is None and chips.influence.error == 'Analysing…'
+assert field_jobs.pending(scene), 'the live edge did not request its analysis'
+hidden = images.pixels(images.output(ts, 'ROUGHNESS').image)[..., 0]
+assert hidden.max() < .5, 'an unanalysed live edge must read 0 (the wear layer waits)'
+started = monotonic()
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+    assert monotonic() - started < 60, 'the live-edge analysis never published'
+assert chips.influence.image is not None and not chips.influence.error, chips.influence.error
+assert chips.influence.provenance == repr(scene_fields.signature(ts, chips.influence))
+assert images.pixels(chips.influence.image)[..., 0].max() > .5, 'the published edge field is empty'
+assert ts.dirty, 'publication did not invalidate the set'
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+chipped = images.pixels(images.output(ts, 'ROUGHNESS').image)[..., 0]
+assert chipped.max() > .5 and not field_jobs.pending(scene), 'the wear layer did not return once analysed'
+# A flush publishes a pending live edge too (a save or export runs every request to completion).
+chips.influence.distance = .12
+dependencies.refresh(scene)
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert field_jobs.pending(scene)
+field_jobs.flush(scene)
+assert not field_jobs.pending(scene) and chips.influence.provenance == repr(scene_fields.signature(ts, chips.influence))
+analysis = chips.influence.image
+wear.masks.remove(next(i for i, m in enumerate(wear.masks) if m.id == chips.id))
+if analysis is not None and analysis.users <= 1:
+    bpy.data.images.remove(analysis)
+edges = next(m for m in wear.masks if m.id == edges_id)   # masks.add() re-allocated the collection
+bpy.app.timers.unregister(cache.tick)
+field_jobs.cancel_all()
+print('LIVE_EDGE job engine: PASS', flush=True)
+
 # 3. Shader parity: the live edge is a boundary raster; CPU and shader agree.
 scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = 1
 scene.render.bake.margin = 0; scene.render.bake.use_clear = True
@@ -156,5 +203,27 @@ assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds, 'a reach
 edges_rna.edge_source = 'BAKED'
 assert not shader_preview.current(scene, ts), 'edge_source is structural'
 print('LIVE_EDGE structural: PASS', flush=True)
+
+# 5. A lowered analysis grid survives copies: restore replays edge_source after
+# influence, and the callback's 64 -> 512 default belongs to the first switch only.
+edges_rna.edge_source = 'LIVE'
+edges_rna.influence.resolution = '64'
+edges_rna.edge_source = 'BAKED'; edges_rna.edge_source = 'LIVE'
+assert edges_rna.influence.resolution == '64', 'a second switch to live edges overrode the chosen grid'
+probe = wear.masks.add(); probe.id, probe.source, probe.generator = new_id(), 'GENERATOR', 'EDGE_WEAR'
+probe.edge_source = 'LIVE'
+assert probe.influence.resolution == '512', 'a fresh live edge keeps the generic 64 grid'
+wear.masks.remove(len(wear.masks) - 1)
+wear_index = next(i for i, layer in enumerate(ts.layers) if layer.name == 'Wear')
+stack.duplicate(ts, wear_index)
+copy = next(m for layer in ts.layers if layer.name == 'Wear Copy' for m in layer.masks)
+assert (copy.edge_source, copy.influence.kind, copy.influence.mode, copy.influence.resolution) == \
+    ('LIVE', 'EDGE', 'LIVE', '64'), (copy.edge_source, copy.influence.kind, copy.influence.mode, copy.influence.resolution)
+set_index = next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == ts.id)
+sets.duplicate(scene, set_index)
+twin = next(item for item in scene.open_painter.texture_sets if item.name == ts.name + ' Copy')
+grids = {layer.name: m.influence.resolution for layer in twin.layers for m in layer.masks if m.edge_source == 'LIVE'}
+assert grids == {'Wear': '64', 'Wear Copy': '64'}, grids
+print('LIVE_EDGE copies keep the grid: PASS', flush=True)
 print('LIVE_EDGE_EXPOSURE_PASS', flush=True)
 open_painter.unregister()

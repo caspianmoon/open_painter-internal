@@ -22,10 +22,26 @@ def restore_faces(project) -> None:
     if obj and obj.type == "MESH":
         mesh = obj.data
         saved = project.paint_face_selection
-        if len(saved) == len(mesh.polygons):
-            mesh.polygons.foreach_set("select", [value == "1" for value in saved])
+        if obj.mode == "EDIT":
+            # Tab out of texture paint ends the session from Edit Mode, where the
+            # edit BMesh is authoritative: a polygon write would be discarded on exit.
+            import bmesh
+            bm = bmesh.from_edit_mesh(mesh)
+            bm.faces.ensure_lookup_table()
+            if len(saved) == len(bm.faces):
+                for face in bm.faces:   # deselecting a face clears its vertices too: pass first
+                    face.select = False
+                for face, value in zip(bm.faces, saved):
+                    if value == "1":
+                        face.select = True
+                # No select-mode flush: in vertex mode it would grow the faces from
+                # their vertices; the face flags are what leaving Edit Mode writes back.
+                bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        else:
+            if len(saved) == len(mesh.polygons):
+                mesh.polygons.foreach_set("select", [value == "1" for value in saved])
+            mesh.update()
         mesh.use_paint_mask = project.paint_original_face_mask
-        mesh.update()
     project.paint_face_selection = ""
     project.paint_object = None
 
@@ -95,10 +111,13 @@ def begin(context: bpy.types.Context, ts, channel: str, mask: bool = False) -> b
     ):
         raise ValueError("Texture-set material slots changed. Repair or reassign the mesh first.")
     project = context.scene.open_painter
+    end_correction(context)
     # Flush the old target before changing channel or mask identity.
     detect(context.scene, force=True)
     from ..evaluation.cache import stroke_finished
     stroke_finished(context.scene)
+    release_canvases(context.scene)
+    release_idle_keys(project)
     image = target(ts, layer, channel, mask)
     if context.object and context.object.mode != "OBJECT":
         bpy.ops.object.mode_set(mode="OBJECT")
@@ -163,25 +182,76 @@ def drop_canvas_nodes(ts):
             material.node_tree.nodes.remove(node)
 
 
+def release_canvases(scene):
+    """Drop a previous multi-set session's canvases so detection never scans them again.
+
+    Returns the ids of the sets that took part.
+    """
+    project = scene.open_painter
+    members = []
+    for entry in project.paint_canvases:
+        member = next((s for s in project.texture_sets if s.id == entry.set_id), None)
+        if member is not None:
+            drop_canvas_nodes(member)
+            members.append(member.id)
+        key = (scene.as_pointer(), entry.image.as_pointer() if entry.image else 0)
+        for table in (_rasters, _checks, _scratch):
+            table.pop(key, None)
+    project.paint_canvases.clear()
+    return members
+
+
+def end_correction(context):
+    """A bake-correction brush session gives way to a layer session, as the reverse does."""
+    if context.scene.open_painter.paint_correction:
+        from ..baking.corrections import end_brush
+        end_brush(context)
+
+
+def release_idle_keys(project):
+    """Stroke keys that render nothing move over to the paint link.
+
+    Sessions before ``paint_link`` linked the sets through the stroke key, which
+    left the layers on the vector-stroke boundary path with no strokes to show.
+    """
+    from .strokes import strokes_for
+    referenced = {mask.stroke_key for ts in project.texture_sets for layer in ts.layers
+                  for mask in layer.masks if mask.stroke_key}
+    for ts in project.texture_sets:
+        for layer in ts.layers:
+            key = layer.stroke_key
+            if not key or key in referenced or strokes_for(project, key):
+                continue
+            if not layer.paint_link:
+                layer.paint_link = key
+            layer.stroke_key = ""
+
+
 def participants(project, ts, layer, obj):
-    """(set, layer) pairs painting the same key on this object: the active set first."""
+    """(set, layer) pairs painting the same link on this object: the active set first."""
     from ..core import layer_stack as stack
-    from .strokes import ensure_key
-    key = ensure_key(layer)
+    from ..utils.ids import new_id
+    if not layer.paint_link:
+        layer.paint_link = new_id()
+    link, key = layer.paint_link, layer.stroke_key
     found = [(ts, layer)]
     for other in project.texture_sets:
         if other.id == ts.id or not any(r.object == obj for r in other.assignments):
             continue
-        linked = next((item for item in other.layers if item.stroke_key == key), None)
+        # A layer the vector brush linked through the stroke key is the same brush target.
+        linked = next((item for item in other.layers if item.type == "PAINT"
+                       and (item.paint_link == link or (key and item.stroke_key == key))), None)
         if linked is None:
             linked = stack.add(other, "PAINT", layer.name)
-            linked.stroke_key = key
+            if key:
+                linked.stroke_key = key
+        linked.paint_link = link
         found.append((other, linked))
     return found
 
 
 def begin_multi(context, ts, channel):
-    """Paint one channel of the active paint layer's key across every set assigned to the object.
+    """Paint one channel of the active paint layer's link across every set assigned to the object.
 
     Blender's material paint mode writes each face into its material's active
     image node, so each participating set gets a canvas node pointing at its own
@@ -197,9 +267,23 @@ def begin_multi(context, ts, channel):
     if obj is None or not obj.data.uv_layers:
         raise ValueError("Assign a UV-unwrapped mesh to this texture set first.")
     project = context.scene.open_painter
+    # Material paint mode writes each face through the material on its slot: a slot the
+    # artist swapped would receive the stroke in their own material's image node. Checked
+    # before participants() so no linked layer is left behind by the refusal.
+    for member_ts in project.texture_sets:
+        if any(
+            r.object == obj
+            and (r.slot_index >= len(obj.material_slots)
+                 or obj.material_slots[r.slot_index].material != member_ts.material)
+            for r in member_ts.assignments
+        ):
+            raise ValueError("Texture-set material slots changed. Repair or reassign the mesh first.")
+    end_correction(context)
     detect(context.scene, force=True)
     from ..evaluation.cache import stroke_finished
     stroke_finished(context.scene)
+    release_canvases(context.scene)
+    release_idle_keys(project)
     members = participants(project, ts, layer, obj)
     if len(members) == 1:
         return begin(context, ts, channel, False)
@@ -242,6 +326,7 @@ def begin_multi(context, ts, channel):
     _checks[key] = (monotonic(), None)
     _rasters[key] = (primary.as_pointer(), pixels(primary))
     for _, _, image in canvases[1:]:
+        _checks[(key, image.as_pointer())] = (monotonic(), None)
         _rasters[(key, image.as_pointer())] = (image.as_pointer(), pixels(image))
     update_editors(context, primary)
     return primary
@@ -257,15 +342,7 @@ def finish(context, evaluate: bool = True) -> None:
     stroke_finished(scene)
     identifier = project.paint_set_id
     image = project.paint_image
-    extra_sets = []
-    for entry in project.paint_canvases:
-        member = next((s for s in project.texture_sets if s.id == entry.set_id), None)
-        if member is not None:
-            drop_canvas_nodes(member)
-            if member.id != identifier:
-                extra_sets.append(member.id)
-        _rasters.pop((scene.as_pointer(), entry.image.as_pointer() if entry.image else 0), None)
-    project.paint_canvases.clear()
+    extra_sets = [member for member in release_canvases(scene) if member != identifier]
     if scene.tool_settings.image_paint.mode == "MATERIAL" and extra_sets:
         scene.tool_settings.image_paint.mode = "IMAGE"
     restore_faces(project)
@@ -351,7 +428,10 @@ def synchronize(context, mask: bool | None = None) -> bool:
             return False
         if expected == project.paint_image and context.object == project.paint_object:
             return True
-    begin(context, ts, project.paint_channel, mask)
+    if project.paint_all_sets and not mask:
+        begin_multi(context, ts, project.paint_channel)
+    else:
+        begin(context, ts, project.paint_channel, mask)
     return True
 
 
@@ -369,11 +449,18 @@ def _detect_canvas(scene, entry, force):
     if image is None:
         return False
     key = (scene.as_pointer(), image.as_pointer())
-    if not force and not image.is_dirty:
+    now = monotonic()
+    last, _ = _checks.get(key, (0, None))
+    # A painted canvas stays dirty until it is packed: the same 0.75 s pace as
+    # the primary keeps idle ticks from re-reading it whole.
+    if not force and (now - last < 0.75 or not image.is_dirty):
         return False
-    raster = pixels(image)
+    raster = pixels(image, _scratch.pop(key, None))
     previous = _rasters.get(key)
+    if previous is not None:
+        _scratch[key] = previous[1]
     _rasters[key] = (image.as_pointer(), raster)
+    _checks[key] = (now, None)
     if previous is not None and previous[1].shape == raster.shape and np.array_equal(previous[1], raster):
         return False
     ts = next((s for s in project.texture_sets if s.id == entry.set_id), None)

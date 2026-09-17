@@ -185,7 +185,10 @@ def _route(context, ui, action, payload):
         return
     if action == "ASSET":
         assets.apply(context, payload)
-        ui.mask_selected = payload[1] == "SMART_MASK"
+        if payload[1] not in {"BRUSH", "ALPHA"}:
+            # Brushes and alphas change the tool, not the stack: the selected
+            # mask stays the paint target.
+            ui.mask_selected = payload[1] == "SMART_MASK"
         ui.properties_scroll = 0
         ts = active_set(context)
         if ts and active(ts):

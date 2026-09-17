@@ -25,6 +25,15 @@ class Entry:
     owner: str = ''   # layer id the work is attributed to (0.9.0 profiling)
 
 
+def alive(image):
+    """False once Blender removed the datablock behind a held Image reference."""
+    try:
+        image.name
+    except ReferenceError:
+        return False
+    return True
+
+
 class Resources:
     def __init__(self, size):
         self.size = size
@@ -43,6 +52,10 @@ class Resources:
         """
         key = sha256(repr((self.size, signature)).encode()).hexdigest()
         self.used.add(key)
+        if key in self.entries and not alive(self.entries[key].image):
+            # Another set's table evicted the shared leaf, or Purge Unused Data
+            # took it: the source is scheduled again rather than handed back dead.
+            self._drop(key)
         if key in self.entries:
             if self.entries[key].error:
                 raise ValueError(self.entries[key].error)
@@ -67,6 +80,19 @@ class Resources:
         self.queue.append(key)
         metrics.count('shader_resource_requests')
         return image
+
+    def adopt(self, image):
+        """List a finished leaf a rehydrated node held under an identity it no
+        longer has, so the retention budget evicts it like any superseded source
+        instead of leaving it in bpy.data at 0 users; an unfinished one is
+        removed as soon as nothing samples it."""
+        key = image.get(RESOURCE)
+        if not key or key in self.entries:
+            return
+        if image.get('op_shader_resource_ready') and tuple(image.size) == (self.size, self.size):
+            self.entries[key] = Entry(image)
+        elif not image.users:
+            bpy.data.images.remove(image)
 
     def _produce(self, entry, parts):
         # Allocate only for an actually scheduled unsupported source. No per-event
@@ -100,9 +126,22 @@ class Resources:
     def pending(self):
         return bool(self.queue)
 
+    def _drop(self, key):
+        """Forget an entry whose image no longer exists, closing its job."""
+        entry = self.entries.pop(key)
+        if entry.job:
+            entry.job.close()
+        entry.job = None
+        if key in self.queue:
+            self.queue.remove(key)
+
     def step(self, budget=.006):
         started = perf_counter()
         published = self.completed
+        # Entries are validated lazily: nothing tells this table when another
+        # set's table or a purge removes an image it still lists.
+        for key in [key for key, entry in self.entries.items() if not alive(entry.image)]:
+            self._drop(key)
         while self.queue:
             key = self.queue[0]
             entry = self.entries[key]
@@ -167,10 +206,11 @@ def values(group, excluded=()):
     # Cache state (0.9.0) never enters an identity: a cache publication must
     # not re-identify the layer it was built for. Metre sizes (0.9.5) act only
     # through the texture fields they derive, so locking a set to metres
-    # re-identifies nothing.
+    # re-identifies nothing. ``opacity_percent`` is the slider mirror of
+    # ``opacity``: callers excluding the uniform must not get it back in 1% steps.
     skip = {'rna_type', 'id_data', 'id', 'name', 'dirty', 'order', 'active_effect',
             'active_mask', 'expanded', 'image_name', 'detail_image_name', 'cache', 'cache_mode',
-            'units', 'feature_size', 'physical_radius', *excluded}
+            'units', 'feature_size', 'physical_radius', 'opacity_percent', *excluded}
     result = []
     for field in group.bl_rna.properties:
         name = field.identifier

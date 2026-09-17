@@ -206,7 +206,10 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
         else:
             assets.apply(context, entry)
         ui = state.get(context.area)
-        ui.mask_selected = entry[1] == "SMART_MASK"
+        if entry[1] not in {"BRUSH", "ALPHA"}:
+            # Brushes and alphas change the tool, not the stack: the selected
+            # mask stays the paint target.
+            ui.mask_selected = entry[1] == "SMART_MASK"
         ui.selected_layers = {active(require_set(context)).id}
         context.area.tag_redraw()
 
@@ -357,6 +360,16 @@ def layer_row_pressed(ts, context):
     too, but with another event state or no list under the mouse, and the
     operator declines them.
     """
+    if context.area is not None and not _drag["active"]:
+        # Whatever moved the index selected that layer: Delete, Duplicate,
+        # keyboard navigation and the legacy list never press a native row,
+        # and Group and Bypass Selected act on the selection.
+        layer = active(ts)
+        ui = state.get(context.area)
+        if layer is None:
+            ui.selected_layers = set()
+        elif layer.id not in ui.selected_layers:
+            ui.selected_layers = {layer.id}
     if _drag["active"] or context.window is None:
         return
     ui_list = getattr(context, "ui_list", None)
@@ -403,6 +416,10 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
         self.saved = layer_stack.arrangement(ts)
         self.current = None
         self.dragging = False
+        # Every row crossed is a placement, and the timer keeps running under a
+        # modal: hold the shader session so the material rebuilds once, on the drop.
+        from ..evaluation import shader_preview
+        self.hold = shader_preview.hold(context.scene, ts)
         _drag["active"] = True
         context.window_manager.modal_handler_add(self)
         return {"RUNNING_MODAL"}
@@ -449,6 +466,8 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
 
     def finish(self, context, result):
         _drag["active"] = False
+        from ..evaluation import shader_preview
+        shader_preview.release_hold(self.hold)
         if self.dragging:
             context.window.cursor_modal_restore()
             context.workspace.status_text_set(None)
@@ -588,7 +607,7 @@ def draw_generator_controls(layout, ts, layer):
                 box.label(text="Rebaking the edge map in the background…", icon="TIME")
             elif stale_curvature(ts) is not None:
                 box.label(text="Edge maps need a rebake (smooth edges, live Edge Size)", icon="ERROR")
-                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Maps", icon="IMAGE_DATA")
+                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Maps", icon="IMAGE_DATA").set_id = ts.id
             elif not any(m.kind == "CURVATURE" and m.image for m in ts.baked_maps):
                 box.label(text="Bake a Curvature map for edge wear", icon="ERROR")
         box.prop(mask, "contrast", slider=True)
@@ -602,7 +621,7 @@ def _profile_rows(scene, ts):
     from ..evaluation import profile
     key = (scene.as_pointer(), ts.id)
     entry = _profile_cache.get(key)
-    serial = (ts.edit_serial, len(ts.layers))
+    serial = (ts.edit_serial, len(ts.layers), profile.table(scene, ts)['sampled_at'])
     if entry is None or entry[0] != serial:
         rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
         entry = _profile_cache[key] = (serial, rows, sum(row['cost_ms'] for row in rows.values()))
@@ -643,9 +662,10 @@ class OP_UL_native_layers(bpy.types.UIList):
         row.prop(
             layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
         )
-        from .performance import badge, cache_icon
+        from .performance import badge, CACHE_ICONS
         scene = context.scene
         profile_rows = _profile_rows(scene, data)
+        profile_row = profile_rows[0].get(layer.id)
         mark = badge(scene, data, layer, profile_rows[0], profile_rows[1])
         if layer.bypass or not compact or mark:
             # Preview-only bypass, distinct from the artistic eye.
@@ -678,7 +698,10 @@ class OP_UL_native_layers(bpy.types.UIList):
         if any(m.source == "ANCHOR" for m in layer.masks) or any(
                 e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
             row.label(text="", icon="ANCHOR_CENTER")
-        icon = cache_icon(scene, data, layer)
+        # The row's state is the one the profile table already holds; asking
+        # the shader session again per cached row scans the stack per binding.
+        icon = (CACHE_ICONS.get(profile_row["state"], "FILE_CACHE")
+                if profile_row is not None and layer.cache_mode != "LIVE" else None)
         if icon:
             row.label(text="", icon=icon)
         if mark:

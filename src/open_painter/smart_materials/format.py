@@ -7,6 +7,19 @@ from zipfile import ZipFile, is_zipfile
 VERSION = 3  # 3: anchor points (anchor ids on masks, channels and filter items)
 MODULE_VERSION = 4  # 4: optional "module" block (a versioned folder subtree with stable ids)
 MAX_BYTES = 512 * 1024 * 1024
+MAX_FILES = 2048
+LINEAR = "Linear Rec.709"   # what save_render writes into an asset EXR for any non-data source
+
+
+def asset_colorspace(recorded: str) -> str:
+    """The colour space an asset EXR holds, from the space its reference records.
+
+    ``save_render`` linearises every non-data source on the way out (a byte sRGB
+    albedo included), so only Non-Color survives as recorded. Materials saved
+    before 0.9.7 recorded the source image's own space; tagging the float EXR
+    with it would linearise the pixels a second time on load.
+    """
+    return recorded if recorded == "Non-Color" else LINEAR
 
 
 def read(path) -> tuple[dict, dict[str, bytes]]:
@@ -14,8 +27,8 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
     if is_zipfile(path):
         with ZipFile(path) as archive:
             entries = archive.infolist()
-            if sum(i.file_size for i in entries) > MAX_BYTES or len(entries) > 2048:
-                raise ValueError("Smart material exceeds the 512 MiB / 2048 file import limit.")
+            if sum(i.file_size for i in entries) > MAX_BYTES or len(entries) > MAX_FILES:
+                raise ValueError(f"Smart material exceeds the {MAX_BYTES // 2 ** 20} MiB / {MAX_FILES} file import limit.")
             data = json.loads(archive.read("material.json"))
             for entry in entries:
                 name = entry.filename

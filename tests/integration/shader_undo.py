@@ -129,6 +129,42 @@ info = ready(scene, ts)
 assert info['graph_rehydrations'] == 1 and info['graph_builds'] == 0, info
 assert next(item for item in ts.layers if item.id == layer_id).blend_mode == target.blend_mode if False else True
 
+# An invalid slider range (a numeric state) survives undo with the last valid
+# graph attached and a recoverable error, as it does on a live session (0.9.7).
+scene, ts = bpy.context.scene, active_set()
+ready(scene, ts)
+target = next(item for item in ts.layers if item.id == layer_id)
+prop = next(item for item in target.channels if item.enabled)
+levels = prop.effects.add()
+levels.kind = 'LEVELS'
+ready(scene, ts)
+bpy.ops.ed.undo_push(message='levels')
+levels.black, levels.white = .8, .2
+info = shader_preview.diagnostics(scene, ts)
+assert info['state'] == 'FAILED' and 'White level' in info['error'], info
+bpy.ops.ed.undo_push(message='invalid range')
+next(item for item in ts.layers if item.id == layer_id).masks[0].amount = .3
+bpy.ops.ed.undo_push(message='unrelated edit')
+bpy.ops.ed.undo()
+scene, ts = bpy.context.scene, active_set()
+material = ts.material
+groups = {tree.name for tree in bpy.data.node_groups if tree.get(OWNER)}
+for _ in range(5):
+    shader_preview.tick(scene, ts)
+info = shader_preview.diagnostics(scene, ts)
+assert info['state'] == 'FAILED' and 'White level' in info['error'], info
+assert info['graph_rehydrations'] == 1 and info['graph_builds'] == 0 and info['attached'], info
+assert sum(node.get('role') == 'Procedural Graph' for node in material.node_tree.nodes) == 1, \
+    'undo of an unrelated edit destroyed the persisted graph'
+assert groups <= {tree.name for tree in bpy.data.node_groups if tree.get(OWNER)}, 'unit trees were removed'
+# Fixing the range recovers on the adopted graph, without a build.
+effect = next(e for p in next(item for item in ts.layers if item.id == layer_id).channels
+              for e in p.effects if e.kind == 'LEVELS')
+effect.white = 1.
+info = ready(scene, ts)
+assert info['graph_rehydrations'] == 1 and info['graph_builds'] == 0, info
+print('SHADER_UNDO invalid range survives undo: PASS', flush=True)
+
 report['result'] = 'PASS'
 destination = ROOT / '.blender-test' / 'shader-undo.json'
 destination.parent.mkdir(exist_ok=True)

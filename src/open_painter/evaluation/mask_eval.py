@@ -33,6 +33,10 @@ def _effect_signature(effect):
     result = tuple(getattr(effect, name) for name in fields)
     result += tuple(tuple(getattr(effect, name)) for name in
                     ("color", "color2", "offset", "transform_scale", "matrix", "bias"))
+    # Surface space and the world direction pick the seam-aware path and the
+    # directional field in apply_effect; a whole-image kind keeps the same
+    # (0, n) cache range in both spaces, so only the signature can tell them apart.
+    result += (getattr(effect, "space", "UV"), tuple(getattr(effect, "direction", (0., 0., -1.))))
     return result + (_image_identity(effect.image),)
 
 
@@ -77,7 +81,7 @@ def _stack_signature(ts, layer, geometry_cache):
             anchors = consumed(mask)
             extra = (mask.generator, mask.amount, mask.contrast, mask.noise_scale,
                      mask.noise_strength, mask.seed, tuple(mask.id_color), maps,
-                     getattr(mask, "edge_width", 1.0), anchors,
+                     getattr(mask, "edge_width", 1.0), getattr(mask, "edge_size", 1.0), anchors,
                      (getattr(mask, "detail_radius", 2.0), getattr(mask, "detail_height_strength", 1.0),
                       getattr(mask, "detail_normal_strength", 1.0), ts.edit_serial) if anchors else None,
                      _live_field_identity(ts, mask) if getattr(mask, "edge_source", "BAKED") == "LIVE" else None)
@@ -89,7 +93,10 @@ def _stack_signature(ts, layer, geometry_cache):
         elif mask.source == "BAKED":
             extra = (mask.map_type, maps)
         elif mask.source == "FILTER":
-            extra = (_effect_signature(mask.effect), ts.edit_serial if mask.effect.image else None)
+            from .operation_contracts import surface
+            # A Surface-space filter pads each island from the set's seam map.
+            extra = (_effect_signature(mask.effect), ts.edit_serial if mask.effect.image else None,
+                     getattr(geometry_cache, "geometry_stamp", None) if surface(mask.effect) else None)
         elif mask.source == 'SCENE':
             extra = (_live_field_identity(ts, mask) if mask.influence.mode == 'LIVE' else
                      (_image_identity(mask.influence.image), mask.influence.update_serial),
@@ -131,17 +138,50 @@ def _stack_signature(ts, layer, geometry_cache):
 
 def evaluate_masks(ts, layer, n, y0, y1, cache, geometry_cache=None):
     geometry_cache = geometry_cache if geometry_cache is not None else {}
+    from .channel_eval import band_rows
     from .operation_contracts import mask_footprint
     from .tiles import expand
     halo = mask_footprint(layer.masks)
-    low, high = (0, n) if halo is None else expand(y0, y1, halo, n)
-    key = ("mask_stack", ts.id, layer.id, _stack_signature(ts, layer, geometry_cache), n, low, high)
-    if key not in geometry_cache:
-        value = np.asarray(_evaluate_masks(ts, layer, n, low, high, cache, geometry_cache), dtype=np.float32)
-        geometry_cache[key] = value
-    else:
-        value = geometry_cache[key]
-    return value[y0 - low:y1 - low]
+    identity = ("mask_stack", ts.id, layer.id, _stack_signature(ts, layer, geometry_cache), n)
+    if halo is None:
+        key = (*identity, 0, n)
+        if key in cache:
+            return cache[key][y0:y1]
+        if key not in geometry_cache:
+            value = np.asarray(_evaluate_masks(ts, layer, n, 0, n, cache, geometry_cache), dtype=np.float32)
+            geometry_cache[key] = value
+        else:
+            value = geometry_cache[key]
+        # Every strip of the job reads the whole-image stack. The shared cache
+        # may refuse or evict it under its allowance, so the job keeps its own
+        # reference rather than rebuilding the seam-padded stack per strip.
+        cache[key] = value
+        return value[y0:y1]
+    # A bounded footprint evaluates aligned strips (channel_eval.band_rows) and
+    # retains just their own rows: a full sweep keeps n / rows entries in the
+    # shared cache instead of one overlapping (16 + 2·halo)-row strip per tile,
+    # which filled the allowance during a single 4K evaluation. The job holds
+    # the current strip itself in case the allowance refuses it.
+    rows = band_rows(halo, n)
+    parts = []
+    for strip_low in range(y0 // rows * rows, y1, rows):
+        strip_high = min(strip_low + rows, n)
+        key = (*identity, strip_low, strip_high)
+        if key in cache:
+            value = cache[key]
+        else:
+            if key not in geometry_cache:
+                low, high = expand(strip_low, strip_high, halo, n)
+                value = np.ascontiguousarray(_evaluate_masks(ts, layer, n, low, high, cache, geometry_cache)
+                                             [strip_low - low:strip_high - low], dtype=np.float32)
+                geometry_cache[key] = value
+            else:
+                value = geometry_cache[key]
+            for stale in [k for k in cache if isinstance(k, tuple) and k[:len(identity)] == identity]:
+                del cache[stale]
+            cache[key] = value
+        parts.append(value[max(y0 - strip_low, 0):min(y1, strip_high) - strip_low])
+    return parts[0] if len(parts) == 1 else np.concatenate(parts)
 
 
 
@@ -175,13 +215,13 @@ def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
         return evaluate(ts, mask, u, v, cache)
     if mask.source == 'STROKES':
         from ..painting.stroke_raster import mask_rows
-        return mask_rows(ts, mask, n, y0, y1, geometry_cache)
+        return mask_rows(ts, mask, n, y0, y1, geometry_cache, cache=cache)
     if mask.source == 'MESH':
         from .mesh_masks import evaluate as evaluate_mesh_mask
-        return evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache)
+        return evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache, cache)
     if mask.source == 'GRAPH':
         from .custom_graph import evaluate as evaluate_graph
-        return evaluate_graph(ts, mask, n, y0, y1, geometry_cache)
+        return evaluate_graph(ts, mask, n, y0, y1, geometry_cache, cache)
     if mask.source == "PROCEDURAL":
         from types import SimpleNamespace
         from .channel_eval import _procedural_tile, _coordinates
@@ -203,9 +243,11 @@ def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
     if mask.source == "PAINT":
         if not mask.image:
             raise ValueError(f"Painted mask image is missing on {layer.name}.")
-        key = mask.image.as_pointer()
+        # Decoded like the shader's Image Texture node (an sRGB-tagged image an
+        # artist picked is linearised; managed canvases are Non-Color).
+        key = (mask.image.as_pointer(), "linear")
         if key not in cache:
-            cache[key] = read(cache, mask.image)
+            cache[key] = read(cache, mask.image, linear=True)
         data = cache[key]
         return data[y0:y1, :, 0] if data.shape[:2] == (n, n) else sample_uv(data, u, v)[..., 0]
     if mask.source == "BAKED":

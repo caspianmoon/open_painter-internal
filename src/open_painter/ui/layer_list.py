@@ -12,6 +12,32 @@ def folders(self, context):
     )
 
 
+def step(ts, layer, direction):
+    """Move ``layer`` (with its subtree) one drop candidate up or down the list.
+
+    The list is drawn by parent, so swapping raw storage neighbours (as
+    ``layer_stack.move`` does) often changes nothing on screen while the raw
+    order consumers read (the anchor picker's "above") still flips. Walking
+    the drag's candidates instead passes every folder edge the way a drop
+    would: into an expanded folder, out of it, then past the next row.
+    """
+    try:
+        gap, depth = layer_stack.slot(ts, layer.id)
+    except ValueError:
+        # Under a collapsed folder there is no row to step through.
+        layer_stack.move(ts, ts.active_layer, direction)
+        return
+    steps = [(g, target) for g, candidates in enumerate(layer_stack.drop_targets(ts, layer.id))
+             for target in candidates]
+    current = next((i for i, (g, target) in enumerate(steps) if g == gap and target[0] == depth), None)
+    if current is None:
+        layer_stack.move(ts, ts.active_layer, direction)
+        return
+    wanted = current - direction   # candidates run top to bottom; UP is the earlier one
+    if 0 <= wanted < len(steps):
+        layer_stack.place(ts, layer.id, steps[wanted][1])
+
+
 class OP_OT_layer(SafeOperator, bpy.types.Operator):
     bl_idname = "open_painter.layer"
     bl_label = "Edit Layer Stack"
@@ -61,15 +87,31 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
 
     def run(self, context):
         ts = require_set(context)
+        before = layer_stack.active(ts)
+        before_id = before.id if before else ""
+        self.edit(context, ts)
+        if context.area:
+            # The panels show content for a layer without masks, but the shelf
+            # reads the flag as it is: left over from a mask on the previous
+            # layer (or one undone since), a Texture click would add a mask.
+            from .dock import state
+
+            layer = layer_stack.active(ts)
+            if layer is None or layer.id != before_id or not layer.masks:
+                state.get(context.area).mask_selected = False
+
+    def edit(self, context, ts):
         if self.action == "GROUP":
             from .dock import state
 
             ui = state.get(context.area) if context.area else None
             current = layer_stack.active(ts)
-            ids = (
-                ui.selected_layers
-                if ui and ui.selected_layers
-                else ({current.id} if current else set())
+            # Ids of undone or deleted layers would group nothing; the active
+            # layer stands in only for an empty selection, since a Ctrl-click
+            # in the dock may deliberately leave it out.
+            existing = {item.id for item in ts.layers}
+            ids = {i for i in (ui.selected_layers if ui else ()) if i in existing} or (
+                {current.id} if current else set()
             )
             folder = layer_stack.group(ts, ids)
             if ui:
@@ -114,7 +156,7 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
         elif self.action == "DUPLICATE":
             layer_stack.duplicate(ts, ts.active_layer)
         elif self.action in {"UP", "DOWN"}:
-            layer_stack.move(ts, ts.active_layer, 1 if self.action == "UP" else -1)
+            step(ts, layer, 1 if self.action == "UP" else -1)
         else:
             layer_stack.parent(ts, layer, "" if self.folder == "ROOT" else self.folder)
 

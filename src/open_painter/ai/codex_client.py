@@ -32,10 +32,38 @@ CONFIG = {**{f"features.{name}": False for name in DISABLED},
           "sandbox_mode": "read-only", "mcp_servers": {}}
 
 
+SAFE_ENVIRONMENT = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT",
+                    "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL",
+                    "SSL_CERT_FILE", "CODEX_CA_CERTIFICATE"}
+
+
+def launch_environment(state_directory, binary_dirs=()):
+    env = {k: v for k, v in os.environ.items() if k in SAFE_ENVIRONMENT}
+    # npm's codex is a "#!/usr/bin/env node" shim. A Dock-launched Blender
+    # inherits launchd's PATH, so node is only reachable beside the executable
+    # the artist chose; the Windows codex.cmd shim needs node.exe the same way.
+    entries = [*binary_dirs, *env.get("PATH", "").split(os.pathsep)]
+    env["PATH"] = os.pathsep.join(dict.fromkeys(d for d in entries if d))
+    env["CODEX_HOME"] = str(state_directory)
+    return env
+
+
+def launch_failure(stderr):
+    # "env: node: No such file or directory" explains a wrong PATH far better
+    # than asking for the executable again. Keep the hint short and path-free.
+    lines = [line.strip() for line in (stderr or "").splitlines() if line.strip()]
+    hint = " ".join(w for w in lines[-1].split() if "/" not in w and "\\" not in w)[:120] if lines else ""
+    if hint:
+        return f"The Codex executable did not run ({hint}). Start Blender from a terminal or choose the codex binary in Material Director preferences"
+    return "Choose a Codex CLI executable in Material Director preferences"
+
+
 def runtime_version(binary, *, env=None, cwd=None):
     result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10, env=env, cwd=cwd)
     match = re.search(r"codex-cli (\d+)\.(\d+)\.([^\s]+)", result.stdout)
-    if result.returncode or not match:
+    if result.returncode:
+        raise ValueError(launch_failure(result.stderr))
+    if not match:
         raise ValueError("Choose a Codex CLI executable in Material Director preferences")
     if (int(match[1]), int(match[2])) != (0, RUNTIME_MINOR):
         raise ValueError(f"This Material Director build supports Codex 0.{RUNTIME_MINOR}.x; found {match[0]}")
@@ -51,7 +79,7 @@ def launch_arguments(binary, overrides=None):
 
 
 class CodexClient:
-    def __init__(self, binary, state_directory, emit, *, overrides=None, credentials="keyring"):
+    def __init__(self, binary, state_directory, emit, *, overrides=None, credentials="keyring", binary_dirs=()):
         state = Path(state_directory).resolve()
         state.mkdir(parents=True, exist_ok=True, mode=0o700)
         workspace = state / "workspace"
@@ -75,11 +103,7 @@ class CodexClient:
         self.text_received = False
         self.image_items = set()
         self.generate_textures = False
-        safe_env = {k: v for k, v in os.environ.items() if k in {
-            "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT",
-            "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL",
-            "SSL_CERT_FILE", "CODEX_CA_CERTIFICATE"}}
-        safe_env["CODEX_HOME"] = str(state)
+        safe_env = launch_environment(state, binary_dirs)
         self.version = runtime_version(binary, env=safe_env, cwd=workspace)
         options = dict(overrides or {})
         options["cli_auth_credentials_store"] = credentials
@@ -232,10 +256,15 @@ class CodexClient:
                         continue
                     # Server messages can contain private filesystem paths. Keep
                     # the product error useful without forwarding raw diagnostics.
-                    self.emit(dict(event="error", request_id=self.request_id,
-                                   message=f"Codex {method} failed ({event['error'].get('code', 'error')}). Reconnect or check account access."))
+                    error = dict(event="error",
+                                 message=f"Codex {method} failed ({event['error'].get('code', 'error')}). Reconnect or check account access.")
                     if method in {"thread/start", "turn/start"}:
+                        # Only a failed start ends the instruction; an account or
+                        # model request failing on its own must not cancel a turn
+                        # Blender would then believe has stopped.
+                        error["request_id"] = self.request_id
                         self.request_id = None
+                    self.emit(error)
                 elif callback:
                     callback(event.get("result", {}))
                 continue
@@ -262,7 +291,7 @@ class CodexClient:
                 self.emit(dict(event="text", request_id=self.request_id, text=params.get("delta", "")[:16000]))
             elif method == "item/completed" and self.request_id and params.get("threadId") == self.thread_id:
                 item = params.get("item", {})
-                if item.get("type") == "imageGeneration":
+                if item.get("type") == "imageGeneration" and item.get("id") in self.image_items:
                     if item.get("status") == "completed" and not item.get("failure"):
                         metadata = generated_images.store(self.state_directory, item)
                         self.emit(dict(event="generated_image", request_id=self.request_id, **metadata))
@@ -280,10 +309,15 @@ class CodexClient:
                     if not self.generate_textures:
                         self.interrupt()
                         raise ValueError("Image generation was disabled for this instruction")
+                    if len(self.image_items) >= generated_images.MAX_IMAGES:
+                        # The budget is a prompt-level hint the model can overrun;
+                        # dropping the turn here would discard the finished
+                        # textures, and interrupt() would strand the draft by
+                        # clearing request_id before turn/completed arrives.
+                        self.emit(dict(event="image_status", request_id=self.request_id,
+                                       message="Ignored an extra generated texture (four per instruction)"))
+                        continue
                     self.image_items.add(item["id"])
-                    if len(self.image_items) > generated_images.MAX_IMAGES:
-                        self.interrupt()
-                        raise ValueError("Generate at most four texture images per instruction")
                     self.emit(dict(event="image_status", request_id=self.request_id,
                                    message=f"Generating texture {len(self.image_items)}… This can take a few minutes."))
                 if item.get("type") in {"commandExecution", "fileChange", "webSearch", "mcpToolCall", "collabAgentToolCall"}:
@@ -291,8 +325,9 @@ class CodexClient:
                     raise ValueError("Codex requested a capability outside Material Director; connection stopped")
         now = time.monotonic()
         if self.request_id and now > self.deadline:
+            request_id = self.request_id
             self.interrupt()
-            self.emit(dict(event="error", message="The instruction timed out. Your material was not changed."))
+            self.emit(dict(event="error", request_id=request_id, message="The instruction timed out. Your material was not changed."))
         expired = [key for key, (_, _, started, _) in self.pending.items() if now - started > 30]
         if expired:
             raise ValueError("Codex connection timed out; reconnect to try again")

@@ -28,8 +28,15 @@ bpy.ops.uv.smart_project(island_margin=.03); bpy.ops.object.mode_set(mode='OBJEC
 cube.data.materials.append(bpy.data.materials.new('Lower')); cube.data.materials.append(bpy.data.materials.new('Upper'))
 for polygon in cube.data.polygons:
     polygon.material_index = 1 if polygon.center.z > 0 else 0
+# A housing around the cube in a third set: its bounds enclose every stroke on the cube, but
+# no stroke reaches its surface.
+bpy.ops.mesh.primitive_cube_add(size=6)
+housing_object = bpy.context.object
+bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT')
+bpy.ops.uv.smart_project(island_margin=.03); bpy.ops.object.mode_set(mode='OBJECT')
 lower = sets.create(scene, 'Lower', 512); sets.assign(scene, lower, cube, 0)
 upper = sets.create(scene, 'Upper', 512); sets.assign(scene, upper, cube, 1)
+housing = sets.create(scene, 'Housing', 512); sets.assign(scene, housing, housing_object, 0)
 for ts in (lower, upper):
     ts.preview_backend = 'CPU'
     base = stack.add(ts, 'FILL', 'Base'); stack.channel_for(base, 'ROUGHNESS').value = .2
@@ -67,6 +74,11 @@ lower_paint = next(l for l in lower.layers if l.type == 'PAINT')
 assert lower_paint.stroke_key and stroke.layer_key == lower_paint.stroke_key
 linked = records.linked_layers(project, stroke.layer_key)
 assert {ts.id for ts, _ in linked} == {lower.id, upper.id}, [ts.name for ts, _ in linked]
+# The housing's bounds enclose the stroke, yet it marks no texel of the housing: linking on
+# the bounds alone gave it a permanent empty 'Marks' layer re-rastered on every edit of the key.
+assert records._intersects(housing, *stroke_raster.bounds(vertical_stroke()))
+assert not stroke_raster.coverage(housing, stroke, 512).any()
+assert not housing.layers and not dependencies.uses_strokes(housing), [l.name for l in housing.layers]
 upper_paint = next(l for ts, l in linked if ts.id == upper.id)
 assert upper_paint.type == 'PAINT' and upper_paint.name == 'Marks'
 lower_rough, upper_rough = rough(lower), rough(upper)
@@ -121,6 +133,207 @@ assert union and intersection / union > .95, intersection / union
 lower.resolution = '512'
 print('VECTOR_STROKES resolution: PASS', flush=True)
 
+# 4b. Rasterize flattens the selected stroke only, into every set rendering it, with the
+#     float-canvas (premultiplied) convention: the output is unchanged, the other strokes stay
+#     live records, and a mask sharing the key refuses the flatten.
+stroke = next(s for s in project.strokes if s.id == stroke.id)
+stroke.hardness = .3   # a wide soft edge: partial-alpha texels over the empty canvas
+stroke_id, key = stroke.id, stroke.layer_key
+flank = vertical_stroke(x=-1.0)
+flank[:, 3] = -1.0     # the -X face: its own UV island, never overlapping the +X stroke
+other = records.record(project, lower, lower_paint, flank, settings(opacity=.5, hardness=.5, roughness=.6), universal=False)
+third = records.record(project, lower, lower_paint, vertical_stroke(z0=.5, z1=.7, count=3, radius=.1), settings(roughness=.4), universal=False)
+other_id = other.id
+other = next(s for s in project.strokes if s.id == other_id)
+stroke = next(s for s in project.strokes if s.id == stroke_id)   # add() moved the collection
+other_cover = stroke_raster.coverage(lower, other, 512) > .01
+assert other_cover.any() and not (other_cover & (stroke_raster.coverage(lower, stroke, 512) > 0)).any()
+expected_lower, expected_upper = rough(lower), rough(upper)
+project.active_texture_set = next(i for i, item in enumerate(project.texture_sets) if item.id == lower.id)
+# A Vector Strokes mask on the key cannot receive pixels: the flatten is refused, nothing changes.
+gate = stack.add(lower, 'FILL', 'Gate')
+mask = gate.masks.add(); mask.id, mask.source = new_id(), 'STROKES'
+mask.stroke_key = key
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT' and l.stroke_key == key)
+lower.active_layer = stack.index_of(lower, lower_paint.id)
+project.active_stroke = next(i for i, s in enumerate(project.strokes) if s.id == stroke_id)
+try:
+    bpy.ops.open_painter.stroke(action='RASTERIZE')
+    raise AssertionError('a masked key must not be flattened')
+except RuntimeError as error:
+    assert 'mask' in str(error), error
+assert any(s.id == stroke_id for s in project.strokes) and stack.channel_for(lower_paint, 'ROUGHNESS').image is None
+stack.remove(lower, stack.index_of(lower, gate.id))
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT' and l.stroke_key == key)
+lower.active_layer = stack.index_of(lower, lower_paint.id)
+project.active_stroke = next(i for i, s in enumerate(project.strokes) if s.id == stroke_id)
+count = len(project.strokes)
+assert bpy.ops.open_painter.stroke(action='RASTERIZE') == {'FINISHED'}
+assert len(project.strokes) == count - 1 and not any(s.id == stroke_id for s in project.strokes)
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT' and l.stroke_key == key)
+upper_paint = next(l for l in upper.layers if l.type == 'PAINT' and l.stroke_key == key)
+for owner in (lower_paint, upper_paint):
+    image = stack.channel_for(owner, 'ROUGHNESS').image
+    assert image is not None and tuple(image.size) == (512, 512), owner.name
+np.testing.assert_allclose(rough(lower), expected_lower, atol=2e-3, err_msg='flattening changed the lower set')
+np.testing.assert_allclose(rough(upper), expected_upper, atol=2e-3, err_msg='the linked set lost (or doubled) the stroke')
+# The other strokes were not burnt in: deleting one clears its texels.
+records.remove(project, other_id)
+after = rough(lower)
+np.testing.assert_allclose(after[other_cover], .2, atol=1e-6, err_msg='a live stroke was baked into the image')
+assert not np.allclose(after, expected_lower)
+print('VECTOR_STROKES rasterize: PASS', flush=True)
+
+# 4c. Duplicate reads the snapshot (the RNA reference dies at add()) and gives the copy its own
+#     order right after the original, so Move Up/Down keeps distinct orders.
+records.record(project, lower, lower_paint, flank, settings(opacity=.5, hardness=.5, roughness=.6), universal=False)
+siblings = records.strokes_for(project, key)
+assert len(siblings) == 2
+first = siblings[0]
+first_name, first_id = first.name, first.id
+project.active_stroke = next(i for i, s in enumerate(project.strokes) if s.id == first_id)
+for _ in range(30):   # enough adds to relocate the collection under the stale reference
+    assert bpy.ops.open_painter.stroke(action='DUPLICATE') == {'FINISHED'}
+    copy = project.strokes[project.active_stroke]
+    assert copy.name == first_name + ' Copy' and copy.layer_key == key, (copy.name, copy.order)
+    orders = [s.order for s in records.strokes_for(project, key)]
+    assert len(set(orders)) == len(orders), orders
+    assert records.strokes_for(project, key)[1].id == copy.id, 'the copy must follow its original'
+    project.active_stroke = next(i for i, s in enumerate(project.strokes) if s.id == first_id)
+print('VECTOR_STROKES duplicate: PASS', flush=True)
+
+# 4d. A Vector Strokes mask with its own key (New Key) collects strokes recorded under it, re-renders,
+#     survives Purge Orphans while linked, and never mirrors paint layers into other sets.
+tint = stack.add(lower, 'FILL', 'Tint'); stack.channel_for(tint, 'ROUGHNESS').value = .95
+mask = tint.masks.add(); mask.id, mask.source = new_id(), 'STROKES'
+lower.active_layer = stack.index_of(lower, tint.id)
+assert bpy.ops.open_painter.mask_strokes(action='NEW') == {'FINISHED'}
+tint = next(l for l in lower.layers if l.name == 'Tint')
+mask = tint.masks[0]
+from open_painter.ui.strokes_panel import active_strokes_mask
+assert mask.stroke_key and active_strokes_mask(tint) is not None and active_strokes_mask(tint).stroke_key == mask.stroke_key
+before = rough(lower)
+upper_count = len(upper.layers)
+lower.dirty = False
+own = records.record(project, lower, tint, vertical_stroke(), settings(), key=mask.stroke_key)
+assert own.layer_key == mask.stroke_key and lower.dirty, 'the mask must wake its set'
+assert len(upper.layers) == upper_count and not records.linked_layers(project, mask.stroke_key)
+assert [m.stroke_key for _, _, m in records.linked_masks(project, mask.stroke_key)] == [mask.stroke_key]
+own_cover = stroke_raster.coverage(lower, own, 512)
+masked = rough(lower)
+assert (own_cover > .999).any() and np.allclose(masked[own_cover > .999], .95, atol=2e-3), masked[own_cover > .999].min()
+assert np.allclose(masked[own_cover <= 0], before[own_cover <= 0]), 'the mask leaked outside its strokes'
+assert records.purge_orphans(project) == 0
+lower.dirty = False
+own = next(s for s in project.strokes if s.id == own.id)
+own.opacity = .5   # an edit of a mask-key stroke re-renders too
+records.touch(project, own)
+assert lower.dirty
+lower.active_layer = stack.index_of(lower, tint.id)
+project.active_stroke = next(i for i, s in enumerate(project.strokes) if s.id == own.id)
+try:
+    bpy.ops.open_painter.stroke(action='RASTERIZE')
+    raise AssertionError('a mask-only key has no paint image to flatten into')
+except RuntimeError:
+    pass
+assert bpy.ops.open_painter.mask_strokes(action='CLEAR') == {'FINISHED'}
+assert records.purge_orphans(project) == 1 and not any(s.id == own.id for s in project.strokes)
+stack.remove(lower, stack.index_of(lower, next(l for l in lower.layers if l.name == 'Tint').id))
+print('VECTOR_STROKES mask key: PASS', flush=True)
+# Back to one live stroke on empty canvases for the geometry and undo checks below.
+for owner in (lower, upper):
+    for item in owner.layers:
+        if item.type == 'PAINT':
+            for prop in item.channels:
+                prop.image = None
+for stale in [s.id for s in project.strokes]:
+    records.remove(project, stale)
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT')
+lower.active_layer = stack.index_of(lower, lower_paint.id)
+stroke = records.record(project, lower, lower_paint, vertical_stroke(), settings())
+low = rough(lower) > .5
+
+# 4e. Dense meshes: coverage rasterises in batches bounded by covered texels. The old guard counted
+#     triangles under the stroke's bounds and refused ordinary strokes on 100k-face assets (the
+#     set failed until the stroke was deleted); batches must reproduce the single pass exactly.
+from unittest.mock import patch
+from open_painter.evaluation import memory, raster_cache
+from open_painter.geometry import snapshots, uv_rasterizer
+key = lower_paint.stroke_key
+whole = stroke_raster.coverage(lower, stroke, 512)
+budget = stroke_raster.PAIR_BYTES * 500
+with snapshots.targets(lower) as entries:
+    lo, hi = stroke_raster.bounds(stroke_raster.unpack_samples(stroke.samples))
+    corners = entries[0]['positions'][entries[0]['tri_vertices']]
+    touched = int((np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1)).sum())
+assert touched * 512 * 16 > budget, touched   # the removed guard refused this stroke at this budget
+with patch.object(stroke_raster, 'MAX_WORKING_BYTES', budget), \
+        patch.object(uv_rasterizer, 'rasterize', wraps=uv_rasterizer.rasterize) as passes:
+    batched = stroke_raster.coverage(lower, stroke, 512)
+assert passes.call_count > 1, passes.call_count
+assert np.array_equal(batched, whole), 'batched rasterisation must match one pass'
+# Many strokes: a channel evaluation rasterises each stroke once, under one evaluated mesh, even
+# when full-canvas rasters (1 MiB each here, 64 MiB at 4k) would outgrow the shared allowance:
+# the tiles used to evict each stroke just before the next tile asked for it again.
+extra = [records.record(project, lower, lower_paint, vertical_stroke(z0=-.8 + .1 * i, count=9, radius=.2),
+                        settings(roughness=.1 * (i + 1))).id for i in range(5)]
+count = len(records.strokes_for(project, key))
+assert count == 6, count
+allowance = memory.shared.allowance
+raster_cache.clear_shared()
+memory.shared.configure(3 * 512 * 512 * 4)
+try:
+    with patch.object(stroke_raster, '_rasterise', wraps=stroke_raster._rasterise) as rasterised, \
+            patch.object(snapshots, 'targets', wraps=snapshots.targets) as meshes:
+        LayerEvaluator(scene).evaluate_channel(lower.id, 'ROUGHNESS')
+    assert rasterised.call_count == count, (rasterised.call_count, count)
+    assert meshes.call_count == 1, meshes.call_count
+    with patch.object(stroke_raster, '_rasterise', wraps=stroke_raster._rasterise) as rasterised:
+        LayerEvaluator(scene).evaluate_channel(lower.id, 'ROUGHNESS')
+    assert rasterised.call_count == 0, rasterised.call_count   # the memoised strokes survived
+    cached = sum(1 for k in raster_cache.for_texture_set(scene, lower) if isinstance(k, tuple) and k[0] == 'stroke')
+    assert cached == count, cached
+    assert memory.shared.used <= memory.shared.allowance
+finally:
+    memory.shared.configure(allowance)
+for stale in extra:
+    records.remove(project, stale)
+stroke = next(s for s in project.strokes if s.layer_key == key)
+assert len(records.strokes_for(project, key)) == 1
+print('VECTOR_STROKES batches: PASS', flush=True)
+
+# 4f. Planar projection records the view's facing axis. The brush once negated the quaternion
+#     instead of the rotated vector (`-q @ v` is the same rotation), storing the direction the
+#     view looks along: every texel facing the viewer failed the raster's front-facing test, so a
+#     planar stroke drew nothing on the visible surface.
+from mathutils import Euler, Vector
+from open_painter.ui.vector_brush import OP_OT_vector_brush
+view = next(a for s in bpy.data.screens for a in s.areas if a.type == 'VIEW_3D').spaces.active.region_3d
+brush = project.vector_brush
+upper_paint = next(l for l in upper.layers if l.type == 'PAINT' and l.stroke_key == key)
+brush.projection, brush.channels, brush.roughness, brush.radius = 'PLANAR', {'ROUGHNESS'}, .9, .25
+top_face = vertical_stroke(x=0., z0=1., z1=1., count=5)   # samples across the top face at z = 1
+top_face[:, 0] = np.linspace(-.5, .5, 5); top_face[:, 3:6] = (0., 0., 1.)
+fake_context = SimpleNamespace(scene=scene, area=SimpleNamespace(tag_redraw=lambda: None))
+for rotation in (Euler((0., 0., 0.)), Euler((.35, -.2, .6))):
+    view.view_rotation = rotation.to_quaternion()
+    recorder = SimpleNamespace(_samples=top_face.tolist(), _points=[], _batch=None, _view=view,
+                               _set_id=upper.id, _layer_id=upper_paint.id, _key='')
+    count = len(project.strokes)
+    OP_OT_vector_brush._commit(recorder, fake_context, brush)
+    assert len(project.strokes) == count + 1
+    planar = project.strokes[-1]
+    assert planar.projection == 'PLANAR'
+    axis = Vector(planar.plane_normal)
+    looking = view.view_rotation @ Vector((0., 0., -1.))
+    assert axis.dot(looking) < -.99, ('the planar axis must face the viewer', tuple(axis), tuple(looking))
+    if rotation.x == rotation.y == rotation.z == 0.:   # the top view: the disc lies in the top face
+        top = stroke_raster.coverage(upper, planar, 512)
+        assert top.max() > .99, ('a planar stroke from above must land on the top face', top.max())
+    records.remove(project, planar.id)
+brush.projection = 'SURFACE'
+print('VECTOR_STROKES planar view: PASS', flush=True)
+
 # 5. Geometry changes re-rasterise; undo removes the stroke as data.
 dependencies.remember(scene, lower, dependencies.geometry_key(scene, lower))
 assert dependencies.uses_geometry(lower)
@@ -129,6 +342,7 @@ assert lower.dirty
 moved = rough(lower)
 assert not np.array_equal(moved > .5, low), 'a moved mesh must re-project the stroke'
 cube.location.x -= .5; bpy.context.view_layer.update()
+assert not housing.layers, ('a later stroke linked the enclosing set', [l.name for l in housing.layers])
 bpy.ops.ed.undo_push(message='before')
 count = len(project.strokes)
 records.record(project, lower, lower_paint, vertical_stroke(x=-1.0), settings())

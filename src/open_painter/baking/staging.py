@@ -5,6 +5,10 @@ import numpy as np
 from ..constants import OWNER
 
 
+class TopologyMismatch(ValueError):
+    """A face selection was made on a different evaluation of the target than the stage holds."""
+
+
 class BakeStage:
     def __init__(self, context, ts, groups, image, scratch):
         self.context, self.ts, self.groups = context, ts, groups
@@ -12,8 +16,10 @@ class BakeStage:
         self.scene = None
         self.world = None
         self.objects, self.meshes, self.materials = [], [], []
+        self.node_groups = []   # the realise trees generated helpers are staged with
         self.copies = {}
         self.cages = {}
+        self.own_sources = {}
 
     def prepare(self):
         if self.context.scene != self.ts.id_data:
@@ -36,7 +42,7 @@ class BakeStage:
                                       for obj in (group.low, *group.sources, group.cage) if obj))
         from .render_geometry import objects
         from .cages import topology_signature
-        self.copies = objects(self.context, originals, self.scene, self.objects, self.meshes)
+        self.copies = objects(self.context, originals, self.scene, self.objects, self.meshes, self.node_groups)
         for group in self.groups:
             target = self.copies[group.low]
             if group.cage and topology_signature(target.data) != topology_signature(self.copies[group.cage].data):
@@ -55,12 +61,35 @@ class BakeStage:
                 node.image = self.image if index in assigned else self.scratch
                 material.node_tree.nodes.active = node
                 target.data.materials[index] = material
+        from ..geometry_effects.manager import TAG
+        for group in self.groups:
+            if group.sources and all(obj.get(TAG) == 'INSTANCE_HELPER' for obj in group.sources):
+                # Generated helpers decorate a low that has no high-poly of its own (Bake Back on a
+                # set that baked from itself): the low is the active target, never a hit, so every
+                # texel outside a helper would keep the neutral default and the low's own
+                # occlusion would be lost. A copy of the target is projected alongside them.
+                target = self.copies[group.low]
+                own = target.copy()
+                own.data = target.data.copy()
+                own.data.materials.clear()
+                self.scene.collection.objects.link(own)
+                self.objects.append(own)
+                self.meshes.append(own.data)
+                self.own_sources[group.low] = own
         self.scene.view_layers[0].update()
         return self
 
-    def restrict(self, group, faces):
-        """Route every face of the target copy outside ``faces`` to the scratch image."""
+    def restrict(self, group, faces, polygons=None):
+        """Route every face of the target copy outside ``faces`` to the scratch image.
+
+        ``polygons`` is the face count the selection was made against; a copy
+        with another count (the evaluation changed underneath) is refused
+        rather than keeping faces the ids do not name.
+        """
         target = self.copies[group.low]
+        if polygons is not None and polygons != len(target.data.polygons):
+            raise TopologyMismatch(f'{group.low.name} evaluates to {len(target.data.polygons)} faces, '
+                                   f'the region was selected on {polygons}')
         material = bpy.data.materials.new('OP Bake Scratch')
         self.materials.append(material)
         material[OWNER] = True
@@ -89,6 +118,8 @@ class BakeStage:
         layer = self.scene.view_layers[0]
         target = self.copies[group.low]
         sources = [self.copies[obj] for obj in (group.sources if sources is None else sources)]
+        if group.low in self.own_sources:
+            sources.append(self.own_sources[group.low])
         selected = [target, *sources]
         visible = set(selected)
         if kind == 'AO' and (ao_scope or self.ts.bake.ao_scope) == 'SET':
@@ -96,6 +127,7 @@ class BakeStage:
             # scene objects. High-poly parts occlude high-to-low bakes.
             visible.update(self.copies[obj] for part in self.groups
                            for obj in (part.sources if self.ts.bake.selected_to_active else (part.low,)))
+            visible.update(self.own_sources.values())
         for obj in self.objects:
             obj.hide_render = obj not in visible
             obj.select_set(obj in selected, view_layer=layer)
@@ -111,6 +143,13 @@ class BakeStage:
             bpy.data.objects.remove(obj, do_unlink=True)
         for mesh in reversed(self.meshes):
             bpy.data.meshes.remove(mesh)
+        for group in reversed(self.node_groups):
+            # The copies' modifiers were cleared once evaluated, so the trees are
+            # orphans here; they would otherwise clutter the Geometry Nodes picker.
+            try:
+                bpy.data.node_groups.remove(group)
+            except ReferenceError:
+                pass
         for material in reversed(self.materials):
             bpy.data.materials.remove(material)
         if self.scene:

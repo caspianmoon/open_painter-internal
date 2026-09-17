@@ -17,7 +17,7 @@ see each other — padding never overwrites covered texels.
 import numpy as np
 
 _maps = {}
-MAX_MAPS = 3
+MAX_MAPS = 3      # cached maps' worth of texels at the largest cached resolution
 DEFAULT_HALO = 48
 
 
@@ -32,10 +32,12 @@ class SeamMap:
         self.depth = np.zeros(0, np.float32)       # texels outside the island
         self.normal = np.zeros((0, 2), np.float32) # outward seam normal per band texel (diagnostics)
         self.island = np.zeros(0, np.int64)        # island each band texel pads (entries are per island)
+        self._grouped = None                        # band entry order by island and each island's [start, stop)
         self.island_of = np.full((n, n), -1, np.int32)   # island id per covered texel
         self.bounds = {}                            # island id -> (r0, r1, c0, c1) of its covered texels
         self.triangle = np.full((n, n), -1, np.int32)
         self.jacobians = np.zeros((0, 2, 3), np.float32)   # dUV (in texels) / dWorld per triangle
+        self.sides = None      # (s0, s1, s_centroid, o0, o1, o_centroid, island) per seam side, pixels (diagnostics)
         self.seam_edges = 0
 
     @property
@@ -68,13 +70,30 @@ class SeamMap:
         r0, c0 = max(r0 - halo, 0), max(c0 - halo, 0)
         r1, c1 = min(r1 + halo + 1, self.n), min(c1 + halo + 1, self.n)
         crop = np.array(padded[r0:r1, c0:c1], copy=True)
-        pick = (self.island == island) & (self.depth <= halo)
-        if pick.any():
-            rows, cols = self.rows[pick], self.cols[pick]
+        # Only this island's band entries: scanning the whole band once per
+        # island made a many-island set quadratic.
+        entries = self.entries(island)
+        entries = entries[self.depth[entries] <= halo]
+        if len(entries):
+            rows, cols = self.rows[entries], self.cols[entries]
             within = (rows >= r0) & (rows < r1) & (cols >= c0) & (cols < c1)
-            rows, cols = rows[within], cols[within]
-            crop[rows - r0, cols - c0] = sample(padded, self.source_x[pick][within], self.source_y[pick][within])
+            rows, cols, entries = rows[within], cols[within], entries[within]
+            crop[rows - r0, cols - c0] = sample(padded, self.source_x[entries], self.source_y[entries])
         return crop, (r0, r1, c0, c1)
+
+    @property
+    def spans(self):
+        """island id -> [start, stop) of its entries in the island-grouped band order."""
+        if self._grouped is None:
+            order = np.argsort(self.island, kind='stable')
+            ids, starts, counts = np.unique(self.island[order], return_index=True, return_counts=True)
+            self._grouped = (order, {int(i): (int(s), int(s + c)) for i, s, c in zip(ids, starts, counts)})
+        return self._grouped[1]
+
+    def entries(self, island):
+        """Indices of one island's band entries; the band is grouped once, lazily."""
+        start, stop = self.spans.get(island, (0, 0))
+        return self._grouped[0][start:stop]
 
     def uv_direction(self, world_direction):
         """(n, n, 2) unit UV-space direction (pixels) of a world direction on each texel's face."""
@@ -100,15 +119,19 @@ def _edge_sides(mesh, uv, faces):
     loop_vertex = np.empty(len(mesh.loops), np.int32)
     mesh.loops.foreach_get('vertex_index', loop_vertex)
     faces = np.asarray(faces, np.int64)
-    totals = loop_total[faces]
+    totals = loop_total[faces].astype(np.int64)
     polygon = np.repeat(faces, totals)
-    loops = np.concatenate([np.arange(loop_start[f], loop_start[f] + loop_total[f]) for f in faces]) \
-        if len(faces) else np.zeros(0, np.int64)
+    # Each loop as its face's first loop plus its position in the face: no per-face arange.
+    position = np.arange(int(totals.sum())) - np.repeat(np.cumsum(totals) - totals, totals)
+    loops = np.repeat(loop_start[faces].astype(np.int64), totals) + position
     following = loops + 1
-    last = loop_start[faces] + loop_total[faces] - 1
-    at_end = np.isin(loops, last)
+    at_end = position == np.repeat(totals - 1, totals)
     following[at_end] = loop_start[polygon[at_end]]
     return loop_vertex[loops], loop_vertex[following], polygon, loops, following
+
+
+ARENA_TEXELS = 1 << 21     # dense closest-seam texels one island group holds at a time
+BAND_TEXELS = 1 << 20      # grid texels one vectorised band chunk evaluates
 
 
 def build(ts, n, halo=DEFAULT_HALO):
@@ -116,7 +139,7 @@ def build(ts, n, halo=DEFAULT_HALO):
     from .snapshots import targets
     from .uv_rasterizer import rasterize
     seam = SeamMap(n)
-    band_rows, band_cols, band_x, band_y, band_depth, band_normal, band_island = [], [], [], [], [], [], []
+    sides = []          # per target: both sides of every seam edge, in pixels
     jacobians = []
     triangle_base = 0
     island_base = 0
@@ -127,9 +150,10 @@ def build(ts, n, halo=DEFAULT_HALO):
             rows, cols, tri, _ = rasterize(uv[tri_loops], n)
             from ..baking.maps.utility import _islands
             labels, _ = _islands(target)
-            roots = {int(root): index + island_base for index, root in enumerate(sorted({int(r) for r in labels if r >= 0}))}
-            island_of_face = np.array([roots.get(int(r), -1) for r in labels], np.int64)
-            island_base += len(roots)
+            roots, island_of_face = np.unique(labels, return_inverse=True)
+            unassigned = int(len(roots) > 0 and roots[0] < 0)
+            island_of_face = np.where(labels >= 0, island_of_face.astype(np.int64) - unassigned + island_base, -1)
+            island_base += len(roots) - unassigned
             if len(rows):
                 seam.covered[rows, cols] = True
                 seam.triangle[rows, cols] = tri + triangle_base
@@ -174,113 +198,210 @@ def build(ts, n, halo=DEFAULT_HALO):
             np.add.at(counts_per_face, polygon, 1)
             centroids /= np.maximum(counts_per_face, 1)[:, None]
             pa, pb = polygon[side_a[seams]], polygon[side_b[seams]]
-            for index, (ea0, ea1, eb0, eb1, fa, fb) in enumerate(zip(a0[seams], a1[seams], b0[seams], b1[seams], pa, pb)):
-                for (s0, s1, sf, o0, o1, of) in ((ea0, ea1, fa, eb0, eb1, fb), (eb0, eb1, fb, ea0, ea1, fa)):
-                    before = len(band_rows)
-                    _band(seam, n, halo, s0 * n, s1 * n, centroids[sf] * n, o0 * n, o1 * n, centroids[of] * n,
-                          band_rows, band_cols, band_x, band_y, band_depth, band_normal)
-                    for added in band_rows[before:]:
-                        band_island.append(np.full(len(added), island_of_face[sf], np.int64))
+            ea0, ea1, eb0, eb1 = a0[seams] * n, a1[seams] * n, b0[seams] * n, b1[seams] * n
+            ca, cb = (centroids[pa] * n).astype(np.float32), (centroids[pb] * n).astype(np.float32)
+            # Side a then side b of each edge (the order breaks distance ties).
+            both = lambda first, second: np.stack((first, second), axis=1).reshape((-1,) + first.shape[1:])
+            sides.append((both(ea0, eb0), both(ea1, eb1), both(ca, cb), both(eb0, ea0), both(eb1, ea1), both(cb, ca),
+                          both(island_of_face[pa], island_of_face[pb])))
     if jacobians:
         seam.jacobians = np.concatenate(jacobians)
-    if band_rows:
-        rows = np.concatenate(band_rows); cols = np.concatenate(band_cols)
-        x = np.concatenate(band_x); y = np.concatenate(band_y); depth = np.concatenate(band_depth)
-        normal = np.concatenate(band_normal)
-        island = np.concatenate(band_island)
-        # Covered texels are never padded. Within one island the closest of its seams
-        # wins; across islands every band is kept (per-island filtering), and
-        # ``_nearest`` marks the globally closest for whole-image padding.
-        keep = ~seam.covered[rows, cols]
-        rows, cols, x, y, depth, normal, island = (rows[keep], cols[keep], x[keep], y[keep], depth[keep],
-                                                   normal[keep], island[keep])
-        linear = rows * n + cols
-        order = np.lexsort((depth, linear, island))
-        key = (island * n * n + linear)[order]
-        first = np.r_[True, key[1:] != key[:-1]]
-        chosen = order[first]
-        seam.rows, seam.cols = rows[chosen], cols[chosen]
-        seam.source_x, seam.source_y, seam.depth = x[chosen], y[chosen], depth[chosen]
-        seam.normal, seam.island = normal[chosen], island[chosen]
-        order = np.lexsort((seam.depth, seam.rows * n + seam.cols))
-        linear = (seam.rows * n + seam.cols)[order]
-        nearest = np.zeros(len(seam.rows), bool)
-        nearest[order[np.r_[True, linear[1:] != linear[:-1]]]] = True
-        seam._nearest = nearest
+    closest = None
+    if sides:
+        seam.sides = tuple(np.concatenate(items) for items in zip(*sides))
+        closest = _bands(seam.covered, n, halo, *seam.sides)
+    if closest is not None:
+        seam.rows, seam.cols, seam.source_x, seam.source_y, seam.depth, seam.normal, seam.island = closest
+        # The globally closest seam of each texel, for whole-image padding (ties to the
+        # lower island): the same depth-then-owner race as the per-island arenas.
+        linear = seam.rows * n + seam.cols
+        composite = (seam.depth.view(np.int32).astype(np.int64) << 32) | seam.island
+        race = np.full(n * n, np.iinfo(np.int64).max, np.int64)
+        np.minimum.at(race, linear, composite)
+        seam._nearest = race[linear] == composite
     else:
         seam._nearest = np.zeros(0, bool)
-    for island in np.unique(seam.island_of[seam.island_of >= 0]):
-        where = np.nonzero(seam.island_of == island)
-        seam.bounds[int(island)] = (int(where[0].min()), int(where[0].max()), int(where[1].min()), int(where[1].max()))
+    # Island bounds in one pass over the covered texels rather than one scan per island.
+    rows, cols = np.nonzero(seam.island_of >= 0)
+    if len(rows):
+        ids = seam.island_of[rows, cols]
+        count = int(ids.max()) + 1
+        r0, c0 = np.full(count, n, np.int64), np.full(count, n, np.int64)
+        r1, c1 = np.full(count, -1, np.int64), np.full(count, -1, np.int64)
+        np.minimum.at(r0, ids, rows); np.maximum.at(r1, ids, rows)
+        np.minimum.at(c0, ids, cols); np.maximum.at(c1, ids, cols)
+        for island in np.flatnonzero(r1 >= 0):
+            seam.bounds[int(island)] = (int(r0[island]), int(r1[island]), int(c0[island]), int(c1[island]))
     return seam
 
 
-def _band(seam, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, rows, cols, xs, ys, depths, normals):
-    """Texels outside the face on side ``s`` of a seam edge, mapped across to side ``o``.
+def _bands(covered, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, island):
+    """The closest seam per (island, texel) outside the islands: (rows, cols, x, y,
+    depth, normal, island), or None without a band.
 
-    Coordinates are pixels. ``s0→s1`` and ``o0→o1`` are the same 3D edge on the two
-    islands, oriented alike; the outside of ``s`` maps to the inside of ``o`` at the
-    same edge parameter and distance, scaled by the islands' UV densities.
+    Coordinates are pixels. Each side ``s0→s1`` and ``o0→o1`` is the same 3D edge on
+    two islands, oriented alike; the outside of ``s`` maps to the inside of ``o`` at
+    the same edge parameter and distance, scaled by the islands' UV densities. The
+    band extends past the edge ends by ``halo`` so the corner squares between two
+    seams are filled too (clamped to the far edge's ends); the closest seam wins where
+    bands overlap, the earlier side among equals.
+
+    Bands are cut into pieces of ``halo`` along the edge and evaluated many pieces per
+    grid, and every band texel races in a dense per-island arena on (depth, side), so
+    the overlapping bands of a dense mesh never pile up: memory is the arena and one
+    grid chunk, and the winners are read back from the arena.
     """
-    edge = s1 - s0
-    length = float(np.hypot(edge[0], edge[1]))
-    if length < 1e-6:
-        return
-    tangent = edge / length
-    normal = np.array((-tangent[1], tangent[0]))
-    if np.dot(s_centroid - s0, normal) > 0:
-        normal = -normal          # outward from the face on side s
-    other_edge = o1 - o0
-    other_length = float(np.hypot(other_edge[0], other_edge[1]))
-    if other_length < 1e-6:
-        return
-    other_tangent = other_edge / other_length
-    other_normal = np.array((-other_tangent[1], other_tangent[0]))
-    if np.dot(o_centroid - o0, other_normal) < 0:
-        other_normal = -other_normal   # inward on side o
+    s0, s1, o0, o1 = (np.asarray(v, np.float32) for v in (s0, s1, o0, o1))
+    edge, other_edge = s1 - s0, o1 - o0
+    length, other_length = np.hypot(edge[:, 0], edge[:, 1]), np.hypot(other_edge[:, 0], other_edge[:, 1])
+    side = np.flatnonzero((length >= 1e-6) & (other_length >= 1e-6))
+    if not len(side):
+        return None
+    s0, o0, island = s0[side], o0[side], np.asarray(island, np.int64)[side]
+    edge, other_edge, length, other_length = edge[side], other_edge[side], length[side], other_length[side]
+    tangent = edge / length[:, None]
+    normal = np.stack((-tangent[:, 1], tangent[:, 0]), axis=1)
+    normal[np.einsum('ij,ij->i', s_centroid[side] - s0, normal) > 0] *= -1        # outward from the face on side s
+    other_tangent = other_edge / other_length[:, None]
+    other_normal = np.stack((-other_tangent[:, 1], other_tangent[:, 0]), axis=1)
+    other_normal[np.einsum('ij,ij->i', o_centroid[side] - o0, other_normal) < 0] *= -1   # inward on side o
     density = other_length / length
-    # The band extends past the edge ends by ``halo`` so the corner squares
-    # between two seams are filled too (clamped to the far edge's ends); the
-    # closest seam wins where bands overlap.
-    reach = tangent * halo
-    corners = np.stack((s0 - reach, s1 + reach, s0 - reach + normal * halo, s1 + reach + normal * halo))
-    x0, y0 = np.maximum(np.floor(corners.min(axis=0) - 1).astype(int), 0)
-    x1, y1 = np.minimum(np.ceil(corners.max(axis=0) + 1).astype(int), n - 1)
-    if x1 < x0 or y1 < y0:
-        return
-    gy, gx = np.mgrid[y0:y1 + 1, x0:x1 + 1]
-    px, py = gx + .5 - s0[0], gy + .5 - s0[1]
-    along = (px * tangent[0] + py * tangent[1])
-    depth = px * normal[0] + py * normal[1]
-    inside = (depth > 0) & (depth <= halo) & (along >= -halo) & (along <= length + halo)
-    if not inside.any():
-        return
-    # Keep the sample a texel inside the far island (its edge ends and border), so
-    # bilinear reads never straddle the far island's own margin.
-    margin = min(.75, other_length / 2)
-    t = np.clip(np.clip(along[inside] / length, 0, 1) * other_length, margin, other_length - margin)
-    d = np.maximum(depth[inside] * density, .75)
-    overshoot = np.maximum(np.maximum(-along[inside], along[inside] - length), 0)
-    distance = np.hypot(depth[inside], overshoot)   # true distance to the edge segment
-    sx = o0[0] + other_tangent[0] * t + other_normal[0] * d - .5
-    sy = o0[1] + other_tangent[1] * t + other_normal[1] * d - .5
-    rows.append(gy[inside].astype(np.int64)); cols.append(gx[inside].astype(np.int64))
-    xs.append(sx.astype(np.float32)); ys.append(sy.astype(np.float32)); depths.append(distance.astype(np.float32))
-    normals.append(np.broadcast_to(normal.astype(np.float32), (int(inside.sum()), 2)).copy())
+    halo = np.float32(halo)
+
+    def offsets(w, px, py):
+        """(along, depth) of texel offsets ``px, py`` from ``s0`` on sides ``w``."""
+        return px * tangent[w, 0] + py * tangent[w, 1], px * normal[w, 0] + py * normal[w, 1]
+
+    def sample(w, along, depth):
+        """Pixel coordinates across the seam. The sample stays a texel inside the far island
+        (its edge ends and border), so bilinear reads never straddle the far island's margin."""
+        margin = np.minimum(np.float32(.75), other_length[w] / 2)
+        t = np.clip(np.clip(along / length[w], 0, 1) * other_length[w], margin, other_length[w] - margin)
+        d = np.maximum(depth * density[w], np.float32(.75))
+        return (o0[w, 0] + other_tangent[w, 0] * t + other_normal[w, 0] * d - np.float32(.5),
+                o0[w, 1] + other_tangent[w, 1] * t + other_normal[w, 1] * d - np.float32(.5))
+
+    # Pieces of ``halo`` along [-halo, length + halo], half-open except the last, each
+    # with the box of its rotated rectangle clamped to the image.
+    count = np.maximum(np.ceil((length + 2 * halo) / halo), 1).astype(np.int64)
+    of = np.repeat(np.arange(len(side)), count)
+    index = np.arange(len(of)) - np.repeat(np.cumsum(count) - count, count)
+    lo = (index * halo - halo).astype(np.float32)
+    hi = np.minimum(lo + halo, length[of] + halo).astype(np.float32)
+    last = index == count[of] - 1
+    p0, p1 = s0[of] + tangent[of] * lo[:, None], s0[of] + tangent[of] * hi[:, None]
+    reach = normal[of] * halo
+    corners = np.stack((p0, p1, p0 + reach, p1 + reach), axis=1)                 # (P, 4, 2)
+    start = np.maximum(np.floor(corners.min(axis=1) - 1), 0).astype(np.int64)
+    stop = np.minimum(np.ceil(corners.max(axis=1) + 1), n - 1).astype(np.int64)
+    pieces = np.flatnonzero((stop >= start).all(axis=1))
+    if not len(pieces):
+        return None
+    of, lo, hi, last, start, stop = of[pieces], lo[pieces], hi[pieces], last[pieces], start[pieces], stop[pieces]
+    extent = (stop - start).max(axis=1) + 1
+    # Arenas: one dense box per island (the union of its pieces' boxes), islands taken
+    # in order into groups of at most ARENA_TEXELS.
+    ids, member = np.unique(island[of], return_inverse=True)
+    box0, box1 = np.full((len(ids), 2), n, np.int64), np.full((len(ids), 2), -1, np.int64)
+    np.minimum.at(box0, member, start); np.maximum.at(box1, member, stop)
+    width = box1[:, 0] - box0[:, 0] + 1
+    area = width * (box1[:, 1] - box0[:, 1] + 1)
+    group, offset = np.zeros(len(ids), np.int64), np.zeros(len(ids), np.int64)
+    groups, first, total = [], 0, 0
+    for i in range(len(ids)):
+        if total and total + area[i] > ARENA_TEXELS:
+            groups.append((first, i, total))
+            first, total = i, 0
+        group[i], offset[i] = len(groups), total
+        total += area[i]
+    groups.append((first, len(ids), total))
+    order = np.lexsort((extent, group[member]))          # by group, alike grids together
+    bounds = np.searchsorted(group[member][order], np.arange(len(groups) + 1))
+    sentinel = np.iinfo(np.int64).max
+    results = []
+    for g, (first, past, size) in enumerate(groups):
+        arena = np.full(size, sentinel, np.int64)
+        chosen = order[bounds[g]:bounds[g + 1]]
+        at = 0
+        while at < len(chosen):
+            # One grid per chunk: pieces come in extent order, so the last piece's box
+            # holds every piece of the chunk.
+            block = int(extent[chosen[at]])
+            take = max(BAND_TEXELS // (block * block), 1)
+            block = int(extent[chosen[min(at + take, len(chosen)) - 1]])
+            sub = chosen[at:at + max(BAND_TEXELS // (block * block), 1)]
+            at += len(sub)
+            block = int(extent[sub[-1]])
+            w = of[sub]
+            steps = np.arange(block, dtype=np.float32)
+            gx = start[sub, 0, None, None].astype(np.float32) + steps[None, None, :]
+            gy = start[sub, 1, None, None].astype(np.float32) + steps[None, :, None]
+            along, depth = offsets(w[:, None, None], gx + np.float32(.5) - s0[w, 0, None, None],
+                                   gy + np.float32(.5) - s0[w, 1, None, None])
+            far = hi[sub, None, None]
+            inside = ((depth > 0) & (depth <= halo) & (along >= lo[sub, None, None])
+                      & ((along < far) | (last[sub, None, None] & (along == far)))
+                      & (gx <= stop[sub, 0, None, None]) & (gy <= stop[sub, 1, None, None]))
+            piece, yy, xx = np.nonzero(inside)
+            rows, cols = start[sub[piece], 1] + yy, start[sub[piece], 0] + xx
+            keep = ~covered[rows, cols]            # covered texels are never padded
+            piece, rows, cols, yy, xx = piece[keep], rows[keep], cols[keep], yy[keep], xx[keep]
+            if not len(piece):
+                continue
+            w, along, depth = of[sub[piece]], along[piece, yy, xx], depth[piece, yy, xx]
+            overshoot = np.maximum(np.maximum(-along, along - length[w]), 0)
+            distance = np.hypot(depth, overshoot)   # true distance to the edge segment
+            owner = member[sub[piece]]
+            linear = offset[owner] + (rows - box0[owner, 1]) * width[owner] + (cols - box0[owner, 0])
+            np.minimum.at(arena, linear, (distance.view(np.int32).astype(np.int64) << 32) | w)
+        won = np.flatnonzero(arena != sentinel)
+        if not len(won):
+            continue
+        key = arena[won]
+        del arena
+        w = key & 0xffffffff
+        distance = (key >> 32).astype(np.int32).view(np.float32)
+        owner = np.repeat(np.arange(first, past), area[first:past])[won]
+        won -= offset[owner]
+        rows, cols = box0[owner, 1] + won // width[owner], box0[owner, 0] + won % width[owner]
+        del key, won
+        x, y = sample(w, *offsets(w, cols.astype(np.float32) + np.float32(.5) - s0[w, 0],
+                                  rows.astype(np.float32) + np.float32(.5) - s0[w, 1]))
+        results.append([rows, cols, x, y, distance, normal[w], ids[owner]])
+    if not results:
+        return None
+    # Field by field, releasing each group's part as it is joined, so the join never
+    # holds two copies of the whole map.
+    joined = []
+    for field in range(7):
+        joined.append(np.concatenate([part[field] for part in results]))
+        for part in results:
+            part[field] = None
+    return tuple(joined)
+
+
+def _placement(ref):
+    """What the seam map reads of an assignment: the mesh and its modifiers, and of the
+    world matrix only orientation and size (the Jacobians use world edge vectors), so a
+    move keeps the map."""
+    from .provenance import object_record
+    rotation = tuple(round(v, 6) + 0.0 for row in ref.object.matrix_world.to_3x3().normalized() for v in row)
+    return repr(object_record(ref.object, transform='SCALE')), rotation, ref.slot_index
 
 
 def map_for(ts, n, geometry_cache=None):
     """The seam map of a set at resolution ``n``, cached against its evaluated geometry."""
-    from .provenance import object_record
     scene = ts.id_data
-    key = (scene.as_pointer(), ts.id, n,
-           tuple((repr(object_record(ref.object)), ref.slot_index) for ref in ts.assignments if ref.object))
-    found = _maps.get(key)
+    key = (scene.as_pointer(), ts.id, n, tuple(_placement(ref) for ref in ts.assignments if ref.object))
+    found = _maps.pop(key, None)
     if found is None:
         found = build(ts, n)
-        if len(_maps) >= MAX_MAPS:
-            _maps.pop(next(iter(_maps)))
-        _maps[key] = found
+    _maps[key] = found
+    # MAX_MAPS maps' worth of texels at the largest cached resolution, most recently
+    # used last: a set's preview map never evicts its full-resolution one.
+    budget = MAX_MAPS * max(held.n for held in _maps.values()) ** 2
+    while len(_maps) > 1 and sum(held.n ** 2 for held in _maps.values()) > budget:
+        _maps.pop(next(iter(_maps)))
     return found
 
 

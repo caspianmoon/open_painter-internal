@@ -189,9 +189,10 @@ def draw_freeze_status(layout, context, ts):
 def draw_performance_section(layout, context, ts, layer):
     """Collapsible Performance section of the layer properties panel."""
     from ..evaluation import profile, layer_cache
+    from .native import _profile_rows
     scene = context.scene
-    rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
-    total = sum(row['cost_ms'] for row in rows.values())
+    # The layer list of the same redraw already built the set's table.
+    rows, total = _profile_rows(scene, ts)
     mark = badge(scene, ts, layer, rows, total)
     header, panel = layout.panel('painter_layer_performance', default_closed=True)
     header.label(text='Performance' + (f' · {mark[0]}' if mark else ''), icon=mark[1] if mark else 'SORTTIME')
@@ -199,6 +200,9 @@ def draw_performance_section(layout, context, ts, layer):
         return
     panel.use_property_split = True
     panel.use_property_decorate = False
+    # Cache states move without an edit (a refresh landing), so this layer's
+    # is read afresh rather than from the table.
+    state_name = profile.state(scene, ts, layer)
     panel.prop(layer, 'bypass', text='Bypass in Preview')
     if layer.bypass:
         panel.label(text='Skipped in the shader preview; export and bakes still include it', icon='INFO')
@@ -213,7 +217,6 @@ def draw_performance_section(layout, context, ts, layer):
         op.action, op.layer_id = 'REFRESH', layer.id
         op = row.operator('open_painter.layer_cache', text='Clear', icon='X')
         op.action, op.layer_id = 'CLEAR', layer.id
-        state_name = profile.state(scene, ts, layer)
         from ..evaluation import cache as scheduler
         if state_name == 'PENDING':
             running = layer_cache.progress(scene)
@@ -243,7 +246,7 @@ def draw_performance_section(layout, context, ts, layer):
             share = 100 * row['cost_ms'] / total if total else 0
             col.label(text=f"CPU reference {row['cpu_ms']:.0f} ms · {share:.0f}% of {total:.0f} ms"
                       + ('' if row['current'] else ' · out of date'))
-        col.label(text=f"State {row['state'].title()}")
+        col.label(text=f"State {state_name.title()}")
     if row is None or not row['profiled']:
         panel.operator('open_painter.profile_layers', icon='SORTTIME').action = 'PROFILE'
 

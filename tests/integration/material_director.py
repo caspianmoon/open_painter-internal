@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 import open_painter
 from open_painter.authoring import assets, commands, context as authoring, document, schema, transactions
-from open_painter.ai import session
+from open_painter.ai import session, viewport
 from open_painter.core import layer_stack as stack, texture_set_manager as sets
 from open_painter.evaluation import shader_preview
 from open_painter.evaluation.metrics import Metrics
@@ -138,6 +138,53 @@ class DirectorTests(unittest.TestCase):
             transactions.undo(self.ts)
             self.assertEqual(document.canonical(document.snapshot(self.ts)), before)
 
+    def test_finished_instructions_leave_no_texture_cache_files(self):
+        import os
+        from types import SimpleNamespace
+        from open_painter.ai import generated_images
+        def chunk(name, data):
+            return struct.pack(">I", len(data)) + name + data + struct.pack(">I", zlib.crc32(name + data))
+        def png(fill):
+            return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 2, 2, 8, 2, 0, 0, 0)) +
+                    chunk(b"IDAT", zlib.compress((b"\0" + bytes([fill]) * 6) * 2)) + chunk(b"IEND", b""))
+        with tempfile.TemporaryDirectory(prefix="painter-image-test-") as directory:
+            cache = Path(directory) / "painter_textures"
+            fixture = SimpleNamespace(send=lambda message: None, close=lambda: None, state_directory=directory)
+            def generate(data):
+                meta = generated_images.store(directory, dict(result=base64.b64encode(data).decode()))
+                session.handle(dict(event="generated_image", request_id=session.request["id"], **meta))
+                return cache / (meta["image_id"].split(":")[1] + ".png"), meta["image_id"]
+            with patch.object(session, "connection", fixture), patch.object(session, "ensure_online"):
+                session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Enamel")
+                path, image_id = generate(png(0x30))
+                proposal = batch(dict(op="add_layer", id="new:paint", name="Generated enamel", kind="FILL"),
+                                 dict(op="assign_texture", layer_id="new:paint", image_id=image_id, channel="BASE_COLOR"))
+                session.tool_call(dict(request_id=session.request["id"], tool="propose_changes",
+                                       arguments=dict(proposal_json=json.dumps(proposal))))
+                session.completed(dict(request_id=session.request["id"], status="completed"))
+                # The draft imports from the cache only when it is applied.
+                self.assertTrue(path.is_file())
+                receipt = session.apply_draft(session.request["id"])
+                self.assertFalse(path.exists())
+                image = stack.channel_for(self.layer(receipt["aliases"]["new:paint"]), "BASE_COLOR").image
+                self.assertEqual(bytes(image.packed_file.data), png(0x30))
+                session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Enamel")
+                stopped, _ = generate(png(0x40))
+                session.stop()
+                self.assertFalse(stopped.exists())
+                session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Enamel")
+                failed, _ = generate(png(0x50))
+                session.completed(dict(request_id=session.request["id"], status="failed"))
+                self.assertFalse(failed.exists())
+            # A texture the companion stored after its turn was stopped ages out; fresh ones stay.
+            old = generated_images.store(directory, dict(result=base64.b64encode(png(0x60)).decode()))
+            old_path = cache / (old["image_id"].split(":")[1] + ".png")
+            os.utime(old_path, (0, 0))
+            fresh = generated_images.store(directory, dict(result=base64.b64encode(png(0x70)).decode()))
+            generated_images.prune(directory, keep=[fresh["image_id"]])
+            self.assertFalse(old_path.exists())
+            self.assertTrue((cache / (fresh["image_id"].split(":")[1] + ".png")).is_file())
+
     def test_numeric_edit_updates_native_shader_without_raster(self):
         identifier = self.steel()
         shader_preview.tick(self.scene, self.ts)
@@ -200,6 +247,32 @@ class DirectorTests(unittest.TestCase):
         bpy.context.view_layer.update()
         with self.assertRaises(schema.AuthoringError):
             transactions.apply(self.ts, p, operation_id="stale-mesh", expected_digest=digest)
+
+    def test_saving_between_draft_and_apply_keeps_the_digest(self):
+        # Packing on save clears ``is_dirty``; a stroke painted before the draft
+        # was captured leaves the canvas dirty until Ctrl+S, which must not
+        # turn a finished draft into "the material changed" (0.9.7).
+        import numpy as np
+        from open_painter.core import image_manager
+        from open_painter.evaluation import cache
+        identifier = self.steel()
+        paint = stack.add(self.ts, "PAINT", "Hand painted")
+        image = image_manager.create("Director paint test", 64)
+        stack.channel_for(paint, "BASE_COLOR").image = image
+        image.pixels.foreach_set(np.full(64 * 64 * 4, .5, np.float32))
+        image.update()
+        image["open_painter_pixel_revision"] = image.get("open_painter_pixel_revision", 0) + 1
+        self.assertTrue(image.is_dirty)
+        p = batch(dict(op="set_layer", layer_id=identifier, values=dict(opacity=.6)))
+        digest = document.digest(self.ts)
+        cache.on_save(None)
+        self.assertFalse(image.is_dirty)
+        self.assertEqual(document.digest(self.ts), digest)
+        transactions.apply(self.ts, p, operation_id="after-save", expected_digest=digest)
+        self.assertAlmostEqual(self.layer(identifier).opacity, .6, places=5)
+        # Pixels that changed since the capture are still caught by the revision.
+        image["open_painter_pixel_revision"] += 1
+        self.assertNotEqual(document.digest(self.ts), digest)
 
     def test_paint_overlay_is_preserved_and_stays_above_new_content(self):
         paint = stack.add(self.ts, "PAINT", "Hand painted label")
@@ -331,6 +404,107 @@ class DirectorTests(unittest.TestCase):
             self.assertIs(session.connection, fixture)
         self.assertIn("changed", session.state["status"])
         self.assertAlmostEqual(self.layer(identifier).opacity, .9)
+
+    def test_browsing_another_set_during_a_turn_keeps_tools_working(self):
+        identifier = self.steel()
+        self.scene_fixture()
+        session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Less wear")
+        self.scene.open_painter.active_texture_set = 1
+        context = session.tool_call(dict(request_id=session.request["id"], tool="get_context", arguments={}))
+        self.assertEqual(context["target"]["id"], self.ts.id)
+        proposal = batch(dict(op="set_layer", layer_id=identifier, values=dict(opacity=.5)))
+        event = dict(request_id=session.request["id"], tool="propose_changes", arguments=dict(proposal_json=json.dumps(proposal)))
+        self.assertTrue(session.tool_call(event)["valid"])
+        session.completed(dict(request_id=session.request["id"], status="completed"))
+        self.assertIsNotNone(session.request["draft"])
+        with self.assertRaisesRegex(schema.AuthoringError, "original texture set"):
+            session.apply_draft(session.request["id"])
+        self.scene.open_painter.active_texture_set = 0
+        session.apply_draft(session.request["id"])
+        self.assertAlmostEqual(self.layer(identifier).opacity, .5)
+
+    def test_account_errors_keep_a_running_turn_and_a_reviewed_draft(self):
+        identifier = self.steel()
+        session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Less wear")
+        event = dict(request_id=session.request["id"], tool="propose_changes", arguments=dict(proposal_json=json.dumps(batch(dict(op="set_layer", layer_id=identifier, values=dict(opacity=.5))))))
+        session.tool_call(event)
+        session.handle(dict(event="error", message="Codex account/rateLimits/read failed (error)."))
+        self.assertTrue(session.request and session.request["running"])
+        self.assertEqual(len(session.state["changes"]), 1)
+        session.completed(dict(request_id=session.request["id"], status="completed"))
+        session.handle(dict(event="error", message="Codex account/read failed (error)."))
+        session.handle(dict(event="error", request_id="stale", message="Late error of an earlier instruction"))
+        self.assertIsNotNone(session.request["draft"])
+        self.assertIn("account/read", session.state["status"])
+        session.handle(dict(event="error", request_id=session.request["id"], message="The instruction timed out."))
+        self.assertIsNone(session.request)
+        self.assertEqual(session.state["changes"], [])
+
+    def test_idle_connection_tick_does_not_redraw(self):
+        from types import SimpleNamespace
+        events = []
+        fixture = SimpleNamespace(send=lambda message: None, close=lambda: None,
+                                  poll=lambda: [events.pop() for _ in range(len(events))])
+        with patch.object(session, "connection", fixture), patch.object(session, "ensure_online"), \
+                patch.object(session, "redraw") as redraw:
+            self.assertEqual(session.tick(), .25)
+            redraw.assert_not_called()
+            events.append(dict(event="limits", limits={}))
+            self.assertEqual(session.tick(), .25)
+            redraw.assert_called_once()
+            session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Less wear")
+            self.assertEqual(session.tick(), .05)
+            self.assertIs(session.connection, fixture)
+
+    def test_scene_inspection_captures_from_the_painter_area(self):
+        other, _, _ = self.scene_fixture()
+        window = bpy.context.window
+        areas = list(window.screen.areas)
+        painter = next(a for a in areas if a.type == "VIEW_3D")
+        solid = next(a for a in areas if a.type != "VIEW_3D" and areas.index(a) < areas.index(painter))
+        previous = solid.type
+        with bpy.context.temp_override(window=window, area=solid):
+            solid.type = "VIEW_3D"
+        try:
+            painter.spaces.active.shading.type = "MATERIAL"
+            region = next(r for r in painter.regions if r.type == "WINDOW")
+            with bpy.context.temp_override(window=window, area=painter, region=region):
+                captured = session.capture(bpy.context, mode="REFINE", scope="SCENE", prompt="Match the wear")
+            captured["visual_settings"] = dict(send_view=True, send_maps=False, reference=None)
+            session.request = captured
+            seen = []
+            def record(context, ts, **kwargs):
+                seen.append(context.area.as_pointer())
+                return [], []
+            with patch.object(session, "attachments_for", record):
+                session.tool_call(dict(request_id=captured["id"], tool="get_material_context", arguments=dict(texture_set_id=other.id)))
+            self.assertEqual(seen, [painter.as_pointer()])
+            self.assertIn(other.id, captured["inspected_materials"])
+            # A capture without its space still prefers a Material-shaded view over the first viewport.
+            captured["space"] = 0
+            self.assertEqual(session.painter_area(captured, window).as_pointer(), painter.as_pointer())
+        finally:
+            with bpy.context.temp_override(window=window, area=solid):
+                solid.type = previous
+
+    def test_isolated_view_capture_keeps_the_artists_selection(self):
+        # Hiding a base clears its selected flag on the next view-layer update,
+        # so a Direct Material send used to leave the high-poly sources (and the
+        # active object) deselected once the isolated capture unhid them.
+        bpy.ops.mesh.primitive_cube_add(location=(3, 0, 0))
+        source = bpy.context.object
+        bpy.ops.mesh.primitive_cube_add(location=(-3, 0, 0))
+        untouched = bpy.context.object
+        bpy.ops.object.select_all(action="DESELECT")
+        for obj in (self.obj, source):
+            obj.select_set(True)
+        bpy.context.view_layer.objects.active = source
+        with viewport.isolated(bpy.context, {self.obj}):
+            self.assertTrue(source.hide_get() and untouched.hide_get())
+            self.assertFalse(self.obj.hide_get())
+        self.assertFalse(source.hide_get() or untouched.hide_get())
+        self.assertEqual([o.select_get() for o in (self.obj, source, untouched)], [True, True, False])
+        self.assertEqual(bpy.context.view_layer.objects.active, source)
 
     def test_reports_name_removed_masks_and_filters(self):
         identifier = self.steel()

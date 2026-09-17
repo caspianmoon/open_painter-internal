@@ -36,11 +36,31 @@ def radii(objs, default):
 
 
 def _token(obj):
-    """A cheap identity for scene-scope members: pointer, transform and mesh epoch."""
-    from ..evaluation.dependencies import _mesh_epochs
+    """A cheap identity for scene-scope members: name, transform, mesh content and radius.
+    The signature is persisted as the field's provenance, so the mesh takes part as its
+    content hash (cached per reported geometry update), never as the session's epoch
+    counter: that restarts on every load, undo and redo, which re-analysed every field on
+    reopen and let a redo land on the epoch an undo had published. Only in Edit Mode, where
+    the authored mesh lags the edit BMesh the analysis reads, does the epoch join in."""
+    from ..evaluation.dependencies import mesh_epoch, mesh_signature
+    mesh = obj.data if obj.type == 'MESH' else None
     return (obj.name_full, tuple(round(v, 6) for row in obj.matrix_world for v in row),
-            _mesh_epochs.get(obj.data.as_pointer(), 0) if obj.data else 0,
+            mesh_signature(mesh) if mesh is not None else None,
+            mesh_epoch(mesh) if mesh is not None and obj.mode == 'EDIT' else 0,
             float(obj.get(RADIUS_PROPERTY, 0.0)))
+
+
+def _content(ts, kind, name):
+    """What a VERTEX_GROUP / ATTRIBUTE field reads off the assigned meshes: the weights or
+    values (which the mesh content hash leaves out, so painting them moved nothing here),
+    the attribute's shape and the group names. As in ``_token``, the digest form and never
+    the session's epoch: the signature persists as the field's provenance."""
+    from ..evaluation.mesh_masks import _attribute_token, _content_token
+    from ..evaluation.resource_keys import stable_keys
+    targets = dict.fromkeys(ref.object for ref in ts.assignments if ref.object and ref.object.type == 'MESH')
+    with stable_keys():
+        return [(obj.name_full, _content_token(obj, kind, name), _attribute_token(obj, name),
+                 tuple(g.name for g in obj.vertex_groups)) for obj in targets]
 
 
 def signature(ts, field):
@@ -50,9 +70,12 @@ def signature(ts, field):
         members = objects(ts, field)
     except ValueError as error:
         members, scope = [], 'ERROR:' + str(error)
-    return json.dumps(dict(kind=field.kind, scope=scope, object=object_record(field.object),
+    entry = dict(kind=field.kind, scope=scope, object=object_record(field.object),
         objects=[_token(obj) if scope == 'SCENE' else object_record(obj) for obj in members],
         radii=sorted(radii(members, field.distance).items()),
         ground=object_record(getattr(field, 'ground_object', None)),
         bounds=tuple(field.bounds), direction=tuple(field.direction), distance=field.distance,
-        attribute=field.attribute, resolution=field.resolution, update=field.update_serial), sort_keys=True)
+        attribute=field.attribute, resolution=field.resolution, update=field.update_serial)
+    if field.kind in {'VERTEX_GROUP', 'ATTRIBUTE'}:   # only these read painted values: other kinds keep their provenance
+        entry['content'] = _content(ts, field.kind, field.attribute)
+    return json.dumps(entry, sort_keys=True)

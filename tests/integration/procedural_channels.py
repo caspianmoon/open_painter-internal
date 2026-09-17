@@ -72,12 +72,33 @@ assert {output.channel for output in ts.outputs if output.dirty} == {'BASE_COLOR
 channel_cache, geometry_cache = {}, {}
 with patch.object(filters, 'apply', wraps=filters.apply) as apply:
     filtered = np.concatenate([source(base, 'FILL', n, low, min(low + 32, n), channel_cache, ts, geometry_cache) for low in range(0, n, 32)])
-    assert apply.call_count == 4
-    assert all(call.args[0].shape[0] <= 50 for call in apply.call_args_list), 'Unbounded filter temporary'
+    # Aligned 64-row strips (halo 9): two strips serve the four requests.
+    assert apply.call_count == 2, apply.call_count
+    assert all(call.args[0].shape[0] <= 64 + 18 for call in apply.call_args_list), 'Unbounded filter temporary'
 reference = whole.copy()
 reference[..., :3] += (filters.apply(whole[..., :3], 'GAUSSIAN_BLUR', radius=3) - whole[..., :3]) * .65
 np.testing.assert_allclose(filtered, reference, atol=1e-7)
 np.testing.assert_allclose(filtered[..., 3], .8, atol=1e-7)
+# The compositor's 16-row sweep re-filtered (16 + 2·halo) rows per tile (13x the
+# image at radius 32): strips are filtered once each and only the current one
+# stays in the evaluation's cache.
+from open_painter.evaluation.channel_eval import band_rows
+from open_painter.evaluation.operation_contracts import stack_footprint
+assert band_rows(96, 4096) == 192 and band_rows(192, 4096) == 384 and band_rows(9, 4096) == 64
+effect.radius = 8
+wide_halo = stack_footprint([effect])
+assert wide_halo == 24 and band_rows(wide_halo, n) == 64
+sweep_cache = {}
+with patch.object(filters, 'apply', wraps=filters.apply) as apply:
+    swept = np.concatenate([source(base, 'FILL', n, low, min(low + 16, n), sweep_cache, ts, {}) for low in range(0, n, 16)])
+    rows_filtered = sum(call.args[0].shape[0] for call in apply.call_args_list)
+    assert apply.call_count == 2 and rows_filtered <= n + 2 * wide_halo * 2, (rows_filtered, apply.call_count)
+strips = [key for key in sweep_cache if isinstance(key, tuple) and key[0] == 'filtered_channel']
+assert len(strips) == 1, strips
+wide = whole.copy()
+wide[..., :3] += (filters.apply(whole[..., :3], 'GAUSSIAN_BLUR', radius=8) - whole[..., :3]) * .65
+np.testing.assert_allclose(swept, wide, atol=1e-6)
+effect.radius = 3
 invert = base.effects.add()
 invert.kind = 'INVERT'
 inverted = source(base, 'FILL', n, 0, n, {}, ts, {})

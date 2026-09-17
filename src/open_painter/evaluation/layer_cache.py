@@ -28,6 +28,7 @@ TAG = 'open_painter_layer_cache'
 PLACEHOLDER = 'OP Cache Placeholder'
 _requests = {}   # (scene pointer, set id, layer id, channel) -> request dict
 _jobs = {}       # same key -> running job dict
+_retired = []    # superseded cache images a sampler still referenced when they were replaced
 _paused_at = 0.0
 paused = None    # predicate(scene) -> bool, installed by the scheduler (freeze while painting)
 
@@ -121,7 +122,18 @@ def _start(scene, key, entry):
     n = entry['size']
     return {'signature': entry['signature'], 'steps': steps, 'progress': 0.0, 'name': layer.name,
             'data': np.ones((n, n, 4), np.float32), 'covered': np.zeros(n, np.bool_), 'ms': 0.0,
-            'size': n, 'channel': key[3]}
+            'size': n, 'channel': key[3], 'current': entry['current']}
+
+
+def _orphaned(scene, key):
+    """The job's layer was removed or set back to Live while its refresh ran.
+
+    Neither path discards the job (the rebuilt graph holds no binding for the
+    layer), and it would keep the tick busy until the strips of a layer nobody
+    samples any more are complete.
+    """
+    ts, layer, row = _resolve(scene, key)
+    return ts is None or layer is None or row is None or layer.cache_mode == 'LIVE'
 
 
 def _advance(job):
@@ -156,7 +168,11 @@ def tick(scene, budget=.008):
         return False
     pointer = scene.as_pointer()
     now = monotonic()
+    _sweep_retired()
     running = next((key for key in _jobs if key[0] == pointer), None)
+    if running is not None and _orphaned(scene, running):
+        _jobs.pop(running, None)
+        running = None
     if running is None:
         for key, entry in list(_requests.items()):
             if key[0] != pointer or now - max(entry['since'], _paused_at) < DEBOUNCE:
@@ -200,6 +216,13 @@ def _finish(scene, key, job):
     ts, layer, row = _resolve(scene, key)
     if ts is None or layer is None or row is None or layer.cache_mode == 'LIVE':
         return
+    try:
+        if job['current']() != job['signature']:
+            return   # inputs moved on while the strips ran; the compiler re-requests
+    except Exception as error:
+        metrics.count('layer_cache_failures')
+        _set_error(scene, str(error))
+        return
     if not job['covered'].all() or not np.isfinite(job['data']).all():
         _set_error(scene, f'incomplete cache for {layer.name}')
         return
@@ -221,16 +244,45 @@ def _finish(scene, key, job):
     from . import profile
     profile.record_refresh(scene, ts, layer.id, job['ms'])
     notify(row, structural=False)   # the shader sampler now reads the new image
-    if previous is not None and previous is not image and previous.get(TAG) and previous.users <= 1:
-        bpy.data.images.remove(previous)
+    if previous is not None and previous is not image and previous.get(TAG):
+        _retire(previous)
         if image.name != name and bpy.data.images.get(name) is None:
             image.name = name
+
+
+def _retire(image):
+    """Release a superseded cache image once nothing samples it any more.
+
+    ``notify`` rebinds the sampler at once only when the session can take an
+    update: with a rebuild pending, inside a batch or in a standing error the
+    node keeps its reference until the next build. A cache image is regenerable,
+    so it loses its fake user now (an orphan is not written into the file) and
+    is removed by the sweep when its last user is gone.
+    """
+    image.use_fake_user = False
+    if image.users:
+        _retired.append(image)
+        return
+    bpy.data.images.remove(image)
+
+
+def _sweep_retired():
+    for image in list(_retired):
+        try:
+            if image.users:
+                continue
+            bpy.data.images.remove(image)
+        except (ReferenceError, RuntimeError):
+            pass   # already freed (a file load, an undo)
+        _retired.remove(image)
 
 
 def flush(scene, ts=None, layer_id=None):
     """Run every pending request and job (of a scene, set or layer) to completion now."""
     pointer = scene.as_pointer()
     prefix = (pointer,) + ((ts.id,) if ts is not None else ()) + ((layer_id,) if layer_id is not None else ())
+    # One job at a time: a request allocates its full-resolution buffer when it
+    # starts, so starting every channel of a layer first would hold them all.
     for key, entry in list(_requests.items()):
         if key[:len(prefix)] != prefix:
             continue
@@ -238,18 +290,25 @@ def flush(scene, ts=None, layer_id=None):
         job = _start(scene, key, entry)
         if job is not None:
             _jobs[key] = job
-    for key, job in list(_jobs.items()):
-        if key[:len(prefix)] != prefix:
-            continue
-        _jobs.pop(key, None)
-        try:
-            while not _advance(job):
-                pass
-        except Exception as error:
-            metrics.count('layer_cache_failures')
-            _set_error(scene, str(error))
-            continue
-        _finish(scene, key, job)
+            _run(scene, key)
+    for key in [k for k in _jobs if k[:len(prefix)] == prefix]:
+        _run(scene, key)
+    _sweep_retired()
+
+
+def _run(scene, key):
+    """Drain one job to completion and publish it."""
+    job = _jobs.pop(key, None)
+    if job is None or _orphaned(scene, key):
+        return
+    try:
+        while not _advance(job):
+            pass
+    except Exception as error:
+        metrics.count('layer_cache_failures')
+        _set_error(scene, str(error))
+        return
+    _finish(scene, key, job)
 
 
 def refresh(scene, ts, layer_id):
@@ -271,8 +330,12 @@ def release_layer(layer):
     """Drop a layer's cache images (before the layer is removed or its cache cleared).
 
     The compiled sampler node may still reference the image; Blender unlinks
-    it and the structural rebuild that follows recompiles the layer.
+    it and the structural rebuild that follows recompiles the layer. A refresh
+    of the layer still running is dropped: nothing will sample its result.
     """
+    for table in (_requests, _jobs):
+        for key in [k for k in table if k[2] == layer.id]:
+            table.pop(key, None)
     for row in layer.cache:
         image = row.image
         row.image = None

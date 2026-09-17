@@ -21,6 +21,7 @@ _jobs = {}
 _live_checks = {}
 _regions = {}
 _states = {}
+_progress = {}   # scene pointer -> the job progress text this scheduler wrote last
 _scene_cursor = None
 _set_cursors = {}
 _last_prune = (frozenset(), 0.0)
@@ -57,7 +58,7 @@ def _prune(live, now):
     layer_cache.prune(live_scenes)
     from . import profile
     profile.prune(live)
-    for table in (_paint_input, _live_checks, _set_cursors):
+    for table in (_paint_input, _live_checks, _set_cursors, _progress):
         for key in set(table) - live_scenes:
             table.pop(key, None)
     for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
@@ -71,6 +72,21 @@ def _set_status(scene, text):
     # RNA writes tag the UI; only write when the text actually changes.
     if scene.open_painter.status != text:
         scene.open_painter.status = text
+
+
+def _set_progress(scene, text):
+    _progress[scene.as_pointer()] = text
+    _set_status(scene, text)
+
+
+def _end_progress(scene):
+    """A finished job's last progress line must not linger; the shader status
+    takes the line back. Anything else written since (a failure) stays."""
+    text = _progress.pop(scene.as_pointer(), None)
+    if text is not None and scene.open_painter.status == text:
+        from . import shader_preview
+        _set_status(scene, '')
+        shader_preview.restate(scene)
 
 
 
@@ -175,12 +191,16 @@ def _rebake_pending(scene):
     area = next((a for a in window.screen.areas if a.type == 'VIEW_3D'), None)
     region = next((r for r in area.regions if r.type == 'WINDOW'), None) if area else None
     try:
+        # Not the operator: it rebakes the set selected in the dock, and the
+        # session survives selecting another set to inspect it. The set that
+        # owns the painted canvas is the one whose region changed.
         with bpy.context.temp_override(window=window, screen=window.screen, area=area, region=region, scene=scene):
-            result = bpy.ops.open_painter.bake_correction(action='REBAKE_REGION')
-        if 'FINISHED' not in result:
-            logger.error('Live region rebake cancelled: %s', scene.open_painter.status)
-        else:
-            logger.info('Live region rebake: %s', scene.open_painter.status)
+            result = corrections.rebake_region(bpy.context, ts)
+        faces = sum(max(v, 0) for v in result.values())
+        full = [k for k, v in result.items() if v < 0]
+        scene.open_painter.status = (f'Rebaked {faces} face(s)' + (f'; full bake of {", ".join(full)}' if full else '')
+                                     if result else 'No Normal or AO map selected to rebake')
+        logger.info('Live region rebake: %s', scene.open_painter.status)
     except Exception as exc:
         logger.error('Live region rebake: %s', exc)
         scene.open_painter.status = f'Region rebake failed: {exc}'
@@ -200,18 +220,8 @@ def tick():
         if not hasattr(scene, "open_painter"):
             continue
         dependencies.refresh(scene)
-        if field_jobs.tick(scene):
-            running = field_jobs.progress(scene)
-            if running is not None:
-                _set_status(scene, f'Analysing {running[0]}… {int(running[1] * 100)}%')
-            _scene_cursor = scene.as_pointer()
-            return .001
-        if layer_cache.tick(scene):
-            running = layer_cache.progress(scene)
-            if running is not None:
-                _set_status(scene, f'Caching {running[0]}… {int(running[1] * 100)}%')
-            _scene_cursor = scene.as_pointer()
-            return .001
+        if field_jobs.progress(scene) is None and layer_cache.progress(scene) is None:
+            _end_progress(scene)   # a finished job's line goes before the shader loop writes
         from ..painting.paint_session import detect
 
         activity = _paint_input.get(scene.as_pointer())
@@ -256,8 +266,12 @@ def tick():
                 info = shader_preview.diagnostics(scene, ts)
                 set_state(scene, ts, 'SHADER' if ready else
                           'FAILED' if info['error'] else 'PREPARING_INPUT', info['error'])
-                if info['pending_resources'] and not info.get('frozen'):
-                    # A set frozen by a stroke waits at the painting rate, never spins.
+                if (info['pending_resources'] and not info['error'] and not info.get('frozen')
+                        and not info.get('held') and not painting_active(scene)):
+                    # Only a queue that was actually stepped earns the fast rate: a
+                    # failed boundary keeps its siblings queued, and a stroke on
+                    # another set (or the correction brush) gates this one without
+                    # freezing it. Both wait at the idle/painting rate, never spin.
                     _scene_cursor = scene_key
                     _set_cursors[scene_key] = ts.id
                     return .001
@@ -279,7 +293,7 @@ def tick():
                 set_state(scene, ts, "STALE")
                 if not painting:
                     continue
-            if key not in _jobs and not painting and now - since < 0.08:
+            if key not in _jobs and not painting and (now - since < 0.08 or shader_preview.held(scene, ts)):
                 set_state(scene, ts, "QUEUED")
                 continue
             try:
@@ -374,6 +388,23 @@ def tick():
             _pending.pop(key, None)
             discard(key)
             return 0.001
+        # Cooperative jobs run after the shader loop: a structural rebuild or a
+        # boundary must not wait for a multi-second cache refresh, and a rebuild
+        # that re-requests the cache supersedes the job before more strips are
+        # wasted. Their progress line is written last so it wins the tick.
+        if field_jobs.tick(scene, budget=.006):
+            running = field_jobs.progress(scene)
+            if running is not None:
+                _set_progress(scene, f'Analysing {running[0]}… {int(running[1] * 100)}%')
+            _scene_cursor = scene_key
+            return .001
+        if layer_cache.tick(scene, budget=.006):
+            running = layer_cache.progress(scene)
+            if running is not None:
+                _set_progress(scene, f'Caching {running[0]}… {int(running[1] * 100)}%')
+            _scene_cursor = scene_key
+            return .001
+        _end_progress(scene)
     # Idle projects poll slowly: native edits bind synchronously in their RNA
     # callbacks and structural edits wake the timer, so 60 Hz is only needed
     # while painting or while a shader session still has work to finish.
@@ -390,8 +421,14 @@ def tick():
     )
 
 
-@persistent
-def on_load(_):
+def _reset_runtime(*, forget_corrections):
+    """Drop every runtime table that holds RNA or per-file state.
+
+    Bake-correction records (the rasters the last bake used, the canvas
+    snapshot) are numpy copies keyed by addresses that are stable within one
+    file: an undo keeps them so the next stroke still rebakes only its region;
+    a file load must not, since another file's datablocks may reuse them.
+    """
     from ..painting.paint_session import reset
     from .raster_cache import clear_shared
 
@@ -411,8 +448,9 @@ def on_load(_):
     forget()
     from ..baking.doctor import forget as forget_doctor
     forget_doctor()
-    from ..baking.corrections import forget as forget_corrections
-    forget_corrections()
+    if forget_corrections:
+        from ..baking import corrections
+        corrections.forget()
     from ..geometry.seams import clear as clear_seams
     clear_seams()
     _pending.clear()
@@ -422,6 +460,15 @@ def on_load(_):
     _regions.clear()
     from . import physical
     physical.forget()
+
+
+def _relearn(*, forget_corrections):
+    _reset_runtime(forget_corrections=forget_corrections)
+    from . import physical
+    from ..core.image_manager import adopt_alpha_mode
+    for image in bpy.data.images:
+        if image.get(OWNER):
+            adopt_alpha_mode(image)   # canvases saved before 0.9.7 carried straight alpha
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             for ts in scene.open_painter.texture_sets:
@@ -438,10 +485,44 @@ def on_load(_):
 
 
 @persistent
+def on_load(_):
+    _relearn(forget_corrections=True)
+
+
+@persistent
+def on_undo(_):
+    # Memfile undo restores properties without their update callbacks: every
+    # session, job and dirty flag starts over. Correction records stay (see
+    # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
+    _relearn(forget_corrections=False)
+
+
+def _pack_images(source_images):
+    """Pack every managed image and authored input, each on its own: an artist
+    texture whose file vanished raises from ``pack()``, and the managed
+    canvases after it (generated, saved blank unless packed) must still land."""
+    from ..core.image_manager import pack_image
+    for image in bpy.data.images:
+        if not ((image.get(OWNER) or image.as_pointer() in source_images) and image.has_data and image.users):
+            continue
+        try:
+            pack_image(image)
+        except Exception as exc:
+            logger.error('Pack %s: %s', image.name, exc)
+            for scene in bpy.data.scenes:
+                if hasattr(scene, 'open_painter'):
+                    scene.open_painter.status = f'Could not pack {image.name}: {exc}'
+
+
+@persistent
 def on_save(_):
     # Save native recipes and their authored inputs. Only explicit CPU preview
     # mode flushes full channel outputs; native mode completes source boundaries.
-    cancel_all()
+    # Queued cache refreshes, field analyses and scheduled edge rebakes are not
+    # cancelled: nothing re-requests them in the running session (0.9.7).
+    for key in list(_jobs):
+        discard(key)
+    _evaluators.clear()
     from .live_preview import clear as clear_live
     clear_live()
     from .preview_policy import clear
@@ -451,43 +532,52 @@ def on_save(_):
     from .evaluator import LayerEvaluator
 
     source_images = set()
-    for scene in bpy.data.scenes:
-        if not hasattr(scene, "open_painter"):
-            continue
-        detect(scene, force=True)
-        stroke_finished(scene)
-        for ts in scene.open_painter.texture_sets:
-            sources = [item.image for item in ts.baked_maps]
-            for layer in ts.layers:
-                for prop in layer.channels:
-                    sources.extend((prop.image, prop.detail_image))
-                    sources.extend(effect.image for effect in prop.effects)
-                for mask in layer.masks:
-                    sources.extend((mask.image, mask.effect.image, mask.influence.image))
-            source_images.update(image.as_pointer() for image in sources if image)
-            from . import shader_preview
-            if shader_preview.requested(ts):
-                try:
-                    shader_preview.flush(scene, ts)
-                    info = shader_preview.diagnostics(scene, ts)
-                    set_state(scene, ts, 'SHADER' if shader_preview.current(scene, ts)
-                              else 'FAILED', info['error'])
-                except Exception as exc:
-                    scene.open_painter.status = f'Shader input needs attention: {exc}'
-                    set_state(scene, ts, 'FAILED', str(exc))
-                    logger.error('Save shader input: %s', exc)
-            elif ts.dirty:
-                try:
-                    LayerEvaluator(scene).evaluate_texture_set(ts.id)
-                    set_state(scene, ts, "READY")
-                except Exception as exc:
-                    scene.open_painter.status = f"Saved project; preview needs attention: {exc}"
-                    set_state(scene, ts, "FAILED", str(exc))
-                    logger.error("Save preview: %s", exc)
-    for image in bpy.data.images:
-        if (image.get(OWNER) or image.as_pointer() in source_images) and image.has_data and image.users:
-            from ..core.image_manager import pack_image
-            pack_image(image)
+    try:
+        for scene in bpy.data.scenes:
+            if not hasattr(scene, "open_painter"):
+                continue
+            detect(scene, force=True)
+            stroke_finished(scene)
+            for ts in scene.open_painter.texture_sets:
+                sources = [item.image for item in ts.baked_maps]
+                for layer in ts.layers:
+                    for prop in layer.channels:
+                        sources.extend((prop.image, prop.detail_image))
+                        sources.extend(effect.image for effect in prop.effects)
+                    for mask in layer.masks:
+                        sources.extend((mask.image, mask.effect.image, mask.influence.image))
+                source_images.update(image.as_pointer() for image in sources if image)
+                from . import shader_preview
+                if shader_preview.requested(ts):
+                    try:
+                        shader_preview.flush(scene, ts)
+                        info = shader_preview.diagnostics(scene, ts)
+                        set_state(scene, ts, 'SHADER' if shader_preview.current(scene, ts)
+                                  else 'FAILED', info['error'])
+                    except Exception as exc:
+                        scene.open_painter.status = f'Shader input needs attention: {exc}'
+                        set_state(scene, ts, 'FAILED', str(exc))
+                        logger.error('Save shader input: %s', exc)
+                elif ts.dirty:
+                    try:
+                        LayerEvaluator(scene).evaluate_texture_set(ts.id)
+                        set_state(scene, ts, "READY")
+                    except Exception as exc:
+                        scene.open_painter.status = f"Saved project; preview needs attention: {exc}"
+                        set_state(scene, ts, "FAILED", str(exc))
+                        logger.error("Save preview: %s", exc)
+    finally:
+        # Whatever failed above, the strokes are packed: an unpacked managed
+        # canvas reloads blank.
+        _pack_images(source_images)
+
+
+@persistent
+def on_render(_):
+    on_save(_)
+    # A scheduled edge rebake would run a Cycles bake from the timer while the
+    # render job owns the scene; cache and field jobs may keep their requests.
+    field_jobs.cancel_rebakes()
 
 
 def register():
@@ -498,10 +588,10 @@ def register():
     bpy.app.handlers.depsgraph_update_post.append(dependencies.on_depsgraph)
     bpy.app.handlers.frame_change_post.append(dependencies.on_frame)
     bpy.app.handlers.load_post.append(on_load)
-    bpy.app.handlers.undo_post.append(on_load)
-    bpy.app.handlers.redo_post.append(on_load)
+    bpy.app.handlers.undo_post.append(on_undo)
+    bpy.app.handlers.redo_post.append(on_undo)
     bpy.app.handlers.save_pre.append(on_save)
-    bpy.app.handlers.render_pre.append(on_save)
+    bpy.app.handlers.render_pre.append(on_render)
     field_jobs.paused = painting_active
     layer_cache.paused = painting_active
     if not bpy.app.background:
@@ -539,10 +629,10 @@ def unregister():
         (bpy.app.handlers.depsgraph_update_post, dependencies.on_depsgraph),
         (bpy.app.handlers.frame_change_post, dependencies.on_frame),
         (bpy.app.handlers.load_post, on_load),
-        (bpy.app.handlers.undo_post, on_load),
-        (bpy.app.handlers.redo_post, on_load),
+        (bpy.app.handlers.undo_post, on_undo),
+        (bpy.app.handlers.redo_post, on_undo),
         (bpy.app.handlers.save_pre, on_save),
-        (bpy.app.handlers.render_pre, on_save),
+        (bpy.app.handlers.render_pre, on_render),
     ):
         if fn in handlers:
             handlers.remove(fn)

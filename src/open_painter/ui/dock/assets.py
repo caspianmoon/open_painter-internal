@@ -142,7 +142,16 @@ def apply(context, entry):
         channel_for(layer, "METALLIC").value = value[4]
     elif kind == "BRUSH":
         if context.object is None or context.object.mode != "TEXTURE_PAINT":
-            bpy.ops.open_painter.paint()
+            # A brush paints whatever the artist selected: the mask button in
+            # the layer row is UI state, not a project property the operator sees.
+            from ...core.layer_stack import active
+            from . import state
+
+            ui = state.get(context.area) if context.area else None
+            layer = active(require_set(context))
+            bpy.ops.open_painter.paint(
+                mask=bool(ui and ui.mask_selected and layer is not None and layer.masks)
+            )
         bpy.ops.brush.asset_activate(
             asset_library_type="ESSENTIALS",
             relative_asset_identifier=f"brushes/essentials_brushes-mesh_texture.blend/Brush/{value}",

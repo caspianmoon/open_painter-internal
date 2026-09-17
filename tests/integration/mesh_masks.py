@@ -142,6 +142,10 @@ assert cpu_mask(ts, mask_of(), n).max() < .01
 group.add(top_vertices, 1.0, 'REPLACE')
 dependencies._mesh_epochs[body.data.as_pointer()] = dependencies.mesh_epoch(body.data) + 1
 mask_of().mesh.kind = 'NORMAL_DIRECTION'; mask_of().mesh.direction = (0, 0, 1)
+# The defaults are radians (45 deg / 15 deg): a fresh mask covers the top face only, not the whole cube.
+assert abs(mask_of().mesh.angle - math.radians(45)) < 1e-6 and abs(mask_of().mesh.softness - math.radians(15)) < 1e-6
+default_cover = coverage_of(ts, mask_of(), body, n)
+assert .1 < default_cover < .25, default_cover
 mask_of().mesh.angle, mask_of().mesh.softness = math.radians(30), math.radians(10)
 top_cover = coverage_of(ts, mask_of(), body, n)
 assert .1 < top_cover < .25, top_cover     # one of six faces
@@ -167,6 +171,114 @@ sculpt.data.foreach_set('value', ids)
 mask_of().mesh.kind = 'FACE_SET'; mask_of().mesh.face_set = 2
 assert 0 < coverage_of(ts, mask_of(), body, n) < .5
 print('MESH_MASK_KINDS_OK', flush=True)
+
+# The selection token is compared across sessions (persisted provenance): a
+# digest of the flags, never Python's per-process salted hash().
+import zlib
+flags = np.empty(len(body.data.polygons), bool)
+body.data.polygons.foreach_get('select', flags)
+assert mesh_masks._selection_token(body)[2] == zlib.crc32(flags.tobytes())
+
+# Persisted identities digest the painted values (0.9.7): undo/redo and a reopen
+# restart the mesh epochs, so an epoch-tagged digest must not answer for other weights.
+from open_painter.evaluation.resource_keys import stable_keys
+mask_of().mesh.kind = 'VERTEX_GROUP'; mask_of().mesh.attribute = 'Worn'
+pointer = body.data.as_pointer()
+with stable_keys():
+    painted = mesh_masks.signature(ts, mask_of())
+group.add(top_vertices, 0.0, 'REPLACE')
+dependencies.clear(); dependencies._mesh_epochs[pointer] = 1       # undo: the counter restarts and the stroke's update re-bumps it
+with stable_keys():
+    undone = mesh_masks.signature(ts, mask_of())
+assert undone != painted
+group.add(top_vertices, 1.0, 'REPLACE')
+dependencies.clear(); dependencies._mesh_epochs[pointer] = 1       # redo lands on the same epoch with the painted weights
+with stable_keys():
+    redone = mesh_masks.signature(ts, mask_of())
+assert redone == painted and redone != undone, 'the digest answered for the undone weights'
+dependencies.clear()                                                # a reopened file: nothing changed, same identity
+with stable_keys():
+    assert mesh_masks.signature(ts, mask_of()) == painted
+print('MESH_MASK_DIGEST_OK', flush=True)
+
+# The raster keys on the mesh (0.9.7): the CPU backend and the export reuse the set's
+# raster cache, so a re-unwrap or a modifier edit must miss the cached coverage.
+from open_painter.evaluation.raster_cache import for_texture_set
+
+
+def output_red(obj):
+    from open_painter.geometry.snapshots import targets
+    from open_painter.geometry.uv_rasterizer import rasterize
+    pixels = images.pixels(images.output(ts, 'BASE_COLOR').image)[..., 0]
+    with targets(ts) as meshes:
+        target = next(t for t in meshes if t['object'] == obj)
+        rows, cols, _, _ = rasterize(target['uv'][target['tri_loops']], n)
+    return float(pixels[rows, cols].mean())
+
+
+def shift_uvs(obj, dv):
+    uv = obj.data.uv_layers.active
+    coords = np.empty((len(obj.data.loops), 2), np.float32)
+    uv.data.foreach_get('uv', coords.ravel())
+    coords[:, 1] += dv
+    uv.data.foreach_set('uv', coords.ravel())
+    obj.data.update()
+    bpy.context.view_layer.update()
+    dependencies._mesh_epochs[obj.data.as_pointer()] = dependencies.mesh_epoch(obj.data) + 1   # the edit's depsgraph update
+
+
+mask_of().mesh.kind = 'OBJECT'; mask_of().mesh.object = screw_a
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
+rust_red, base_red = output_red(screw_a), output_red(screw_b)
+assert rust_red > base_red + .2, (rust_red, base_red)
+cached = [key for key in for_texture_set(scene, ts) if key[0] == mesh_masks.CACHE]
+assert len(cached) == 1
+shift_uvs(screw_a, -.35)                        # the island moves below its old place
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
+assert [key for key in for_texture_set(scene, ts) if key[0] == mesh_masks.CACHE] != cached, 'the raster cache kept the old island'
+assert abs(output_red(screw_a) - rust_red) < .05, (output_red(screw_a), rust_red)
+shift_uvs(screw_a, .35)
+unwrapped = mesh_masks.signature(ts, mask_of())
+bevel = screw_a.modifiers.new('Bevel', 'BEVEL')
+assert mesh_masks.signature(ts, mask_of()) != unwrapped, 'a modifier edit must re-identify the raster'
+screw_a.modifiers.remove(bevel)
+assert mesh_masks.signature(ts, mask_of()) == unwrapped
+print('MESH_MASK_RASTER_CACHE_OK', flush=True)
+
+# Edit Mode (0.9.7): the selection is read from the edit BMesh without flushing it,
+# so the scheduler's signature no longer tags the mesh (and re-hashes it) every tick.
+import bmesh
+mask_of().mesh.kind = 'FACE_SELECTION'
+bpy.context.view_layer.objects.active = body
+bpy.ops.object.mode_set(mode='EDIT')
+bm = bmesh.from_edit_mesh(body.data)
+for face in bm.faces:
+    face.select_set(False)                          # the object-mode selection came along
+for face in bm.faces:
+    if face.normal.y > .9:
+        face.select_set(True)
+bmesh.update_edit_mesh(body.data)
+bpy.context.view_layer.update()
+epochs = (dependencies.mesh_epoch(body.data), dependencies.epoch())
+token = mesh_masks._selection_token(body)
+edited = mesh_masks.signature(ts, mask_of())
+bpy.context.view_layer.update()
+assert (dependencies.mesh_epoch(body.data), dependencies.epoch()) == epochs, 'the signature flushed the edit mesh'
+assert token[0] == sum(1 for face in bm.faces if face.select) > 0
+assert .1 < coverage_of(ts, mask_of(), body, n) < .25, coverage_of(ts, mask_of(), body, n)
+bpy.context.view_layer.update()
+assert (dependencies.mesh_epoch(body.data), dependencies.epoch()) == epochs, 'the raster flushed the edit mesh'
+for face in bm.faces:                               # a click-select in Edit Mode moves the token at once
+    face.select_set(False)
+for face in bm.faces:
+    if face.normal.y < -.9:
+        face.select_set(True)
+assert mesh_masks._selection_token(body) != token
+bpy.ops.object.mode_set(mode='OBJECT')
+assert .1 < coverage_of(ts, mask_of(), body, n) < .25
+for polygon in body.data.polygons:
+    polygon.select = polygon.normal.x > .9
+print('MESH_MASK_EDIT_MODE_OK', flush=True)
 
 # Shader path: the boundary matches the CPU reference; a membership change re-identifies it.
 mask_of().mesh.kind = 'COLLECTION'
@@ -291,5 +403,56 @@ assert imported.mesh.collection_name == 'Screws' and mesh_masks.resolve(imported
 # Clearing a pointer clears its name too, so the mask does not fall back to the old datablock.
 imported.mesh.collection = None
 assert imported.mesh.collection_name == '' and mesh_masks.resolve(imported.mesh, 'collection') is None
+
+# ---- The evaluation view layer is the artist's, not the first (0.9.7) ------------------------
+# A layout/texturing split: the props collection is excluded from the first view layer and the
+# artist works in the second. The CPU reference used to evaluate view layer 0, where the prop has
+# no depsgraph node, and silently read the base mesh without modifiers.
+from open_painter.geometry import gn_queries, queries
+from open_painter.geometry.snapshots import targets
+props = bpy.data.collections.new('Props')
+scene.collection.children.link(props)
+prop = cube('Prop', 1.0, (.1, .1, .5, .5))
+for owner in list(prop.users_collection):        # cube() links into the active collection
+    owner.objects.unlink(prop)
+props.objects.link(prop)
+prop.location.x = 6
+prop.modifiers.new('Array', 'ARRAY').count = 2   # the copy spans world x 6.5..7.5
+texturing = scene.view_layers.new('Texturing')
+scene.view_layers[0].layer_collection.children['Props'].exclude = True
+bpy.context.window.view_layer = texturing
+props_ts = sets.create(scene, 'Props', 512)
+sets.assign(scene, props_ts, prop)
+
+
+def evaluated_triangles():
+    with targets(props_ts) as meshes:
+        return len(meshes[0]['tri_indices'])
+
+
+assert evaluated_triangles() == 24, 'the prop evaluates with its modifiers in the artist\'s layer'
+assert len(gn_queries.combined_target(scene, [prop], {}, 1.0)[1]) == 24
+with queries.acceleration(scene, [prop]) as trees:
+    assert abs(trees[0].find_nearest((8., 0., 0.), 10.)[3] - .5) < 1e-4, 'influencers are evaluated too'
+# The artist's layer excludes the prop but another layer evaluates it: that layer serves.
+scene.view_layers[0].layer_collection.children['Props'].exclude = False
+texturing.layer_collection.children['Props'].exclude = True
+assert evaluated_triangles() == 24
+# No layer evaluates it (excluded everywhere, or disabled in viewports): an error names the
+# object rather than the base mesh standing in for the evaluated one.
+scene.view_layers[0].layer_collection.children['Props'].exclude = True
+for disable in (lambda: None, lambda: setattr(prop, 'hide_viewport', True)):
+    disable()
+    try:
+        evaluated_triangles()
+        raise AssertionError('an object no view layer evaluates must not fall back to its base mesh')
+    except ValueError as exc:
+        assert 'Prop' in str(exc) and 'view layer' in str(exc), exc
+    texturing.layer_collection.children['Props'].exclude = False
+prop.hide_viewport = False
+assert evaluated_triangles() == 24
+bpy.context.window.view_layer = scene.view_layers[0]
+scene.view_layers.remove(texturing)
+print('MESH_MASK_VIEW_LAYER_OK', flush=True)
 print('MESH_MASKS_PASS', flush=True)
 open_painter.unregister()

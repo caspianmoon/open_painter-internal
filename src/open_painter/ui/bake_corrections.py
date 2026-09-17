@@ -17,12 +17,25 @@ ACTIONS = [
 ]
 
 
+def session_set(context):
+    """The set a live correction session paints, else the active one: the session survives
+    selecting another set in the dock to inspect it."""
+    project = context.scene.open_painter
+    if project.paint_correction:
+        ts = next((item for item in project.texture_sets if item.id == project.paint_set_id), None)
+        if ts is not None:
+            return ts
+    return active_set(context)
+
+
 class OP_OT_bake_correction(SafeOperator, bpy.types.Operator):
     bl_idname = 'open_painter.bake_correction'
     bl_label = 'Bake Correction'
     bl_options = {'REGISTER', 'UNDO'}
     action: bpy.props.EnumProperty(items=ACTIONS, default='BRUSH')
     kind: bpy.props.EnumProperty(items=CORRECTION_KINDS, default='OFFSET')
+    set_id: bpy.props.StringProperty(options={'HIDDEN', 'SKIP_SAVE'},
+                                     description='The texture set whose panel holds the button')
 
     @classmethod
     def description(cls, context, properties):
@@ -30,9 +43,20 @@ class OP_OT_bake_correction(SafeOperator, bpy.types.Operator):
             return {k: d for k, _, d in CORRECTION_KINDS}.get(properties.kind, '')
         return {k: d for k, _, d in ACTIONS}.get(properties.action, '')
 
+    def target(self, context):
+        if self.set_id:
+            project = context.scene.open_painter
+            ts = next((item for item in project.texture_sets if item.id == self.set_id), None)
+            if ts is None:
+                raise ValueError('The texture set no longer exists')
+            return ts
+        # Without a set (a script, a keymap): the session's canvas is what a region rebake
+        # or Finish acts on, whichever set is selected in the dock.
+        return session_set(context) if self.action in {'STOP', 'REBAKE_REGION'} else require_set(context)
+
     def run(self, context):
         from ..baking import corrections
-        ts = require_set(context)
+        ts = self.target(context)
         scene = context.scene
         settings = ts.bake.corrections
         if self.action == 'BRUSH':
@@ -65,12 +89,13 @@ class OP_OT_bake_correction(SafeOperator, bpy.types.Operator):
             invalidate(ts)
             scene.open_painter.status = f'Rebaked {", ".join(kinds)} with corrections'
         elif self.action == 'CLEAR':
-            if scene.open_painter.paint_correction == self.kind:
+            if scene.open_painter.paint_correction == self.kind and scene.open_painter.paint_set_id == ts.id:
                 corrections.end_brush(context)
             corrections.clear(ts, self.kind)
             scene.open_painter.status = f'Cleared {corrections.LABELS[self.kind]}'
         elif self.action == 'CLEAR_ALL':
-            corrections.end_brush(context)
+            if scene.open_painter.paint_set_id == ts.id:
+                corrections.end_brush(context)
             corrections.clear(ts)
             scene.open_painter.status = 'Cleared every bake correction'
         elif self.action == 'OVERLAY':
@@ -90,14 +115,22 @@ def draw_corrections(layout, context, ts):
     if not panel:
         return
     painting = project.paint_correction
+
+    def button(parent, text, action, icon='NONE', kind=None):
+        # Every button names the set it was drawn for: the session may paint another set.
+        op = parent.operator('open_painter.bake_correction', text=text, icon=icon)
+        op.action, op.set_id = action, ts.id
+        if kind is not None:
+            op.kind = kind
+        return op
+
     panel.prop(settings, 'active', text='Correction')
-    if painting:
+    if painting and project.paint_set_id == ts.id:
         row = panel.row(align=True)
         row.label(text=f'Painting {corrections.LABELS[painting]}', icon='BRUSH_DATA')
-        row.operator('open_painter.bake_correction', text='Finish', icon='CHECKMARK').action = 'STOP'
+        button(row, 'Finish', 'STOP', icon='CHECKMARK')
     else:
-        op = panel.operator('open_painter.bake_correction', text='Bake Correction Brush', icon='BRUSH_DATA')
-        op.action, op.kind = 'BRUSH', settings.active
+        button(panel, 'Bake Correction Brush', 'BRUSH', icon='BRUSH_DATA', kind=settings.active)
     if settings.active == 'OFFSET':
         panel.prop(settings, 'value', text='Projection Distance')
         panel.prop(settings, 'offset_range')
@@ -121,12 +154,11 @@ def draw_corrections(layout, context, ts):
     panel.prop(settings, 'live_rebake')
     panel.prop(settings, 'show_cage')
     row = panel.row(align=True)
-    row.operator('open_painter.bake_correction', text='Rebake Region', icon='FILE_REFRESH').action = 'REBAKE_REGION'
-    row.operator('open_painter.bake_correction', text='Rebake All', icon='RENDER_STILL').action = 'REBAKE_ALL'
+    button(row, 'Rebake Region', 'REBAKE_REGION', icon='FILE_REFRESH')
+    button(row, 'Rebake All', 'REBAKE_ALL', icon='RENDER_STILL')
     row = panel.row(align=True)
-    op = row.operator('open_painter.bake_correction', text='Clear', icon='X')
-    op.action, op.kind = 'CLEAR', settings.active
-    row.operator('open_painter.bake_correction', text='Clear All').action = 'CLEAR_ALL'
+    button(row, 'Clear', 'CLEAR', icon='X', kind=settings.active)
+    button(row, 'Clear All', 'CLEAR_ALL')
     if active_keys:
         panel.label(text='Painted: ' + ', '.join(corrections.LABELS[k] for k in active_keys), icon='CHECKMARK')
 
@@ -145,7 +177,7 @@ class OP_PT_native_bake_correction(bpy.types.Panel):
         return editor.is_area(context.area) and bool(context.scene.open_painter.paint_correction)
 
     def draw(self, context):
-        ts = active_set(context)
+        ts = session_set(context)
         if ts is None:
             return
         layout = self.layout

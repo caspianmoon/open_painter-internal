@@ -1,8 +1,10 @@
 """Resolve raster/procedural channel inputs and texture-space effect stacks.
 
 Unfiltered sources retain cooperative row tiling. Shared scalar procedurals are
-cached across channels. Neighborhood effects evaluate the actual full raster
-once, then serve slices; no effect wraps across row-tile boundaries.
+cached across channels. Neighborhood effects with a bounded footprint filter
+aligned strips a few halos tall (``band_rows``) and serve tiles from the current
+strip; whole-image effects evaluate the actual full raster once, then serve
+slices. No effect wraps across row-tile boundaries.
 """
 
 import numpy as np
@@ -13,6 +15,15 @@ from .metrics import count, measured
 from ..texture_engine import filters, procedurals
 
 TILE_ROWS = 16
+
+
+def band_rows(halo, n):
+    """Rows per strip of a bounded-footprint filter. The halo is filtered again
+    for every strip, so strips grow with it (at most doubling the work) while
+    each temporary stays a fraction of the image; small halos still get strips
+    several tiles tall so the compositor's 16-row sweep does not refilter them."""
+    return min(n, max(4 * TILE_ROWS, (2 * int(halo) // TILE_ROWS) * TILE_ROWS))
+
 
 NEIGHBORHOOD_EFFECTS = frozenset({
     "BLUR", "GAUSSIAN_BLUR", "DIRECTIONAL_BLUR", "RADIAL_BLUR", "SLOPE_BLUR",
@@ -391,18 +402,31 @@ def source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
     from .operation_contracts import stack_footprint
     from .tiles import expand
     halo = stack_footprint(effects)
-    if halo is not None:
-        low, high = expand(y0, y1, halo, n)
-        raster = np.empty((high - low, n, 4), np.float32)
-        for start in range(low, high, TILE_ROWS):
-            stop = min(start + TILE_ROWS, high)
-            raster[start - low:stop - low] = _raw_source(prop, kind, n, start, stop, cache, ts, geometry_cache)
-        return apply_texture_effects(raster, effects)[y0 - low:y1 - low]
     # The pixel cache belongs to the current channel evaluation; keep filtered
     # RGBA here rather than retaining every layer/channel result in geometry cache.
     # Anchor prefixes share the owner's pointer, so the effect subset is part of the key.
     key = ("filtered_channel", prop.as_pointer(), tuple(e.as_pointer() for e in effects), n,
            getattr(ts, "edit_serial", 0))
+    if halo is not None:
+        # The compositor sweeps 16-row tiles: filtering (16 + 2·halo) rows for
+        # each was up to 25x the image. Aligned strips are filtered once and only
+        # the current one stays in the cache, so temporaries remain bounded.
+        rows = band_rows(halo, n)
+        parts = []
+        for strip_low in range(y0 // rows * rows, y1, rows):
+            strip_high = min(strip_low + rows, n)
+            strip = (*key, strip_low, strip_high)
+            if strip not in cache:
+                for stale in [k for k in cache if isinstance(k, tuple) and k[:len(key)] == key]:
+                    del cache[stale]
+                low, high = expand(strip_low, strip_high, halo, n)
+                raster = np.empty((high - low, n, 4), np.float32)
+                for start in range(low, high, TILE_ROWS):
+                    stop = min(start + TILE_ROWS, high)
+                    raster[start - low:stop - low] = _raw_source(prop, kind, n, start, stop, cache, ts, geometry_cache)
+                cache[strip] = apply_texture_effects(raster, effects)[strip_low - low:strip_high - low]
+            parts.append(cache[strip][max(y0 - strip_low, 0):min(y1, strip_high) - strip_low])
+        return parts[0] if len(parts) == 1 else np.concatenate(parts)
     if key not in cache:
         raster = np.empty((n, n, 4), np.float32)
         for low in range(0, n, TILE_ROWS):
@@ -436,7 +460,7 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
                     else None)
             if base is not None:
                 base = np.broadcast_to(base, (y1 - y0, n, 4))
-            return channel_rows(ts, layer, prop.channel, n, y0, y1, geometry_cache, base=base)
+            return channel_rows(ts, layer, prop.channel, n, y0, y1, geometry_cache, base=base, cache=cache)
     if kind == "FILL" and getattr(prop, "projection", "UV") == "DECAL":
         # Decal objects (0.9.6): the layer's Empty is the projection frame.
         from ..painting import decals
@@ -456,7 +480,7 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
 def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
     """Shared image sampling for regular fills, paint and scalar detail inputs."""
     if image:
-        from .image_snapshots import read
+        from .image_snapshots import associated, read
         key = (image.as_pointer(), "linear")
         if key not in cache:
             cache[key] = read(cache, image, linear=True)
@@ -464,7 +488,7 @@ def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
             # Paint pixels already occupy the output UV grid. Resampling four
             # neighbours per pixel was the dominant cost of every brush update.
             rgba = cache[key][y0:y1].copy()
-            if image.is_float:
+            if image.is_float and not associated(image):
                 np.divide(
                     rgba[..., :3], rgba[..., 3:4], out=rgba[..., :3], where=rgba[..., 3:4] > 1e-8
                 )
@@ -477,8 +501,9 @@ def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
             (np.arange(y0, y1, dtype=np.float32) + 0.5) / n,
         )
         rgba = sample_uv(cache[key], u, v)
-        if kind == "PAINT" and image.is_float:
-            # Blender's native float brush buffers are premultiplied.
+        if kind == "PAINT" and image.is_float and not associated(image):
+            # Blender's native float brush buffers are premultiplied (a file-backed
+            # canvas is already divided once by the reader).
             rgba[..., :3] = np.divide(
                 rgba[..., :3],
                 rgba[..., 3:4],

@@ -1,5 +1,7 @@
 """UV-space geometry rasterization for CPU triplanar texture fills."""
 
+from contextlib import nullcontext
+
 from ..evaluation.metrics import measured
 
 import numpy as np
@@ -36,17 +38,19 @@ def geometry(ts, n, coverage=False):
 def tangents(ts, n, geometry_cache=None):
     """Per-texel world tangent (dP/du) and bitangent (dP/dv) rasters of the assigned faces.
 
-    The frame decal normals are expressed in; cached with the geometry rasters.
+    The frame decal normals are expressed in; cached with the geometry rasters, which the
+    shared cache drops together when the geometry stamp (resolution, transforms, mesh) moves.
     """
     if geometry_cache is not None and "tangents" in geometry_cache:
         return geometry_cache["tangents"]
-    from ..geometry.snapshots import targets
-    from ..geometry.uv_rasterizer import rasterize
     tangent = np.zeros((n, n, 3), np.float32)
     bitangent = np.zeros((n, n, 3), np.float32)
     tangent[..., 0] = 1
     bitangent[..., 1] = 1
-    with targets(ts) as objects:
+    # Same neutral frame as geometry(): an unassigned (duplicated) set is not an error.
+    from ..geometry.snapshots import targets
+    from ..geometry.uv_rasterizer import rasterize
+    with targets(ts) if ts.assignments else nullcontext(()) as objects:
         for target in objects:
             uv = target["uv"][target["tri_loops"]].astype(np.float64)
             p = target["positions"][target["tri_vertices"]].astype(np.float64)

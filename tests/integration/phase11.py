@@ -116,6 +116,15 @@ obj = scene.open_painter.paint_object
 paint_session.finish(bpy.context)
 assert [p.select for p in obj.data.polygons] == saved_selection
 assert obj.data.use_paint_mask == saved_mask
+# Tab into Edit Mode ends the session there: the selection restore goes through the edit
+# BMesh, since a polygon write in Edit Mode is discarded on the way out.
+paint_session.begin(bpy.context, ts, "ROUGHNESS")
+bpy.ops.object.mode_set(mode="EDIT")
+assert not paint_session.synchronize(bpy.context) and scene.open_painter.paint_image is None
+assert obj.mode == "EDIT" and scene.open_painter.paint_object is None
+bpy.ops.object.mode_set(mode="OBJECT")
+assert [p.select for p in obj.data.polygons] == saved_selection
+assert obj.data.use_paint_mask == saved_mask
 # A removed evaluated output is rebuilt even when the old output was clean.
 e = LayerEvaluator(scene)
 out = next(o for o in ts.outputs if o.channel == "ROUGHNESS")

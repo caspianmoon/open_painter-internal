@@ -134,7 +134,7 @@ def steps():
     report['debug'] = {'timer': bpy.app.timers.is_registered(cache.tick),
                        'paint_input': scene.as_pointer() in cache._paint_input,
                        'pending': scene.as_pointer() in corrections._pending,
-                       'snapshot_differs': bool(not np.array_equal(corrections._snapshots.get((scene.as_pointer(), settings.corrections.offset_image.as_pointer())), images.pixels(settings.corrections.offset_image))),
+                       'snapshot_differs': bool(not np.array_equal(corrections._snapshots.get(scene.as_pointer(), (0, None))[1], images.pixels(settings.corrections.offset_image))),
                        'modal': cache._modal_painting(scene), 'status': project.status}
     # The scheduler notices the stroke end, rebuilds the overlay and rebakes the region from its timer.
     deadline = time.monotonic() + 40

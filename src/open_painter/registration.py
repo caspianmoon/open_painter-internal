@@ -2,7 +2,7 @@
 
 import bpy
 
-from .preferences import OP_Preferences
+from .preferences import OP_Preferences, update_debug
 from .baking.jobs import OP_OT_bake_queue, OP_OT_edge_map_refresh
 from .properties.influencer import OP_Influencer
 from .properties.mesh_selector import OP_MeshSelector
@@ -143,6 +143,11 @@ def register():
         for cls in CLASSES:
             bpy.utils.register_class(cls)
             _registered_classes.append(cls)
+        addon = bpy.context.preferences.addons.get(__package__)
+        if addon:
+            # Saved preferences restore without their update callbacks: a
+            # persisted Developer Mode must reach the logger before any output.
+            update_debug(addon.preferences, None)
         bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
         bpy.types.WindowManager.open_painter_director = bpy.props.PointerProperty(type=OP_DirectorSettings)
         _cleanups.append(lambda: delattr(bpy.types.WindowManager, 'open_painter_director'))

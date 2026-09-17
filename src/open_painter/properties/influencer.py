@@ -1,10 +1,12 @@
 """Explicit scene inputs and bounded UV-space analysis settings."""
 import bpy
 
+from ..core.layer_stack import replaying
+
 
 def changed(self, context):
     project = getattr(self.id_data, 'open_painter', None)
-    if project:
+    if project and not replaying():
         from ..core.layer_stack import invalidate
         for ts in project.texture_sets:
             if any(m.influence.as_pointer() == self.as_pointer() for layer in ts.layers for m in layer.masks):

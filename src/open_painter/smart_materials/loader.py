@@ -8,43 +8,71 @@ from tempfile import TemporaryDirectory
 import bpy
 
 from ..constants import OWNER
-from ..core.layer_stack import invalidate, restore, snapshot
+from ..core.layer_stack import copy_ids, invalidate, restore, snapshot
 from ..utils.ids import new_id
-from .format import read
+from .format import asset_colorspace, read
 
 
 @contextmanager
 def decode_assets(assets, loaded):
-    """Yield a decoder turning ``{"asset": key}`` values into packed, owned images."""
+    """Yield a decoder turning ``{"asset": key}`` values into packed, owned images.
+
+    A lookup asset (fill or detail image, frozen field) whose bytes and colorspace
+    are already packed in the file, tagged with their content hash, is shared:
+    updates and repeated inserts add no copies and the module base compares it
+    by content. Painted images (paint masks, paint layer channels) are always
+    the instance's own copy and carry no hash.
+    """
+    from hashlib import sha256
     from ..constants import OWNER
+    from .modules import ASSET_HASH, asset_image
     decoded_images = {}
     with TemporaryDirectory(prefix="open-painter-import-") as directory:
 
-        def decode(value):
-            if isinstance(value, dict) and "asset" in value:
-                key = value["asset"]
-                if key not in assets:
-                    raise ValueError(f"Missing smart material texture: {key}")
-                identity = (key, value.get("colorspace", "Non-Color"))
-                if identity in decoded_images:
-                    return decoded_images[identity]
+        def load(value, painted):
+            key = value["asset"]
+            if key not in assets:
+                raise ValueError(f"Missing smart material texture: {key}")
+            colorspace = asset_colorspace(value.get("colorspace", "Non-Color"))
+            identity = (key, colorspace, painted)
+            if identity in decoded_images:
+                return decoded_images[identity]
+            digest = sha256(assets[key]).hexdigest()
+            image = None if painted else asset_image(digest, colorspace)
+            if image is None:
                 dest = Path(directory) / f"{new_id()}.exr"
                 dest.write_bytes(assets[key])
                 image = bpy.data.images.load(str(dest), check_existing=False)
                 loaded.append(image)
                 image[OWNER] = True
-                image.colorspace_settings.name = value.get("colorspace", "Non-Color")
+                image.colorspace_settings.name = colorspace
                 image.pack()
                 image.use_fake_user = True
-                decoded_images[identity] = image
-                return image
+                if not painted:
+                    image[ASSET_HASH] = digest
+            decoded_images[identity] = image
+            return image
+
+        def decode(value, painted=False):
+            if isinstance(value, dict) and "asset" in value:
+                return load(value, painted)
             if isinstance(value, dict):
-                return {k: decode(v) for k, v in value.items()}
+                own = value.get("source") == "PAINT" or value.get("type") == "PAINT"
+                return {k: decode(v, painted or (own and k in ("image", "channels"))) for k, v in value.items()}
             if isinstance(value, list):
-                return [decode(v) for v in value]
+                return [decode(v, painted) for v in value]
             return value
 
         yield decode
+
+
+def _copyable(layers):
+    """Document layers in the shape ``copy_ids`` reads; older formats lack some of the keys."""
+    return [dict(layer, module_instance=layer.get('module_instance', ''),
+                 masks=[mask for mask in layer.get('masks', []) if mask.get('id')],
+                 channels=[{'effects': [effect for effect in channel.get('effects', []) if effect.get('id')]}
+                           for channel in layer.get('channels', [])])
+            for layer in layers]
 
 
 def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -> list:
@@ -58,17 +86,29 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     path = Path(path)
     data, assets = read(path)
     module = data.get('module')
+    tokens = {}
     if module is not None:
+        # The module's id space is closed: an id already under a token (a nested
+        # instance, which serializer.save refuses since 0.9.7) would be inserted
+        # verbatim and collide with the original and with every other insert.
+        if any(modules.namespaced(identifier) for identifier in modules.owned_ids(data['layers'])):
+            raise ValueError('This module document nests another module instance and cannot be inserted; '
+                             'save the module again from a folder without one.')
         token = token or new_id()[:8]
         namespaced = modules.namespace_mapping(data['layers'], token)
-        mapping = {layer['id']: namespaced[layer['id']] for layer in data['layers']}
-        mask_mapping = {m['id']: namespaced[m['id']] for layer in data['layers'] for m in layer.get('masks', []) if m.get('id')}
-        effect_mapping = {e['id']: namespaced[e['id']] for layer in data['layers'] for c in layer.get('channels', [])
-                          for e in c.get('effects', []) if e.get('id')}
+        mapping = {layer['id']: namespaced.get(layer['id'], layer['id']) for layer in data['layers']}
+        mask_mapping = {m['id']: namespaced.get(m['id'], m['id']) for layer in data['layers']
+                        for m in layer.get('masks', []) if m.get('id')}
+        effect_mapping = {e['id']: namespaced.get(e['id'], e['id']) for layer in data['layers']
+                          for c in layer.get('channels', []) for e in c.get('effects', []) if e.get('id')}
     else:
-        mapping = {layer["id"]: new_id() for layer in data["layers"]}
-        mask_mapping = {m['id']: new_id() for layer in data['layers'] for m in layer.get('masks',[]) if m.get('id')}
-        effect_mapping = {e['id']: new_id() for layer in data['layers'] for c in layer.get('channels', [])
+        # A whole-set document carries its module instances as saved: like Duplicate,
+        # the import puts each one under a fresh token so it stays an instance the
+        # module's base matches, instead of a stamped folder with unrelated ids.
+        ids, tokens = copy_ids(_copyable(data['layers']))
+        mapping = {layer['id']: ids[layer['id']] for layer in data['layers']}
+        mask_mapping = {m['id']: ids[m['id']] for layer in data['layers'] for m in layer.get('masks', []) if m.get('id')}
+        effect_mapping = {e['id']: ids[e['id']] for layer in data['layers'] for c in layer.get('channels', [])
                           for e in c.get('effects', []) if e.get('id')}
     if parent_id and not any(layer.id == parent_id and layer.type == 'FOLDER' for layer in ts.layers):
         raise ValueError('The target folder no longer exists.')
@@ -76,36 +116,10 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     from ..evaluation.anchors import derived_mapping
     anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
     loaded = []
-    decoded_images = {}
     start = len(ts.layers)
     old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")}
     try:
-        with TemporaryDirectory(prefix="open-painter-import-") as directory:
-
-            def decode(value):
-                if isinstance(value, dict) and "asset" in value:
-                    key = value["asset"]
-                    if key not in assets:
-                        raise ValueError(f"Missing smart material texture: {key}")
-                    identity = (key, value.get("colorspace", "Non-Color"))
-                    if identity in decoded_images:
-                        return decoded_images[identity]
-                    dest = Path(directory) / f"{new_id()}.exr"
-                    dest.write_bytes(assets[key])
-                    image = bpy.data.images.load(str(dest), check_existing=False)
-                    loaded.append(image)
-                    image[OWNER] = True
-                    image.colorspace_settings.name = value.get("colorspace", "Non-Color")
-                    image.pack()
-                    image.use_fake_user = True
-                    decoded_images[identity] = image
-                    return image
-                if isinstance(value, dict):
-                    return {k: decode(v) for k, v in value.items()}
-                if isinstance(value, list):
-                    return [decode(v) for v in value]
-                return value
-
+        with decode_assets(assets, loaded) as decode:
             for source in data["layers"]:
                 values = decode(source)
                 values["id"] = mapping[source["id"]]
@@ -129,6 +143,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                             mask[field] = anchor_mapping.get(mask[field], mask[field])
                 layer = ts.layers.add()
                 restore(values, layer)
+                if source['id'] in tokens:
+                    layer.module_instance = tokens[source['id']]
                 if layer.type != "FOLDER":
                     from ..constants import CHANNELS, DEFAULTS
 

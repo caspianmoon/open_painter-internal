@@ -4,11 +4,15 @@ import base64
 import hashlib
 import re
 import struct
+import time
 from pathlib import Path
 
 MAX_IMAGES = 4
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_SERVER_MESSAGE = 32 * 1024 * 1024
+# Longer than the longest turn, so another Blender sharing the state
+# directory never loses a texture its own instruction is still using.
+PRUNE_AGE = 24 * 60 * 60
 
 
 def inspect(data):
@@ -44,12 +48,15 @@ def store(state_directory, item):
                 prompt=(item.get("revisedPrompt") or "")[:5000])
 
 
-def read(state_directory, metadata):
-    identifier = metadata.get("image_id", "")
+def _path(state_directory, identifier):
     if not re.fullmatch(r"generated:[0-9a-f]{64}", identifier):
         raise ValueError("Unknown generated texture ID")
-    root = Path(state_directory).resolve()
-    path = root / "painter_textures" / (identifier.split(":")[1] + ".png")
+    return Path(state_directory).resolve() / "painter_textures" / (identifier.split(":")[1] + ".png")
+
+
+def read(state_directory, metadata):
+    identifier = metadata.get("image_id", "")
+    path = _path(state_directory, identifier)
     if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
         raise ValueError("Generated texture is missing; generate it again")
     if path.stat().st_size > MAX_IMAGE_BYTES:
@@ -59,3 +66,32 @@ def read(state_directory, metadata):
     if hashlib.sha256(data).hexdigest() != identifier.split(":")[1] or (width, height) != (metadata["width"], metadata["height"]):
         raise ValueError("Generated texture changed after creation; generate it again")
     return data
+
+
+def discard(entries):
+    """Once the owning request ends, applied pixels are packed in the .blend
+    and unapplied ones are unwanted; the cache copies would otherwise stay forever."""
+    for entry in entries:
+        try:
+            path = _path(entry["state_directory"], entry.get("image_id", ""))
+            if not path.is_symlink():
+                path.unlink(missing_ok=True)
+        except (KeyError, ValueError, OSError):
+            continue  # Housekeeping never fails the apply that triggered it.
+
+
+def prune(state_directory, keep=(), *, now=None):
+    """Textures left by interrupted turns age out on the next connection."""
+    directory = Path(state_directory).resolve() / "painter_textures"
+    if directory.is_symlink() or not directory.is_dir():
+        return
+    kept = {identifier.split(":")[-1] for identifier in keep}
+    now = time.time() if now is None else now
+    for path in directory.glob("*.png"):
+        try:
+            if path.stem in kept or path.is_symlink() or not path.is_file():
+                continue
+            if now - path.stat().st_mtime > PRUNE_AGE:
+                path.unlink(missing_ok=True)
+        except OSError:
+            continue

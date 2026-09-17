@@ -90,11 +90,12 @@ def coverage(ts, layer, n=256):
 
 
 # ---- 0. opening a file keeps every handler (they must all be persistent) ---------------------
-from open_painter.evaluation.cache import on_load, on_save
+from open_painter.evaluation.cache import on_load, on_render, on_save, on_undo
 for handlers, fn in ((bpy.app.handlers.depsgraph_update_post, dependencies.on_depsgraph),
                      (bpy.app.handlers.frame_change_post, dependencies.on_frame),
-                     (bpy.app.handlers.load_post, on_load), (bpy.app.handlers.undo_post, on_load),
-                     (bpy.app.handlers.save_pre, on_save), (bpy.app.handlers.render_pre, on_save)):
+                     (bpy.app.handlers.load_post, on_load), (bpy.app.handlers.undo_post, on_undo),
+                     (bpy.app.handlers.redo_post, on_undo),
+                     (bpy.app.handlers.save_pre, on_save), (bpy.app.handlers.render_pre, on_render)):
     assert fn in handlers, f'{fn.__name__} was dropped by opening the file'
 epoch = dependencies.epoch()
 bpy.data.objects[0].location.x += 1e-3

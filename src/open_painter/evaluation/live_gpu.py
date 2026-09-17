@@ -230,9 +230,17 @@ class Device:
     def _release(self, texture):
         self._leased.discard(id(texture))
 
-    def _drop_checkpoint(self, key, counter='live_checkpoint_evictions'):
-        _, size = self._checkpoints.pop(key)
+    def _drop_checkpoint(self, key, counter='live_checkpoint_evictions', recycle=False):
+        texture, size = self._checkpoints.pop(key)
         self._checkpoint_bytes -= size
+        if recycle:
+            # Adoption took this texture out of the scratch pool. A drop made
+            # while composing is followed by a compose that needs that scratch
+            # texture straight away; returning it avoids a full-size
+            # allocation and free per replaced checkpoint. Every checkpoint
+            # matches the pool resolution: compose clears both on a change.
+            self._pool.append(texture)
+            metrics.gauge('live_gpu_scratch_bytes', len(self._pool)*size)
         metrics.count(counter)
         metrics.gauge('live_checkpoint_cache_bytes', self._checkpoint_bytes)
 
@@ -269,7 +277,7 @@ class Device:
         # channel bucket; do not retain undo history as GPU textures.
         for previous in tuple(self._checkpoints):
             if previous[:3] == key[:3] and previous != key:
-                self._drop_checkpoint(previous, 'live_checkpoint_invalidations')
+                self._drop_checkpoint(previous, 'live_checkpoint_invalidations', recycle=True)
         entry = self._checkpoints.get(key)
         metrics.count('live_checkpoint_hits' if entry is not None else 'live_checkpoint_misses')
         if entry is not None:
@@ -283,7 +291,17 @@ class Device:
             metrics.count('live_checkpoint_oversize_skips')
             return
         while self._checkpoints and self._checkpoint_bytes + size > self._checkpoint_limit:
-            self._drop_checkpoint(next(iter(self._checkpoints)))
+            # One owner's channels are composed as a fixed cycle after every
+            # root edit. When the cycle outgrows the cache, plain LRU evicts
+            # the sibling the next edit needs first and never hits again;
+            # keeping the resident siblings serves most of the cycle. Other
+            # owners still age out, so the cache follows the edited set.
+            victim = next((previous for previous in self._checkpoints
+                           if previous[0] != key[0]), None)
+            if victim is None:
+                metrics.count('live_checkpoint_capacity_skips')
+                return
+            self._drop_checkpoint(victim, recycle=True)
         # Adopt the completed leased texture. It can never be selected by the
         # scratch allocator while retained as a checkpoint, and no copy pass is
         # needed to keep it. The caller's subsequent release is harmless.

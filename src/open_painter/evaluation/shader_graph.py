@@ -17,7 +17,6 @@ from ast import literal_eval
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from hashlib import sha256
 import json
 import re
 from time import perf_counter
@@ -30,7 +29,7 @@ from ..constants import CHANNELS, DEFAULTS, OWNER
 from ..core.layer_stack import channel_for
 from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combine
 from .shader_effects import apply_effect, is_pointwise, UnsupportedEffect
-from .shader_resources import Resources, RESOURCE, values
+from .shader_resources import Resources, RESOURCE, alive, values
 from .resource_keys import image_key
 from .anchors import COMPOSITE_KINDS, channel_of
 from . import metrics
@@ -80,6 +79,23 @@ def global_signature(ts):
 def structural_signature(ts):
     """Complete structural signature of a texture set (global, wiring and units)."""
     return Graph(ts.id_data, ts, None).structural_signature()
+
+
+def _band_rows(halo, n):
+    """Rows per cooperative strip of a bounded-footprint filter: the halo is
+    filtered again for every strip, so strips grow with it (at most doubling
+    the work) while each ``next()`` stays a fraction of the image."""
+    if not halo:
+        return 16
+    return max(16, min(n, (2 * int(halo) // 16) * 16))
+
+
+def _same_literal(a, b):
+    """Baked export values compare equal across the JSON round trip of persisted trees."""
+    try:
+        return json.loads(json.dumps(a)) == json.loads(json.dumps(b))
+    except (TypeError, ValueError):
+        return a == b
 
 
 def remove_orphan_units(ts_id):
@@ -154,6 +170,7 @@ class Unit:
     inputs: dict = field(default_factory=dict)      # interface input name -> socket type
     outputs: dict = field(default_factory=dict)     # interface output name -> socket type
     imports: list = field(default_factory=list)     # (producer key, export name, input name)
+    const_imports: list = field(default_factory=list)   # (producer key, export name, baked value)
     exports: dict = field(default_factory=dict)     # export name -> ('socket', name) | ('const', value)
     flags: dict = field(default_factory=dict)
     bindings: dict = field(default_factory=dict)
@@ -185,7 +202,7 @@ class Unit:
 
 class Graph(Math):
     def __init__(self, scene, ts, material):
-        self.scene, self.ts, self.material = scene, ts, material
+        self.scene, self._ts, self.material = scene, ts, material
         self.n = int(ts.resolution)
         self.tree = None
         self.instance = None
@@ -211,12 +228,38 @@ class Graph(Math):
         self._previous = None
         self._reused, self._warnings = [], []
         self._stubs = False
+        self._adopted = []
+        # Graphs of one session share this cell; it names the newest of them.
+        self._head = [self]
+
+    @property
+    def _live(self):
+        """The newest graph of the session (0.9.7).
+
+        Boundary and cache closures are bound methods of the graph that compiled
+        their unit. Adopted units carry them into every later graph, while the
+        graph they belong to stops re-planning once it is superseded, so the
+        authoring state they read comes from the live graph instead.
+        """
+        return self._head[0]
+
+    @property
+    def ts(self):
+        live = self._live
+        return self._ts if live is self else live._ts
+
+    @ts.setter
+    def ts(self, value):
+        self._ts = value
 
     @property
     def anchors(self):
         # Indexed once per planning pass: anchor placement is structural, so
-        # every structural check re-plans, and adopted units' closures on this
-        # object read the index refreshed by the latest plan.
+        # every structural check re-plans the live graph, and adopted units'
+        # closures read the index refreshed by the latest plan.
+        live = self._live
+        if live is not self:
+            return live.anchors
         if self._anchors is None:
             from .anchors import index
             self._anchors = index(self.ts)
@@ -394,6 +437,10 @@ class Graph(Math):
     def _import(self, producer, export_name, socket_type):
         kind, payload = producer.exports[export_name]
         if kind == 'const':
+            # A baked literal is part of the adoption contract too: the unit must
+            # be recompiled when the producer starts exporting a socket instead.
+            if self.unit is not None:
+                self.unit.const_imports.append((producer.key, export_name, payload))
             return payload
         unit = self.unit
         if unit is None:
@@ -417,9 +464,10 @@ class Graph(Math):
                       self._import(producer, alpha, 'NodeSocketFloat') if alpha in producer.exports else 1.0)
 
     def _import_mask(self, producer, public=True):
+        value = self._import(producer, 'Value', 'NodeSocketFloat')
         if producer.flags.get('empty'):
             return 1.0 if public else None
-        return self._import(producer, 'Value', 'NodeSocketFloat')
+        return value
 
 
     def smooth(self, low, high, value):
@@ -533,15 +581,22 @@ class Graph(Math):
         layer_id = _descriptor_layer(json.loads(node['op_boundary']) if node.get('op_boundary') else None)
         binding = ResourceBinding(node.get('op_dependency'), {o.as_pointer() for o in items}, identity,
                                   factory, node, signature, owner_factory=owner_factory, layer_id=layer_id)
-        key = sha256(repr((self.n, signature)).encode()).hexdigest()
         image = node.image
-        if (image is None or image.get(RESOURCE) != key or not image.get('op_shader_resource_ready')
-                or not image.has_data):
-            fresh = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
-            if fresh.get('op_shader_resource_ready'):
-                node.image = fresh
-            else:
-                binding.pending_image = fresh
+        if (image is not None and image.get(RESOURCE) and image.get('op_shader_resource_ready')
+                and not image.has_data and image.packed_file is None):
+            # A reloaded leaf reads its packed pixels on first use; one saved
+            # without them comes back as its neutral fill: never adopt it again.
+            image['op_shader_resource_ready'] = False
+        # The persisted image is adopted through the cache-hit path so it lives in
+        # this graph's entries: an image no table knows is never evicted once a
+        # later re-identification replaces it.
+        fresh = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
+        if fresh.get('op_shader_resource_ready'):
+            node.image = fresh
+        else:
+            binding.pending_image = fresh
+        if image is not None and image != fresh and image.get(RESOURCE):
+            self.resources.adopt(image)   # superseded: the table, not bpy.data, keeps it
         self.resource_bindings.append(binding)
         if self.unit is not None:
             self.unit.resource_bindings.append(binding)
@@ -638,19 +693,37 @@ class Graph(Math):
             return self.separate(result.color)[0]
         return self._field(prop, kind)
 
+    def _content_stamp(self, layer, prop, effects):
+        """Inputs the CPU raster of a channel reads beyond the channel's own values:
+        the layer's vector strokes, the decal Empty's frame, and the mesh (a
+        projected source, or a Surface-space filter padding across its seams)."""
+        from .operation_contracts import surface
+        stamp = ()
+        if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
+            from ..painting.strokes import stroke_identity
+            stamp += (('strokes', stroke_identity(self.scene.open_painter, layer.stroke_key)),)
+        if layer.type == 'FILL' and prop.projection == 'DECAL':
+            from ..painting import decals
+            stamp += (('decal', decals.signature(layer)),)
+        geometry = (bool(stamp) or prop.projection == 'TRIPLANAR'
+                    or any(surface(e) for e in effects if e.enabled and e.strength > 0))
+        return stamp + (self._geometry_stamp(geometry),)
+
     def _channel_prefix(self, layer, prop, count, rehydrate=None):
         anchored = layer.type == 'FILL' and prop.anchor
         def owners():
             items = [prop, *list(prop.effects)[:count]]
+            if getattr(layer, 'stroke_key', '') or prop.projection == 'DECAL':
+                items.append(layer)   # stroke edits and decal drags notify the layer
             if anchored:
                 items.extend(self._anchor_dependencies(prop.anchor, channel=prop.anchor_channel or prop.channel)[0])
             return items
         def identity():
+            effects = list(prop.effects)[:count]
             return ('channel-prefix', layer.type, prop.channel,
                     values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
-                    tuple(values(e, excluded={'strength'} if i == count - 1 else ())
-                          for i, e in enumerate(list(prop.effects)[:count])),
-                    self._geometry_stamp(prop.projection == 'TRIPLANAR'),
+                    tuple(values(e, excluded={'strength'} if i == count - 1 else ()) for i, e in enumerate(effects)),
+                    self._content_stamp(layer, prop, effects),
                     ('anchor', self._anchor_dependencies(prop.anchor, channel=prop.anchor_channel or prop.channel)[1])
                     if anchored else None)
         def factory(signature):
@@ -665,8 +738,9 @@ class Graph(Math):
                 halo = stack_footprint(snapshot.effects)
                 cache, geometry = {}, {}
                 if halo is not None:
-                    for low in range(0, self.n, 16):
-                        high = min(low + 16, self.n)
+                    rows = _band_rows(halo, self.n)
+                    for low in range(0, self.n, rows):
+                        high = min(low + rows, self.n)
                         start, stop = expand(low, high, halo, self.n)
                         data = np.empty((stop - start, self.n, 4), np.float32)
                         for row in range(start, stop, 16):
@@ -714,7 +788,7 @@ class Graph(Math):
                             if snapshot.image else None)
                     if base is not None:
                         base = np.broadcast_to(base, (high - low, n, 4))
-                    yield low, channel_rows(self.ts, layer, channel, n, low, high, None, base=base)
+                    yield low, channel_rows(self.ts, layer, channel, n, low, high, geometry, base=base)
             return parts()
         if rehydrate is not None:
             return self._rebind(rehydrate, owners, identity, factory)
@@ -923,11 +997,11 @@ class Graph(Math):
         coordinates = self.node('ShaderNodeTexCoord')
         coordinates.object = obj
         coordinates['op_decal'] = layer.id
-        size = float(getattr(obj, 'empty_display_size', 1.0)) or 1.0
+        width, height = decals.extent(obj)   # the drawn picture keeps the image's aspect
         offset = tuple(getattr(obj, 'empty_image_offset', (-.5, -.5)))
         local = self.separate(coordinates.outputs['Object'])
-        u = self.math('SUBTRACT', self.math('DIVIDE', local[0], size), offset[0])
-        v = self.math('SUBTRACT', self.math('DIVIDE', local[1], size), offset[1])
+        u = self.math('SUBTRACT', self.math('DIVIDE', local[0], width), offset[0])
+        v = self.math('SUBTRACT', self.math('DIVIDE', local[1], height), offset[1])
         sample = self.image(prop.image, self.combine(u, v, 0.0), prop.filtering, 'NONE',
                             getter=lambda: prop.image, owner=prop)
         depth = self.math('MAXIMUM', self.param(layer, 'decal_depth'), 1e-6)
@@ -948,23 +1022,33 @@ class Graph(Math):
             axis_y = self.combine(*(self.param(layer, 'decal_axes', 3 + i) for i in range(3)))
             world = self.vec('ADD', self.vec('ADD', self.vec('SCALE', axis_x, nx), self.vec('SCALE', axis_y, ny)),
                              self.vec('SCALE', axis_z, nz))
-            tangent = self.node('ShaderNodeTangent')
-            tangent.direction_type = 'UV_MAP'
+            # The set's tangent frame, signed like the Normal Map node that decodes
+            # the result: a Normal Map node fed a constant tangent-space (1, 0, 0)
+            # returns T and (0, 1, 0) returns sign · N × T, so a mirrored UV island
+            # flips the bitangent here as it does in painting.projection.tangents.
             normal = self.coord_normal()
-            t = tangent.outputs['Tangent']
-            b = self.vec('CROSS_PRODUCT', normal, t)
+            t, b = (self._tangent_axis(axis) for axis in ((1., .5, .5), (.5, 1., .5)))
             components = self.combine(self.vec('DOT_PRODUCT', world, t), self.vec('DOT_PRODUCT', world, b),
                                       self.vec('DOT_PRODUCT', world, normal))
             color = self.vec('ADD', self.vec('SCALE', components, .5), (.5, .5, .5))
         return Signal(color, coverage)
 
+    def _tangent_axis(self, color):
+        frame = self.node('ShaderNodeNormalMap')
+        frame.space = 'TANGENT'
+        frame.inputs['Strength'].default_value = 1.0
+        frame.inputs['Color'].default_value = (*color, 1.0)
+        return frame.outputs['Normal']
+
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
             if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
                 value = self._strokes_boundary(layer, prop)
-            elif layer.type == 'FILL' and prop.projection == 'DECAL' and prop.image and not prop.anchor:
+            elif layer.type == 'FILL' and prop.projection == 'DECAL' and not prop.anchor:
                 from ..painting import decals
-                if decals.resolve(layer) is None:
+                if prop.image is None or decals.resolve(layer) is None:
+                    # Nothing to project (channel_eval._base_source): the flat
+                    # colour must not cover the whole mesh.
                     value = Signal((0., 0., 0.), 0.0)
                 else:
                     value = self._decal_signal(layer, prop, channel)
@@ -1022,6 +1106,45 @@ class Graph(Math):
         if prop and not prop.enabled:
             return False
         return self._mode(layer, prop) != 'DISABLE'
+
+    def _wired(self, layer, channel):
+        """The layer's channel unit is in the chain: it blends, or it is a folder
+        whose disabled channel still publishes a composite (or a descendant's
+        output) that consumers read there; that unit passes its backdrop through."""
+        if self._touched(layer, channel):
+            return True
+        if layer.type != 'FOLDER' or self._skipped(layer):
+            return False
+        return channel in self._subtree_consumed(layer)
+
+    def _composite_consumed(self, layer):
+        """Channels consumers read from the layer's OUTPUT/GROUP anchors (indexed once per plan)."""
+        from .anchors import consumed_channels, output_id, group_id
+        plan = self._plan
+        table = getattr(plan, 'consumed', None) if plan is not None else None
+        if table is None:
+            table = {}
+            for item in self.ts.layers:
+                for source in (*item.channels, *item.masks):
+                    for identifier, requested in consumed_channels(source):
+                        anchor = self.anchors.get(identifier)
+                        if anchor is not None and anchor.kind in COMPOSITE_KINDS:
+                            table.setdefault(identifier, set()).add(channel_of(anchor, requested))
+            if plan is not None:
+                plan.consumed = table
+        channels = set(table.get(output_id(layer.id), ()))
+        if layer.type == 'FOLDER':
+            channels |= table.get(group_id(layer.id), set())
+        return channels
+
+    def _subtree_consumed(self, folder):
+        from ..core.layer_stack import descendants
+        channels = set(self._composite_consumed(folder))
+        inside = descendants(self.ts, folder.id)
+        for layer in self.ts.layers:
+            if layer.id in inside:
+                channels |= self._composite_consumed(layer)
+        return channels
 
     def _source_key(self, layer, channel, count=None):
         """Unit key of a channel prefix, or None when its content is a constant."""
@@ -1081,7 +1204,7 @@ class Graph(Math):
         siblings = [item for item in self.ts.layers if item.parent_id == layer.parent_id]
         position = next((i for i, item in enumerate(siblings) if item.id == layer.id), 0)
         for previous in reversed(siblings[:position]):
-            if self._touched(previous, channel):
+            if self._wired(previous, channel):
                 return (('CHANNEL', previous.id, channel), 'Out')
         parent = self._layer(layer.parent_id) if layer.parent_id else None
         if parent is None:
@@ -1091,8 +1214,9 @@ class Graph(Math):
         return Signal((0., 0., 0.), 0.0)
 
     def _composite_group(self, folder, channel):
-        """A folder's child composite before it blends; untouched folders compose nothing."""
-        if folder.type == 'FOLDER' and self._touched(folder, channel):
+        """A folder's child composite before it blends; a folder whose disabled
+        channel is read composes its children without blending them."""
+        if folder.type == 'FOLDER' and self._wired(folder, channel):
             return (('CHANNEL', folder.id, channel), 'Group')
         if folder.type == 'FOLDER' and folder.group_mode == 'PASSTHROUGH':
             return self._composite_backdrop(folder, channel)
@@ -1119,7 +1243,7 @@ class Graph(Math):
             if self._skipped(layer):
                 return []   # a pass-through imports nothing: its content work stops
             cached = self._cache_effective(layer, key[2]) != 'LIVE'
-            if layer.type == 'FOLDER' or not cached:
+            if (layer.type == 'FOLDER' or not cached) and self._touched(layer, key[2]):
                 refs.append(self._mask_key(layer))
             if layer.type != 'FOLDER' and not cached:
                 refs.append(self._source_key(layer, key[2]))
@@ -1176,12 +1300,23 @@ class Graph(Math):
     def _skipped(self, layer):
         """The layer compiles as a pass-through: it or an ancestor is bypassed,
         or an ancestor is cached (its subtree is sampled from the cache image)."""
-        seen, cursor, own = set(), layer, True
+        seen, cursor, own, consumed = set(), layer, True, None
         while cursor is not None and cursor.id not in seen:
             if getattr(cursor, 'bypass', False):
                 return True
             if not own and self._cache_mode(cursor) != 'LIVE':
-                return True
+                if consumed is None:
+                    return True
+                # The cache image ignores the anchor; its consumers read the layer
+                # (or the published folder it sits in) live, composed over the
+                # isolated folder's empty backdrop only.
+                message = (f'Anchor consumers read "{consumed.name}" inside cached folder '
+                           f'"{cursor.name}": compiled without its backdrop')
+                if message not in self._warnings:
+                    self._warnings.append(message)
+                return False
+            if consumed is None and self._composite_consumed(cursor):
+                consumed = cursor
             seen.add(cursor.id)
             own = False
             cursor = self._layer(cursor.parent_id) if cursor.parent_id else None
@@ -1249,7 +1384,7 @@ class Graph(Math):
                 if layer.id in ancestors:
                     raise ValueError('Layer hierarchy contains a cycle')
                 plan.opaque[layer.id] = opaque
-                touched = tuple(channel for channel in CHANNELS if self._touched(layer, channel))
+                touched = tuple(channel for channel in CHANNELS if self._wired(layer, channel))
                 plan.wiring.append((layer.id, layer.type, parent, layer.group_mode, touched))
                 for channel in touched:
                     plan.order.append(('CHANNEL', layer.id, channel))
@@ -1275,7 +1410,8 @@ class Graph(Math):
             prop = channel_for(layer, key[2])
             signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs,
                          bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None,
-                         'skip' if self._skipped(layer) else self._cache_effective(layer, key[2]))
+                         'skip' if self._skipped(layer) else self._cache_effective(layer, key[2]),
+                         self._touched(layer, key[2]))
             if stub:
                 # A stub stands in while the layer is hidden and its content unchanged.
                 return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
@@ -1287,7 +1423,8 @@ class Graph(Math):
                 from ..painting import decals
                 obj = decals.resolve(layer)
                 decal = (obj.name, round(float(getattr(obj, 'empty_display_size', 1.0)), 6),
-                         tuple(round(float(x), 6) for x in getattr(obj, 'empty_image_offset', (0, 0)))) if obj else None
+                         tuple(round(float(x), 6) for x in getattr(obj, 'empty_image_offset', (0, 0))),
+                         tuple(round(x, 6) for x in decals.aspect(obj))) if obj else None
             return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
                     self._continuation(key), decal)
         masks = list(layer.masks)
@@ -1358,8 +1495,21 @@ class Graph(Math):
             if not isinstance(source, tuple):
                 return anchor, source
             key, export = source
-            return anchor, self._import_composite(self.compile_unit(key), export)
+            signal = self._import_composite(self.compile_unit(key), export)
+            if export == 'Out':
+                # A blended Out is the chain's premultiplied form in a non-opaque
+                # context; composite.Composer.output publishes straight RGBA.
+                signal = self._straight(signal)
+            return anchor, signal
         return anchor, self.source(anchor.layer, anchor.channel, count=anchor.position)
+
+    def _straight(self, signal):
+        """Unpremultiply a Signal (a constant alpha of 1 is already straight)."""
+        alpha = signal.alpha
+        if not is_socket(alpha) and float(alpha) == 1.0:
+            return signal
+        factor = self.math('DIVIDE', self.math('GREATER_THAN', alpha, 1e-8), self.math('MAXIMUM', alpha, 1e-8))
+        return Signal(self.vec('SCALE', signal.color, factor), alpha)
 
     def anchor_signal(self, identifier, channel=None):
         return self._anchor(identifier, channel)[1]
@@ -1398,9 +1548,11 @@ class Graph(Math):
         """Exact inputs of a channel prefix, including anchored content it instantiates."""
         effects = list(prop.effects)[:count]
         owners = [prop, *effects]
+        if getattr(layer, 'stroke_key', '') or prop.projection == 'DECAL':
+            owners.append(layer)
         key = ('channel', layer.type, prop.channel,
                values(prop, excluded={'effects', 'enabled', 'opacity', 'blend_mode'}),
-               tuple(values(e) for e in effects), self._geometry_stamp(prop.projection == 'TRIPLANAR'))
+               tuple(values(e) for e in effects), self._content_stamp(layer, prop, effects))
         if layer.type == 'FILL' and prop.anchor:
             nested, nested_key = self._anchor_dependencies(prop.anchor, seen, prop.anchor_channel or prop.channel)
             owners.extend(nested)
@@ -1416,8 +1568,9 @@ class Graph(Math):
             raise ValueError('Published inputs contain a reference cycle')
         seen = seen | {node}
         owners, keys = [], []
+        inside = contributors(self.ts, anchor)
         for layer in self.ts.layers:
-            if layer.id not in contributors(self.ts, anchor):
+            if layer.id not in inside:
                 continue
             owners.append(layer)
             prop = channel_for(layer, channel)
@@ -1654,11 +1807,20 @@ class Graph(Math):
                 for low in range(0, self.n, 16):
                     yield low, _evaluate_masks(self.ts, source_layer, self.n, low, min(low + 16, self.n), cache, geometry)
             return parts()
-        owners = [mask, mask.influence, mask.mesh]
+        def owners():
+            return [mask, mask.influence, mask.mesh, *self._stroke_layers(mask)]
         if rehydrate is not None:
             return self._rebind(rehydrate, owners, identity, factory)
         return self.separate(self.boundary(self._role, owners, identity, factory,
                                            ['mask_source', layer.id, mask.id]).color)[0]
+
+    def _stroke_layers(self, mask):
+        """Stroke edits notify the paint layers rendering a key: a Vector Strokes
+        mask reading that key is re-identified through them."""
+        if mask.source != 'STROKES' or not mask.stroke_key:
+            return []
+        from ..painting.strokes import linked_layers
+        return [layer for _, layer in linked_layers(self.scene.open_painter, mask.stroke_key)]
 
     def _scene_identity(self, field):
         falloff = getattr(field, 'falloff', 'LINEAR')
@@ -1716,6 +1878,7 @@ class Graph(Math):
         """
         from .dependencies import map_dependencies
         from .anchors import consumed_channels
+        from .operation_contracts import surface
         owners, keys = [], []
         for mask in masks:
             if not mask.enabled or mask.source == 'ANCHOR':
@@ -1728,11 +1891,16 @@ class Graph(Math):
                 from .mesh_masks import signature as mesh_signature
                 stamp += (('mesh', mesh_signature(self.ts, mask)),)
             if mask.source == 'GRAPH':
+                # The CPU reference bakes the group over the assigned meshes (custom_graph.evaluate).
                 from .custom_graph import signature as graph_signature
-                stamp += (('graph', graph_signature(mask.node_group)),)
+                stamp += (('graph', graph_signature(mask.node_group), self._geometry_stamp(True)),)
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
+                owners.extend(self._stroke_layers(mask))
                 stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key), self._geometry_stamp(True)),)
+            if mask.source == 'FILTER' and surface(mask.effect):
+                # Surface-space filters pad each UV island from the set's seam map.
+                stamp += (('geometry', self._geometry_stamp(True)),)
             required = map_dependencies(mask)
             stamp += (('maps', tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps
                                     if required is None or m.kind in required)),)
@@ -1778,8 +1946,10 @@ class Graph(Math):
             items.extend((masks[-1], masks[-1].effect))
             return items
         def identity():
+            from .operation_contracts import surface
             return ('mask-filter-prefix', self._mask_dependencies(masks[:-1])[1],
-                    values(masks[-1].effect, excluded={'strength'}))
+                    values(masks[-1].effect, excluded={'strength'}),
+                    self._geometry_stamp(surface(masks[-1].effect)))
         def factory(signature):
             from .snapshots import capture
             last = capture(masks[-1]).replaced(black=0., white=1., invert=False, strength=1.,
@@ -1787,18 +1957,51 @@ class Graph(Math):
             snapshot = capture(layer).replaced(masks=tuple(capture(m) for m in masks[:-1]) + (last,))
             def parts():
                 from .mask_eval import evaluate_masks
+                from .operation_contracts import mask_footprint
                 cache, geometry = {}, {}
+                rows = _band_rows(mask_footprint(snapshot.masks), self.n)
                 # Neighborhood operators consume exactly this prefix, never the
                 # final material or unrelated layer/channel sources.
-                for low in range(0, self.n, 16):
+                for low in range(0, self.n, rows):
                     yield low, evaluate_masks(self.ts, snapshot, self.n, low,
-                                              min(low + 16, self.n), cache, geometry)
+                                              min(low + rows, self.n), cache, geometry)
+                    # Each band is filtered once and not retained for the next.
+                    for key in [k for k in geometry if isinstance(k, tuple) and k and k[0] == 'mask_stack']:
+                        del geometry[key]
             return parts()
         if rehydrate is not None:
             return self._rebind(rehydrate, owners, identity, factory)
         with self.role(f'RasterMaskPrefix:{layer.id}:{masks[-1].id}'):
             return self.separate(self.boundary(self._role, owners, identity, factory,
                                                ['mask_prefix', layer.id, masks[-1].id, bool(pre_filter)]).color)[0]
+
+    def _mask_walk(self, masks, start, stop, pre_filter, prefix):
+        """The entries of [start, stop) a CPU-rastered filter reads, as ``_mask_chain``
+        accumulates them: active entries, an active group with its member run,
+        nothing of a disabled group's run."""
+        from ..core.mask_stack import block
+        index = start
+        while index < stop:
+            mask = masks[index]
+            index += 1
+            if not self._mask_active(mask, pre_filter):
+                if mask.source == 'GROUP':
+                    index = min(block(masks, index - 1)[1], stop)
+                continue
+            prefix.append(mask)
+            if mask.source == 'GROUP':
+                run_stop = min(block(masks, index - 1)[1], stop)
+                self._mask_walk(masks, index, run_stop, pre_filter, prefix)
+                index = run_stop
+        return prefix
+
+    def _run_prefix(self, masks, stop, pre_filter):
+        """What a filter at ``stop - 1`` rasters: its innermost group's run up to it,
+        or the whole outer stack for a top-level entry (never the outer entries of
+        a member, which the CPU reference folds after the group)."""
+        parent = getattr(masks[stop - 1], 'parent_id', '')
+        start = next((i + 1 for i, m in enumerate(masks[:stop]) if parent and m.id == parent), 0)
+        return self._mask_walk(masks, start, stop, pre_filter, [])
 
     def _mask_chain(self, layer, masks, start, stop, pre_filter, result, prefix):
         """Fold entries [start, stop) into ``result``; a GROUP folds its member run first (0.9.3)."""
@@ -1811,7 +2014,11 @@ class Graph(Math):
                 run_stop = min(run_stop, stop)
                 if self._mask_active(mask, pre_filter):
                     prefix.append(mask)
-                    value = self._mask_chain(layer, masks, index + 1, run_stop, pre_filter, None, prefix)
+                    # Members raster their own run only (mask_eval._stack evaluates the
+                    # run from nothing and folds the group into the outer result after).
+                    run = []
+                    value = self._mask_chain(layer, masks, index + 1, run_stop, pre_filter, None, run)
+                    prefix.extend(run)
                     if value is None:
                         value = 1.0
                     result = self._mask_fold(layer, mask, value, result)
@@ -1908,9 +2115,10 @@ class Graph(Math):
         node = self.node('ShaderNodeGroup')
         node.node_tree = tree
         node['op_custom_graph'] = tree.name
+        from .custom_graph import COORDINATE_INPUTS
         for socket in node.inputs:
             name = socket.name.lower()
-            if name in {'uv', 'vector', 'coordinates'}:
+            if name in COORDINATE_INPUTS:
                 self.link(self.coord_uv(), socket)
             elif name == 'position':
                 self.link(self.coord_position(), socket)
@@ -1941,7 +2149,7 @@ class Graph(Math):
             producer = self.compile_unit(continued)
             result = self._import_mask(producer, public=False)
             start = next(i + 1 for i, m in enumerate(masks) if m.id == continued[2]) if continued[2] else len(masks)
-        prefix = [m for m in masks[:start] if self._mask_active(m, pre_filter)]
+        prefix = self._mask_walk(masks, 0, start, pre_filter, [])
         result = self._mask_chain(layer, masks, start, stop, pre_filter, result, prefix)
         self.unit.flags['empty'] = result is None
         return 1.0 if result is None else result
@@ -1986,6 +2194,7 @@ class Graph(Math):
             # in, so an adopted unit would keep rastering at the previous resolution.
             return None
         try:
+            unit.tree.users   # a tree removed as an orphan is recompiled, not adopted
             if unit.signature != self._unit_signature(key, stub=unit.flags.get('stub')):
                 return None
             # Collection reallocation moves PropertyGroups; captured references
@@ -1994,19 +2203,33 @@ class Graph(Math):
                 return None
         except (ValueError, StopIteration, ReferenceError):
             return None
+        # Its published inputs must exist in this graph too (adopted or rebuilt),
+        # with the export shapes this tree was linked against: a producer whose
+        # export turned into a constant (or a baked literal into a socket) has
+        # no socket to wire by name, so the consumer is recompiled instead.
+        self._building_units.add(key)
+        try:
+            for producer_key, export_name, _ in unit.imports:
+                if self.compile_unit(producer_key).exports.get(export_name) != ('socket', export_name):
+                    return None
+            for producer_key, export_name, payload in unit.const_imports:
+                export = self.compile_unit(producer_key).exports.get(export_name)
+                if export is None or export[0] != 'const' or not _same_literal(export[1], payload):
+                    return None
+        finally:
+            self._building_units.discard(key)
+        # Everything taken from the previous graph is handed back if this build fails.
+        self._adopted.append((key, unit, unit.instance,
+                              [(b, b.node.image, b.pending_image) for b in unit.resource_bindings]))
         del previous.units[key]
         unit.instance = None
         for binding in unit.resource_bindings:
             if binding.owner_factory is not None:
                 binding.owners = {o.as_pointer() for o in binding.owner_factory()}
-            if binding.pending_image is not None or not binding.node.image.get('op_shader_resource_ready'):
-                # The previous graph closes its unfinished jobs; queue this input again.
-                image = self.resources.request(binding.signature,
-                                               lambda b=binding: b.factory(b.signature), owner=binding.layer_id)
-                if image.get('op_shader_resource_ready'):
-                    binding.node.image, binding.pending_image = image, None
-                else:
-                    binding.pending_image = image
+            # A finished image is adopted into this graph's entries (cache hit), so
+            # a later re-identification leaves it to the eviction budget; the
+            # previous graph closes its unfinished jobs, so those are queued again.
+            self._request(binding, binding.signature)
         self.bindings.update(unit.bindings)
         for binding in unit.bindings.values():
             self.owner_bindings[binding.owner.as_pointer()].append(binding)
@@ -2020,10 +2243,21 @@ class Graph(Math):
         self._plan.keys.add(key)
         self.units[key] = unit
         self._reused.append(key)
-        # Its published inputs must exist in this graph too (adopted or rebuilt).
-        for producer_key, _, _ in unit.imports:
-            self.compile_unit(producer_key)
         return unit
+
+    def _rollback_adoption(self):
+        """A failed build hands adopted units back to the graph they came from."""
+        previous = self._previous
+        for key, unit, instance, images in self._adopted:
+            self.units.pop(key, None)
+            if previous is not None:
+                previous.units[key] = unit
+            unit.instance = instance
+            for binding, node_image, pending in images:
+                binding.node.image, binding.pending_image = node_image, pending
+        self._adopted = []
+        if previous is not None and self._head[0] is self:
+            self._head[0] = previous
 
     def compile_unit(self, key):
         """Compile one unit (and, recursively, every unit it imports)."""
@@ -2057,6 +2291,7 @@ class Graph(Math):
         unit.build_ms = (perf_counter() - started) * 1000
         unit.tree['op_flags'] = json.dumps(unit.flags)
         unit.tree['op_exports'] = json.dumps(unit.exports)
+        unit.tree['op_const_imports'] = json.dumps([[list(k), name, value] for k, name, value in unit.const_imports])
         unit.tree['op_effects'] = json.dumps([self._owner_key(e) for e in unit.compiled_effects.values()])
         self._building_units.discard(key)
         self._plan.keys.add(key)
@@ -2128,29 +2363,33 @@ class Graph(Math):
         backdrop = Signal(unit.input('In', 'NodeSocketColor'),
                           1.0 if opaque else unit.input('In:Alpha', 'NodeSocketFloat'))
         cached = self._cache_effective(layer, channel) != 'LIVE'
+        # A folder whose disabled channel is read by consumers composes its
+        # children for them and passes its backdrop through (composite.Composer).
+        blends = self._touched(layer, channel)
         with self.role(f'LayerMix:{layer.id}:{channel}'):
-            amount = self.math('MULTIPLY', self.param(layer, 'opacity'), self.param(layer, 'visible'))
-            if prop:
-                amount = self.math('MULTIPLY', amount, self.param(prop, 'opacity'))
-            if layer.type == 'FOLDER' or not cached:
-                # A cached paint/fill layer bakes its mask into the image alpha.
-                amount = self.math('MULTIPLY', amount, self.mask(layer))
+            amount = 0.0
+            if blends:
+                amount = self.math('MULTIPLY', self.param(layer, 'opacity'), self.param(layer, 'visible'))
+                if prop:
+                    amount = self.math('MULTIPLY', amount, self.param(prop, 'opacity'))
+                if layer.type == 'FOLDER' or not cached:
+                    # A cached paint/fill layer bakes its mask into the image alpha.
+                    amount = self.math('MULTIPLY', amount, self.mask(layer))
             if cached:
                 content = self._layer_cache(layer, channel)
-                result = blend(self, backdrop, content, amount, mode, channel)
+                result = blend(self, backdrop, content, amount, mode, channel) if blends else backdrop
                 published = content
             elif layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
                 grouped = Signal(unit.input('Grouped', 'NodeSocketColor'),
                                  1.0 if opaque else unit.input('Grouped:Alpha', 'NodeSocketFloat'))
-                result = Signal(self.mix(backdrop.color, grouped.color, amount),
-                                self.scalar_mix(backdrop.alpha, grouped.alpha, amount))
-                published = grouped
+                result = (Signal(self.mix(backdrop.color, grouped.color, amount),
+                                 self.scalar_mix(backdrop.alpha, grouped.alpha, amount)) if blends else backdrop)
+                # The chain is premultiplied in a non-opaque context; anchors read straight RGBA.
+                published = self._straight(grouped)
             elif layer.type == 'FOLDER':
                 child = Signal(unit.input('Grouped', 'NodeSocketColor'), unit.input('Grouped:Alpha', 'NodeSocketFloat'))
-                source = Signal(self.vec('SCALE', child.color,
-                    self.math('DIVIDE', self.math('GREATER_THAN', child.alpha, 1e-8),
-                              self.math('MAXIMUM', child.alpha, 1e-8))), child.alpha)
-                result = blend(self, backdrop, source, amount, mode, channel)
+                source = self._straight(child)
+                result = blend(self, backdrop, source, amount, mode, channel) if blends else backdrop
                 published = source
             else:
                 source = self.source(layer, channel)
@@ -2169,7 +2408,7 @@ class Graph(Math):
                 continue
             if layer.id in ancestors:
                 raise ValueError('Layer hierarchy contains a cycle')
-            if not self._touched(layer, channel):
+            if not self._wired(layer, channel):
                 continue
             unit = self.units[('CHANNEL', layer.id, channel)]
             instance = unit.instance
@@ -2205,10 +2444,24 @@ class Graph(Math):
         if problems:
             raise ValueError(' | '.join(problems))
         started = perf_counter()
+        self._reused, self._warnings, self._adopted = [], [], []
         plan = self.plan()
         self._previous = reuse if (reuse is not None and reuse.units
                                    and global_signature(reuse.ts) == global_signature(self.ts)) else None
-        self._reused, self._warnings = [], []
+        if self._previous is not None:
+            # Adopted closures read authoring state through the session's live graph.
+            self._head = self._previous._head
+            self._head[0] = self
+        try:
+            self._build(plan, started)
+        except Exception:
+            self._rollback_adoption()
+            raise
+        finally:
+            self._previous = None
+        return self
+
+    def _build(self, plan, started):
         self.tree = bpy.data.node_groups.new('OP Procedural · ' + self.ts.name, 'ShaderNodeTree')
         self.tree[OWNER] = True
         self.tree['op_shader_graph'] = self.ts.id
@@ -2216,19 +2469,24 @@ class Graph(Math):
         self.uv = self.node('ShaderNodeTexCoord').outputs['UV']
         for key in plan.order:
             self.compile_unit(key)
+        # Boundaries a discarded unit requested (its compilation raised after the
+        # request) are dropped by the resource stepper instead of being rastered.
+        self.resources.used = self._used_resources()
         for unit in self.units.values():
-            if unit.inputs or unit.outputs:
-                self._instance(unit)
+            # Every tree is instanced, sockets or not: a user-less unit tree would be
+            # removed as an orphan while its unit is still adoptable.
+            self._instance(unit)
         for unit in self.units.values():
-            if unit.instance is None:
-                continue
             for name, source in (('UV', self.uv), ('Position', self.geometry.outputs['Position']),
                                  ('Normal', self.geometry.outputs['Normal'])):
                 if name in unit.inputs:
                     self.link(source, unit.instance.inputs[name])
             for producer_key, export_name, input_name in unit.imports:
-                producer = self.units[producer_key]
-                self.link(producer.instance.outputs[export_name], unit.instance.inputs[input_name])
+                kind, payload = self.units[producer_key].exports[export_name]
+                if kind == 'socket':
+                    self.link(self.units[producer_key].instance.outputs[export_name], unit.instance.inputs[input_name])
+                else:
+                    self.link(payload, unit.instance.inputs[input_name])
         for channel in CHANNELS:
             self.tree.interface.new_socket(name=channel, in_out='OUTPUT', socket_type='NodeSocketColor')
         output = self.node('NodeGroupOutput')
@@ -2257,7 +2515,6 @@ class Graph(Math):
         self.tree['op_signature'] = repr(self._structure)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
-        self._previous = None
         # A batch can alter topology and numeric/image inputs together. Adopted
         # units retain their nodes, but their uniforms and resource identities
         # must be reconciled before marking this replacement graph current.
@@ -2266,9 +2523,10 @@ class Graph(Math):
             self._reconcile_cache(binding)
         from .references import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
+        queued = sum(key in self.resources.used for key in self.resources.queue)
         self._last = {'parameter_changes': corrections.get('parameter_changes', []),
                       'invalidated_nodes': corrections.get('invalidated_nodes', []), 'affected_channels': list(CHANNELS),
-                      'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': len(self.resources.queue),
+                      'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': queued,
                       'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
                       'build_ms': (perf_counter() - started) * 1000,
                       'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
@@ -2282,7 +2540,7 @@ class Graph(Math):
         metrics.count('shader_graph_builds')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
-        return self
+        self._adopted = []
 
     def rehydrate(self):
         """Adopt the material's persisted graph after undo/redo instead of rebuilding.
@@ -2322,6 +2580,8 @@ class Graph(Math):
                 (unit.inputs if item.in_out == 'INPUT' else unit.outputs)[item.name] = item.socket_type
             unit.flags = json.loads(unit.tree.get('op_flags', '{}'))
             unit.exports = {name: tuple(value) for name, value in json.loads(unit.tree.get('op_exports', '{}')).items()}
+            unit.const_imports = [(tuple(key), name, value)
+                                  for key, name, value in json.loads(unit.tree.get('op_const_imports', '[]'))]
             units[unit.key] = unit
             by_instance[node.as_pointer()] = unit
         self.units = units
@@ -2354,7 +2614,7 @@ class Graph(Math):
         self._reverse_map()
         self._structure = self.structural_signature()
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
-        self.resources.used = {b.node.image.get(RESOURCE) for b in self.resource_bindings if b.node.image}
+        self.resources.used = self._used_resources()
         for binding in self.cache_bindings:
             self._reconcile_cache(binding)
         from .references import warnings
@@ -2407,7 +2667,9 @@ class Graph(Math):
                     layer = self._layer(layer_id)
                     if layer is None or self._cache_row(layer, channel) is None:
                         return False
-                    self._layer_cache(layer, channel, rehydrate=node)
+                    # The binding's identifier is the mix role the reverse map propagates.
+                    with self.role(node.get('op_dependency') or self._role):
+                        self._layer_cache(layer, channel, rehydrate=node)
             for owner_key in json.loads(unit.tree.get('op_effects', '[]')):
                 effect = self._resolve(owner_key)
                 if effect is None:
@@ -2446,7 +2708,7 @@ class Graph(Math):
         if site == 'mask_prefix':
             masks = list(layer.masks)
             stop = next(i + 1 for i, m in enumerate(masks) if m.id == args[1])
-            prefix = [m for m in masks[:stop] if self._mask_active(m, args[2])]
+            prefix = self._run_prefix(masks, stop, args[2])
             return self._mask_prefix(layer, prefix, args[2], rehydrate=node) is not None
         return False
 
@@ -2587,6 +2849,10 @@ class Graph(Math):
             scope = self.rebuild_scope()
             if scope is not None:
                 raise RebuildRequired('Shader graph topology changed', scope)
+        elif self._plan is not None:
+            # A collection add() may have moved the layer structs since the last
+            # plan; the numeric path reads them without re-planning.
+            self._plan.layers = {l.id: l for l in self.ts.layers}
         if resources:
             self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None
@@ -2605,19 +2871,17 @@ class Graph(Math):
         for binding in self.resource_bindings:
             if not resources:
                 break
-            if pointer is not None and pointer not in binding.owners:
+            # Purge Unused Data may have taken the in-flight placeholder: its source
+            # is requested again whichever owner this update was narrowed to.
+            removed = self._placeholder_removed(binding)
+            if pointer is not None and pointer not in binding.owners and not removed:
                 continue
             signature = binding.identity()
             if signature != binding.signature:
-                before = len(self.resources.queue)
-                image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
-                                               owner=binding.layer_id)
-                if image.get('op_shader_resource_ready'):
-                    binding.node.image, binding.pending_image = image, None
-                else:
-                    binding.pending_image = image
-                queued += len(self.resources.queue) - before
-                binding.signature = signature
+                queued += self._request(binding, signature)
+                if binding.owner_factory is not None:
+                    # New inputs (an added effect or mask) must reach the owner filter.
+                    binding.owners = {o.as_pointer() for o in binding.owner_factory()}
                 invalidated.add(binding.identifier)
         for index, (p, identifier, getter, node, previous) in enumerate(self.image_bindings):
             if pointer is not None and p != pointer:
@@ -2636,11 +2900,15 @@ class Graph(Math):
             signature = binding.identity()
             if signature != binding.signature or binding.stale:
                 # A publication does not change the identity; it clears staleness.
+                if signature != binding.signature:
+                    if binding.owner_factory is not None:
+                        binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+                    # The export re-rasters this content whether or not a refresh is requested.
+                    invalidated.add(binding.identifier)
                 binding.signature = signature
                 cache_requests += self._reconcile_cache(binding)
         if resources:
-            self.resources.used = {(b.pending_image or b.node.image).get(RESOURCE)
-                                   for b in self.resource_bindings if b.pending_image or b.node.image}
+            self.resources.used = self._used_resources()
         pending = list(invalidated)
         while pending:
             for downstream in self.reverse.get(pending.pop(), ()):
@@ -2665,7 +2933,51 @@ class Graph(Math):
     def pending_resources(self):
         return self.resources.pending
 
+    def _request(self, binding, signature):
+        """Bind the cached image for ``signature``, or keep its placeholder pending.
+        Returns how many rasters this queued."""
+        before = len(self.resources.queue)
+        image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
+                                       owner=binding.layer_id)
+        if image.get('op_shader_resource_ready'):
+            binding.node.image, binding.pending_image = image, None
+        else:
+            binding.pending_image = image
+        binding.signature = signature
+        return len(self.resources.queue) - before
+
+    @staticmethod
+    def _placeholder_removed(binding):
+        """A held placeholder Blender has since removed is forgotten, and the
+        binding's signature reset so its source is requested again."""
+        if binding.pending_image is None or alive(binding.pending_image):
+            return False
+        binding.pending_image, binding.signature = None, None
+        return True
+
+    def _used_resources(self):
+        keys = set()
+        for binding in self.resource_bindings:
+            self._placeholder_removed(binding)
+            image = binding.pending_image or binding.node.image
+            if image:
+                keys.add(image.get(RESOURCE))
+        return keys
+
+    def resource_error(self):
+        """The failure of an isolated input this graph still shows a placeholder for.
+
+        A raster that raised keeps its key bound (the identity did not change),
+        so the error must outlive the edit that reported it: the session stays
+        failed until Retry rebuilds or an edit re-identifies the input.
+        """
+        return next((entry.error for key, entry in self.resources.entries.items()
+                     if entry.error and key in self.resources.used), '')
+
     def step_resources(self, budget=.006):
+        for binding in self.resource_bindings:
+            if self._placeholder_removed(binding):
+                self._request(binding, binding.identity())
         result = self.resources.step(budget)
         for binding in self.resource_bindings:
             if binding.pending_image and binding.pending_image.get('op_shader_resource_ready'):
@@ -2682,11 +2994,14 @@ class Graph(Math):
                 self.material.node_tree.nodes.remove(self.instance)
             if self.tree and not self.tree.users:
                 bpy.data.node_groups.remove(self.tree)
-            for unit in self.units.values():
-                if unit.tree and not unit.tree.users:
-                    bpy.data.node_groups.remove(unit.tree)
         except (ReferenceError, RuntimeError):
             pass
+        for unit in self.units.values():
+            try:
+                if unit.tree and not unit.tree.users:
+                    bpy.data.node_groups.remove(unit.tree)
+            except (ReferenceError, RuntimeError):
+                pass
         self.resources.close()
 
     def detach(self):

@@ -35,6 +35,11 @@ def mesh_masks(ts):
     return [m for l in ts.layers for m in l.masks if m.source == 'MESH' and m.enabled]
 
 
+def graph_masks(ts):
+    """Custom Graph masks (0.9.3): the CPU reference bakes the group over the assigned meshes."""
+    return [m for l in ts.layers for m in l.masks if m.source == 'GRAPH' and m.enabled and m.node_group]
+
+
 def uses_surface_effects(ts):
     """Surface-space (seam-aware) effects read the mesh through the seam map (0.9.4)."""
     from .operation_contracts import surface
@@ -48,12 +53,23 @@ def uses_surface_effects(ts):
     return False
 
 
+def uses_placement(ts):
+    """Consumers that read where the assigned objects stand: triplanar projection, strokes
+    and decals (authored in world space), live scene fields, normal-direction mesh masks,
+    custom graphs with a Position or Normal input. Physical sizes, seam maps, edge rebakes
+    and the other mesh masks and graphs see the surface alone."""
+    from ..painting import decals
+    from .custom_graph import reads_placement
+    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
+        or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts)) \
+        or any(m.mesh.kind == 'NORMAL_DIRECTION' for m in mesh_masks(ts)) \
+        or any(reads_placement(m.node_group) for m in graph_masks(ts))
+
+
 def uses_geometry(ts):
     from . import physical
-    from ..painting import decals
-    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
-        or bool(live_fields(ts)) or bool(ts.bake.auto_edge_rebake) or uses_strokes(ts) or bool(mesh_masks(ts)) \
-        or uses_surface_effects(ts) or physical.uses(ts) or bool(decals.layers_of(ts))
+    return uses_placement(ts) or bool(ts.bake.auto_edge_rebake) or bool(mesh_masks(ts)) \
+        or bool(graph_masks(ts)) or uses_surface_effects(ts) or physical.uses(ts)
 
 
 @measured('geometry_signature')
@@ -84,8 +100,117 @@ def mesh_signature(mesh):
 
 
 def mesh_epoch(mesh):
-    """How many geometry updates Blender reported for the mesh this session (0 before the first)."""
+    """A session-unique stamp of the mesh's last reported geometry update (0 before the first).
+    Stamps are drawn from the scene-wide update counter, which no undo or redo resets, so a
+    redo never lands on the value an undo's update carried."""
     return _mesh_epochs.get(mesh.as_pointer(), 0)
+
+
+_layer_digests = {}   # (mesh pointer, layer name) -> (mesh epoch, digest)
+
+# Attributes Subdivision and Bevel read besides positions and topology.
+_CREASE_LAYERS = ('crease_edge', 'crease_vert', 'bevel_weight_edge', 'bevel_weight_vert')
+
+
+def _layer_digest(obj, name, weights):
+    """Digest of one deform layer (vertex-group weights) or crease attribute of the mesh,
+    recomputed only after a reported geometry update; None when the mesh lacks it."""
+    mesh = obj.data
+    key = (mesh.as_pointer(), name)
+    epoch = _mesh_epochs.get(mesh.as_pointer(), 0)
+    cached = _layer_digests.get(key)
+    if cached is not None and cached[0] == epoch:
+        return cached[1]
+    digest = None
+    if weights:
+        group = obj.vertex_groups.get(name)
+        if group is not None:
+            values = np.zeros(len(mesh.vertices), np.float32)
+            for vertex in mesh.vertices:
+                for entry in vertex.groups:
+                    if entry.group == group.index:
+                        values[vertex.index] = entry.weight
+                        break
+            digest = hashlib.sha256(values.tobytes()).hexdigest()[:16]
+    else:
+        attribute = mesh.attributes.get(name)
+        if attribute is not None and attribute.data_type == 'FLOAT':
+            values = np.empty(len(attribute.data), np.float32)
+            attribute.data.foreach_get('value', values)
+            digest = hashlib.sha256(values.tobytes()).hexdigest()[:16]
+    _layer_digests[key] = (epoch, digest)
+    return digest
+
+
+def mesh_inputs(obj):
+    """Mesh data the evaluated surface reads beyond positions, topology and UVs: shape-key
+    values, the vertex groups its modifiers name, creases and bevel weights under a
+    Subdivision or Bevel modifier. Empty for a plain mesh, so its records keep their form."""
+    result = []
+    keys = getattr(obj.data, 'shape_keys', None)
+    if keys is not None:
+        result.append(('shape_keys', tuple((block.name, round(float(block.value), 6), block.mute)
+                                           for block in keys.key_blocks)))
+    if obj.type != 'MESH':
+        return tuple(result)
+    groups, layers = set(), set()
+    for modifier in obj.modifiers:
+        for prop in modifier.bl_rna.properties:
+            if prop.type == 'STRING' and not prop.is_readonly:
+                name = getattr(modifier, prop.identifier, '')
+                if name and name in obj.vertex_groups:
+                    groups.add(name)
+        if modifier.type in {'SUBSURF', 'BEVEL'}:
+            layers.update(_CREASE_LAYERS)
+    for name in sorted(groups):
+        result.append(('vertex_group', name, _layer_digest(obj, name, weights=True)))
+    for name in sorted(layers):
+        digest = _layer_digest(obj, name, weights=False)
+        if digest is not None:
+            result.append(('attribute', name, digest))
+    return tuple(result)
+
+
+def _plain(value, ids):
+    if isinstance(value, bpy.types.ID):
+        return ids(value)
+    if isinstance(value, dict):
+        return tuple((key, _plain(item, ids)) for key, item in sorted(value.items()))
+    if isinstance(value, (list, tuple)):
+        return tuple(_plain(item, ids) for item in value)
+    return value
+
+
+def node_inputs(modifier, ids):
+    """A Geometry Nodes modifier's group inputs, sorted by socket. Blender 5.2 keeps them
+    under ``properties.inputs`` (the modifier itself carries no ID properties); ``ids``
+    names the datablocks object, collection and image sockets point to."""
+    inputs = getattr(getattr(modifier, 'properties', None), 'inputs', None)
+    if inputs is None:
+        return ()
+    entries = []
+    for socket in inputs.keys():
+        if socket == '_RNA_UI':
+            continue
+        try:
+            fields = inputs[socket].to_dict()
+        except (AttributeError, TypeError):
+            continue
+        entries.append((socket, _plain(fields, ids)))
+    return tuple(sorted(entries))
+
+
+def dependency_key(owner, value, ids=datablock_key):
+    """A modifier's referenced datablock. An object the modifier reads (a Boolean cutter, a
+    Shrinkwrap target, a lattice, a Geometry Nodes object input) contributes its placement
+    relative to the owner and its mesh, so moving or editing it re-keys the evaluated
+    geometry while moving the assembly as a whole does not."""
+    key = ids(value)
+    if not isinstance(value, bpy.types.Object):
+        return key
+    relative = owner.matrix_world.inverted_safe() @ value.matrix_world
+    return (key, tuple(round(float(v), 6) + 0.0 for row in relative for v in row),
+            mesh_signature(value.data) if value.type == 'MESH' else None)
 
 
 def modifier_signature(obj):
@@ -102,24 +227,37 @@ def modifier_signature(obj):
                     value = tuple(sorted(value))   # enum flags: unordered and unhashable otherwise
                 values.append((prop.identifier, tuple(value) if getattr(prop, "is_array", False) else value))
             elif prop.type == 'POINTER':
-                values.append((prop.identifier, value.as_pointer() if value else None))
+                # Name-based under stable_keys: a persisted cache provenance
+                # must not carry another session's datablock address.
+                values.append((prop.identifier, dependency_key(obj, value)))
+        if modifier.type == 'NODES':
+            values.append(('inputs', node_inputs(modifier, lambda value: dependency_key(obj, value))))
         result.append((modifier.type, tuple(values)))
     return tuple(result)
+
+
+def placement_key(obj, full):
+    """The object's world matrix, or only its world sizes (scale and mirroring) when nothing
+    on the set reads where it stands: a drag then leaves every key alone."""
+    matrix = obj.matrix_world
+    if full:
+        return tuple(v for row in matrix for v in row)
+    return (tuple(round(float(v), 6) for v in matrix.to_scale()), matrix.to_3x3().determinant() < 0)
 
 
 def geometry_key(scene, ts):
     if not uses_geometry(ts):
         return None
     objects = []
+    placed = uses_placement(ts)
     for ref in ts.assignments:
         obj = ref.object
         if obj is None or obj.type != 'MESH':
             objects.append((None, ref.slot_index))
             continue
         mesh = obj.data
-        objects.append((datablock_key(obj), datablock_key(mesh), ref.slot_index,
-                        tuple(v for row in obj.matrix_world for v in row),
-                        mesh_signature(mesh), modifier_signature(obj)))
+        objects.append((datablock_key(obj), datablock_key(mesh), ref.slot_index, placement_key(obj, placed),
+                        mesh_signature(mesh), modifier_signature(obj), mesh_inputs(obj)))
     from ..geometry.influencers import signature
     fields = tuple(signature(ts, m.influence) for m in live_fields(ts))
     from .mesh_masks import signature as mesh_mask_signature
@@ -146,7 +284,7 @@ def on_depsgraph(scene, depsgraph):
         item = update.id.original
         if isinstance(item, bpy.types.Mesh) and update.is_updated_geometry:
             pointer = item.as_pointer()
-            _mesh_epochs[pointer] = _mesh_epochs.get(pointer, 0)+1
+            _mesh_epochs[pointer] = _epoch+1   # unique for the session: ``clear`` empties the map, never the counter
             relevant = True
         elif isinstance(item, bpy.types.Object) and (update.is_updated_geometry or update.is_updated_transform):
             relevant = True
@@ -193,6 +331,7 @@ def refresh(scene):
     decals.adopt_duplicates(scene)
     for ts in scene.open_painter.texture_sets:
         refresh_names(ts)
+        decals.show_images(ts)   # the picture's aspect is part of the frame (0.9.7): swap it before keying
         key = key_for(scene, ts)
         if key in _known and uses_geometry(ts):
             current = geometry_key(scene, ts)
@@ -220,9 +359,6 @@ def refresh(scene):
                 for layer in decals.layers_of(ts):
                     notify(layer, structural=False)
                 continue
-            if current[5:] != previous[5:]:
-                invalidate(ts)   # a mesh mask's membership, selection or attribute changed
-                continue
             targets_changed = current[:4] != previous[:4]
             if targets_changed and field_jobs.active() and ts.bake.auto_edge_rebake and _mesh_edited(previous[3], current[3]):
                 from ..baking.bake_manager import owned_curvature
@@ -231,8 +367,12 @@ def refresh(scene):
             if not field_jobs.active():
                 invalidate(ts)   # synchronous analysis re-runs inside the next evaluation
                 continue
-            if targets_changed and (any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
-                                    or not live_fields(ts)):
+            # A mesh mask's membership, selection, attribute or mesh changed (its
+            # signature carries the mesh, so an edit re-rasters it without
+            # skipping the edge rebake and live-field requests above and below).
+            if current[5:] != previous[5:] or (targets_changed and (
+                    any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
+                    or graph_masks(ts) or not live_fields(ts))):
                 invalidate(ts)
             # Live fields never block: request their analyses; publication invalidates.
             from ..generators.scene_fields import signature as field_signature
@@ -245,8 +385,8 @@ def refresh(scene):
 
 
 def _decal_shapes(frames):
-    """The compiled part of decal signatures: object name, display size, image offset."""
-    return tuple((frame[0], frame[2], frame[3]) if frame else None for frame in frames)
+    """The compiled part of decal signatures: object name, display size, image offset and aspect."""
+    return tuple((frame[0], frame[2], frame[3], frame[7]) if frame else None for frame in frames)
 
 
 def _mesh_edited(previous, current):
@@ -317,13 +457,21 @@ def image_written(image):
 
 
 def clear():
-    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _known.clear(); _candidates.clear()
+    from . import mesh_masks
+    from ..painting import decals
+    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _candidates.clear()
+    mesh_masks.clear()   # its digests are tagged with the epochs
+    decals.forget()      # which Empties this session's layers held: another file's layers start over
 
 
 def prune(live):
+    from . import mesh_masks
     for key in set(_known)-set(live):
         _known.pop(key, None)
     meshes = {m.as_pointer() for m in bpy.data.meshes}
     for values in (_mesh_epochs, _mesh_fingerprints):
         for key in set(values)-meshes:
             values.pop(key, None)
+    for key in [k for k in _layer_digests if k[0] not in meshes]:
+        _layer_digests.pop(key, None)
+    mesh_masks.prune(meshes)

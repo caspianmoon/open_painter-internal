@@ -23,6 +23,8 @@ VOLATILE = frozenset({'dirty', 'order', 'active_mask', 'active_effect', 'expande
                       'module_instance', 'module_name', 'module_detached', 'layer_id',
                       'bypass', 'cache_mode', 'cache'})
 BASE_TEXT_PREFIX = 'OP Module Base · '
+DIRECTOR_PREFIX = 'md.'   # Material Director ids (authoring.commands.allocate) are plain, dot and all
+ASSET_HASH = 'open_painter_asset_hash'   # on decoded module images: sha256 of the EXR bytes
 
 
 def owned_ids(layers):
@@ -40,15 +42,21 @@ def owned_ids(layers):
     return found
 
 
-def namespace_mapping(layers, token):
+def namespaced(identifier):
+    """Whether an id already carries an instance token (a nested module instance's)."""
+    return '.' in identifier and not identifier.startswith(DIRECTOR_PREFIX)
+
+
+def namespace_mapping(layers, token, keep=()):
     """{own id: instance id} for every owned id (derived anchor ids included).
 
-    Ids that already carry a namespace (a nested module instance's) are left alone.
+    Ids that already carry a namespace (a nested module instance's) and ids in
+    ``keep`` (added inside the instance by the artist) are left alone.
     """
     if not token:
         return {}
     return derived_mapping({identifier: f'{token}.{identifier}' for identifier in owned_ids(layers)
-                            if '.' not in identifier})
+                            if not namespaced(identifier) and identifier not in keep})
 
 
 def denamespace_mapping(layers, token):
@@ -82,7 +90,7 @@ def remap(layers, mapping):
         for item in layer.get('masks', []):
             mask = dict(item)
             mask['id'] = value(mask.get('id', ''))
-            for field in ('reference_layer', 'reference_mask', 'reference_anchor',
+            for field in ('parent_id', 'reference_layer', 'reference_mask', 'reference_anchor',
                           'detail_height_anchor', 'detail_normal_anchor'):
                 if mask.get(field):
                     mask[field] = value(mask[field])
@@ -117,10 +125,14 @@ PAINT_MARKER = {'__paint__': True}
 
 
 def comparable(layers):
-    """Layer dicts stripped of UI state, with images as names, for three-way merging.
+    """Layer dicts stripped of UI state, with datablocks as markers, for three-way merging.
 
-    Painted images (paint masks, paint layer channels) are replaced by a marker:
-    pixels are always the instance's own and never merge (see ``_keep_paint``).
+    Images decoded from a module document compare by content hash, so an asset
+    the new version left alone equals the base whatever its datablock is named;
+    other datablocks (images, decal Empties, mesh selector and influencer
+    pointers, node groups) compare by name. Painted images (paint masks, paint
+    layer channels) are replaced by a marker: pixels are always the instance's
+    own and never merge (see ``_keep_paint``).
     """
     def clean(value):
         if isinstance(value, dict):
@@ -129,8 +141,12 @@ def comparable(layers):
             return [clean(item) for item in value]
         if isinstance(value, tuple):
             return list(value)
-        if hasattr(value, 'bl_rna') and value.__class__.__name__ == 'Image':
-            return {'__image__': value.name}
+        if hasattr(value, 'bl_rna') and hasattr(value, 'id_type'):
+            if value.id_type == 'IMAGE':
+                if value.get(ASSET_HASH):
+                    return {'__asset__': value[ASSET_HASH], 'colorspace': value.colorspace_settings.name}
+                return {'__image__': value.name}
+            return {'__datablock__': value.id_type, 'name': value.name}
         return value
     result = [clean(layer) for layer in layers]
     for layer in result:
@@ -144,14 +160,33 @@ def comparable(layers):
     return result
 
 
+POOLS = {'IMAGE': 'images', 'OBJECT': 'objects', 'COLLECTION': 'collections', 'MATERIAL': 'materials',
+         'NODETREE': 'node_groups'}
+
+
+def asset_image(digest, colorspace):
+    """A packed image decoded from a module asset with these bytes and colorspace, if any."""
+    import bpy
+    for image in bpy.data.images:
+        if image.get(ASSET_HASH) == digest and image.colorspace_settings.name == colorspace \
+                and image.packed_file is not None:
+            return image
+    return None
+
+
 def resolve_images(layers):
-    """Turn ``{'__image__': name}`` markers back into Image datablocks (missing → None)."""
+    """Turn ``comparable`` datablock markers back into datablocks (missing → None)."""
     import bpy
 
     def restore(value):
         if isinstance(value, dict):
             if set(value) == {'__image__'}:
                 return bpy.data.images.get(value['__image__'])
+            if set(value) == {'__asset__', 'colorspace'}:
+                return asset_image(value['__asset__'], value['colorspace'])
+            if set(value) == {'__datablock__', 'name'}:
+                pool = getattr(bpy.data, POOLS.get(value['__datablock__'], ''), None)
+                return pool.get(value['name']) if pool is not None else None
             return {key: restore(item) for key, item in value.items()}
         if isinstance(value, list):
             return [restore(item) for item in value]
@@ -261,11 +296,13 @@ def save_module(context, ts, root, path, name='', description=''):
     block = {'id': module_id, 'version': version, 'name': name or root.module_name or root.name,
              'description': description, 'created': datetime.now(timezone.utc).isoformat(timespec='seconds')}
     path = serializer.save(ts, path, root_id=root.id, module=block)
+    # The base first: a folder stamped with a version whose base is missing could
+    # never be updated, only replaced.
+    members = [_snapshot(layer) for layer in subtree(ts, root.id)]
+    write_base(module_id, version, comparable(remap(members, denamespace_mapping(members, root.module_instance))))
     root.module_id, root.module_version = module_id, version
     root.module_source, root.module_name = 'library:' + path.name, block['name']
     root.module_detached = False
-    members = [_snapshot(layer) for layer in subtree(ts, root.id)]
-    write_base(module_id, version, comparable(remap(members, denamespace_mapping(members, root.module_instance))))
     return path, block
 
 
@@ -286,6 +323,8 @@ def update(ts, root, path, replace=False):
     module = data.get('module')
     if module is None or module['id'] != root.module_id:
         raise ValueError('That document is not a version of this module.')
+    if not replace and read_base(root.module_id, root.module_version) is None:
+        raise ValueError(MISSING_BASE)   # before any asset is decoded into the file
     loaded = []
     with decode_assets(assets, loaded) as decode:
         parent_raw = [decode(layer) for layer in data['layers']]
@@ -339,36 +378,58 @@ def update_catalog(ts, root, replace=False):
                         parent_raw=parent_raw)
 
 
+MISSING_BASE = 'The base snapshot of this instance is missing; use Replace to discard local edits.'
+
+
 def apply_update(ts, root, parent, version, name, source, loaded, replace=False, parent_raw=()):
     """Three-way merge of base (the version the instance came from), ``parent``
     (the new definition, comparable form) and local (the instance as edited),
     applied transactionally: the subtree is replaced by the merged layers in
-    place; any failure restores it. Returns (version, conflicts)."""
-    import bpy
+    place; any failure restores it and drops the images decoded for the update.
+    Returns (version, conflicts)."""
+    try:
+        return _apply_update(ts, root, parent, version, name, source, loaded, replace, parent_raw)
+    except Exception:
+        _discard(loaded)
+        raise
+
+
+def _apply_update(ts, root, parent, version, name, source, loaded, replace, parent_raw):
     from ..core.layer_stack import invalidate, restore
     from ..evaluation.references import issues
     token = root.module_instance
+    if token and not root.id.startswith(token + '.'):
+        # The namespace round-trip below would rewrite every id and stamp nothing:
+        # a stamped folder whose ids are not under its token is a copy made
+        # before 0.9.7 (whole-set import, Duplicate) and cannot be merged.
+        raise ValueError('This folder is a copy whose ids are not namespaced; detach it or re-insert the module.')
     members = subtree(ts, root.id)
     local_raw = [_snapshot(layer) for layer in members]
     local_plain_raw = remap(local_raw, denamespace_mapping(local_raw, token))
     local = comparable(local_plain_raw)
     base = read_base(root.module_id, root.module_version)
     if base is None and not replace:
-        raise ValueError('The base snapshot of this instance is missing; use Replace to discard local edits.')
+        raise ValueError(MISSING_BASE)
     from copy import deepcopy
     if replace or base is None:
         merged, conflicts = deepcopy(parent), []
     else:
         merged, conflicts = merge(base, parent, local)
-    # Nested module instances keep their own identity across the outer update.
+    # Nested module instances keep their own identity across the outer update, and
+    # a layer's cache (preview-only state, not merged) stays as the artist set it.
     nested = {layer['id']: {key: layer[key] for key in layer if key.startswith('module_')}
               for layer in local_raw if layer.get('module_id') and layer['id'] != root.id}
+    cached = {layer['id']: {'cache_mode': layer['cache_mode'], 'cache': layer['cache']}
+              for layer in local_raw if layer.get('cache_mode', 'LIVE') != 'LIVE'}
     plain_root = plain_id(root.id, token)
     _keep_paint(merged, [] if replace else local_plain_raw, parent_raw)
     for layer in merged:
         if layer['id'] == plain_root:
             layer['parent_id'] = root.parent_id
-    mapping = namespace_mapping(merged, token)
+    # Ids the artist added inside the instance are not the module's: they keep
+    # their plain ids so references from outside the instance still find them.
+    local_ids = {identifier for identifier in owned_ids(local_raw) if not namespaced(identifier)}
+    mapping = namespace_mapping(merged, token, keep=local_ids)
     mapping.pop(root.parent_id, None)
     instance = remap(merged, mapping)
     instance = resolve_images(instance)
@@ -385,10 +446,12 @@ def apply_update(ts, root, parent, version, name, source, loaded, replace=False,
         added = []
         for values in instance:
             layer = ts.layers.add()
-            values = dict(values)
+            values = dict(values, **cached.get(values['id'], {}))
             for key in ('dirty', 'order'):
                 values.pop(key, None)
-            restore(values, layer)
+            # Merged dicts come in set order: restore in RNA order so a pointer's
+            # update callback runs before the name mirroring it is restored.
+            restore(_rna_ordered(values, layer.bl_rna), layer)
             for key, value in (stamp if layer.id == root_id else nested.get(layer.id, {})).items():
                 setattr(layer, key, value)
             _ensure_channels(layer)
@@ -408,19 +471,86 @@ def apply_update(ts, root, parent, version, name, source, loaded, replace=False,
             layer = ts.layers.add()
             restore(values, layer)
             ts.layers.move(len(ts.layers) - 1, min(index, len(ts.layers) - 1))
-        for image in loaded:
-            bpy.data.images.remove(image)
         ts.active_layer = saved_active
         invalidate(ts)
         raise
     used = {image.name for layer in instance for image in _images(layer)}
-    for image in loaded:
-        if image.name not in used:
-            bpy.data.images.remove(image)
+    _discard([image for image in loaded if image.name not in used])
     write_base(stamp['module_id'], version, parent)
-    ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == root_id)
+    _release(saved, {layer['id'] for layer in instance})
+    ts.active_layer = next((i for i, item in enumerate(ts.layers) if item.id == root_id),
+                           min(saved_active, len(ts.layers) - 1))
     invalidate(ts)
     return version, conflicts
+
+
+def _discard(images):
+    import bpy
+    for image in images:
+        try:
+            bpy.data.images.remove(image)
+        except ReferenceError:
+            pass   # already gone
+
+
+def _rna_ordered(values, rna):
+    """``values`` with keys in RNA declaration order, nested property groups included."""
+    result = {}
+    for prop in rna.properties:
+        key = prop.identifier
+        if key not in values:
+            continue
+        value = values[key]
+        if prop.type == 'COLLECTION':
+            value = [_rna_ordered(item, prop.fixed_type) if isinstance(item, dict) else item for item in value]
+        elif prop.type == 'POINTER' and isinstance(value, dict):
+            value = _rna_ordered(value, prop.fixed_type)
+        result[key] = value
+    for key in values:
+        result.setdefault(key, values[key])
+    return result
+
+
+def _release(saved, kept_ids):
+    """After the subtree was replaced: drop what only the old layers held.
+
+    Cache images and images the add-on made for those layers (decoded assets a
+    new version superseded, painted images Replace discarded) go unless a layer,
+    output or baked map anywhere still shows them; decal Empties of layers the
+    merge removed go the way ``layer_stack.remove`` releases them.
+    """
+    import bpy
+    from ..constants import OWNER
+    from ..evaluation.layer_cache import TAG
+    from ..painting.decals import MARKER
+    referenced, decal_users = set(), set()
+    for scene in bpy.data.scenes:
+        project = getattr(scene, 'open_painter', None)
+        if project is None:
+            continue
+        for ts in project.texture_sets:
+            for layer in ts.layers:
+                referenced.update(image.as_pointer() for image in _images(_snapshot(layer)))
+                if getattr(layer, 'decal_object', None) is not None:
+                    decal_users.add(layer.decal_object.as_pointer())
+            referenced.update(row.image.as_pointer() for row in (*ts.outputs, *ts.baked_maps) if row.image is not None)
+    doomed = {}
+    for _, values in saved:
+        for image in _images(values):
+            try:
+                if image.as_pointer() not in referenced and (image.get(OWNER) or image.get(TAG)):
+                    doomed[image.as_pointer()] = image
+            except ReferenceError:
+                continue
+        obj = values.get('decal_object')
+        if values['id'] not in kept_ids and obj is not None and obj.get(MARKER) == values['id'] \
+                and obj.as_pointer() not in decal_users:
+            bpy.data.objects.remove(obj)
+    for image in doomed.values():
+        try:
+            bpy.data.images.remove(image)
+        except (ReferenceError, RuntimeError):
+            pass
 
 
 def _keep_paint(merged, local_raw, parent_raw):

@@ -165,6 +165,44 @@ with patch.object(projection, 'geometry', wraps=projection.geometry) as geometry
     finish(Builder(scene, ts, cache, device).channel('ROUGHNESS'))
 assert geometry.call_count == 0 and device.uploads == uploads
 
+# A Surface-space channel effect pads each island across seams, so its leaf
+# follows the effect's space and direction and the mesh it pads across; a
+# UV-space effect keeps its leaf through a re-unwrap (0.9.7).
+from open_painter.evaluation import dependencies
+prop.projection = 'UV'
+seam_effect = prop.effects.add()
+seam_effect.kind, seam_effect.radius, seam_effect.space = 'GAUSSIAN_BLUR', 4, 'SURFACE'
+surface_signature = pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS')
+seam_effect.space = 'UV'
+uv_signature = pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS')
+assert uv_signature != surface_signature, 'a Space toggle reused the old filtered leaf'
+seam_effect.space = 'SURFACE'
+assert pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS') == surface_signature
+seam_effect.kind, seam_effect.direction = 'DIRECTIONAL_BLUR', (0., 0., -1.)
+down_signature = pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS')
+seam_effect.direction = (1., 0., 0.)
+assert pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS') != down_signature, \
+    'a Direction edit reused the old directional leaf'
+seam_effect.kind = 'GAUSSIAN_BLUR'
+seam_effect.space = 'UV'
+uv_signature = pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS')
+seam_effect.space = 'SURFACE'
+padded_signature = pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS')
+mesh = scene.objects['Cube'].data
+for loop in mesh.uv_layers.active.data:
+    loop.uv = (loop.uv.x * .9 + .05, loop.uv.y * .9 + .05)
+mesh.update()
+dependencies._mesh_epochs[mesh.as_pointer()] = dependencies.mesh_epoch(mesh) + 1
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+assert pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS') != padded_signature, \
+    'a re-unwrap reused the padding of the old UV layout'
+seam_effect.space = 'UV'
+assert pure_signature(Builder(scene, ts, cache, device), 'ROUGHNESS') == uv_signature, \
+    'a re-unwrap regenerated a UV-space filtered leaf'
+prop.effects.clear()
+prop.projection = 'TRIPLANAR'
+
 # Duplicate scene UUIDs remain independent cache owners.
 other_scene = scene.copy()
 other = other_scene.open_painter.texture_sets[0]
@@ -253,7 +291,7 @@ except RuntimeError as error:
     assert str(error) == 'Injected live leaf upload failure'
 else:
     raise AssertionError('An upload failure was swallowed')
-assert not failure_cache.values and builder.resources.required_geometry is None
+assert not failure_cache.values and not builder.resources.required
 finish(Builder(scene, ts, failure_cache, device).channel('ROUGHNESS'))
 assert failure_cache.values
 

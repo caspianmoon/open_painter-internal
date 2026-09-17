@@ -1,5 +1,9 @@
 """Mesh-aware mask selectors (0.9.2): Blender's own scene structure as mask input."""
+import math
+
 import bpy
+
+from ..core.layer_stack import replaying
 
 KINDS = [
     ('OBJECT', 'Object', 'Faces of one assigned object'),
@@ -16,7 +20,7 @@ KINDS = [
 
 def changed(self, context):
     project = getattr(self.id_data, 'open_painter', None)
-    if not project:
+    if not project or replaying():
         return
     for ts in project.texture_sets:
         if any(m.mesh.as_pointer() == self.as_pointer() for layer in ts.layers for m in layer.masks):
@@ -42,7 +46,7 @@ def _pointer_changed(name):
 
 def numeric(self, context):
     project = getattr(self.id_data, 'open_painter', None)
-    if not project:
+    if not project or replaying():
         return
     for ts in project.texture_sets:
         if any(m.mesh.as_pointer() == self.as_pointer() for layer in ts.layers for m in layer.masks):
@@ -68,10 +72,11 @@ class OP_MeshSelector(bpy.types.PropertyGroup):
     island: bpy.props.IntProperty(name='Island', default=-1, min=-1, update=changed,
         description='UV island index on the object (-1: the islands of the selected faces)')
     direction: bpy.props.FloatVectorProperty(name='Direction', default=(0., 0., 1.), subtype='DIRECTION', update=changed)
-    angle: bpy.props.FloatProperty(name='Angle', default=45., min=0., max=180., subtype='ANGLE', unit='ROTATION',
-        update=changed, description='Faces within this angle of the direction are fully covered')
-    softness: bpy.props.FloatProperty(name='Softness', default=15., min=0., max=90., subtype='ANGLE', unit='ROTATION',
-        update=changed, description='Angle over which coverage fades to zero past the angle')
+    # ANGLE properties store radians; the UI shows degrees.
+    angle: bpy.props.FloatProperty(name='Angle', default=math.radians(45.), min=0., max=math.pi, subtype='ANGLE',
+        unit='ROTATION', update=changed, description='Faces within this angle of the direction are fully covered')
+    softness: bpy.props.FloatProperty(name='Softness', default=math.radians(15.), min=0., max=math.pi / 2, subtype='ANGLE',
+        unit='ROTATION', update=changed, description='Angle over which coverage fades to zero past the angle')
     include_children: bpy.props.BoolProperty(name='Include Child Collections', default=True, update=changed)
 
     def resolve(self, name):

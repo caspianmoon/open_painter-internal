@@ -77,8 +77,9 @@ def edge_turning(target, exclude_angle=None):
         return empty, np.zeros(npf), np.zeros(nl, np.int64), np.zeros(0, np.int64), 0
     local_normals = np.empty(npf * 3, np.float32)
     mesh.polygons.foreach_get('normal', local_normals)
-    world = np.asarray(target['object'].matrix_world, np.float64)
-    fn = _unit(local_normals.reshape(-1, 3).astype(np.float64) @ np.linalg.inv(world[:3, :3]))
+    # inverted_safe, as face_turning: a zero-scaled axis is a singular matrix.
+    normal_matrix = np.asarray(target['object'].matrix_world.to_3x3().inverted_safe().transposed(), np.float64)
+    fn = _unit(local_normals.reshape(-1, 3).astype(np.float64) @ normal_matrix.T)
     lt = np.empty(npf, np.int64); mesh.polygons.foreach_get('loop_total', lt)
     ev = np.empty(ne * 2, np.int64); mesh.edges.foreach_get('vertices', ev); ev = ev.reshape(-1, 2)
     le = np.empty(nl, np.int64); mesh.loops.foreach_get('edge_index', le)

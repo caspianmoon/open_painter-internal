@@ -168,6 +168,29 @@ def run():
     with bpy.data.libraries.load(str(essentials)) as (available, _loaded):
         assert all(entry[2] in available.brushes for entry in native.assets.BRUSHES), available.brushes
 
+    # A brush picked from the shelf paints the mask selected in the layer row;
+    # on a fill layer that is the only paintable target, and the selection
+    # survives the brush and alpha clicks that follow.
+    ui = native.state.get(bpy.context.area)
+    ui.mask_selected = True
+    assert bpy.ops.open_painter.mask(action="ADD", source="PAINT") == {"FINISHED"}
+    painted_mask = layer.masks[layer.active_mask]
+    assert painted_mask.source == "PAINT"
+    apply("BRUSH:Paint Soft")
+    assert project.paint_image == painted_mask.image and project.paint_mask, (
+        project.paint_image, project.paint_mask)
+    assert ui.mask_selected, "Picking a brush deselected the mask"
+    apply("ALPHA:Library alpha")
+    assert ui.mask_selected and project.paint_mask
+    bpy.ops.open_painter.paint(stop=True)
+    assert project.paint_image is None
+    # The overlay dock routes the same click through its own handler.
+    from open_painter.ui.dock import interaction
+    interaction.route(bpy.context, ui, "ASSET", native.assets.BRUSHES[1])
+    assert project.paint_image == painted_mask.image and project.paint_mask
+    assert ui.mask_selected, "The dock brush click deselected the mask"
+    bpy.ops.open_painter.paint(stop=True)
+
     native.state.get(bpy.context.area).mask_selected = False
     paint = stack.add(ts, "PAINT", "Brush target")
     project.paint_channel = "BASE_COLOR"

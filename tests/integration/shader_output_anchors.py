@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
-from open_painter.evaluation import anchors, cache, shader_preview
+from open_painter.evaluation import anchors, cache, layer_cache, shader_preview
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph
 from open_painter.utils.ids import new_id
@@ -141,11 +141,15 @@ def run():
     assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
     small = SampledSet(ts)
 
-    def parity(label, channels=('BASE_COLOR', 'ROUGHNESS')):
+    def parity(label, channels=('BASE_COLOR', 'ROUGHNESS'), cached=False):
         graph = Graph(scene, small, ts.material)
         graph.build()
         while graph.pending_resources:
             graph.step_resources(.1)
+        if cached:
+            layer_cache.flush(scene)
+            graph.update()   # adopt the published cache images
+            assert all(v == 'CURRENT' for v in graph.cache_states().values()), graph.cache_states()
         tree = ts.material.node_tree
         output = next(n for n in tree.nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
         emission = tree.nodes.new('ShaderNodeEmission')
@@ -163,13 +167,15 @@ def run():
             worst = max(worst, error)
             assert np.allclose(actual, expected, atol=3e-4), (label, channel, error)
             assert expected.std() > 1e-3, (label, channel, 'flat expectation proves nothing')
-        record = {'case': label, 'max_error': worst, 'units': len(graph.units), 'nodes': graph.node_count}
+        record = {'case': label, 'max_error': worst, 'units': len(graph.units), 'nodes': graph.node_count,
+                  'warnings': list(graph._warnings)}
         report['cases'].append(record)
         print('SHADER_OUTPUT_ANCHORS_PARITY', json.dumps(record), flush=True)
         tree.nodes.remove(bake_node)
         tree.nodes.remove(emission)
         graph.close()
         material_manager.repair(ts)
+        return record
 
     parity('composite_anchors')
     layer_by_id(ts, worn_id).visible = False
@@ -184,6 +190,40 @@ def run():
     layer_by_id(ts, folder_id).group_mode = 'PASSTHROUGH'
     parity('folder_switched_to_passthrough')
     layer_by_id(ts, folder_id).group_mode = 'ISOLATED'
+    # Soft coverage inside the isolated folder: the published Out (premultiplied in the
+    # chain) and a passthrough sub-folder's Group are read straight, like the CPU publishes.
+    stripes = next(m for m in layer_by_id(ts, scratches_id).masks)
+    stripes.procedural, stripes.noise_scale = 'RADIAL_GRADIENT', 1.5
+    parity('soft_isolated_output')
+    inner = stack.add(ts, 'FOLDER', 'Inner'); inner_id = inner.id
+    inner.parent_id, inner.group_mode, inner.publish_group = folder_id, 'PASSTHROUGH', True
+    speck = stack.add(ts, 'FILL', 'Speck'); speck_id = speck.id
+    speck.parent_id = inner_id
+    stack.channel_for(speck, 'BASE_COLOR').color = (.7, .1, .8, 1.)
+    stack.channel_for(speck, 'ROUGHNESS').value = .05
+    radial = speck.masks.add()
+    radial.id, radial.source, radial.procedural, radial.noise_scale = new_id(), 'PROCEDURAL', 'RADIAL_GRADIENT', 2.5
+    nested_mask = layer_by_id(ts, masked_id).masks.add()
+    nested_mask.id, nested_mask.source, nested_mask.operation = new_id(), 'REFERENCE', 'MAX'
+    nested_mask.reference_anchor, nested_mask.reference_channel = anchors.group_id(inner_id), 'ROUGHNESS'
+    parity('soft_passthrough_group_in_isolated')
+    # A folder whose channel is disabled still publishes what its children compose
+    # (its own composite and a descendant's output), as composite.Composer does.
+    for channel in ('BASE_COLOR', 'ROUGHNESS'):
+        stack.channel_for(layer_by_id(ts, folder_id), channel).enabled = False
+    parity('folder_channels_disabled_published')
+    for channel in ('BASE_COLOR', 'ROUGHNESS'):
+        stack.channel_for(layer_by_id(ts, folder_id), channel).enabled = True
+    stack.channel_for(layer_by_id(ts, wear_id), 'BASE_COLOR').enabled = False
+    parity('passthrough_channel_disabled_published')
+    stack.channel_for(layer_by_id(ts, wear_id), 'BASE_COLOR').enabled = True
+    # A cached folder samples its image, but anchors published inside it are read
+    # live (without a backdrop), and the limitation is reported.
+    layer_by_id(ts, folder_id).cache_mode = 'CACHED'
+    record = parity('cached_published_folder', cached=True)
+    assert any('cached folder' in w and 'without its backdrop' in w for w in record['warnings']), record['warnings']
+    layer_by_id(ts, folder_id).cache_mode = 'LIVE'
+    layer_cache.release_layer(layer_by_id(ts, folder_id))
 
     # Runtime: toggling a publish flag is a scoped rebuild; consumers follow producers.
     ts.preview_backend = 'LIVE'

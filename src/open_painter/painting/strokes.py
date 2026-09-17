@@ -22,6 +22,33 @@ def linked_layers(project, key):
             if getattr(layer, 'stroke_key', '') == key]
 
 
+def linked_masks(project, key):
+    """(texture set, layer, mask) triples of Vector Strokes masks rendering the key."""
+    if not key:
+        return []
+    return [(ts, layer, mask) for ts in project.texture_sets for layer in ts.layers for mask in layer.masks
+            if mask.source == 'STROKES' and mask.stroke_key == key]
+
+
+def rendered_keys(project):
+    """Every key some layer or Vector Strokes mask renders."""
+    return ({layer.stroke_key for ts in project.texture_sets for layer in ts.layers if layer.stroke_key}
+            | {mask.stroke_key for ts in project.texture_sets for layer in ts.layers for mask in layer.masks
+               if mask.source == 'STROKES' and mask.stroke_key})
+
+
+def _wake(project, key, created=()):
+    """A stroke change is numeric for the layers and masks rendering the key; a
+    newly linked layer is structural for its own set. A mask keyed on its own
+    (no layer owns the key) hears about the strokes only through itself."""
+    from ..properties.layer import changed, numeric
+    for owner_ts, item in linked_layers(project, key):
+        (changed if owner_ts in created else numeric)(item, None)
+    from ..properties.mask import numeric as mask_numeric
+    for _, _, mask in linked_masks(project, key):
+        mask_numeric(mask, None)
+
+
 def stroke_identity(project, key):
     """Repr-stable identity of a key's strokes, for cache keys and boundary identities."""
     return tuple((s.id, s.revision) for s in strokes_for(project, key))
@@ -32,9 +59,7 @@ def touch(project, stroke):
     stroke.revision += 1
     project.stroke_serial += 1
     enable_channels(project, stroke.layer_key)
-    from ..properties.layer import numeric
-    for ts, layer in linked_layers(project, stroke.layer_key):
-        numeric(layer, None)
+    _wake(project, stroke.layer_key)
 
 
 def channel_value(stroke, channel):
@@ -50,7 +75,8 @@ def stroke_channels(stroke):
 
 
 def _intersects(ts, lo, hi):
-    """Whether any assigned object's world bounds overlap the stroke bounds."""
+    """Whether any assigned object's world bounds overlap the stroke bounds: a cheap
+    pre-filter, not a hit test (a housing's bounds enclose every part inside it)."""
     for ref in ts.assignments:
         obj = ref.object
         if obj is None or obj.type != 'MESH':
@@ -67,10 +93,11 @@ def ensure_key(layer):
     return layer.stroke_key
 
 
-def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True):
-    """Store a gesture as a stroke of the layer's key; link paint layers in other sets it reaches."""
+def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key=''):
+    """Store a gesture as a stroke of the layer's key (or of ``key``: a Vector Strokes
+    mask's own key); link paint layers in other sets it reaches."""
     from ..core import layer_stack as stack
-    key = ensure_key(layer)
+    key = key or ensure_key(layer)
     samples = np.ascontiguousarray(samples, np.float32)
     stroke = project.strokes.add()
     stroke.id, stroke.name = new_id(), f'Stroke {len(project.strokes)}'
@@ -86,21 +113,22 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
     lo, hi = stroke_raster.bounds(samples)
     stroke.bounds_min, stroke.bounds_max = lo, hi
     created = []
-    if universal:
+    # A mask-only key has no paint layer to mirror into other sets.
+    if universal and key == layer.stroke_key:
         for other in project.texture_sets:
             if other.id == ts.id or any(item.stroke_key == key for item in other.layers):
                 continue
-            if _intersects(other, lo, hi):
+            # Link only sets the stroke marks: the disc may spill onto a neighbouring
+            # object the pointer never crossed, so the raster, not the ray hit, decides,
+            # and a set the bounds merely enclose must not gain a layer it re-rasters
+            # for nothing on every later edit of the key.
+            if _intersects(other, lo, hi) and stroke_raster.touches(other, stroke, int(other.resolution)):
                 linked = stack.add(other, 'PAINT', layer.name)
                 linked.stroke_key = key
                 created.append(other)
     project.stroke_serial += 1
     enable_channels(project, key)
-    from ..properties.layer import changed, numeric
-    for owner_ts, item in linked_layers(project, key):
-        # A new stroke is a numeric change for existing linked layers; a new
-        # linked layer is structural for its own set.
-        (changed if owner_ts in created else numeric)(item, None)
+    _wake(project, key, created)
     return stroke
 
 
@@ -122,15 +150,13 @@ def remove(project, stroke_id):
     key = project.strokes[index].layer_key
     project.strokes.remove(index)
     project.stroke_serial += 1
-    from ..properties.layer import numeric
-    for ts, layer in linked_layers(project, key):
-        numeric(layer, None)
+    _wake(project, key)
     return True
 
 
 def purge_orphans(project):
-    """Strokes whose key no layer renders any more."""
-    keys = {layer.stroke_key for ts in project.texture_sets for layer in ts.layers if layer.stroke_key}
+    """Strokes whose key no layer or mask renders any more."""
+    keys = rendered_keys(project)
     doomed = [i for i, s in enumerate(project.strokes) if s.layer_key not in keys]
     for index in reversed(doomed):
         project.strokes.remove(index)

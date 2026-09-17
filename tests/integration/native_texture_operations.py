@@ -59,6 +59,27 @@ assert layer.masks[0].source == "FILTER"
 assert bpy.ops.open_painter.mask(action="ADD", source="FILTER") == {"FINISHED"}
 assert layer.masks[-1].effect.kind == "LEVELS"
 
+# UI buttons run non-nested (undo=True here) and Blender refills unset operator
+# properties from the previous run: a mask-side pick must not steer the
+# channel-side buttons (which leave target unset) onto the active mask.
+assert bpy.ops.open_painter.mask(action="ADD", source="PAINT") == {"FINISHED"}
+painted_index, mask_count, effect_count = layer.active_mask, len(layer.masks), len(prop.effects)
+painted = lambda: layer.masks[painted_index]  # masks.add() invalidates references
+painted_name = painted().name
+assert painted().source == "PAINT"
+assert bpy.ops.open_painter.choose_filter(True, choice="BLUR", target="MASK", create=True) == {"FINISHED"}
+layer.active_mask = painted_index
+assert bpy.ops.open_painter.choose_filter(True, choice="HSL", create=False) == {"FINISHED"}
+assert (painted().source, painted().name) == ("PAINT", painted_name) and prop.effects[prop.active_effect].kind == "HSL"
+assert bpy.ops.open_painter.choose_filter(True, choice="INVERT") == {"FINISHED"}
+assert len(prop.effects) == effect_count + 1 and prop.effects[-1].kind == "INVERT"
+assert bpy.ops.open_painter.choose_procedural(True, choice="FBM", target="MASK", create=False) == {"FINISHED"}
+assert painted().source == "PROCEDURAL"
+painted().source, renamed = "PAINT", painted().name
+assert bpy.ops.open_painter.choose_procedural(True, choice="VORONOI") == {"FINISHED"}
+assert (painted().source, painted().name, prop.procedural) == ("PAINT", renamed, "VORONOI")
+assert len(layer.masks) == mask_count + 1
+
 assert bpy.ops.open_painter.catalog_material(choice="Clean Brushed Steel") == {"FINISHED"}
 folder = stack.active(ts)
 assert folder.type == "FOLDER" and folder.name == "Clean Brushed Steel"
@@ -109,4 +130,4 @@ for kind in ("MATERIAL_ID", "OBJECT_ID", "UV_ISLAND"):
     assert second[256, 128] == 0 and second[256, 384] == 1
     assert np.array_equal(before_pixels, pixels(image))
 open_painter.unregister()
-print("NATIVE_TEXTURE_OPERATIONS_PASS: all50 asset handles; reusable filter/procedural operators; ordered mask filters alter pixels; searchable catalog applies editable layers; named material/object/island IDs select baked pixels without changing source maps")
+print("NATIVE_TEXTURE_OPERATIONS_PASS: all50 asset handles; reusable filter/procedural operators; channel buttons ignore remembered mask targets; ordered mask filters alter pixels; searchable catalog applies editable layers; named material/object/island IDs select baked pixels without changing source maps")

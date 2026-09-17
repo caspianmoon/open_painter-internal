@@ -228,6 +228,26 @@ def run():
     set_bypass(ts, {layer.id for layer in ts.layers if layer.bypass}, False)
     ready(scene, ts)
     assert not any(layer.bypass for layer in ts.layers)
+    # Editing a bypassed layer still invalidates the export (0.9.7): the shader
+    # holds no bindings for it, so it cannot narrow what the reference must redo.
+    stack.channel_for(layer_by_id(ts, consumer_id), 'BASE_COLOR').enabled = False   # the opaque top fill
+    ready(scene, ts)
+    LayerEvaluator(scene).evaluate_texture_set(ts.id)
+    output = next(o for o in ts.outputs if o.channel == 'BASE_COLOR')
+    assert not output.dirty
+    before = images.pixels(output.image).copy()
+    layer_by_id(ts, blue_id).bypass = True
+    ready(scene, ts)
+    stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').color = (.9, .2, .2, 1.)
+    assert shader_preview.current(scene, ts)
+    assert output.dirty, 'an edit to a bypassed layer was dropped from the export'
+    LayerEvaluator(scene).evaluate_texture_set(ts.id)
+    assert not np.array_equal(before, images.pixels(output.image)), 'export shipped the pre-edit pixels'
+    stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').color = (.1, .1, .9, 1.)
+    stack.channel_for(layer_by_id(ts, consumer_id), 'BASE_COLOR').enabled = True
+    layer_by_id(ts, blue_id).bypass = False
+    ready(scene, ts)
+    print('LAYER_BYPASS_EXPORT_DIRTY_OK', flush=True)
     # A folder whose child composite is published: a consumer reads its GROUP anchor while
     # the folder is bypassed (its pass-through unit still exports the Group sockets, and the
     # consumer unit adopted from the previous build wires them by name).

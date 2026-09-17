@@ -1,6 +1,6 @@
 """Persistent bake input descriptions; no automatic rebaking on scene edits."""
 import json
-from ..evaluation.dependencies import mesh_signature
+from ..evaluation.dependencies import mesh_signature, mesh_inputs, node_inputs, dependency_key
 
 ALGORITHM_VERSION = 1
 
@@ -9,7 +9,10 @@ def identity(item):
     return (item.library.filepath if item.library else '', item.name_full) if item else None
 
 
-def parameters(group):
+def parameters(group, owner=None, legacy=False):
+    """A modifier's settings. With its ``owner`` the objects it reads (a cutter, a target) are
+    recorded with their relative placement and mesh, and a Geometry Nodes modifier with its
+    group inputs; ``legacy`` keeps the form of records written before 0.9.7."""
     result = {}
     for field in group.bl_rna.properties:
         if field.identifier == 'rna_type' or field.is_readonly:
@@ -22,7 +25,11 @@ def parameters(group):
                 value = sorted(value)
             result[field.identifier] = tuple(value) if getattr(field, 'is_array', False) else value
         elif field.type == 'POINTER':
-            result[field.identifier] = identity(value)
+            result[field.identifier] = identity(value) if owner is None or legacy else dependency_key(owner, value, identity)
+    if getattr(group, 'type', None) == 'NODES' and owner is not None and not legacy:
+        inputs = node_inputs(group, lambda value: dependency_key(owner, value, identity))
+        if inputs:
+            result['inputs'] = inputs
     return result
 
 
@@ -34,16 +41,23 @@ def object_record(obj, transform='FULL'):
     if obj is None:
         return None
     matrix = obj.matrix_world
+    legacy = transform == 'LEGACY'
     if transform == 'SCALE':
         placement = dict(scale=[round(float(v), 6) for v in matrix.to_scale()],
                          mirrored=matrix.to_3x3().determinant() < 0)
-    elif transform == 'LEGACY':
+    elif legacy:
         placement = [list(row) for row in matrix]   # exact floats, as records were written before 0.9.7
     else:
         placement = [[round(float(v), 6) + 0.0 for v in row] for row in matrix]   # a move back lands on the record (no -0.0)
-    return dict(identity=identity(obj), matrix=placement,
-                mesh=mesh_signature(obj.data) if obj.type == 'MESH' else None,
-                modifiers=[parameters(modifier) for modifier in obj.modifiers])
+    result = dict(identity=identity(obj), matrix=placement,
+                  mesh=mesh_signature(obj.data) if obj.type == 'MESH' else None,
+                  modifiers=[parameters(modifier, obj, legacy) for modifier in obj.modifiers])
+    inputs = () if legacy else mesh_inputs(obj)
+    if inputs:
+        # Weights, creases and shape keys the modifiers read: recorded only when present, so
+        # a plain mesh's record keeps its form and its maps stay current.
+        result['inputs'] = inputs
+    return result
 
 
 # Maps that read where the object stands (occluders of the assembly, world axes); every other
@@ -103,6 +117,13 @@ def corrections_signature(ts, kind):
     if 'ignore' in result:
         result['ignored_sources'] = sorted(identity(ref.object) for ref in ts.bake.high_objects
                                            if ref.object and getattr(ref, 'ignorable', False))
+    # The settings that scale a painted raster at bake time, recorded only with that raster
+    # so maps without the correction keep their records.
+    if 'offset' in result:
+        result['offset_range'] = round(float(corrections.offset_range), 6)
+    if 'direction' in result:
+        from ..baking.corrections import bake_settings
+        result['direction_vector'] = list(bake_settings(ts)['direction_vector'])
     return result
 
 

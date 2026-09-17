@@ -8,32 +8,56 @@ The height image remains available separately for displacement workflows.
 import numpy as np
 
 
-def _triangle_charts(entry):
-    """Connected UV charts, without joining disconnected or mirrored edges."""
-    triangles = entry["triangles"]
-    parents = list(range(len(triangles)))
-    edges = {}
+def _triangle_charts(tri_vertices, uv):
+    """Connected UV charts, without joining disconnected or mirrored edges.
 
-    def root(index):
-        while parents[index] != index:
-            parents[index] = parents[parents[index]]
-            index = parents[index]
-        return index
-
-    for index, triangle in enumerate(triangles):
-        vertices = tuple(triangle.vertices)
-        uv = entry["uv"][list(triangle.loops)]
-        du, dv = uv[1] - uv[0], uv[2] - uv[0]
-        orientation = 1 if du[0] * dv[1] - du[1] * dv[0] >= 0 else -1
-        for a, b in ((0, 1), (1, 2), (2, 0)):
-            if vertices[a] > vertices[b]:
-                a, b = b, a
-            # Shared mesh vertices and matching corner UVs establish actual
-            # connectivity. Mere adjacency in the atlas does not.
-            key = (vertices[a], vertices[b], tuple(uv[a]), tuple(uv[b]), orientation)
-            previous = edges.setdefault(key, index)
-            parents[root(index)] = root(previous)
-    return [root(index) for index in range(len(triangles))]
+    Labels are the smallest triangle index of each chart. Each round hooks a
+    triangle and its current label onto the smallest label around its edges,
+    then shortcuts the label chains (Shiloach-Vishkin), so whole partial charts
+    merge per round and a dense evaluated mesh settles in a few array passes
+    rather than a Python loop per triangle.
+    """
+    count = len(tri_vertices)
+    labels = np.arange(count)
+    if not count:
+        return labels
+    du, dv = uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]
+    orientation = np.where(du[:, 0] * dv[:, 1] - du[:, 1] * dv[:, 0] >= 0, 1, -1)
+    corner_a, corner_b = np.array((0, 1, 2)), np.array((1, 2, 0))
+    # Shared mesh vertices and matching corner UVs establish actual
+    # connectivity. Mere adjacency in the atlas does not.
+    vertex_a, vertex_b = tri_vertices[:, corner_a], tri_vertices[:, corner_b]
+    uv_a, uv_b = uv[:, corner_a], uv[:, corner_b]
+    swap = vertex_a > vertex_b
+    keys = np.empty((count * 3, 7), np.float64)
+    keys[:, 0] = np.where(swap, vertex_b, vertex_a).ravel()
+    keys[:, 1] = np.where(swap, vertex_a, vertex_b).ravel()
+    keys[:, 2:4] = np.where(swap[..., None], uv_b, uv_a).reshape(-1, 2)
+    keys[:, 4:6] = np.where(swap[..., None], uv_a, uv_b).reshape(-1, 2)
+    keys[:, 6] = np.repeat(orientation, 3)
+    order = np.lexsort(keys.T[::-1])
+    ranked = keys[order]
+    starts = np.flatnonzero(np.r_[True, np.any(ranked[1:] != ranked[:-1], axis=1)])
+    corner_triangle = order // 3
+    edge = np.empty(count * 3, np.int64)
+    edge[order] = np.repeat(np.arange(len(starts)), np.diff(np.r_[starts, count * 3]))
+    edge = edge.reshape(count, 3)
+    while True:
+        lowest = np.minimum.reduceat(labels[corner_triangle], starts)
+        candidate = np.minimum(labels, lowest[edge].min(axis=1))
+        hooked = labels.copy()
+        # Hooking the label itself, not only the triangle, is what merges
+        # whole partial charts per round instead of one edge hop per round.
+        np.minimum.at(hooked, labels, candidate)
+        hooked = np.minimum(hooked, candidate)
+        while True:
+            jumped = hooked[hooked]
+            if np.array_equal(jumped, hooked):
+                break
+            hooked = jumped
+        if np.array_equal(hooked, labels):
+            return labels
+        labels = hooked
 
 
 def _uv_metric(ts, n):
@@ -52,32 +76,32 @@ materials use the conventional one-world-unit tile. Empty atlas texels have
         charts.fill(1)
         return metric, charts
     from ..geometry.snapshots import targets
-    from ..geometry.uv_rasterizer import tiles
+    from ..geometry.uv_rasterizer import rasterize
     chart_offset = 1
     with targets(ts) as entries:
         for entry in entries:
-            chart_ids = _triangle_charts(entry)
-            for tri, chart in zip(entry["triangles"], chart_ids):
-                xyz = entry["positions"][list(tri.vertices)]
-                uv = entry["uv"][list(tri.loops)]
-                duv1, duv2 = uv[1] - uv[0], uv[2] - uv[0]
-                determinant = duv1[0] * duv2[1] - duv1[1] * duv2[0]
-                if abs(determinant) < 1e-12:
-                    continue
-                edge1, edge2 = xyz[1] - xyz[0], xyz[2] - xyz[0]
-                dpdu = (edge1 * duv2[1] - edge2 * duv1[1]) / determinant
-                dpdv = (edge2 * duv1[0] - edge1 * duv2[0]) / determinant
-                length_u = np.linalg.norm(dpdu)
-                if length_u < 1e-12:
-                    continue
-                shear = np.dot(dpdu, dpdv) / length_u
-                length_v = np.linalg.norm(dpdv - dpdu * (shear / length_u))
-                if length_v < 1e-12:
-                    continue
-                inverse = (1 / length_u, -shear / (length_u * length_v), 1 / length_v)
-                for region, inside, *_ in tiles(uv, n):
-                    metric[region][inside] = inverse
-                    charts[region][inside] = chart_offset + chart
+            uv = entry["uv"][entry["tri_loops"]]
+            xyz = entry["positions"][entry["tri_vertices"]]
+            chart_ids = _triangle_charts(entry["tri_vertices"], uv)
+            duv1, duv2 = uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]
+            determinant = duv1[:, 0] * duv2[:, 1] - duv1[:, 1] * duv2[:, 0]
+            edge1, edge2 = xyz[:, 1] - xyz[:, 0], xyz[:, 2] - xyz[:, 0]
+            with np.errstate(divide="ignore", invalid="ignore"):
+                dpdu = (edge1 * duv2[:, 1, None] - edge2 * duv1[:, 1, None]) / determinant[:, None]
+                dpdv = (edge2 * duv1[:, 0, None] - edge1 * duv2[:, 0, None]) / determinant[:, None]
+                length_u = np.linalg.norm(dpdu, axis=1)
+                shear = np.einsum("ij,ij->i", dpdu, dpdv) / length_u
+                length_v = np.linalg.norm(dpdv - dpdu * (shear / length_u)[:, None], axis=1)
+                inverse = np.stack((1 / length_u, -shear / (length_u * length_v), 1 / length_v), axis=1)
+            # Degenerate triangles are dropped before rasterizing so they cannot
+            # overwrite texels an earlier valid triangle covered.
+            kept = np.flatnonzero((np.abs(determinant) >= 1e-12)
+                                  & (length_u >= 1e-12) & (length_v >= 1e-12))
+            rows, cols, tri, _ = rasterize(uv[kept], n)
+            if len(rows):
+                tri = kept[tri]
+                metric[rows, cols] = inverse[tri]
+                charts[rows, cols] = chart_offset + chart_ids[tri]
             chart_offset += len(chart_ids)
     return metric, charts
 

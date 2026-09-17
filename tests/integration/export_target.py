@@ -75,5 +75,23 @@ with TemporaryDirectory(prefix='op-target-') as directory:
     assert files == ['Prop_Hull_BaseMap.tif', 'Prop_Hull_EmissionMap.tif', 'Prop_Hull_MetallicGlossMap.tif',
                      'Prop_Hull_Normal.tif', 'Prop_Hull_OcclusionMap.tif'], files   # the set's own TIFF/16 settings
     print('EXPORT_TARGET godot and custom: PASS', flush=True)
+    # The plain button sets no property, so it must not inherit all_sets=True from an earlier
+    # "Selected Objects" click (undo=True takes the button's last-properties path).
+    project.export_mesh, project.target, ts.export.prefix = True, 'UNREAL', ''
+    deck = sets.create(scene, 'Deck', 512); deck.preview_backend = 'CPU'
+    cube.select_set(True)
+    project.export_directory = str(root / 'selected')
+    bpy.ops.open_painter.export_target(True, all_sets=True)
+    files = sorted(p.name for p in (root / 'selected').iterdir())
+    assert not any(f.startswith('Deck') for f in files) and 'T_Hull_BC.png' in files, files
+    project.active_texture_set = [ts.name for ts in project.texture_sets].index('Deck')
+    cube.select_set(False)
+    project.export_directory = str(root / 'plain')
+    bpy.ops.open_painter.export_target(True)
+    files = sorted(p.name for p in (root / 'plain').iterdir())
+    assert not any(f.startswith('T_Hull') or f == 'Hull_manifest.json' for f in files), \
+        f'plain export inherited all_sets from the previous run: {files}'
+    assert 'T_Deck_BC.png' in files and 'Deck_manifest.json' in files, files
+    print('EXPORT_TARGET plain button after selected-objects export: PASS', flush=True)
 print('EXPORT_TARGET_PASS', flush=True)
 open_painter.unregister()

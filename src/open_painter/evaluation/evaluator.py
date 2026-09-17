@@ -9,7 +9,7 @@ from ..core import image_manager, material_manager
 from ..core.layer_stack import channel_for
 from ..utils.logging import logger
 from . import metrics
-from .channel_eval import source, TILE_ROWS, _procedural_tile
+from .channel_eval import source, TILE_ROWS, _field_tile
 from .raster_cache import RasterCache, for_texture_set
 
 
@@ -177,9 +177,12 @@ class LayerEvaluator:
                     if not np.any(mask):
                         skipped.add(layer.id)
                         continue
-                if layer.type == "FILL" and prop and prop.procedural:
+                # A detail image overrides a retained procedural; warm the source
+                # the composite actually samples, never the noise it ignores.
+                if layer.type == "FILL" and prop and (prop.procedural or getattr(prop, "detail_image", None)
+                                                      or getattr(prop, "detail_image_name", "")):
                     step_started = perf_counter()
-                    _procedural_tile(prop, n, y0, y1, ts, self.geometry_cache)
+                    _field_tile(prop, n, y0, y1, ts, self.geometry_cache)
                     if slices.ready(perf_counter()-step_started):
                         yield
                     if author.edit_serial != serial:

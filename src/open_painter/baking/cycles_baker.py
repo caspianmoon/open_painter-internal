@@ -101,12 +101,16 @@ def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
     return image
 
 
-def bake_faces(context, ts, kind, regions):
-    """Bake ``kind`` with only ``regions`` ({object: faces}) on the real image; the rest hits scratch."""
-    return _bake(context, ts, kind, regions=regions)
+def bake_faces(context, ts, kind, regions, polygons=None):
+    """Bake ``kind`` with only ``regions`` ({object: faces}) on the real image; the rest hits scratch.
+
+    ``polygons`` ({object: face count}) says which evaluation the faces index;
+    a staged copy of another count raises ``staging.TopologyMismatch``.
+    """
+    return _bake(context, ts, kind, regions=regions, polygons=polygons)
 
 
-def _bake(context, ts, kind, regions=None):
+def _bake(context, ts, kind, regions=None, polygons=None):
     from .pairing import groups
     from .staging import prepared
     from . import corrections
@@ -126,11 +130,9 @@ def _bake(context, ts, kind, regions=None):
     objects = {obj for part in parts for obj in (part.low, *part.sources, part.cage) if obj}
     if any(obj.name not in context.view_layer.objects for obj in objects):
         raise ValueError('Every bake target, source and active cage must be in the active view layer')
-    from .cages import validate_topology
-    graph = context.evaluated_depsgraph_get()
-    for part in parts:
-        if part.cage:
-            validate_topology(part.low, part.cage, graph)
+    # Cage correspondence is checked on the staged copies in BakeStage.prepare, the
+    # geometry Cycles actually receives; a separate render-evaluation scope per map
+    # only repeated that work on the originals.
     factor = int(settings.supersample)
     resolution = int(ts.resolution)
     working = supersample_preflight(resolution, factor)
@@ -140,7 +142,9 @@ def _bake(context, ts, kind, regions=None):
     ignorable = {ref.object for ref in settings.high_objects if ref.object and getattr(ref, 'ignorable', False)}
     if ignore is not None and not any(src in ignorable for part in parts for src in part.sources):
         ignore = None
-    exclude = corrections.raster(ts, 'AO_EXCLUDE') if projecting and kind == 'AO' and settings.ao_scope == 'SET' else None
+    # A set baked from its lows still sees the other parts' contact under SET scope, so the
+    # exclusion pass is not tied to projection the way the cage and source passes are.
+    exclude = corrections.raster(ts, 'AO_EXCLUDE') if kind == 'AO' and settings.ao_scope == 'SET' else None
     image = scratch = alternative = None
     try:
         image = create(f"{ts.name}_Baked{kind.title().replace('_', '')}", working, DEFAULT_COLORS[kind])
@@ -167,7 +171,7 @@ def _bake(context, ts, kind, regions=None):
             bake_settings.max_ray_distance = settings.ray_distance
             if regions is not None:
                 for part in parts:
-                    stage.restrict(part, regions.get(part.low, ()))
+                    stage.restrict(part, regions.get(part.low, ()), (polygons or {}).get(part.low))
             if geometric:
                 # Painted cage corrections become one owned cage per part.
                 for part in parts:
@@ -179,10 +183,15 @@ def _bake(context, ts, kind, regions=None):
             def run_pass(target_image, sources_of=None, ao_scope=None):
                 for part in parts:
                     cage = stage.cages.get(part.low)
+                    bake_settings.max_ray_distance = settings.ray_distance
                     if cage is not None:
                         bake_settings.use_cage = True
                         bake_settings.cage_object = cage
                         bake_settings.cage_extrusion = 0
+                        if settings.ray_distance > 0:
+                            # Cycles measures the limit from the cage point: a painted lift
+                            # would otherwise stop the rays that far above the surface.
+                            bake_settings.max_ray_distance = settings.ray_distance + cage.get(corrections.LIFT, 0.0)
                     else:
                         bake_settings.cage_object = stage.copies[part.cage] if part.cage else None
                     sources = None if sources_of is None else sources_of(part)

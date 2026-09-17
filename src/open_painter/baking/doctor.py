@@ -117,8 +117,63 @@ def _bmesh(mesh):
     return bm
 
 
-def _from_issue(check, issue):
-    return Finding(check, issue.severity, issue.message, issue.object_name, faces=tuple(issue.faces))
+def _base_topology(ts):
+    """Per target name, whether the viewport-evaluated face count matches its base mesh.
+
+    ``diagnostics`` reports polygon indices of the evaluated mesh (the one
+    ``geometry.snapshots.targets`` builds); they only address base faces
+    when no modifier changes the face count.
+    """
+    scene = ts.id_data
+    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+    return {obj.name: len(obj.evaluated_get(depsgraph).data.polygons) == len(obj.data.polygons) for obj in _lows(ts)}
+
+
+def _from_issue(check, issue, base_ok=None):
+    faces, message = tuple(issue.faces), issue.message
+    if faces and base_ok is not None and not base_ok.get(issue.object_name, True):
+        faces = ()
+        message += ' (modifiers change the topology, so they are not selectable)'
+    return Finding(check, issue.severity, message, issue.object_name, faces=faces)
+
+
+def _issue_findings(check, issues, ts):
+    findings = []
+    base_ok = _base_topology(ts) if any(issue.faces for issue in issues) else None
+    for issue in issues:
+        key = check
+        if check == 'uvs':
+            text = issue.message.lower()
+            if 'scale' in text:
+                key = 'scale'
+            elif 'cage' in text:
+                key = 'cage'
+            elif any(word in text for word in ('source', 'target', 'match', 'ambiguous')) and 'slot' not in text:
+                key = 'naming'
+        findings.append(_from_issue(key, issue, base_ok))
+    return findings
+
+
+def _sync_edit_meshes(ts):
+    """Edit Mode keeps its geometry in the edit BMesh; the datablock the checks read lags behind."""
+    for obj in dict.fromkeys(_lows(ts) + _highs(ts) + _cages(ts)):
+        if obj.mode == 'EDIT':
+            obj.update_from_editmode()
+
+
+def _end_paint_session(context):
+    """A live paint or correction session masks strokes to the faces it selected;
+    a highlight would silently replace that mask, so the session ends first."""
+    project = context.scene.open_painter
+    if project.paint_image is None:
+        return
+    if project.paint_correction:
+        from .corrections import end_brush
+        end_brush(context)
+    else:
+        from ..painting import paint_session
+        paint_session.finish(context)
 
 
 # ---- checks ------------------------------------------------------------------
@@ -133,16 +188,7 @@ def check_uvs(ts, tier='PRE_BAKE'):
     evaluated = tier == 'FULL' or all(len(obj.data.polygons) <= LARGE_MESH for obj in _lows(ts))
     if not evaluated:
         findings.append(Finding('uvs', 'INFO', 'large targets: exact UV overlap is checked by Full Check'))
-    for issue in diagnostics.inspect(ts, evaluated=evaluated):
-        key = 'uvs'
-        text = issue.message.lower()
-        if 'scale' in text:
-            key = 'scale'
-        elif 'cage' in text:
-            key = 'cage'
-        elif any(word in text for word in ('source', 'target', 'match', 'ambiguous')) and 'slot' not in text:
-            key = 'naming'
-        findings.append(_from_issue(key, issue))
+    findings.extend(_issue_findings('uvs', diagnostics.inspect(ts, evaluated=evaluated), ts))
     return findings
 
 
@@ -354,7 +400,16 @@ def check_modifiers(ts):
     return findings
 
 
-def check_cage(ts):
+def _render_faces_estimate(obj):
+    """Face count after render subdivision, from the base mesh; other modifiers are not guessed."""
+    count = len(obj.data.polygons)
+    for modifier in obj.modifiers:
+        if modifier.show_render and modifier.type in {'SUBSURF', 'MULTIRES'}:
+            count *= 4 ** modifier.render_levels
+    return count
+
+
+def check_cage(ts, tier='PRE_BAKE'):
     """Cage vertices whose offset crosses the low-poly surface (likely cage intersections).
 
     From an automatic cage the vertex travels along its normal by the
@@ -362,7 +417,10 @@ def check_cage(ts):
     case the segment from the surface to the cage point is cast against the
     low-poly mesh itself, evaluated with render modifiers as the bake sees it:
     a hit means the cage pierces neighbouring geometry (ears, fingers, folds),
-    which projects the wrong surface there.
+    which projects the wrong surface there. The cast is one Python ray per
+    evaluated vertex, and render subdivision multiplies those, so targets
+    above ``LARGE_MESH`` evaluated faces wait for the Full tier like the other
+    per-face checks.
     """
     from mathutils import Vector
     from mathutils.bvhtree import BVHTree
@@ -376,6 +434,15 @@ def check_cage(ts):
         parts = {part.low: part for part in groups(ts, validate_cages=False)}
     except ValueError:
         return findings
+    if tier != 'FULL':
+        # Subdivided targets are skipped before the render-level evaluation itself gets costly.
+        for low in list(parts):
+            if _render_faces_estimate(low) > LARGE_MESH:
+                findings.append(Finding('cage', 'INFO', f'about {_render_faces_estimate(low)} faces at render level: '
+                                        'cage intersections are checked by Full Check', low.name))
+                del parts[low]
+        if not parts:
+            return findings
     extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
     scene = ts.id_data
     originals = [obj for part in parts.values() for obj in (part.low, part.cage) if obj is not None]
@@ -386,6 +453,10 @@ def check_cage(ts):
             mesh = copy.data
             count = len(mesh.vertices)
             if not count or not len(mesh.polygons):
+                continue
+            if tier != 'FULL' and len(mesh.polygons) > LARGE_MESH:
+                findings.append(Finding('cage', 'INFO', f'{len(mesh.polygons)} evaluated faces: '
+                                        'cage intersections are checked by Full Check', low.name))
                 continue
             local = np.empty((count, 3), np.float32)
             mesh.vertices.foreach_get('co', local.ravel())
@@ -412,34 +483,35 @@ def check_cage(ts):
                 below = np.zeros(count, bool)
             segments = targets_ - positions
             lengths = np.linalg.norm(segments, axis=1)
-            polygons = [tuple(polygon.vertices) for polygon in mesh.polygons]
-            tree = BVHTree.FromPolygons([Vector(p) for p in positions], polygons)
+            loop_vertex = np.empty(len(mesh.loops), np.int32)
+            mesh.loops.foreach_get('vertex_index', loop_vertex)
+            poly_total = np.empty(len(mesh.polygons), np.int32)
+            mesh.polygons.foreach_get('loop_total', poly_total)
+            loop_face = np.repeat(np.arange(len(mesh.polygons)), poly_total)
+            mesh.calc_loop_triangles()
+            triangles = np.empty(len(mesh.loop_triangles) * 3, np.int32)
+            mesh.loop_triangles.foreach_get('vertices', triangles)
+            tree = BVHTree.FromPolygons(positions.tolist(), triangles.reshape(-1, 3).tolist())
             pierced = np.zeros(count, bool)
-            for index in range(count):
-                if lengths[index] <= 1e-9:
-                    continue
-                direction = segments[index] / lengths[index]
-                # Start a hair above the surface so the vertex's own faces do not count.
-                origin = positions[index] + direction * max(lengths[index] * 1e-3, 1e-6)
-                hit = tree.ray_cast(Vector(origin), Vector(direction), float(lengths[index]))
-                if hit[0] is not None:
+            cast = np.flatnonzero(lengths > 1e-9)
+            rays = segments[cast] / lengths[cast, None]
+            # Start a hair above the surface so the vertex's own faces do not count.
+            origins = positions[cast] + rays * np.maximum(lengths[cast] * 1e-3, 1e-6)[:, None]
+            for index, origin, direction, length in zip(cast, origins.tolist(), rays.tolist(), lengths[cast].tolist()):
+                if tree.ray_cast(Vector(origin), Vector(direction), length)[0] is not None:
                     pierced[index] = True
-            vertex_faces = {}
-            for polygon in mesh.polygons:
-                for v in polygon.vertices:
-                    vertex_faces.setdefault(int(v), set()).add(int(polygon.index))
             base_ok = len(mesh.polygons) == len(low.data.polygons) and count == len(low.data.vertices)
             for flags, message in ((pierced, 'cage vertices pierce the low-poly surface: likely cage intersections'),
                                    (below, 'custom cage vertices sit below the surface: rays start inside the mesh')):
                 hits = np.flatnonzero(flags)
                 if not len(hits):
                     continue
-                faces = sorted({f for v in hits for f in vertex_faces.get(int(v), ())})
+                faces = np.unique(loop_face[np.isin(loop_vertex, hits)])
                 text = f'{len(hits)} {message}'
                 if not base_ok:
                     text += ' (render modifiers change the topology, so they are not selectable)'
                 findings.append(Finding('cage', 'WARNING', text, low.name,
-                                        faces=tuple(faces) if base_ok else (),
+                                        faces=tuple(int(f) for f in faces) if base_ok else (),
                                         vertices=tuple(int(v) for v in hits) if base_ok else ()))
     return findings
 
@@ -448,53 +520,68 @@ def check_seams(ts):
     """UV island borders that carry no seam flag (reimported meshes lose their seams)."""
     findings = []
     for obj in _lows(ts):
-        mesh = obj.data
-        uv = next((layer for layer in mesh.uv_layers if layer.active_render), mesh.uv_layers.active)
-        if uv is None or not len(mesh.polygons) or not len(mesh.edges):
-            continue
-        loops_total = len(mesh.loops)
-        coords = np.empty((loops_total, 2), np.float32)
-        uv.data.foreach_get('uv', coords.ravel())
-        loop_vertex = np.empty(loops_total, np.int32)
-        mesh.loops.foreach_get('vertex_index', loop_vertex)
-        loop_edge = np.empty(loops_total, np.int32)
-        mesh.loops.foreach_get('edge_index', loop_edge)
-        poly_start = np.empty(len(mesh.polygons), np.int32)
-        poly_total = np.empty(len(mesh.polygons), np.int32)
-        mesh.polygons.foreach_get('loop_start', poly_start)
-        mesh.polygons.foreach_get('loop_total', poly_total)
-        # The loop after each loop within its polygon (edge end).
-        next_loop = np.arange(loops_total) + 1
-        ends = poly_start + poly_total - 1
-        next_loop[ends] = poly_start
-        edge_vertices = np.empty((len(mesh.edges), 2), np.int32)
-        mesh.edges.foreach_get('vertices', edge_vertices.ravel())
-        # UV of the edge oriented from the lower vertex index: comparable across faces.
-        v0, v1 = loop_vertex, loop_vertex[next_loop]
-        lo_first = v0 <= v1
-        a = np.where(lo_first[:, None], coords, coords[next_loop])
-        b = np.where(lo_first[:, None], coords[next_loop], coords)
-        order = np.argsort(loop_edge, kind='stable')
-        sorted_edges = loop_edge[order]
-        border = np.zeros(len(mesh.edges), bool)
-        starts = np.flatnonzero(np.r_[True, sorted_edges[1:] != sorted_edges[:-1]])
-        counts = np.diff(np.r_[starts, len(sorted_edges)])
-        # Every loop compared with the first loop of its edge group, vectorized.
-        first = np.repeat(order[starts], counts)
-        differs = (np.abs(a[order] - a[first]).max(axis=1) > 1e-5) | (np.abs(b[order] - b[first]).max(axis=1) > 1e-5)
-        border[sorted_edges[differs]] = True
-        seams = np.empty(len(mesh.edges), bool)
-        mesh.edges.foreach_get('use_seam', seams)
-        missing = np.flatnonzero(border & ~seams)
-        if len(missing):
-            findings.append(Finding('seams', 'INFO',
-                                    f'{len(missing)} UV island borders are not marked as seams (bakes are unaffected; '
-                                    're-unwrapping would lose the islands)', obj.name, edges=tuple(int(e) for e in missing)))
+        if obj.mode == 'EDIT':
+            # The datablock's UV layers are empty while the edit BMesh owns them.
+            import bmesh
+            mesh = bpy.data.meshes.new('OP Seams Check')
+            try:
+                bmesh.from_edit_mesh(obj.data).to_mesh(mesh)
+                findings.extend(_seam_findings(obj, mesh, obj.data))
+            finally:
+                bpy.data.meshes.remove(mesh)
+        else:
+            findings.extend(_seam_findings(obj, obj.data, obj.data))
     return findings
 
 
+def _seam_findings(obj, mesh, source):
+    """``mesh`` carries the geometry; the render UV map is named by ``source``."""
+    named = next((layer for layer in source.uv_layers if layer.active_render), source.uv_layers.active)
+    uv = mesh.uv_layers.get(named.name) if named is not None else None
+    if uv is None or not len(mesh.polygons) or not len(mesh.edges):
+        return []
+    loops_total = len(mesh.loops)
+    coords = np.empty((loops_total, 2), np.float32)
+    uv.data.foreach_get('uv', coords.ravel())
+    loop_vertex = np.empty(loops_total, np.int32)
+    mesh.loops.foreach_get('vertex_index', loop_vertex)
+    loop_edge = np.empty(loops_total, np.int32)
+    mesh.loops.foreach_get('edge_index', loop_edge)
+    poly_start = np.empty(len(mesh.polygons), np.int32)
+    poly_total = np.empty(len(mesh.polygons), np.int32)
+    mesh.polygons.foreach_get('loop_start', poly_start)
+    mesh.polygons.foreach_get('loop_total', poly_total)
+    # The loop after each loop within its polygon (edge end).
+    next_loop = np.arange(loops_total) + 1
+    ends = poly_start + poly_total - 1
+    next_loop[ends] = poly_start
+    edge_vertices = np.empty((len(mesh.edges), 2), np.int32)
+    mesh.edges.foreach_get('vertices', edge_vertices.ravel())
+    # UV of the edge oriented from the lower vertex index: comparable across faces.
+    v0, v1 = loop_vertex, loop_vertex[next_loop]
+    lo_first = v0 <= v1
+    a = np.where(lo_first[:, None], coords, coords[next_loop])
+    b = np.where(lo_first[:, None], coords[next_loop], coords)
+    order = np.argsort(loop_edge, kind='stable')
+    sorted_edges = loop_edge[order]
+    border = np.zeros(len(mesh.edges), bool)
+    starts = np.flatnonzero(np.r_[True, sorted_edges[1:] != sorted_edges[:-1]])
+    counts = np.diff(np.r_[starts, len(sorted_edges)])
+    # Every loop compared with the first loop of its edge group, vectorized.
+    first = np.repeat(order[starts], counts)
+    differs = (np.abs(a[order] - a[first]).max(axis=1) > 1e-5) | (np.abs(b[order] - b[first]).max(axis=1) > 1e-5)
+    border[sorted_edges[differs]] = True
+    seams = np.empty(len(mesh.edges), bool)
+    mesh.edges.foreach_get('use_seam', seams)
+    missing = np.flatnonzero(border & ~seams)
+    if not len(missing):
+        return []
+    return [Finding('seams', 'INFO', f'{len(missing)} UV island borders are not marked as seams (bakes are unaffected; '
+                    're-unwrapping would lose the islands)', obj.name, edges=tuple(int(e) for e in missing))]
+
+
 def check_coverage(ts):
-    return [_from_issue('coverage', issue) for issue in diagnostics.ray_coverage(ts)]
+    return _issue_findings('coverage', diagnostics.ray_coverage(ts), ts)
 
 
 PRE_BAKE = (check_uvs, check_normals, check_scale, check_naming, check_doubles, check_modifiers, check_cage, check_seams)
@@ -512,13 +599,14 @@ def examine(ts, tier='PRE_BAKE'):
     from ..evaluation.resource_keys import key_for
     started = perf_counter()
     findings, ran = [], []
+    _sync_edit_meshes(ts)
     checks = list(PRE_BAKE) + ([check_coverage] if tier == 'FULL' else [])
     for check in checks:
         key = KEYS[check]
         if check is check_coverage and any(f.severity == 'ERROR' for f in findings):
             continue
         try:
-            findings.extend(check(ts, tier) if check in {check_uvs, check_normals, check_doubles} else check(ts))
+            findings.extend(check(ts, tier) if check in {check_uvs, check_normals, check_doubles, check_cage} else check(ts))
         except Exception as exc:   # one broken check must not hide the others
             findings.append(Finding(key, 'INFO', f'check skipped: {exc}'))
         ran.append(key)
@@ -562,6 +650,7 @@ def select(ts, finding, context=None):
     context = context or bpy.context
     scene = ts.id_data
     view_layer = context.view_layer if context.view_layer and context.view_layer in scene.view_layers[:] else scene.view_layers[0]
+    _end_paint_session(context)
     if finding.objects:
         targets = [obj for obj in (_resolve(ts, name) for name in finding.objects) if obj is not None and obj.name in view_layer.objects]
         if not targets:
@@ -580,8 +669,14 @@ def select(ts, finding, context=None):
         raise ValueError(f'{finding.object_name} is not a mesh in this scene')
     mesh = obj.data
     faces, vertices, edges = set(finding.faces), set(finding.vertices), set(finding.edges)
-    if (faces and max(faces) >= len(mesh.polygons)) or (vertices and max(vertices) >= len(mesh.vertices)) \
-            or (edges and max(edges) >= len(mesh.edges)):
+    if obj.mode == 'EDIT':
+        # The edit BMesh is the geometry the highlight lands on; the datablock may lag behind it.
+        import bmesh
+        bm = bmesh.from_edit_mesh(mesh)
+        counts = len(bm.faces), len(bm.verts), len(bm.edges)
+    else:
+        counts = len(mesh.polygons), len(mesh.vertices), len(mesh.edges)
+    if any(wanted and max(wanted) >= count for wanted, count in zip((faces, vertices, edges), counts)):
         raise ValueError(f'{obj.name} changed since the check ran; run Bake Check again')
     if obj.name in view_layer.objects:
         for other in view_layer.objects:
@@ -590,8 +685,6 @@ def select(ts, finding, context=None):
     mode = 'FACE' if faces else 'VERT' if vertices else 'EDGE'
     scene.tool_settings.mesh_select_mode = (mode == 'VERT', mode == 'EDGE', mode == 'FACE')
     if obj.mode == 'EDIT':
-        import bmesh
-        bm = bmesh.from_edit_mesh(mesh)
         bm.verts.ensure_lookup_table(); bm.edges.ensure_lookup_table(); bm.faces.ensure_lookup_table()
         for element in bm.verts:
             element.select_set(False)

@@ -149,6 +149,20 @@ bolt.location.x = .3; bpy.context.view_layer.update(); dependencies.refresh(scen
 field_jobs.tick(scene, budget=0)
 bolt.location.x = -.2; bpy.context.view_layer.update(); dependencies.refresh(scene)
 assert not field_jobs.pending(scene), 'a request survived for the raster already published'
+# A normal-direction mesh mask on the layer carries the panel's placement in its own signature:
+# moving the panel must still request the live field (the raster reads where it stands).
+direction = layer.masks.add(); direction.id, direction.source = new_id(), 'MESH'
+direction.mesh.kind = 'NORMAL_DIRECTION'
+mask = layer.masks[0]; field = mask.influence   # masks.add() re-allocated the collection
+panel.location.z = .1; bpy.context.view_layer.update(); dependencies.refresh(scene)
+assert field_jobs.pending(scene), 'a mesh mask on the layer swallowed the live-field request'
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+assert field.provenance == repr(scene_fields.signature(ts, field))
+layer.masks[1].enabled = False
+panel.location.z = 0; bpy.context.view_layer.update(); dependencies.refresh(scene)
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
 # Edit mode defers analysis; leaving it resumes.
 bolt.location.x = .3; bpy.context.view_layer.update(); dependencies.refresh(scene)
 bpy.context.view_layer.objects.active = panel
@@ -164,7 +178,66 @@ field.mode = 'MANUAL'
 with Metrics() as counters:
     scene_fields.update(ts, mask)
 assert counters.phases['scene_analysis']['calls'] == 1
-bpy.app.timers.unregister(cache.tick)
 print('LIVE_FIELDS job engine: PASS', flush=True)
+
+# 4. A scene-scope provenance names the members by content, not by the session's epoch
+# counter: reopening the file (``dependencies.clear``) leaves it current, and a redo after
+# an undo of a member edit cannot land on the epoch the undo published.
+field.mode, field.scope, field.distance = 'LIVE', 'SCENE', .3
+dependencies.refresh(scene)
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+scene_fields.update(ts, mask)   # publish the current members synchronously
+published = field.provenance
+assert published == repr(scene_fields.signature(ts, field))
+dependencies.clear()                                               # what load_post, undo_post and redo_post run
+assert repr(scene_fields.signature(ts, field)) == published, 'a reopened file re-analysed unchanged members'
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert not field_jobs.pending(scene), 'a reopened file requested an analysis for the published members'
+
+
+def edit_block(z):
+    for vertex in block.data.vertices:
+        if vertex.co.z < 0:
+            vertex.co.z = z
+    block.data.update(); bpy.context.view_layer.update()
+    pointer = block.data.as_pointer()
+    dependencies._mesh_epochs[pointer] = dependencies.mesh_epoch(block.data) + 1   # the edit's depsgraph update
+    dependencies._candidates.add(scene.as_pointer())
+
+
+edit_block(-.6)                                                    # the edit: the block's bottom reaches through the panel
+dependencies.refresh(scene)
+assert field_jobs.pending(scene), 'a member mesh edit did not request the field'
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+edited = images.pixels(field.image)[..., 0].copy()
+dependencies.clear(); edit_block(-.15)                             # undo: the counter restarts, one update re-stamps the mesh
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)      # the evaluation after an undo step re-requests
+assert field_jobs.pending(scene)
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+undone, undone_provenance = images.pixels(field.image)[..., 0].copy(), field.provenance
+assert not np.array_equal(undone, edited)
+dependencies.clear(); edit_block(-.6)                              # redo: the same single update, the edited content again
+assert repr(scene_fields.signature(ts, field)) != undone_provenance, 'the redo read as the undone members'
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert field_jobs.pending(scene), 'the redo did not request the field'
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+np.testing.assert_allclose(images.pixels(field.image)[..., 0], edited, atol=1e-6)
+# The epoch stamps themselves never repeat within a session (an Edit Mode member keeps
+# its epoch in the token, as the authored mesh lags the edit BMesh the analysis reads).
+stamps = []
+for step in range(2):                                              # undo, then redo: one reported update each
+    dependencies.clear()
+    for vertex in block.data.vertices:
+        vertex.co.x += .01
+    block.data.update(); bpy.context.view_layer.update()
+    stamps.append(dependencies.mesh_epoch(block.data))
+assert stamps[0] and stamps[1] > stamps[0], stamps
+field.mode = 'MANUAL'
+bpy.app.timers.unregister(cache.tick)
+print('LIVE_FIELDS persisted identity: PASS', flush=True)
 print('LIVE_FIELDS_PASS', flush=True)
 open_painter.unregister()

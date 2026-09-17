@@ -66,16 +66,18 @@ def canonical(value):
 def digest(ts):
     from ..geometry.provenance import record
     from ..geometry.influencers import signature
+    # Pixel edits are tracked by the managed revision alone: ``is_dirty`` flips
+    # on every save (packing clears it) without any material change.
     sources = []
     for layer in ts.layers:
         for channel in layer.channels:
             for image in (channel.image, channel.detail_image):
                 if image:
-                    sources.append((image.name_full, tuple(image.size), image.get("open_painter_pixel_revision", 0), image.is_dirty))
+                    sources.append((image.name_full, tuple(image.size), image.get("open_painter_pixel_revision", 0)))
         for mask in layer.masks:
             if mask.image:
                 image = mask.image
-                sources.append((image.name_full, tuple(image.size), image.get("open_painter_pixel_revision", 0), image.is_dirty))
+                sources.append((image.name_full, tuple(image.size), image.get("open_painter_pixel_revision", 0)))
     inputs = dict(document=encode(snapshot(ts), digest=True), geometry=record(ts, "SCENE_FIELD"),
                   maps=[(entry.kind, entry.provenance, encode(entry.image),
                          entry.image.get("open_painter_pixel_revision", 0) if entry.image else 0)

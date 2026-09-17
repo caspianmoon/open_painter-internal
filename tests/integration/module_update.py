@@ -149,5 +149,245 @@ with TemporaryDirectory() as directory:
     layer_by_id(damage_id).publish_group = False
     assert {layer.id: layer.name for layer in ts.layers} == before
     print('MODULE_UPDATE refusal and rollback: PASS', flush=True)
+
+with TemporaryDirectory() as directory:
+    from open_painter.core import mask_stack
+    from open_painter.evaluation import anchors, layer_cache
+    from open_painter.evaluation.references import warnings
+    from open_painter.smart_materials import serializer
+    from open_painter.smart_materials.format import read
+
+    def image_names():
+        return {image.name for image in bpy.data.images}
+
+    # Mask groups (0.9.3) inside a module: membership survives insert, update, replace and a
+    # module saved from an instance.
+    grouped = stack.add(ts, 'FOLDER', 'Grouped'); grouped_id = grouped.id
+    member = stack.add(ts, 'FILL', 'Member'); member_id = member.id
+    member.parent_id = grouped_id
+    only(member, 'ROUGHNESS'); stack.channel_for(member, 'ROUGHNESS').value = .3
+    group = member.masks.add(); group.id, group.source, group.invert = new_id(), 'GROUP', True
+    group_id = group.id
+    for source in ('NOISE', 'PROCEDURAL'):
+        item = member.masks.add(); item.id, item.source, item.parent_id = new_id(), source, group_id
+
+    def intact(layer, token):
+        masks = layer.masks
+        assert masks[0].id == token + '.' + group_id, masks[0].id
+        assert mask_stack.members(masks, 0) == [1, 2], [(m.id, m.parent_id) for m in masks]
+        assert all(m.parent_id == masks[0].id for m in masks[1:])
+
+    g1, g_block = modules.save_module(bpy.context, ts, layer_by_id(grouped_id), Path(directory) / 'g1.openpaintmaterial', 'Grouped')
+    g_instance = loader.apply(ts, g1)[0]
+    g_instance_id, g_token = g_instance.id, g_instance.module_instance
+    intact(named(g_instance, member_id), g_token)
+    base_masks = next(layer for layer in modules.read_base(g_block['id'], 1) if layer['id'] == member_id)['masks']
+    assert base_masks[1]['parent_id'] == group_id, 'the instance base keeps namespaced parent ids'
+    stack.channel_for(layer_by_id(member_id), 'ROUGHNESS').value = .35
+    g2, _ = modules.save_module(bpy.context, ts, layer_by_id(grouped_id), Path(directory) / 'g2.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(g_instance_id), g2)
+    assert version == 2 and conflicts == [], conflicts
+    intact(named(layer_by_id(g_instance_id), member_id), g_token)
+    modules.update(ts, layer_by_id(g_instance_id), g2, replace=True)
+    intact(named(layer_by_id(g_instance_id), member_id), g_token)
+    g3, _ = modules.save_module(bpy.context, ts, layer_by_id(g_instance_id), Path(directory) / 'g3.openpaintmaterial')
+    data, _ = read(g3)
+    saved_masks = next(layer for layer in data['layers'] if layer['id'] == member_id)['masks']
+    assert saved_masks[0]['id'] == group_id and saved_masks[1]['parent_id'] == group_id, saved_masks
+    reinserted = loader.apply(ts, g3)[0]
+    intact(named(reinserted, member_id), reinserted.module_instance)
+    print('MODULE_UPDATE mask groups: PASS', flush=True)
+
+    # Updates neither duplicate unchanged texture assets nor orphan cache images, and a layer's
+    # Cache mode survives; a refused update decodes nothing.
+    textured = stack.add(ts, 'FOLDER', 'Textured'); textured_id = textured.id
+    detailed = stack.add(ts, 'FILL', 'Detailed'); detailed_id = detailed.id
+    detailed.parent_id = textured_id
+    only(detailed, 'ROUGHNESS'); dprop = stack.channel_for(detailed, 'ROUGHNESS')
+    dprop.image = images.create('Detail texture', 64)
+    images.write(dprop.image, np.random.default_rng(1).random((64, 64, 4), np.float32), pack=False)
+    t1, t_block = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't1.openpaintmaterial', 'Textured')
+    before_insert = image_names()
+    t_instance = loader.apply(ts, t1)[0]
+    t_instance_id, t_token = t_instance.id, t_instance.module_instance
+    asset = stack.channel_for(named(t_instance, detailed_id), 'ROUGHNESS').image
+    assert asset is not None and asset.name != 'Detail texture' and asset.get(modules.ASSET_HASH)
+    asset_name = asset.name
+    assert image_names() == before_insert | {asset_name}
+    # A cached instance layer, and a local layer added inside the instance, both with a cache image.
+    def fake_cache(layer):
+        layer.cache_mode = 'CACHED'
+        row = next(row for row in layer.cache if row.channel == 'ROUGHNESS')
+        row.image = images.create('Cache of ' + layer.name, 64)
+        row.image[layer_cache.TAG] = layer.id
+        row.provenance = 'stale'
+        return row.image.name
+    cache_name = fake_cache(named(t_instance, detailed_id))
+    local_layer = stack.add(ts, 'FILL', 'Local'); local_layer_id = local_layer.id
+    local_layer.parent_id = t_instance_id
+    local_cache_name = fake_cache(layer_by_id(local_layer_id))
+    settled = image_names()
+    layer_by_id(detailed_id).opacity = .6
+    t2, _ = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't2.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(t_instance_id), t2)
+    assert version == 2 and conflicts == [], conflicts
+    assert image_names() == settled, image_names() ^ settled
+    updated = named(layer_by_id(t_instance_id), detailed_id)
+    assert stack.channel_for(updated, 'ROUGHNESS').image == asset, 'an unchanged asset was re-imported'
+    assert updated.cache_mode == 'CACHED' and next(row for row in updated.cache if row.channel == 'ROUGHNESS').image.name == cache_name
+    assert layer_by_id(local_layer_id).cache_mode == 'CACHED'
+    modules.write_base(t_block['id'], 2, modules.read_base(t_block['id'], 2))
+    modules.update(ts, layer_by_id(t_instance_id), t2)
+    assert image_names() == settled, image_names() ^ settled
+    # Replace drops the local layer, and with it its cache image.
+    modules.update(ts, layer_by_id(t_instance_id), t2, replace=True)
+    assert not any(layer.id == local_layer_id for layer in ts.layers)
+    assert image_names() == settled - {local_cache_name}, image_names() ^ settled
+    assert stack.channel_for(named(layer_by_id(t_instance_id), detailed_id), 'ROUGHNESS').image == asset
+    # A changed asset replaces the instance's copy instead of piling up next to it.
+    images.write(dprop.image, np.random.default_rng(2).random((64, 64, 4), np.float32), pack=False)
+    t3, _ = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't3.openpaintmaterial')
+    modules.update(ts, layer_by_id(t_instance_id), t3)
+    replaced = stack.channel_for(named(layer_by_id(t_instance_id), detailed_id), 'ROUGHNESS').image
+    assert replaced.name != asset_name and asset_name not in image_names()
+    assert image_names() == (settled - {local_cache_name, asset_name}) | {replaced.name}, image_names() ^ settled
+    settled = image_names()
+    # Without a base snapshot the update is refused before any asset is decoded.
+    bpy.data.texts.remove(bpy.data.texts[modules.base_name(t_block['id'], 3)])
+    layer_by_id(detailed_id).opacity = .7
+    t4, _ = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't4.openpaintmaterial')
+    for _ in range(2):
+        try:
+            modules.update(ts, layer_by_id(t_instance_id), t4)
+        except ValueError as error:
+            assert 'base snapshot' in str(error)
+        else:
+            raise AssertionError('an instance without a base updated')
+    assert image_names() == settled, image_names() ^ settled
+    print('MODULE_UPDATE datablock economy: PASS', flush=True)
+
+    # A layer the artist adds inside an instance keeps its id across updates, so a consumer outside
+    # the instance still finds its published output.
+    extra = stack.add(ts, 'FILL', 'Extra'); extra_id = extra.id
+    extra.parent_id = t_instance_id
+    only(extra, 'ROUGHNESS'); stack.channel_for(extra, 'ROUGHNESS').value = .1
+    extra.publish_output = True
+    consumer = stack.add(ts, 'FILL', 'Consumer'); consumer_id = consumer.id
+    only(consumer, 'ROUGHNESS'); stack.channel_for(consumer, 'ROUGHNESS').anchor = anchors.output_id(extra_id)
+    assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
+    version, conflicts = modules.update(ts, layer_by_id(t_instance_id), t4, replace=True)   # the base is gone
+    assert version == 4 and not any(layer.id == extra_id for layer in ts.layers)   # Replace discards the addition
+    assert warnings(ts) == ['Consumer: anchor point is missing'], warnings(ts)
+    extra = stack.add(ts, 'FILL', 'Extra'); extra_id = extra.id
+    extra.parent_id = t_instance_id
+    only(extra, 'ROUGHNESS'); stack.channel_for(extra, 'ROUGHNESS').value = .1
+    extra.publish_output = True
+    stack.channel_for(layer_by_id(consumer_id), 'ROUGHNESS').anchor = anchors.output_id(extra_id)
+    assert not warnings(ts)
+    layer_by_id(detailed_id).opacity = .8
+    t5, _ = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't5.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(t_instance_id), t5)
+    assert version == 5 and conflicts == [], conflicts
+    assert layer_by_id(extra_id).parent_id == t_instance_id, 'the local addition was re-namespaced'
+    assert stack.channel_for(layer_by_id(consumer_id), 'ROUGHNESS').anchor == anchors.output_id(extra_id)
+    assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
+    layer_by_id(detailed_id).opacity = .9
+    t6, _ = modules.save_module(bpy.context, ts, layer_by_id(textured_id), Path(directory) / 't6.openpaintmaterial')
+    modules.update(ts, layer_by_id(t_instance_id), t6)
+    assert layer_by_id(extra_id).parent_id == t_instance_id and not warnings(ts)
+    print('MODULE_UPDATE local additions keep their ids: PASS', flush=True)
+
+    # Merged dicts restore in RNA order: a mesh selector edited on both sides keeps the name its
+    # pointer mirrors even when the merge hands the name before the pointer.
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    bolts = bpy.context.object; bolts.name = 'Bolts'
+    masked = stack.add(ts, 'FOLDER', 'Masked'); masked_id = masked.id
+    bolted = stack.add(ts, 'FILL', 'Bolted'); bolted_id = bolted.id
+    bolted.parent_id = masked_id
+    only(bolted, 'ROUGHNESS')
+    mesh_mask = bolted.masks.add(); mesh_mask.id, mesh_mask.source = new_id(), 'MESH'
+    mesh_mask.mesh.kind = 'OBJECT'; mesh_mask.mesh.object = bolts
+    m1, m_block = modules.save_module(bpy.context, ts, layer_by_id(masked_id), Path(directory) / 'm1.openpaintmaterial', 'Masked')
+    m_instance = loader.apply(ts, m1)[0]
+    m_instance_id, m_token = m_instance.id, m_instance.module_instance
+    selector = named(m_instance, bolted_id).masks[0].mesh
+    assert selector.object is None and selector.object_name == 'Bolts'
+    selector.include_children = False   # local edit
+    layer_by_id(bolted_id).masks[0].mesh.softness = .5   # the author's edit (radians)
+    m2, _ = modules.save_module(bpy.context, ts, layer_by_id(masked_id), Path(directory) / 'm2.openpaintmaterial')
+    data, assets = read(m2)
+    with loader.decode_assets(assets, []) as decode:
+        parent_raw = [decode(layer) for layer in data['layers']]
+    parent = modules.comparable(parent_raw)
+    for layer in parent:
+        for mask in layer['masks']:
+            mask['mesh'] = dict(reversed(list(mask['mesh'].items())))   # names before pointers
+    version, conflicts = modules.apply_update(ts, layer_by_id(m_instance_id), parent, 2, 'Masked', 'library:' + m2.name, [],
+                                              parent_raw=parent_raw)
+    assert version == 2 and conflicts == [], conflicts
+    selector = named(layer_by_id(m_instance_id), bolted_id).masks[0].mesh
+    assert selector.object_name == 'Bolts' and selector.resolve('object') == bolts, selector.object_name
+    assert selector.include_children is False and abs(selector.softness - .5) < 1e-6
+    print('MODULE_UPDATE restore order: PASS', flush=True)
+
+    # A duplicated instance is a second instance under its own token: its ids keep their plain
+    # part, so Update merges it against the shared base (no spurious conflicts, no id rewrite)
+    # and a consumer outside the copy keeps finding the copy's anchors. Duplicating the origin
+    # folder namespaces the copy the same way.
+    from open_painter.core import texture_set_manager as sets
+    damage2 = stack.add(ts, 'FOLDER', 'Damage2'); damage2_id = damage2.id
+    scratched = stack.add(ts, 'FILL', 'Scratched'); scratched_id = scratched.id
+    scratched.parent_id = damage2_id
+    only(scratched, 'ROUGHNESS'); stack.channel_for(scratched, 'ROUGHNESS').value = .9
+    scratched.publish_output = True
+    d1, d_block = modules.save_module(bpy.context, ts, layer_by_id(damage2_id), Path(directory) / 'd1.openpaintmaterial', 'Damage2')
+    d_instance = loader.apply(ts, d1)[0]
+    d_instance_id, d_token = d_instance.id, d_instance.module_instance
+    stack.channel_for(named(d_instance, scratched_id), 'ROUGHNESS').value = .85   # local edit
+    copy_id = stack.duplicate(ts, stack.index_of(ts, d_instance_id)).id
+    copy = layer_by_id(copy_id)
+    assert copy.module_id == d_block['id'] and copy.module_instance and copy.module_instance != d_token
+    assert copy_id == copy.module_instance + '.' + damage2_id, copy_id
+    copy_scratched = named(copy, scratched_id)
+    assert copy_scratched.parent_id == copy_id
+    assert {layer.id for layer in modules.instances(ts, d_block['id'])} == {damage2_id, d_instance_id, copy_id}
+    consumer = stack.add(ts, 'FILL', 'Copy consumer'); consumer_id = consumer.id
+    only(consumer, 'ROUGHNESS'); stack.channel_for(consumer, 'ROUGHNESS').anchor = anchors.output_id(copy_scratched.id)
+    assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
+    layer_by_id(scratched_id).opacity = .5
+    d2, _ = modules.save_module(bpy.context, ts, layer_by_id(damage2_id), Path(directory) / 'd2.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(copy_id), d2)
+    assert version == 2 and conflicts == [], conflicts
+    copy = layer_by_id(copy_id)
+    assert copy.module_version == 2 and copy.module_id == d_block['id']
+    copy_scratched = named(copy, scratched_id)
+    assert abs(copy_scratched.opacity - .5) < 1e-6, 'the new version applied to the copy'
+    assert abs(stack.channel_for(copy_scratched, 'ROUGHNESS').value - .85) < 1e-6, 'the local edit travelled with the copy'
+    assert not issues(ts) and not warnings(ts), (issues(ts), warnings(ts))
+    version, conflicts = modules.update(ts, layer_by_id(d_instance_id), d2)
+    assert version == 2 and conflicts == [], conflicts
+    origin_copy_id = stack.duplicate(ts, stack.index_of(ts, damage2_id)).id
+    origin_copy = layer_by_id(origin_copy_id)
+    assert origin_copy.module_instance and origin_copy_id == origin_copy.module_instance + '.' + damage2_id
+    stack.channel_for(named(origin_copy, scratched_id), 'ROUGHNESS').value = .8
+    layer_by_id(scratched_id).opacity = .4
+    d3, _ = modules.save_module(bpy.context, ts, layer_by_id(damage2_id), Path(directory) / 'd3.openpaintmaterial')
+    version, conflicts = modules.update(ts, layer_by_id(origin_copy_id), d3)
+    assert version == 3 and conflicts == [], conflicts
+    assert abs(named(layer_by_id(origin_copy_id), scratched_id).opacity - .4) < 1e-6
+    assert abs(stack.channel_for(named(layer_by_id(origin_copy_id), scratched_id), 'ROUGHNESS').value - .8) < 1e-6
+    # A duplicated set carries its instances the same way (the set collection is reallocated
+    # by the copy: nothing below reads ``ts``).
+    tokens = {d_token, layer_by_id(copy_id).module_instance, layer_by_id(origin_copy_id).module_instance}
+    set_copy = sets.duplicate(scene, next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == ts.id))
+    copied = modules.instances(set_copy, d_block['id'])
+    assert len(copied) == 4 and len({item.module_instance for item in copied}) == 4   # the origin folder too
+    assert {item.module_instance for item in copied}.isdisjoint(tokens)
+    assert all(item.id == item.module_instance + '.' + damage2_id for item in copied)
+    assert not issues(set_copy), issues(set_copy)
+    version, conflicts = modules.update(set_copy, copied[0], d3)
+    assert version == 3 and conflicts == [], conflicts
+    scene.open_painter.texture_sets.remove(next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == set_copy.id))
+    print('MODULE_UPDATE duplicated instances: PASS', flush=True)
 print('MODULE_UPDATE_PASS', flush=True)
 open_painter.unregister()

@@ -36,6 +36,12 @@ class MathTests(unittest.TestCase):
             [0.7, 0, 0, 0.7],
         )
 
+    def test_packing_only_constants(self):
+        # Zero/One slots load no channel, so the exporter sizes the output itself.
+        np.testing.assert_allclose(pack({}, ("ONE", "ZERO", "ONE", "ONE_MINUS_ONE"), shape=(2, 2, 4))[1, 1], [1, 0, 1, 0])
+        with self.assertRaises(ValueError):
+            pack({}, ("ONE", "ONE", "ONE", "ONE"))
+
     def test_uv_centers(self):
         data = np.arange(16, dtype=np.float32).reshape(2, 2, 4)
         np.testing.assert_allclose(sample_uv(data, np.array(0.25), np.array(0.25)), data[0, 0])

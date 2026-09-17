@@ -10,16 +10,54 @@ import bpy
 import numpy as np
 
 CACHE = 'custom_graph'
+COORDINATE_INPUTS = {'uv', 'vector', 'coordinates'}
+PLACEMENT_INPUTS = {'position', 'normal'}   # wired from Geometry: world space in the bake and the shader
+
+
+def reads_placement(tree):
+    """Whether the group exposes a Position or Normal input: its coverage then moves with the object."""
+    return tree is not None and any(item.item_type == 'SOCKET' and item.in_out == 'INPUT'
+                                    and item.name.lower() in PLACEMENT_INPUTS for item in tree.interface.items_tree)
+
+
+def _value(value):
+    if value is None or isinstance(value, str):   # String/Menu sockets: a str iterates as characters
+        return value
+    try:
+        return tuple(round(float(v), 6) for v in value)
+    except TypeError:
+        return round(float(value), 6) if isinstance(value, (int, float)) else str(value)
 
 
 def _socket_value(socket):
     if socket.is_linked or not hasattr(socket, 'default_value'):
         return None
-    value = socket.default_value
-    try:
-        return tuple(round(float(v), 6) for v in value)
-    except TypeError:
-        return round(float(value), 6) if isinstance(value, (int, float)) else str(value)
+    return _value(socket.default_value)
+
+
+def _node_data(node):
+    """Read-only sub-structs the property walk skips: ramp stops, curve points, image frames."""
+    data = [('mute', node.mute)]
+    ramp = getattr(node, 'color_ramp', None)
+    if ramp is not None:
+        data.append(('color_ramp', ramp.interpolation, ramp.color_mode, ramp.hue_interpolation,
+                     tuple((round(float(e.position), 6), _value(e.color)) for e in ramp.elements)))
+    mapping = getattr(node, 'mapping', None)
+    if mapping is not None:
+        data.append(('mapping', mapping.tone, mapping.extend, mapping.use_clip,
+                     _value((mapping.clip_min_x, mapping.clip_min_y, mapping.clip_max_x, mapping.clip_max_y)),
+                     _value(mapping.black_level), _value(mapping.white_level),
+                     tuple(tuple((_value(p.location), p.handle_type) for p in curve.points) for curve in mapping.curves)))
+    user = getattr(node, 'image_user', None)
+    if user is not None:
+        data.append(('image_user', user.frame_current, user.frame_start, user.frame_offset, user.frame_duration,
+                     user.use_cyclic, user.use_auto_refresh))
+    texture = getattr(node, 'texture_mapping', None)
+    if texture is not None:
+        data.append(('texture_mapping', texture.vector_type, texture.mapping, texture.mapping_x, texture.mapping_y,
+                     texture.mapping_z, _value(texture.translation), _value(texture.rotation), _value(texture.scale),
+                     texture.use_min, texture.use_max, _value(texture.min), _value(texture.max)))
+    return tuple(data)
 
 
 def signature(tree, seen=None):
@@ -32,7 +70,7 @@ def signature(tree, seen=None):
     seen = seen | {tree.name}
     nodes = []
     for node in tree.nodes:
-        entry = [node.name, node.bl_idname, tuple(_socket_value(s) for s in node.inputs)]
+        entry = [node.name, node.bl_idname, tuple(_socket_value(s) for s in node.inputs), _node_data(node)]
         for prop in node.bl_rna.properties:
             if prop.identifier in {'rna_type', 'name', 'label', 'location', 'width', 'height', 'select', 'inputs',
                                    'outputs', 'parent', 'color', 'use_custom_color', 'hide', 'mute', 'show_options',
@@ -54,9 +92,13 @@ def signature(tree, seen=None):
                 elif value is not None and hasattr(value, 'name'):
                     entry.append((prop.identifier, value.name))
         nodes.append(tuple(entry))
-    links = tuple(sorted((l.from_node.name, l.from_socket.identifier, l.to_node.name, l.to_socket.identifier)
+    links = tuple(sorted((l.from_node.name, l.from_socket.identifier, l.to_node.name, l.to_socket.identifier, l.is_muted)
                          for l in tree.links))
-    return (tree.name, tuple(nodes), links)
+    # A fresh group instance (the bake's and the shader's) takes unlinked input values from the
+    # interface defaults, and the socket names decide the UV/Position/Normal wiring.
+    interface = tuple((item.identifier, item.name, item.in_out, item.socket_type, _value(getattr(item, 'default_value', None)))
+                      for item in tree.interface.items_tree if item.item_type == 'SOCKET')
+    return (tree.name, tuple(nodes), links, interface)
 
 
 def _wire(material, tree):
@@ -69,7 +111,7 @@ def _wire(material, tree):
     geometry = nodes.new('ShaderNodeNewGeometry')
     for socket in group.inputs:
         name = socket.name.lower()
-        if name in {'uv', 'vector', 'coordinates'}:
+        if name in COORDINATE_INPUTS:
             links.new(coordinates.outputs['UV'], socket)
         elif name == 'position':
             links.new(geometry.outputs['Position'], socket)
@@ -131,14 +173,22 @@ def raster(ts, mask, n):
         bpy.data.images.remove(scratch)
 
 
-def evaluate(ts, mask, n, y0, y1, geometry_cache):
-    key = (CACHE, ts.id, mask.id, signature(mask.node_group), n)
+def evaluate(ts, mask, n, y0, y1, geometry_cache, cache=None):
+    # Baked over the assigned meshes: the raster follows the geometry stamp like the mask stack does.
+    key = (CACHE, ts.id, mask.id, signature(mask.node_group), n, getattr(geometry_cache, 'geometry_stamp', None))
     store = geometry_cache if geometry_cache is not None else {}
+    if cache is not None and key in cache:
+        return cache[key][y0:y1]
     if key in store:
-        return store[key][y0:y1]
-    values = raster(ts, mask, n)
-    try:
-        store[key] = values
-    except TypeError:
-        pass
+        values = store[key]
+    else:
+        values = raster(ts, mask, n)
+        try:
+            store[key] = values
+        except TypeError:
+            pass
+    # A bake is far too expensive to repeat per strip when the shared allowance
+    # evicts it between strips: the job keeps its own reference.
+    if cache is not None:
+        cache[key] = values
     return values[y0:y1]

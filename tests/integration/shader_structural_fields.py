@@ -16,6 +16,7 @@ import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, shader_preview
+from open_painter.evaluation.metrics import Metrics
 from open_painter.utils.ids import new_id
 
 
@@ -132,6 +133,15 @@ field(prop_of, 'procedural', 'CHECKER', True)
 field(prop_of, 'procedural', '', True)
 field(effect_of, 'kind', 'GAMMA', True)
 field(effect_of, 'kind', 'GAUSSIAN_BLUR', True)
+# The blur makes the channel prefix a raster boundary; the opacity slider (the
+# opacity_percent mirror of the uniform) must not re-identify it per 1% step.
+with Metrics() as observed:
+    prop_of().opacity_percent = 60
+    info = shader_preview.diagnostics(scene, ts)
+    assert shader_preview.current(scene, ts) and not info['pending_resources'], info
+    assert observed.counts['shader_resource_requests'] == 0, observed.report()
+    assert abs(prop_of().opacity - .6) < 1e-6
+print('STRUCTURAL_FIELD channel.opacity_percent=60 numeric (boundary kept)', flush=True)
 field(effect_of, 'enabled', False, True)     # spatial: structural
 field(effect_of, 'kind', 'LEVELS', True)
 field(mask_of, 'generator', 'DIRT', True)

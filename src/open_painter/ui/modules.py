@@ -90,8 +90,10 @@ class OP_OT_module_update(SafeOperator, bpy.types.Operator):
     bl_description = ("Update this instance (or every instance of its module in the set) to the newest "
                       "library version, keeping your edits; conflicts keep your values and are listed")
     bl_options = {"REGISTER", "UNDO"}
-    all_instances: bpy.props.BoolProperty(name="All Instances", default=False)
-    replace: bpy.props.BoolProperty(name="Replace (discard local edits)", default=False)
+    # SKIP_SAVE: three buttons share this operator; a remembered Replace must not turn a later
+    # plain Update into a wholesale replace that drops the artist's edits.
+    all_instances: bpy.props.BoolProperty(name="All Instances", default=False, options={"SKIP_SAVE"})
+    replace: bpy.props.BoolProperty(name="Replace (discard local edits)", default=False, options={"SKIP_SAVE"})
 
     def run(self, context):
         ts, root = _root(context)
@@ -165,14 +167,15 @@ def draw_module_box(layout, context, ts, layer):
     box.label(text=layer.module_source or "unsaved definition")
     row = box.row(align=True)
     row.enabled = not layer.module_detached
-    row.operator("open_painter.module_update", text="Update", icon="FILE_REFRESH")
+    op = row.operator("open_painter.module_update", text="Update", icon="FILE_REFRESH")
+    op.all_instances, op.replace = False, False
     op = row.operator("open_painter.module_update", text="Update All")
-    op.all_instances = True
+    op.all_instances, op.replace = True, False
     row.operator("open_painter.module_save", text="Save Version", icon="EXPORT")
     row = box.row(align=True)
     row.operator("open_painter.module_detach", text="Detach", icon="UNLINKED")
     op = row.operator("open_painter.module_update", text="Replace with Library Version")
-    op.replace = True
+    op.all_instances, op.replace = False, True
 
 
 CLASSES = (OP_OT_module_save, OP_OT_module_insert, OP_OT_module_update, OP_OT_module_detach)

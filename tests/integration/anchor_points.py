@@ -139,6 +139,12 @@ assert stack.channel_for(copy, 'ROUGHNESS').anchor == added.id
 assert bpy.ops.open_painter.anchor_pick(target='CHANNEL', clear=True) == {'FINISHED'}
 assert stack.channel_for(copy, 'ROUGHNESS').anchor == ''
 assert bpy.ops.open_painter.anchor_pick(target='CHANNEL', choice=channel_anchor_id) == {'FINISHED'}
+# UI buttons (undo=True here) replay the operator's last-used properties: a clear
+# click must not ghost clear=True into the next picker click on any consumer.
+assert bpy.ops.open_painter.anchor_pick('EXEC_DEFAULT', True, target='CHANNEL', clear=True) == {'FINISHED'}
+assert stack.channel_for(copy, 'ROUGHNESS').anchor == ''
+assert bpy.ops.open_painter.anchor_pick('EXEC_DEFAULT', True, target='CHANNEL', choice=channel_anchor_id) == {'FINISHED'}
+assert stack.channel_for(copy, 'ROUGHNESS').anchor == channel_anchor_id, stack.channel_for(copy, 'ROUGHNESS').anchor
 assert bpy.ops.open_painter.anchor_locate(anchor_id=channel_anchor_id) == {'FINISHED'}
 assert ts.layers[ts.active_layer].id == source_id
 assert scene.open_painter.properties_channel == 'ROUGHNESS'

@@ -92,7 +92,14 @@ class OP_OT_geometry_effect(SafeOperator,bpy.types.Operator):
                 layer=active(ts)
                 if layer is None: raise ValueError('Select the layer whose mask drives the displacement')
                 image=publish_mask(ts,layer)
-            helper=displace.create(ts,obj,image,self.levels,self.amplitude,self.midlevel,self.smooth)
+            previous=None
+            if obj.get('kind')=='DISPLACE' and obj.parent is not None:
+                # The last helper is active after a run: a second click retunes the source
+                # and replaces the live helper instead of displacing the displaced copy.
+                previous=None if obj.get('frozen') else obj
+                obj=obj.parent
+            helper=displace.create(ts,obj,image,self.levels,self.amplitude,self.midlevel,self.smooth,replacing=previous)
+            if previous is not None: manager.remove(previous)
         elif self.action=='EXTRACT_CURVES':
             from ..geometry_effects import curves
             from ..core.published_outputs import publish_mask
@@ -161,15 +168,19 @@ class OP_PT_geometry_effects(bpy.types.Panel):
         row.operator('open_painter.geometry_effect',text='Seam Bead on Curve').action='SEAM'
         row=layout.row(align=True)
         row.operator('open_painter.geometry_effect',text='Bake Back to Normal / AO',icon='RENDER_STILL').action='BAKE_BACK'
+        obj=context.active_object
         if obj and obj.get('kind')=='DISPLACE':
             row=layout.row(align=True)
             row.operator('open_painter.geometry_effect',text='Apply').action='APPLY'
             row.operator('open_painter.geometry_effect',text='Replace Source Mesh').action='REPLACE_SOURCE'
-        obj=context.active_object
         if obj and obj.get('open_painter_geometry_effect')=='INSTANCE_HELPER':
+            from ..geometry_effects import manager
             layout.label(text=f"{obj.get('instance_count',0):,} instances · bounded geometry")
-            if obj.get('kind') in {'RUST','MOSS','SNOW','SPLINTERS','PEEL'}:
-                for name in ('density','size','seed','lift'):
+            kind=obj.get('kind')
+            # Weld, stitch and seam helpers have no regenerate path; a displaced copy is retuned
+            # through its modifier inputs (Amplitude, Midlevel), so only its creation-time keys show.
+            if kind in manager.KINDS or kind=='DISPLACE':
+                for name in (('levels','smooth') if kind=='DISPLACE' else ('density','size','seed','lift')):
                     layout.prop(obj,f'["{name}"]',text=name.title())
                 layout.operator('open_painter.geometry_effect',text='Regenerate').action='REGENERATE'
                 layout.operator('open_painter.geometry_effect',text='Unfreeze' if obj.get('frozen') else 'Freeze').action='UNFREEZE' if obj.get('frozen') else 'FREEZE'

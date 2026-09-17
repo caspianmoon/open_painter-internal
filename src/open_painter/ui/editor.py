@@ -33,9 +33,10 @@ def is_area(area):
 def mount(window, area):
     """Adapt only the chosen area to Blender's native painting backend."""
     key = area.as_pointer()
-    if key not in _active:
-        _active[key] = "VIEW_3D"
-        _previous[key] = "VIEW_3D"
+    # Re-picking the editor type from the 2D backend must land on the 3D
+    # backend, or scan's type check drops the area it just mounted.
+    _active[key] = "VIEW_3D"
+    _previous.setdefault(key, "VIEW_3D")
     area.type = "VIEW_3D"
     _spaces[key] = area.spaces.active.as_pointer()
     area.spaces.active.shading.type = "MATERIAL"
@@ -96,6 +97,24 @@ def persist(screen):
     ]
 
 
+def prune():
+    """Forget areas Blender freed behind the add-on's back.
+
+    Close Area and Join never go through close(); a later Split reuses the
+    freed ScrArea and Space addresses, and a stale key would make the new,
+    ordinary viewport a Painter area. Inactive workspaces keep their entries:
+    save() persists every screen, not only the ones a window shows.
+    """
+    from .dock import state
+
+    live = {area.as_pointer() for screen in bpy.data.screens for area in screen.areas}
+    for key in [key for key in _active if key not in live]:
+        _active.pop(key, None)
+        _previous.pop(key, None)
+        _spaces.pop(key, None)
+        state.states.pop(key, None)
+
+
 def scan(window):
     from .dock import state
 
@@ -117,6 +136,9 @@ def scan(window):
             _spaces[key] = _spaces.pop(owner)
             if owner in state.states:
                 state.states[key] = state.states.pop(owner)
+    # Un-maximizing frees the temp area and hands the Space back in one
+    # operator: the follow above must see that owner before it is forgotten.
+    prune()
     for area in window.screen.areas:
         if area.type == "NODE_EDITOR" and area.spaces.active.tree_type == EDITOR_ID:
             mount(window, area)
@@ -219,6 +241,9 @@ def register():
     bpy.app.handlers.save_pre.append(save)
     bpy.app.handlers.save_pre.append(unmark_handles)
     bpy.app.handlers.save_post.append(remark_handles)
+    # A write that fails (read-only folder, full or unmounted disk) ends in
+    # save_post_fail, not save_post: the shelf must come back either way.
+    bpy.app.handlers.save_post_fail.append(remark_handles)
     bpy.types.VIEW3D_HT_header.prepend(header)
     bpy.types.IMAGE_HT_header.prepend(header)
     bpy.app.timers.register(restore_initial, first_interval=0.1)
@@ -234,7 +259,8 @@ def unregister():
         bpy.app.timers.unregister(restore_initial)
     from .native import remark_handles, unmark_handles
     for handlers, fn in ((bpy.app.handlers.load_post, load), (bpy.app.handlers.save_pre, save),
-                         (bpy.app.handlers.save_pre, unmark_handles), (bpy.app.handlers.save_post, remark_handles)):
+                         (bpy.app.handlers.save_pre, unmark_handles), (bpy.app.handlers.save_post, remark_handles),
+                         (bpy.app.handlers.save_post_fail, remark_handles)):
         if fn in handlers:
             handlers.remove(fn)
     bpy.types.VIEW3D_HT_header.remove(header)

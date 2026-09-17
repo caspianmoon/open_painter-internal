@@ -108,6 +108,115 @@ island_height = rgba(np.where(u < .5, .3, .7).astype(np.float32))
 np.testing.assert_allclose(combined(island_ts, neutral, island_height), neutral, atol=1e-7,
                            err_msg="Disconnected touching UV islands leaked height across their border")
 
+# A dense evaluated mesh with mirrored, disconnected and degenerate triangles
+# must produce the same metric and chart partition as the per-triangle
+# reference, without ever building the per-triangle RNA list (which stalled
+# exports of large assets for tens of seconds).
+from unittest.mock import patch
+from open_painter.export.surface_normal import _uv_metric
+from open_painter.geometry import snapshots
+from open_painter.geometry.uv_rasterizer import tiles
+
+
+def reference_metric(ts, n):
+    metric = np.zeros((n, n, 3), np.float32)
+    charts = np.zeros((n, n), np.int32)
+    chart_offset = 1
+    with snapshots.targets(ts) as entries:
+        for entry in entries:
+            vertices, loops = entry["tri_vertices"], entry["tri_loops"]
+            parents = list(range(len(vertices)))
+
+            def root(index):
+                while parents[index] != index:
+                    parents[index] = parents[parents[index]]
+                    index = parents[index]
+                return index
+
+            edges = {}
+            for index in range(len(vertices)):
+                uv = entry["uv"][loops[index]]
+                du, dv = uv[1] - uv[0], uv[2] - uv[0]
+                orientation = 1 if du[0] * dv[1] - du[1] * dv[0] >= 0 else -1
+                for a, b in ((0, 1), (1, 2), (2, 0)):
+                    if vertices[index][a] > vertices[index][b]:
+                        a, b = b, a
+                    key = (vertices[index][a], vertices[index][b], tuple(uv[a]), tuple(uv[b]), orientation)
+                    parents[root(index)] = root(edges.setdefault(key, index))
+            chart_ids = [root(index) for index in range(len(vertices))]
+            for index, chart in enumerate(chart_ids):
+                xyz = entry["positions"][vertices[index]]
+                uv = entry["uv"][loops[index]]
+                duv1, duv2 = uv[1] - uv[0], uv[2] - uv[0]
+                determinant = duv1[0] * duv2[1] - duv1[1] * duv2[0]
+                if abs(determinant) < 1e-12:
+                    continue
+                edge1, edge2 = xyz[1] - xyz[0], xyz[2] - xyz[0]
+                dpdu = (edge1 * duv2[1] - edge2 * duv1[1]) / determinant
+                dpdv = (edge2 * duv1[0] - edge1 * duv2[0]) / determinant
+                length_u = np.linalg.norm(dpdu)
+                if length_u < 1e-12:
+                    continue
+                shear = np.dot(dpdu, dpdv) / length_u
+                length_v = np.linalg.norm(dpdv - dpdu * (shear / length_u))
+                if length_v < 1e-12:
+                    continue
+                for region, inside, *_ in tiles(uv, n):
+                    metric[region][inside] = (1 / length_u, -shear / (length_u * length_v), 1 / length_v)
+                    charts[region][inside] = chart_offset + chart
+            chart_offset += len(chart_ids)
+    return metric, charts
+
+
+dense_ts = sets.create(scene, "Dense relief mesh", 512)
+dense_ts.height_distance = .5
+dense_mesh = bpy.data.meshes.new("Dense relief islands")
+# Two quads sharing an edge but with the second one's UVs mirrored back over
+# the first (a seam the charts must not cross, later triangles winning the
+# overlap), a quad whose UV corners exactly touch the first one's
+# (disconnected), a quad overlapping the first elsewhere in the atlas and a
+# UV-degenerate sliver that must not overwrite covered texels.
+dense_mesh.from_pydata(
+    [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (2, 0, 0), (2, 1, 0),
+     (3, 0, 0), (4, 0, 0), (4, 1, 0), (3, 1, 0),
+     (5, 0, 0), (6, 0, .5), (6, 1, .5), (5, 1, 0),
+     (7, 0, 0), (7, 1, 0), (7, 2, 0)],
+    [], [(0, 1, 2, 3), (1, 4, 5, 2), (6, 7, 8, 9), (10, 11, 12, 13), (14, 15, 16)])
+dense_uv = dense_mesh.uv_layers.new(name="Render UV")
+for item, coordinate in zip(dense_uv.data, (
+        (0, 0), (.4, 0), (.4, .4), (0, .4),
+        (.4, 0), (.2, 0), (.2, .4), (.4, .4),
+        (.4, 0), (.8, 0), (.8, .4), (.4, .4),
+        (.1, .1), (.3, .1), (.3, .3), (.1, .3),
+        (.5, .5), (.5, .5), (.5, .5))):
+    item.uv = coordinate
+dense_obj = bpy.data.objects.new("Dense relief islands", dense_mesh)
+scene.collection.objects.link(dense_obj)
+dense_obj.scale = (1.5, .75, 1)
+subdivision = dense_obj.modifiers.new("Dense", "SUBSURF")
+subdivision.levels = 4
+subdivision.subdivision_type = "SIMPLE"
+sets.assign(scene, dense_ts, dense_obj)
+scene.view_layers[0].update()
+expected_metric, expected_charts = reference_metric(dense_ts, 256)
+assert len(np.unique(expected_charts)) >= 5, np.unique(expected_charts)
+
+
+def no_rna_triangles(self, key):
+    assert key != "triangles", "the export metric materialised the per-triangle RNA list"
+    raise KeyError(key)
+
+
+with patch.object(snapshots.Target, "__missing__", no_rna_triangles):
+    actual_metric, actual_charts = _uv_metric(dense_ts, 256)
+np.testing.assert_allclose(actual_metric, expected_metric, rtol=1e-6, atol=1e-6)
+# Chart labels are arbitrary; the partition of texels into charts is not.
+_, expected_partition = np.unique(expected_charts, return_inverse=True)
+_, actual_partition = np.unique(actual_charts, return_inverse=True)
+np.testing.assert_array_equal(actual_partition, expected_partition,
+                              err_msg="Vectorised UV charts partition the atlas differently")
+np.testing.assert_array_equal((actual_charts > 0), (expected_charts > 0))
+
 # Export both engine conventions and ensure the authoring image and the
 # preview's single Bump connection are unchanged by exporting.
 LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)

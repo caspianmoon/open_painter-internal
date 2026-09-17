@@ -98,6 +98,78 @@ bpy.context.view_layer.update()
 _, triangulated_border = pixels(ts, "UV_BORDER")
 assert np.allclose(triangulated_border, border, atol=1e-4)
 
+
+def quads(name, islands, resolution):
+    """Disconnected quads, each its own UV island, assigned to a fresh set."""
+    data = bpy.data.meshes.new(name)
+    data.from_pydata([(x, y, 0) for index in range(len(islands)) for x, y in ((index, 0), (index + 1, 0), (index + 1, 1), (index, 1))],
+                     [], [(4 * index, 4 * index + 1, 4 * index + 2, 4 * index + 3) for index in range(len(islands))])
+    layer = data.uv_layers.new(name="Render")
+    for face, corners in zip(data.polygons, islands):
+        for loop, uv in zip(face.loop_indices, corners):
+            layer.data[loop].uv = uv
+    holder = bpy.data.objects.new(name, data)
+    bpy.context.collection.objects.link(holder)
+    bpy.context.view_layer.update()
+    holder_ts = sets.create(bpy.context.scene, name, resolution)
+    sets.assign(bpy.context.scene, holder_ts, holder)
+    return holder, holder_ts
+
+
+# Diagonal borders: the falloff equals the plain per-texel distance to the
+# nearest border edge (islands far enough apart that only their own edges count).
+diamond = ((.25, .05), (.45, .25), (.25, .45), (.05, .25))
+sliver = ((.55, .55), (.95, .6), (.94, .7), (.56, .62))
+_, diagonal_ts = quads("Diagonal islands", (diamond, sliver), 512)
+diagonal_ts.bake.uv_border_width = 3
+_, diagonal = pixels(diagonal_ts, "UV_BORDER")
+covered_rows, covered_cols = np.nonzero(diagonal[..., 3] > 0)
+points = np.stack((covered_cols, covered_rows), axis=1).astype(np.float64)
+nearest = np.full(len(points), np.inf)
+for corners in (diamond, sliver):
+    for a, b in zip(corners, corners[1:] + corners[:1]):
+        a, b = np.array(a) * 512 - .5, np.array(b) * 512 - .5
+        t = np.clip(((points - a) @ (b - a)) / ((b - a) @ (b - a)), 0, 1)
+        nearest = np.minimum(nearest, np.linalg.norm(points - a - t[:, None] * (b - a), axis=1))
+expected = np.clip(1 - nearest / 3, 0, 1)
+assert np.allclose(diagonal[covered_rows, covered_cols, 0], expected, atol=1e-4)
+assert (expected > 0).sum() > 200 and (expected == 0).sum() > 200
+# Edges spanning most of a large tile only touch the texels near them: six
+# full-width strips at 2048 (twelve long edges) stay well under the square
+# per-edge grids that used to take a GB here and swap or fail at 4k and 8k.
+import time
+import tracemalloc
+crate = tuple(((.05, .05 + .15 * index), (.95, .05 + .15 * index), (.95, .17 + .15 * index), (.05, .17 + .15 * index))
+              for index in range(6))
+_, crate_ts = quads("Crate islands", crate, 2048)
+tracemalloc.start()
+started = time.perf_counter()
+_, crate_border = pixels(crate_ts, "UV_BORDER")
+crate_seconds = time.perf_counter() - started
+crate_peak = tracemalloc.get_traced_memory()[1]
+tracemalloc.stop()
+assert crate_peak < 600 * 2 ** 20, f"UV border bake peaked at {crate_peak / 2 ** 20:.0f} MB"
+assert crate_border[int(.11 * 2048), int(.05 * 2048), 0] > .5 and crate_border[int(.11 * 2048), 1024, 0] == 0
+print(f"crate border at 2048: {crate_seconds:.2f}s, {crate_peak / 2 ** 20:.0f} MB traced")
+# UV island IDs: one colour per island, gathered rather than compared per triangle.
+side = 40
+many = tuple(((x / side + .002, y / side + .002), ((x + 1) / side - .002, y / side + .002),
+              ((x + 1) / side - .002, (y + 1) / side - .002), (x / side + .002, (y + 1) / side - .002))
+             for y in range(side) for x in range(side))
+many_object, many_ts = quads("Many islands", many, 512)
+started = time.perf_counter()
+many_image, many_ids = pixels(many_ts, "UV_ISLAND")
+many_seconds = time.perf_counter() - started
+many_palette = json.loads(many_image["id_palette"])
+assert len(many_palette) == side * side
+assert len({tuple(color) for color in many_palette.values()}) == side * side
+from open_painter.geometry.snapshots import _object_key
+for polygon in list(many_object.data.polygons)[::97]:
+    row, col = int((polygon.index // side + .5) * 512 / side), int((polygon.index % side + .5) * 512 / side)
+    assert many_ids[row, col, 3] == 1
+    assert np.allclose(many_ids[row, col, :3], many_palette[f"{_object_key(many_object)}|island:{polygon.index}"], atol=1e-6)
+print(f"{side * side} island IDs at 512: {many_seconds:.2f}s")
+
 # Open sheets have no valid opposing surface: do not replace thickness with AO/noise.
 ts.bake.thickness_resolution = "64"
 _, open_thickness = pixels(ts, "THICKNESS")
@@ -140,6 +212,8 @@ cube_ts.bake.cage_mode = "CUSTOM"  # Unrelated high-poly cage settings must not 
 bake_selected(bpy.context, cube_ts)
 assert {item.kind for item in cube_ts.baked_maps} == {"POSITION", "WORLD_NORMAL"}
 assert not cube_ts.bake.thickness
+# Adding sets reallocated the collection: re-resolve the first set.
+ts = next(item for item in bpy.context.scene.open_painter.texture_sets if item.name == "Utility data")
 assert len(ts.material.node_tree.nodes) == node_count
 register_map(cube_ts, "THICKNESS", thickness_image)
 

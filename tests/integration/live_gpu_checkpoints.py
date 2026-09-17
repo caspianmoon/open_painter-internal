@@ -4,6 +4,7 @@ Run Blender with --factory-startup --python and a real GPU window. Readbacks
 below are validation only; the production checkpoint path performs no copies,
 uploads, image writes or readbacks when it reuses a completed group.
 """
+from collections import Counter
 import json
 import os
 from pathlib import Path
@@ -164,6 +165,46 @@ def run():
         assert {key[0] for key in device._checkpoints}=={'c'}
         device.prune_checkpoints({'a','b'})
         assert not device._checkpoints and device._checkpoint_bytes==0
+
+        # One root touching more channels than fit is composed as a cycle on
+        # every edit. Resident sibling channels must keep hitting instead of
+        # thrashing, and no scratch texture may be allocated per edit.
+        cycle=[root('cycle',channel=channel) for channel in ('BASE_COLOR','ROUGHNESS','METALLIC')]
+        def edit(opacity):
+            totals=Counter()
+            for folder in cycle:
+                folder['opacity']=opacity
+                channel=folder['checkpoint_key'][2]
+                totals.update(compare('cycle-'+channel+'-'+str(opacity),[folder],channel).counts)
+            return totals
+        cold=edit(.63)
+        assert cold['live_checkpoint_adoptions']==2
+        assert cold['live_checkpoint_capacity_skips']==1
+        assert cold['live_checkpoint_evictions']==0
+        for opacity in (.41,.22):
+            warm_cycle=edit(opacity)
+            assert warm_cycle['live_checkpoint_hits']==2 and warm_cycle['live_checkpoint_misses']==1
+            assert warm_cycle['live_checkpoint_capacity_skips']==1
+            assert warm_cycle['live_checkpoint_evictions']==warm_cycle['live_checkpoint_adoptions']==0
+            assert warm_cycle['live_gpu_allocations']==0
+        pool=len(device._pool)
+        # Another owner's edit still ages the cycle out; the evicted texture
+        # returns to the scratch pool rather than being freed and reallocated.
+        other=root('other',channel='NORMAL')
+        evicting=compare('other-owner-evicts-resident-cycle',[other],'NORMAL')
+        assert evicting.counts['live_checkpoint_evictions']==1
+        assert evicting.counts['live_checkpoint_adoptions']==1
+        assert evicting.counts['live_gpu_allocations']==0
+        assert len(device._pool)==pool
+        assert {key[:3] for key in device._checkpoints}=={('cycle',n,'ROUGHNESS'),('other',n,'NORMAL')}
+        cycle[1]['children'][0]=leaf('DIFFERENCE')
+        cycle[1]['checkpoint_key']=('cycle',n,'ROUGHNESS','root-folder',(True,'edited'))
+        replaced=compare('child-edit-replaces-checkpoint-without-allocation',[cycle[1]],'ROUGHNESS')
+        assert replaced.counts['live_checkpoint_invalidations']==1
+        assert replaced.counts['live_checkpoint_adoptions']==1
+        assert replaced.counts['live_gpu_allocations']==0
+        assert len(device._pool)==pool
+        device.discard_checkpoints()
 
         # An untrusted annotation on another backdrop must never get cached.
         annotation=root(signature='wrong-position')

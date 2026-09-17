@@ -80,7 +80,64 @@ def _luma(data):
     return np.sum(data[..., :3] * np.array([0.2126, 0.7152, 0.0722], np.float32), axis=-1)
 
 
+# Direct convolution costs one full pass over the image per tap; the FFT
+# path costs a fixed handful, so kernels longer than this (sigma above 6)
+# are cheaper by FFT, and a 4k blur at the widest radius no longer takes
+# tens of seconds. Both compute the same clamped kernel; only rounding differs.
+FFT_TAPS = 40
+
+# Rows per FFT band: the float64 transform of a band stays a few megabytes.
+_BAND_ROWS = 64
+
+
+def _fft_length(length):
+    """Smallest transform length >= ``length`` with only 2, 3 and 5 as factors,
+    the radices pocketfft handles fastest."""
+    best = None
+    two = 1
+    while two < 2 * length:
+        three = two
+        while three < 2 * length:
+            five = three
+            while five < 2 * length:
+                if five >= length and (best is None or five < best):
+                    best = five
+                five *= 5
+            three *= 3
+        two *= 2
+    return best
+
+
+def _convolve_axis_fft(data, kernel, axis):
+    """The same clamped convolution as the direct taps, via float64 FFTs on
+    bands of the other axis. Edge padding of ``half`` plus zeros up to the
+    transform length keeps the circular wrap from reaching any output texel."""
+    half = len(kernel) // 2
+    length = data.shape[axis]
+    padded_length = length + 2 * half
+    size = _fft_length(padded_length)
+    spectrum = np.fft.rfft(np.roll(np.pad(kernel.astype(np.float64), (0, size - len(kernel))), -half))
+    shape = [1] * data.ndim
+    shape[axis] = -1
+    spectrum = spectrum.reshape(shape)
+    pad = [(0, 0)] * data.ndim
+    pad[axis] = (half, half + size - padded_length)
+    take = [slice(None)] * data.ndim
+    take[axis] = slice(half, half + length)
+    other = 1 - axis
+    out = np.empty(data.shape, np.float32)
+    for low in range(0, data.shape[other], _BAND_ROWS):
+        band = [slice(None)] * data.ndim
+        band[other] = slice(low, low + _BAND_ROWS)
+        transform = np.fft.rfft(np.pad(data[tuple(band)].astype(np.float64), pad, mode="edge"), axis=axis)
+        transform *= spectrum
+        out[tuple(band)] = np.fft.irfft(transform, n=size, axis=axis)[tuple(take)]
+    return out
+
+
 def _convolve_axis(data, kernel, axis):
+    if len(kernel) > FFT_TAPS:
+        return _convolve_axis_fft(data, kernel, axis)
     half = len(kernel) // 2
     pad = [(0, 0)] * data.ndim
     pad[axis] = (half, half)
@@ -94,6 +151,35 @@ def _convolve_axis(data, kernel, axis):
         np.multiply(padded[tuple(region)], weight, out=scratch)
         result += scratch
     return result
+
+
+def _box_axis(data, half, axis):
+    """Mean over the clamped (2*half+1) window along ``axis``, exact for any
+    radius: running sums in float64 make the cost independent of the width."""
+    width = 2 * half + 1
+    length = data.shape[axis]
+    pad = [(0, 0)] * data.ndim
+    pad[axis] = (half, half)
+    padded = np.pad(data, pad, mode="edge")
+    out = np.empty(data.shape, np.float32)
+    if axis == 0:
+        # Rows are contiguous, so sliding the window is one vector add and
+        # subtract per row.
+        window = padded[:width].sum(axis=0, dtype=np.float64)
+        out[0] = window / width
+        for row in range(1, length):
+            window += padded[row + width - 1]
+            window -= padded[row - 1]
+            out[row] = window / width
+        return out
+    # Along the strided axis, cumulative sums per band of rows; the window
+    # sum is the difference of the sums either side of it.
+    for low in range(0, data.shape[0], _BAND_ROWS):
+        sums = np.cumsum(padded[low:low + _BAND_ROWS], axis=1, dtype=np.float64)
+        head = sums[:, width - 1:width - 1 + length]
+        out[low:low + _BAND_ROWS, 0] = head[:, 0] / width
+        out[low:low + _BAND_ROWS, 1:] = (head[:, 1:] - sums[:, :length - 1]) / width
+    return out
 
 
 def shift(data, dy, dx, fill=0.0):
@@ -359,8 +445,7 @@ def apply(data, kind, **params):
             out = blurred
     elif key == "BLUR":
         half = min(int(np.ceil(radius)), 192)
-        kernel = np.full(half * 2 + 1, 1 / (half * 2 + 1), np.float32)
-        out = _convolve_axis(_convolve_axis(source, kernel, 0), kernel, 1)
+        out = _box_axis(_box_axis(source, half, 0), half, 1)
     elif key in {"DILATE", "ERODE", "MORPHOLOGICAL_EXPAND", "MORPHOLOGICAL_CONTRACT"}:
         out = _morphology(source, radius, key in {"DILATE", "MORPHOLOGICAL_EXPAND"})
     elif key == "EDGE_DETECT":

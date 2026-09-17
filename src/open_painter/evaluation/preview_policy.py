@@ -36,6 +36,12 @@ def resources(scene, ts, size):
     if getattr(cache, 'geometry_stamp', None) != stamp:
         cache.clear()
         cache.geometry_stamp = stamp
+    serial = getattr(ts, 'edit_serial', 0)
+    if getattr(cache, 'serial_stamp', None) != serial:
+        # Memoized anchor/stack lookups are keyed by serial: entries of earlier
+        # serials are unreachable yet pin whole layer snapshots until dropped.
+        cache.signatures = {}
+        cache.serial_stamp = serial
     return cache
 
 

@@ -88,9 +88,10 @@ def prune(live):
         _tables.pop(key, None)
 
 
-def _bypassed(ts, layer):
+def _bypassed(ts, layer, by_id=None):
     seen, cursor = set(), layer
-    by_id = {item.id: item for item in ts.layers}
+    if by_id is None:
+        by_id = {item.id: item for item in ts.layers}
     while cursor is not None and cursor.id not in seen:
         if getattr(cursor, 'bypass', False):
             return True
@@ -99,9 +100,9 @@ def _bypassed(ts, layer):
     return False
 
 
-def state(scene, ts, layer, cache_states=None):
+def state(scene, ts, layer, cache_states=None, by_id=None):
     """'BYPASSED' | 'LIVE' | 'CACHED' | 'FROZEN' | 'STALE' | 'PENDING' for the UI."""
-    if _bypassed(ts, layer):
+    if _bypassed(ts, layer, by_id):
         return 'BYPASSED'
     mode = getattr(layer, 'cache_mode', 'LIVE')
     if mode == 'LIVE':
@@ -123,12 +124,15 @@ def rows(scene, ts):
     entry = table(scene, ts)
     from . import shader_preview
     cache_states = shader_preview.diagnostics(scene, ts).get('cache_states', {}) if shader_preview.requested(ts) else {}
+    # One id map for the whole table: the ancestor walk of every layer would
+    # otherwise rebuild it, quadratic in the stack on each sidebar redraw.
+    by_id = {item.id: item for item in ts.layers}
     result = []
     for layer in ts.layers:
         compile_info = entry['compile'].get(layer.id, {})
         cpu = entry['cpu'].get(layer.id, {})
         row = {'layer_id': layer.id, 'name': layer.name, 'type': layer.type,
-               'state': state(scene, ts, layer, cache_states),
+               'state': state(scene, ts, layer, cache_states, by_id),
                'compile_ms': compile_info.get('compile_ms', 0.0), 'nodes': compile_info.get('nodes', 0),
                'samplers': compile_info.get('samplers', 0),
                'boundary_ms': entry['boundary'].get(layer.id, 0.0),

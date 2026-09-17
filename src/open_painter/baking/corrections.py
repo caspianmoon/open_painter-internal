@@ -34,9 +34,10 @@ OVERLAY = 'open_painter_correction_overlay'
 FIELDS = {'OFFSET': 'offset_image', 'SKEW': 'skew_image', 'DIRECTION': 'direction_image',
           'IGNORE': 'ignore_image', 'AO_EXCLUDE': 'ao_exclude_image'}
 LABELS = {key: label for key, label, _ in CORRECTION_KINDS}
-_baked = {}       # (scene pointer, set id) -> {kind: {correction key: raster}} used by the last bake
+_baked = {}       # (scene pointer, set id) -> {kind: {correction key: raster, setting: value}} used by the last bake
 _pending = {}     # scene pointer -> time the last correction stroke ended (live rebake settle)
-_snapshots = {}   # (scene pointer, image pointer) -> raster at session start / last stroke
+_snapshots = {}   # scene pointer -> (image pointer, raster at session start / last stroke)
+LIFT = 'open_painter_cage_lift'   # on a corrected cage: the largest painted distance added to its reach
 SETTLE = .25
 
 
@@ -46,6 +47,11 @@ def image_of(ts, key, create_missing=False):
     corrections = ts.bake.corrections
     image = getattr(corrections, FIELDS[key])
     n = int(ts.resolution)
+    # Reading the size loads a packed buffer; has_data is False before that.
+    if image is not None and tuple(image.size) != (n, n) and image.get(TAG) and image.has_data:
+        # The set changed resolution: the painted weights follow it, as the outputs do.
+        image.scale(n, n)
+        image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
     if image is not None and (tuple(image.size) != (n, n) or not image.has_data):
         image = None
     if image is None and create_missing:
@@ -79,17 +85,24 @@ def refresh_used(image):
 
 
 def active_keys(ts):
-    return [key for key in FIELDS if raster(ts, key) is not None]
+    """Painted corrections by their maintained USED flag: the bake panel asks on every redraw,
+    so no canvas is read here."""
+    corrections = ts.bake.corrections
+    return [key for key in FIELDS
+            if (image := getattr(corrections, FIELDS[key])) is not None and image.get(USED)]
 
 
 def clear(ts, key=None):
     corrections = ts.bake.corrections
+    scene = ts.id_data.as_pointer()
     for item in (FIELDS if key is None else [key]):
         image = getattr(corrections, FIELDS[item])
         setattr(corrections, FIELDS[item], None)
         if image is not None and image.get(TAG):
+            if _snapshots.get(scene, (0,))[0] == image.as_pointer():
+                _snapshots.pop(scene, None)
             bpy.data.images.remove(image)
-    _baked.pop((ts.id_data.as_pointer(), ts.id), None)
+    _baked.pop((scene, ts.id), None)
 
 
 # ---- sampling ----------------------------------------------------------------
@@ -159,7 +172,9 @@ def dominant_face_normals(mesh):
 
 
 def cage_positions(mesh, matrix_world, rasters, extrusion, direction_vector, base_cage=None):
-    """World-space cage vertices for a render-evaluated target under the painted corrections.
+    """World-space cage vertices for a render-evaluated target under the painted corrections,
+    and the largest distance the painting added to a cage segment (the reach the bake rays
+    must gain to still land on the surface).
 
     ``base_cage`` (V, 3) world positions of an artist cage keep its shape; the
     corrections then apply on top of it.
@@ -194,9 +209,16 @@ def cage_positions(mesh, matrix_world, rasters, extrusion, direction_vector, bas
         w = weights['DIRECTION'][:, None]
         direction = direction * (1 - w) + target[None, :] * w
         direction /= np.maximum(np.linalg.norm(direction, axis=1, keepdims=True), 1e-12)
+    base = lengths
     if 'OFFSET' in weights:
         lengths = lengths + (weights['OFFSET'] - NEUTRAL['OFFSET']) * 2
-    return positions + direction * np.maximum(lengths, 0.0)[:, None]
+    lift = float(max(0.0, (lengths - base).max())) if count else 0.0
+    # Cycles casts a custom cage's rays from the cage point toward the surface point: a
+    # segment of zero length (Cage: None, a zero ray distance, a stroke pulled down to the
+    # surface) has no direction and bakes nothing, so the cage always sits a hair off.
+    extent = float((positions.max(axis=0) - positions.min(axis=0)).max()) if count else 0.0
+    epsilon = max(1e-4 * extent, 1e-5)
+    return positions + direction * np.maximum(lengths, epsilon)[:, None], lift
 
 
 def corrected_cage(ts, target, rasters, base_cage_object=None):
@@ -219,8 +241,8 @@ def corrected_cage(ts, target, rasters, base_cage_object=None):
         cage_mesh.vertices.foreach_get('co', base_local.ravel())
         cage_world = np.asarray(base_cage_object.matrix_world, np.float64)
         base = base_local @ cage_world[:3, :3].T + cage_world[:3, 3]
-    positions = cage_positions(target.data, target.matrix_world, geometric, extrusion,
-                               tuple(settings.corrections.direction_vector), base)
+    positions, lift = cage_positions(target.data, target.matrix_world, geometric, extrusion,
+                                     tuple(settings.corrections.direction_vector), base)
     mesh = target.data.copy()
     mesh[OWNER] = True
     mesh.materials.clear()
@@ -228,6 +250,7 @@ def corrected_cage(ts, target, rasters, base_cage_object=None):
     mesh.update()
     cage = bpy.data.objects.new(f'{target.name} Corrected Cage', mesh)
     cage[OWNER] = True
+    cage[LIFT] = lift
     cage.matrix_world.identity()
     cage.hide_render = True
     return cage
@@ -314,7 +337,8 @@ def begin_brush(context, ts, key):
         set_value(project, .5 + .25)   # a quarter of the range outward, a sensible first stroke
     else:
         set_value(project, 1.0)
-    _snapshots[(context.scene.as_pointer(), image.as_pointer())] = pixels(image)
+    # One snapshot per scene: re-targeting the session (another kind, a layer) replaces it.
+    _snapshots[context.scene.as_pointer()] = (image.as_pointer(), pixels(image))
     paint_session.update_editors(context, image)
     update_overlay(context, ts)
     return image
@@ -331,14 +355,14 @@ def stroke_finished(scene, watch=True):
     image = project.paint_image
     if not key or image is None:
         return False
-    snapshot_key = (scene.as_pointer(), image.as_pointer())
     if watch:
         _watch[scene.as_pointer()] = monotonic()
     current = pixels(image)
-    previous = _snapshots.get(snapshot_key)
-    if previous is not None and previous.shape == current.shape and np.array_equal(previous, current):
+    owner, previous = _snapshots.get(scene.as_pointer(), (0, None))
+    if owner == image.as_pointer() and previous is not None and previous.shape == current.shape \
+            and np.array_equal(previous, current):
         return False
-    _snapshots[snapshot_key] = current
+    _snapshots[scene.as_pointer()] = (image.as_pointer(), current)
     image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
     refresh_used(image)
     ts = next((item for item in project.texture_sets if item.id == project.paint_set_id), None)
@@ -388,11 +412,9 @@ def end_brush(context):
     from ..painting import paint_session
     scene = context.scene
     project = scene.open_painter
-    image = project.paint_image
     if project.paint_correction:
         paint_session.finish(context, evaluate=False)
-    if image is not None:
-        _snapshots.pop((scene.as_pointer(), image.as_pointer()), None)
+    _snapshots.pop(scene.as_pointer(), None)
     _watch.pop(scene.as_pointer(), None)
     remove_overlay(scene)
 
@@ -438,8 +460,8 @@ def update_overlay(context, ts):
             extrusion = 0.0
             if ts.bake.cage_mode == 'AUTO':
                 extrusion = ts.bake.cage_extrusion if ts.bake.separate_cage_distance else ts.bake.ray_distance
-            positions = cage_positions(mesh, evaluated.matrix_world, rasters, extrusion,
-                                       tuple(ts.bake.corrections.direction_vector), base)
+            positions, _ = cage_positions(mesh, evaluated.matrix_world, rasters, extrusion,
+                                          tuple(ts.bake.corrections.direction_vector), base)
             overlay_mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=False, depsgraph=depsgraph)
             overlay_mesh[OWNER] = True
             overlay_mesh.materials.clear()
@@ -471,21 +493,33 @@ def remove_overlay(scene, ts=None):
 
 # ---- region rebake -----------------------------------------------------------
 
-def face_map(ts):
-    """Per assigned object: (face id raster at the set resolution, evaluated→base face validity)."""
-    from ..geometry.snapshots import targets
+def face_map(context, ts):
+    """Per assigned object: (face id raster at the set resolution, polygon count) of the target
+    as the bake stages it — render modifier visibility and render subdivision levels — so the
+    ids address the faces ``BakeStage.restrict`` keeps."""
+    from .render_geometry import scope
+    from ..geometry.snapshots import _triangle_arrays
     from ..geometry.uv_rasterizer import rasterize
     n = int(ts.resolution)
+    lows = sorted({ref.object for ref in ts.assignments if ref.object}, key=lambda obj: obj.name_full)
     result = {}
-    with targets(ts) as meshes:
-        for target in meshes:
-            uv = target['uv'][target['tri_loops']]
-            rows, cols, tris, _ = rasterize(uv, n)
+    scene = ts.id_data
+    with context.temp_override(scene=scene, view_layer=scene.view_layers[0]), scope(context, lows) as frozen:
+        for obj in lows:
+            mesh = frozen[obj].data
+            uv_layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
             ids = np.full((n, n), -1, np.int64)
-            if len(rows):
-                ids[rows, cols] = target['tri_polygons'][tris]
-            base_ok = len(target['mesh'].polygons) == len(target['object'].data.polygons)
-            result[target['object']] = (ids, base_ok)
+            if uv_layer is not None and len(mesh.polygons):
+                mesh.calc_loop_triangles()
+                _, tri_loops, tri_material, tri_polygons = _triangle_arrays(mesh)
+                slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
+                chosen = np.isin(tri_material, np.fromiter(slots, np.int32, len(slots)))
+                uv = np.empty((len(mesh.loops), 2), np.float32)
+                uv_layer.data.foreach_get('uv', uv.ravel())
+                rows, cols, tris, _ = rasterize(uv[tri_loops[chosen]], n)
+                if len(rows):
+                    ids[rows, cols] = tri_polygons[chosen][tris]
+            result[obj] = (ids, len(mesh.polygons))
     return result
 
 
@@ -504,6 +538,19 @@ def dilate(mask, radius):
     return out
 
 
+def bake_settings(ts):
+    """Correction settings that scale the painted rasters at bake time."""
+    corrections = ts.bake.corrections
+    vector = np.asarray(tuple(corrections.direction_vector), np.float64)
+    vector /= max(np.linalg.norm(vector), 1e-12)
+    return {'offset_range': float(corrections.offset_range),
+            'direction_vector': tuple(float(v) for v in np.round(vector, 6))}
+
+
+# A setting change re-dirties every texel the raster it scales has painted.
+SCALED = {'offset_range': 'OFFSET', 'direction_vector': 'DIRECTION'}
+
+
 def changed_texels(ts, kind):
     """Texels whose corrections differ from what the last bake of ``kind`` used, or None (no record)."""
     record = _baked.get((ts.id_data.as_pointer(), ts.id), {}).get(kind)
@@ -519,63 +566,80 @@ def changed_texels(ts, kind):
         if before is None or now is None or before.shape != now.shape:
             return np.ones((n, n), bool)
         dirty |= np.abs(before - now) > 1e-6
+    settings = bake_settings(ts)
+    for setting, key in SCALED.items():
+        if record.get(setting) != settings[setting]:
+            for values in (record.get(key), current[key]):
+                if values is not None:
+                    dirty |= np.abs(values - NEUTRAL[key]) > 1e-6
     return dirty
 
 
 def remember(ts, kind):
-    """Record the correction rasters a bake of ``kind`` used."""
-    _baked.setdefault((ts.id_data.as_pointer(), ts.id), {})[kind] = {key: raster(ts, key) for key in FIELDS}
+    """Record the correction rasters (and the settings scaling them) a bake of ``kind`` used."""
+    record = {key: raster(ts, key) for key in FIELDS}
+    record.update(bake_settings(ts))
+    _baked.setdefault((ts.id_data.as_pointer(), ts.id), {})[kind] = record
 
 
 def rebake_region(context, ts, kinds=None):
     """Rebake only the faces whose corrections changed since the last bake, into the existing maps.
 
-    Returns {kind: faces rebaked}; a kind without a previous bake record is
-    baked fully instead.
+    Returns {kind: faces rebaked}; a kind without a previous bake record, with
+    a map of another size, or whose staged topology no longer matches the face
+    map is baked fully instead (-1).
     """
     from .cycles_baker import bake, bake_faces
     from .bake_manager import register_map
+    from .staging import TopologyMismatch
     from ..core.layer_stack import invalidate
     settings = ts.bake
     kinds = [k for k in (kinds or ('NORMAL', 'AO')) if getattr(settings, k.lower())]
     result = {}
-    maps = face_map(ts)
+    n = int(ts.resolution)
+    maps = face_map(context, ts)
+    polygons = {obj: count for obj, (_, count) in maps.items()}
     for kind in kinds:
         prop = next((m for m in ts.baked_maps if m.kind == kind and m.image), None)
         dirty = changed_texels(ts, kind)
-        if prop is None or dirty is None:
+        fresh = None
+        if prop is not None and dirty is not None and tuple(prop.image.size) == (n, n):
+            if not dirty.any():
+                result[kind] = 0
+                continue
+            # Faces touching a changed texel, widened by the margin so the halo is rebaked too.
+            grown = dilate(dirty, max(2, settings.margin))
+            regions = {}
+            for obj, (ids, _) in maps.items():
+                faces = np.unique(ids[grown & (ids >= 0)])
+                if len(faces):
+                    regions[obj] = set(int(f) for f in faces)
+            if not regions:
+                result[kind] = 0
+                continue
+            try:
+                fresh = bake_faces(context, ts, kind, regions, polygons)
+            except TopologyMismatch:
+                fresh = None
+        if fresh is None:
             image = bake(context, ts, kind)
             register_map(ts, kind, image)
             result[kind] = -1
             continue
-        if not dirty.any():
-            result[kind] = 0
-            continue
-        # Faces touching a changed texel, widened by the margin so the halo is rebaked too.
-        grown = dilate(dirty, max(2, settings.margin))
-        regions = {}
-        for obj, (ids, base_ok) in maps.items():
-            faces = np.unique(ids[grown & (ids >= 0)])
-            if len(faces):
-                regions[obj] = set(int(f) for f in faces)
-        if not regions:
-            result[kind] = 0
-            continue
-        fresh = bake_faces(context, ts, kind, regions)
         try:
-            n = int(ts.resolution)
+            # The rebaked faces plus their margin, minus texels other faces own: in the
+            # restricted bake those faces went to scratch, so their texels hold no bake.
+            cover = np.zeros((n, n), bool)
+            foreign = np.zeros((n, n), bool)
+            for obj, (ids, _) in maps.items():
+                owned = np.isin(ids, list(regions.get(obj, ())))
+                cover |= owned
+                foreign |= (ids >= 0) & ~owned
+            cover = dilate(cover, settings.margin) & ~foreign
             current = pixels(prop.image)
-            if current.shape[0] != n or fresh.size[0] != n:
-                write(prop.image, pixels(fresh))
-            else:
-                cover = np.zeros((n, n), bool)
-                for obj, faces in regions.items():
-                    ids = maps[obj][0]
-                    cover |= np.isin(ids, list(faces))
-                cover = dilate(cover, settings.margin)
-                updated = pixels(fresh)
-                current[cover] = updated[cover]
-                write(prop.image, current)
+            updated = pixels(fresh)
+            current[cover] = updated[cover]
+            write(prop.image, current)
         finally:
             bpy.data.images.remove(fresh)
         result[kind] = sum(len(f) for f in regions.values())

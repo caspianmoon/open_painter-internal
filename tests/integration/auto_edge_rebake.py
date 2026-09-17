@@ -50,8 +50,15 @@ assert not field_jobs._rebakes
 # On: a mesh edit schedules the rebake; a transform does not.
 ts.bake.auto_edge_rebake = True
 dependencies.remember(scene, ts, dependencies.geometry_key(scene, ts))
+ts.dirty = False; serial = ts.edit_serial
 cube.location.x += 1; bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer()); dependencies.refresh(scene)
+assert not field_jobs._rebakes, 'a transform scheduled a rebake'
+# Nothing on this set reads where the cube stands: a move leaves it current, a resize does not.
+assert not ts.dirty and ts.edit_serial == serial, 'a move re-evaluated a set that only reads the surface'
+cube.scale.x = 2; bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer()); dependencies.refresh(scene)
+assert ts.dirty and ts.edit_serial != serial, 'a resize left the set current'
 assert not field_jobs._rebakes, 'a transform scheduled a rebake'
 edit_mesh()
 assert field_jobs._rebakes, 'a mesh edit did not schedule the rebake'
@@ -61,6 +68,14 @@ field_jobs.REBAKE_DEBOUNCE = 0
 field_jobs.tick(scene)
 field_jobs.cancel_all()
 assert not field_jobs._rebakes
+# A mesh mask's signature carries the mesh too: an edit that changes it must not skip the rebake.
+cube.vertex_groups.new(name='Worn')
+mesh_mask = layer.masks.add(); mesh_mask.id, mesh_mask.source = new_id(), 'MESH'
+mesh_mask.mesh.kind, mesh_mask.mesh.attribute = 'VERTEX_GROUP', 'Worn'
+dependencies.remember(scene, ts, dependencies.geometry_key(scene, ts))
+edit_mesh()
+assert field_jobs._rebakes, 'a mesh mask on the set swallowed the rebake'
+field_jobs.cancel_all()
 bpy.app.timers.unregister(cache.tick)
 print('AUTO_EDGE_REBAKE_PASS', flush=True)
 open_painter.unregister()

@@ -139,6 +139,32 @@ with bpy.context.temp_override(scene=scene):
 assert plain_prop.units == 'PHYSICAL'
 print('PHYSICAL_SCALE_LOCK_OK', flush=True)
 
+# An unresolvable set is remembered too (0.9.7): a set landing on a material slot without faces
+# used to copy the evaluated mesh on every panel redraw and refresh until the artist fixed it.
+from open_painter.geometry import snapshots
+crate_object = cube('Crate', 2.0)
+crate_object.data.materials.append(None); crate_object.data.materials.append(None)
+crate = sets.create(scene, 'Crate', 512)
+crate.assignments.add().object, crate.assignments[0].slot_index = crate_object, 1
+measured = []
+original_targets = snapshots.targets
+snapshots.targets = lambda ts: measured.append(ts.id) or original_targets(ts)
+try:
+    assert physical.density(crate) is None and physical.describe(crate) == 'Physical scale: assign a mesh'
+    assert physical.expected(stack.channel_for(stack.add(crate, 'FILL', 'Paint'), 'BASE_COLOR'), crate) == {}
+    physical.sync(crate)
+    assert measured == [crate.id], f'an empty slot is measured once, not per call: {measured}'
+    crate_object.data.polygons.foreach_set('material_index', np.ones(len(crate_object.data.polygons), np.int32))
+    crate_object.data.update()
+    bpy.context.view_layer.update()
+    crate_density = physical.density(crate)
+    assert crate_density and abs(crate_density / mug_density - 2) < 1e-3, (crate_density, mug_density, measured)
+    assert measured == [crate.id, crate.id], 'faces moved onto the slot: measured again, once'
+    assert 'Texel' in physical.describe(crate) and measured == [crate.id, crate.id]
+finally:
+    snapshots.targets = original_targets
+print('PHYSICAL_SCALE_NEGATIVE_CACHE_OK', flush=True)
+
 # A material authored on the mug re-normalizes on the truck when loaded.
 from open_painter.smart_materials.serializer import save
 from open_painter.smart_materials.loader import apply as load

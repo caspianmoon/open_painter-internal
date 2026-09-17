@@ -6,13 +6,15 @@ source's geometry are not fed their own output). A Geometry Nodes group
 subdivides the copy, samples the image through the set's UV map per corner,
 takes the first corner's value per vertex (no seam averaging, like the
 Displace modifier) and offsets along the normal by ``(h - midlevel) * amplitude``.
+Only the faces in the set's material slots move (other sets may own the object's
+other slots); the copy keeps the source's material list and indices.
 """
 import bpy
 import numpy as np
 
 from ..utils.ids import new_id
 from . import limits
-from .manager import TAG
+from .manager import TAG, _image, texture_set_of
 
 MAX_LEVELS = 4
 
@@ -24,7 +26,39 @@ def _uv_name(obj):
     return uv.name
 
 
-def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, material, created):
+def _slots(ts, obj):
+    """The material slots of ``obj`` the set owns; displacement touches their faces only."""
+    slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
+    if not slots:
+        raise ValueError('Displacement source must be assigned to the texture set')
+    return slots
+
+
+def _face_selection(nodes, links, slots):
+    """A face-domain field: the face's material slot belongs to the set."""
+    material_index = nodes.new('GeometryNodeInputMaterialIndex')
+    selected = None
+    for slot in sorted(slots):
+        compare = nodes.new('FunctionNodeCompare')
+        compare.data_type, compare.operation = 'INT', 'EQUAL'
+        links.new(material_index.outputs['Material Index'], compare.inputs['A'])
+        compare.inputs['B'].default_value = slot
+        if selected is None:
+            selected = compare
+            continue
+        either = nodes.new('FunctionNodeBooleanMath'); either.operation = 'OR'
+        links.new(selected.outputs['Result'], either.inputs[0])
+        links.new(compare.outputs['Result'], either.inputs[1])
+        selected = either
+    # Evaluated on faces, so a point takes the selection of the faces it belongs to
+    # (a boundary vertex moves with the set's side) instead of an averaged slot index.
+    on_faces = nodes.new('GeometryNodeFieldOnDomain')
+    on_faces.data_type, on_faces.domain = 'BOOLEAN', 'FACE'
+    links.new(selected.outputs['Result'], on_faces.inputs['Value'])
+    return on_faces.outputs['Value']
+
+
+def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created):
     group = bpy.data.node_groups.new('OP Displacement', 'GeometryNodeTree')
     created.append(group)
     group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
@@ -68,33 +102,57 @@ def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, material, c
     along = nodes.new('ShaderNodeVectorMath'); along.operation = 'SCALE'
     links.new(normal.outputs['Normal'], along.inputs[0])
     links.new(scaled.outputs[0], along.inputs['Scale'])
+    selection = _face_selection(nodes, links, slots)
     set_position = nodes.new('GeometryNodeSetPosition')
     links.new(subdivide.outputs['Mesh'], set_position.inputs['Geometry'])
+    links.new(selection, set_position.inputs['Selection'])
     links.new(along.outputs['Vector'], set_position.inputs['Offset'])
     shade = nodes.new('GeometryNodeSetShadeSmooth')
     links.new(set_position.outputs['Geometry'], shade.inputs['Geometry'])
+    links.new(selection, shade.inputs['Selection'])
     shade.inputs['Shade Smooth'].default_value = True
-    last = shade
-    if material is not None:
-        set_material = nodes.new('GeometryNodeSetMaterial')
-        set_material.inputs['Material'].default_value = material
-        links.new(shade.outputs['Geometry'], set_material.inputs['Geometry'])
-        last = set_material
-    links.new(last.outputs['Geometry'], group_out.inputs['Geometry'])
+    links.new(shade.outputs['Geometry'], group_out.inputs['Geometry'])
     return group
+
+
+def settings(helper):
+    """Amplitude and midlevel as the helper displaces right now.
+
+    The group exposes them as modifier inputs so the artist tunes them in the modifier
+    panel; a frozen helper (no modifiers) or another kind answers with its stored values.
+    """
+    values = dict(amplitude=float(helper.get('amplitude', 0.0)), midlevel=float(helper.get('midlevel', .5)))
+    modifier = next((m for m in helper.modifiers if m.type == 'NODES' and m.node_group is not None), None)
+    if modifier is None:
+        return values
+    for item in modifier.node_group.interface.items_tree:
+        if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name.lower() in values:
+            socket = getattr(modifier.properties.inputs, item.identifier, None)
+            if socket is not None:
+                values[item.name.lower()] = float(socket.value)
+    return values
 
 
 def create(ts, obj, image, levels=2, amplitude=None, midlevel=.5, smooth=False, replacing=None):
     """An owned, tagged copy of the evaluated source displaced by ``image``; returns the helper."""
     if obj.type != 'MESH':
         raise ValueError('Displacement needs a mesh source')
+    # The operator leaves the last helper active: a helper as source would stack relief
+    # on relief and hand Replace Source Mesh the helper instead of the artist's mesh.
+    if obj.get(TAG):
+        raise ValueError('Select the source object, not an effect helper')
+    slots = _slots(ts, obj)
     levels = int(max(0, min(MAX_LEVELS, levels)))
     amplitude = float(ts.height_distance if amplitude is None else amplitude)
     scene = ts.id_data
     with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
         graph = bpy.context.evaluated_depsgraph_get()
     evaluated = obj.evaluated_get(graph)
-    faces = len(evaluated.data.polygons)
+    faces = len(evaluated.data.polygons)   # every face subdivides; only the set's move
+    material_index = np.empty(faces, np.int32)
+    evaluated.data.polygons.foreach_get('material_index', material_index)
+    if not np.isin(material_index, np.fromiter(slots, np.int32, len(slots))).any():
+        raise ValueError(f'{obj.name} has no evaluated faces in its assigned slots')
     limits.check(scene, 0, faces * (4 ** levels) * 2, replacing=replacing)
     uv_name = _uv_name(obj)
     identifier = new_id()
@@ -107,9 +165,8 @@ def create(ts, obj, image, levels=2, amplitude=None, midlevel=.5, smooth=False, 
         scene.collection.objects.link(helper)
         helper.matrix_world = obj.matrix_world.copy()
         helper.parent = obj
-        helper.matrix_parent_inverse = obj.matrix_world.inverted()
-        material = ts.material if ts.material else None
-        group = _node_group(image, uv_name, levels, amplitude, midlevel, smooth, material, created)
+        helper.matrix_parent_inverse = obj.matrix_world.inverted_safe()   # a flat source still gets its helper
+        group = _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created)
         modifier = helper.modifiers.new('Open Painter Displacement', 'NODES')
         modifier.node_group = group
         for item in created:
@@ -123,7 +180,7 @@ def create(ts, obj, image, levels=2, amplitude=None, midlevel=.5, smooth=False, 
         helper['amplitude'] = amplitude
         helper['midlevel'] = midlevel
         helper['smooth'] = smooth
-        helper['source_image'] = image.name
+        helper['source_image'] = image   # an ID pointer follows renames; older files hold the name
         helper['frozen'] = False
         obj.hide_set(True) if False else None   # the source stays visible; the artist decides
         return helper
@@ -142,11 +199,13 @@ def regenerate(ts, helper):
     """Re-copy the evaluated source (a moved panel, an edited mesh) with the same settings."""
     if helper.get('frozen'):
         raise ValueError('Unfreeze the helper before regenerating')
-    image = bpy.data.images.get(helper.get('source_image', ''))
+    ts = texture_set_of(ts, helper)
+    image = _image(helper.get('source_image'))
     source = helper.parent
     if image is None or source is None:
         raise ValueError('Displacement source or image is missing')
-    replacement = create(ts, source, image, helper['levels'], helper['amplitude'], helper['midlevel'],
+    tuned = settings(helper)   # the modifier's inputs, not the creation-time values
+    replacement = create(ts, source, image, helper['levels'], tuned['amplitude'], tuned['midlevel'],
                          bool(helper['smooth']), replacing=helper)
     from .manager import remove
     remove(helper)
@@ -169,7 +228,16 @@ def replace_source(helper):
         raise ValueError('The displaced copy has no source any more')
     apply(helper)
     old = source.data
-    source.data = helper.data.copy()
+    mesh = helper.data.copy()
+    for key in (TAG, 'effect_owner'):   # the source's own mesh now, not an owned resource
+        mesh.pop(key, None)
+    source.data = mesh
+    # The copy came from the evaluated source, so its viewport modifiers are already in
+    # it; left live they would run again over their own result (a Mirror doubles the
+    # mesh, a Subdivision re-subdivides and smooths the relief away).
+    for modifier in list(source.modifiers):
+        if modifier.show_viewport:
+            source.modifiers.remove(modifier)
     from .manager import remove
     remove(helper)
     if old.users == 0:

@@ -86,6 +86,29 @@ while resources.pending:
     resources.step()
 assert b.get('op_shader_resource_ready')
 assert abs(float(image_manager.pixels(b)[0, 0, 0]) - .25) < 1e-6
+# Tables validate their entries lazily: another set's table adopts the same
+# leaf and may evict it, and Purge Unused Data takes any user-less leaf or
+# in-flight placeholder. A dead entry is scheduled again, never dereferenced.
+other = Resources(16)
+shared = other.request(('shared-leaf',), lambda: source_rows(.5))
+while other.pending:
+    other.step()
+assert resources.request(('shared-leaf',), lambda: source_rows(.5)) == shared
+bpy.data.images.remove(shared)
+resources.step()
+again = resources.request(('shared-leaf',), lambda: source_rows(.5))
+while resources.pending:
+    resources.step()
+assert again.get('op_shader_resource_ready') and abs(float(image_manager.pixels(again)[0, 0, 0]) - .5) < 1e-6
+placeholder = resources.request(('purged-placeholder',), lambda: source_rows(.75))
+bpy.data.images.remove(placeholder)
+resources.step()
+assert not resources.pending
+placeholder = resources.request(('purged-placeholder',), lambda: source_rows(.75))
+while resources.pending:
+    resources.step()
+assert placeholder.get('op_shader_resource_ready') and abs(float(image_manager.pixels(placeholder)[0, 0, 0]) - .75) < 1e-6
+other.close()
 resources.close()
 # Evaluated-geometry changes reach cached triplanar inputs through the normal
 # depsgraph observer; native mask Levels never repeat initial scene analysis.
@@ -105,6 +128,23 @@ cache.tick()
 assert shader_preview.diagnostics(scene, geometry_ts)['pending_resources']
 ready(geometry_ts)
 assert geometry_graph.resource_bindings[0].node.image != old_geometry_image
+# Purge Unused Data removes an in-flight placeholder (nothing samples it yet)
+# and the unused leaf of a previous slider value: the session rasters the
+# source again instead of failing on the removed image.
+boundary = geometry_graph.resource_bindings[0]
+settled = boundary.node.image
+geometry_prop.scale = (3., 3.)
+placeholder = boundary.pending_image
+assert placeholder is not None and not placeholder.get('op_shader_resource_ready')
+bpy.data.images.remove(placeholder)
+ready(geometry_ts)
+assert boundary.node.image != settled and boundary.node.image.get('op_shader_resource_ready')
+assert boundary.pending_image is None
+bpy.data.images.remove(settled)
+geometry_prop.scale = (1., 1.)
+ready(geometry_ts)
+assert boundary.node.image.get('op_shader_resource_ready') and boundary.node.image.has_data
+assert not shader_preview.diagnostics(scene, geometry_ts)['error']
 scene_mask = geometry_layer.masks.add()
 scene_mask.id, scene_mask.source = 'manual-scene-field', 'SCENE'
 scene_mask.influence.kind = 'UP'
@@ -120,7 +160,8 @@ report = ROOT / '.blender-test/shader-native/boundaries.json'
 report.parent.mkdir(parents=True, exist_ok=True)
 report.write_text(json.dumps({'result': 'PASS', 'checks': ['published-prefix-invalidation',
     'unrelated-channel-no-raster', 'filter-strength-and-levels-native', 'atomic-input-swap',
-    'no-output-allocation', 'superseded-value-recovery', 'geometry-input-invalidation',
+    'no-output-allocation', 'superseded-value-recovery', 'removed-image-recovery',
+    'purged-placeholder-recovery', 'geometry-input-invalidation',
     'scene-levels-no-analysis'], 'dependency_edit': info}, indent=2) + '\n')
 open_painter.unregister()
 print('SHADER_BOUNDARIES_PASS', report, flush=True)

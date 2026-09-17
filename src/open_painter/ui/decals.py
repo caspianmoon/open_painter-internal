@@ -58,7 +58,15 @@ class OP_OT_decal(SafeOperator, bpy.types.Operator):
                 for prop in layer.channels:
                     prop.enabled = False
             location, rotation = self._frame(context)
-            obj = decals.create_object(context, decals.PREFIX + self.name, image, location, rotation, self.size)
+            name = decals.PREFIX + self.name
+            if name not in bpy.data.objects:
+                # The name is free: a layer still naming an Empty that is gone would re-link
+                # to the one made here, and it is not what the artist is making.
+                for other in scene.open_painter.texture_sets:
+                    for stale in other.layers:
+                        if stale.decal_object is None and stale.decal_object_name == name:
+                            stale.decal_object_name = ''
+            obj = decals.create_object(context, name, image, location, rotation, self.size)
             obj[decals.MARKER] = layer.id
             layer.decal_object, layer.decal_object_name = obj, obj.name
             for prop in layer.channels:

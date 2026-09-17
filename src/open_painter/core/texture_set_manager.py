@@ -10,9 +10,13 @@ from .project_manager import project_for
 def create(scene: bpy.types.Scene, name: str = "Texture Set", resolution=None):
     project = project_for(scene)
     ts = project.texture_sets.add()
+    from ..evaluation.shader_preview import texture_sets_changed
+    texture_sets_changed(scene)   # the array may have been reallocated under live sessions
     ts.id, ts.name = new_id(), name
     if resolution is not None:
         ts.resolution = str(resolution)
+    from ..targets import apply, get
+    apply(get(project.target), ts.export)   # a set added after the target was chosen follows it too
     material = bpy.data.materials.new(f"OP · {name}")
     material[OWNER], material["texture_set_id"] = True, ts.id
     material.use_nodes = True
@@ -76,26 +80,63 @@ def unassign(ts, index: int) -> None:
     physical.sync(ts)
 
 
+def _release_image(owner, field, ts) -> None:
+    """Drop a managed image the set alone owns. A datablock the artist picked, or a
+    derived one they wired into a material of their own, stays in the file."""
+    image = getattr(owner, field)
+    if image is None or not image.get(OWNER) or image.get("texture_set_id", ts.id) != ts.id:
+        return
+    setattr(owner, field, None)
+    users = bpy.data.user_map(subset=[image], value_types={"MATERIAL", "NODETREE"}).get(image, ())
+    if any(user != ts.material and user.get("op_shader_graph") != ts.id for user in users):
+        return   # the set's own material and compiled graph are the only expected samplers
+    try:
+        bpy.data.images.remove(image)
+    except (ReferenceError, RuntimeError):
+        pass
+
+
 def remove(scene: bpy.types.Scene, index: int) -> None:
-    ts = scene.open_painter.texture_sets[index]
+    project = scene.open_painter
+    ts = project.texture_sets[index]
+    if project.paint_set_id == ts.id or any(entry.set_id == ts.id for entry in project.paint_canvases):
+        # The canvas goes with the set: end the session while its mesh state is still resolvable,
+        # or the object stays in Texture Paint with the face mask restricted and no canvas.
+        if project.paint_correction:
+            from ..baking.corrections import end_brush
+            end_brush(bpy.context)
+        else:
+            from ..painting.paint_session import finish
+            finish(bpy.context, evaluate=False)
     while ts.assignments:
         unassign(ts, len(ts.assignments) - 1)
-    # Cache images and correction canvases belong to this set alone: a removed set
-    # must not leave packed 4k floats behind in the file.
+    # Outputs, cache images, paint canvases and correction canvases belong to this set
+    # alone: a removed set must not leave packed 4k floats behind in the file.
     from ..evaluation.layer_cache import release_layer
     from ..painting.decals import release as release_decal
     for layer in ts.layers:
         release_layer(layer)
         release_decal(layer)
+        if layer.type == "PAINT":
+            for channel in layer.channels:
+                _release_image(channel, "image", ts)
+        for mask in layer.masks:
+            if mask.source == "PAINT":
+                _release_image(mask, "image", ts)
+    for prop in (*ts.outputs, *ts.baked_maps):
+        _release_image(prop, "image", ts)
     from ..baking.corrections import clear as clear_corrections
     clear_corrections(ts)
-    scene.open_painter.texture_sets.remove(index)
+    project.texture_sets.remove(index)
+    from ..evaluation.shader_preview import texture_sets_changed
+    texture_sets_changed(scene)   # the sets that followed moved down one slot
     scene.open_painter.active_texture_set = max(0, index - 1)
 
 
 def duplicate(scene, index):
     """Copy a texture project without stealing the source object's material slots."""
-    from .layer_stack import invalidate, restore, snapshot
+    from .image_manager import clone
+    from .layer_stack import copy_ids, replay, restore, snapshot
 
     source = scene.open_painter.texture_sets[index]
     name = source.name + " Copy"
@@ -108,52 +149,53 @@ def duplicate(scene, index):
     ts = create(scene, name, resolution)
     for key, value in surface.items():
         setattr(ts, key, value)
-    mapping = {item["id"]: new_id() for item in layers}
-    mask_mapping = {mask['id']: new_id() for item in layers for mask in item['masks']}
-    effect_mapping = {e['id']: new_id() for item in layers for c in item['channels'] for e in c['effects'] if e['id']}
+    ids, tokens = copy_ids(layers)
+    mapping = {item["id"]: ids[item["id"]] for item in layers}
     from ..evaluation.anchors import derived_mapping
-    anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
-    for data in layers:
-        layer = ts.layers.add()
-        restore(data, layer)
-        layer.id = mapping[data["id"]]
-        layer.parent_id = mapping.get(data["parent_id"], "")
-        for row in layer.cache:
-            # A cached image belongs to one layer; the copy rebuilds its own.
-            row.image = None
-            row.provenance = ''
-        for channel in layer.channels:
-            channel.layer_id = layer.id
-            if channel.anchor:
-                channel.anchor = anchor_mapping.get(channel.anchor, channel.anchor)
-            for effect in channel.effects:
-                if effect.id:
-                    effect.id = effect_mapping.get(effect.id, effect.id)
-            if layer.type == "PAINT" and channel.image:
-                channel.image = channel.image.copy()
-        for mask in layer.masks:
-            mask.id = mask_mapping[mask.id]
-            if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
-                mask.parent_id = mask_mapping.get(mask.parent_id, '')
-            if mask.source == 'REFERENCE':
-                mask.reference_layer = mapping.get(mask.reference_layer, mask.reference_layer)
-                mask.reference_mask = mask_mapping.get(mask.reference_mask, mask.reference_mask)
-            for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
-                value = getattr(mask, field)
-                if value:
-                    setattr(mask, field, anchor_mapping.get(value, value))
-            if mask.source == "PAINT" and mask.image:
-                mask.image = mask.image.copy()
-    for kind, image in maps:
-        prop = ts.baked_maps.add()
-        prop.kind = kind
-        prop.image = image.copy() if image else None
-    restore(settings, ts.bake)
-    from ..baking.corrections import FIELDS
-    for field in FIELDS.values():
-        # Correction canvases belong to one set: clearing them in either would orphan the other.
-        image = getattr(ts.bake.corrections, field)
-        if image is not None:
-            setattr(ts.bake.corrections, field, image.copy())
-    invalidate(ts)
+    anchor_mapping = {**ids, **derived_mapping(mapping)}
+    with replay(ts):
+        for data in layers:
+            layer = ts.layers.add()
+            restore(data, layer)
+            layer.id = mapping[data["id"]]
+            layer.parent_id = mapping.get(data["parent_id"], "")
+            if data["id"] in tokens:
+                layer.module_instance = tokens[data["id"]]
+            for row in layer.cache:
+                # A cached image belongs to one layer; the copy rebuilds its own.
+                row.image = None
+                row.provenance = ''
+            for channel in layer.channels:
+                channel.layer_id = layer.id
+                if channel.anchor:
+                    channel.anchor = anchor_mapping.get(channel.anchor, channel.anchor)
+                for effect in channel.effects:
+                    if effect.id:
+                        effect.id = ids.get(effect.id, effect.id)
+                if layer.type == "PAINT" and channel.image:
+                    channel.image = clone(channel.image)
+            for mask in layer.masks:
+                mask.id = ids[mask.id]
+                if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
+                    mask.parent_id = ids.get(mask.parent_id, '')
+                if mask.source == 'REFERENCE':
+                    mask.reference_layer = mapping.get(mask.reference_layer, mask.reference_layer)
+                    mask.reference_mask = ids.get(mask.reference_mask, mask.reference_mask)
+                for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
+                    value = getattr(mask, field)
+                    if value:
+                        setattr(mask, field, anchor_mapping.get(value, value))
+                if mask.source == "PAINT" and mask.image:
+                    mask.image = clone(mask.image)
+        for kind, image in maps:
+            prop = ts.baked_maps.add()
+            prop.kind = kind
+            prop.image = clone(image) if image else None
+        restore(settings, ts.bake)
+        from ..baking.corrections import FIELDS
+        for field in FIELDS.values():
+            # Correction canvases belong to one set: clearing them in either would orphan the other.
+            image = getattr(ts.bake.corrections, field)
+            if image is not None:
+                setattr(ts.bake.corrections, field, clone(image))
     return ts

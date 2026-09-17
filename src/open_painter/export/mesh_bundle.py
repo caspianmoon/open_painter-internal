@@ -8,7 +8,25 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import bpy
 from .exporter import export
+from ..baking.bake_back import helpers_of
+from ..core.image_manager import pack_image
 from ..evaluation.evaluator import LayerEvaluator
+
+
+def _pack_material_images(materials):
+    # libraries.write stores a generated image as its packed bytes, not its pixel
+    # buffer: strokes, boundary rasters and layer caches are packed by the save
+    # handler only, so a bundle taken between saves must pack what the live
+    # material references, through group trees.
+    seen=set()
+    def walk(tree):
+        if tree is None or tree.as_pointer() in seen: return
+        seen.add(tree.as_pointer())
+        for node in tree.nodes:
+            if node.bl_idname=='ShaderNodeGroup': walk(node.node_tree)
+            elif node.bl_idname=='ShaderNodeTexImage' and node.image and node.image.has_data: pack_image(node.image)
+    for material in materials:
+        if material and material.use_nodes: walk(material.node_tree)
 
 
 def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
@@ -24,7 +42,9 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
     try:
         graph=context.evaluated_depsgraph_get()
         sources={ref.object for ts in texture_sets for ref in ts.assignments if ref.object}
-        helpers={obj for obj in context.scene.objects if obj.get('open_painter_geometry_effect')=='INSTANCE_HELPER' and obj.parent in sources}
+        # Stitch and weld helpers hang off the extracted curve, not the source: resolve
+        # ownership as Bake Back does so every effect kind reaches the bundle.
+        helpers={obj for ts in texture_sets for obj in helpers_of(ts,context.scene)}
         triangles=0
         def stage(source,matrix,name):
             nonlocal triangles
@@ -59,10 +79,13 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
                 records.append(dict(id=ts.id,name=ts.name,resolution=int(ts.resolution),
                     revision=ts.edit_serial,preset=ts.export.preset,
                     files=[str(path.relative_to(root)) for path in files]))
-            from ..core.image_manager import pack_image
             for ts in texture_sets:
                 for output in ts.outputs:
                     if output.image: pack_image(output.image)
+            _pack_material_images(ts.material for ts in texture_sets)
+            # Blender 5.2 crashes copying a never-synced view layer of a scene created after
+            # a depsgraph update (0.9.7): sync the staging layer before it is written.
+            scene.view_layers[0].update()
             bpy.data.libraries.write(str(root/'scene.blend'),{scene},fake_user=True,compress=True)
             (root/'manifest.json').write_text(json.dumps(dict(format_version=1,
                 generated_geometry=geometry,triangles=triangles,texture_sets=records,

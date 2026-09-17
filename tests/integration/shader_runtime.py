@@ -217,6 +217,43 @@ ready(scene, masked)
 new = image_manager.pixels(boundary.node.image)[..., 0]
 assert float(np.mean(new - old)) > .5, 'Mask prefix retained stale source pixels'
 assert not masked.outputs
+
+# A raster that raises keeps its identity bound, so the failure must outlive the
+# edit that reported it: an unrelated uniform edit cannot report the graph
+# current over the placeholder, and Retry rasters the source again.
+settled = boundary.node.image
+factory = boundary.factory
+def failing(signature):
+    raise ValueError('Injected raster failure')
+    yield
+boundary.factory = failing
+data[..., :3] = .4
+image_manager.write(source_image, data, pack=False)
+assert shader_preview.diagnostics(scene, masked)['pending_resources']
+shader_preview.tick(scene, masked)
+info = shader_preview.diagnostics(scene, masked)
+assert info['state'] == 'FAILED' and 'Injected raster failure' in info['error'], info
+layer = next(l for l in masked.layers if l.id == layer.id)
+layer.opacity = .9
+shader_preview.tick(scene, masked)
+info = shader_preview.diagnostics(scene, masked)
+assert not shader_preview.current(scene, masked)
+assert info['state'] == 'FAILED' and 'Injected raster failure' in info['error'], info
+assert 'Injected raster failure' in shader_preview.status(scene, masked)
+assert boundary.node.image == settled, 'the last valid input stays bound while failed'
+try:
+    shader_preview.flush(scene, masked)
+except RuntimeError as error:
+    assert 'Injected raster failure' in str(error)
+else:
+    raise AssertionError('A failed shader resource was hidden by an unrelated edit')
+boundary.factory = factory
+shader_preview.retry(scene, masked)
+ready(scene, masked)
+boundary = shader_preview.ensure(scene, masked).resource_bindings[0]
+assert boundary.node.image.get('op_shader_resource_ready') and boundary.pending_image is None
+assert abs(float(np.mean(image_manager.pixels(boundary.node.image)[..., 0])) - .4) < .05
+assert not masked.outputs
 assert not source_image.get(OWNER) and not source_image.packed_file
 cache.on_save(None)
 assert source_image.packed_file, 'Saving did not pack a directly assigned source image'
@@ -230,7 +267,8 @@ report.write_text(json.dumps({'result': 'PASS', 'blender': bpy.app.version_strin
                'detach-material-preservation', 'reattach-no-duplicate-groups',
                'external-build-requires-surface-attachment', 'raster-override-native-restoration',
                'explicit-cpu-reference',
-               'native-reattachment', 'image-write-without-baked-outputs', 'unmanaged-source-save-packing']},
+               'native-reattachment', 'image-write-without-baked-outputs',
+               'raster-failure-persists-until-retry', 'unmanaged-source-save-packing']},
     indent=2) + '\n')
 open_painter.unregister()
 print('SHADER_RUNTIME_PASS', str(report), flush=True)

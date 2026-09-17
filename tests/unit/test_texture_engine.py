@@ -116,6 +116,64 @@ class FilterTests(unittest.TestCase):
         bottom = filters.apply(image[10:], "GAUSSIAN_BLUR", radius=2)[6:]
         np.testing.assert_array_equal(whole, np.concatenate((top, bottom)))
 
+    def test_wide_blurs_match_direct_kernels(self):
+        # Kernels wider than FFT_TAPS convolve by FFT and the box blur by running
+        # sums; both equal the direct clamped kernel to float32 rounding.
+        def direct(data, kernel, axis):
+            half = len(kernel) // 2
+            pad = [(0, 0)] * data.ndim
+            pad[axis] = (half, half)
+            padded = np.pad(data.astype(np.float64), pad, mode="edge")
+            taps = [padded[(slice(None),) * axis + (slice(offset, offset + data.shape[axis]),)] * weight
+                    for offset, weight in enumerate(kernel.astype(np.float64))]
+            return np.sum(taps, axis=0)
+        rng = np.random.default_rng(7)
+        for shape in ((1, 9), (9, 1), (41, 29), (30, 45, 3), (17, 17, 4)):
+            data = rng.random(shape, dtype=np.float32)
+            for sigma in (6.5, 13., 40., 64.):
+                half = min(int(np.ceil(sigma * 3)), 192)
+                self.assertGreater(2 * half + 1, filters.FFT_TAPS)
+                x = np.arange(-half, half + 1, dtype=np.float32)
+                kernel = np.exp(-(x * x) / (2 * sigma * sigma))
+                kernel /= kernel.sum()
+                expected = direct(direct(data, kernel, 1), kernel, 0)
+                np.testing.assert_allclose(filters.gaussian_blur(data, sigma), expected, atol=1e-6, rtol=0,
+                                           err_msg=f"{shape}, sigma {sigma}")
+            for radius in (0, 1, 17, 100, 192):
+                kernel = np.full(2 * radius + 1, 1 / (2 * radius + 1), np.float32)
+                expected = np.clip(direct(direct(data, kernel, 0), kernel, 1), 0, 1)
+                np.testing.assert_allclose(filters.apply(data, "BLUR", radius=radius), expected, atol=1e-6, rtol=0,
+                                           err_msg=f"{shape}, radius {radius}")
+        constant = np.full((50, 70, 2), .37, np.float32)
+        np.testing.assert_array_equal(filters.apply(constant, "BLUR", radius=9), constant)
+        np.testing.assert_array_equal(filters.apply(constant, "GAUSSIAN_BLUR", radius=20), constant)
+        impulse = np.zeros((301, 301), np.float32)
+        impulse[150, 150] = 1
+        blurred = filters.apply(impulse, "GAUSSIAN_BLUR", radius=20)
+        self.assertAlmostEqual(float(blurred.sum()), 1, places=5)
+        np.testing.assert_allclose(blurred, blurred.T, atol=1e-7)
+        impulse[150, 150], impulse[150, 0] = 0, 1
+        blurred = filters.apply(impulse, "GAUSSIAN_BLUR", radius=20)
+        # FFT rounding leaves ~1e-18 beyond the support rather than exact zeros.
+        self.assertLess(float(blurred[:, 100:].max()), 1e-12)
+
+    def test_wide_blur_cost_is_radius_independent(self):
+        # A 4k blur at the widest radius took tens of seconds in one scheduler
+        # step when every tap was a full pass over the image.
+        from time import perf_counter
+        data = np.random.default_rng(3).random((1024, 1024, 3), dtype=np.float32)
+        def seconds(kind, radius):
+            best = np.inf
+            for _ in range(2):
+                started = perf_counter()
+                filters.apply(data, kind, radius=radius)
+                best = min(best, perf_counter() - started)
+            return best
+        narrow, wide = seconds("GAUSSIAN_BLUR", 2), seconds("GAUSSIAN_BLUR", 64)
+        self.assertLess(wide, narrow * 8, (narrow, wide))
+        narrow, wide = seconds("BLUR", 2), seconds("BLUR", 64)
+        self.assertLess(wide, narrow * 8, (narrow, wide))
+
     def test_morphology_expected_area_and_constant(self):
         image = np.zeros((9, 9), np.float32)
         image[4, 4] = 1

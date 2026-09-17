@@ -101,6 +101,29 @@ try:
     assert layer_by_id(damage_id).module_version == 2, 'the nested instance was replaced by the outer update'
     assert abs(layer_by_id(dirt_id).opacity - .8) < 1e-6
     np.testing.assert_allclose(render(), after, atol=1e-6)
+    # A duplicated recipe instance is its own instance: a fresh token, the nested Damage token
+    # derived from it, so both the copy and its nested instance update in place.
+    copy_id = stack.duplicate(ts, stack.index_of(ts, folder_id)).id
+    copy = layer_by_id(copy_id)
+    assert copy.module_instance and copy.module_instance != layer_by_id(folder_id).module_instance
+    assert copy_id == copy.module_instance + '.' + modules.plain_id(folder_id, layer_by_id(folder_id).module_instance)
+    copied_damage = next(layer for layer in modules.subtree(ts, copy_id) if layer.module_source == 'catalog:Damage')
+    assert copied_damage.module_instance == composer.nested_token('Test Steel', copy.module_instance, 'Damage')
+    assert all(layer.id.startswith(copied_damage.module_instance + '.') for layer in modules.subtree(ts, copied_damage.id))
+    assert {layer.id for layer in ts.layers if layer.id in {l.id for l in modules.subtree(ts, folder_id)}} \
+        .isdisjoint({layer.id for layer in modules.subtree(ts, copy_id)})
+    assert not issues(ts)
+    copied_damage_id = copied_damage.id
+    CATALOG['Test Steel'] = dict(custom, version=3)
+    composer.MODULES['Damage'] = dict(bumped, version=3)
+    version, conflicts = modules.update_catalog(ts, layer_by_id(copied_damage_id))
+    assert version == 3 and conflicts == [], conflicts
+    assert layer_by_id(copied_damage_id).module_version == 3
+    assert abs(next(layer for layer in modules.subtree(ts, copied_damage_id) if layer.name == 'Dirt Copy').opacity - .8) < 1e-6
+    assert layer_by_id(dirt_id).module_version == 0 and abs(layer_by_id(dirt_id).opacity - .8) < 1e-6, 'the original is untouched'
+    assert not issues(ts)
+    for layer in ts.layers:
+        layer.visible = layer.visible and layer.id not in {l.id for l in modules.subtree(ts, copy_id)}
 finally:
     composer.MODULES['Damage'] = original
     CATALOG.pop('Test Steel', None)
@@ -124,5 +147,24 @@ for layer in members:
         prop.layer_id = layer.id
 np.testing.assert_allclose(render('BASE_COLOR'), stamped, atol=1e-6)
 print('CATALOG_MODULES ids are inert: PASS', flush=True)
+
+# 5. The Update, Update All and Replace buttons share one operator; UI clicks (undo=True here)
+# refill unset properties from the previous run, so a Replace click must not make a later plain
+# Update replace wholesale (dropping edits), nor an Update All click make it touch every instance.
+first_id = composer.apply_document(ts, composer.MODULES['Damage'], 'Damage').id
+second_id = composer.apply_document(ts, composer.MODULES['Damage'], 'Damage').id
+rust_of = lambda folder_id: next(layer for layer in modules.subtree(ts, folder_id) if layer.name == 'Rust')
+ts.active_layer = stack.index_of(ts, first_id)
+assert bpy.ops.open_painter.module_update('EXEC_DEFAULT', True, replace=True) == {'FINISHED'}
+rust_of(second_id).opacity = .2                              # an edit inside the other instance
+ts.active_layer = stack.index_of(ts, second_id)
+assert bpy.ops.open_painter.module_update('EXEC_DEFAULT', True) == {'FINISHED'}
+assert abs(rust_of(second_id).opacity - .2) < 1e-6, 'a plain Update replaced the instance after a Replace click'
+assert 'already' in scene.open_painter.status, scene.open_painter.status
+assert bpy.ops.open_painter.module_update('EXEC_DEFAULT', True, all_instances=True) == {'FINISHED'}
+assert scene.open_painter.status.count('already') == len(modules.instances(ts, layer_by_id(second_id).module_id)) > 1
+assert bpy.ops.open_painter.module_update('EXEC_DEFAULT', True) == {'FINISHED'}
+assert scene.open_painter.status.count('already') == 1, scene.open_painter.status
+print('CATALOG_MODULES update buttons forget replace: PASS', flush=True)
 print('CATALOG_MODULES_PASS', flush=True)
 open_painter.unregister()

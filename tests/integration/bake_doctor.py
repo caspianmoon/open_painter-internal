@@ -167,5 +167,85 @@ assert doctor.last(ts).errors
 ts.bake.source_mode = 'ALL'
 full = doctor.examine(ts, 'FULL')
 assert full.status('coverage') != 'SKIP', full.summary()
+
+# A finding clicked during a correction brush session ends the session first: the face
+# selection that masks strokes to the assigned slot must not become the finding's faces.
+from open_painter.baking import corrections
+project = scene.open_painter
+bpy.context.view_layer.objects.active = low
+corrections.begin_brush(bpy.context, ts, 'OFFSET')
+assert project.paint_correction == 'OFFSET' and low.mode == 'TEXTURE_PAINT' and low.data.use_paint_mask
+assert doctor.select(ts, low_normals).startswith('selected 2 faces')
+assert project.paint_image is None and not project.paint_correction and low.mode == 'OBJECT'
+assert not low.data.use_paint_mask
+flags = np.empty(len(low.data.polygons), bool); low.data.polygons.foreach_get('select', flags)
+assert set(np.flatnonzero(flags)) == {0, 5}
+corrections.begin_brush(bpy.context, ts, 'OFFSET')
+doctor.select(ts, findings(report, 'scale')[0])
+assert project.paint_image is None and low.mode == 'OBJECT' and bolt_low.select_get()
+print('BAKE_DOCTOR_SESSION_OK', flush=True)
+
+# Evaluated polygon indices only address base faces while no modifier changes the face count:
+# a mirrored target stacks its UVs, and its findings say so instead of offering wrong faces.
+mirror = bolt_low.modifiers.new('Mirror', 'MIRROR')
+mirrored = doctor.examine(ts, 'FULL')
+gated = [f for f in mirrored.findings if f.object_name == 'Bolt_low' and f.check in {'uvs', 'coverage'}]
+assert any('Stacked' in f.message and f.check == 'uvs' for f in gated), gated
+assert all(not f.faces and 'not selectable' in f.message for f in gated), gated
+doctor.select_all(ts, mirrored)                     # nothing left on Bolt_low to mis-select
+bolt_low.modifiers.remove(mirror)
+plain = doctor.examine(ts, 'FULL')
+assert all(f.faces for f in plain.findings if f.object_name == 'Bolt_low' and f.check == 'coverage'), plain.findings
+print('BAKE_DOCTOR_TOPOLOGY_OK', flush=True)
+
+# The cage check is bounded like the other per-face checks: above LARGE_MESH faces at render
+# level the pre-bake tier defers it to Full Check, from the base-mesh estimate or the
+# evaluated count, instead of casting one Python ray per render-subdivided vertex.
+ts.bake.ray_distance = 1.5
+doctor.LARGE_MESH = 100
+bounded = doctor.examine(ts, 'PRE_BAKE')
+ring_cage = [f for f in findings(bounded, 'cage') if f.object_name == 'Ring_low']
+assert ring_cage and ring_cage[0].severity == 'INFO' and 'Full Check' in ring_cage[0].message, findings(bounded, 'cage')
+doctor.LARGE_MESH = 300                              # the torus (288 faces) passes the estimate...
+array = ring_low.modifiers.new('Array', 'ARRAY')     # ...and the evaluated count catches the doubled mesh
+array.count = 2
+bounded = doctor.examine(ts, 'PRE_BAKE')
+ring_cage = [f for f in findings(bounded, 'cage') if f.object_name == 'Ring_low']
+assert ring_cage and ring_cage[0].severity == 'INFO' and 'evaluated faces' in ring_cage[0].message, findings(bounded, 'cage')
+ring_low.modifiers.remove(array)
+assert doctor.examine(ts, 'FULL').status('cage') == 'WARN'
+doctor.LARGE_MESH = 250_000
+ts.bake.ray_distance = .1
+print('BAKE_DOCTOR_CAGE_BOUND_OK', flush=True)
+
+# Edit Mode: the checks see the edit BMesh (seams just marked, faces just flipped), and a
+# stale finding is refused against the edit mesh instead of indexing past it.
+bpy.context.view_layer.objects.active = bolt_low
+bpy.ops.object.mode_set(mode='EDIT')
+edit = doctor.examine(ts, 'PRE_BAKE')
+bolt_seams = [f for f in findings(edit, 'seams') if f.object_name == 'Bolt_low']
+assert bolt_seams and bolt_seams[0].edges, findings(edit, 'seams')
+assert not any('skipped' in f.message for f in edit.findings), edit.findings
+bpy.ops.mesh.select_all(action='SELECT'); bpy.ops.uv.seams_from_islands()
+bm = bmesh.from_edit_mesh(bolt_low.data); bm.faces.ensure_lookup_table()
+bmesh.ops.reverse_faces(bm, faces=[bm.faces[2]])
+bmesh.update_edit_mesh(bolt_low.data)
+edit = doctor.examine(ts, 'PRE_BAKE')
+assert not [f for f in findings(edit, 'seams') if f.object_name == 'Bolt_low'], findings(edit, 'seams')
+bolt_normals = [f for f in findings(edit, 'normals') if f.object_name == 'Bolt_low']
+assert bolt_normals and set(bolt_normals[0].faces) == {2}, bolt_normals
+doctor.select(ts, bolt_normals[0])
+bm = bmesh.from_edit_mesh(bolt_low.data); bm.faces.ensure_lookup_table()
+assert {f.index for f in bm.faces if f.select} == {2}
+bmesh.ops.delete(bm, geom=[bm.faces[i] for i in (2, 3, 4, 5)], context='FACES')
+bmesh.update_edit_mesh(bolt_low.data)
+try:
+    doctor.select(ts, bolt_seams[0])
+except ValueError as exc:
+    assert 'changed since' in str(exc), exc
+else:
+    raise AssertionError('a finding from before the edit must be refused')
+bpy.ops.object.mode_set(mode='OBJECT')
+print('BAKE_DOCTOR_EDIT_MODE_OK', flush=True)
 print('BAKE_DOCTOR_PASS', flush=True)
 open_painter.unregister()

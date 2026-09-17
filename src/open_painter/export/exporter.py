@@ -76,7 +76,9 @@ def export(context: bpy.types.Context, ts, settings, naming=None, directory=None
                         (np.arange(n, dtype=np.float32) + 0.5) / n,
                         (np.arange(start, min(n, start + 128), dtype=np.float32) + 0.5) / n,
                     )
-                    scaled[start : start + len(v)] = sample_uv(value, u, v)
+                    # Clamped like the atlas: a repeating fetch bleeds the opposite border
+                    # into the outermost exported texels of an island flush with the UV edge.
+                    scaled[start : start + len(v)] = sample_uv(value, u, v, tiling="NONE")
                 value = scaled
             if key == "NORMAL":
                 value = surface_normal(ts, value, channel("HEIGHT"))
@@ -94,7 +96,7 @@ def export(context: bpy.types.Context, ts, settings, naming=None, directory=None
                         key = key.removeprefix("ONE_MINUS_")
                         if key not in {"ZERO", "ONE"}:
                             channel(key)
-                    values = pack(cache, definition)
+                    values = pack(cache, definition, shape=(n, n, 4))
                 elif definition == 'BASE_COLOR_OPACITY':
                     values=channel('BASE_COLOR').copy()
                     values[...,3]=channel('OPACITY')[...,0]

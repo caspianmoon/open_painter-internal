@@ -140,24 +140,31 @@ def match_sources(ts, scene):
             cage_mode=ts.bake.cage_mode, cage_object=ts.bake.cage_object,
         ),
     ), validate_cages=False)
-    old = [(ref.object, getattr(ref, "target", None), getattr(ref, "cage", None), ref.name)
+    old = [(ref.object, getattr(ref, "target", None), getattr(ref, "cage", None), ref.name,
+            getattr(ref, "ignorable", False))
            for ref in ts.bake.high_objects]
     previous = (ts.bake.source_mode, ts.bake.selected_to_active, ts.bake.active_high, ts.bake.cage_object)
+    # Ignore Brush Excludes is authored per source and lives only on the rows: a
+    # re-match keeps it for sources that are listed again.
+    flags = {source: ignorable for source, _, _, _, ignorable in old if source is not None}
     try:
         ts.bake.high_objects.clear()
         for source, low, cage in entries:
             ref = ts.bake.high_objects.add()
             ref.object, ref.target, ref.cage, ref.name = source, low, cage, source.name
+            ref.ignorable = flags.get(source, False)
         ts.bake.source_mode = "MATCHED"
         ts.bake.selected_to_active = True
         ts.bake.active_high = 0
-        if len(lows) == 1:
+        # Only a found '_cage' partner replaces the visible cage: a hand-picked or
+        # created cage ('<low> Cage') must not be cleared under cage_mode CUSTOM.
+        if len(lows) == 1 and entries[0][2] is not None:
             ts.bake.cage_object = entries[0][2]
     except Exception:
         ts.bake.high_objects.clear()
-        for source, low, cage, name in old:
+        for source, low, cage, name, ignorable in old:
             ref = ts.bake.high_objects.add()
-            ref.object, ref.target, ref.cage, ref.name = source, low, cage, name
+            ref.object, ref.target, ref.cage, ref.name, ref.ignorable = source, low, cage, name, ignorable
         ts.bake.source_mode, ts.bake.selected_to_active, ts.bake.active_high, ts.bake.cage_object = previous
         raise
     return planned

@@ -5,6 +5,8 @@ import weakref
 from .resource_keys import key_for
 
 _shared = {}
+# Rasters every strip of a job reads; retained for the job when they exceed the allowance.
+REQUIRED = ('geometry', 'tangents')
 
 
 def for_texture_set(scene, texture_set, force=False):
@@ -19,7 +21,8 @@ def for_texture_set(scene, texture_set, force=False):
         if hasattr(cache, "geometry_stamp"):
             from ..core.layer_stack import invalidate
             invalidate(texture_set)
-        cache.pop("geometry", None)
+        for key in REQUIRED:
+            cache.pop(key, None)
         cache.geometry_stamp = geometry_stamp
     dependencies.remember(scene, texture_set, geometry_stamp)
     stamp = (texture_set.edit_serial, int(texture_set.resolution), geometry_stamp)
@@ -46,13 +49,20 @@ def byte_size(value):
     return sum(memory.allocations(value).values())
 
 
+def _gauge_required():
+    if metrics is None or _shared is None:  # Blender may tear down modules before cache finalizers.
+        return
+    metrics.gauge('cache_required_geometry_bytes', sum(
+        byte_size(cache.required) for cache in _shared.values()))
+
+
 class RasterCache(OrderedDict):
     """Disposable memoization. Oversized values remain caller-owned, uncached."""
     def __init__(self, budget=None):
         super().__init__()
         self.manager = memory.shared if budget is None else memory.MemoryBudget(budget)
         self.signatures = {}
-        self.required_geometry = None
+        self.required = {}
 
     @property
     def used(self):
@@ -66,13 +76,13 @@ class RasterCache(OrderedDict):
         return self.manager.allowance
 
     def __contains__(self, key):
-        found = (key == 'geometry' and self.required_geometry is not None) or super().__contains__(key)
+        found = key in self.required or super().__contains__(key)
         metrics.count("cache_hits" if found else "cache_misses")
         return found
 
     def __getitem__(self, key):
-        if key == 'geometry' and self.required_geometry is not None:
-            return self.required_geometry
+        if key in self.required:
+            return self.required[key]
         value = super().__getitem__(key)
         self.move_to_end(key)
         self.manager.touch((id(self), key))
@@ -88,19 +98,17 @@ class RasterCache(OrderedDict):
         if self.manager.admit((id(self), key), value, evict):
             super().__setitem__(key, value)
             metrics.count("cache_insert_bytes", byte_size(value))
-        elif key == 'geometry':
+        elif key in REQUIRED:
             # Required for every strip: retain once for the current job, outside
             # disposable cache allowance, instead of rebuilding per strip.
-            self.required_geometry = value
-            metrics.gauge('cache_required_geometry_bytes', sum(
-                byte_size(cache.required_geometry) for cache in _shared.values()))
+            self.required[key] = value
+            _gauge_required()
 
     def release_required(self):
-        had_required = self.required_geometry is not None
-        self.required_geometry = None
-        if had_required and metrics is not None and _shared is not None:
-            metrics.gauge('cache_required_geometry_bytes', sum(
-                byte_size(cache.required_geometry) for cache in _shared.values()))
+        had_required = bool(self.required)
+        self.required = {}
+        if had_required:
+            _gauge_required()
 
     def clear(self):
         self.release_required()
@@ -114,9 +122,9 @@ class RasterCache(OrderedDict):
         self.manager.remove((id(self), key))
 
     def pop(self, key, *default):
-        if key == 'geometry' and self.required_geometry is not None:
-            value = self.required_geometry
-            self.release_required()
+        if key in self.required:
+            value = self.required.pop(key)
+            _gauge_required()
             return value
         if not OrderedDict.__contains__(self, key):
             if default:

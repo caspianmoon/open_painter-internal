@@ -37,6 +37,19 @@ class Footprints(unittest.TestCase):
                 np.testing.assert_allclose(actual, expected, atol=1e-7, rtol=1e-6,
                                            err_msg=f'{kind}, {rows} rows')
 
+    def test_wide_strips_match_full_filters(self):
+        # FFT and running-sum blurs stay shift-invariant within the footprint halo.
+        data = np.random.default_rng(85).random((300, 41, 4), dtype=np.float32)
+        for kind, radius in (('GAUSSIAN_BLUR', 25.), ('BLUR', 60.), ('HIGH_PASS', 30.),
+                             ('SHARPEN', 10.), ('SMOOTH_MASK', 12.)):
+            expected = filters.apply(data, kind, radius=radius)
+            for rows in (16, 128, 300):
+                actual = np.empty_like(expected)
+                for target, source, crop in slices(len(data), rows, footprint(kind, radius)):
+                    actual[target] = filters.apply(data[source], kind, radius=radius)[crop]
+                np.testing.assert_allclose(actual, expected, atol=1e-6, rtol=0,
+                                           err_msg=f'{kind}, {rows} rows')
+
     def test_composed_halos_and_unknown(self):
         def effect(kind, radius=2, enabled=True):
             return SimpleNamespace(kind=kind, radius=radius, enabled=enabled, strength=1)

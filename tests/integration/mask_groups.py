@@ -200,6 +200,54 @@ graph.close()
 material_manager.repair(ts)
 print('MASK_GROUPS_PARITY', error, flush=True)
 
+
+def parity(label):
+    """The baked Rust coverage against mask_eval at the sampled size (the CPU
+    channel harness scales filter radii with the preview size; the shader's
+    boundary rasters the authored radius at its own size)."""
+    graph = Graph(scene, small, ts.material)
+    graph.build()
+    while graph.pending_resources:
+        graph.step_resources(.1)
+    coverage = np.concatenate([evaluate_masks(ts, layer_of(), N, y0, min(N, y0 + 16), {}, {}) for y0 in range(0, N, 16)])
+    expected = .1 + (.9 - .1) * coverage
+    error = float(np.abs(bake_channel(graph)[..., 0] - expected).max())
+    assert error < 3e-4, (label, error)
+    print('MASK_GROUPS_PARITY', label, error, flush=True)
+    return graph
+
+
+# A spatial filter inside a group rasters the group's own run, not the outer stack
+# folded through the group again (0.9.7).
+blur_id = add('FILTER', 'Blur')
+by_id(blur_id).effect.kind, by_id(blur_id).effect.radius, by_id(blur_id).effect.space = 'GAUSSIAN_BLUR', 3., 'UV'
+assert mask_stack.adopt(layer_of(), 5, 3) == 4 and by_id(blur_id).parent_id == group_id
+assert [m.id for m in layer_of().masks] == [group_id, a_id, b_id, lv_id, blur_id, c_id]
+graph = parity('blur_in_group')
+prefix_node = next(node for node in graph.nodes() if node.get('op_boundary', '').startswith('["mask_prefix"'))
+graph.close(); material_manager.repair(ts)
+# Undo rehydration and continuations rebuild the prefix with the same group walk:
+# the members of a disabled group stay out of a later top-level filter.
+assert mask_stack.out_of_group(layer_of(), 4) == 4 and by_id(blur_id).parent_id == ''
+by_id(group_id).enabled = False
+graph = parity('blur_after_disabled_group')
+built = next(b for b in graph.resource_bindings if b.identifier.startswith('RasterMaskPrefix:'))
+from open_painter.constants import OWNER
+for stale in [n for n in ts.material.node_tree.nodes if n.get(OWNER) and n.get('role') == 'Procedural Graph'
+              and n != graph.instance]:
+    ts.material.node_tree.nodes.remove(stale)   # the detached empty-set graph from sets.create
+probe = Graph(scene, small, ts.material)
+assert probe.rehydrate(), probe._last
+rehydrated = next(b for b in probe.resource_bindings if b.identifier.startswith('RasterMaskPrefix:'))
+assert rehydrated.signature == built.signature, 'the rehydrated prefix includes the disabled group\'s member'
+assert probe._last['raster_boundaries_queued'] == 0 and rehydrated.node.image == built.node.image
+probe.detach()
+graph.close(); material_manager.repair(ts)
+by_id(group_id).enabled = True
+layer_of().masks.remove(next(i for i, m in enumerate(layer_of().masks) if m.id == blur_id))
+assert [m.id for m in layer_of().masks] == [group_id, a_id, b_id, lv_id, c_id]
+print('MASK_GROUPS_FILTER_PREFIX_OK', flush=True)
+
 # Custom Graph: native in the shader, baked with Cycles for the CPU reference.
 graph_id = add('GRAPH', 'Custom', operation='MULTIPLY')
 tree = bpy.data.node_groups.new('Mask ramp', 'ShaderNodeTree')
@@ -231,6 +279,68 @@ tree.links.new(separate.outputs['Y'], group_out.inputs['Coverage'])
 assert custom_graph.signature(tree) != before, 'editing the group changes its signature'
 raster = custom_graph.raster(ts, by_id(graph_id), 64)
 assert np.abs(raster - uu[:, None]).max() < .03
+# The identity also covers what the property walk misses (0.9.7): interface defaults (what a
+# fresh instance reads for an unlinked input), ramp stops, curve points, node and link mutes.
+before = custom_graph.signature(tree)
+scale = tree.interface.new_socket(name='Scale', in_out='INPUT', socket_type='NodeSocketFloat')
+assert custom_graph.signature(tree) != before
+before = custom_graph.signature(tree)
+scale.default_value = 20.
+assert custom_graph.signature(tree) != before, 'an interface default'
+ramp = tree.nodes.new('ShaderNodeValToRGB')
+before = custom_graph.signature(tree)
+ramp.color_ramp.elements[0].position = .6
+assert custom_graph.signature(tree) != before, 'a ramp stop'
+before = custom_graph.signature(tree)
+ramp.color_ramp.interpolation = 'CONSTANT'
+assert custom_graph.signature(tree) != before, 'ramp interpolation'
+before = custom_graph.signature(tree)
+ramp.mute = True
+assert custom_graph.signature(tree) != before, 'a node mute'
+curve = tree.nodes.new('ShaderNodeRGBCurve')
+before = custom_graph.signature(tree)
+curve.mapping.curves[3].points[0].location = (0., .3)
+curve.mapping.update()
+assert custom_graph.signature(tree) != before, 'a curve point'
+before = custom_graph.signature(tree)
+tree.links[-1].is_muted = True
+assert custom_graph.signature(tree) != before, 'a muted link'
+tree.links[-1].is_muted = False
+volume = tree.nodes.new('ShaderNodeVolumePrincipled')   # its attribute inputs are String sockets
+assert any(s.type == 'STRING' and s.default_value for s in volume.inputs)
+assert custom_graph.signature(tree) == custom_graph.signature(tree), 'string sockets sign as text'
+for node in (ramp, curve, volume):
+    tree.nodes.remove(node)
+tree.interface.remove(scale)
+# The CPU raster is baked over the assigned meshes, so it follows the geometry stamp (0.9.7):
+# a group reading Position is placement-aware, and the export path (no force) re-bakes after
+# the plane moves instead of serving the cached raster.
+from open_painter.evaluation import dependencies
+assert not dependencies.uses_placement(ts)
+height = bpy.data.node_groups.new('Mask height', 'ShaderNodeTree')
+height.interface.new_socket(name='Position', in_out='INPUT', socket_type='NodeSocketVector')
+height.interface.new_socket(name='Coverage', in_out='OUTPUT', socket_type='NodeSocketFloat')
+height_in, height_out = height.nodes.new('NodeGroupInput'), height.nodes.new('NodeGroupOutput')
+height_xyz = height.nodes.new('ShaderNodeSeparateXYZ')
+height.links.new(height_in.outputs['Position'], height_xyz.inputs[0])
+height.links.new(height_xyz.outputs['Z'], height_out.inputs['Coverage'])
+by_id(graph_id).node_group = height
+assert dependencies.uses_geometry(ts) and dependencies.uses_placement(ts)
+output = lambda: images.pixels(next(o.image for o in ts.outputs if o.channel == 'BASE_COLOR'))[..., 0]
+evaluator = LayerEvaluator(scene)
+evaluator.evaluate_texture_set(ts.id)
+low = output()
+assert abs(float(low.mean()) - .1) < .02, float(low.mean())   # z = 0: the graph masks the rust out
+plane.location.z = 1.
+bpy.context.view_layer.update()
+dependencies.refresh(scene)
+assert ts.dirty, 'moving the plane invalidates a set whose only geometry consumer is the graph'
+evaluator.evaluate_texture_set(ts.id)
+high = output()
+assert float(high.mean()) > float(low.mean()) + .1, (float(low.mean()), float(high.mean()))
+plane.location.z = 0.
+bpy.context.view_layer.update()
+by_id(graph_id).node_group = tree
 # The live session adopts the graph and reports it in the structural signature.
 ts.preview_backend = 'LIVE'
 material_manager.repair(ts)

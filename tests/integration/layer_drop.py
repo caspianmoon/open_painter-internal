@@ -102,5 +102,65 @@ channel.opacity_percent = 35
 assert abs(channel.opacity - .35) < 1e-6 and channel.opacity_percent == 35
 channel.opacity = .333
 assert channel.opacity_percent == 33
+
+# A drag places the layer at every row it crosses while the timer keeps
+# ticking: the shader session held by the modal rebuilds once, on the drop,
+# and once for a cancelled drag put back in place.
+from time import monotonic
+from open_painter.core import material_manager
+from open_painter.evaluation import cache, shader_preview
+scene = bpy.context.scene
+if bpy.app.timers.is_registered(cache.tick):
+    bpy.app.timers.unregister(cache.tick)
+bpy.ops.mesh.primitive_plane_add(size=2)
+sets.assign(scene, ts, bpy.context.object)
+
+
+def ready():
+    deadline = monotonic() + 60
+    while monotonic() < deadline:
+        shader_preview.tick(scene, ts)
+        info = shader_preview.diagnostics(scene, ts)
+        assert not info['error'], info
+        if shader_preview.current(scene, ts):
+            return info
+    raise AssertionError(shader_preview.diagnostics(scene, ts))
+
+
+material_manager.repair(ts)
+builds = ready()['graph_builds']
+saved = stack.arrangement(ts)
+dragged = by_name('Middle').id
+key = shader_preview.hold(scene, ts)
+try:
+    crossed = 0
+    for gap in range(len(stack.drop_targets(ts, dragged))):
+        for target in stack.drop_targets(ts, dragged)[gap]:
+            stack.place(ts, dragged, target)
+            crossed += 1
+            for _ in range(3):
+                shader_preview.tick(scene, ts)
+            info = shader_preview.diagnostics(scene, ts)
+            assert info['held'] and info['graph_builds'] == builds, (crossed, info)
+    stack.place(ts, dragged, stack.drop_targets(ts, dragged)[0][0])
+    assert crossed > 4 and stack.arrangement(ts) != saved
+finally:
+    shader_preview.release_hold(key)
+assert not shader_preview.diagnostics(scene, ts)['held']
+info = ready()
+assert info['graph_builds'] == builds + 1, (builds, info)
+builds = info['graph_builds']
+key = shader_preview.hold(scene, ts)
+try:
+    stack.place(ts, dragged, stack.drop_targets(ts, dragged)[1][0])
+    for _ in range(3):
+        shader_preview.tick(scene, ts)
+    stack.restore_arrangement(ts, saved)
+    assert stack.arrangement(ts) == saved
+finally:
+    shader_preview.release_hold(key)
+info = ready()
+assert info['graph_builds'] == builds + 1, (builds, info)
+shader_preview.release_hold(key)   # releasing twice, or an ended hold, is harmless
 open_painter.unregister()
 print('LAYER_DROP_PASS', flush=True)

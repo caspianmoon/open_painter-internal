@@ -294,6 +294,14 @@ def run():
         bpy.ops.open_painter.layer_cache(action='REFRESH')
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
     assert next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR').image is not frozen_image
+    # Channel opacity is applied after the cache sample: the slider (through its
+    # opacity_percent mirror) must not turn the frozen row stale.
+    stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').opacity_percent = 60
+    assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, blue_id)
+    assert not layer_cache.pending(scene, ts, blue_id)
+    stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').opacity = 1.
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, blue_id)
     # Toggling the mode is structural and scoped to the layer's units.
     builds = shader_preview.diagnostics(scene, ts)['graph_builds']
     layer_by_id(ts, blue_id).cache_mode = 'CACHED'
@@ -317,6 +325,14 @@ def run():
     assert observed.report()['counters'].get('layer_cache_requests', 0) >= 1
     layer_cache.flush(scene)
     assert all(v == 'CURRENT' for v in states(scene, ts, folder_id).values())
+    # An edit inside a cached folder stays pending for the export (0.9.7): the
+    # child's units are sampled from the cache and hold no bindings to narrow by.
+    output = images.output(ts, 'BASE_COLOR')
+    output.dirty = False
+    stack.channel_for(layer_by_id(ts, yellow_id), 'BASE_COLOR').color = (.2, .9, .9, .8)
+    assert shader_preview.current(scene, ts)
+    assert output.dirty, 'an edit to a cached folder child was dropped from the export'
+    layer_cache.flush(scene)
     print('LAYER_CACHE_MODES_OK', flush=True)
 
     # Paused while painting: no job starts, even past the debounce.
@@ -330,6 +346,135 @@ def run():
     layer_cache.paused = None
     layer_cache.flush(scene)
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+
+    # Saving keeps a queued refresh (0.9.7): nothing re-requests it in the
+    # running session, so the layer would stay STALE with the old image bound.
+    from open_painter.evaluation import field_jobs
+    pointer = scene.as_pointer()
+    next(m for m in layer_by_id(ts, blue_id).masks if m.id == checker_id).strength = .3
+    assert layer_cache.pending(scene, ts, blue_id)
+    field_jobs._rebakes[(pointer, ts.id)] = monotonic()
+    with metrics.Metrics() as observed:
+        cache.on_save(None)
+    assert layer_cache.pending(scene, ts, blue_id), 'save dropped the queued cache refresh'
+    assert (pointer, ts.id) in field_jobs._rebakes, 'save dropped the scheduled edge rebake'
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'STALE'
+    cache.on_render(None)
+    assert layer_cache.pending(scene, ts, blue_id) and (pointer, ts.id) not in field_jobs._rebakes, \
+        'a render drops only the timer-driven bake'
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    print('LAYER_CACHE_SAVE_OK', flush=True)
+
+    def start_job(layer_id, mask_id, strength):
+        """Edit a mask so a refresh is requested, then tick (one strip a time) until it starts."""
+        next(m for m in layer_by_id(ts, layer_id).masks if m.id == mask_id).strength = strength
+        assert layer_cache.pending(scene, ts, layer_id)
+        deadline = monotonic() + 5
+        while not layer_cache.tick(scene, budget=0) and monotonic() < deadline:
+            pass
+        return next(k for k in layer_cache._jobs if k[2] == layer_id)
+
+    # A publication while a structural rebuild is pending (0.9.7): notify cannot
+    # rebind the sampler, so the superseded image keeps a user; it loses its
+    # fake user at once and is removed once the rebuild lets go of it.
+    row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
+    previous_image = row.image
+    previous_name = previous_image.name
+    start_job(blue_id, checker_id, .35)
+    stack.add(ts, 'FILL', 'Mid-job layer')
+    assert shader_preview.diagnostics(scene, ts)['rebuild_pending']
+    with metrics.Metrics() as observed:
+        layer_cache.flush(scene, ts, blue_id)
+    assert observed.report()['counters'].get('layer_cache_publications', 0) >= 1
+    row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
+    assert row.image is not previous_image and row.provenance
+    assert bpy.data.images.get(previous_name) is previous_image
+    assert not previous_image.use_fake_user and previous_image.users == 1, \
+        'a superseded cache image the sampler still reads must not be persisted'
+    ready(scene, ts)   # the rebuild binds the published image
+    layer_cache.tick(scene)
+    assert bpy.data.images.get(previous_name) is None, 'the superseded cache image leaked'
+    assert row.image.use_fake_user and states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    # A job whose inputs moved on while a rebuild was pending never publishes:
+    # the pending rebuild swallows the edit that would have superseded it.
+    previous_image = row.image
+    start_job(blue_id, checker_id, .45)
+    stack.add(ts, 'FILL', 'Second mid-job layer')
+    assert shader_preview.diagnostics(scene, ts)['rebuild_pending']
+    with metrics.Metrics() as observed:
+        next(m for m in layer_by_id(ts, blue_id).masks if m.id == checker_id).strength = .55
+    assert observed.report()['counters'].get('layer_cache_requests', 0) == 0
+    with metrics.Metrics() as observed:
+        layer_cache.flush(scene, ts, blue_id)
+    assert observed.report()['counters'].get('layer_cache_publications', 0) == 0, 'a torn cache was published'
+    row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
+    assert row.image is previous_image
+    ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'STALE' and layer_cache.pending(scene, ts, blue_id)
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    for name in ('Mid-job layer', 'Second mid-job layer'):
+        stack.remove_tree(ts, next(l for l in ts.layers if l.name == name).id)
+    ready(scene, ts)
+    print('LAYER_CACHE_RETIRE_OK', flush=True)
+
+    # A running job of a layer set back to Live is dropped on the next tick
+    # instead of holding the scheduler until its strips are done.
+    key = start_job(blue_id, checker_id, .65)
+    layer_by_id(ts, blue_id).cache_mode = 'LIVE'
+    assert not layer_cache.tick(scene, budget=0) and key not in layer_cache._jobs, 'an orphan job kept running'
+    layer_by_id(ts, blue_id).cache_mode = 'CACHED'
+    ready(scene, ts)
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    # An explicit refresh runs one channel at a time: the next channel's buffer
+    # is allocated only after the previous one has been published.
+    alive = []
+    original_start = layer_cache._start
+
+    def counting_start(*args):
+        alive.append(len(layer_cache._jobs))
+        return original_start(*args)
+    with patch.object(layer_cache, '_start', counting_start):
+        layer_cache.refresh(scene, ts, folder_id)
+    assert len(alive) >= 2 and max(alive) == 0, alive
+    assert all(v == 'CURRENT' for v in states(scene, ts, folder_id).values())
+    print('LAYER_CACHE_ORPHAN_OK', flush=True)
+
+    # A running cache job must not starve the shader loop: a structural edit
+    # rebuilds on the next tick while the job keeps its strips.
+    from time import sleep
+
+    def slow_strips():
+        for _ in range(100000):
+            sleep(.002)
+            yield 0, np.zeros((1, 512, 4), np.float32)
+    fake = (pointer, ts.id, blue_id, 'EMISSION')   # a bound channel's rebuild would discard a current job
+    layer_cache._jobs[fake] = {'signature': 'fake', 'steps': slow_strips(), 'progress': 0., 'name': 'Slow',
+                               'data': np.ones((512, 512, 4), np.float32), 'covered': np.zeros(512, np.bool_),
+                               'ms': 0., 'size': 512, 'channel': 'ROUGHNESS'}
+    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    late = stack.add(ts, 'FILL', 'Late layer')
+    late_id = late.id
+    assert shader_preview.diagnostics(scene, ts)['rebuild_pending']
+    interval = cache.tick()
+    info = shader_preview.diagnostics(scene, ts)
+    assert not info['rebuild_pending'] and info['graph_builds'] == builds + 1, info
+    assert abs(interval - .001) < 1e-9 and fake in layer_cache._jobs, 'the job still advances after the shader loop'
+    while shader_preview.diagnostics(scene, ts)['pending_resources']:
+        cache.tick()
+    cache.tick()
+    assert fake in layer_cache._jobs and scene.open_painter.status.startswith('Caching Slow'), scene.open_painter.status
+    layer_cache._jobs.pop(fake)
+    cache.tick()
+    assert not scene.open_painter.status.startswith('Caching'), scene.open_painter.status
+    stack.remove_tree(ts, late_id)
+    ready(scene, ts)
+    print('LAYER_CACHE_PRIORITY_OK', flush=True)
 
     # Undo rehydration keeps the image bound without a request.
     graph = shader_preview.ensure(scene, ts)
@@ -357,6 +502,58 @@ def run():
     row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
     assert row.image is not None and row.image.has_data and tuple(row.image.size) == (512, 512)
     print('LAYER_CACHE_PERSISTENCE_OK', flush=True)
+
+    # Persisted provenance carries no session-local tokens (0.9.7): a modifier's
+    # target object is named, and a mesh mask's painted weights are digested
+    # instead of the per-process mesh epoch, so a reopened file stays CURRENT.
+    from open_painter.evaluation import dependencies, mesh_masks
+    obj = ts.assignments[0].object
+    rig = bpy.data.objects.new('Rig Armature', bpy.data.armatures.new('Rig'))
+    scene.collection.objects.link(rig)
+    modifier = obj.modifiers.new('Rig', 'ARMATURE')
+    modifier.object = rig
+    weights = obj.vertex_groups.new(name='Weights')
+    for vertex in obj.data.vertices:
+        weights.add([vertex.index], (vertex.co.x + 1) / 2, 'REPLACE')
+    rigged = stack.add(ts, 'FILL', 'Rigged'); rigged_id = rigged.id
+    prop = stack.channel_for(rigged, 'BASE_COLOR')
+    prop.color, prop.procedural, prop.projection = (.2, .6, .3, 1.), 'FBM', 'TRIPLANAR'
+    mesh_mask = rigged.masks.add()
+    mesh_mask.id, mesh_mask.source = new_id(), 'MESH'
+    mesh_mask.mesh.kind, mesh_mask.mesh.attribute = 'VERTEX_GROUP', 'Weights'
+    layer_by_id(ts, rigged_id).cache_mode = 'CACHED'
+    ready(scene, ts)
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    assert states(scene, ts, rigged_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, rigged_id)
+    row = next(r for r in layer_by_id(ts, rigged_id).cache if r.channel == 'BASE_COLOR')
+    assert 'Rig Armature' in row.provenance and str(rig.as_pointer()) not in row.provenance, row.provenance
+    dependencies._mesh_epochs.clear()   # a fresh process starts counting again
+    mesh_masks._digests.clear()
+    graph = shader_preview.ensure(scene, ts)
+    with metrics.Metrics() as observed:
+        graph.update()
+    assert observed.report()['counters'].get('layer_cache_requests', 0) == 0, 'the provenance drifted across sessions'
+    assert states(scene, ts, rigged_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, rigged_id)
+    # Painting weights still re-identifies the mask (the digest follows the values).
+    weights.add([0], .05, 'REPLACE')
+    dependencies._mesh_epochs[obj.data.as_pointer()] = dependencies.mesh_epoch(obj.data) + 1
+    graph.update()
+    assert states(scene, ts, rigged_id)['BASE_COLOR'] == 'STALE', states(scene, ts, rigged_id)
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    # An edit to a cached layer reports its channel: the export re-rasters it.
+    output = images.output(ts, 'BASE_COLOR')
+    output.dirty = False
+    stack.channel_for(layer_by_id(ts, rigged_id), 'BASE_COLOR').color = (.3, .6, .3, 1.)
+    info = shader_preview.diagnostics(scene, ts)
+    assert 'BASE_COLOR' in info['affected_channels'] and output.dirty, info['affected_channels']
+    layer_cache.flush(scene)
+    ready(scene, ts)
+    stack.remove_tree(ts, rigged_id)
+    obj.modifiers.remove(modifier)
+    ready(scene, ts)
+    print('LAYER_CACHE_PROVENANCE_OK', flush=True)
 
     # Resolution change: stale until refreshed at the new size.
     ts.resolution = '1024'
@@ -387,10 +584,13 @@ def run():
     assert '"bypass": true' not in text and '"refresh_serial"' not in text and '"cache": [' not in text, \
         'portable materials carry no cache'
     stack.remove_tree(ts, copy_id)
+    ready(scene, ts)
     cached_image = layer_by_id(ts, blue_id).cache[0].image
     name = cached_image.name
+    start_job(blue_id, checker_id, .75)
     stack.remove_tree(ts, blue_id)
     assert bpy.data.images.get(name) is None, 'removing a layer drops its cache images'
+    assert not layer_cache.pending(scene, ts, blue_id), 'removing a layer drops its running refresh'
     ready(scene, ts)
     print('LAYER_CACHE_PASS', flush=True)
     (ROOT / '.blender-test' / 'layer-cache.json').write_text(json.dumps(report, indent=2))

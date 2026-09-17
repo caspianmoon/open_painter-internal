@@ -69,6 +69,13 @@ def redraw():
                     area.tag_redraw()
 
 
+def release(captured):
+    """The request is over: its textures are packed in the .blend or unwanted."""
+    from . import generated_images
+    if captured:
+        generated_images.discard(captured["images"].values())
+
+
 def ensure_online():
     if not bpy.app.online_access:
         raise schema.AuthoringError("Enable Allow Online Access in Blender Preferences > System to connect Codex")
@@ -87,6 +94,8 @@ def connect(context):
         directory = bpy.utils.extension_path_user(package, path="material_director", create=True)
     else:
         directory = bpy.utils.user_resource("CONFIG", path="open_painter/material_director", create=True)
+    from . import generated_images
+    generated_images.prune(directory)
     connection = Connection(bpy.path.abspath(prefs.director_codex_binary) if prefs.director_codex_binary else "codex",
                             Path(directory), credentials=prefs.director_credentials)
     state.update(status="Connecting Codex…", response="", changes=[])
@@ -97,6 +106,7 @@ def connect(context):
 
 def disconnect():
     global connection, request, _model_items
+    release(request)
     request = None
     clear_conversation()
     if connection:
@@ -117,6 +127,7 @@ def stop():
     global request
     if request and not request["running"] and request["draft"]:
         remember(request, "discarded")
+    release(request)
     request = None
     if connection:
         connection.send(dict(action="interrupt"))
@@ -141,7 +152,7 @@ def binding_digest(saved):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
-def target(captured, *, check=True):
+def target(captured, *, check=True, require_active=True):
     scene = next((s for s in bpy.data.scenes if s.as_pointer() == captured["scene"]), None)
     ts = next((s for s in scene.open_painter.texture_sets if s.id == captured["set_id"]), None) if scene else None
     window = next((w for wm in bpy.data.window_managers for w in wm.windows
@@ -155,10 +166,27 @@ def target(captured, *, check=True):
             current = {item.id: document.digest(item) for item in scene_authoring.materials(scene)}
             if current != captured["target_digests"]:
                 raise schema.AuthoringError("A scene material changed; run the scene instruction again")
+    if check and require_active:
+        # Only applying a draft acts on the active set; tool calls resolve the
+        # captured set by id, so browsing other sets during a turn is harmless.
         project = scene.open_painter
         if not 0 <= project.active_texture_set < len(project.texture_sets) or project.texture_sets[project.active_texture_set].id != ts.id:
             raise schema.AuthoringError("Return to the original texture set before applying its draft")
     return window, scene, ts
+
+
+def painter_area(captured, window):
+    """The Painter area the instruction was run from; maximizing moves its space to another area."""
+    from ..ui import editor
+    areas = [a for a in window.screen.areas if a.type == "VIEW_3D"]
+    for pick in (lambda a: a.spaces.active.as_pointer() == captured.get("space"),
+                 editor.is_area,
+                 lambda a: a.spaces.active.shading.type in {"MATERIAL", "RENDERED"},
+                 lambda a: True):
+        area = next((a for a in areas if pick(a)), None)
+        if area is not None:
+            return area
+    return None
 
 
 def capture(context, *, mode, scope, prompt):
@@ -180,6 +208,7 @@ def capture(context, *, mode, scope, prompt):
         root = ts.layers[ts.active_layer].id
     result = dict(id=uuid.uuid4().hex, scene=context.scene.as_pointer(), set_id=ts.id,
                   window=context.window.as_pointer(), digest=document.digest(ts),
+                  space=context.area.spaces.active.as_pointer() if context.area else 0,
                   bindings=bindings, binding_digest=binding_digest(bindings), scope=root,
                   mode=mode, prompt=prompt.strip(), draft=None, running=True, images={},
                   scene_scope=scope == "SCENE", target_digests={item.id: document.digest(item) for item in targets},
@@ -261,6 +290,7 @@ def run(context):
     connection.send(payload)
     if request and not request["running"] and request["draft"]:
         remember(request, "discarded")
+    release(request)
     request = captured
     state.update(status="Directing material…", response="", changes=[])
     state["visual_inputs"] = visual_context.manifest(attachments)
@@ -270,7 +300,7 @@ def run(context):
 def tool_call(event):
     if not request or not request["running"] or event.get("request_id") != request["id"]:
         raise schema.AuthoringError("This instruction is no longer active")
-    window, scene, ts = target(request)
+    window, scene, ts = target(request, require_active=False)
     name = event["tool"]
     spec = next((t["inputSchema"] for t in authoring.tools(request.get("scene_scope", False)) if t["name"] == name), None)
     if spec is None:
@@ -293,7 +323,7 @@ def tool_call(event):
         if identifier not in request["target_digests"]:
             raise schema.AuthoringError("Material is outside this instruction's scene scope")
         part = next(item for item in scene.open_painter.texture_sets if item.id == identifier)
-        area = next((a for a in window.screen.areas if a.type == "VIEW_3D"), None)
+        area = painter_area(request, window)
         if area is None:
             raise schema.AuthoringError("Open a 3D View to inspect scene materials")
         region = next(r for r in area.regions if r.type == "WINDOW")
@@ -350,6 +380,7 @@ def apply_draft(identifier):
                                      objects=authoring.resolve_bindings(request["bindings"]), images=request["images"])
     state.update(status="Applied: " + receipt["summary"], changes=receipt["changes"])
     remember(request, "applied")
+    release(request)
     request = None
     redraw()
     return receipt
@@ -361,6 +392,7 @@ def completed(event):
         return
     request["running"] = False
     if event.get("status") != "completed":
+        release(request)
         request = None
         state.update(status="Instruction ended without applying changes", changes=[])
         return
@@ -379,7 +411,7 @@ def completed(event):
     except schema.AuthoringError as exc:
         state["status"] = f"Draft not applied: {exc}"
         return
-    area = next((a for a in window.screen.areas if a.type == "VIEW_3D"), None)
+    area = painter_area(request, window)
     if area is None:
         state["status"] = "Draft ready — open a 3D View and Apply Draft"
         return
@@ -439,12 +471,19 @@ def handle(event):
     elif kind == "completed":
         completed(event)
     elif kind == "error":
-        if event.get("request_id") and (not request or event["request_id"] != request["id"]):
+        ends_request = bool(event.get("request_id"))
+        if ends_request and (not request or event["request_id"] != request["id"]):
             return
-        request = None
         if event.get("fatal"):
             disconnect()
-        state.update(status=event.get("message", "Codex error"), changes=[])
+        elif ends_request:
+            release(request)
+            request = None
+        if ends_request or event.get("fatal"):
+            state["changes"] = []
+        # An account or model request failing on its own leaves a running
+        # turn and a reviewed draft alone; the companion still owns that turn.
+        state["status"] = event.get("message", "Codex error")
 
 
 def tick():
@@ -452,7 +491,8 @@ def tick():
         return None
     try:
         ensure_online()
-        for event in connection.poll():
+        events = connection.poll()
+        for event in events:
             if connection is None:
                 break  # A fatal event in this batch already disconnected.
             handle(event)
@@ -460,8 +500,11 @@ def tick():
         disconnect()
         state["status"] = str(exc)[:500]
         return None
-    redraw()
-    return .05
+    # The panel only reflects session state, which changes inside handle();
+    # an idle connection must not keep every viewport redrawing.
+    if events:
+        redraw()
+    return .05 if request and request["running"] else .25
 
 
 @persistent

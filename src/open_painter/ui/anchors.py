@@ -151,7 +151,9 @@ class OP_OT_anchor_pick(SearchPicker, SafeOperator, bpy.types.Operator):
     bl_property = "choice"
     choice: bpy.props.EnumProperty(name="Anchor", items=anchor_items)
     target: bpy.props.EnumProperty(items=TARGETS)
-    clear: bpy.props.BoolProperty(default=False, options={"HIDDEN"})
+    # SKIP_SAVE: the picker button leaves `clear` unset, so it must not inherit
+    # the X button's last-used True and wipe the field instead of searching.
+    clear: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"})
 
     def invoke(self, context, event):
         if self.clear:

@@ -13,7 +13,7 @@ import open_painter
 from open_painter.core import layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, layer_cache, profile, shader_preview
-from open_painter.ui.performance import badge, cache_icon
+from open_painter.ui.performance import CACHE_ICONS, badge, cache_icon
 from open_painter.utils.ids import new_id
 
 
@@ -102,21 +102,42 @@ assert mark is not None and mark[1] == 'ERROR' and mark[0].endswith('ms'), (mark
 assert profile.table(scene, ts)['resolution'] == 256
 print('LAYER_PROFILE_ROWS', json.dumps({row['name']: round(row['cost_ms'], 2) for row in rows.values()}), flush=True)
 
+# The table walks every layer's ancestors with one shared id map: a sidebar
+# redraw used to rebuild the map per layer, quadratic in the stack.
+walks = []
+original_bypassed = profile._bypassed
+profile._bypassed = lambda ts_, layer_, by_id=None: (walks.append(by_id is None), original_bypassed(ts_, layer_, by_id))[1]
+try:
+    profile.rows(scene, ts)
+finally:
+    profile._bypassed = original_bypassed
+assert len(walks) == len(ts.layers) and not any(walks), walks
+
+
+def row_icon(layer):
+    """The layer list's cache icon, read from the table instead of the shader session."""
+    row = {row['layer_id']: row for row in profile.rows(scene, ts)}.get(layer.id)
+    return CACHE_ICONS.get(row['state'], 'FILE_CACHE') if row is not None and layer.cache_mode != 'LIVE' else None
+
+
 # States follow bypass and cache modes; an edit marks the CPU figures out of date.
 layer_by_id(ts, blurred_id).bypass = True
 ready(scene, ts)
 rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
 assert rows[blurred_id]['state'] == 'BYPASSED' and not rows[blurred_id]['current']
 assert cache_icon(scene, ts, layer_by_id(ts, blurred_id)) is None
+assert row_icon(layer_by_id(ts, blurred_id)) is None
 layer_by_id(ts, blurred_id).bypass = False
 layer_by_id(ts, folder_id).cache_mode = 'CACHED'
 ready(scene, ts)
 assert profile.state(scene, ts, layer_by_id(ts, folder_id)) == 'PENDING'
 assert cache_icon(scene, ts, layer_by_id(ts, folder_id)) == 'SORTTIME'
+assert row_icon(layer_by_id(ts, folder_id)) == 'SORTTIME'
 layer_cache.flush(scene)
 ready(scene, ts)
 assert profile.state(scene, ts, layer_by_id(ts, folder_id)) == 'CACHED', profile.state(scene, ts, layer_by_id(ts, folder_id))
 assert cache_icon(scene, ts, layer_by_id(ts, folder_id)) == 'FILE_CACHE'
+assert row_icon(layer_by_id(ts, folder_id)) == 'FILE_CACHE'
 rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
 assert rows[folder_id]['refresh_ms'] > 0
 layer_by_id(ts, folder_id).cache_mode = 'FROZEN'
@@ -124,6 +145,13 @@ ready(scene, ts)
 layer_by_id(ts, child_a_id).opacity = .4
 assert profile.state(scene, ts, layer_by_id(ts, folder_id)) == 'STALE'
 assert cache_icon(scene, ts, layer_by_id(ts, folder_id)) == 'TIME'
+assert row_icon(layer_by_id(ts, folder_id)) == 'TIME'
+# A bypassed cached layer keeps the cache icon, as the shader-side lookup gave it.
+layer_by_id(ts, folder_id).bypass = True
+ready(scene, ts)
+assert profile.state(scene, ts, layer_by_id(ts, folder_id)) == 'BYPASSED'
+assert cache_icon(scene, ts, layer_by_id(ts, folder_id)) == 'FILE_CACHE'
+assert row_icon(layer_by_id(ts, folder_id)) == 'FILE_CACHE'
 with bpy.context.temp_override(scene=scene):
     assert bpy.ops.open_painter.profile_layers(action='CLEAR') == {'FINISHED'}
 assert not profile.profiled(scene, ts)

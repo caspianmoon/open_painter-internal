@@ -29,7 +29,8 @@ def main():
 
     try:
         client = CodexClient(config["binary"], config["state_directory"], emit,
-                             credentials=config.get("credentials", "keyring"))
+                             credentials=config.get("credentials", "keyring"),
+                             binary_dirs=config.get("binary_dirs", []))
         while True:
             readable, writable, _ = select.select([connection], [connection] if outgoing else [], [], .025)
             if writable:

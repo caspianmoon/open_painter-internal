@@ -106,6 +106,99 @@ with TemporaryDirectory(prefix="open-painter-generated-portable-") as directory:
     assert not (directory / "incomplete.openpaintmaterial").exists()
     channel.detail_image = imported
 
+    # A byte-sourced texture travels as half floats (every 8-bit step preserved; half the
+    # bytes) while float canvases keep 32 bits, and a set whose textures exceed the import
+    # budget is refused at save time rather than written as a file nothing can import (0.9.7).
+    from open_painter.smart_materials import format as material_format
+    copy_id = copy.id   # the sets added below reallocate the collection; resolve by id after
+    byte_values = np.round(np.random.default_rng(7).random((32, 32, 4), np.float32) * 255) / 255
+    bitmap = bpy.data.images.new("Byte portable bitmap", 32, 32, alpha=True)
+    bitmap.pixels.foreach_set(byte_values.astype(np.float32).ravel())
+    bitmap.filepath_raw, bitmap.file_format = str(directory / "byte_source.png"), "PNG"
+    bitmap.save()
+    byte_source = bpy.data.images.load(bitmap.filepath_raw, check_existing=False)
+    byte_source.colorspace_settings.name = "Non-Color"
+    byte_source.pack()
+    assert not byte_source.is_float
+    mixed = sets.create(scene, "Mixed depths", 512)
+    mixed_layer = stack.add(mixed, "FILL", "Mixed sources")
+    stack.channel_for(mixed_layer, "BASE_COLOR").detail_image = byte_source
+    stack.channel_for(mixed_layer, "ROUGHNESS").detail_image = source
+    mixed_path = serializer.save(mixed, directory / "mixed.openpaintmaterial")
+
+
+    def exr_pixel_types(blob):
+        # The chlist attribute: per channel a name, then pixel type (1 half, 2 float) and 12 more bytes.
+        pos = blob.index(b"channels\x00chlist\x00") + len(b"channels\x00chlist\x00") + 4
+        found = set()
+        while blob[pos]:
+            pos = blob.index(b"\x00", pos) + 1
+            found.add(int.from_bytes(blob[pos:pos + 4], "little"))
+            pos += 16
+        return found
+
+    with ZipFile(mixed_path) as archive:
+        mixed_data = json.loads(archive.read("material.json"))
+        by_channel = {c["channel"]: c["detail_image"]["asset"] for c in mixed_data["layers"][0]["channels"]
+                      if c["channel"] in {"BASE_COLOR", "ROUGHNESS"}}
+        depths = {key: exr_pixel_types(archive.read(asset)) for key, asset in by_channel.items()}
+    assert depths == {"BASE_COLOR": {1}, "ROUGHNESS": {2}}, depths
+    mixed_copy = sets.create(scene, "Mixed depths import", 512)
+    loader.apply(mixed_copy, mixed_path)
+    np.testing.assert_allclose(images.pixels(stack.channel_for(mixed_copy.layers[0], "BASE_COLOR").detail_image),
+                               byte_values, atol=.5 / 255)
+    np.testing.assert_allclose(images.pixels(stack.channel_for(mixed_copy.layers[0], "ROUGHNESS").detail_image),
+                               values, atol=2e-6)
+    limits = material_format.MAX_BYTES, material_format.MAX_FILES
+    try:
+        for material_format.MAX_BYTES, material_format.MAX_FILES in ((1024, limits[1]), (limits[0], 2)):
+            try:
+                serializer.save(mixed, directory / "oversized.openpaintmaterial")
+                raise AssertionError("A material over the import budget was saved")
+            except ValueError as error:
+                assert "import limit" in str(error), error
+            assert not (directory / "oversized.openpaintmaterial").exists()
+    finally:
+        material_format.MAX_BYTES, material_format.MAX_FILES = limits
+    assert not any(name.startswith("OP Asset Encoding") for name in bpy.data.scenes.keys())
+    copy = next(item for item in scene.open_painter.texture_sets if item.id == copy_id)
+
+    # An 8-bit sRGB albedo comes back evaluating exactly as it left: save_render writes the
+    # asset EXR scene-linear, so the reference records the linear space rather than the
+    # source's own, and a file saved before 0.9.7 (tagged sRGB) loads the same way (0.9.7).
+    albedo = bpy.data.images.new("Byte albedo", 32, 32, alpha=True)
+    albedo.pixels.foreach_set(np.tile(np.array([.5, .5, .5, 1], np.float32), 32 * 32))
+    albedo.pack()   # a colour space change reloads the image: from the packed bytes, not blank
+    albedo.colorspace_settings.name = "sRGB"
+    assert not albedo.is_float and not albedo.colorspace_settings.is_data
+    np.testing.assert_allclose(images.pixels(albedo)[..., :3], 128 / 255, atol=1e-6)
+    coloured = sets.create(scene, "Byte albedo source", 512)
+    coloured_layer = stack.add(coloured, "FILL", "Albedo fill")
+    for channel in coloured_layer.channels:
+        channel.enabled = channel.channel == "BASE_COLOR"
+    stack.channel_for(coloured_layer, "BASE_COLOR").image = albedo
+    evaluator.evaluate_channel(coloured.id, "BASE_COLOR")
+    expected = images.pixels(images.output(coloured, "BASE_COLOR").image).copy()
+    assert abs(expected[..., 0].mean() - .2159) < 2e-3, expected[..., 0].mean()   # linearised once
+    coloured_path = serializer.save(coloured, directory / "albedo.openpaintmaterial")
+    with ZipFile(coloured_path) as archive:
+        coloured_data = json.loads(archive.read("material.json"))
+    recorded = next(c for c in coloured_data["layers"][0]["channels"] if c["channel"] == "BASE_COLOR")["image"]
+    assert recorded["colorspace"] == material_format.LINEAR, recorded
+    legacy_tagged = directory / "albedo-srgb-tagged.openpaintmaterial"
+    with ZipFile(coloured_path) as source_archive, ZipFile(legacy_tagged, "w") as archive:
+        for info in source_archive.infolist():
+            archive.writestr(info, source_archive.read(info) if info.filename != "material.json"
+                             else json.dumps(coloured_data).replace(material_format.LINEAR, "sRGB"))
+    for tagged in (coloured_path, legacy_tagged):
+        coloured_copy = sets.create(scene, "Byte albedo import", 512)
+        loader.apply(coloured_copy, tagged)
+        imported_albedo = stack.channel_for(coloured_copy.layers[0], "BASE_COLOR").image
+        assert imported_albedo.colorspace_settings.name == material_format.LINEAR, imported_albedo.colorspace_settings.name
+        evaluator.evaluate_channel(coloured_copy.id, "BASE_COLOR")
+        np.testing.assert_allclose(images.pixels(images.output(coloured_copy, "BASE_COLOR").image), expected,
+                                   atol=1e-3, err_msg=tagged.name)
+
     # Existing version-1/version-2 files need no optional detail fields.
     for version in (1, 2):
         legacy = directory / f"legacy-{version}.openpaintmaterial"
@@ -122,7 +215,7 @@ with TemporaryDirectory(prefix="open-painter-generated-portable-") as directory:
         np.testing.assert_allclose(images.pixels(images.output(old, "ROUGHNESS").image)[..., 0], .42, atol=2e-6)
 
     # Packed detail must survive a .blend save independently of the import ZIP.
-    copy_id = copy.id
+    copy = next(item for item in scene.open_painter.texture_sets if item.id == copy_id)
     blend = directory / "generated-detail.blend"
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))
     path.unlink()

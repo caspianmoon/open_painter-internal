@@ -79,29 +79,67 @@ class OP_OT_bake_queue(bpy.types.Operator):
         self.finish(context)
 
 
+def land_edge_maps(scene_name, set_id, expected, produced):
+    """Register a finished background edge-map bake on the set it was started
+    for and return the status text.
+
+    The set is resolved by id inside the scene recorded at invoke: the window
+    may show another scene by the time the job lands. The landed maps get their
+    own undo step; the modal operator itself is not an UNDO operator, so
+    without one the next Ctrl+Z after an unrelated edit would return to the
+    memfile written before the maps existed.
+    """
+    from ..core.layer_stack import invalidate
+    from ..geometry.provenance import record
+    from .bake_manager import register_maps
+    scene = bpy.data.scenes.get(scene_name)
+    ts = (next((item for item in scene.open_painter.texture_sets if item.id == set_id), None)
+          if scene is not None else None)
+    if ts is None or record(ts, 'CURVATURE') != expected:
+        for image in produced.values():
+            bpy.data.images.remove(image)
+        status = ('Scene removed; edge map rebake discarded' if scene is None
+                  else 'Bake inputs changed; edge map rebake discarded')
+        if scene is not None:
+            scene.open_painter.status = status
+        return status
+    register_maps(ts, produced)
+    invalidate(ts)
+    status = scene.open_painter.status = 'Edge maps rebaked: thin, normal, wide and extreme reaches'
+    bpy.ops.ed.undo_push(message='Rebake Edge Maps')
+    return status
+
+
 class OP_OT_edge_map_refresh(bpy.types.Operator):
     """Rebake the Curvature edge map cooperatively so the interface stays responsive."""
     bl_idname = 'open_painter.edge_map_refresh'
     bl_label = 'Rebake Edge Map (Background)'
     bl_options = {'REGISTER', 'INTERNAL'}
     if hasattr(bpy, 'props'):   # the pure unit tests load this module with a stub bpy
-        set_id: bpy.props.StringProperty(options={'HIDDEN'}, description='Texture set to rebake; the active set when empty')
+        # SKIP_SAVE: a finished modal stores its properties as the type's last-used
+        # values, which a panel button would otherwise inherit from the auto rebake.
+        set_id: bpy.props.StringProperty(options={'HIDDEN', 'SKIP_SAVE'},
+                                         description='Texture set to rebake; the active set when empty')
     else:
         set_id = ''
     running = False
+    running_set_id = ''   # the set the live job serves: a global flag alone cannot tell sets apart
     _timer = None
     _job = None
     _set_id = ''
+    _scene_name = ''
     _expected = ''
     _last_timer_duration = 0.
 
-    def _set(self, context):
-        return next((ts for ts in context.scene.open_painter.texture_sets if ts.id == self._set_id), None)
+    def _status(self, context, text):
+        scene = bpy.data.scenes.get(self._scene_name)
+        (context.scene if scene is None else scene).open_painter.status = text
 
     def finish(self, context):
         job, timer = self._job, self._timer
         self._job = self._timer = None
         OP_OT_edge_map_refresh.running = False
+        OP_OT_edge_map_refresh.running_set_id = ''
         try:
             if job is not None:
                 job.close()
@@ -124,14 +162,16 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
             if ts is None:
                 raise ValueError('That texture set no longer exists.')
             self._set_id = ts.id
+            self._scene_name = context.scene.name
             self._expected = record(ts, 'CURVATURE')
             self._job = curvature_steps(ts)
             next(self._job)  # reads the evaluated meshes now, while the depsgraph is current
-            context.scene.open_painter.status = 'Rebaking edge maps… 2% · Esc stops'
+            self._status(context, 'Rebaking edge maps… 2% · Esc stops')
             self._timer = context.window_manager.event_timer_add(.02, window=context.window)
             self._last_timer_duration = self._timer.time_duration
             context.window_manager.modal_handler_add(self)
             OP_OT_edge_map_refresh.running = True
+            OP_OT_edge_map_refresh.running_set_id = ts.id
         except Exception as exc:
             self.finish(context)
             self.report({'ERROR'}, str(exc))
@@ -139,12 +179,9 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        from ..core.layer_stack import invalidate
-        from ..geometry.provenance import record
-        from .bake_manager import register_maps
         if event.type == 'ESC':
             self.finish(context)
-            context.scene.open_painter.status = 'Edge map rebake stopped; the previous map is kept'
+            self._status(context, 'Edge map rebake stopped; the previous map is kept')
             return {'FINISHED'}
         if event.type != 'TIMER' or self._timer is None:
             return {'PASS_THROUGH'}
@@ -154,26 +191,18 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
         self._last_timer_duration = duration
         try:
             fraction = next(self._job)
-            context.scene.open_painter.status = f'Rebaking edge maps… {int(fraction * 100)}% · Esc stops'
+            self._status(context, f'Rebaking edge maps… {int(fraction * 100)}% · Esc stops')
         except StopIteration as done:
             produced = done.value
             self.finish(context)
-            ts = self._set(context)
-            if ts is None or record(ts, 'CURVATURE') != self._expected:
-                for image in produced.values():
-                    bpy.data.images.remove(image)
-                context.scene.open_painter.status = 'Bake inputs changed; edge map rebake discarded'
-                return {'FINISHED'}
-            register_maps(ts, produced)
-            invalidate(ts)
-            context.scene.open_painter.status = 'Edge maps rebaked: thin, normal, wide and extreme reaches'
+            land_edge_maps(self._scene_name, self._set_id, self._expected, produced)
             for area in context.screen.areas:
                 area.tag_redraw()
             return {'FINISHED'}
         except Exception as exc:
             self.finish(context)
             self.report({'ERROR'}, str(exc))
-            context.scene.open_painter.status = f'Edge map rebake failed: {exc}'
+            self._status(context, f'Edge map rebake failed: {exc}')
             return {'FINISHED'}
         return {'PASS_THROUGH'}
 

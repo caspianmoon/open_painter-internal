@@ -304,7 +304,7 @@ def _stamp_module(ts, folder_id, name, data, token=None, nested=()):
         layer.parent_id = instance.get(layer.parent_id, layer.parent_id)
         for item in layer.masks:
             item.id = instance[item.id]
-            for field in ("reference_layer", "reference_mask", "reference_anchor",
+            for field in ("parent_id", "reference_layer", "reference_mask", "reference_anchor",
                           "detail_height_anchor", "detail_normal_anchor"):
                 value = getattr(item, field)
                 if value:

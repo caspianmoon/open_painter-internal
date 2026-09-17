@@ -2,6 +2,7 @@
 
 import math
 import bpy
+import numpy as np
 from mathutils import Matrix
 
 from ..constants import OWNER
@@ -12,8 +13,18 @@ CAGE_MARKER = "open_painter_bake_cage"
 
 
 def topology_signature(mesh):
-    """Cycles cage correspondence requires ordered polygon/vertex mapping."""
-    return (len(mesh.vertices), tuple(tuple(face.vertices) for face in mesh.polygons))
+    """Cycles cage correspondence requires ordered polygon/vertex mapping.
+
+    Polygon starts plus the loop vertex indices describe the ordered corner
+    lists exactly; reading them in bulk keeps a render-subdivided target
+    (millions of polygons) to a fraction of a second instead of a Python
+    tuple per face.
+    """
+    starts = np.empty(len(mesh.polygons), dtype=np.int32)
+    mesh.polygons.foreach_get("loop_start", starts)
+    corners = np.empty(len(mesh.loops), dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", corners)
+    return (len(mesh.vertices), len(mesh.polygons), len(mesh.loops), starts.tobytes(), corners.tobytes())
 
 
 def validate_topology(low, cage, depsgraph=None):

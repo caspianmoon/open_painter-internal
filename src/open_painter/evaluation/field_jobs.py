@@ -74,6 +74,13 @@ def _resolve(scene, key):
     return ts, mask
 
 
+def _analysed(mask):
+    """The masks whose field this engine owns: the membership of ``dependencies.live_fields``
+    (LIVE scene masks and live-edge generators), which is what requests jobs."""
+    return mask.source == 'SCENE' or (
+        mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE')
+
+
 def _editing(ts):
     return any(ref.object is not None and ref.object.mode == 'EDIT' for ref in ts.assignments)
 
@@ -92,7 +99,7 @@ def tick(scene, budget=.008):
             if key[0] != pointer or now - entry['since'] < DEBOUNCE:
                 continue
             ts, mask = _resolve(scene, key)
-            if ts is None or mask is None or mask.source != 'SCENE':
+            if ts is None or mask is None or not _analysed(mask):
                 _requests.pop(key, None)
                 continue
             if _editing(ts):
@@ -147,7 +154,7 @@ def _finish(scene, key, signature, value):
     from ..generators import scene_fields
     from .shader_preview import notify
     ts, mask = _resolve(scene, key)
-    if ts is None or mask is None or mask.source != 'SCENE':
+    if ts is None or mask is None or not _analysed(mask):
         return
     field = mask.influence
     if repr(scene_fields.signature(ts, field)) != signature:
@@ -179,7 +186,7 @@ def flush(scene):
             continue
         _requests.pop(key, None)
         ts, mask = _resolve(scene, key)
-        if ts is None or mask is None or mask.source != 'SCENE':
+        if ts is None or mask is None or not _analysed(mask):
             continue
         try:
             value = scene_fields.compute(ts, mask.influence)
@@ -192,6 +199,11 @@ def flush(scene):
 def cancel_all():
     _requests.clear()
     _jobs.clear()
+    _rebakes.clear()
+
+
+def cancel_rebakes():
+    """Drop scheduled edge rebakes only (a render is about to own the scene)."""
     _rebakes.clear()
 
 

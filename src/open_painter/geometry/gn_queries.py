@@ -27,8 +27,8 @@ def _socket(sockets, *names):
 
 def combined_target(scene, objects, radii, default_radius):
     """(vertices (V,3) world, triangles (T,3), radius per triangle) of evaluated influencers."""
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        graph = bpy.context.evaluated_depsgraph_get()
+    from .snapshots import depsgraph_for
+    graph = depsgraph_for(scene, objects)
     vertices, triangles, radius = [], [], []
     offset = 0
     for obj in objects:

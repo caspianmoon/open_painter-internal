@@ -8,7 +8,9 @@ the set resolution. ``signature`` names every input the coverage depends on
 to the collection changes the signature and the mask re-evaluates; the
 scheduler's depsgraph tracking notices such changes (``dependencies``).
 """
+import hashlib
 import math
+import zlib
 
 import bpy
 import numpy as np
@@ -32,13 +34,84 @@ def _collection_objects(collection, include_children):
     return tuple(collection.all_objects if include_children else collection.objects)
 
 
-def _selection_token(obj):
+def _selection_flags(obj):
+    """Face select flags of the object's base mesh, in Edit Mode straight from the
+    edit BMesh: flushing it (``update_from_editmode``) tags the mesh as changed, and
+    the scheduler would re-hash the whole mesh and flush again on every tick for as
+    long as the artist stays in Edit Mode."""
     mesh = obj.data
-    if obj.mode == 'EDIT':
-        obj.update_from_editmode()
+    if obj.mode == 'EDIT' and mesh.is_editmode:
+        import bmesh
+        faces = bmesh.from_edit_mesh(mesh).faces
+        return np.fromiter((face.select for face in faces), bool, len(faces))
     flags = np.empty(len(mesh.polygons), bool)
     mesh.polygons.foreach_get('select', flags)
-    return int(flags.sum()), int(np.flatnonzero(flags)[:64].sum()) if flags.any() else 0, int(abs(hash(flags.tobytes())) % (1 << 31))
+    return flags
+
+
+def _selection_token(obj):
+    flags = _selection_flags(obj)
+    # A persisted provenance compares this token across sessions: no Python hash().
+    return int(flags.sum()), int(np.flatnonzero(flags)[:64].sum()) if flags.any() else 0, zlib.crc32(flags.tobytes())
+
+
+def _selected_faces(target):
+    """One 0/1 float per evaluated polygon (the bake's ``polygon_flags`` contract),
+    or None when the modifier stack changes the face count."""
+    flags = _selection_flags(target['object'])
+    if len(flags) != len(target['mesh'].polygons):
+        return None
+    return flags.astype(np.float32)
+
+
+_digests = {}   # (mesh pointer, kind, name) -> (mesh epoch, digest)
+
+
+def clear():
+    """With the mesh epochs (``dependencies.clear``): a reopened file or an undo step
+    counts from zero again, so an epoch-tagged digest would answer for other values."""
+    _digests.clear()
+
+
+def prune(meshes):
+    for key in tuple(_digests):
+        if key[0] not in meshes:
+            _digests.pop(key, None)
+
+
+def _content_token(obj, kind, name):
+    """The painted values a selector reads, as the session's mesh epoch (cheap, per
+    process) or, for a persisted identity, a digest of the values themselves: a
+    cached layer's provenance must still compare equal after the file is reopened."""
+    from .dependencies import mesh_epoch
+    from .resource_keys import stable
+    mesh = obj.data
+    epoch = mesh_epoch(mesh)
+    if not stable():
+        return epoch
+    key = (mesh.as_pointer(), kind, name)
+    cached = _digests.get(key)
+    if cached is not None and cached[0] == epoch:
+        return cached[1]
+    digest = hashlib.sha256()
+    if kind == 'VERTEX_GROUP':
+        group = obj.vertex_groups.get(name)
+        if group is not None:
+            weights = np.zeros(len(mesh.vertices), np.float32)
+            for vertex in mesh.vertices:
+                for entry in vertex.groups:
+                    if entry.group == group.index:
+                        weights[vertex.index] = entry.weight
+                        break
+            digest.update(weights.tobytes())
+    else:
+        found = _attribute_values(obj, mesh, '.sculpt_face_set' if kind == 'FACE_SET' else name)
+        if found is not None:
+            digest.update(found[0].encode())
+            digest.update(np.ascontiguousarray(found[1]).tobytes())
+    token = digest.hexdigest()[:16]
+    _digests[key] = (epoch, token)
+    return token
 
 
 def _attribute_token(obj, name):
@@ -50,11 +123,13 @@ def _attribute_token(obj, name):
 
 def signature(ts, mask):
     """Repr-stable identity of everything a mesh mask's coverage depends on."""
-    from .dependencies import mesh_signature
+    from .dependencies import mesh_signature, modifier_signature
     selector = mask.mesh
     kind = selector.kind
     targets = tuple(dict.fromkeys(ref.object for ref in ts.assignments if ref.object and ref.object.type == 'MESH'))
-    parts = [kind, tuple(obj.name for obj in targets)]
+    # Every kind rasterizes through the evaluated render UVs and topology: a re-unwrap
+    # or a modifier edit re-identifies the raster even when the selection did not move.
+    parts = [kind, tuple((obj.name, mesh_signature(obj.data), modifier_signature(obj)) for obj in targets)]
     if kind == 'OBJECT':
         obj = resolve(selector, 'object')
         parts.append(obj.name if obj else None)
@@ -71,24 +146,21 @@ def signature(ts, mask):
                             for ref in ts.assignments)))
     elif kind in {'VERTEX_GROUP', 'ATTRIBUTE', 'FACE_SET'}:
         # Weights, attribute values and face sets are not part of the mesh signature (positions,
-        # topology, UVs); the mesh's update epoch moves when they are painted, so it stands in.
-        from .dependencies import mesh_epoch
+        # topology, UVs); their content token (epoch or digest) stands in.
         parts.append((selector.attribute, selector.face_set,
-                      tuple((obj.name, mesh_signature(obj.data), mesh_epoch(obj.data),
+                      tuple((_content_token(obj, kind, selector.attribute),
                              _attribute_token(obj, selector.attribute if kind != 'FACE_SET' else '.sculpt_face_set'),
                              tuple(g.name for g in obj.vertex_groups)) for obj in targets)))
     elif kind == 'FACE_SELECTION':
-        parts.append(tuple((obj.name, _selection_token(obj)) for obj in targets))
+        parts.append(tuple(_selection_token(obj) for obj in targets))
     elif kind == 'UV_ISLAND':
         obj = resolve(selector, 'object')
         parts.append((obj.name if obj else None, selector.island,
-                      tuple((o.name, mesh_signature(o.data), _selection_token(o) if selector.island < 0 else None)
-                            for o in targets)))
+                      tuple(_selection_token(o) for o in targets) if selector.island < 0 else None))
     elif kind == 'NORMAL_DIRECTION':
         parts.append((tuple(round(float(v), 6) for v in selector.direction), round(float(selector.angle), 6),
                       round(float(selector.softness), 6),
-                      tuple((obj.name, mesh_signature(obj.data), tuple(round(v, 6) for row in obj.matrix_world for v in row))
-                            for obj in targets)))
+                      tuple(tuple(round(v, 6) for row in obj.matrix_world for v in row) for obj in targets)))
     return tuple(parts)
 
 
@@ -165,10 +237,8 @@ def _triangle_coverage(ts, mask, target):
             return np.zeros(tris, np.float32)
         return _face_values(target, (found[1] == float(selector.face_set)).astype(np.float32))
     if kind == 'FACE_SELECTION':
-        from ..baking.maps.selection import polygon_flags
-        try:
-            flags = polygon_flags(target)
-        except ValueError:
+        flags = _selected_faces(target)
+        if flags is None:
             return np.zeros(tris, np.float32)
         return _face_values(target, flags)
     if kind == 'UV_ISLAND':
@@ -183,10 +253,8 @@ def _triangle_coverage(ts, mask, target):
                 return np.zeros(tris, np.float32)
             wanted = {roots[selector.island]}
         else:
-            from ..baking.maps.selection import polygon_flags
-            try:
-                flags = polygon_flags(target)
-            except ValueError:
+            flags = _selected_faces(target)
+            if flags is None:
                 return np.zeros(tris, np.float32)
             wanted = {int(r) for r in labels[flags > .5] if r >= 0}
         return _face_values(target, np.isin(labels, list(wanted)).astype(np.float32))
@@ -235,15 +303,22 @@ def raster(ts, mask, n):
     return result
 
 
-def evaluate(ts, mask, n, y0, y1, geometry_cache):
+def evaluate(ts, mask, n, y0, y1, geometry_cache, cache=None):
     """Rows [y0, y1) of the mask, cached per signature in the set's raster cache."""
     key = (CACHE, ts.id, mask.id, signature(ts, mask), n)
     store = geometry_cache if geometry_cache is not None else {}
+    if cache is not None and key in cache:
+        return cache[key][y0:y1]
     if key in store:
-        return store[key][y0:y1]
-    values = raster(ts, mask, n)
-    try:
-        store[key] = values
-    except TypeError:
-        pass
+        values = store[key]
+    else:
+        values = raster(ts, mask, n)
+        try:
+            store[key] = values
+        except TypeError:
+            pass
+    # Every strip of a job reads the whole raster; the shared allowance may
+    # evict it between strips, so the job keeps its own reference.
+    if cache is not None:
+        cache[key] = values
     return values[y0:y1]

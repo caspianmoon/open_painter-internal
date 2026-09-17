@@ -14,9 +14,19 @@ def create(name: str, resolution: int, color=(0, 0, 0, 0), color_data=False):
     )
     image[OWNER] = True
     image.colorspace_settings.name = "Linear Rec.709" if color_data else "Non-Color"
+    adopt_alpha_mode(image)
     image.generated_color = color
     image.use_fake_user = True
     return image
+
+
+def adopt_alpha_mode(image):
+    """Managed float images hold data: paint canvases are premultiplied, the rest
+    is read as stored. Channel-packed alpha keeps Blender from unpremultiplying
+    them on GPU upload once packed (the shader divides once itself) and from
+    premultiplying them again when a saved file is reopened."""
+    if image.is_float and image.alpha_mode != 'CHANNEL_PACKED':
+        image.alpha_mode = 'CHANNEL_PACKED'
 
 
 @measured('image_read')
@@ -63,6 +73,19 @@ def output(ts, channel):
         prop.image.scale(n, n)
         prop.dirty = True
     return prop
+
+
+def clone(image):
+    """A copy holding the current pixels.
+
+    ``Image.copy()`` duplicates the datablock and its packed bytes but not the
+    pixel buffer: a painted canvas that was not packed since its last stroke
+    copies as its last save (or blank, when never saved). Paint canvases are
+    packed by the save handler, not per stroke, so flush first.
+    """
+    if image.is_dirty or not (image.packed_file or image.filepath):
+        pack_image(image)
+    return image.copy()
 
 
 @measured("packing")

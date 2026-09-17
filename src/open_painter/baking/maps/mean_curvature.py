@@ -36,8 +36,10 @@ def face_turning(target, exclude_angle=None):
         return np.zeros(npf), np.zeros(npf)
     local_normals = np.empty(npf * 3, np.float32)
     mesh.polygons.foreach_get("normal", local_normals)
-    world = np.asarray(target["object"].matrix_world, np.float64)
-    fn = _unit(local_normals.reshape(-1, 3).astype(np.float64) @ np.linalg.inv(world[:3, :3]))
+    # inverted_safe, as every other normal transform: a zero-scaled axis is a
+    # singular matrix, which np.linalg.inv refuses.
+    normal_matrix = np.asarray(target["object"].matrix_world.to_3x3().inverted_safe().transposed(), np.float64)
+    fn = _unit(local_normals.reshape(-1, 3).astype(np.float64) @ normal_matrix.T)
     lt = np.empty(npf, np.int64)
     mesh.polygons.foreach_get("loop_total", lt)
     ev = np.empty(ne * 2, np.int64)
@@ -144,6 +146,32 @@ def _encode(cells, origin, span):
     return (shifted[:, 0] * span[1] + shifted[:, 1]) * span[2] + shifted[:, 2]
 
 
+def prepare_raster(target, n, exclude_angle=None):
+    """Read the radius-independent part of a target: face turning and areas plus
+    the rasterised texels and their world positions.
+
+    Runs inside the ``targets`` context; the returned object holds no RNA
+    references. Every reach of the edge map set shares one of these (the 4k
+    raster alone is hundreds of megabytes), only the samples differ.
+    """
+    from types import SimpleNamespace
+    from ...geometry.uv_rasterizer import interpolate, rasterize
+    turning, area = face_turning(target, exclude_angle)
+    rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n, unique=False)
+    positions = np.asarray(target["positions"], np.float64)
+    texels = (interpolate(weights, positions[target["tri_vertices"][tri]]) if len(rows)
+              else np.empty((0, 3)))
+    return SimpleNamespace(turning=turning, area=area, rows=rows, cols=cols, texels=texels)
+
+
+def prepare_reach(target, raster, radius):
+    """Samples for one radius over a shared raster; the arrays are referenced, not copied."""
+    from types import SimpleNamespace
+    points, turn_w, area_w = _samples(target, raster.turning, raster.area, radius * .5)
+    return SimpleNamespace(rows=raster.rows, cols=raster.cols, texels=raster.texels,
+                           points=points, turn_w=turn_w, area_w=area_w)
+
+
 def prepare(target, n, radius, exclude_angle=None):
     """Read everything the kernel needs from the evaluated mesh into plain arrays.
 
@@ -151,15 +179,14 @@ def prepare(target, n, radius, exclude_angle=None):
     references, so the accumulation can proceed across cooperative steps after
     the evaluated meshes are released.
     """
-    from types import SimpleNamespace
-    from ...geometry.uv_rasterizer import interpolate, rasterize
-    turning, area = face_turning(target, exclude_angle)
-    points, turn_w, area_w = _samples(target, turning, area, radius * .5)
-    rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n, unique=False)
-    positions = np.asarray(target["positions"], np.float64)
-    texels = (interpolate(weights, positions[target["tri_vertices"][tri]]) if len(rows)
-              else np.empty((0, 3)))
-    return SimpleNamespace(rows=rows, cols=cols, texels=texels, points=points, turn_w=turn_w, area_w=area_w)
+    return prepare_reach(target, prepare_raster(target, n, exclude_angle), radius)
+
+
+# Pair work per kernel evaluation: texels of a cell against nearby samples. Both
+# grow with radius^2 (a dense 4k asset at the XWIDE reach holds tens of
+# thousands of each per cell), so the pair matrix is sliced to a fixed size.
+TEXEL_CHUNK = 1024
+SAMPLE_CHUNK = 4096
 
 
 def accumulate(prepared, n, radius, result, covered):
@@ -235,8 +262,29 @@ def accumulate(prepared, n, radius, result, covered):
             near = np.flatnonzero((outside * outside).sum(axis=1) <= radius * radius)
             if not len(near):
                 continue
-            kernel = np.clip(1 - np.linalg.norm(sub[:, None, :] - gathered[near][None], axis=-1) / radius, 0, None)
-            numerator, denominator = kernel @ tw[near], kernel @ aw[near]
+            close, close_turn, close_area = gathered[near], tw[near], aw[near]
+            numerator, denominator = np.zeros(len(sub)), np.zeros(len(sub))
+            # Both sums are linear, so slices of the pair matrix add up to the
+            # same values.
+            for t0 in range(0, len(sub), TEXEL_CHUNK):
+                if perf_counter() - last_yield > .03:
+                    yield group / len(group_keys)
+                    last_yield = perf_counter()
+                chunk = sub[t0:t0 + TEXEL_CHUNK]
+                samples, sample_turn, sample_area = close, close_turn, close_area
+                if len(chunk) < len(sub):
+                    # A slice's own bounding box drops more samples than the octant's.
+                    lo, hi = chunk.min(axis=0), chunk.max(axis=0)
+                    outside = np.maximum(np.maximum(lo - close, close - hi), 0)
+                    within = np.flatnonzero((outside * outside).sum(axis=1) <= radius * radius)
+                    samples, sample_turn, sample_area = close[within], close_turn[within], close_area[within]
+                for s0 in range(0, len(samples), SAMPLE_CHUNK):
+                    piece = slice(s0, s0 + SAMPLE_CHUNK)
+                    delta = chunk[:, None, :] - samples[None, piece]
+                    squared = np.einsum("ijk,ijk->ij", delta, delta)
+                    kernel = np.clip(1 - np.sqrt(squared, out=squared) / radius, 0, None)
+                    numerator[t0:t0 + TEXEL_CHUNK] += kernel @ sample_turn[piece]
+                    denominator[t0:t0 + TEXEL_CHUNK] += kernel @ sample_area[piece]
             # 4 R H: a bend of radius r reads 2 R / r; a hard edge saturates.
             value[texel_order[first + member]] = np.where(
                 denominator > 1e-18, 4 * radius * numerator / np.maximum(denominator, 1e-18), 0.0)

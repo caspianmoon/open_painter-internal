@@ -42,11 +42,17 @@ assert all(foreign not in group.sources for group in matched)
 assert tuple(obj.name for obj in bpy.data.objects) == names
 assert ts.bake.source_mode == "MATCHED"
 
+# Ignore Brush Excludes lives on the rows: a re-match keeps it per source.
+next(ref for ref in ts.bake.high_objects if ref.object == highs[2]).ignorable = True
+pairing.match_sources(ts, scene)
+assert [(ref.object, ref.ignorable) for ref in ts.bake.high_objects] == [
+    (highs[0], False), (highs[1], False), (highs[2], True)]
+
 # Missing sources do not discard a previously valid explicit source list.
-old = [(ref.object, ref.target, ref.cage) for ref in ts.bake.high_objects]
+old = [(ref.object, ref.target, ref.cage, ref.ignorable) for ref in ts.bake.high_objects]
 highs[2].name = "Unmatched"
 rejects(lambda: pairing.match_sources(ts, scene), "No scene mesh")
-assert [(ref.object, ref.target, ref.cage) for ref in ts.bake.high_objects] == old
+assert [(ref.object, ref.target, ref.cage, ref.ignorable) for ref in ts.bake.high_objects] == old
 highs[2].name = "Bolt_high"
 assert len(pairing.groups(ts)[0].sources) == 2
 
@@ -130,6 +136,21 @@ wrong_mesh.from_pydata(vertices, [], faces)
 wrong = bpy.data.objects.new("Wrong cage", wrong_mesh); scene.collection.objects.link(wrong)
 bpy.context.view_layer.update()
 rejects(lambda: cages.validate_topology(low_b, wrong), "topology")
+# The bulk signature keeps the exact ordered-corner comparison: a rotated corner
+# list, a differing corner count and a differing vertex count all differ.
+def signature(vertices, polygon):
+    mesh = bpy.data.meshes.new("Signature probe")
+    mesh.from_pydata(vertices, [], [polygon])
+    try:
+        return cages.topology_signature(mesh)
+    finally:
+        bpy.data.meshes.remove(mesh)
+square = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+quad = signature(square, (0, 1, 2, 3))
+assert quad == signature([(x + 5, y, z) for x, y, z in square], (0, 1, 2, 3))
+assert quad != signature(square, (1, 2, 3, 0))
+assert quad != signature(square, (0, 1, 2))
+assert quad != signature(square + [(2, 2, 0)], (0, 1, 2, 3))
 ts.bake.high_objects[1].cage = wrong
 rejects(lambda: pairing.groups(ts), "Conflicting")
 ts.bake.high_objects[1].cage = created[0]
@@ -161,6 +182,18 @@ assert pairing.groups(single)[0].cage == single_cage
 single.bake.cage_object = None
 rejects(lambda: pairing.groups(single), 'missing')
 single.bake.cage_object = single_cage
+# Match Sources replaces the visible cage only with a found '_cage' partner: a
+# created cage ('<low> Cage') stays, so the set still bakes under CUSTOM.
+other.name = "Single_low"
+single_high = low_a.copy(); single_high.data = low_a.data.copy(); single_high.name = "Single_high"
+scene.collection.objects.link(single_high)
+pairing.match_sources(single, scene)
+assert single.bake.cage_mode == "CUSTOM" and single.bake.cage_object == single_cage
+assert pairing.groups(single)[0].cage == single_cage
+partner = low_a.copy(); partner.data = low_a.data.copy(); partner.name = "Single_cage"
+scene.collection.objects.link(partner)
+pairing.match_sources(single, scene)
+assert single.bake.cage_object == partner and pairing.groups(single)[0].cage == partner
 # Routing, cage edits and AO scope participate in map staleness; all authored
 # references and new settings survive a normal .blend save/reopen.
 from open_painter.baking.bake_manager import register_map

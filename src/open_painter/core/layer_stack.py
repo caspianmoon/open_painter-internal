@@ -1,7 +1,15 @@
 """Ordered layers with stable hierarchy, duplication and cycle-safe parenting."""
 
+from contextlib import contextmanager
+
 from ..constants import CHANNELS, DEFAULTS
 from ..utils.ids import new_id
+
+# Properties a getter/setter pair derives from another one: replaying them after
+# their source would overwrite it (opacity_percent rounds opacity to 1/100).
+DERIVED = {('OP_Channel', 'opacity_percent'), ('OP_BakeCorrections', 'value')}
+
+_replays = 0
 
 
 def invalidate(ts) -> None:
@@ -104,9 +112,10 @@ def snapshot(source) -> dict:
     import bpy
 
     result = {}
+    kind = source.bl_rna.identifier
     for prop in source.bl_rna.properties:
         key = prop.identifier
-        if key == "rna_type":
+        if key == "rna_type" or (kind, key) in DERIVED:
             continue
         value = getattr(source, key)
         if prop.is_readonly and prop.type != "COLLECTION" and not (
@@ -125,7 +134,10 @@ def snapshot(source) -> dict:
 
 
 def restore(data: dict, target) -> None:
+    kind = target.bl_rna.identifier
     for key, value in data.items():
+        if (kind, key) in DERIVED:
+            continue   # snapshots written before 0.9.7 still carry it
         prop = target.bl_rna.properties[key]
         if prop.type == "COLLECTION":
             collection = getattr(target, key)
@@ -145,6 +157,106 @@ def copy_properties(source, target):
     restore(snapshot(source), target)
 
 
+def replaying() -> bool:
+    """Whether snapshots are being replayed: property callbacks skip their set-wide walks."""
+    return _replays > 0
+
+
+@contextmanager
+def replay(ts):
+    """Restore snapshots into ``ts`` with one invalidation at the end instead of one per property.
+
+    Every value ``restore`` writes fires its update callback, and each callback
+    walks the whole set (owner lookup by id or pointer, dependent channels, the
+    shader session's owner scan): copying N layers into a stack of L costs
+    N x hundreds x L reads, seconds for a folder and minutes for a set. The
+    snapshot already holds everything those callbacks derive (mirrored names,
+    physical texture sizes, cache rows), so the walks are skipped while a replay
+    is open and the set is invalidated, physically resolved and notified once.
+    """
+    global _replays
+    from ..evaluation.shader_preview import authoring_batch, notify
+    with authoring_batch(ts):
+        _replays += 1
+        try:
+            yield
+        finally:
+            _replays -= 1
+            invalidate(ts)
+        from ..evaluation import physical
+        physical.sync(ts)
+        notify(ts, structural=True)
+
+
+def copy_ids(sources):
+    """New ids for copied layer snapshots: ``({old id: new id}, {root id: new instance token})``.
+
+    Plain ids become fresh uuids. A module instance among the copies keeps the
+    plain part of its ids under a fresh token (``old.<id>`` -> ``new.<id>``), and
+    the copy's root takes that token, so the copy is a second instance the
+    module's base snapshot still matches: Update merges it instead of treating
+    every module layer as locally deleted and rewriting the copy's ids. An
+    origin folder (saved from, token '') is namespaced the same way. A catalog
+    recipe's nested instance token is derived from the recipe's, as the update
+    that rebuilds the recipe expects.
+    """
+    from ..smart_materials.modules import namespaced
+    by_id = {item['id']: item for item in sources}
+
+    def catalog(item):
+        source = item.get('module_source', '')
+        return source[len('catalog:'):] if source.startswith('catalog:') else ''
+
+    def enclosing(item):
+        cursor = item.get('parent_id', '')
+        while cursor in by_id:
+            if roots.get(cursor):
+                return by_id[cursor]
+            cursor = by_id[cursor].get('parent_id', '')
+        return None
+
+    def depth(item):
+        count, cursor = 0, item.get('parent_id', '')
+        while cursor in by_id:
+            count, cursor = count + 1, by_id[cursor].get('parent_id', '')
+        return count
+
+    roots = {item['id']: item for item in sources
+             if item['type'] == 'FOLDER' and item.get('module_id') and not item.get('module_detached')}
+    tokens = {}
+    for item in sorted(roots.values(), key=depth):   # an outer token before the ones derived from it
+        outer = enclosing(item)
+        token = new_id()[:8]
+        if outer is not None and catalog(outer) and catalog(item):
+            from ..smart_materials.composer import nested_token
+            if item['module_instance'] == nested_token(catalog(outer), outer['module_instance'], catalog(item)):
+                token = nested_token(catalog(outer), tokens[outer['id']], catalog(item))
+        tokens[item['id']] = token
+    prefixes = sorted(((item['module_instance'] + '.', tokens[identifier] + '.')
+                       for identifier, item in roots.items() if item['module_instance']),
+                      key=lambda pair: -len(pair[0]))
+
+    def renamed(identifier, item):
+        for old, new in prefixes:
+            if identifier.startswith(old):
+                return new + identifier[len(old):]
+        root = item if item['id'] in roots else enclosing(item)
+        if root is not None and not root['module_instance'] and not namespaced(identifier):
+            return tokens[root['id']] + '.' + identifier
+        return new_id()   # an artist addition inside an instance keeps a plain id
+
+    ids = {}
+    for item in sources:
+        ids[item['id']] = renamed(item['id'], item)
+        for mask in item['masks']:
+            ids[mask['id']] = renamed(mask['id'], item)
+        for channel in item['channels']:
+            for effect in channel['effects']:
+                if effect['id']:
+                    ids[effect['id']] = renamed(effect['id'], item)
+    return ids, tokens
+
+
 def duplicate(ts, index):
     root_id = ts.layers[index].id
     ids = {root_id}
@@ -154,51 +266,53 @@ def duplicate(ts, index):
             break
         ids = expanded
     sources = [snapshot(item) for item in ts.layers if item.id in ids]
-    mapping = {item["id"]: new_id() for item in sources}
-    mask_mapping = {m['id']: new_id() for item in sources for m in item['masks']}
-    effect_mapping = {e['id']: new_id() for item in sources for c in item['channels'] for e in c['effects'] if e['id']}
+    ids, tokens = copy_ids(sources)
+    mapping = {item["id"]: ids[item["id"]] for item in sources}
     # Anchors outside the copied subtree keep their original ids, like layer references.
     from ..evaluation.anchors import derived_mapping
-    anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
-    for source in sources:
-        target = ts.layers.add()
-        restore(source, target)
-        target.id = mapping[source["id"]]
-        target.name += " Copy"
-        target.parent_id = mapping.get(source["parent_id"], source["parent_id"])
-        for row in target.cache:
-            # A cached image belongs to one layer; the copy rebuilds its own.
-            row.image = None
-            row.provenance = ''
-        for mask in target.masks:
-            mask.id = mask_mapping[mask.id]
-            if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
-                mask.parent_id = mask_mapping.get(mask.parent_id, '')
-            if mask.source == 'REFERENCE':
-                mask.reference_layer = mapping.get(mask.reference_layer,mask.reference_layer)
-                mask.reference_mask = mask_mapping.get(mask.reference_mask,mask.reference_mask)
-            for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
-                value = getattr(mask, field)
-                if value:
-                    setattr(mask, field, anchor_mapping.get(value, value))
-            if mask.source == "PAINT" and mask.image:
-                mask.image = mask.image.copy()
-        for channel in target.channels:
-            channel.layer_id = target.id
-            if channel.anchor:
-                channel.anchor = anchor_mapping.get(channel.anchor, channel.anchor)
-            for effect in channel.effects:
-                if effect.id:
-                    effect.id = effect_mapping.get(effect.id, effect.id)
-            if target.type == "PAINT" and channel.image:
-                channel.image = channel.image.copy()
-    # Move the copied subtree immediately above the original root. Stable IDs
-    # preserve parent links even when children precede their folder in storage.
-    for offset, source in enumerate(sources):
-        source_index = next(i for i, item in enumerate(ts.layers) if item.id == mapping[source["id"]])
-        ts.layers.move(source_index, index + 1 + offset)
-    ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == mapping[root_id])
-    invalidate(ts)
+    anchor_mapping = {**ids, **derived_mapping(mapping)}
+    from .image_manager import clone
+    with replay(ts):
+        for source in sources:
+            target = ts.layers.add()
+            restore(source, target)
+            target.id = mapping[source["id"]]
+            target.name += " Copy"
+            target.parent_id = mapping.get(source["parent_id"], source["parent_id"])
+            if source["id"] in tokens:
+                target.module_instance = tokens[source["id"]]
+            for row in target.cache:
+                # A cached image belongs to one layer; the copy rebuilds its own.
+                row.image = None
+                row.provenance = ''
+            for mask in target.masks:
+                mask.id = ids[mask.id]
+                if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
+                    mask.parent_id = ids.get(mask.parent_id, '')
+                if mask.source == 'REFERENCE':
+                    mask.reference_layer = mapping.get(mask.reference_layer,mask.reference_layer)
+                    mask.reference_mask = ids.get(mask.reference_mask,mask.reference_mask)
+                for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
+                    value = getattr(mask, field)
+                    if value:
+                        setattr(mask, field, anchor_mapping.get(value, value))
+                if mask.source == "PAINT" and mask.image:
+                    mask.image = clone(mask.image)
+            for channel in target.channels:
+                channel.layer_id = target.id
+                if channel.anchor:
+                    channel.anchor = anchor_mapping.get(channel.anchor, channel.anchor)
+                for effect in channel.effects:
+                    if effect.id:
+                        effect.id = ids.get(effect.id, effect.id)
+                if target.type == "PAINT" and channel.image:
+                    channel.image = clone(channel.image)
+        # Move the copied subtree immediately above the original root. Stable IDs
+        # preserve parent links even when children precede their folder in storage.
+        for offset, source in enumerate(sources):
+            source_index = next(i for i, item in enumerate(ts.layers) if item.id == mapping[source["id"]])
+            ts.layers.move(source_index, index + 1 + offset)
+        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == mapping[root_id])
     return ts.layers[ts.active_layer]
 
 

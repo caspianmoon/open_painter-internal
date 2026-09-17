@@ -15,6 +15,7 @@ SAMPLE_WIDTH = 13   # px py pz nx ny nz pressure radius tilt_x tilt_y tx ty tz
 CHUNK = 256
 MAX_PAIRS = 40_000_000   # texel × sample pairs evaluated at once
 MAX_WORKING_BYTES = 1024 * 1024 * 1024
+PAIR_BYTES = 64   # indices, weights, position and normal of one (texel, triangle) pair
 
 
 # ---- stroke samples ----------------------------------------------------------
@@ -109,11 +110,16 @@ def _alpha_lookup(texture, lateral, samples, radius, rotation, angle):
     """Sample a (H, W) alpha texture in each sample's disc frame (tangent from the stroke)."""
     axis = samples[:, 3:6]
     tangent = samples[:, 10:13] if samples.shape[1] >= 13 else None
+    helper = np.where(np.abs(axis[:, 2:3]) < .9, np.array([[0, 0, 1]], np.float32), np.array([[1, 0, 0]], np.float32))
+    fallback = np.cross(axis, helper)
     if rotation == 'RAKE' and tangent is not None and np.any(tangent):
-        t = tangent
+        # The first sample of a gesture has no previous point, so its tangent is
+        # zero: a zero frame would read the texture's centre texel over the whole disc.
+        t = np.array(tangent, np.float32, copy=True)
+        degenerate = np.linalg.norm(t, axis=1) < 1e-8
+        t[degenerate] = fallback[degenerate]
     else:
-        helper = np.where(np.abs(axis[:, 2:3]) < .9, np.array([[0, 0, 1]], np.float32), np.array([[1, 0, 0]], np.float32))
-        t = np.cross(axis, helper)
+        t = fallback
     t = t / np.maximum(np.linalg.norm(t, axis=1, keepdims=True), 1e-8)
     if angle:
         b0 = np.cross(axis, t)
@@ -155,60 +161,137 @@ def alpha_pixels(image):
     return images.pixels(image)[..., 0].astype(np.float32)
 
 
-def coverage(ts, stroke, n, resources=None):
-    """(n, n) coverage of one stroke on one texture set, cached per (stroke revision, n, geometry)."""
-    from ..geometry.snapshots import targets
+def _batches(uv, n):
+    """Index runs of ``uv`` (T, 3, 2) whose covered texels fit one rasterisation pass.
+
+    The per-texel temporaries (indices, weights, positions, normals) scale with
+    covered texels, not with the triangle count: a dense mesh under a small
+    stroke is cheap, a whole-UV stroke on a coarse mesh is not."""
+    extent = np.clip(uv.max(axis=1) - uv.min(axis=1), 0.0, 1.0)
+    estimate = extent[:, 0] * extent[:, 1] * float(n * n) + 1.0
+    groups = np.cumsum(estimate) // (MAX_WORKING_BYTES // PAIR_BYTES)
+    return np.split(np.arange(len(uv)), np.flatnonzero(np.diff(groups)) + 1)
+
+
+def _rasterise(stroke, n, entries):
+    """(n, n) coverage of one stroke over the evaluated ``entries`` of a set."""
     from ..geometry.uv_rasterizer import interpolate, rasterize
-    stamp = getattr(resources, 'geometry_stamp', None) if resources is not None else None
-    key = ('stroke', ts.id, stroke.id, stroke.revision, n, repr(stamp))
-    if resources is not None and key in resources:
-        return resources[key]
     samples = unpack_samples(stroke.samples)
     result = np.zeros((n, n), np.float32)
     covered = np.zeros((n, n), bool)
-    if len(samples) and ts.assignments and all(ref.object for ref in ts.assignments):
+    if len(samples) and entries:
         lo, hi = bounds(samples)
         texture = alpha_pixels(stroke.alpha_image)
         planar = tuple(stroke.plane_normal) if stroke.projection == 'PLANAR' else None
-        with targets(ts) as entries:
-            for target in entries:
-                tri_vertices, tri_loops = target['tri_vertices'], target['tri_loops']
-                corners = target['positions'][tri_vertices]                       # (T, 3, 3)
-                chosen = np.flatnonzero(np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1))
-                if not len(chosen):
-                    continue
-                if len(chosen) * n * 16 > MAX_WORKING_BYTES:
-                    raise ValueError('The stroke covers too many triangles for one rasterisation; split it')
-                rows, cols, tri, weights = rasterize(target['uv'][tri_loops[chosen]], n, unique=False)
+        flat_result = result.reshape(-1)
+        for target in entries:
+            tri_vertices, tri_loops = target['tri_vertices'], target['tri_loops']
+            corners = target['positions'][tri_vertices]                       # (T, 3, 3)
+            chosen = np.flatnonzero(np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1))
+            if not len(chosen):
+                continue
+            uv = target['uv'][tri_loops[chosen]]
+            for batch in _batches(uv, n):
+                rows, cols, tri, weights = rasterize(uv[batch], n, unique=False)
                 if not len(rows):
                     continue
-                positions = interpolate(weights, target['positions'][tri_vertices[chosen][tri]])
-                normals = interpolate(weights, target['world_normals'][tri_loops[chosen][tri]])
+                picked = chosen[batch][tri]
+                positions = interpolate(weights, target['positions'][tri_vertices[picked]])
+                normals = interpolate(weights, target['world_normals'][tri_loops[picked]])
                 alpha = kernel(positions, normals, samples, stroke.hardness, stroke.flow, stroke.accumulate, planar,
                                texture, stroke.alpha_rotation, stroke.alpha_angle)
-                flat = rows * n + cols
-                accumulated = np.zeros(n * n, np.float32)
-                np.maximum.at(accumulated, flat, alpha)
-                result = np.maximum(result, accumulated.reshape(n, n))
+                np.maximum.at(flat_result, rows * n + cols, alpha)
                 covered[rows, cols] = True
         if covered.any():
             result = dilate(result, covered)
-    result = (result * float(stroke.opacity)).astype(np.float32)
-    result.flags.writeable = False
-    if resources is not None:
-        resources[key] = result
-    return result
+    return (result * float(stroke.opacity)).astype(np.float32)
 
 
-def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None):
+def _compact(result):
+    """The covered rows of a raster, or its covered texels when those are smaller.
+
+    Strokes are local: memoising every stroke as a full canvas (64 MiB at 4k)
+    let a handful of them outgrow the shared allowance, and the CPU tiles then
+    evicted each stroke just before the next tile needed it again."""
+    n = result.shape[1]
+    hit = np.flatnonzero(result.any(axis=1))
+    if not len(hit):
+        return ('rows', 0, np.zeros((0, n), np.float32))
+    lo, hi = int(hit[0]), int(hit[-1]) + 1
+    band = result[lo:hi].copy()   # never a view: the full canvas must be released
+    flat = np.flatnonzero(band)
+    if len(flat) * 8 < band.nbytes:
+        return ('texels', lo, (flat + lo * n).astype(np.int32), band.reshape(-1)[flat])
+    return ('rows', lo, band)
+
+
+def _expand(compact, y0, y1, n):
+    """Rows ``y0:y1`` of a compact raster as (y1 - y0, n) float32."""
+    rows = np.zeros((y1 - y0, n), np.float32)
+    kind, lo, *data = compact
+    if kind == 'rows':
+        band = data[0]
+        start, stop = max(y0, lo), min(y1, lo + len(band))
+        if start < stop:
+            rows[start - y0:stop - y0] = band[start - lo:stop - lo]
+    else:
+        flat, values = data
+        first, last = np.searchsorted(flat, (y0 * n, y1 * n))
+        rows.reshape(-1)[flat[first:last] - y0 * n] = values[first:last]
+    return rows
+
+
+def rasters(ts, strokes, n, resources=None, cache=None):
+    """Compact coverage of each stroke on one texture set, memoised per (stroke revision, n, geometry).
+
+    The set's mesh is evaluated at most once per call, and only when a stroke
+    misses the cache: each stroke used to run its own to_mesh. A job's ``cache``
+    keeps the rasters its every strip reads when the shared allowance evicts them."""
+    from contextlib import nullcontext
+    from ..geometry.snapshots import targets
+    stamp = getattr(resources, 'geometry_stamp', None) if resources is not None else None
+    keys = [('stroke', ts.id, stroke.id, stroke.revision, n, repr(stamp)) for stroke in strokes]
+    found = {}
+    for key in keys:
+        if cache is not None and key in cache:
+            found[key] = cache[key]
+        elif resources is not None and key in resources:
+            found[key] = resources[key]
+    missing = [(stroke, key) for stroke, key in zip(strokes, keys) if key not in found]
+    if missing:
+        ready = bool(ts.assignments) and all(ref.object for ref in ts.assignments)
+        with (targets(ts) if ready else nullcontext([])) as entries:
+            for stroke, key in missing:
+                found[key] = _compact(_rasterise(stroke, n, entries))
+                if resources is not None:
+                    resources[key] = found[key]
+    if cache is not None:
+        cache.update(found)
+    return [found[key] for key in keys]
+
+
+def coverage(ts, stroke, n, resources=None):
+    """(n, n) coverage of one stroke on one texture set."""
+    return _expand(rasters(ts, [stroke], n, resources)[0], 0, n, n)
+
+
+def touches(ts, stroke, n, resources=None):
+    """Whether the stroke marks any texel of the set at resolution ``n``.
+
+    Read off the compact raster: a miss compacts to zero rows, and expanding a
+    4k canvas only to ask ``any()`` of it would cost more than the raster."""
+    kind, _, data, *_ = rasters(ts, [stroke], n, resources)[0]
+    return kind == 'texels' or len(data) > 0
+
+
+def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache=None):
     """Straight RGBA rows of a layer's strokes for one channel, composited over ``base`` rows."""
     from .strokes import channel_value, stroke_channels, strokes_for
     project = ts.id_data.open_painter
     rows = np.zeros((y1 - y0, n, 4), np.float32) if base is None else np.array(base, np.float32, copy=True)
-    for stroke in strokes_for(project, layer.stroke_key):
-        if channel not in stroke_channels(stroke):
-            continue
-        alpha = coverage(ts, stroke, n, resources)[y0:y1][..., None]
+    strokes = [stroke for stroke in strokes_for(project, layer.stroke_key) if channel in stroke_channels(stroke)]
+    for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
+        alpha = _expand(raster, y0, y1, n)[..., None]
         if stroke.blend == 'ERASE':
             rows[..., 3:4] *= 1.0 - alpha
             continue
@@ -221,12 +304,13 @@ def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None):
     return rows
 
 
-def mask_rows(ts, mask, n, y0, y1, resources=None):
+def mask_rows(ts, mask, n, y0, y1, resources=None, cache=None):
     """Coverage rows of a mask's strokes (union of the strokes of its key)."""
     from .strokes import strokes_for
     project = ts.id_data.open_painter
     rows = np.zeros((y1 - y0, n), np.float32)
-    for stroke in strokes_for(project, mask.stroke_key):
-        alpha = coverage(ts, stroke, n, resources)[y0:y1]
+    strokes = strokes_for(project, mask.stroke_key)
+    for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
+        alpha = _expand(raster, y0, y1, n)
         rows = (rows * (1.0 - alpha)) if stroke.blend == 'ERASE' else np.maximum(rows, alpha)
     return rows

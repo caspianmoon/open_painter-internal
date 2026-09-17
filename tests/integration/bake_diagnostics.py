@@ -110,6 +110,61 @@ assert parameters(decimate)['delimit']==['NORMAL','SEAM']
 assert '"delimit":["NORMAL","SEAM"]' in record(ts,'NORMAL')
 assert hash(modifier_signature(twin)) is not None
 twin.modifiers.remove(decimate)
+# What a modifier reads beyond its own RNA re-keys the geometry and the bake record: a Geometry
+# Nodes group input, a Boolean cutter's placement relative to the asset, the weights of the
+# vertex group a Displace names, creases under Subdivision, shape-key values. A plain mesh's
+# record keeps its form; records written before 0.9.7 stay current.
+current=lambda: prop.provenance==record(ts,'CURVATURE')
+assert '"inputs"' not in record(ts,'CURVATURE')
+group=bpy.data.node_groups.new('Panel lines','GeometryNodeTree')
+group.interface.new_socket(name='Geometry',in_out='INPUT',socket_type='NodeSocketGeometry')
+group.interface.new_socket(name='Geometry',in_out='OUTPUT',socket_type='NodeSocketGeometry')
+strength=group.interface.new_socket(name='Strength',in_out='INPUT',socket_type='NodeSocketFloat')
+group.links.new(group.nodes.new('NodeGroupInput').outputs['Geometry'],group.nodes.new('NodeGroupOutput').inputs['Geometry'])
+lines=twin.modifiers.new('Panel lines','NODES'); lines.node_group=group
+prop.provenance=record(ts,'CURVATURE'); signature=modifier_signature(twin)
+assert '"inputs"' in prop.provenance and current()
+twin.path_resolve(f'modifiers["Panel lines"].properties.inputs.{strength.identifier}').value=.5
+bpy.context.view_layer.update()
+assert modifier_signature(twin)!=signature and not current(), 'a Geometry Nodes input changed the surface unnoticed'
+twin.path_resolve(f'modifiers["Panel lines"].properties.inputs.{strength.identifier}').value=0
+bpy.context.view_layer.update()
+assert modifier_signature(twin)==signature and current()
+twin.modifiers.remove(lines); bpy.data.node_groups.remove(group)
+cut=twin.modifiers.new('Cut','BOOLEAN'); cut.object=obj
+prop.provenance=record(ts,'CURVATURE'); signature=modifier_signature(twin)
+obj.location.x+=1; bpy.context.view_layer.update()
+assert modifier_signature(twin)!=signature and not current(), 'moving the cutter changed the surface unnoticed'
+twin.location.x+=1; bpy.context.view_layer.update()   # the assembly moved as a whole: the cut is the same
+assert modifier_signature(twin)==signature and current()
+obj.location.x-=1; twin.location.x-=1; bpy.context.view_layer.update()
+twin.modifiers.remove(cut)
+dents=twin.vertex_groups.new(name='Dents')
+displace=twin.modifiers.new('Dents','DISPLACE'); displace.vertex_group='Dents'
+prop.provenance=record(ts,'CURVATURE')
+dents.add([0],1.0,'REPLACE'); bpy.context.view_layer.update()   # what a weight stroke reports
+assert not current(), 'painting the Displace weights changed the surface unnoticed'
+dents.remove([0]); bpy.context.view_layer.update()
+assert current()
+twin.modifiers.remove(displace); twin.vertex_groups.remove(dents)
+subdivide=twin.modifiers.new('Subdivide','SUBSURF')
+prop.provenance=record(ts,'CURVATURE')
+crease=twin.data.attributes.new('crease_edge','FLOAT','EDGE'); crease.data[0].value=1.0
+bpy.context.view_layer.update()
+assert not current(), 'creasing an edge under Subdivision changed the surface unnoticed'
+twin.data.attributes.remove(twin.data.attributes['crease_edge']); bpy.context.view_layer.update()
+assert current()
+twin.modifiers.remove(subdivide)
+twin.shape_key_add(name='Basis'); bulge=twin.shape_key_add(name='Bulge'); bulge.value=0
+prop.provenance=record(ts,'CURVATURE')
+bulge.value=.5; bpy.context.view_layer.update()
+assert not current(), 'a shape-key value changed the surface unnoticed'
+bulge.value=0; bpy.context.view_layer.update()
+assert current()
+prop.provenance=record(ts,'CURVATURE',legacy=True)
+assert status(ts,prop)=='Ready', 'a record written before 0.9.7 must stay current'
+twin.shape_key_clear()
+prop.provenance=record(ts,'CURVATURE')
 # Native operator path: inspection reports, selection selects, results retained for the panel.
 bpy.context.view_layer.objects.active=obj
 assert bpy.ops.open_painter.bake(action='INSPECT')=={'FINISHED'}

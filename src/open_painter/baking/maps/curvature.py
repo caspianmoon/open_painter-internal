@@ -175,15 +175,22 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
     interface responsive.
     """
     from ...geometry.snapshots import targets
-    from .mean_curvature import convex_map_steps, prepare
+    from .mean_curvature import convex_map_steps, prepare_raster, prepare_reach
     n = int(ts.resolution)
     base = ts.bake.mean_curvature_distance
+    # Everything the set provides is read before the first yield: a modal caller
+    # may add or remove texture sets (or undo) between steps, which reallocates
+    # the collection under this RNA reference.
+    name = ts.name
     radii = {kind: base * EDGE_RADIUS_FACTORS[kind] for kind in kinds}
     with targets(ts) as meshes:
         # No yields while evaluated meshes are alive: the depsgraph may change between steps.
         creases = [prepare_creases(target["mesh"], target["object"].matrix_world, target["slots"], n,
                                    ts.bake.curvature_angle, ts.bake.curvature_width) for target in meshes]
-        fields = {kind: [prepare(target, n, radii[kind], radians(ts.bake.curvature_angle)) for target in meshes]
+        # Face turning and the raster are radius-independent: one copy serves
+        # every reach (four 4k rasters would hold gigabytes for the whole job).
+        rasters = [prepare_raster(target, n, radians(ts.bake.curvature_angle)) for target in meshes]
+        fields = {kind: [prepare_reach(target, raster, radii[kind]) for target, raster in zip(meshes, rasters)]
                   for kind in kinds}
     yield 0.02
     lines = np.zeros((n, n), dtype=np.float32)
@@ -196,25 +203,35 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
                 np.maximum(lines, done.value, out=lines)
                 break
     result = {}
-    for position, kind in enumerate(kinds):
-        # Smooth convex curvature within the physical radius: rims, bevels and
-        # dense edges that never exceed the crease angle still become edge wear.
-        values = lines.copy()
-        steps = convex_map_steps(fields[kind], n, radii[kind])
-        while True:
+    try:
+        for position, kind in enumerate(kinds):
+            # Smooth convex curvature within the physical radius: rims, bevels and
+            # dense edges that never exceed the crease angle still become edge wear.
+            values = lines.copy()
+            steps = convex_map_steps(fields.pop(kind), n, radii[kind])
+            while True:
+                try:
+                    yield 0.15 + 0.83 * (position + next(steps)) / len(kinds)
+                except StopIteration as done:
+                    np.maximum(values, done.value, out=values)
+                    break
+            rgba = np.ones((n, n, 4), dtype=np.float32)
+            rgba[..., :3] = values[..., None]
+            image = result[kind] = images.create(f"{name}_BakedCurvature{EDGE_SUFFIXES[kind]}", n)
+            image["open_painter_curvature_method"] = METHOD
+            image["mean_curvature_distance"] = float(radii[kind])
+            image["open_painter_edge_kind"] = kind
+            images.write(image, rgba)
+    except BaseException:
+        # Stopped (GeneratorExit from the modal's Esc/cancel) or failed part-way:
+        # the reaches already produced are packed fake-user images nobody
+        # registers, so they would otherwise persist in the file.
+        for image in result.values():
             try:
-                yield 0.15 + 0.83 * (position + next(steps)) / len(kinds)
-            except StopIteration as done:
-                np.maximum(values, done.value, out=values)
-                break
-        rgba = np.ones((n, n, 4), dtype=np.float32)
-        rgba[..., :3] = values[..., None]
-        image = images.create(f"{ts.name}_BakedCurvature{EDGE_SUFFIXES[kind]}", n)
-        image["open_painter_curvature_method"] = METHOD
-        image["mean_curvature_distance"] = float(radii[kind])
-        image["open_painter_edge_kind"] = kind
-        images.write(image, rgba)
-        result[kind] = image
+                bpy.data.images.remove(image)
+            except ReferenceError:
+                pass  # a memfile undo mid-job already freed it
+        raise
     return result
 
 

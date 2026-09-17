@@ -8,6 +8,14 @@ from .operators import SafeOperator
 from .texture_operations import _redraw
 
 
+def active_strokes_mask(layer):
+    """The layer's active mask when it is a Vector Strokes mask with a key of its own to edit."""
+    if layer is None or not layer.masks:
+        return None
+    mask = layer.masks[max(0, min(layer.active_mask, len(layer.masks) - 1))]
+    return mask if mask.source == 'STROKES' and mask.stroke_key else None
+
+
 class OP_UL_strokes(bpy.types.UIList):
     def filter_items(self, context, data, propname):
         ts = require_set(context)
@@ -22,6 +30,16 @@ class OP_UL_strokes(bpy.types.UIList):
         row.prop(item, 'name', text='', emboss=False, icon='CURVE_BEZCURVE')
         row.label(text=f'{item.sample_count}')
         row.label(text='', icon='BRUSH_DATA' if item.blend == 'PAINT' else 'X')
+
+
+class OP_UL_mask_strokes(OP_UL_strokes):
+    """The strokes of the active Vector Strokes mask's key (the mask section's list)."""
+    def filter_items(self, context, data, propname):
+        mask = active_strokes_mask(active(require_set(context)))
+        key = mask.stroke_key if mask is not None else ''
+        items = getattr(data, propname)
+        flags = [self.bitflag_filter_item if item.layer_key == key else 0 for item in items]
+        return flags, []
 
 
 class OP_OT_stroke(SafeOperator, bpy.types.Operator):
@@ -48,12 +66,18 @@ class OP_OT_stroke(SafeOperator, bpy.types.Operator):
             project.active_stroke = min(index, len(project.strokes) - 1)
         elif self.action == 'DUPLICATE':
             from ..core.layer_stack import snapshot, restore
+            from ..utils.ids import new_id
             values = snapshot(stroke)
+            # Later siblings move up one so the copy gets its own slot right after
+            # the original (equal orders would make Move Up/Down a no-op swap).
+            for sibling in project.strokes:
+                if sibling.layer_key == values['layer_key'] and sibling.order > values['order']:
+                    sibling.order += 1
+            # add() reallocates the collection: `stroke` is stale from here on.
             copy = project.strokes.add()
             restore(values, copy)
-            from ..utils.ids import new_id
-            copy.id, copy.name = new_id(), stroke.name + ' Copy'
-            copy.order = stroke.order + 1
+            copy.id, copy.name = new_id(), values['name'] + ' Copy'
+            copy.order = values['order'] + 1
             stroke_records.touch(project, copy)
             project.active_stroke = len(project.strokes) - 1
         elif self.action in {'MOVE_UP', 'MOVE_DOWN'}:
@@ -98,49 +122,86 @@ class OP_OT_mask_strokes(SafeOperator, bpy.types.Operator):
         _redraw(context, ts, mask=True)
 
 
+def _flatten(ts, stroke, channel, n, original):
+    """``original`` (straight RGBA) with this one stroke composited, as channel_rows would
+    composite it; the other strokes of the key stay live records."""
+    import numpy as np
+    from ..painting import stroke_raster
+    rows = np.array(original, np.float32, copy=True)
+    alpha = stroke_raster.coverage(ts, stroke, n)[..., None]
+    if stroke.blend == 'ERASE':
+        rows[..., 3:4] *= 1.0 - alpha
+        return rows
+    color = np.asarray(stroke_records.channel_value(stroke, channel), np.float32)
+    out_alpha = alpha + rows[..., 3:4] * (1.0 - alpha)
+    premultiplied = color * alpha + rows[..., :3] * rows[..., 3:4] * (1.0 - alpha)
+    rows[..., :3] = np.divide(premultiplied, out_alpha, out=np.zeros_like(premultiplied), where=out_alpha > 1e-8)
+    rows[..., 3:4] = out_alpha
+    return rows
+
+
 def _rasterize(context, project, ts, stroke):
-    """Flatten one stroke into the linked paint layer's images of this set, then drop it."""
+    """Flatten one stroke into the paint images of every layer rendering it (each set at its
+    own resolution), then drop the record. The stroke is one project-wide record: leaving a
+    linked set unflattened would erase it there."""
     import numpy as np
     from ..core import image_manager as images
-    from ..painting import stroke_raster
-    layer = next((item for item in ts.layers if item.stroke_key == stroke.layer_key), None)
-    if layer is None:
-        raise ValueError('This set has no layer rendering that stroke.')
-    n = int(ts.resolution)
-    for channel in stroke_records.stroke_channels(stroke):
-        prop = channel_for(layer, channel)
-        if prop is None:
-            continue
-        original = images.pixels(prop.image) if prop.image else np.zeros((n, n, 4), np.float32)
-        if original.shape != (n, n, 4):
-            raise ValueError('Authored paint image size differs from the texture set; resample it first')
-        rows = stroke_raster.channel_rows(ts, layer, channel, n, 0, n, base=original)
-        replacement = images.create(f'{ts.name}_{layer.name}_{channel}', n, color_data=channel == 'BASE_COLOR')
+    key = stroke.layer_key
+    linked = stroke_records.linked_layers(project, key)
+    if not linked:
+        raise ValueError('No paint layer renders that stroke; only layer strokes can be rasterised.')
+    if stroke_records.linked_masks(project, key):
+        raise ValueError('A Vector Strokes mask renders this stroke; a mask cannot receive pixels. Unlink it first.')
+    staged = []
+    # Every target is validated and composited before any image is swapped, so a
+    # size mismatch cannot leave one set flattened while the stroke stays live.
+    for other, layer in linked:
+        n = int(other.resolution)
+        for channel in stroke_records.stroke_channels(stroke):
+            prop = channel_for(layer, channel)
+            if prop is None:
+                continue
+            original = images.pixels(prop.image) if prop.image else np.zeros((n, n, 4), np.float32)
+            if original.shape != (n, n, 4):
+                raise ValueError(f'{other.name}: authored paint image size differs from the texture set; resample it first')
+            if prop.image and prop.image.is_float:
+                # Float paint canvases store premultiplied pixels (what every reader divides
+                # by alpha); the stroke composite works in straight colour.
+                np.divide(original[..., :3], original[..., 3:4], out=original[..., :3], where=original[..., 3:4] > 1e-8)
+                original[..., :3][original[..., 3] <= 1e-8] = 0
+            rows = _flatten(other, stroke, channel, n, original)
+            rows[..., :3] *= rows[..., 3:4]   # managed images are float: back to premultiplied
+            staged.append((other, layer, prop, channel, n, rows))
+    for other, layer, prop, channel, n, rows in staged:
+        replacement = images.create(f'{other.name}_{layer.name}_{channel}', n, color_data=channel == 'BASE_COLOR')
         replacement.use_fake_user = False
         images.write(replacement, rows, pack=True)
         prop.image, prop.enabled = replacement, True
     stroke_records.remove(project, stroke.id)
 
 
-def draw_strokes(layout, context, ts, layer):
+def draw_strokes(layout, context, ts, layer, mask=None):
+    """The strokes box of a paint layer, or of a Vector Strokes ``mask`` (its key's strokes)."""
     project = context.scene.open_painter
-    if layer is None or layer.type != 'PAINT':
+    if layer is None or (mask is None and layer.type != 'PAINT'):
         return
+    key = mask.stroke_key if mask is not None else layer.stroke_key
     box = layout.box()
     row = box.row(align=True)
     row.label(text='Vector Strokes', icon='CURVE_BEZCURVE')
-    count = len(stroke_records.strokes_for(project, layer.stroke_key))
+    count = len(stroke_records.strokes_for(project, key))
     row.label(text=f'{count}')
-    if not layer.stroke_key:
+    if not key:
         box.label(text='Paint with the Vector Brush to add strokes.')
         return
-    box.template_list('OP_UL_strokes', '', project, 'strokes', project, 'active_stroke', rows=3)
+    box.template_list('OP_UL_mask_strokes' if mask is not None else 'OP_UL_strokes', '', project, 'strokes',
+                      project, 'active_stroke', rows=3)
     row = box.row(align=True)
     for action, icon in (('MOVE_UP', 'TRIA_UP'), ('MOVE_DOWN', 'TRIA_DOWN'), ('DUPLICATE', 'DUPLICATE'),
                          ('RASTERIZE', 'IMAGE_DATA'), ('DELETE', 'TRASH')):
         row.operator('open_painter.stroke', text='', icon=icon).action = action
     index = project.active_stroke
-    if 0 <= index < len(project.strokes) and project.strokes[index].layer_key == layer.stroke_key:
+    if 0 <= index < len(project.strokes) and project.strokes[index].layer_key == key:
         stroke = project.strokes[index]
         for name in ('radius', 'hardness', 'opacity', 'flow', 'accumulate', 'projection', 'blend'):
             box.prop(stroke, name)
@@ -170,7 +231,7 @@ class OP_OT_resample_paint_images(SafeOperator, bpy.types.Operator):
                 image = item.image
                 if image is None or tuple(image.size) == (n, n):
                     continue
-                copy = image.copy()
+                copy = images.clone(image)   # unsaved strokes travel with the copy
                 copy.scale(n, n)
                 copy.pack()
                 item.image = copy
@@ -187,4 +248,4 @@ def pending_resample(ts):
                if item.image is not None and tuple(item.image.size) != (n, n))
 
 
-CLASSES = (OP_UL_strokes, OP_OT_stroke, OP_OT_mask_strokes, OP_OT_resample_paint_images)
+CLASSES = (OP_UL_strokes, OP_UL_mask_strokes, OP_OT_stroke, OP_OT_mask_strokes, OP_OT_resample_paint_images)

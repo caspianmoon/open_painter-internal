@@ -70,6 +70,15 @@ def mark_faces(obj,indices,name='open_painter_cut_surface'):
     attribute=obj.data.attributes.get(name)
     if attribute and (attribute.domain!='FACE' or attribute.data_type!='FLOAT'):
         raise ValueError('Existing attribute has a different domain or type')
+    if obj.mode=='EDIT':
+        # Attribute data reads as empty while an edit-mesh exists, so the
+        # write has to go through the BMesh face layer instead.
+        import bmesh
+        bm=bmesh.from_edit_mesh(obj.data)
+        layer=bm.faces.layers.float.get(name) or bm.faces.layers.float.new(name)
+        for index,face in enumerate(bm.faces): face[layer]=float(index in selected)
+        bmesh.update_edit_mesh(obj.data)
+        return obj.data.attributes.get(name)
     attribute=attribute or obj.data.attributes.new(name,'FLOAT','FACE')
     data=np.array([float(i in selected) for i in range(len(obj.data.polygons))],np.float32)
     attribute.data.foreach_set('value',data)

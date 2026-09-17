@@ -9,6 +9,14 @@ PACK_ITEMS = CHANNEL_ITEMS + [
 ]
 
 
+def follow_target_changed(self, context):
+    project = getattr(self.id_data, "open_painter", None)
+    if self.follow_target and project:
+        # Switching it on adopts the target now; the set is not left on the settings it had.
+        from ..targets import apply, get
+        apply(get(project.target), self)
+
+
 class OP_ExportSettings(bpy.types.PropertyGroup):
     directory: bpy.props.StringProperty(
         name="Output Directory", subtype="DIR_PATH", options={"PATH_SUPPORTS_BLEND_RELATIVE"}
@@ -35,7 +43,7 @@ class OP_ExportSettings(bpy.types.PropertyGroup):
     bit_depth: bpy.props.EnumProperty(
         name="Bit Depth", items=[("8", "8 bit", ""), ("16", "16 bit", "")], default="8"
     )
-    follow_target: bpy.props.BoolProperty(name="Follow Project Target", default=True,
+    follow_target: bpy.props.BoolProperty(name="Follow Project Target", default=True, update=follow_target_changed,
         description="Take preset, format and bit depth from the project's Target renderer")
     prefix: bpy.props.StringProperty(name="Prefix")
     suffix: bpy.props.StringProperty(name="Suffix")

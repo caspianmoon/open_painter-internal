@@ -11,8 +11,8 @@ from mathutils.bvhtree import BVHTree
 
 @contextmanager
 def acceleration(scene, objects):
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        graph = bpy.context.evaluated_depsgraph_get()
+    from .snapshots import depsgraph_for
+    graph = depsgraph_for(scene, objects)
     trees = []
     try:
         for obj in objects:

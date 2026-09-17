@@ -18,6 +18,8 @@ class OP_OT_vector_brush(bpy.types.Operator):
     bl_idname = 'open_painter.vector_brush'
     bl_label = 'Vector Brush'
     bl_options = {'REGISTER', 'UNDO'}
+    mask: bpy.props.BoolProperty(default=False, options={'SKIP_SAVE'},
+                                 description='Record into the active Vector Strokes mask\'s key instead of the layer\'s')
     _handler = None
 
     @classmethod
@@ -32,10 +34,14 @@ class OP_OT_vector_brush(bpy.types.Operator):
             self.report({'ERROR'}, str(error))
             return {'CANCELLED'}
         layer = active(ts)
-        if layer is None or layer.type != 'PAINT':
+        from .strokes_panel import active_strokes_mask
+        mask = active_strokes_mask(layer) if self.mask else None
+        if mask is None and (layer is None or layer.type != 'PAINT'):
             self.report({'ERROR'}, 'Select a paint layer: vector strokes live on paint layers.')
             return {'CANCELLED'}
         self._set_id, self._layer_id = ts.id, layer.id
+        # A Vector Strokes mask with its own key collects the strokes itself (any layer type).
+        self._key = mask.stroke_key if mask is not None else ''
         self._region = next(region for region in context.area.regions if region.type == 'WINDOW')
         self._view = context.space_data.region_3d
         self._points, self._samples, self._last = [], [], None
@@ -145,8 +151,11 @@ class OP_OT_vector_brush(bpy.types.Operator):
         if ts is None or layer is None:
             return
         samples = np.asarray(self._samples, np.float32).reshape(-1, SAMPLE_WIDTH)
-        plane = tuple(-self._view.view_rotation @ Vector((0, 0, -1))) if settings.projection == 'PLANAR' else (0, 0, 1)
-        stroke_records.record(project, ts, layer, samples, settings, plane_normal=plane, universal=settings.universal)
+        # The disc axis must face the viewer (the raster culls texels whose normal points away
+        # from it): the view's +Z, not the direction it looks along.
+        plane = tuple(self._view.view_rotation @ Vector((0, 0, 1))) if settings.projection == 'PLANAR' else (0, 0, 1)
+        stroke_records.record(project, ts, layer, samples, settings, plane_normal=plane, universal=settings.universal,
+                              key=self._key)
         self._samples, self._points, self._batch = [], [], None
         bpy.ops.ed.undo_push(message='Vector Stroke')
         context.area.tag_redraw()

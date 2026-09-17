@@ -91,6 +91,19 @@ class Kernel(unittest.TestCase):
         self.assertLess(along_x[left].mean(), .1)
         self.assertGreater(along_y[up].mean(), .9)
 
+    def test_rake_first_sample_without_tangent_keeps_the_alpha_shape(self):
+        positions, normals = grid(n=81, extent=1.0)
+        texture = np.zeros((16, 16), np.float32)
+        texture[:, 8:] = 1.0
+        # The vector brush records the first sample of a gesture with a zero tangent; the
+        # second sample lies outside the grid, so only the first stamp is measured.
+        samples = np.array([sample((0, 0, 0), tangent=(0, 0, 0)), sample((3, 0, 0), tangent=(1, 0, 0))])
+        alpha = kernel(positions, normals, samples, hardness=1.0, alpha_texture=texture)
+        up = (positions[:, 1] > .2) & (positions[:, 1] < .45) & (np.abs(positions[:, 0]) < .1)
+        down = (positions[:, 1] < -.2) & (positions[:, 1] > -.45) & (np.abs(positions[:, 0]) < .1)
+        self.assertGreater(alpha[up].mean(), .9)      # the helper frame, as a single click uses
+        self.assertLess(alpha[down].mean(), .1)       # not a solid disc from the texture's centre texel
+
     def test_packing_resample_bounds_dilate(self):
         samples = np.array([sample((i * .1, 0, 0), radius=.2) for i in range(5)])
         self.assertTrue(np.array_equal(unpack_samples(pack_samples(samples)), samples))

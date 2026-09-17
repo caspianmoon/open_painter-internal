@@ -36,6 +36,22 @@ assert tuple(out.image.size)==(1024,1024) and tuple(paint.size)==(1024,1024)
 np.testing.assert_allclose(images.pixels(out.image)[...,0],.25,atol=1e-7)
 proxy=preview_policy._proxies[(*cache.key_for(scene,ts),'ROUGHNESS')][2]
 np.testing.assert_allclose(images.pixels(proxy)[...,0],.75,atol=1e-7)
+# Serial-keyed anchor memos of earlier edits must not accumulate in the preview cache.
+from open_painter.evaluation import anchors
+layer.publish_output=True
+copy=stack.add(ts,'FILL','Copy'); stack.channel_for(copy,'ROUGHNESS').anchor=anchors.output_id(layer.id)
+def preview_memo():
+    for _ in LayerEvaluator(scene).channel_steps(ts.id,'ROUGHNESS',preview_resolution=512): pass
+    return preview_policy._resources[cache.key_for(scene,ts)].signatures
+counts=set()
+for step in range(4):
+    rough.value=.5+.05*step
+    memo=preview_memo()
+    assert all(key[-1]==ts.edit_serial for key in memo), sorted(memo)
+    counts.add(len(memo))
+assert len(counts)==1 and counts!={0}, counts
+stack.remove(ts,next(i for i,l in enumerate(ts.layers) if l.id==copy.id))
+ts.layers[0].publish_output=False
 # A later edit cancels an older proxy before publishing it.
 job=LayerEvaluator(scene).channel_steps(ts.id,'ROUGHNESS',preview_resolution=512)
 next(job); rough.value=.83

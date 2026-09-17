@@ -1,6 +1,7 @@
 import bpy
 
 from ..constants import BLEND_ITEMS, CHANNELS
+from ..core.layer_stack import replaying
 from .channel import OP_Channel
 from .mask import OP_Mask
 
@@ -16,7 +17,7 @@ def numeric(self, context):
 
 def _changed(self, context, structural):
     project = getattr(self.id_data, "open_painter", None)
-    if project:
+    if project and not replaying():
         pointer = self.as_pointer()
         for ts in project.texture_sets:
             owned = next((layer for layer in ts.layers if layer.as_pointer() == pointer or
@@ -54,6 +55,8 @@ def preview_only(self, context):
 
     The authoring serial moves so sessions notice, but no output is marked dirty.
     """
+    if replaying():
+        return
     ts = _texture_set_of(self)
     if ts is None:
         return
@@ -82,7 +85,12 @@ class OP_LayerCache(bpy.types.PropertyGroup):
 
 def decal_object_changed(self, context):
     """The name mirrors the pointer so a re-link after load (or a deleted Empty) never falls
-    back to an object chosen earlier."""
+    back to an object chosen earlier. The Empty the layer leaves gives up the layer's marker:
+    still marked, the scheduler would take it for a Shift+D copy and duplicate the layer."""
+    from ..painting.decals import MARKER
+    previous = bpy.data.objects.get(self.decal_object_name) if self.decal_object_name else None
+    if previous is not None and previous != self.decal_object and previous.get(MARKER) == self.id:
+        del previous[MARKER]
     self.decal_object_name = self.decal_object.name if self.decal_object is not None else ''
     changed(self, context)
 
@@ -156,6 +164,11 @@ class OP_Layer(bpy.types.PropertyGroup):
     # Vector strokes (0.6.0): paint layers sharing a key across sets render the same strokes.
     stroke_key: bpy.props.StringProperty(update=changed,
         description="Key of the project's vector strokes this paint layer renders")
+    # Native painting across sets (0.9.7): the layers one brush session targets share a link.
+    # Its own id, not the stroke key: a key alone routes a layer through the vector-stroke
+    # boundary even when it renders no strokes.
+    paint_link: bpy.props.StringProperty(
+        description="Id shared by the paint layers of other sets this layer paints together with")
     # Material module identity on an instance root folder (0.4.1). Metadata only:
     # ids inside the instance are "<module_instance>.<module id>".
     module_id: bpy.props.StringProperty(description="Module definition this folder is an instance of")

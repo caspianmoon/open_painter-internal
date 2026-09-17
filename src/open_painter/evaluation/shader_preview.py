@@ -19,7 +19,8 @@ _sessions = {}
 _busy = set()
 _batches = {}
 _deferred = {}   # session key -> {owner pointer: owner} touched by a stroke while frozen (0.9.0)
-_holds = set()   # session keys a gesture is rewriting (a layer drag): no repair until it ends (0.9.7)
+_holds = {}      # session key -> perf_counter of the last renewal by a gesture rewriting it (a layer drag) (0.9.7)
+HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
 
 def authoring_structure_changed(scene):
@@ -62,19 +63,49 @@ def hold(scene, ts):
     rebuild once for the final arrangement (or none when nothing changed).
     """
     key = key_for(scene, ts)
-    _holds.add(key)
+    _holds[key] = perf_counter()
     return key
+
+
+def renew_hold(key):
+    """Keep a gesture's hold alive: a drag renews on every event it handles.
+
+    The bound in ``HOLD_SECONDS`` is measured from the last renewal, so a slow
+    drag never expires while its modal is still receiving events, and one
+    whose modal was cancelled underneath it (a closed window, a file load)
+    expires on its own.
+    """
+    if key in _holds:
+        _holds[key] = perf_counter()
 
 
 def release_hold(key):
     if key in _holds:
-        _holds.discard(key)
+        del _holds[key]
         from . import cache
         cache.wake()
 
 
+def _held(key):
+    """Whether ``key`` is held, releasing a hold nobody renewed for ``HOLD_SECONDS``.
+
+    A modal the window manager cancels never reaches its own release; without
+    the bound the session would sit on its last attached shader forever
+    (``tick`` returns early) and a CPU set would stay QUEUED.
+    """
+    since = _holds.get(key)
+    if since is None:
+        return False
+    if perf_counter() - since < HOLD_SECONDS:
+        return True
+    logger.warning('Shader hold on %s outlived its gesture (%g s); releasing it',
+                   key, HOLD_SECONDS)
+    del _holds[key]
+    return False
+
+
 def held(scene, ts):
-    return key_for(scene, ts) in _holds
+    return _held(key_for(scene, ts))
 
 
 def requested(ts):
@@ -122,10 +153,14 @@ def texture_sets_changed(scene):
 
     Graphs and cooperative jobs compiled against the old addresses are dropped
     now, not when a tick first dereferences them; sessions rehydrate from their
-    materials. Sessions of a removed set are closed by ``prune``.
+    materials, and the rehydration re-requests the cache refreshes ``_release``
+    drops with a moved graph. Queued work keyed by id (cache refreshes of a
+    graph that stayed put, field requests, scheduled edge rebakes) survives:
+    the scheduler re-issues none of it. Sessions of a removed set are closed
+    by ``prune``.
     """
     from . import cache
-    cache.cancel_all()
+    cache.discard_evaluators()
     pointer = scene.as_pointer()
     for key, entry in _sessions.items():
         if key[0] != pointer or not entry.get('graph'):
@@ -482,7 +517,7 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
         # Frozen while painting: no repair, no isolated-input steps until release.
         _publish_status(scene, ts, entry)
         return current(scene, ts)
-    if not force_repair and not ignore_gate and key in _holds:
+    if not force_repair and not ignore_gate and _held(key):
         # Held by a gesture (see ``hold``): the last attached shader stays as is.
         return current(scene, ts)
     if (force_repair or not entry or not entry.get('graph') or not _alive(entry, ts)
@@ -519,6 +554,10 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
 def retry(scene, ts):
     entry = _sessions.get(key_for(scene, ts))
     if entry:
+        if entry.get('graph') is not None and _alive(entry, ts):
+            # A failed isolated input is inherited by every rebuilt graph until
+            # an edit re-identifies it; Retry alone requests it again.
+            entry['graph'].retry_failures()
         entry.update(error='', rebuild=True)
 
 

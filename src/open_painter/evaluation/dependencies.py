@@ -5,6 +5,7 @@ on each tile/timer tick. Projection acquires evaluated geometry in an owned
 scope; no evaluated mesh is retained. Modifier RNA also contributes to keys.
 """
 import hashlib
+import secrets
 import bpy
 import numpy as np
 from bpy.app.handlers import persistent
@@ -55,14 +56,14 @@ def uses_surface_effects(ts):
 
 def uses_placement(ts):
     """Consumers that read where the assigned objects stand: triplanar projection, strokes
-    and decals (authored in world space), live scene fields, normal-direction mesh masks,
-    custom graphs with a Position or Normal input. Physical sizes, seam maps, edge rebakes
-    and the other mesh masks and graphs see the surface alone."""
+    and decals (authored in world space), live scene fields, custom graphs with a Position
+    or Normal input. Physical sizes, seam maps, edge rebakes and mesh masks see the surface
+    alone: a normal-direction mask reads the objects' orientation, which its own selector
+    signature carries (``mesh_masks._orientation``), so a drag leaves the set's key alone."""
     from ..painting import decals
     from .custom_graph import reads_placement
     return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
         or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts)) \
-        or any(m.mesh.kind == 'NORMAL_DIRECTION' for m in mesh_masks(ts)) \
         or any(reads_placement(m.node_group) for m in graph_masks(ts))
 
 
@@ -111,10 +112,57 @@ _layer_digests = {}   # (mesh pointer, layer name) -> (mesh epoch, digest)
 # Attributes Subdivision and Bevel read besides positions and topology.
 _CREASE_LAYERS = ('crease_edge', 'crease_vert', 'bevel_weight_edge', 'bevel_weight_vert')
 
+# RNA exposes the deform layer only per vertex, so reading a vertex group's weights is a
+# Python loop over every vertex (about a second per million vertices with one group, more
+# on a rigged asset). Meshes above this many vertices identify their weights by the mesh
+# update epoch instead of a digest: a weight stroke or an Edit Mode exit then costs nothing
+# here, at the price of re-evaluating after an undo or a reopen rather than on a changed
+# weight alone.
+WEIGHT_HASH_BOUND = 250_000
+
+# Salts the epoch stand-ins: a persisted provenance carrying one must never compare
+# equal to the same epoch value of another session, whose weights it knows nothing of.
+# A session is one run of the epochs: ``clear`` restarts them at 0 for every mesh on a
+# load, undo or redo, so it draws a fresh salt too, else the provenance a big mesh got
+# before the reload (say ``epoch:<salt>:0``, untouched) would compare equal to the
+# reopened mesh at epoch 0, whose weights the file may have changed in between.
+_SESSION = secrets.token_hex(4)
+
+
+def weights_hashed(mesh):
+    """Whether the mesh is small enough for its vertex-group weights to be digested."""
+    return len(mesh.vertices) <= WEIGHT_HASH_BOUND
+
+
+def epoch_token(mesh):
+    """The stand-in for a weight digest above ``WEIGHT_HASH_BOUND``: the mesh's update epoch,
+    unique for the session and never equal to another session's, nor to one of the same
+    process before its last load, undo or redo (a provenance carrying it re-evaluates once
+    per such restart: the price of not looping over the vertices)."""
+    return 'epoch:%s:%d' % (_SESSION, mesh_epoch(mesh))
+
+
+def group_weights(obj, mesh, name):
+    """Per-vertex weights of the object's vertex group ``name`` read off ``mesh`` (its own
+    data, or an evaluated copy: those keep the deform layer), or None without such a group.
+    The per-vertex loop is the only way RNA offers; callers bound it by ``weights_hashed``
+    or cache the result per mesh epoch."""
+    group = obj.vertex_groups.get(name)
+    if group is None:
+        return None
+    weights = np.zeros(len(mesh.vertices), np.float32)
+    for vertex in mesh.vertices:
+        for entry in vertex.groups:
+            if entry.group == group.index:
+                weights[vertex.index] = entry.weight
+                break
+    return weights
+
 
 def _layer_digest(obj, name, weights):
     """Digest of one deform layer (vertex-group weights) or crease attribute of the mesh,
-    recomputed only after a reported geometry update; None when the mesh lacks it."""
+    recomputed only after a reported geometry update; None when the mesh lacks it. Above
+    ``WEIGHT_HASH_BOUND`` the weights are stood in for by the epoch token."""
     mesh = obj.data
     key = (mesh.as_pointer(), name)
     epoch = _mesh_epochs.get(mesh.as_pointer(), 0)
@@ -123,15 +171,9 @@ def _layer_digest(obj, name, weights):
         return cached[1]
     digest = None
     if weights:
-        group = obj.vertex_groups.get(name)
-        if group is not None:
-            values = np.zeros(len(mesh.vertices), np.float32)
-            for vertex in mesh.vertices:
-                for entry in vertex.groups:
-                    if entry.group == group.index:
-                        values[vertex.index] = entry.weight
-                        break
-            digest = hashlib.sha256(values.tobytes()).hexdigest()[:16]
+        if name in obj.vertex_groups:
+            digest = epoch_token(mesh) if not weights_hashed(mesh) \
+                else hashlib.sha256(group_weights(obj, mesh, name).tobytes()).hexdigest()[:16]
     else:
         attribute = mesh.attributes.get(name)
         if attribute is not None and attribute.data_type == 'FLOAT':
@@ -245,9 +287,118 @@ def placement_key(obj, full):
     return (tuple(round(float(v), 6) for v in matrix.to_scale()), matrix.to_3x3().determinant() < 0)
 
 
+# Modifiers whose evaluated surface follows another object's pose or the clock, which the
+# key cannot read off the owner: it hashes the base mesh and the modifier's RNA values,
+# not a bone's rotation, a hook target's drag, a simulation or point-cache state, an
+# emitter's particles or an Alembic, .mdd or .pc2 frame.
+_TIME_MODIFIERS = frozenset({'ARMATURE', 'HOOK', 'LATTICE', 'MESH_DEFORM', 'SURFACE_DEFORM', 'SHRINKWRAP',
+                             'WARP', 'CAST', 'SIMPLE_DEFORM', 'WAVE', 'CLOTH', 'SOFT_BODY',
+                             'MESH_SEQUENCE_CACHE', 'MESH_CACHE', 'FLUID', 'DYNAMIC_PAINT',
+                             'EXPLODE', 'PARTICLE_INSTANCE', 'NODES'})
+
+
+def _keyed(datablock):
+    """Whether the datablock's animation data (an action, drivers, NLA strips) can change it
+    with the frame. Layered actions of Blender 5 still hang off ``animation_data.action``."""
+    data = getattr(datablock, 'animation_data', None)
+    return data is not None and bool(data.action or len(data.drivers) or len(data.nla_tracks))
+
+
+def _modifier_objects(modifier):
+    """The objects a modifier reads besides its owner: a Boolean cutter, a Shrinkwrap or
+    Data Transfer target, a UV projector, a Geometry Nodes object input, the members of a
+    Boolean's cutter collection. Their animation moves the owner's evaluated surface just
+    as the owner's own would, and the owner's RNA says nothing about it."""
+    for prop in modifier.bl_rna.properties:
+        if prop.type != 'POINTER' or prop.identifier == 'rna_type':
+            continue
+        value = getattr(modifier, prop.identifier, None)
+        if isinstance(value, bpy.types.Object):
+            yield value
+        elif isinstance(value, bpy.types.Collection):
+            yield from value.all_objects
+    for projector in getattr(modifier, 'projectors', ()):
+        if projector.object is not None:
+            yield projector.object
+    if modifier.type != 'NODES':
+        return
+    inputs = getattr(getattr(modifier, 'properties', None), 'inputs', None)
+    for socket in (inputs.keys() if inputs is not None else ()):
+        if socket == '_RNA_UI':
+            continue
+        try:
+            fields = inputs[socket].to_dict()
+        except (AttributeError, TypeError):
+            continue
+        for value in fields.values():
+            if isinstance(value, bpy.types.Object):
+                yield value
+
+
+def _time_dependent(obj, seen):
+    """The object, its data or shape keys, or an object up its parent chain is animated, or
+    one of its modifiers deforms it from time or from another object that is. ``seen``
+    bounds the walk: a cutter that reads its owner back, or a target shared by every
+    assignment, is visited once."""
+    while obj is not None and obj.as_pointer() not in seen:
+        seen.add(obj.as_pointer())
+        data = obj.data
+        if _keyed(obj) or _keyed(data) or _keyed(getattr(data, 'shape_keys', None)):
+            return True
+        for modifier in obj.modifiers:
+            if modifier.type in _TIME_MODIFIERS \
+                    or (modifier.type == 'DISPLACE' and modifier.texture is not None):
+                return True
+            # A static cutter keeps the owner static; an animated one (its own keys, a
+            # parent's, a deformer of its own) carries the frame into the owner's key.
+            if any(_time_dependent(target, seen) for target in _modifier_objects(modifier)):
+                return True
+        obj = obj.parent
+    return False
+
+
+def animated(ts):
+    """Whether an assigned object's evaluated geometry can differ between frames. Only
+    then does the frame belong in the set's keys: a static prop would otherwise re-raster
+    every CPU boundary and invalidate the set on each scrub of the timeline."""
+    seen = set()
+    return any(_time_dependent(ref.object, seen) for ref in ts.assignments if ref.object is not None)
+
+
+# (*key_for(scene, ts), stable) -> (token, geometry key). The key is asked for once per binding
+# identity while a shader graph compiles, and the walk over modifiers, deform layers and
+# selectors is not free; it can only change with a reported depsgraph update, an authoring
+# edit or a frame. A key built under ``stable_keys`` names datablocks instead of tokenising
+# them (a persisted cache provenance), so the two forms are memoised apart.
+_keys = {}
+
+
+def _key_token(scene, ts):
+    # Assignments and the auto-rebake toggle carry no update callback, so an edit of theirs
+    # bumps neither the epoch nor the serial: they are read directly, they are cheap. The
+    # assigned meshes' own epochs come along: ``on_depsgraph`` moves them with the counter,
+    # but a stroke reported through ``mesh_epoch`` alone (as the suites simulate) must not
+    # be served the key of the mesh before it.
+    return (_epoch, ts.edit_serial, scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
+            tuple((ref.object.as_pointer() if ref.object is not None else None, ref.slot_index,
+                   _mesh_epochs.get(ref.object.data.as_pointer(), 0)
+                   if ref.object is not None and ref.object.type == 'MESH' else None)
+                  for ref in ts.assignments))
+
+
 def geometry_key(scene, ts):
+    """(resolution, time, objects, live fields, mesh-mask selectors, decal frames), or None
+    when nothing on the set reads the assigned geometry. ``time`` is the frame and subframe
+    for an animated set (``animated``) and None for a static one, so scrubbing leaves its
+    key, and every identity stamped with the key, alone."""
     if not uses_geometry(ts):
         return None
+    from .resource_keys import stable
+    slot = (*key_for(scene, ts), stable())
+    token = _key_token(scene, ts)
+    cached = _keys.get(slot)
+    if cached is not None and cached[0] == token:
+        return cached[1]
     objects = []
     placed = uses_placement(ts)
     for ref in ts.assignments:
@@ -264,7 +415,10 @@ def geometry_key(scene, ts):
     selectors = tuple(mesh_mask_signature(ts, m) for m in mesh_masks(ts))
     from ..painting import decals
     frames = tuple(decals.signature(layer) for layer in decals.layers_of(ts))
-    return (int(ts.resolution), scene.frame_current, scene.frame_subframe, tuple(objects), fields, selectors, frames)
+    time = (scene.frame_current, scene.frame_subframe) if animated(ts) else None
+    key = (int(ts.resolution), time, tuple(objects), fields, selectors, frames)
+    _keys[slot] = (token, key)
+    return key
 
 
 def remember(scene, ts, signature):
@@ -345,8 +499,8 @@ def refresh(scene):
             if previous is None or current is None:
                 invalidate(ts)
                 continue
-            if current[:6] == previous[:6] and current[6:] != previous[6:] \
-                    and _decal_shapes(current[6]) == _decal_shapes(previous[6]):
+            if current[:5] == previous[:5] and current[5:] != previous[5:] \
+                    and _decal_shapes(current[5]) == _decal_shapes(previous[5]):
                 # Only decal frames moved: the shader reads them natively, so a numeric
                 # notification (no structural repair per drag frame) keeps the session current
                 # while outputs and CPU caches are marked stale. (The Empty's name, display
@@ -359,8 +513,8 @@ def refresh(scene):
                 for layer in decals.layers_of(ts):
                     notify(layer, structural=False)
                 continue
-            targets_changed = current[:4] != previous[:4]
-            if targets_changed and field_jobs.active() and ts.bake.auto_edge_rebake and _mesh_edited(previous[3], current[3]):
+            targets_changed = current[:3] != previous[:3]   # resolution, time, objects
+            if targets_changed and field_jobs.active() and ts.bake.auto_edge_rebake and _mesh_edited(previous[2], current[2]):
                 from ..baking.bake_manager import owned_curvature
                 if owned_curvature(ts) is not None:
                     field_jobs.schedule_rebake(scene, ts)
@@ -370,7 +524,7 @@ def refresh(scene):
             # A mesh mask's membership, selection, attribute or mesh changed (its
             # signature carries the mesh, so an edit re-rasters it without
             # skipping the edge rebake and live-field requests above and below).
-            if current[5:] != previous[5:] or (targets_changed and (
+            if current[4:] != previous[4:] or (targets_changed and (
                     any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks))
                     or graph_masks(ts) or not live_fields(ts))):
                 invalidate(ts)
@@ -457,9 +611,12 @@ def image_written(image):
 
 
 def clear():
+    """What load_post, undo_post and redo_post run: the epochs restart for every mesh."""
+    global _SESSION
     from . import mesh_masks
     from ..painting import decals
-    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _candidates.clear()
+    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
+    _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
     decals.forget()      # which Empties this session's layers held: another file's layers start over
 
@@ -468,6 +625,8 @@ def prune(live):
     from . import mesh_masks
     for key in set(_known)-set(live):
         _known.pop(key, None)
+    for key in [k for k in _keys if k[:2] not in live]:
+        _keys.pop(key, None)
     meshes = {m.as_pointer() for m in bpy.data.meshes}
     for values in (_mesh_epochs, _mesh_fingerprints):
         for key in set(values)-meshes:

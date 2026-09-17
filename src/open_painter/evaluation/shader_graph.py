@@ -27,10 +27,11 @@ import numpy as np
 
 from ..constants import CHANNELS, DEFAULTS, OWNER
 from ..core.layer_stack import channel_for
-from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combine
+from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combine, srgb_encode
 from .shader_effects import apply_effect, is_pointwise, UnsupportedEffect
 from .shader_resources import Resources, RESOURCE, alive, values
 from .resource_keys import image_key
+from .image_snapshots import stored_encoding
 from .anchors import COMPOSITE_KINDS, channel_of
 from . import metrics
 
@@ -43,9 +44,16 @@ class RebuildRequired(Exception):
         self.scope = scope
 
 
+def _effect_image_signature(image):
+    # Which transfer effect_image compiles to sample the map as stored is wired
+    # into the graph, so a retagged or swapped image rebuilds rather than
+    # riding the image binding alone; None keeps "no image" distinct.
+    return stored_encoding(image) if image else None
+
+
 def _effects_signature(items):
     # A pointwise effect's enabled flag is a shader uniform, not structure.
-    return tuple((e.kind, None if is_pointwise(e.kind) else bool(e.enabled), bool(e.image), e.id)
+    return tuple((e.kind, None if is_pointwise(e.kind) else bool(e.enabled), _effect_image_signature(e.image), e.id)
                  for e in items)
 
 
@@ -68,7 +76,7 @@ def _mask_signature(m):
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
             m.reference_channel, m.reference_stage, m.reference_anchor, m.detail_height_anchor,
             m.detail_normal_anchor, m.effect.kind,
-            None if is_pointwise(m.effect.kind) else m.effect.enabled, bool(m.effect.image))
+            None if is_pointwise(m.effect.kind) else m.effect.enabled, _effect_image_signature(m.effect.image))
 
 
 def global_signature(ts):
@@ -539,7 +547,16 @@ class Graph(Math):
         return Signal(color, alpha)
 
     def effect_image(self, effect):
-        return self.image(effect.image, getter=lambda: effect.image, owner=effect).color
+        """A Normal Combine detail map sampled as stored, like the CPU's raw read.
+
+        An artist's image arrives sRGB-tagged (image.open's default for a PNG),
+        and the Image Texture node decodes it. Retagging the datablock would
+        also turn a Base Color fill of the same image raw, so the decode is
+        undone here per sample instead; a Non-Color or float map is data already.
+        """
+        image = effect.image
+        color = self.image(image, getter=lambda: effect.image, owner=effect).color
+        return srgb_encode(self, color) if stored_encoding(image) == 'SRGB' else color
 
     def mesh_map(self, kind):
         prop = next((m for m in self.ts.baked_maps if m.kind == kind and m.image), None)
@@ -612,9 +629,12 @@ class Graph(Math):
             return None
         from .dependencies import geometry_key
         stamp = geometry_key(self.scene, self.ts)
-        # Triplanar sources depend on assigned mesh geometry. Scene-field
-        # influencers have their own identities and must not evict those leaves.
-        return stamp[:4] if stamp is not None else None
+        # Resolution, time and the assigned objects: what a raster of the mesh reads.
+        # Scene-field influencers, mesh-mask selectors and decal frames have their
+        # own identities and must not evict those leaves. ``time`` is None unless the
+        # set is animated (dependencies.animated), so scrubbing a static prop keeps
+        # every stamped identity, and the CPU boundaries behind them, current.
+        return stamp[:3] if stamp is not None else None
 
     def _field(self, owner, kind=None, generator=False, rehydrate=None):
         """Preserve custom integer-hash noise as a separately cached scalar."""
@@ -2226,10 +2246,20 @@ class Graph(Math):
         for binding in unit.resource_bindings:
             if binding.owner_factory is not None:
                 binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+            held = binding.node.image
             # A finished image is adopted into this graph's entries (cache hit), so
             # a later re-identification leaves it to the eviction budget; the
             # previous graph closes its unfinished jobs, so those are queued again.
-            self._request(binding, binding.signature)
+            # A raster that failed is inherited with its error, not run again
+            # (0.9.8): it is retried only once an edit re-identifies the input
+            # or Retry forgets the failure, not on every structural rebuild.
+            self._request(binding, binding.signature, previous=previous)
+            if held is not None and held.get(RESOURCE) and held.users:
+                # The leaf the node still shows (the previous value, or an
+                # interrupted placeholder) follows the binding into this table,
+                # so it is released once the binding moves on. Never removed
+                # here: a rolled-back build hands it back to the node.
+                self.resources.adopt(held)
         self.bindings.update(unit.bindings)
         for binding in unit.bindings.values():
             self.owner_bindings[binding.owner.as_pointer()].append(binding)
@@ -2255,6 +2285,11 @@ class Graph(Math):
             unit.instance = instance
             for binding, node_image, pending in images:
                 binding.node.image, binding.pending_image = node_image, pending
+                if previous is not None:
+                    # An inherited failure returns to the table that still
+                    # serves the binding, or closing this candidate's table
+                    # would take its placeholder from under the previous graph.
+                    self.resources.restore(binding.signature, previous.resources)
         self._adopted = []
         if previous is not None and self._head[0] is self:
             self._head[0] = previous
@@ -2521,7 +2556,7 @@ class Graph(Math):
         corrections = self.update(check_structure=False) if self._reused else {}
         for binding in self.cache_bindings:
             self._reconcile_cache(binding)
-        from .references import warnings
+        from ..core.validation import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
         queued = sum(key in self.resources.used for key in self.resources.queue)
         self._last = {'parameter_changes': corrections.get('parameter_changes', []),
@@ -2617,7 +2652,7 @@ class Graph(Math):
         self.resources.used = self._used_resources()
         for binding in self.cache_bindings:
             self._reconcile_cache(binding)
-        from .references import warnings
+        from ..core.validation import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
         self._last = {'parameter_changes': [], 'invalidated_nodes': [], 'affected_channels': [],
                       'updated_bindings': 0, 'raster_boundaries_queued': len(self.resources.queue),
@@ -2933,12 +2968,15 @@ class Graph(Math):
     def pending_resources(self):
         return self.resources.pending
 
-    def _request(self, binding, signature):
+    def _request(self, binding, signature, previous=None):
         """Bind the cached image for ``signature``, or keep its placeholder pending.
-        Returns how many rasters this queued."""
+        Returns how many rasters this queued. ``previous`` is the graph the binding
+        is adopted from: a raster it saw fail is inherited instead of requested."""
         before = len(self.resources.queue)
-        image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
-                                       owner=binding.layer_id)
+        image = self.resources.inherit(signature, previous.resources) if previous is not None else None
+        if image is None:
+            image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
+                                           owner=binding.layer_id)
         if image.get('op_shader_resource_ready'):
             binding.node.image, binding.pending_image = image, None
         else:
@@ -2973,6 +3011,28 @@ class Graph(Math):
         """
         return next((entry.error for key, entry in self.resources.entries.items()
                      if entry.error and key in self.resources.used), '')
+
+    def retry_failures(self):
+        """Request every failed isolated input again (Retry, 0.9.8).
+
+        A failure is otherwise carried from graph to graph by the bindings that
+        show it, so only an edit that re-identifies the input retries its raster.
+        Returns how many inputs were requested again.
+        """
+        failed = self.resources.forget_failures()
+        if not failed:
+            return 0
+        requested = 0
+        for binding in self.resource_bindings:
+            # The failed placeholder nothing sampled went with its entry; one the
+            # node still shows is replaced once the new raster publishes.
+            dropped = self._placeholder_removed(binding)
+            image = binding.pending_image or binding.node.image
+            if dropped or (image is not None and image.get(RESOURCE) in failed):
+                self._request(binding, binding.identity())
+                requested += 1
+        self.resources.used = self._used_resources()
+        return requested
 
     def step_resources(self, budget=.006):
         for binding in self.resource_bindings:

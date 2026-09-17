@@ -49,6 +49,18 @@ def _selection_flags(obj):
     return flags
 
 
+def _base_face_count(obj):
+    """Face count of the base mesh, from the same source ``_selection_flags`` reads: in
+    Edit Mode the edit BMesh (``mesh.polygons`` lags behind unflushed edits). Only the
+    count: ``warnings`` runs on every panel redraw, and materialising the flags there
+    walked every BMesh face through Python (~0.5 s on a 1M-face mesh)."""
+    mesh = obj.data
+    if obj.mode == 'EDIT' and mesh.is_editmode:
+        import bmesh
+        return len(bmesh.from_edit_mesh(mesh).faces)
+    return len(mesh.polygons)
+
+
 def _selection_token(obj):
     flags = _selection_flags(obj)
     # A persisted provenance compares this token across sessions: no Python hash().
@@ -57,52 +69,150 @@ def _selection_token(obj):
 
 def _selected_faces(target):
     """One 0/1 float per evaluated polygon (the bake's ``polygon_flags`` contract),
-    or None when the modifier stack changes the face count."""
+    or None when the modifier stack changes the face count (``warnings`` reports it)."""
     flags = _selection_flags(target['object'])
     if len(flags) != len(target['mesh'].polygons):
         return None
     return flags.astype(np.float32)
 
 
+# Modifier kinds that only move vertices or edit non-topology data (weights, normals,
+# UVs): a face selection maps through them by index. Any other kind may change the
+# evaluated face count.
+DEFORMING = frozenset({
+    'ARMATURE', 'CAST', 'CLOTH', 'COLLISION', 'CORRECTIVE_SMOOTH', 'CURVE', 'DATA_TRANSFER',
+    'DISPLACE', 'DYNAMIC_PAINT', 'HOOK', 'LAPLACIANDEFORM', 'LAPLACIANSMOOTH', 'LATTICE',
+    'MESH_CACHE', 'MESH_DEFORM', 'NORMAL_EDIT', 'PARTICLE_SYSTEM', 'SHRINKWRAP',
+    'SIMPLE_DEFORM', 'SMOOTH', 'SOFT_BODY', 'SURFACE', 'SURFACE_DEFORM', 'UV_PROJECT',
+    'UV_WARP', 'VERTEX_WEIGHT_EDIT', 'VERTEX_WEIGHT_MIX', 'VERTEX_WEIGHT_PROXIMITY',
+    'VOLUME_DISPLACE', 'WARP', 'WAVE', 'WEIGHTED_NORMAL',
+})
+
+
+def _evaluated_face_count(obj, depsgraph, base):
+    """Face count of the evaluated mesh as the raster's ``to_mesh`` will see it. In Edit
+    Mode a stack that only deforms evaluates to a BMesh wrapper whose RNA arrays stay
+    empty until something materialises it: read as 0 faces, every such stack would be
+    named. ``to_mesh`` materialises the wrapper in place (the copy itself is dropped),
+    and RNA reports the real count until the next evaluation."""
+    evaluated = obj.evaluated_get(depsgraph)
+    count = len(evaluated.data.polygons)
+    if count == 0 and base and obj.mode == 'EDIT':
+        evaluated.to_mesh(depsgraph=depsgraph)
+        try:
+            count = len(evaluated.data.polygons)
+        finally:
+            evaluated.to_mesh_clear()
+    return count
+
+
+def _unmappable_modifier(obj, depsgraph):
+    """The modifier a face selection cannot be mapped through, or None when the evaluated
+    mesh keeps the base face count. The stack is not evaluated one modifier at a time
+    (a depsgraph per candidate): the first shown modifier that can change the face
+    count is named, the last shown one when every kind only deforms."""
+    base = _base_face_count(obj)
+    if _evaluated_face_count(obj, depsgraph, base) == base:
+        return None
+    # The viewport depsgraph (``depsgraph_for``) runs the viewport stack; in Edit Mode
+    # only the modifiers shown there.
+    shown = [modifier for modifier in obj.modifiers
+             if modifier.show_viewport and (obj.mode != 'EDIT' or modifier.show_in_editmode)]
+    if not shown:
+        return None
+    return next((modifier for modifier in shown if modifier.type not in DEFORMING), shown[-1])
+
+
+def warnings(ts):
+    """One entry per selection-driven mask and target whose modifier stack changes the
+    face count: such a mask reads as empty (``_selected_faces``), which an artist cannot
+    tell apart from an empty selection without a report. Cheap when no mask reads the
+    selection; otherwise one evaluated face count per target, through the same depsgraph
+    the raster reads."""
+    assigned = tuple(dict.fromkeys(ref.object for ref in getattr(ts, 'assignments', None) or ()
+                                   if ref.object and ref.object.type == 'MESH'))
+    if not assigned:
+        return []
+    wanted = []
+    for layer in ts.layers:
+        for mask in layer.masks:
+            if not mask.enabled or mask.source != 'MESH':
+                continue
+            selector = mask.mesh
+            if selector.kind == 'FACE_SELECTION':
+                wanted.append((layer, assigned))
+            elif selector.kind == 'UV_ISLAND' and selector.island < 0:
+                # Islands by selection read the chosen object's selection alone.
+                chosen = resolve(selector, 'object')
+                wanted.append((layer, assigned if chosen is None else tuple(o for o in assigned if o == chosen)))
+    if not wanted:
+        return []
+    from ..geometry.snapshots import depsgraph_for
+    scene = getattr(ts, 'id_data', None)
+    if not isinstance(scene, bpy.types.Scene):
+        scene = bpy.context.scene
+    try:
+        depsgraph = depsgraph_for(scene, assigned)
+    except ValueError:
+        return []   # no view layer evaluates a target: the raster reports that itself
+    unmappable = {obj: _unmappable_modifier(obj, depsgraph) for obj in assigned}
+    result = []
+    for layer, objects in wanted:
+        for obj in objects:
+            modifier = unmappable[obj]
+            if modifier is None:
+                continue
+            # Several targets may carry a same-named modifier: qualify it then.
+            name = modifier.name if len(assigned) == 1 else f'{obj.name}.{modifier.name}'
+            message = f'{layer.name}: face selection cannot be mapped through {name} (face count changed)'
+            if message not in result:
+                result.append(message)
+    return result
+
+
 _digests = {}   # (mesh pointer, kind, name) -> (mesh epoch, digest)
+_weights = {}   # (mesh pointer, group name) -> (mesh epoch, modifier signature, evaluated weights)
 
 
 def clear():
     """With the mesh epochs (``dependencies.clear``): a reopened file or an undo step
-    counts from zero again, so an epoch-tagged digest would answer for other values."""
+    counts from zero again, so an epoch-tagged digest (or weight array) would answer
+    for other values."""
     _digests.clear()
+    _weights.clear()
 
 
 def prune(meshes):
-    for key in tuple(_digests):
-        if key[0] not in meshes:
-            _digests.pop(key, None)
+    for store in (_digests, _weights):
+        for key in tuple(store):
+            if key[0] not in meshes:
+                store.pop(key, None)
 
 
 def _content_token(obj, kind, name):
     """The painted values a selector reads, as the session's mesh epoch (cheap, per
     process) or, for a persisted identity, a digest of the values themselves: a
-    cached layer's provenance must still compare equal after the file is reopened."""
-    from .dependencies import mesh_epoch
+    cached layer's provenance must still compare equal after the file is reopened.
+    Weights of a mesh above ``dependencies.WEIGHT_HASH_BOUND`` are never digested (a
+    per-vertex loop, seconds on a million vertices after every weight stroke): their
+    session-salted epoch token stands in, so such a provenance re-evaluates once after
+    a reopen instead of stalling the session."""
+    from .dependencies import mesh_epoch, epoch_token, group_weights, weights_hashed
     from .resource_keys import stable
     mesh = obj.data
     epoch = mesh_epoch(mesh)
     if not stable():
         return epoch
+    if kind == 'VERTEX_GROUP' and not weights_hashed(mesh):
+        return epoch_token(mesh)
     key = (mesh.as_pointer(), kind, name)
     cached = _digests.get(key)
     if cached is not None and cached[0] == epoch:
         return cached[1]
     digest = hashlib.sha256()
     if kind == 'VERTEX_GROUP':
-        group = obj.vertex_groups.get(name)
-        if group is not None:
-            weights = np.zeros(len(mesh.vertices), np.float32)
-            for vertex in mesh.vertices:
-                for entry in vertex.groups:
-                    if entry.group == group.index:
-                        weights[vertex.index] = entry.weight
-                        break
+        weights = group_weights(obj, mesh, name)
+        if weights is not None:
             digest.update(weights.tobytes())
     else:
         found = _attribute_values(obj, mesh, '.sculpt_face_set' if kind == 'FACE_SET' else name)
@@ -159,9 +269,21 @@ def signature(ts, mask):
                       tuple(_selection_token(o) for o in targets) if selector.island < 0 else None))
     elif kind == 'NORMAL_DIRECTION':
         parts.append((tuple(round(float(v), 6) for v in selector.direction), round(float(selector.angle), 6),
-                      round(float(selector.softness), 6),
-                      tuple(tuple(round(v, 6) for row in obj.matrix_world for v in row) for obj in targets)))
+                      round(float(selector.softness), 6), tuple(_orientation(obj) for obj in targets)))
     return tuple(parts)
+
+
+def _orientation(obj):
+    """What of the object's placement its world normals read: the normal matrix (the inverse
+    transpose of the 3x3 part, as ``snapshots`` applies it) scaled to unit length. Rotation,
+    mirroring, a non-uniform scale and shear all redirect the normals; a translation or a
+    uniform scale does not, and keying the full world matrix re-rastered the mask (and
+    re-keyed the set) on every drag of the asset."""
+    matrix = np.asarray(obj.matrix_world.to_3x3().inverted_safe().transposed(), np.float64)
+    length = float(np.linalg.norm(matrix))
+    if length > 0.:
+        matrix = matrix / length
+    return tuple(round(float(v), 6) + 0.0 for v in matrix.ravel())   # + 0.0: no -0.0 vs 0.0 split
 
 
 def _interpolate(weights, corner_values):
@@ -198,6 +320,26 @@ def _attribute_values(obj, mesh, name):
     return attribute.domain, values.astype(np.float32)
 
 
+def _evaluated_weights(obj, mesh, name):
+    """The group's weights on the evaluated mesh (it keeps the deform layer), read per
+    vertex once per mesh update and modifier stack: every strip, resolution and mask
+    that reads the group within one geometry state reuses the array rather than
+    looping over the vertices again (seconds on a large asset)."""
+    from .dependencies import mesh_epoch, modifier_signature, group_weights
+    if name not in obj.vertex_groups:
+        return None
+    key = (obj.data.as_pointer(), name)
+    # The evaluated weights also follow the stack (a Vertex Weight modifier, a Subdivision
+    # level), which a mesh update does not report: its signature is part of the stamp.
+    stamp = (mesh_epoch(obj.data), modifier_signature(obj))
+    cached = _weights.get(key)
+    if cached is not None and cached[:2] == stamp and len(cached[2]) == len(mesh.vertices):
+        return cached[2]
+    weights = group_weights(obj, mesh, name)
+    _weights[key] = (*stamp, weights)
+    return weights
+
+
 def _triangle_coverage(ts, mask, target):
     """(per-corner values (T, 3) | per-triangle values (T,)), for one evaluated target."""
     selector = mask.mesh
@@ -220,16 +362,9 @@ def _triangle_coverage(ts, mask, target):
         slots |= {ref.slot_index for ref in ts.assignments if ref.object == obj and ref.original_material == material}
         return np.isin(target['tri_material'], list(slots)).astype(np.float32)
     if kind == 'VERTEX_GROUP':
-        group = obj.vertex_groups.get(selector.attribute)
-        if group is None:
+        weights = _evaluated_weights(obj, mesh, selector.attribute)
+        if weights is None:
             return np.zeros(tris, np.float32)
-        weights = np.zeros(len(mesh.vertices), np.float32)
-        # Evaluated meshes keep the deform layer; read it per vertex.
-        for vertex in mesh.vertices:
-            for entry in vertex.groups:
-                if entry.group == group.index:
-                    weights[vertex.index] = entry.weight
-                    break
         return _point_values(target, weights)
     if kind == 'FACE_SET':
         found = _attribute_values(obj, mesh, '.sculpt_face_set')

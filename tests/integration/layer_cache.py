@@ -367,6 +367,42 @@ def run():
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
     print('LAYER_CACHE_SAVE_OK', flush=True)
 
+    # Adding or removing a set keeps the queued work of the others (0.9.7):
+    # only the CPU evaluator jobs read the relocated structs by address. The
+    # refresh of a moved graph is re-requested by the rehydration, a running
+    # field analysis returns to its queue, and the scheduled edge rebake stays.
+    identifier = ts.id
+    next(m for m in layer_by_id(ts, blue_id).masks if m.id == checker_id).strength = .32
+    assert layer_cache.pending(scene, ts, blue_id)
+    field_jobs._rebakes[(pointer, ts.id)] = monotonic()
+    field_jobs._requests[(pointer, ts.id, 'field-request')] = {'signature': 'request', 'since': monotonic()}
+    field_jobs._jobs[(pointer, ts.id, 'field-job')] = {'signature': 'job', 'steps': iter(()), 'progress': 0., 'name': 'Job'}
+    cache._jobs[(pointer, ts.id)] = ('BASE_COLOR', (strip for strip in ()))
+    for step in ('add', 'remove'):
+        if step == 'add':
+            second = sets.create(scene, 'Second set', 512)
+            second_id = second.id
+        else:
+            sets.remove(scene, next(i for i, t in enumerate(scene.open_painter.texture_sets) if t.id == second_id))
+        ts = next(t for t in scene.open_painter.texture_sets if t.id == identifier)
+        assert (pointer, ts.id) not in cache._jobs, f'the {step} kept a CPU evaluator job over the moved set'
+        assert (pointer, ts.id) in field_jobs._rebakes, f'the {step} dropped the scheduled edge rebake'
+        assert (pointer, ts.id, 'field-request') in field_jobs._requests, f'the {step} dropped a queued field analysis'
+        assert (pointer, ts.id, 'field-job') in field_jobs._requests and not field_jobs._jobs, \
+            f'the {step} did not return the running field analysis to its queue'
+        ready(scene, ts)   # the moved graph rehydrates and re-requests its stale rows
+        assert layer_cache.pending(scene, ts, blue_id), f'the {step} dropped the queued cache refresh'
+        assert states(scene, ts, blue_id)['BASE_COLOR'] == 'STALE'
+    for key in [k for k in field_jobs._requests if k[0] == pointer]:
+        field_jobs._requests.pop(key)
+    field_jobs._rebakes.pop((pointer, ts.id))
+    with metrics.Metrics() as observed:
+        layer_cache.flush(scene)
+    assert observed.report()['counters'].get('layer_cache_publications', 0) >= 1
+    ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    print('LAYER_CACHE_SET_CHANGE_OK', flush=True)
+
     def start_job(layer_id, mask_id, strength):
         """Edit a mask so a refresh is requested, then tick (one strip a time) until it starts."""
         next(m for m in layer_by_id(ts, layer_id).masks if m.id == mask_id).strength = strength
@@ -421,16 +457,52 @@ def run():
     ready(scene, ts)
     print('LAYER_CACHE_RETIRE_OK', flush=True)
 
-    # A running job of a layer set back to Live is dropped on the next tick
-    # instead of holding the scheduler until its strips are done.
+    # Back to Live (0.9.7): the switch releases the cache images (fake user
+    # dropped, the datablock kept for an undo and purged by the next save),
+    # forgets the rows' provenance and drops the running refresh; the rows
+    # themselves stay for the compiled bindings. Before, only Clear released
+    # them: a layer cached once carried its full-resolution images in the file
+    # for good.
     key = start_job(blue_id, checker_id, .65)
+    job = layer_cache._jobs[key]
+    retired = {r.channel: (r.image, r.image.name) for r in layer_by_id(ts, blue_id).cache if r.image is not None}
+    assert retired
     layer_by_id(ts, blue_id).cache_mode = 'LIVE'
+    assert key not in layer_cache._jobs and not layer_cache.pending(scene, ts, blue_id), \
+        'the switch to Live kept the refresh of a layer nobody samples'
+    assert len(layer_by_id(ts, blue_id).cache) == 8, 'the switch to Live reallocated the cache rows'
+    assert all(r.image is None and not r.provenance for r in layer_by_id(ts, blue_id).cache), \
+        'the switch to Live kept the cache images bound to the rows'
+    for image, name in retired.values():
+        assert bpy.data.images.get(name) is image and not image.use_fake_user and image.users == 1, \
+            'a retired cache image the sampler still reads must not be persisted'
+        assert image not in layer_cache._retired, 'the switch to Live queued a cache image for removal'
+    # A job the switch did not see (a layer removed around the engine) is dropped
+    # on the next tick instead of holding the scheduler until its strips are done.
+    layer_cache._jobs[key] = job
     assert not layer_cache.tick(scene, budget=0) and key not in layer_cache._jobs, 'an orphan job kept running'
+    ready(scene, ts)   # the rebuild compiles the layer live and lets go of the images
+    graph = shader_preview.ensure(scene, ts)
+    assert any(key[:3] == ('SRC', blue_id, 'BASE_COLOR') for key in graph.units), sorted(graph.units)
+    assert not any(json.loads(n['op_cache'])[0] == blue_id for n in cache_nodes(graph))
+    layer_cache.tick(scene)
+    # Never removed, only orphaned: the datablock (and its unpacked pixels) must
+    # outlive the switch for an undo, so the sweep is not allowed to take it.
+    for image, name in retired.values():
+        assert bpy.data.images.get(name) is image and image.users == 0 and not image.use_fake_user, \
+            f'the released cache image {name} was removed or is still bound'
+    # Cached again rebuilds from scratch: nothing trusts the provenance of an image that is gone.
     layer_by_id(ts, blue_id).cache_mode = 'CACHED'
     ready(scene, ts)
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'MISSING' and layer_cache.pending(scene, ts, blue_id), \
+        states(scene, ts, blue_id)
     layer_cache.flush(scene)
     ready(scene, ts)
-    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    assert all(v == 'CURRENT' for v in states(scene, ts, blue_id).values()), states(scene, ts, blue_id)
+    row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
+    assert row.image is not None and row.image.use_fake_user and tuple(row.image.size) == (512, 512) and row.provenance
+    assert row.image.get('open_painter_layer_cache') == blue_id
+    print('LAYER_CACHE_LIVE_RELEASE_OK', flush=True)
     # An explicit refresh runs one channel at a time: the next channel's buffer
     # is allocated only after the previous one has been published.
     alive = []
@@ -485,6 +557,40 @@ def run():
     assert all(v == 'CURRENT' for v in probe.cache_states().values()), probe.cache_states()
     assert any(n.image == row.image for n in cache_nodes(probe))
     probe.detach()
+    # Undoing the switch to Live brings the cache images back with their pixels:
+    # unpacked generated pixels do not survive a memfile undo of a removed
+    # datablock, so a removal here (immediate or by the sweep) would have bound
+    # the rows to blank images and left the shader sampling nothing.
+    identifier = ts.id
+    cached = {r.channel: (r.image.name, images.pixels(r.image).copy()) for r in layer_by_id(ts, blue_id).cache
+              if r.image is not None}
+    assert cached and any(pixels.any() for _, pixels in cached.values())
+    bpy.ops.ed.undo_push(message='cached')
+    layer_by_id(ts, blue_id).cache_mode = 'LIVE'
+    assert not layer_cache._retired
+    for name, _ in cached.values():
+        assert not bpy.data.images[name].use_fake_user and bpy.data.images[name].users == 1
+    layer_cache.tick(scene)
+    for name, _ in cached.values():
+        assert bpy.data.images.get(name) is not None, f'the released cache image {name} was removed'
+    bpy.ops.ed.undo_push(message='live')
+    assert bpy.ops.ed.undo() == {'FINISHED'}
+    scene = bpy.context.scene
+    ts = next(t for t in scene.open_painter.texture_sets if t.id == identifier)
+    assert layer_by_id(ts, blue_id).cache_mode == 'CACHED'
+    for channel, (name, pixels) in cached.items():
+        row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == channel)
+        image = bpy.data.images.get(name)
+        assert image is not None and row.image == image and row.provenance and image.use_fake_user, \
+            f'undo did not rebind the {channel} cache image'
+        assert image.has_data and np.array_equal(images.pixels(image), pixels), \
+            f'the {channel} cache image came back without its pixels'
+    with metrics.Metrics() as observed:
+        ready(scene, ts)
+    assert observed.report()['counters'].get('layer_cache_requests', 0) == 0, observed.report()['counters']
+    assert all(v == 'CURRENT' for v in states(scene, ts, blue_id).values()), states(scene, ts, blue_id)
+    row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
+    print('LAYER_CACHE_UNDO_RELEASE_OK', flush=True)
     # Save and reopen: the packed image survives and the cache is still current.
     path = ROOT / '.blender-test' / 'layer-cache.blend'
     identifier = ts.id

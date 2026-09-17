@@ -12,6 +12,7 @@ def contact_history(ts,field,start,end,step=1):
     scene=ts.id_data; old_frame=scene.frame_current; old_subframe=scene.frame_subframe
     objects=list(dict.fromkeys(ref.object for ref in ts.assignments if ref.object))
     if not objects: raise ValueError('Assign a source surface before offline analysis')
+    from ..geometry.snapshots import depsgraph_for
     topology={}
     n=int(field.resolution)
     duration=np.zeros((n,n),np.float32); proximity=np.zeros_like(duration)
@@ -19,8 +20,11 @@ def contact_history(ts,field,start,end,step=1):
     try:
         for frame in frames:
             scene.frame_set(frame)
+            # The layer the field's sampling (``compute``) evaluates the sources in; the
+            # first layer may exclude them and hand back the base mesh every frame.
+            depsgraph=depsgraph_for(scene,objects)
             for obj in objects:
-                evaluated=obj.evaluated_get(scene.view_layers[0].depsgraph)
+                evaluated=obj.evaluated_get(depsgraph)
                 mesh=evaluated.to_mesh()
                 try:
                     signature=(len(mesh.vertices),tuple(tuple(face.vertices) for face in mesh.polygons))

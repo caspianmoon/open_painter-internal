@@ -146,6 +146,37 @@ dents.add([0],1.0,'REPLACE'); bpy.context.view_layer.update()   # what a weight 
 assert not current(), 'painting the Displace weights changed the surface unnoticed'
 dents.remove([0]); bpy.context.view_layer.update()
 assert current()
+# Reading the weights is a Python loop over every vertex (seconds per million after every
+# stroke and Edit Mode exit): below dependencies.WEIGHT_HASH_BOUND the record digests them,
+# above it the mesh update epoch stands in, salted so no other session's record can match.
+import re
+from unittest.mock import patch
+from open_painter.evaluation import dependencies
+stroke=lambda weight: (dents.add([0],weight,'REPLACE'), bpy.context.view_layer.update())   # reported as a mesh update
+weights_of=lambda: next(e[2] for e in dependencies.mesh_inputs(twin) if e[0]=='vertex_group' and e[1]=='Dents')
+assert re.fullmatch('[0-9a-f]{16}', weights_of()), weights_of()
+with patch.object(dependencies, 'WEIGHT_HASH_BOUND', len(twin.data.vertices)-1), \
+     patch.object(dependencies, 'group_weights', side_effect=AssertionError('looped over the vertices of a large mesh')):
+    stroke(1.0); large=weights_of()
+    assert large==dependencies.epoch_token(twin.data)==f'epoch:{dependencies._SESSION}:{dependencies.mesh_epoch(twin.data)}', large
+    prop.provenance=record(ts,'CURVATURE'); assert current()
+    stroke(0.0)
+    assert not current(), 'a weight stroke on a large mesh changed the surface unnoticed'
+    with patch.object(dependencies, '_SESSION', 'other'):   # the same epoch value in another session
+        assert dependencies.epoch_token(twin.data)!=weights_of(), 'a record from another session matched the epoch'
+    # The same process after a load, undo or redo: dependencies.clear() restarts every mesh at
+    # epoch 0, so a record taken at epoch 0 (an untouched mesh) would answer for the reopened
+    # mesh, whose weights the file may have changed. The salt restarts with the epochs.
+    dependencies.clear()                                     # what load_post, undo_post and redo_post run
+    assert dependencies.mesh_epoch(twin.data)==0
+    untouched=dependencies.epoch_token(twin.data); prop.provenance=record(ts,'CURVATURE'); assert current()
+    dependencies.clear()
+    assert dependencies.mesh_epoch(twin.data)==0 and dependencies.epoch_token(twin.data)!=untouched, 'the salt survived the restarted epochs'
+    assert not current(), 'a large-mesh record from before a reload in the same process stayed current'
+    prop.provenance=record(ts,'CURVATURE'); assert current()   # re-evaluates once per restart, then settles
+stroke(1.0)
+assert re.fullmatch('[0-9a-f]{16}', weights_of()), 'the weights are digested again below the bound'
+dents.remove([0]); bpy.context.view_layer.update()
 twin.modifiers.remove(displace); twin.vertex_groups.remove(dents)
 subdivide=twin.modifiers.new('Subdivide','SUBSURF')
 prop.provenance=record(ts,'CURVATURE')

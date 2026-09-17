@@ -35,21 +35,35 @@ def _enabled_collections(layer_collection, found):
     return found
 
 
-def _enabled_in(layer, objects):
-    """The first object without an enabled base in ``layer``, or None.
+def _has_base_in(layer):
+    """Predicate: does an object have an enabled base in ``layer``?
 
     Read from the collection tree rather than ``ViewLayer.objects``, which lags behind an
     exclude toggle until something syncs the layer, and which still lists an object that is
-    disabled in viewports.
+    disabled in viewports. The tree is walked once here, not per object: ``evaluable`` and
+    the bake stages test every target of a set against it.
     """
     enabled = _enabled_collections(layer.layer_collection, set())
     master = layer.layer_collection.collection   # ``users_collection`` leaves the scene collection out
-    return next((obj for obj in objects if obj.hide_viewport or not (
-        obj.name in master.objects or any(owner in enabled for owner in obj.users_collection))), None)
+    return lambda obj: not obj.hide_viewport and (
+        obj.name in master.objects or any(owner in enabled for owner in obj.users_collection))
 
 
-def depsgraph_for(scene, objects):
-    """Depsgraph of the first view layer (the artist's own first) that evaluates every object.
+def _enabled_in(layer, objects):
+    """The first object without an enabled base in ``layer``, or None."""
+    has_base = _has_base_in(layer)
+    return next((obj for obj in objects if not has_base(obj)), None)
+
+
+def evaluable(scene, objects):
+    """The objects some view layer of ``scene`` gives an enabled base (cheap: no depsgraph)."""
+    tests = [_has_base_in(layer) for layer in scene.view_layers]
+    return [obj for obj in objects if any(has_base(obj) for has_base in tests)]
+
+
+def _evaluation(scene, objects):
+    """(view layer, its depsgraph) of the first layer (the artist's own first) that evaluates
+    every object.
 
     An object without an enabled base in a layer (excluded collection, disabled in viewports)
     is not evaluated there: ``evaluated_get`` hands back the original, or a copy nothing
@@ -68,10 +82,29 @@ def depsgraph_for(scene, objects):
                 depsgraph = bpy.context.evaluated_depsgraph_get()
             absent = next((obj for obj in objects if not obj.evaluated_get(depsgraph).is_evaluated), None)
             if absent is None:
-                return depsgraph
+                return layer, depsgraph
         missing = missing or absent
     raise ValueError(f'{missing.name} is not evaluated in any view layer of {scene.name} '
                      '(excluded collection or disabled in viewports).')
+
+
+def depsgraph_for(scene, objects):
+    """Depsgraph of the first view layer (the artist's own first) that evaluates every object.
+
+    Every reader of evaluated geometry for a texture set — the CPU reference, bakes and
+    their face maps, the doctor, diagnostics, offline analysis — goes through here (or
+    ``view_layer_for``) with the assigned targets in ``objects``, so face indices agree
+    between them: a per-layer exclusion must not hand one reader another evaluation than
+    the rest. Readers of other objects add the ``evaluable`` ones: a high-poly source or a
+    generated helper is disabled in viewports on purpose and is read from its original.
+    """
+    return _evaluation(scene, objects)[1]
+
+
+def view_layer_for(scene, objects):
+    """The view layer ``depsgraph_for`` evaluates ``objects`` in, for callers that stage
+    geometry under a context override rather than reading the depsgraph directly."""
+    return _evaluation(scene, objects)[0]
 
 
 class Target(dict):

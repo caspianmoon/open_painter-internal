@@ -5,19 +5,13 @@ from ..core.layer_stack import replaying
 
 
 def changed(self, context):
-    _detail_colorspace(self)
+    # A Normal Combine detail map is data whatever its colorspace tag: both
+    # evaluators read it as stored per sample (channel_eval.apply_effect and
+    # shader_graph.Graph.effect_image), so the artist's image is never retagged
+    # here; a Base Color fill of the same image keeps decoding it as colour.
     _changed(self, context, True)
     from .channel import _resolve_physical
     _resolve_physical(self)
-
-
-def _detail_colorspace(effect):
-    """A Normal Combine detail map is data: an sRGB tag (the default of an opened
-    PNG) would have the shader's Image Texture node decode it while the CPU
-    reference reads the stored values, so the two combines disagree."""
-    image = effect.image
-    if effect.kind == 'NORMAL_COMBINE' and image is not None and image.colorspace_settings.name != 'Non-Color':
-        image.colorspace_settings.name = 'Non-Color'
 
 
 def numeric(self, context):

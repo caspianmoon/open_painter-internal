@@ -9,7 +9,6 @@ slices. No effect wraps across row-tile boundaries.
 
 import numpy as np
 
-from ..core.image_manager import pixels
 from .blend_modes import sample_uv
 from .metrics import count, measured
 from ..texture_engine import filters, procedurals
@@ -159,7 +158,12 @@ def apply_effect(data, effect, seams=None):
         detail = getattr(effect, "image", None)
         if detail is None:
             raise ValueError("Normal Combine needs a detail normal texture.")
-        image = pixels(detail)[..., :3]
+        # A detail normal map is data: read as stored whatever the image's tag
+        # (an opened PNG arrives sRGB). The decision is per read, so the same
+        # image used as a colour fill elsewhere still decodes there; the shader
+        # re-encodes its sample to match (shader_graph.Graph.effect_image).
+        from .image_snapshots import read
+        image = read({}, detail, linear=False)[..., :3]
         if image.shape[:2] != source.shape[:2]:
             h, w = source.shape[:2]
             y, x = np.indices((h, w), dtype=np.float32)

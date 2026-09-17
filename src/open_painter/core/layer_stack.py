@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 
-from ..constants import CHANNELS, DEFAULTS
+from ..constants import CHANNELS, DEFAULTS, OWNER
 from ..utils.ids import new_id
 
 # Properties a getter/setter pair derives from another one: replaying them after
@@ -86,6 +86,33 @@ def parent(ts, layer, folder_id: str) -> None:
     invalidate(ts)
 
 
+def release_image(image) -> None:
+    """Let a managed image go without removing its datablock.
+
+    Unpacked generated pixels do not survive a memfile undo of a removed
+    datablock: Ctrl+Z after a rebake, a deleted layer or set, or a module
+    Replace brought the image back blank. Dropping the fake user instead keeps
+    the datablock (and its pixels) for an undo, while an image nothing binds
+    any more is neither packed by the save handler nor written into the file:
+    Blender purges it on the next save or reload. An image the artist picked
+    (no owner tag) or wired into their own material (a user) stays either way.
+    """
+    if image is None or not image.get(OWNER):
+        return
+    image.use_fake_user = False
+
+
+def release_images(layer) -> None:
+    """Release the painted images a layer alone owns: a paint layer's canvases and
+    its painted masks. Cache images and decal Empties have their own release."""
+    if layer.type == "PAINT":
+        for channel in layer.channels:
+            release_image(channel.image)
+    for mask in layer.masks:
+        if mask.source == "PAINT":
+            release_image(mask.image)
+
+
 def remove(ts, index: int) -> None:
     layer = ts.layers[index]
     for child in ts.layers:
@@ -95,6 +122,7 @@ def remove(ts, index: int) -> None:
     from ..painting.decals import release as release_decal
     release_layer(layer)
     release_decal(layer)
+    release_images(layer)
     ts.layers.remove(index)
     ts.active_layer = min(index, len(ts.layers) - 1)
     invalidate(ts)
@@ -135,6 +163,11 @@ def snapshot(source) -> dict:
 
 def restore(data: dict, target) -> None:
     kind = target.bl_rna.identifier
+    if kind == "OP_MeshSelector":
+        # A snapshot taken before angles became radians (a file the migration
+        # has not reached yet) would clamp 45 to pi and cover every face.
+        from ..properties.mesh_selector import degrees_to_radians
+        data = degrees_to_radians(data)
     for key, value in data.items():
         if (kind, key) in DERIVED:
             continue   # snapshots written before 0.9.7 still carry it
@@ -406,6 +439,7 @@ def remove_tree(ts, identifier):
         if ts.layers[i].id in identifiers:
             release_layer(ts.layers[i])
             release_decal(ts.layers[i])
+            release_images(ts.layers[i])
             ts.layers.remove(i)
     ts.active_layer = min(ts.active_layer, max(0, len(ts.layers) - 1))
     invalidate(ts)

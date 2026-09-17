@@ -115,6 +115,15 @@ rebaked = baked('AO')[..., 0]
 assert abs(rebaked[TRENCH].mean() - own_ao[TRENCH].mean()) < .08, rebaked[TRENCH].mean()
 assert rebaked[128 - 20:128 + 20, 128 - 20:128 + 20].min() < rebaked[256, 256] - .05
 print('BAKE_BACK panel rebake keeps own occlusion: PASS', flush=True)
+# A separate cage extrusion beyond the ray distance cannot reach the helpers, but the panel's
+# surface is a direct bake rather than a projection onto a copy of itself: its occlusion stays.
+ts.bake.separate_cage_distance, ts.bake.cage_extrusion = True, ts.bake.ray_distance * 4
+bake_manager.bake_selected(bpy.context, ts)
+extruded = baked('AO')[..., 0]
+assert abs(extruded[TRENCH].mean() - own_ao[TRENCH].mean()) < .08, extruded[TRENCH].mean()
+assert extruded[246:266, 246:266].min() > .9, extruded[246:266, 246:266].min()
+ts.bake.separate_cage_distance = False
+print('BAKE_BACK separate cage extrusion keeps own occlusion: PASS', flush=True)
 # Each bake realised the helper through an owned node tree; the stage removes them with
 # its copies instead of leaving zero-user trees in the Geometry Nodes picker (0.9.7).
 leaked = [g.name for g in bpy.data.node_groups if g.name.startswith('OP Realize Instances')]
@@ -137,5 +146,33 @@ for kind in ('NORMAL', 'AO'):
     assert not status_of(kind).startswith('Stale'), (kind, status_of(kind))
 assert next(bake_manager.bake_steps(bpy.context, ts)) == 'NORMAL'   # the preflight passes again
 assert np.abs(baked('NORMAL')[..., :2] - .5).max() > .1, 'Remove lost the baked relief'
+
+# --- a convex cube decorated by a helper alone bakes its own surface: nothing but the helper
+# occludes it (no coincident copy of itself), the helper is projected on top, and the surface
+# the helper sits on still darkens it (Cycles hides the active low; an unselected stand-in occludes).
+from open_painter.baking import cycles_baker
+bpy.ops.mesh.primitive_cube_add(size=2, location=(20, 0, 0))
+cube = bpy.context.object
+bpy.ops.mesh.primitive_plane_add(size=.3, location=(20.3, .3, 1.15), rotation=(0, np.radians(60), 0))
+ramp = bpy.context.object   # leans over the top face: a quarter of its hemisphere looks down at it
+ramp[manager.TAG] = 'INSTANCE_HELPER'
+cube_ts = sets.create(scene, 'Cube', 512); sets.assign(scene, cube_ts, cube)
+cube_ts.preview_backend = 'CPU'
+row = cube_ts.bake.high_objects.add(); row.object, row.name, row.target = ramp, ramp.name, cube
+cube_ts.bake.selected_to_active, cube_ts.bake.ray_distance, cube_ts.bake.ao_scope = True, .3, 'SET'
+bpy.context.view_layer.update()
+datablocks = (len(bpy.data.objects), len(bpy.data.meshes))
+cube_ao = images.pixels(cycles_baker.bake(bpy.context, cube_ts, 'AO'))[..., 0]
+cube_normal = images.pixels(cycles_baker.bake(bpy.context, cube_ts, 'NORMAL'))
+assert np.quantile(cube_ao, .5) > .995 and cube_ao.mean() > .97, (np.quantile(cube_ao, .5), cube_ao.mean())
+assert cube_ao.min() < .9, cube_ao.min()   # the ramp shades the face beneath it
+assert np.quantile(np.abs(cube_normal[..., :2] - .5).max(axis=-1), .5) < .02
+assert (len(bpy.data.objects), len(bpy.data.meshes)) == datablocks, 'the stage left its stand-in behind'
+# Under PAIR scope nothing shades the cube, and the only thing the ramp can see is the face
+# it leans over, which Cycles hides from the projection: the stand-in supplies its occlusion.
+cube_ts.bake.ao_scope = 'PAIR'
+pair_ao = images.pixels(cycles_baker.bake(bpy.context, cube_ts, 'AO'))[..., 0]
+assert np.quantile(pair_ao, .5) > .995 and pair_ao.min() < .9, (np.quantile(pair_ao, .5), pair_ao.min())
+print('BAKE_BACK convex cube self-bake with helper: PASS', flush=True)
 print('BAKE_BACK_PASS', flush=True)
 open_painter.unregister()

@@ -76,6 +76,51 @@ LayerEvaluator(scene).evaluate_texture_set(ts.id)
 np.testing.assert_allclose(images.pixels(output.image)[..., :3],.5,atol=1e-6)
 layer.masks.clear()
 stack.invalidate(ts)
+# The timer survives a raise inside the tick (0.9.8). Blender unregisters a
+# timer whose function raises and wake() refuses to revive one, so one bad
+# dependency refresh used to stop every live update until a restart. With the
+# timer registered the fault is reported and retried; a run of them backs off.
+from open_painter.evaluation import dependencies
+LayerEvaluator(scene).evaluate_texture_set(ts.id)   # a clean set: the recovered ticks write no status of their own
+scene.open_painter.status = ''
+bpy.app.timers.register(cache.tick, first_interval=1000, persistent=True)
+try:
+    def broken_refresh(_scene):
+        raise ValueError('Injected dependency fault')
+    with patch.object(dependencies, 'refresh', side_effect=broken_refresh) as refresh:
+        intervals = [cache.tick() for _ in range(cache.FAULT_BACKOFF + 2)]
+    assert refresh.call_count == len(intervals), 'a fault stopped the tick from retrying'
+    assert bpy.app.timers.is_registered(cache.tick), 'the scheduler timer died with the fault'
+    assert all(abs(i - cache.IDLE_INTERVAL) < 1e-9 for i in intervals[:cache.FAULT_BACKOFF - 1]), intervals
+    assert all(abs(i - cache.FAULT_INTERVAL) < 1e-9 for i in intervals[cache.FAULT_BACKOFF - 1:]), intervals
+    assert 'Injected dependency fault' in scene.open_painter.status, scene.open_painter.status
+    assert cache._fault_streak == len(intervals)
+    # Unpatched, the next tick recovers: the fault line is taken back and the
+    # streak resets so a later fault starts at the idle rate again.
+    interval = cache.tick()
+    assert interval is not None and interval <= cache.IDLE_INTERVAL, interval
+    assert cache._fault_streak == 0 and not cache._faults
+    assert 'Injected dependency fault' not in scene.open_painter.status, scene.open_painter.status
+    with patch.object(dependencies, 'refresh', side_effect=broken_refresh):
+        assert abs(cache.tick() - cache.IDLE_INTERVAL) < 1e-9
+    assert bpy.app.timers.is_registered(cache.tick)
+    cache.tick()
+    # A status written by something else after the fault is not taken back.
+    with patch.object(dependencies, 'refresh', side_effect=broken_refresh):
+        cache.tick()
+    scene.open_painter.status = 'Something the artist should still read'
+    cache.tick()
+    assert scene.open_painter.status == 'Something the artist should still read'
+finally:
+    bpy.app.timers.unregister(cache.tick)
+# Driven by hand (no timer to lose) the raise reaches the caller: tests must see crashes.
+with patch.object(dependencies, 'refresh', side_effect=broken_refresh):
+    try:
+        cache.tick()
+        raise AssertionError('an unregistered scheduler swallowed the fault')
+    except ValueError as exc:
+        assert 'Injected dependency fault' in str(exc)
+assert cache._fault_streak == 0
 # Saving drains the latest complete edit and cancels older preview buffers.
 cache._jobs[key] = ('ROUGHNESS', LayerEvaluator(scene).channel_steps(ts.id, 'ROUGHNESS'))
 next(cache._jobs[key][1])

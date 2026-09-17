@@ -11,6 +11,8 @@ rasters, which every set derives from its own UVs. The kernel is pure numpy
 import base64
 import numpy as np
 
+from ..evaluation import metrics
+
 SAMPLE_WIDTH = 13   # px py pz nx ny nz pressure radius tilt_x tilt_y tx ty tz
 CHUNK = 256
 MAX_PAIRS = 40_000_000   # texel × sample pairs evaluated at once
@@ -176,6 +178,7 @@ def _batches(uv, n):
 def _rasterise(stroke, n, entries):
     """(n, n) coverage of one stroke over the evaluated ``entries`` of a set."""
     from ..geometry.uv_rasterizer import interpolate, rasterize
+    metrics.count('stroke_rasterisations')
     samples = unpack_samples(stroke.samples)
     result = np.zeros((n, n), np.float32)
     covered = np.zeros((n, n), bool)
@@ -241,6 +244,12 @@ def _expand(compact, y0, y1, n):
     return rows
 
 
+def _key(ts, stroke, n, resources):
+    """Memo key of one stroke's raster: (stroke revision, n, the set's geometry stamp)."""
+    stamp = getattr(resources, 'geometry_stamp', None) if resources is not None else None
+    return ('stroke', ts.id, stroke.id, stroke.revision, n, repr(stamp))
+
+
 def rasters(ts, strokes, n, resources=None, cache=None):
     """Compact coverage of each stroke on one texture set, memoised per (stroke revision, n, geometry).
 
@@ -249,8 +258,7 @@ def rasters(ts, strokes, n, resources=None, cache=None):
     keeps the rasters its every strip reads when the shared allowance evicts them."""
     from contextlib import nullcontext
     from ..geometry.snapshots import targets
-    stamp = getattr(resources, 'geometry_stamp', None) if resources is not None else None
-    keys = [('stroke', ts.id, stroke.id, stroke.revision, n, repr(stamp)) for stroke in strokes]
+    keys = [_key(ts, stroke, n, resources) for stroke in strokes]
     found = {}
     for key in keys:
         if cache is not None and key in cache:
@@ -275,13 +283,30 @@ def coverage(ts, stroke, n, resources=None):
     return _expand(rasters(ts, [stroke], n, resources)[0], 0, n, n)
 
 
-def touches(ts, stroke, n, resources=None):
-    """Whether the stroke marks any texel of the set at resolution ``n``.
+def marks(raster):
+    """Whether a compact raster covers any texel.
 
-    Read off the compact raster: a miss compacts to zero rows, and expanding a
+    Read off the compact form: a miss compacts to zero rows, and expanding a
     4k canvas only to ask ``any()`` of it would cost more than the raster."""
-    kind, _, data, *_ = rasters(ts, [stroke], n, resources)[0]
+    kind, _, data, *_ = raster
     return kind == 'texels' or len(data) > 0
+
+
+def touches(ts, stroke, n, resources=None):
+    """Whether the stroke marks any texel of the set at resolution ``n``."""
+    return marks(rasters(ts, [stroke], n, resources)[0])
+
+
+def adopt(ts, stroke, n, resources, raster):
+    """Memoise a compact ``raster`` of the stroke under the key ``resources`` stamps it with now.
+
+    A set carries a geometry stamp only while something on it reads the assigned
+    geometry, and the evaluation keys stroke rasters under that stamp: a raster
+    built to decide whether a stroke links the set (which reads no geometry until
+    it is linked) would be keyed under no stamp at all, and the first evaluation
+    of the linked set would build the same raster again. Linking and adopting
+    happen in one call, so the raster describes the geometry the stamp does."""
+    resources[_key(ts, stroke, n, resources)] = raster
 
 
 def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache=None):

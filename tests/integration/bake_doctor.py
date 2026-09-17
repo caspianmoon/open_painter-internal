@@ -198,6 +198,64 @@ plain = doctor.examine(ts, 'FULL')
 assert all(f.faces for f in plain.findings if f.object_name == 'Bolt_low' and f.check == 'coverage'), plain.findings
 print('BAKE_DOCTOR_TOPOLOGY_OK', flush=True)
 
+# The doctor reads the layer the CPU reference evaluates the targets in (0.9.8). A layout/
+# texturing split excludes the bolt from the first view layer; the artist works in the second.
+# The first layer evaluated the excluded bolt to its base mesh, so the mirrored target looked
+# unmodified and evaluated face indices were offered as base faces.
+from open_painter.baking import diagnostics
+props = bpy.data.collections.new('Props')
+scene.collection.children.link(props)
+for owner in list(bolt_low.users_collection):
+    owner.objects.unlink(bolt_low)
+props.objects.link(bolt_low)
+texturing = scene.view_layers.new('Texturing')
+scene.view_layers[0].layer_collection.children['Props'].exclude = True
+bpy.context.window.view_layer = texturing
+mirror = bolt_low.modifiers.new('Mirror', 'MIRROR')
+assert doctor._base_topology(ts)['Bolt_low'] is False, 'the mirrored bolt evaluates in the artist\'s layer'
+split = doctor.examine(ts, 'FULL')
+gated = [f for f in split.findings if f.object_name == 'Bolt_low' and f.check in {'uvs', 'coverage'}]
+assert any('Stacked' in f.message and f.check == 'uvs' for f in gated), gated
+assert all(not f.faces and 'not selectable' in f.message for f in gated), gated
+assert not any('skipped' in f.message for f in split.findings), split.findings
+# The diagnostics' own face selection refuses those indices the same way.
+counts, skipped = diagnostics.select_faces(ts, [diagnostics.Issue('INFO', 'planted', 'Bolt_low', (0, 1))])
+assert skipped == ['Bolt_low'] and not counts, (counts, skipped)
+# The artist's layer excludes the bolt but the other one evaluates it: that layer serves both.
+scene.view_layers[0].layer_collection.children['Props'].exclude = False
+texturing.layer_collection.children['Props'].exclude = True
+assert doctor._base_topology(ts)['Bolt_low'] is False
+bolt_low.modifiers.remove(mirror)
+assert doctor._base_topology(ts)['Bolt_low'] is True
+# ``evaluable`` keeps an object some layer gives an enabled base and drops one no layer does
+# (excluded everywhere, or disabled in viewports), walking each layer's collection tree
+# once rather than once per object: the bake stages and validation call it per texture set.
+from open_painter.geometry import snapshots
+walks = []                                          # root walks; the recursion re-enters the global
+tree_walk = snapshots._enabled_collections
+snapshots._enabled_collections = lambda layer_collection, found: (
+    layer_collection.collection == scene.collection and walks.append(layer_collection)) or tree_walk(layer_collection, found)
+try:
+    assert snapshots.evaluable(scene, [low, bolt_low, ring_low, high]) == [low, bolt_low, ring_low, high]
+    assert len(walks) == len(scene.view_layers) == 2, len(walks)
+    scene.view_layers[0].layer_collection.children['Props'].exclude = True
+    high.hide_viewport = True
+    assert snapshots.evaluable(scene, [low, bolt_low, ring_low, high]) == [low, ring_low]
+    assert snapshots._enabled_in(texturing, [low, bolt_low]) == bolt_low
+    scene.view_layers[0].layer_collection.children['Props'].exclude = False
+    high.hide_viewport = False
+    assert snapshots.evaluable(scene, [bolt_low, high]) == [bolt_low, high]
+finally:
+    snapshots._enabled_collections = tree_walk
+texturing.layer_collection.children['Props'].exclude = False
+bpy.context.window.view_layer = scene.view_layers[0]
+scene.view_layers.remove(texturing)
+props.objects.unlink(bolt_low)
+scene.collection.objects.link(bolt_low)
+scene.collection.children.unlink(props)
+bpy.data.collections.remove(props)
+print('BAKE_DOCTOR_VIEW_LAYER_OK', flush=True)
+
 # The cage check is bounded like the other per-face checks: above LARGE_MESH faces at render
 # level the pre-bake tier defers it to Full Check, from the base-mesh estimate or the
 # evaluated count, instead of casting one Python ray per render-subdivided vertex.

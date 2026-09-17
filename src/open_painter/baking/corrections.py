@@ -438,12 +438,14 @@ def update_overlay(context, ts):
     if not rasters:
         return None
     from .pairing import groups
+    from ..geometry.snapshots import depsgraph_for
     try:
         parts = groups(ts, validate_cages=False)
+        # The layer the rasters were painted against; a low no layer evaluates leaves the
+        # overlay off rather than raising out of the stroke scheduler.
+        depsgraph = depsgraph_for(scene, [part.low for part in parts])
     except ValueError:
         return None
-    with context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        depsgraph = context.evaluated_depsgraph_get()
     created = []
     for part in parts:
         evaluated = part.low.evaluated_get(depsgraph)
@@ -493,18 +495,21 @@ def remove_overlay(scene, ts=None):
 
 # ---- region rebake -----------------------------------------------------------
 
-def face_map(context, ts):
+def face_map(context, ts, flush=False):
     """Per assigned object: (face id raster at the set resolution, polygon count) of the target
     as the bake stages it — render modifier visibility and render subdivision levels — so the
-    ids address the faces ``BakeStage.restrict`` keeps."""
+    ids address the faces ``BakeStage.restrict`` keeps. ``flush`` as in ``rebake_region``."""
     from .render_geometry import scope
-    from ..geometry.snapshots import _triangle_arrays
+    from ..geometry.snapshots import _triangle_arrays, view_layer_for
     from ..geometry.uv_rasterizer import rasterize
     n = int(ts.resolution)
     lows = sorted({ref.object for ref in ts.assignments if ref.object}, key=lambda obj: obj.name_full)
     result = {}
     scene = ts.id_data
-    with context.temp_override(scene=scene, view_layer=scene.view_layers[0]), scope(context, lows) as frozen:
+    # The layer the corrections were painted against (``snapshots.targets``), not the first:
+    # ids from another evaluation of the lows would name other faces than the dirty texels.
+    with context.temp_override(scene=scene, view_layer=view_layer_for(scene, lows)), \
+            scope(context, lows, required=lows, flush=flush) as frozen:
         for obj in lows:
             mesh = frozen[obj].data
             uv_layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
@@ -582,12 +587,17 @@ def remember(ts, kind):
     _baked.setdefault((ts.id_data.as_pointer(), ts.id), {})[kind] = record
 
 
-def rebake_region(context, ts, kinds=None):
+def rebake_region(context, ts, kinds=None, flush=False):
     """Rebake only the faces whose corrections changed since the last bake, into the existing maps.
 
     Returns {kind: faces rebaked}; a kind without a previous bake record, with
     a map of another size, or whose staged topology no longer matches the face
     map is baked fully instead (-1).
+
+    ``flush`` loads the targets' Edit Mode geometry into their datablocks before the face
+    map and the bakes stage them (``render_geometry.flush_edit_meshes``). The operator
+    passes it; the stroke-driven rebake the scheduler runs from its timer does not, so a
+    timer never flushes a mesh the artist is editing.
     """
     from .cycles_baker import bake, bake_faces
     from .bake_manager import register_map
@@ -597,7 +607,7 @@ def rebake_region(context, ts, kinds=None):
     kinds = [k for k in (kinds or ('NORMAL', 'AO')) if getattr(settings, k.lower())]
     result = {}
     n = int(ts.resolution)
-    maps = face_map(context, ts)
+    maps = face_map(context, ts, flush=flush)
     polygons = {obj: count for obj, (_, count) in maps.items()}
     for kind in kinds:
         prop = next((m for m in ts.baked_maps if m.kind == kind and m.image), None)
@@ -618,11 +628,11 @@ def rebake_region(context, ts, kinds=None):
                 result[kind] = 0
                 continue
             try:
-                fresh = bake_faces(context, ts, kind, regions, polygons)
+                fresh = bake_faces(context, ts, kind, regions, polygons, flush=flush)
             except TopologyMismatch:
                 fresh = None
         if fresh is None:
-            image = bake(context, ts, kind)
+            image = bake(context, ts, kind, flush=flush)
             register_map(ts, kind, image)
             result[kind] = -1
             continue

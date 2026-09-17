@@ -10,16 +10,20 @@ class TopologyMismatch(ValueError):
 
 
 class BakeStage:
-    def __init__(self, context, ts, groups, image, scratch):
+    def __init__(self, context, ts, groups, image, scratch, flush=False):
         self.context, self.ts, self.groups = context, ts, groups
         self.image, self.scratch = image, scratch
+        # Whether the originals' edit meshes are flushed before staging: only a bake a user
+        # action started (``render_geometry.flush_edit_meshes``), never the scheduler's.
+        self.flush = flush
         self.scene = None
         self.world = None
         self.objects, self.meshes, self.materials = [], [], []
         self.node_groups = []   # the realise trees generated helpers are staged with
         self.copies = {}
         self.cages = {}
-        self.own_sources = {}
+        # Occluder stand-ins for lows Cycles hides while helpers project onto them (``standin``).
+        self.standins = {}
 
     def prepare(self):
         if self.context.scene != self.ts.id_data:
@@ -42,7 +46,8 @@ class BakeStage:
                                       for obj in (group.low, *group.sources, group.cage) if obj))
         from .render_geometry import objects
         from .cages import topology_signature
-        self.copies = objects(self.context, originals, self.scene, self.objects, self.meshes, self.node_groups)
+        self.copies = objects(self.context, originals, self.scene, self.objects, self.meshes, self.node_groups,
+                              flush=self.flush)
         for group in self.groups:
             target = self.copies[group.low]
             if group.cage and topology_signature(target.data) != topology_signature(self.copies[group.cage].data):
@@ -61,23 +66,38 @@ class BakeStage:
                 node.image = self.image if index in assigned else self.scratch
                 material.node_tree.nodes.active = node
                 target.data.materials[index] = material
-        from ..geometry_effects.manager import TAG
-        for group in self.groups:
-            if group.sources and all(obj.get(TAG) == 'INSTANCE_HELPER' for obj in group.sources):
-                # Generated helpers decorate a low that has no high-poly of its own (Bake Back on a
-                # set that baked from itself): the low is the active target, never a hit, so every
-                # texel outside a helper would keep the neutral default and the low's own
-                # occlusion would be lost. A copy of the target is projected alongside them.
-                target = self.copies[group.low]
-                own = target.copy()
-                own.data = target.data.copy()
-                own.data.materials.clear()
-                self.scene.collection.objects.link(own)
-                self.objects.append(own)
-                self.meshes.append(own.data)
-                self.own_sources[group.low] = own
         self.scene.view_layers[0].update()
         return self
+
+    @staticmethod
+    def self_baked(group, sources=None):
+        """Whether the low bakes its own surface: no high-poly, or only generated helpers.
+
+        Generated helpers (Bake Back) decorate a low that has no high-poly of its own; they
+        are projected on top of the low's direct bake rather than standing in for it.
+        """
+        from ..geometry_effects.manager import TAG
+        sources = group.sources if sources is None else sources
+        return all(obj.get(TAG) == 'INSTANCE_HELPER' for obj in sources)
+
+    def standin(self, group):
+        """An unselected copy of the target that occludes while helpers project onto it.
+
+        Cycles hides the active object from rays during a selected-to-active bake, so the
+        occlusion a bolt or weld receives from the surface it sits on would be lost. The copy
+        is never a projection source (no hit at the ray-distance boundary) and is shown only
+        for that pass, so the target never self-occludes against it.
+        """
+        if group.low not in self.standins:
+            target = self.copies[group.low]
+            own = target.copy()
+            own.data = target.data.copy()
+            own.data.materials.clear()
+            self.scene.collection.objects.link(own)
+            self.objects.append(own)
+            self.meshes.append(own.data)
+            self.standins[group.low] = own
+        return self.standins[group.low]
 
     def restrict(self, group, faces, polygons=None):
         """Route every face of the target copy outside ``faces`` to the scratch image.
@@ -114,20 +134,29 @@ class BakeStage:
         self.cages[group.low] = cage
 
     @contextmanager
-    def target(self, group, kind, sources=None, ao_scope=None):
+    def target(self, group, kind, sources=None, ao_scope=None, project=None):
+        """Select and show the objects of one bake pass of ``group``.
+
+        ``project`` is whether this pass is selected-to-active (default: whenever there are
+        sources); a direct pass selects the target alone. A projecting pass whose sources
+        are only generated helpers also shows the target's occluder stand-in.
+        """
         layer = self.scene.view_layers[0]
         target = self.copies[group.low]
-        sources = [self.copies[obj] for obj in (group.sources if sources is None else sources)]
-        if group.low in self.own_sources:
-            sources.append(self.own_sources[group.low])
-        selected = [target, *sources]
+        sources = group.sources if sources is None else sources
+        project = bool(sources) if project is None else project
+        selected = [target, *(self.copies[obj] for obj in sources)] if project else [target]
         visible = set(selected)
+        if kind == 'AO' and project and sources and self.self_baked(group, sources):
+            visible.add(self.standin(group))
         if kind == 'AO' and (ao_scope or self.ts.bake.ao_scope) == 'SET':
-            # Assembly contact uses original positions and excludes unrelated
-            # scene objects. High-poly parts occlude high-to-low bakes.
-            visible.update(self.copies[obj] for part in self.groups
-                           for obj in (part.sources if self.ts.bake.selected_to_active else (part.low,)))
-            visible.update(self.own_sources.values())
+            # Assembly contact uses original positions and excludes unrelated scene objects.
+            # High-poly parts occlude high-to-low bakes; a part baked from itself (no high-poly,
+            # or helpers only) is its own low, with its helpers.
+            for part in self.groups:
+                visible.update(self.copies[obj] for obj in part.sources)
+                if self.self_baked(part):
+                    visible.add(self.copies[part.low])
         for obj in self.objects:
             obj.hide_render = obj not in visible
             obj.select_set(obj in selected, view_layer=layer)
@@ -159,8 +188,8 @@ class BakeStage:
 
 
 @contextmanager
-def prepared(context, ts, groups, image, scratch):
-    stage = BakeStage(context, ts, groups, image, scratch)
+def prepared(context, ts, groups, image, scratch, flush=False):
+    stage = BakeStage(context, ts, groups, image, scratch, flush)
     try:
         yield stage.prepare()
     finally:

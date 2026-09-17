@@ -3,7 +3,9 @@
 Helpers (displaced copies, instanced bolts, stitches, welds…) are staged as
 high-poly sources paired to their source object for one cooperative bake of
 the existing NORMAL/AO pipeline; the set's bake settings are restored
-afterwards, and the helpers can be kept, hidden or removed.
+afterwards, and the helpers can be kept, hidden or removed. A low whose only
+sources are helpers bakes its own surface directly before they project onto
+it (``cycles_baker.run_pass``), so its relief and occlusion survive the bake.
 """
 from contextlib import contextmanager
 

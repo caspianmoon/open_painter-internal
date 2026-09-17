@@ -151,6 +151,8 @@ def raster(ts, mask, n):
         if override is not None:
             override.__enter__()
         try:
+            # The evaluation tick and layer-cache jobs raster from a timer: never flush the
+            # edit meshes here (``render_geometry.flush_edit_meshes``), the datablock is staged.
             with prepared(context, ts, parts, image, scratch) as stage:
                 settings = stage.scene.render.bake
                 settings.target = 'IMAGE_TEXTURES'

@@ -67,7 +67,7 @@ class OP_OT_bake_correction(SafeOperator, bpy.types.Operator):
             corrections.end_brush(context)
             scene.open_painter.status = 'Bake correction session ended'
         elif self.action == 'REBAKE_REGION':
-            result = corrections.rebake_region(context, ts)
+            result = corrections.rebake_region(context, ts, flush=True)
             faces = sum(max(v, 0) for v in result.values())
             full = [k for k, v in result.items() if v < 0]
             scene.open_painter.status = (f'Rebaked {faces} face(s)' + (f'; full bake of {", ".join(full)}' if full else '')
@@ -82,7 +82,7 @@ class OP_OT_bake_correction(SafeOperator, bpy.types.Operator):
             context.window_manager.progress_begin(0, len(kinds))
             try:
                 for index, kind in enumerate(kinds):
-                    register_map(ts, kind, bake(context, ts, kind))
+                    register_map(ts, kind, bake(context, ts, kind, flush=True))
                     context.window_manager.progress_update(index + 1)
             finally:
                 context.window_manager.progress_end()

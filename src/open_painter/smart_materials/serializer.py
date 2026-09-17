@@ -70,6 +70,10 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         values.pop('cache', None)
         values['cache_mode'] = 'LIVE'
         values['bypass'] = False
+        # A paint link pairs this layer with layers of other sets in this project; the
+        # imported copy paints on its own. The stroke key stays: the loader re-keys it
+        # together with the strokes saved below.
+        values['paint_link'] = ''
         for mask in values.get('masks', []):
             if 'mesh' in mask:
                 # Mesh masks re-link by name on import; datablock pointers are not portable.
@@ -91,6 +95,31 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                          provenance='', error='')
         return encode(values, layer.name)
 
+    def stroke_data(layers):
+        """The project's vector strokes the saved layers and Vector Strokes masks render.
+
+        Strokes belong to the project, keyed by the layers that render them: a
+        document without them imports a stroke layer that shows nothing (and
+        the next paint session retires its idle key for good). Saved in stack
+        order under their own keys; the loader re-keys them with the layers.
+        """
+        from ..painting.strokes import strokes_for
+        project = ts.id_data.open_painter
+        keys = []
+        for layer in layers:
+            for key in (layer.stroke_key, *(mask.stroke_key for mask in layer.masks if mask.source == 'STROKES')):
+                if key and key not in keys:
+                    keys.append(key)
+        records = []
+        for key in keys:
+            for stroke in strokes_for(project, key):
+                values = snapshot(stroke)
+                # Identity and UI state are the project's; the loader issues new ids.
+                for field in ('id', 'revision', 'selected'):
+                    values.pop(field, None)
+                records.append(encode(values, f'{stroke.name} (stroke)'))
+        return records
+
     state=json.loads(ts.material_state_data or '{}')
     live={layer.id for layer in ts.layers}
     if state:
@@ -99,6 +128,7 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         state['overrides']=[k for k in state.get('overrides',[]) if k in live]
     if root_id is None:
         layers = [layer_data(layer) for layer in ts.layers]
+        strokes = stroke_data(ts.layers)
     else:
         from . import modules
         from ..utils.ids import new_id
@@ -133,6 +163,7 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                     if not effect.id:
                         effect.id = new_id()
         layers = [layer_data(layer) for layer in members]
+        strokes = stroke_data(members)
         layers = modules.remap(layers, modules.denamespace_mapping(layers, root.module_instance))
         plain_root = modules.plain_id(root_id, root.module_instance)
         for layer in layers:
@@ -152,6 +183,8 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
     }
     if root_id is not None:
         data['module'] = module
+    if strokes:
+        data['strokes'] = strokes
     temp_scene = bpy.data.scenes.new("OP Asset Encoding")
     try:
         fmt = temp_scene.render.image_settings

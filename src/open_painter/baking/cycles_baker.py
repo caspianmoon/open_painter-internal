@@ -92,25 +92,31 @@ def bevel_graph(material, kind, radius, samples):
     links.new(shader.outputs[0], output.inputs['Surface'])
 
 
-def bake(context: bpy.types.Context, ts, kind: str) -> bpy.types.Image:
-    """Bake one map for every part of the set; painted corrections shape the cage and passes."""
-    image = _bake(context, ts, kind)
+def bake(context: bpy.types.Context, ts, kind: str, flush=False) -> bpy.types.Image:
+    """Bake one map for every part of the set; painted corrections shape the cage and passes.
+
+    ``flush`` loads the originals' Edit Mode geometry into their datablocks before staging
+    (``render_geometry.flush_edit_meshes``): the bakes a user action starts pass it, the
+    scheduler's never do.
+    """
+    image = _bake(context, ts, kind, flush=flush)
     if kind in {'NORMAL', 'AO'}:
         from . import corrections
         corrections.remember(ts, kind)
     return image
 
 
-def bake_faces(context, ts, kind, regions, polygons=None):
+def bake_faces(context, ts, kind, regions, polygons=None, flush=False):
     """Bake ``kind`` with only ``regions`` ({object: faces}) on the real image; the rest hits scratch.
 
     ``polygons`` ({object: face count}) says which evaluation the faces index;
     a staged copy of another count raises ``staging.TopologyMismatch``.
+    ``flush`` as in ``bake``.
     """
-    return _bake(context, ts, kind, regions=regions, polygons=polygons)
+    return _bake(context, ts, kind, regions=regions, polygons=polygons, flush=flush)
 
 
-def _bake(context, ts, kind, regions=None, polygons=None):
+def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
     from .pairing import groups
     from .staging import prepared
     from . import corrections
@@ -149,7 +155,7 @@ def _bake(context, ts, kind, regions=None, polygons=None):
     try:
         image = create(f"{ts.name}_Baked{kind.title().replace('_', '')}", working, DEFAULT_COLORS[kind])
         scratch = create('OP Bake Unassigned Slots', 32)
-        with prepared(context, ts, parts, image, scratch) as stage:
+        with prepared(context, ts, parts, image, scratch, flush=flush) as stage:
             bake_settings = stage.scene.render.bake
             bake_settings.target = 'IMAGE_TEXTURES'
             bake_settings.use_selected_to_active = projecting
@@ -194,20 +200,32 @@ def _bake(context, ts, kind, regions=None, polygons=None):
                             bake_settings.max_ray_distance = settings.ray_distance + cage.get(corrections.LIFT, 0.0)
                     else:
                         bake_settings.cage_object = stage.copies[part.cage] if part.cage else None
-                    sources = None if sources_of is None else sources_of(part)
-                    with stage.target(part, kind, sources=sources, ao_scope=ao_scope) as target:
-                        for material in target.data.materials:
-                            node = material.node_tree.nodes.active if material and material.use_nodes else None
-                            if node is not None and node.image is image:
-                                node.image = target_image
-                        uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
-                        logger.info('Baking %s for %s from %d source(s)', kind, part.low.name,
-                                    len(sources if sources is not None else part.sources))
-                        _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
-                        for material in target.data.materials:
-                            node = material.node_tree.nodes.active if material and material.use_nodes else None
-                            if node is not None and node.image is target_image:
-                                node.image = image
+                    sources = part.sources if sources_of is None else sources_of(part)
+                    # Generated helpers (Bake Back) decorate a low that has no high-poly of its
+                    # own: Cycles never hits the active object, so the texels the helpers miss
+                    # would keep the neutral default and the low's own occlusion would be lost.
+                    # The low bakes its own surface directly first; the helpers then project on
+                    # top of that result (use_clear is off, so a miss keeps the direct bake).
+                    layered = projecting and stage.self_baked(part, sources)
+                    steps = ((False, ()), (True, sources)) if layered else ((projecting, sources),)
+                    for project, step_sources in steps:
+                        bake_settings.use_selected_to_active = project
+                        # The helper pass extends nothing: its margin would halo every helper
+                        # footprint over the direct bake inside the islands, and the direct
+                        # pass already padded the island borders.
+                        bake_settings.margin = 0 if layered and project else settings.margin * factor
+                        with stage.target(part, kind, sources=step_sources, ao_scope=ao_scope, project=project) as target:
+                            for material in target.data.materials:
+                                node = material.node_tree.nodes.active if material and material.use_nodes else None
+                                if node is not None and node.image is image:
+                                    node.image = target_image
+                            uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
+                            logger.info('Baking %s for %s from %d source(s)', kind, part.low.name, len(step_sources))
+                            _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
+                            for material in target.data.materials:
+                                node = material.node_tree.nodes.active if material and material.use_nodes else None
+                                if node is not None and node.image is target_image:
+                                    node.image = image
 
             run_pass(image)
             passes = []

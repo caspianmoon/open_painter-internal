@@ -151,6 +151,34 @@ top_cover = coverage_of(ts, mask_of(), body, n)
 assert .1 < top_cover < .25, top_cover     # one of six faces
 mask_of().mesh.direction = (0, 0, -1)
 assert abs(coverage_of(ts, mask_of(), body, n) - top_cover) < .03
+# The mask reads the objects' orientation, not where they stand: a drag (or a uniform scale)
+# leaves the selector signature, the raster and the set's geometry key alone; a rotation, and
+# a non-uniform scale (which redirects the normals through the normal matrix), re-key both.
+assert not dependencies.uses_placement(ts), 'a normal-direction mask must not key the set on placement'
+oriented = mesh_masks.signature(ts, mask_of())
+oriented_key = dependencies.geometry_key(scene, ts)
+oriented_raster = cpu_mask(ts, mask_of(), n)
+body.location.x += 2.5
+bpy.context.view_layer.update()
+assert mesh_masks.signature(ts, mask_of()) == oriented, 'a translation re-identified the raster'
+assert dependencies.geometry_key(scene, ts) == oriented_key, 'a translation re-keyed the set'
+assert np.array_equal(cpu_mask(ts, mask_of(), n), oriented_raster)
+body.scale = (2., 2., 2.)
+bpy.context.view_layer.update()
+assert mesh_masks.signature(ts, mask_of()) == oriented, 'a uniform scale re-identified the raster'
+body.scale = (2., 1., 1.)
+bpy.context.view_layer.update()
+assert mesh_masks.signature(ts, mask_of()) != oriented, 'a non-uniform scale redirects the normals'
+body.scale = (1., 1., 1.)
+body.rotation_euler.x = math.radians(90)
+bpy.context.view_layer.update()
+assert mesh_masks.signature(ts, mask_of()) != oriented, 'a rotation must re-identify the raster'
+assert dependencies.geometry_key(scene, ts) != oriented_key, 'a rotation must re-key the set'
+assert not np.array_equal(cpu_mask(ts, mask_of(), n), oriented_raster), 'the covered face moved'
+body.location.x, body.rotation_euler.x = 0., 0.
+bpy.context.view_layer.update()
+assert mesh_masks.signature(ts, mask_of()) == oriented and dependencies.geometry_key(scene, ts) == oriented_key
+print('MESH_MASK_NORMAL_ORIENTATION_OK', flush=True)
 for polygon in body.data.polygons:
     polygon.select = polygon.normal.x > .9
 mask_of().mesh.kind = 'FACE_SELECTION'
@@ -200,6 +228,43 @@ dependencies.clear()                                                # a reopened
 with stable_keys():
     assert mesh_masks.signature(ts, mask_of()) == painted
 print('MESH_MASK_DIGEST_OK', flush=True)
+
+# Reading a vertex group is a Python loop over every vertex. Above dependencies.WEIGHT_HASH_BOUND
+# the persisted token is the session-salted mesh epoch instead of a digest (a re-evaluation
+# after a reopen, never seconds after every weight stroke); below it the digest as before.
+from unittest.mock import patch
+looped = AssertionError('looped over the vertices of a large mesh')
+with stable_keys(), patch.object(dependencies, 'WEIGHT_HASH_BOUND', len(body.data.vertices) - 1), \
+        patch.object(dependencies, 'group_weights', side_effect=looped):
+    large = mesh_masks._content_token(body, 'VERTEX_GROUP', 'Worn')
+    assert large == dependencies.epoch_token(body.data) == f'epoch:{dependencies._SESSION}:{dependencies.mesh_epoch(body.data)}'
+    large_signature = mesh_masks.signature(ts, mask_of())
+    dependencies._mesh_epochs[pointer] = dependencies.mesh_epoch(body.data) + 1   # a weight stroke
+    assert mesh_masks.signature(ts, mask_of()) != large_signature
+    assert mesh_masks._content_token(body, 'ATTRIBUTE', 'Worn') != large, 'attributes are read vectorised: still digested'
+assert mesh_masks._content_token(body, 'VERTEX_GROUP', 'Worn') == dependencies.mesh_epoch(body.data), 'the session token is the epoch'
+with stable_keys():
+    assert mesh_masks._content_token(body, 'VERTEX_GROUP', 'Worn') == painted[2][2][0][0], 'digested again below the bound'
+
+# The coverage reads the evaluated weights once per mesh update and modifier stack: every
+# strip, resolution and mask of that geometry state reuses the array.
+reads = []
+read_weights = dependencies.group_weights
+with patch.object(dependencies, 'group_weights', side_effect=lambda *args: reads.append(args) or read_weights(*args)):
+    mesh_masks.clear()
+    full = cpu_mask(ts, mask_of(), n)
+    assert len(reads) == 1 and full.max() > .99
+    half = cpu_mask(ts, mask_of(), n // 2)
+    assert len(reads) == 1 and half.max() > .99, 'another resolution re-read the weights'
+    dependencies._mesh_epochs[pointer] = dependencies.mesh_epoch(body.data) + 1   # a weight stroke
+    cpu_mask(ts, mask_of(), n)
+    assert len(reads) == 2, 'a mesh update must re-read the weights'
+    subdivide = body.modifiers.new('Subdivide', 'SUBSURF')   # the evaluated vertices change without a mesh update
+    assert cpu_mask(ts, mask_of(), n).max() > .99 and len(reads) == 3, 'a modifier edit must re-read the weights'
+    body.modifiers.remove(subdivide)
+    cpu_mask(ts, mask_of(), n)
+    assert len(reads) == 4
+print('MESH_MASK_WEIGHT_BOUND_OK', flush=True)
 
 # The raster keys on the mesh (0.9.7): the CPU backend and the export reuse the set's
 # raster cache, so a re-unwrap or a modifier edit must miss the cached coverage.
@@ -279,6 +344,116 @@ assert .1 < coverage_of(ts, mask_of(), body, n) < .25
 for polygon in body.data.polygons:
     polygon.select = polygon.normal.x > .9
 print('MESH_MASK_EDIT_MODE_OK', flush=True)
+
+# A modifier that changes the face count (0.9.8): the selection cannot be mapped onto the
+# evaluated polygons, so the mask reads as empty and the set's warnings say through what.
+# The composed list is core.validation.warnings (what the Validate button and the shader
+# report show); evaluation.references stays bpy-free and structural.
+from open_painter.core import validation
+from open_painter.evaluation import references
+
+
+def selection_warnings():
+    return [w for w in validation.warnings(ts) if 'face selection' in w]
+
+
+assert not selection_warnings(), selection_warnings()
+subdivide = body.modifiers.new('Subdivision', 'SUBSURF')
+expected = 'Rust: face selection cannot be mapped through Body.Subdivision (face count changed)'
+assert selection_warnings() == [expected], selection_warnings()
+assert mesh_masks.warnings(ts) == [expected], mesh_masks.warnings(ts)
+assert not references.warnings(ts), 'the structural warnings do not evaluate geometry'
+bpy.ops.open_painter.texture_set(action='VALIDATE')
+assert expected in scene.open_painter.status, scene.open_painter.status
+assert coverage_of(ts, mask_of(), body, n) == 0, 'the unmappable selection still reads as empty'
+mask_of().mesh.kind = 'UV_ISLAND'; mask_of().mesh.object = body; mask_of().mesh.island = -1
+assert selection_warnings() == [expected], 'islands by selection read the selection too'
+mask_of().mesh.object = screw_a
+assert not selection_warnings(), 'islands of another object do not read the body selection'
+mask_of().mesh.object = body; mask_of().mesh.island = 0
+assert not selection_warnings(), 'an island by index does not read the selection'
+mask_of().mesh.kind = 'FACE_SELECTION'
+subdivide.show_viewport = False
+assert not selection_warnings(), 'a modifier hidden in the viewport is not in the evaluated stack'
+subdivide.show_viewport = True
+mask_of().enabled = False
+assert not selection_warnings(), 'a disabled mask reads nothing'
+mask_of().enabled = True
+# A deforming modifier keeps the face count and is never named: the constructive one is.
+displace = body.modifiers.new('Displace', 'DISPLACE')
+body.modifiers.move(len(body.modifiers) - 1, 0)
+assert selection_warnings() == [expected], selection_warnings()
+body.modifiers.remove(subdivide)
+assert not selection_warnings(), 'a deforming stack maps the selection'
+assert .1 < coverage_of(ts, mask_of(), body, n) < .25, 'the selection maps again'
+body.modifiers.remove(displace)
+assert not selection_warnings()
+# In Edit Mode the face-count check reads the edit BMesh count alone: no flush (the
+# scheduler would re-hash the mesh every tick) and no per-face flags (a Python walk over
+# every BMesh face on each panel redraw). The count is the live one: an unflushed edit
+# leaves ``mesh.polygons`` behind, and comparing that would blame a stack that only deforms.
+subdivide = body.modifiers.new('Subdivision', 'SUBSURF')
+bpy.ops.object.mode_set(mode='EDIT')
+bpy.context.view_layer.update()
+epochs = (dependencies.mesh_epoch(body.data), dependencies.epoch())
+materialised = mesh_masks._selection_flags
+
+
+def no_flags(obj):
+    raise AssertionError('warnings materialised the selection flags')
+
+
+mesh_masks._selection_flags = no_flags
+try:
+    assert selection_warnings() == [expected], selection_warnings()
+    bpy.context.view_layer.update()
+    assert (dependencies.mesh_epoch(body.data), dependencies.epoch()) == epochs, 'warnings flushed the edit mesh'
+    subdivide.show_in_editmode = False              # (a modifier toggle is a geometry update itself)
+    assert not selection_warnings(), 'a modifier hidden in Edit Mode is not in the evaluated stack'
+finally:
+    mesh_masks._selection_flags = materialised
+bpy.ops.object.mode_set(mode='OBJECT')
+body.modifiers.remove(subdivide)
+from open_painter.geometry.snapshots import depsgraph_for
+scratch_mesh = bpy.data.meshes.new('Scratch')
+bm = bmesh.new()
+bmesh.ops.create_cube(bm, size=1)
+bm.to_mesh(scratch_mesh)
+bm.free()
+scratch = bpy.data.objects.new('Scratch', scratch_mesh)
+scene.collection.objects.link(scratch)
+bpy.context.view_layer.objects.active = scratch
+scratch.select_set(True)
+bpy.ops.object.mode_set(mode='EDIT')
+bm = bmesh.from_edit_mesh(scratch_mesh)
+bmesh.ops.poke(bm, faces=bm.faces[:])               # 6 quads become 24 triangles, unflushed
+bmesh.update_edit_mesh(scratch_mesh)
+bpy.context.view_layer.update()
+assert len(scratch_mesh.polygons) == 6 and len(bm.faces) == 24
+depsgraph = depsgraph_for(scene, (scratch,))
+# A stack that only deforms evaluates, in Edit Mode, to a BMesh wrapper whose RNA arrays
+# read as empty until materialised: the check must not name the deforming modifier.
+scratch_displace = scratch.modifiers.new('Displace', 'DISPLACE')
+bpy.context.view_layer.update()
+depsgraph = depsgraph_for(scene, (scratch,))
+assert len(scratch.evaluated_get(depsgraph).data.polygons) == 0, 'the wrapper reads as empty (Blender changed?)'
+assert mesh_masks._unmappable_modifier(scratch, depsgraph) is None, 'an unmaterialised wrapper blamed the deforming stack'
+assert len(scratch.evaluated_get(depsgraph).data.polygons) == 24, 'materialised in place'
+assert len(mesh_masks._selection_flags(scratch)) == 24, 'the coverage path reads the live faces'
+scratch.modifiers.remove(scratch_displace)
+bpy.context.view_layer.update()
+depsgraph = depsgraph_for(scene, (scratch,))
+assert mesh_masks._unmappable_modifier(scratch, depsgraph) is None, 'the stale mesh count blamed an empty stack'
+scratch_subdivide = scratch.modifiers.new('Subdivision', 'SUBSURF')
+bpy.context.view_layer.update()
+depsgraph = depsgraph_for(scene, (scratch,))
+assert mesh_masks._unmappable_modifier(scratch, depsgraph) == scratch_subdivide
+bpy.ops.object.mode_set(mode='OBJECT')
+scratch.select_set(False)
+bpy.data.objects.remove(scratch)
+bpy.data.meshes.remove(scratch_mesh)
+bpy.context.view_layer.objects.active = body
+print('MESH_MASK_SELECTION_WARNING_OK', flush=True)
 
 # Shader path: the boundary matches the CPU reference; a membership change re-identifies it.
 mask_of().mesh.kind = 'COLLECTION'
@@ -454,5 +629,84 @@ assert evaluated_triangles() == 24
 bpy.context.window.view_layer = scene.view_layers[0]
 scene.view_layers.remove(texturing)
 print('MESH_MASK_VIEW_LAYER_OK', flush=True)
+
+# ---- Angles saved as degrees migrate to radians (0.9.7) ---------------------------------------
+# The angle properties changed units in place (degrees, max 180 / 90 -> radians, max pi / pi/2).
+# A file saved before that reads its raw 45 unclamped (2578 deg: every face covered), and a
+# portable material or module base from then was clamped to pi on restore. Anything past a full
+# turn can only be degrees; radians (never above pi) pass through every path untouched.
+from open_painter.properties.mesh_selector import FORMAT_VERSION, degrees_to_radians
+from open_painter.smart_materials import modules
+assert degrees_to_radians({'angle': 45.0, 'softness': 15.0, 'kind': 'NORMAL_DIRECTION'}) == {
+    'angle': math.radians(45), 'softness': math.radians(15), 'kind': 'NORMAL_DIRECTION'}
+untouched = {'angle': 0.8, 'softness': 0.2}
+assert degrees_to_radians(untouched) is untouched
+# restore(): a snapshot in degrees lands as radians instead of the clamp.
+mask_of().mesh.kind = 'NORMAL_DIRECTION'
+stack.restore({'angle': 45.0, 'softness': 15.0}, mask_of().mesh)
+assert abs(mask_of().mesh.angle - math.radians(45)) < 1e-6 and abs(mask_of().mesh.softness - math.radians(15)) < 1e-6
+stack.restore({'angle': 0.8}, mask_of().mesh)
+assert abs(mask_of().mesh.angle - 0.8) < 1e-6
+# A portable material written with degree values applies as radians.
+degrees_archive = ROOT / '.blender-test' / 'mesh-mask-material-degrees.zip'
+if degrees_archive.exists():
+    degrees_archive.unlink()
+with zipfile.ZipFile(archive) as bundle, zipfile.ZipFile(degrees_archive, 'w') as legacy:
+    for entry in bundle.infolist():
+        payload = bundle.read(entry.filename)
+        if entry.filename == 'material.json':
+            document = json.loads(payload)
+            for layer in document['layers']:
+                for stored in layer.get('masks', []):
+                    if stored.get('source') == 'MESH':
+                        stored['mesh'].update(kind='NORMAL_DIRECTION', angle=45.0, softness=15.0)
+            payload = json.dumps(document).encode()
+        legacy.writestr(entry, payload)
+legacy_set = sets.create(scene, 'Legacy import', 512)
+load(legacy_set, degrees_archive)
+legacy_mask = next(m for layer in legacy_set.layers for m in layer.masks if m.source == 'MESH')
+assert abs(legacy_mask.mesh.angle - math.radians(45)) < 1e-6 and abs(legacy_mask.mesh.softness - math.radians(15)) < 1e-6
+# A saved file: the raw degree values (past the RNA clamp, as the old file holds them), a
+# selector already in radians, and a module base snapshot in degrees.
+mask_of().mesh['angle'], mask_of().mesh['softness'] = 45.0, 15.0
+assert mask_of().mesh.angle == 45.0, 'the stored value reads back unclamped (the reported symptom)'
+radians_mask = layer_of().masks.add()
+radians_mask.id, radians_mask.name, radians_mask.source = new_id(), 'Radians', 'MESH'
+radians_mask.mesh.kind = 'NORMAL_DIRECTION'
+radians_mask.mesh.angle = 0.8
+radians_mask_id = radians_mask.id
+modules.write_base('legacy-module', 1, [{'id': 'root', 'masks': [
+    {'id': 'm', 'source': 'MESH', 'mesh': {'kind': 'NORMAL_DIRECTION', 'angle': 45.0, 'softness': 15.0}}]}])
+assert scene.open_painter.format_version == FORMAT_VERSION, 'a project is stamped with the current format at its first set'
+scene.open_painter.format_version = 1   # as a file saved before the stamp existed holds it
+# Undo and redo relearn without the migration: the memfile they restore is never older than
+# the loaded file, and a scan there would fight the step it just restored.
+cache.on_undo(None)
+assert mask_of().mesh.angle == 45.0 and scene.open_painter.format_version == 1, 'undo does not run the format migration'
+ts_id, scene_name = ts.id, scene.name
+legacy_blend = ROOT / '.blender-test' / 'mesh-mask-degrees.blend'
+bpy.ops.wm.save_as_mainfile(filepath=str(legacy_blend))
+bpy.ops.wm.open_mainfile(filepath=str(legacy_blend))
+scene = bpy.data.scenes[scene_name]
+ts = next(t for t in scene.open_painter.texture_sets if t.id == ts_id)
+body = bpy.data.objects['Body']
+layer_of = lambda: next(l for l in ts.layers if l.id == rust_id)
+mask_of = lambda: next(m for m in layer_of().masks if m.id == mask_id)
+assert scene.open_painter.format_version == FORMAT_VERSION, 'the pass is recorded so it runs once'
+assert abs(mask_of().mesh.angle - math.radians(45)) < 1e-6, mask_of().mesh.angle
+assert abs(mask_of().mesh.softness - math.radians(15)) < 1e-6, mask_of().mesh.softness
+reloaded_radians = next(m for m in layer_of().masks if m.id == radians_mask_id)
+assert abs(reloaded_radians.mesh.angle - 0.8) < 1e-6, 'a value already in radians is not converted'
+mask_of().mesh.direction = (0, 0, 1)
+migrated_cover = coverage_of(ts, mask_of(), body, n)
+assert .1 < migrated_cover < .25, migrated_cover     # the top face, as the defaults cover it
+base_mesh = modules.read_base('legacy-module', 1)[0]['masks'][0]['mesh']
+assert abs(base_mesh['angle'] - math.radians(45)) < 1e-6 and abs(base_mesh['softness'] - math.radians(15)) < 1e-6
+# Once stamped, the pass leaves the file alone (a reload of a stamped file takes the same path).
+mask_of().mesh['angle'] = 45.0
+cache.on_load(None)
+assert mask_of().mesh.angle == 45.0
+mask_of().mesh.angle = math.radians(45)
+print('MESH_MASK_DEGREES_MIGRATED_OK', flush=True)
 print('MESH_MASKS_PASS', flush=True)
 open_painter.unregister()

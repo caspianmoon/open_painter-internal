@@ -278,17 +278,23 @@ legacy = channel_eval.source(rough, 'FILL', n, 0, n, {}, ts, {})
 np.testing.assert_allclose(legacy[:3], .3, atol=1e-7)
 
 # Images an artist picks arrive sRGB-tagged (image.open's default for PNG/JPG):
-# a Normal Combine detail map is data and is retagged Non-Color on assignment,
-# a painted mask is decoded like the shader's Image Texture node samples it.
+# a Normal Combine detail map is data and is read as stored without retagging
+# the datablock (the same image may be a colour fill elsewhere), a painted mask
+# is decoded like the shader's Image Texture node samples it.
 from open_painter.evaluation.mask_eval import evaluate_masks
 from open_painter.utils.ids import new_id
 opened = bpy.data.images.new('Opened normal map', width=8, height=8)
 opened.colorspace_settings.name = 'sRGB'
+opened.pixels.foreach_set(np.tile(np.array([.5, .5, 1., 1.], np.float32), 8 * 8))
 normal = stack.channel_for(layer, 'NORMAL')
 combine = normal.effects.add()
 combine.kind = 'NORMAL_COMBINE'
 combine.image = opened
-assert opened.colorspace_settings.name == 'Non-Color', opened.colorspace_settings.name
+assert opened.colorspace_settings.name == 'sRGB', opened.colorspace_settings.name
+flat = np.full((8, 8, 3), (.5, .5, 1.), np.float32)
+combined = channel_eval.apply_effect(np.concatenate((flat, np.ones((8, 8, 1), np.float32)), axis=-1), combine)
+np.testing.assert_allclose(combined[..., :3], flat, atol=1.5 / 255)   # stored .5, not the decoded .214
+assert opened.colorspace_settings.name == 'sRGB', opened.colorspace_settings.name
 grey = bpy.data.images.new('Opened mask', width=8, height=8)
 grey.colorspace_settings.name = 'sRGB'
 grey.pixels.foreach_set(np.full(8 * 8 * 4, .5, np.float32))

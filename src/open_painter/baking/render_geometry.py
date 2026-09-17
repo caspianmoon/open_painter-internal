@@ -7,12 +7,34 @@ import bpy
 from contextlib import contextmanager
 
 
+def flush_edit_meshes(objects):
+    """Load every Edit Mode object's edit BMesh into its datablock (the artist's geometry).
+
+    Edit Mode keeps the geometry in the edit BMesh; the datablock lags behind until the
+    mode ends. Every reader here copies or evaluates the datablock — ``ID.copy`` and
+    ``to_mesh``/``new_from_object`` with ``preserve_all_data_layers`` both bypass the edit
+    mesh — so without the flush a bake started from Edit Mode (a region rebake, Bake Back)
+    staged the mesh as it was before the edit while the doctor's checks read the edited one.
+    Each bake stage passes its originals through ``objects`` below, which is why the flush
+    is wired there (``flush=True``) rather than in one entry point.
+
+    Only the paths a user action starts ask for it. ``update_from_editmode`` tags the mesh
+    as changed, so a stage the scheduler runs from its timer — a custom-graph raster on
+    the evaluation tick, a layer-cache job — would flush the whole mesh on every tick for
+    as long as the artist stays in Edit Mode and fight the edit session; those stage the
+    datablock as it is (``evaluation.mesh_masks`` reads its selection the same way).
+    """
+    for obj in dict.fromkeys(objects):
+        if obj is not None and obj.mode == 'EDIT':
+            obj.update_from_editmode()
+
+
 @contextmanager
-def scope(context, originals):
+def scope(context, originals, required=None, flush=False):
     scene = bpy.data.scenes.new('OP Bake Geometry Check')
     owned_objects, owned_meshes, owned_groups = [], [], []
     try:
-        yield objects(context, originals, scene, owned_objects, owned_meshes, owned_groups)
+        yield objects(context, originals, scene, owned_objects, owned_meshes, owned_groups, required, flush)
     finally:
         for obj in reversed(owned_objects):
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -26,9 +48,22 @@ def scope(context, originals):
         bpy.data.scenes.remove(scene)
 
 
-def objects(context, originals, scene, owned_objects, owned_meshes, owned_groups=None):
+def objects(context, originals, scene, owned_objects, owned_meshes, owned_groups=None, required=None, flush=False):
+    from ..geometry.snapshots import depsgraph_for, evaluable
     owned_groups = [] if owned_groups is None else owned_groups
-    graph = context.evaluated_depsgraph_get()
+    originals = list(originals)
+    if flush:
+        # Before the depsgraph and the copies: both read the datablock, not the edit BMesh.
+        # Operator-driven stages only (``flush_edit_meshes``); the scheduler's never ask.
+        flush_edit_meshes(originals)
+    # The same layer choice as the CPU reference (``snapshots.targets``): an original the
+    # context's layer excludes would otherwise hand over its base transform and modifier
+    # values, and the staged faces would not be the ones the rasters were made against.
+    # ``required`` (the targets, when the caller knows them) must be evaluated; by default
+    # every original some layer can evaluate is. The rest — a high-poly or a generated helper
+    # disabled in viewports to keep the scene responsive — keep their base transform and
+    # modifier values, and their copies are evaluated in the owned scene as before.
+    graph = depsgraph_for(context.scene, evaluable(context.scene, originals) if required is None else required)
     scene.render.fps = context.scene.render.fps
     scene.render.fps_base = context.scene.render.fps_base
     scene.frame_set(context.scene.frame_current, subframe=context.scene.frame_subframe)
@@ -91,6 +126,8 @@ def objects(context, originals, scene, owned_objects, owned_meshes, owned_groups
                     value = getattr(modifier, prop.identifier, None)
                     if isinstance(value, bpy.types.Object) and value in copies:
                         setattr(modifier, prop.identifier, copies[value])
+    # The owned scene has the one view layer it was created with; every copy is linked to
+    # its master collection and enabled, so ``depsgraph_for`` would pick the same layer.
     with context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
         graph = context.evaluated_depsgraph_get()
         frozen = []

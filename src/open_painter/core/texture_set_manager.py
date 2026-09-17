@@ -9,6 +9,14 @@ from .project_manager import project_for
 
 def create(scene: bpy.types.Scene, name: str = "Texture Set", resolution=None):
     project = project_for(scene)
+    if not project.texture_sets:
+        # A project born here already holds the current format (selector angles
+        # in radians); stamped now, it never enters ``cache._migrate_angles`` on
+        # load. Only the first set stamps: a legacy file opened before the
+        # extension was enabled (no load_post) keeps its old stamp until it is
+        # reopened and migrated.
+        from ..properties.mesh_selector import FORMAT_VERSION
+        project.format_version = FORMAT_VERSION
     ts = project.texture_sets.add()
     from ..evaluation.shader_preview import texture_sets_changed
     texture_sets_changed(scene)   # the array may have been reallocated under live sessions
@@ -82,18 +90,16 @@ def unassign(ts, index: int) -> None:
 
 def _release_image(owner, field, ts) -> None:
     """Drop a managed image the set alone owns. A datablock the artist picked, or a
-    derived one they wired into a material of their own, stays in the file."""
+    derived one they wired into a material of their own, stays in the file.
+
+    Only the fake user goes (see ``layer_stack.release_image``): the datablock
+    stays for an undo of the removal, and the next save purges it along with
+    the set's now unused material."""
     image = getattr(owner, field)
-    if image is None or not image.get(OWNER) or image.get("texture_set_id", ts.id) != ts.id:
+    if image is None or image.get("texture_set_id", ts.id) != ts.id:
         return
-    setattr(owner, field, None)
-    users = bpy.data.user_map(subset=[image], value_types={"MATERIAL", "NODETREE"}).get(image, ())
-    if any(user != ts.material and user.get("op_shader_graph") != ts.id for user in users):
-        return   # the set's own material and compiled graph are the only expected samplers
-    try:
-        bpy.data.images.remove(image)
-    except (ReferenceError, RuntimeError):
-        pass
+    from .layer_stack import release_image
+    release_image(image)
 
 
 def remove(scene: bpy.types.Scene, index: int) -> None:
@@ -114,17 +120,22 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
     # alone: a removed set must not leave packed 4k floats behind in the file.
     from ..evaluation.layer_cache import release_layer
     from ..painting.decals import release as release_decal
+    from .layer_stack import release_images
     for layer in ts.layers:
         release_layer(layer)
         release_decal(layer)
-        if layer.type == "PAINT":
-            for channel in layer.channels:
-                _release_image(channel, "image", ts)
-        for mask in layer.masks:
-            if mask.source == "PAINT":
-                _release_image(mask, "image", ts)
+        release_images(layer)
     for prop in (*ts.outputs, *ts.baked_maps):
         _release_image(prop, "image", ts)
+    material = ts.material
+    if material is not None and material.get(OWNER) and material.users <= 1 and material.use_nodes:
+        # The set's material outlives the set unused, and its output nodes would
+        # keep the released images users: packed and written once more, purged
+        # only on the save after. An artist who put the material on a mesh of
+        # their own keeps it showing the outputs.
+        for node in material.node_tree.nodes:
+            if node.bl_idname == "ShaderNodeTexImage" and node.image is not None and node.image.get(OWNER):
+                node.image = None
     from ..baking.corrections import clear as clear_corrections
     clear_corrections(ts)
     project.texture_sets.remove(index)

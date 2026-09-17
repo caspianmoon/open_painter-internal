@@ -13,7 +13,7 @@ import open_painter
 from open_painter.core import texture_set_manager as sets, layer_stack as stack, material_manager, image_manager
 from open_painter.evaluation import shader_preview
 from open_painter.evaluation.metrics import Metrics
-from open_painter.evaluation.shader_resources import Resources
+from open_painter.evaluation.shader_resources import RESOURCE, Resources, alive
 
 
 def ready(ts):
@@ -108,6 +108,34 @@ placeholder = resources.request(('purged-placeholder',), lambda: source_rows(.75
 while resources.pending:
     resources.step()
 assert placeholder.get('op_shader_resource_ready') and abs(float(image_manager.pixels(placeholder)[0, 0, 0]) - .75) < 1e-6
+# A leaf a rehydrated node still samples under an identity the table does not
+# list (an interrupted placeholder, or one superseded by the entry of its own
+# key) is never cached and never removed while bound: the table releases it
+# once the binding moves on, instead of leaving it in bpy.data unlisted.
+tree = bpy.data.node_groups.new('OP boundary holder', 'ShaderNodeTree')
+holder, sibling = tree.nodes.new('ShaderNodeTexImage'), tree.nodes.new('ShaderNodeTexImage')
+stale = bpy.data.images.new('OP stale placeholder', width=16, height=16, float_buffer=True)
+stale[RESOURCE], stale['op_shader_resource_ready'] = 'stale-placeholder', False
+holder.image = stale
+listed = resources.request(('listed-leaf',), lambda: source_rows(.5))
+superseded = bpy.data.images.new('OP superseded placeholder', width=16, height=16, float_buffer=True)
+superseded[RESOURCE], superseded['op_shader_resource_ready'] = listed[RESOURCE], False
+sibling.image = superseded
+for image in (stale, superseded):
+    resources.adopt(image)
+    resources.adopt(image)   # listed once
+assert len(resources.superseded) == 2 and 'stale-placeholder' not in resources.entries
+resources.step()
+assert alive(stale) and alive(superseded) and resources.entries[listed[RESOURCE]].image == listed
+holder.image = None
+resources.step()
+assert not alive(stale), 'a superseded placeholder outlived the binding that held it'
+assert alive(superseded) and superseded.users == 1
+sibling.image = None
+resources.step()
+assert not alive(superseded) and alive(listed), 'the listed entry was released with its superseded twin'
+assert not resources.superseded
+bpy.data.node_groups.remove(tree)
 other.close()
 resources.close()
 # Evaluated-geometry changes reach cached triplanar inputs through the normal
@@ -128,6 +156,53 @@ cache.tick()
 assert shader_preview.diagnostics(scene, geometry_ts)['pending_resources']
 ready(geometry_ts)
 assert geometry_graph.resource_bindings[0].node.image != old_geometry_image
+# The frame is no part of a static prop's identities: a scrub of the timeline keeps the
+# geometry key, the session and every cached source (no raster is requested).
+assert not dependencies.animated(geometry_ts)
+frame_key = dependencies.geometry_key(scene, geometry_ts)
+settled_image = geometry_graph.resource_bindings[0].node.image
+scene.frame_set(scene.frame_current + 1)
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+with Metrics() as frame_observed:
+    dependencies.refresh(scene)
+    cache.tick()
+    assert shader_preview.current(scene, geometry_ts), 'a frame change invalidated a static prop'
+    assert not shader_preview.diagnostics(scene, geometry_ts)['pending_resources']
+    assert frame_observed.counts['shader_resource_requests'] == 0, frame_observed.report()
+assert dependencies.geometry_key(scene, geometry_ts) == frame_key, 'a frame change re-keyed a static prop'
+assert geometry_graph.resource_bindings[0].node.image == settled_image
+# An armature-deformed prop follows the pose: the same scrub re-rasters its triplanar source.
+rig = bpy.data.objects.new('Boundary rig', bpy.data.armatures.new('Boundary rig'))
+scene.collection.objects.link(rig)
+deform = bpy.context.object.modifiers.new('Boundary armature', 'ARMATURE')
+deform.object = rig
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)   # the modifier itself re-keys the set
+cache.tick()
+ready(geometry_ts)
+assert dependencies.animated(geometry_ts)
+deformed_key = dependencies.geometry_key(scene, geometry_ts)
+assert deformed_key[1] == (scene.frame_current, scene.frame_subframe)
+settled_image = geometry_graph.resource_bindings[0].node.image
+scene.frame_set(scene.frame_current + 1)
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+cache.tick()
+assert dependencies.geometry_key(scene, geometry_ts) != deformed_key, 'a frame change left a deformed prop keyed'
+assert shader_preview.diagnostics(scene, geometry_ts)['pending_resources'], 'a frame change of a deformed prop requested no raster'
+ready(geometry_ts)
+assert geometry_graph.resource_bindings[0].node.image != settled_image
+bpy.context.object.modifiers.remove(deform)
+bpy.data.objects.remove(rig)
+bpy.context.view_layer.update()
+dependencies._candidates.add(scene.as_pointer())
+dependencies.refresh(scene)
+cache.tick()
+ready(geometry_ts)
+assert not dependencies.animated(geometry_ts)
 # Purge Unused Data removes an in-flight placeholder (nothing samples it yet)
 # and the unused leaf of a previous slider value: the session rasters the
 # source again instead of failing on the removed image.
@@ -161,7 +236,7 @@ report.parent.mkdir(parents=True, exist_ok=True)
 report.write_text(json.dumps({'result': 'PASS', 'checks': ['published-prefix-invalidation',
     'unrelated-channel-no-raster', 'filter-strength-and-levels-native', 'atomic-input-swap',
     'no-output-allocation', 'superseded-value-recovery', 'removed-image-recovery',
-    'purged-placeholder-recovery', 'geometry-input-invalidation',
-    'scene-levels-no-analysis'], 'dependency_edit': info}, indent=2) + '\n')
+    'purged-placeholder-recovery', 'superseded-leaf-release', 'geometry-input-invalidation', 'static-frame-no-raster',
+    'deformed-frame-raster', 'scene-levels-no-analysis'], 'dependency_edit': info}, indent=2) + '\n')
 open_painter.unregister()
 print('SHADER_BOUNDARIES_PASS', report, flush=True)

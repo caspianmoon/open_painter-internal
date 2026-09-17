@@ -69,7 +69,9 @@ def vertical_stroke(x=1.0, z0=-.8, z1=.8, count=17, radius=.25):
 
 # 1. Recording a stroke on the lower set's paint layer links a paint layer in the upper set.
 before_upper = rough(upper)
-stroke = records.record(project, lower, paint, vertical_stroke(), settings())
+from open_painter.evaluation import metrics
+with metrics.Metrics() as counted:
+    stroke = records.record(project, lower, paint, vertical_stroke(), settings())
 lower_paint = next(l for l in lower.layers if l.type == 'PAINT')
 assert lower_paint.stroke_key and stroke.layer_key == lower_paint.stroke_key
 linked = records.linked_layers(project, stroke.layer_key)
@@ -81,6 +83,18 @@ assert not stroke_raster.coverage(housing, stroke, 512).any()
 assert not housing.layers and not dependencies.uses_strokes(housing), [l.name for l in housing.layers]
 upper_paint = next(l for ts, l in linked if ts.id == upper.id)
 assert upper_paint.type == 'PAINT' and upper_paint.name == 'Marks'
+# The link test rasterised the stroke once on each set the bounds reached (the upper set and the
+# housing; its own set needs no test). The raster that linked the upper set is the one its first
+# evaluation renders: the test used to build it with no cache, so the evaluation built it again.
+assert counted.counts['stroke_rasterisations'] == 2, dict(counted.counts)
+with counted:
+    LayerEvaluator(scene).evaluate_channel(upper.id, 'ROUGHNESS')
+assert counted.counts['stroke_rasterisations'] == 2, ('the linked set re-rasterised the stroke', dict(counted.counts))
+with counted:
+    LayerEvaluator(scene).evaluate_channel(lower.id, 'ROUGHNESS')
+assert counted.counts['stroke_rasterisations'] == 3, dict(counted.counts)
+rendered = images.pixels(images.output(upper, 'ROUGHNESS').image)[..., 0]
+assert rendered.max() > .85, ('the adopted raster must render the stroke', rendered.max())
 lower_rough, upper_rough = rough(lower), rough(upper)
 assert lower_rough.max() > .85 and upper_rough.max() > .85, ('the stroke must render on both sets', lower_rough.max(), upper_rough.max())
 assert (lower_rough > .5).mean() < .5 and not np.allclose(upper_rough, before_upper)
@@ -333,6 +347,69 @@ for rotation in (Euler((0., 0., 0.)), Euler((.35, -.2, .6))):
     records.remove(project, planar.id)
 brush.projection = 'SURFACE'
 print('VECTOR_STROKES planar view: PASS', flush=True)
+
+# 4g. Portable materials carry the strokes their layers render (0.9.8). The document used to hold
+#     only the layer's stroke key: applied elsewhere the layer showed nothing, and the next paint
+#     session retired the strokeless key into a paint link, making the loss permanent.
+import json
+from tempfile import TemporaryDirectory
+from zipfile import ZipFile
+from open_painter.painting.paint_session import release_idle_keys
+from open_painter.smart_materials import loader, serializer
+second = records.record(project, lower, lower_paint, flank, settings(opacity=.5, hardness=.5, roughness=.6), universal=False)
+second_id = second.id
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT' and l.stroke_key == key)
+assert len(records.strokes_for(project, key)) == 2
+source_rough = rough(lower)
+# A twin of the cube in a fresh set: the same geometry under the strokes, none of the links.
+twin = cube.copy(); twin.data = cube.data.copy(); scene.collection.objects.link(twin)
+copy_set = sets.create(scene, 'Copy', 512); sets.assign(scene, copy_set, twin, 0)
+copy_set.preview_backend = 'CPU'
+bpy.context.view_layer.update()
+with TemporaryDirectory() as directory:
+    path = serializer.save(lower, Path(directory) / 'strokes.openpaintmaterial')
+    with ZipFile(path) as archive:
+        document = json.loads(archive.read('material.json'))
+    saved = document.get('strokes', [])
+    assert len(saved) == 2 and {s['layer_key'] for s in saved} == {key}, saved
+    assert not any(layer.get('paint_link') for layer in document['layers']), 'paint links are not portable'
+    assert all('id' not in s and 'revision' not in s and 'selected' not in s for s in saved)
+    roots = loader.apply(copy_set, path)
+imported = next(l for l in copy_set.layers if l.type == 'PAINT' and l.name == lower_paint.name)
+assert imported.stroke_key and imported.stroke_key != key, 'the copy must not alias the source strokes'
+assert not imported.paint_link
+copies = records.strokes_for(project, imported.stroke_key)
+assert len(copies) == 2 and len(records.strokes_for(project, key)) == 2, 'the strokes must be re-imported, not moved'
+assert {s.id for s in copies}.isdisjoint({s.id for s in records.strokes_for(project, key)})
+for original, copy in zip(records.strokes_for(project, key), copies):
+    assert copy.samples == original.samples and copy.order == original.order and copy.revision == 0, copy.name
+    assert abs(copy.roughness - original.roughness) < 1e-6 and copy.channels == original.channels
+assert [ts.id for ts, _ in records.linked_layers(project, imported.stroke_key)] == [copy_set.id]
+copied_rough = rough(copy_set)
+assert copied_rough.max() > .85, ('the imported strokes must render on the new set', copied_rough.max())
+np.testing.assert_allclose(copied_rough, source_rough, atol=2e-3, err_msg='the copy must render what the source renders')
+# A paint session leaves a key whose strokes exist alone; only a strokeless key retires.
+idle = stack.add(copy_set, 'PAINT', 'Idle'); idle.stroke_key = new_id()
+idle_key = idle.stroke_key
+release_idle_keys(project)
+imported = next(l for l in copy_set.layers if l.name == lower_paint.name)
+idle = next(l for l in copy_set.layers if l.name == 'Idle')
+assert imported.stroke_key and len(records.strokes_for(project, imported.stroke_key)) == 2, 'an imported stroke key was retired'
+assert not idle.stroke_key and idle.paint_link == idle_key
+# The copies are independent records: deleting the source strokes leaves them rendering.
+records.remove(project, second_id)
+assert len(records.strokes_for(project, imported.stroke_key)) == 2
+np.testing.assert_allclose(rough(copy_set), copied_rough, atol=1e-6, err_msg='the copy followed the source')
+assert not housing.layers
+sets.remove(scene, next(i for i, item in enumerate(project.texture_sets) if item.id == copy_set.id))
+assert records.purge_orphans(project) == 2
+bpy.data.objects.remove(twin)
+lower = next(item for item in project.texture_sets if item.name == 'Lower')
+upper = next(item for item in project.texture_sets if item.name == 'Upper')
+housing = next(item for item in project.texture_sets if item.name == 'Housing')
+lower_paint = next(l for l in lower.layers if l.type == 'PAINT' and l.stroke_key == key)
+assert len(records.strokes_for(project, key)) == 1
+print('VECTOR_STROKES portable: PASS', flush=True)
 
 # 5. Geometry changes re-rasterise; undo removes the stroke as data.
 dependencies.remember(scene, lower, dependencies.geometry_key(scene, lower))

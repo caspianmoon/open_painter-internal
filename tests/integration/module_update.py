@@ -158,7 +158,9 @@ with TemporaryDirectory() as directory:
     from open_painter.smart_materials.format import read
 
     def image_names():
-        return {image.name for image in bpy.data.images}
+        # Images the file keeps: a released one (no fake user, nothing binding it) stays in
+        # memory for an undo but is purged on the next save.
+        return {image.name for image in bpy.data.images if image.users or image.use_fake_user}
 
     # Mask groups (0.9.3) inside a module: membership survives insert, update, replace and a
     # module saved from an instance.
@@ -239,10 +241,12 @@ with TemporaryDirectory() as directory:
     modules.write_base(t_block['id'], 2, modules.read_base(t_block['id'], 2))
     modules.update(ts, layer_by_id(t_instance_id), t2)
     assert image_names() == settled, image_names() ^ settled
-    # Replace drops the local layer, and with it its cache image.
+    # Replace drops the local layer, and with it its cache image: released, not removed (0.9.7),
+    # so an undo of the Replace finds the datablock.
     modules.update(ts, layer_by_id(t_instance_id), t2, replace=True)
     assert not any(layer.id == local_layer_id for layer in ts.layers)
     assert image_names() == settled - {local_cache_name}, image_names() ^ settled
+    assert local_cache_name in bpy.data.images and not bpy.data.images[local_cache_name].use_fake_user
     assert stack.channel_for(named(layer_by_id(t_instance_id), detailed_id), 'ROUGHNESS').image == asset
     # A changed asset replaces the instance's copy instead of piling up next to it.
     images.write(dprop.image, np.random.default_rng(2).random((64, 64, 4), np.float32), pack=False)
@@ -250,6 +254,7 @@ with TemporaryDirectory() as directory:
     modules.update(ts, layer_by_id(t_instance_id), t3)
     replaced = stack.channel_for(named(layer_by_id(t_instance_id), detailed_id), 'ROUGHNESS').image
     assert replaced.name != asset_name and asset_name not in image_names()
+    assert asset_name in bpy.data.images and not bpy.data.images[asset_name].use_fake_user
     assert image_names() == (settled - {local_cache_name, asset_name}) | {replaced.name}, image_names() ^ settled
     settled = image_names()
     # Without a base snapshot the update is refused before any asset is decoded.
@@ -389,5 +394,62 @@ with TemporaryDirectory() as directory:
     assert version == 3 and conflicts == [], conflicts
     scene.open_painter.texture_sets.remove(next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == set_copy.id))
     print('MODULE_UPDATE duplicated instances: PASS', flush=True)
+
+with TemporaryDirectory() as directory:
+    # Portable strokes (0.6.0) are instance-local: the loader keys an imported stroke layer and
+    # Vector Strokes mask afresh, together with the strokes it restores, and Update and Replace
+    # keep that key (and a paint link) instead of merging the document's own key back over it,
+    # which aliased the origin's strokes here and orphaned the instance's.
+    from types import SimpleNamespace
+    from open_painter.painting import strokes as records
+    project = scene.open_painter
+
+    def settings():
+        return SimpleNamespace(radius=.25, hardness=.9, opacity=1., flow=1., accumulate='MAX', alpha_image=None,
+                               projection='SURFACE', blend='PAINT', base_color=(1, 0, 0, 1), roughness=.9, metallic=0.,
+                               height=.5, ao=1., emission=(0, 0, 0, 1), opacity_value=1., normal=(.5, .5, 1, 1),
+                               channels={'ROUGHNESS'})
+
+    def samples(count=5):
+        z = np.linspace(-.5, .5, count, dtype=np.float32)
+        return np.stack([np.ones(count, np.float32), np.zeros(count, np.float32), z,
+                         np.ones(count, np.float32), np.zeros(count, np.float32), np.zeros(count, np.float32),
+                         np.ones(count, np.float32), np.full(count, .25, np.float32),
+                         np.zeros(count, np.float32), np.zeros(count, np.float32),
+                         np.zeros(count, np.float32), np.zeros(count, np.float32), np.ones(count, np.float32)], axis=1)
+
+    marked = stack.add(ts, 'FOLDER', 'Marked'); marked_id = marked.id
+    marks = stack.add(ts, 'PAINT', 'Marks'); marks_id = marks.id
+    marks.parent_id = marked_id
+    origin_key = records.record(project, ts, layer_by_id(marks_id), samples(), settings(), universal=False).layer_key
+    striped = stack.add(ts, 'FILL', 'Striped'); striped_id = striped.id
+    striped.parent_id = marked_id
+    only(striped, 'ROUGHNESS')
+    strokes_mask = striped.masks.add(); strokes_mask.id, strokes_mask.source = new_id(), 'STROKES'
+    strokes_mask.stroke_key = origin_mask_key = new_id()
+    records.record(project, ts, layer_by_id(striped_id), samples(), settings(), key=origin_mask_key)
+    s1, s_block = modules.save_module(bpy.context, ts, layer_by_id(marked_id), Path(directory) / 's1.openpaintmaterial', 'Marked')
+    s_instance = loader.apply(ts, s1)[0]
+    s_instance_id = s_instance.id
+    local_key = named(s_instance, marks_id).stroke_key
+    local_mask_key = named(s_instance, striped_id).masks[0].stroke_key
+    assert local_key and local_key != origin_key and len(records.strokes_for(project, local_key)) == 1
+    assert local_mask_key and local_mask_key != origin_mask_key and len(records.strokes_for(project, local_mask_key)) == 1
+    named(s_instance, marks_id).paint_link = link = new_id()   # a brush session across sets (local state)
+    layer_by_id(marks_id).opacity = .6
+    s2, _ = modules.save_module(bpy.context, ts, layer_by_id(marked_id), Path(directory) / 's2.openpaintmaterial')
+    for replace in (False, True):
+        version, conflicts = modules.update(ts, layer_by_id(s_instance_id), s2, replace=replace)
+        assert version == 2 and conflicts == [], conflicts
+        updated = named(layer_by_id(s_instance_id), marks_id)
+        assert abs(updated.opacity - .6) < 1e-6
+        assert updated.stroke_key == local_key, (replace, updated.stroke_key, local_key, origin_key)
+        assert updated.paint_link == link, (replace, updated.paint_link)
+        assert named(layer_by_id(s_instance_id), striped_id).masks[0].stroke_key == local_mask_key, replace
+        assert len(records.strokes_for(project, local_key)) == 1 and len(records.strokes_for(project, local_mask_key)) == 1
+        assert layer_by_id(marks_id).stroke_key == origin_key and layer_by_id(striped_id).masks[0].stroke_key == origin_mask_key
+        assert records.purge_orphans(project) == 0, 'the update orphaned the instance\'s strokes'
+        assert not issues(ts), issues(ts)
+    print('MODULE_UPDATE portable strokes: PASS', flush=True)
 print('MODULE_UPDATE_PASS', flush=True)
 open_painter.unregister()

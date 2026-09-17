@@ -1,11 +1,41 @@
 """Preflight and register texture mesh maps."""
 
-from ..constants import OWNER
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
 from .cycles_baker import bake
 from .maps.curvature import EDGE_MAP_KINDS, bake_curvature_set, edge_map_set_complete
 from .maps.utility import UTILITY_KINDS, bake_utility
+
+
+# The map each (set id, kind) released at its last rebake, by image name. A
+# released map stays resident for an undo of that rebake; the generation before
+# it goes when the next rebake supersedes it (``register_map``) or at the next
+# save (``sweep_released``), so a session of rebakes keeps at most one
+# superseded map per kind instead of every generation until the file is saved
+# and reopened. Names are only meaningful within one file: ``forget`` runs on
+# load.
+_released = {}
+
+
+def _released_image(key, image, previous):
+    """The map ``key`` released before ``previous``, if it is still ours to remove.
+
+    A name can be taken by a later image once Blender frees the datablock it
+    named, so the image must still carry the owner tag and be neither of the
+    maps the set holds now; a user (a map property holds one, so does a shader
+    node or the artist's material) or a fake user keeps it.
+    """
+    name = _released.get(key)
+    if name is None:
+        return None
+    import bpy
+    from ..constants import OWNER
+    older = bpy.data.images.get(name)
+    if older is None or older == image or older == previous:
+        return None
+    if not older.get(OWNER) or older.users or older.use_fake_user:
+        return None
+    return older
 
 
 def register_map(ts, kind, image):
@@ -15,17 +45,55 @@ def register_map(ts, kind, image):
         prop.kind = kind
     previous = prop.image
     prop.image = image
-    if previous is not None and previous != image and previous.get(OWNER):
+    if previous is not None and previous != image:
         # The superseded map would otherwise stay in the file through its fake
-        # user and be packed on every save. A user-supplied image is never
-        # ours to drop; a live shader node may still bind an owned one, which
-        # then goes once the graph rebinds.
-        previous.use_fake_user = False
-        if not previous.users:
-            import bpy
-            bpy.data.images.remove(previous)
+        # user and be packed on every save. Only the fake user goes: an undo of
+        # the rebake finds the datablock with its pixels, and Blender purges it
+        # on the next save once the graph no longer binds it. A user-supplied
+        # image is never ours to drop.
+        from ..constants import OWNER
+        from ..core.layer_stack import release_image
+        release_image(previous)
+        if previous.get(OWNER):
+            key = (ts.id, kind)
+            # Every rebake makes fresh datablocks (the edge-map set alone is four
+            # float RGBA images), and a zero-user image is resident until the file
+            # is reopened, so the generation before ``previous`` is removed now:
+            # one undo of the rebake still finds its map with the pixels, only a
+            # second undo lands on a map a rebake restores.
+            older = _released_image(key, image, previous)
+            if older is not None:
+                import bpy
+                bpy.data.images.remove(older)
+            _released[key] = previous.name
     from ..geometry.provenance import record
     prop.provenance = record(ts, kind)
+
+
+def sweep_released():
+    """Remove the released maps nothing binds any more (the save handler, before packing).
+
+    A save writes only bound images, so the released ones would be dropped by
+    the next reload either way; removing them here bounds the session's memory
+    to the live maps. A released map a shader node or the artist's material
+    still binds stays, and stays remembered for a later sweep.
+    """
+    import bpy
+    from ..constants import OWNER
+    for key, name in list(_released.items()):
+        older = bpy.data.images.get(name)
+        if older is None or not older.get(OWNER):
+            del _released[key]   # freed already, or the name went to an artist's image
+            continue
+        if older.users or older.use_fake_user:
+            continue   # bound again (an undo, a node, the artist's material): live, not ours
+        bpy.data.images.remove(older)
+        del _released[key]
+
+
+def forget():
+    """Another file's images may reuse the remembered names."""
+    _released.clear()
 
 
 def register_maps(ts, produced):
@@ -80,11 +148,14 @@ def bake_steps(context, ts):
     if not any((settings.normal, settings.ao, settings.curvature, selected_utility, bevel_kinds)):
         raise ValueError("Select at least one map to bake.")
     tasks = []
+    # A user action starts this queue (the bake operator, Bake Back), so each Cycles map
+    # flushes the originals' Edit Mode geometry before staging it; the doctor flushed once
+    # above, but the queue yields between maps and the artist may edit in between.
     if settings.normal:
-        tasks.append(("NORMAL", lambda: bake(context, ts, "NORMAL")))
+        tasks.append(("NORMAL", lambda: bake(context, ts, "NORMAL", flush=True)))
     if settings.ao:
-        tasks.append(("AO", lambda: bake(context, ts, "AO")))
-    tasks.extend((kind, lambda kind=kind: bake(context, ts, kind)) for kind in bevel_kinds)
+        tasks.append(("AO", lambda: bake(context, ts, "AO", flush=True)))
+    tasks.extend((kind, lambda kind=kind: bake(context, ts, kind, flush=True)) for kind in bevel_kinds)
     if settings.curvature:
         tasks.append(("CURVATURE", lambda: bake_curvature_set(ts)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)

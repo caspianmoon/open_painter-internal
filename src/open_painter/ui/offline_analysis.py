@@ -5,6 +5,36 @@ import numpy as np
 from .operators import SafeOperator
 
 
+SUPERSEDED='open_painter_superseded'
+
+
+def retire_superseded(field,previous):
+    """Let the raster a contact run just replaced go, keeping one superseded raster per mask.
+
+    Each run rasters a fresh full-resolution fake-user image. The one it replaces
+    only loses its fake user (not the datablock, so an undo of this run finds its
+    pixels) and is purged on the next save; until then it stays resident. Without
+    a bound, repeated runs before a save stacked every superseded raster in
+    memory, so the field remembers the released predecessor's name and removes
+    the one before it once a newer run releases another: that older raster is two
+    undo steps away and nothing binds it any more. Names, not pointers, identify
+    it (addresses are reused across loads); a datablock that gained a user or a
+    fake user since (an artist wired it into a material, another mask adopted
+    it) is no longer ours to remove.
+    """
+    from ..core.layer_stack import release_image
+    from ..constants import OWNER
+    if previous is None or not previous.get(OWNER):
+        return
+    release_image(previous)
+    older=bpy.data.images.get(field.get(SUPERSEDED,''))
+    if older is not None and older!=previous and older.get(OWNER) and not older.users and not older.use_fake_user:
+        bpy.data.images.remove(older)
+    # A predecessor something else still binds (another mask's field) is not ours to remove later.
+    if not previous.users: field[SUPERSEDED]=previous.name
+    elif SUPERSEDED in field: del field[SUPERSEDED]
+
+
 class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
     bl_idname='open_painter.offline_analysis'
     bl_label='Offline Analysis'
@@ -52,8 +82,7 @@ class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
             previous=mask.influence.image
             mask.influence.image=image; mask.influence.mode='FROZEN'
             mask.influence.provenance=json.dumps(result); invalidate(ts)
-            # Each run rasters a fresh fake-user image; release the last one like scene_fields.publish does.
-            if previous and previous.users<=1: bpy.data.images.remove(previous)
+            retire_superseded(mask.influence,previous)
         elif self.action=='MARK':
             obj=context.active_object
             if not obj or obj.type!='MESH': raise ValueError('Select a mesh')

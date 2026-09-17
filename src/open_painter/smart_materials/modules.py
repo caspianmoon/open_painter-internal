@@ -18,10 +18,14 @@ from pathlib import Path
 
 from ..evaluation.anchors import derived_mapping
 
+# Stroke keys and paint links are instance state like the cache: the loader keys an
+# imported stroke layer or Vector Strokes mask afresh with the strokes it restores, so
+# merging the document's own key back over it would alias the origin's strokes (or render
+# nothing) and orphan the instance's; ``_apply_update`` carries the local ones over.
 VOLATILE = frozenset({'dirty', 'order', 'active_mask', 'active_effect', 'expanded', 'image_name',
                       'detail_image_name', 'revision', 'module_id', 'module_version', 'module_source',
                       'module_instance', 'module_name', 'module_detached', 'layer_id',
-                      'bypass', 'cache_mode', 'cache'})
+                      'bypass', 'cache_mode', 'cache', 'stroke_key', 'paint_link'})
 BASE_TEXT_PREFIX = 'OP Module Base · '
 DIRECTOR_PREFIX = 'md.'   # Material Director ids (authoring.commands.allocate) are plain, dot and all
 ASSET_HASH = 'open_painter_asset_hash'   # on decoded module images: sha256 of the EXR bytes
@@ -421,6 +425,12 @@ def _apply_update(ts, root, parent, version, name, source, loaded, replace, pare
               for layer in local_raw if layer.get('module_id') and layer['id'] != root.id}
     cached = {layer['id']: {'cache_mode': layer['cache_mode'], 'cache': layer['cache']}
               for layer in local_raw if layer.get('cache_mode', 'LIVE') != 'LIVE'}
+    # Stroke keys name this project's strokes (see VOLATILE): a member keeps its own on Replace
+    # too, or the strokes it renders would be orphaned; a layer new to this version starts unkeyed.
+    keyed = {layer['id']: {key: layer[key] for key in ('stroke_key', 'paint_link') if layer.get(key)}
+             for layer in local_raw}
+    keyed_masks = {(layer['id'], mask['id']): mask['stroke_key']
+                   for layer in local_raw for mask in layer.get('masks', []) if mask.get('stroke_key')}
     plain_root = plain_id(root.id, token)
     _keep_paint(merged, [] if replace else local_plain_raw, parent_raw)
     for layer in merged:
@@ -446,7 +456,11 @@ def _apply_update(ts, root, parent, version, name, source, loaded, replace, pare
         added = []
         for values in instance:
             layer = ts.layers.add()
-            values = dict(values, **cached.get(values['id'], {}))
+            values = dict(values, **cached.get(values['id'], {}), **keyed.get(values['id'], {}))
+            if 'masks' in values:
+                values['masks'] = [dict(mask, stroke_key=keyed_masks[(values['id'], mask.get('id'))])
+                                   if (values['id'], mask.get('id')) in keyed_masks else mask
+                                   for mask in values['masks']]
             for key in ('dirty', 'order'):
                 values.pop(key, None)
             # Merged dicts come in set order: restore in RNA order so a pointer's
@@ -515,9 +529,12 @@ def _release(saved, kept_ids):
     """After the subtree was replaced: drop what only the old layers held.
 
     Cache images and images the add-on made for those layers (decoded assets a
-    new version superseded, painted images Replace discarded) go unless a layer,
-    output or baked map anywhere still shows them; decal Empties of layers the
-    merge removed go the way ``layer_stack.remove`` releases them.
+    new version superseded, painted images Replace discarded) lose their fake
+    user unless a layer, output or baked map anywhere still shows them: the
+    datablocks stay for an undo of the update (a removed one comes back blank,
+    see ``layer_stack.release_image``) and are purged on the next save. Decal
+    Empties of layers the merge removed go the way ``layer_stack.remove``
+    releases them.
     """
     import bpy
     from ..constants import OWNER
@@ -548,8 +565,8 @@ def _release(saved, kept_ids):
             bpy.data.objects.remove(obj)
     for image in doomed.values():
         try:
-            bpy.data.images.remove(image)
-        except (ReferenceError, RuntimeError):
+            image.use_fake_user = False
+        except ReferenceError:
             pass
 
 

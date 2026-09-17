@@ -84,9 +84,10 @@ ts.baked_maps.remove(next(i for i, m in enumerate(ts.baked_maps) if m.kind == 'C
 np.testing.assert_array_equal(edge_curvature(ts, SimpleNamespace(edge_size=2.5), mesh_map), mesh_map('CURVATURE')[..., 0])
 
 # A rebake releases the maps it supersedes (0.9.7): they used to survive on
-# their fake user and were packed into the .blend on every save. A map a node
-# still binds loses the fake user and goes once unbound; a user-supplied
-# image is left alone.
+# their fake user and were packed into the .blend on every save. Only the fake
+# user goes, not the datablock (an undo of the rebake finds its pixels): a map
+# nothing binds is purged on the next save, one a node still binds goes once
+# unbound; a user-supplied image is left alone.
 from open_painter.constants import OWNER
 superseded = {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
 material = bpy.data.materials.new('binds the old map')
@@ -96,10 +97,12 @@ node.image = bpy.data.images[superseded['CURVATURE_THIN']]
 picked = bpy.data.images.new('artist curvature', 8, 8)
 picked.use_fake_user = True
 register_map(ts, 'CURVATURE_XWIDE', picked)
-assert superseded['CURVATURE_XWIDE'] not in bpy.data.images
+released = bpy.data.images[superseded['CURVATURE_XWIDE']]
+assert released.users == 0 and not released.use_fake_user, (released.users, released.use_fake_user)
 register_maps(ts, bake_curvature_set(ts))
 assert edge_map_set_complete(ts)
-assert superseded['CURVATURE'] not in bpy.data.images, 'the superseded map kept its fake user'
+released = bpy.data.images[superseded['CURVATURE']]
+assert released.users == 0 and not released.use_fake_user, 'the superseded map kept its fake user'
 bound = bpy.data.images[superseded['CURVATURE_THIN']]
 assert bound.users == 1 and not bound.use_fake_user, (bound.users, bound.use_fake_user)
 node.image = None

@@ -1,8 +1,9 @@
 """Unit adoption across rebuilds (0.9.7): adopted closures read the live graph,
 export shapes are part of the adoption contract, socket-less units survive the
 orphan sweep, a failed rebuild leaves its predecessor intact, adopted images stay
-under the eviction budget, cache owners follow added inputs, discarded units
-leave no boundary work behind, and float paint canvases read back straight."""
+under the eviction budget, a failed raster is inherited rather than re-run on every
+rebuild, cache owners follow added inputs, discarded units leave no boundary work
+behind, and float paint canvases read back straight."""
 import sys
 from pathlib import Path
 from time import monotonic
@@ -19,7 +20,7 @@ from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, layer_cache, shader_preview
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph, _band_rows, remove_orphan_units
-from open_painter.evaluation.shader_resources import RESOURCE
+from open_painter.evaluation.shader_resources import RESOURCE, alive
 from open_painter.painting import channel_paint
 from open_painter.utils.ids import new_id
 
@@ -218,6 +219,61 @@ def run():
     voronoi_binding = binding_of(graph, 'MaskSource:' + noisy_id)
     key = voronoi_binding.node.image.get(RESOURCE)
     assert key in graph.resources.entries, 'an adopted image no table knows is never evicted'
+
+    # ---- A failed raster is inherited by every rebuilt graph, not run again (0.9.8):
+    # only an edit that re-identifies the input, or Retry, runs its factory.
+    calls = []
+    real_factory = voronoi_binding.factory
+
+    def failing(signature):
+        calls.append(signature)
+        raise ValueError('Injected raster failure')
+        yield
+
+    voronoi_binding.factory = failing
+    settled = voronoi_binding.node.image
+    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    next(m for m in layer_by_id(ts, noisy_id).masks if m.id == voronoi_id).noise_scale = 6.
+    shader_preview.tick(scene, ts)
+    info = shader_preview.diagnostics(scene, ts)
+    assert info['state'] == 'FAILED' and 'Injected raster failure' in info['error'] and len(calls) == 1, info
+    failed = voronoi_binding.pending_image
+    failed_key = failed.get(RESOURCE)
+    assert failed is not None and not failed.get('op_shader_resource_ready') and voronoi_binding.node.image == settled
+    for step in range(3):   # unrelated structural edits: the failed factory never re-runs
+        added = layer_by_id(ts, third_id).masks.add()
+        added.id, added.source, added.procedural = new_id(), 'PROCEDURAL', 'CHECKER'
+        stack.invalidate(ts)
+        shader_preview.tick(scene, ts)
+        info = shader_preview.diagnostics(scene, ts)
+        assert info['graph_builds'] == builds + step + 1, info
+        graph = shader_preview.ensure(scene, ts)
+        assert graph.units[noisy_key].tree.as_pointer() == noisy_tree, 'the failed unit was recompiled, not adopted'
+        assert len(calls) == 1, f'a structural rebuild ran a failed factory again ({len(calls)} calls)'
+        assert info['state'] == 'FAILED' and 'Injected raster failure' in info['error'], info
+        assert graph.resources.entries[failed_key].error, 'the inherited failure is not listed by the new graph'
+        assert alive(failed) and voronoi_binding.pending_image == failed and voronoi_binding.node.image == settled
+        assert settled.get(RESOURCE) in graph.resources.entries, 'the leaf the node still shows is not listed'
+    # Re-identifying the input retries it once (and fails again, once).
+    next(m for m in layer_by_id(ts, noisy_id).masks if m.id == voronoi_id).noise_scale = 7.
+    shader_preview.tick(scene, ts)
+    info = shader_preview.diagnostics(scene, ts)
+    assert len(calls) == 2 and info['state'] == 'FAILED', (len(calls), info)
+    retried = voronoi_binding.pending_image
+    assert retried is not None and retried != failed
+    # Retry forgets the failures: the input is rastered again and the failed
+    # placeholders are released instead of lingering in bpy.data.
+    voronoi_binding.factory = real_factory
+    shader_preview.retry(scene, ts)
+    info = ready(scene, ts)
+    graph = shader_preview.ensure(scene, ts)
+    voronoi_binding = binding_of(graph, 'MaskSource:' + noisy_id)
+    assert voronoi_binding.node.image.get('op_shader_resource_ready') and voronoi_binding.pending_image is None
+    assert voronoi_binding.node.image != settled and voronoi_binding.signature == voronoi_binding.identity()
+    assert not alive(failed) and not alive(retried), 'failed placeholders outlived Retry'
+    assert not [i for i in bpy.data.images if i.get(RESOURCE) and not i.get('op_shader_resource_ready')], \
+        'an interrupted placeholder was left in bpy.data'
+    print('ADOPTION_FAILURE_INHERITED_OK', flush=True)
 
     # ---- Cache owners follow inputs added to a cached layer.
     layer_by_id(ts, third_id).cache_mode = 'CACHED'

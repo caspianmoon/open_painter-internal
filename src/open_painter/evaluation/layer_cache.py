@@ -326,6 +326,30 @@ def refresh(scene, ts, layer_id):
     flush(scene, ts, layer_id)
 
 
+def _drop_work(layer_id):
+    """Forget the requests and running jobs of a layer nothing will sample the result of."""
+    for table in (_requests, _jobs):
+        for key in [k for k in table if k[2] == layer_id]:
+            table.pop(key, None)
+
+
+def _unbind_rows(layer):
+    """Detach the images of a layer's cache rows and forget what they were built from.
+
+    The rows themselves stay: compiled bindings may keep their addresses, and a
+    row without an image samples the placeholder until the next publication.
+    Returns the detached cache images.
+    """
+    detached = []
+    for row in layer.cache:
+        image = row.image
+        row.image = None
+        row.provenance = ''
+        if image is not None and image.get(TAG):
+            detached.append(image)
+    return detached
+
+
 def release_layer(layer):
     """Drop a layer's cache images (before the layer is removed or its cache cleared).
 
@@ -333,18 +357,37 @@ def release_layer(layer):
     it and the structural rebuild that follows recompiles the layer. A refresh
     of the layer still running is dropped: nothing will sample its result.
     """
-    for table in (_requests, _jobs):
-        for key in [k for k in table if k[2] == layer.id]:
-            table.pop(key, None)
-    for row in layer.cache:
-        image = row.image
-        row.image = None
-        row.provenance = ''
-        if image is not None and image.get(TAG):
-            try:
-                bpy.data.images.remove(image)
-            except (ReferenceError, RuntimeError):
-                pass
+    _drop_work(layer.id)
+    for image in _unbind_rows(layer):
+        try:
+            bpy.data.images.remove(image)
+        except (ReferenceError, RuntimeError):
+            pass
+
+
+def retire_layer(layer):
+    """A layer set back to Live gives up its cache images (the mode's update callback).
+
+    Only Clear released them before, so a layer cached once carried its
+    full-resolution images in the file for good. They are released, never
+    removed (``layer_stack.release_image``): unpacked generated pixels do not
+    survive a memfile undo of a removed datablock, so Ctrl+Z after the switch
+    would bind the rows to blank images and the shader would sample nothing
+    until a refresh. Dropping the fake user keeps the datablock and its pixels
+    for an undo while the sampler of the compiled graph still reads them; once
+    the structural rebuild recompiles the layer live nothing binds them and
+    the next save or reload purges them. Not ``_retire`` either: the sweep
+    removes a user-less image on the next tick, which is the same removal.
+    The rows lose their provenance too, so Cached again rebuilds instead of
+    trusting an image that is gone.
+    """
+    from ..core.layer_stack import release_image
+    _drop_work(layer.id)
+    for image in _unbind_rows(layer):
+        try:
+            release_image(image)
+        except (ReferenceError, RuntimeError):
+            pass   # already freed (a file load, an undo)
 
 
 def placeholder():

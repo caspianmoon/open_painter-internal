@@ -2,8 +2,110 @@
 
 ## 0.9.7
 
-Bug fixes from a full-tree audit (all background, GUI and GPU suites pass) and two artist-session
-suites on a real asset file (`docs`: TESTING.md).
+Bug fixes from a full-tree audit (all background, GUI and GPU suites pass), artist-session suites
+on a real asset file (`docs`: TESTING.md), and a second, multi-agent audit that confirmed and fixed
+223 further defects (327 candidates from 24 finder scopes over two rounds, per-file triage, two-lens
+adversarial verification, one fixer per file group, each with regression checks). Highlights of
+that second pass, by subsystem:
+
+- **Native shader compiler (`evaluation/shader_graph.py`, 26 fixes).** Sessions no longer keep an
+  RNA reference to the texture set (adding or removing a set shifted every later session onto the
+  wrong set); adopted units read their own graph's anchor index, boundary images and export
+  sockets instead of the previous build's; a failed rebuild no longer corrupts the still-attached
+  graph; orphan unit trees are not deleted while live; layer caches persist provenance without
+  session-local tokens (caches no longer rebuild on every reopen, FROZEN layers are not flagged
+  STALE forever); channel identities include vector strokes and decal frames; a spatial filter
+  inside a mask group rasters the group's inner result; composite anchors inside isolated folders,
+  premultiplied float canvases after packing, image-less decal channels, decal normal frames and
+  sRGB-tagged detail images now agree with the CPU reference; strokes and halo boundaries are
+  rastered once per strip band instead of per 16 rows; cache bindings notice effects and masks
+  added to a cached layer; disabled mask groups stay out of rebuilt mask prefixes.
+- **Scheduler and sessions (`cache.py`, `shader_preview.py`, `layer_cache.py`,
+  `shader_resources.py`, `field_jobs.py`).** `on_save` packs every image even when one pack fails
+  (strokes were lost on reload); saving or rendering no longer cancels pending cache refreshes and
+  live-field analyses for good; the timer no longer spins at 1 kHz on a failed boundary; the live
+  region rebake targets the set that owns the correction; undo no longer forgets bake-correction
+  records; live-edge generators are analysed while the timer runs; a failed boundary raster stays
+  reported instead of silently exporting a grey placeholder; status messages from the cache
+  engine and bakes survive the tick; images removed elsewhere no longer wedge a session; channel
+  opacity edits no longer re-raster boundaries through the percent mirror.
+- **CPU reference (`buffers.py`, `composite.py`, `mask_eval.py`, `channel_eval.py`,
+  `image_snapshots.py`, `raster_cache.py`).** The scalar fast path crashed on any Surface-space
+  effect (the default) on a scalar channel; mask signatures omitted `edge_size`, `space`,
+  `direction` and the geometry stamp; float fills were read premultiplied but composited straight;
+  16-bit PNG/TIFF fills were double-linearised; whole-image masks and strokes thrashed the cache
+  at 4k and were recomputed per strip.
+- **Dependencies and geometry (`dependencies.py`, `mesh_masks.py`, `custom_graph.py`,
+  `physical.py`, `snapshots.py`, `seams.py`, `influencers.py`).** Geometry Nodes inputs, shape
+  keys, referenced vertex groups and crease layers take part in geometry keys and bake records;
+  a mesh-mask edit no longer skips edge rebakes and live-field requests; mesh-mask and custom-graph
+  rasters carry a geometry stamp; the CPU reference evaluates the view layer the artist works in
+  and refuses (with a clear message) an assigned object no layer evaluates instead of reading its
+  base mesh; seam maps build in bounded memory; unresolvable physical densities are cached.
+- **Baking (36 fixes).** Rebakes retire the superseded map instead of packing it forever; region
+  rebakes map viewport face indices onto the render-evaluated copy and no longer copy margin
+  texels over neighbouring islands; painted Projection Distance raises the ray distance with the
+  cage; a zero-extrusion cage no longer collapses onto the surface; AO Exclusion applies without
+  high-poly sources; Bake Back keeps 'Ignore Brush Excludes' and turns projection off again on
+  Remove; the edge-map job binds the set it was started for, registers an undo step and releases
+  its images when cancelled; Bake Check findings select base-mesh faces; UV Border and edge-map
+  bakes allocate bounded grids; resolution changes keep painted corrections.
+- **Painting.** Secondary canvases of a multi-set session are no longer re-read at 60 Hz; sessions
+  begun over a correction session or a swapped material slot are refused; retargets inside Paint
+  Across Sets keep the session; non-square decals keep their aspect; re-pointing a decal no longer
+  spawns a duplicate layer; vector-stroke rasters are shared across strips and no longer refused
+  on dense meshes; decal tangent frames are keyed by geometry and resolution; Material Stamp no
+  longer walks triangles through RNA.
+- **Smart materials and modules.** Module base snapshots serialise datablock pointers by name;
+  mask groups, locally added layers and Material Director ids survive Update/Replace; Update no
+  longer leaks datablocks or re-imports unchanged assets; folders containing a module instance
+  save as modules; imported EXR assets keep their colour space; large materials import (assets
+  are no longer 32-bit EXR); scene-field masks with a ground object save.
+- **UI and operators.** Operator properties no longer leak between clicks (Paint buttons stopping
+  the session after one Finish, Add Filter converting the active mask, Choose Procedural
+  rewriting a mask, Clear Anchor turning every picker into a clear, Selected Objects export
+  becoming the default, Update becoming Replace); the layer drag commits one structural edit
+  instead of one per row crossed; the layer list no longer recomputes diagnostics per row;
+  Rasterize Stroke keeps the stroke for other sets; New Key on a Vector Strokes mask is paintable;
+  the Geometry Effects panel no longer raises on redraw; planar vector strokes use the right view
+  direction; shelf brushes respect the mask selection; the Painter timer survives exceptions.
+- **Geometry effects.** Prototypes and published snapshots are released; instance sizes follow
+  the source object's scale; Regenerate and Displace read the helper's own set and the current
+  modifier values; Replace Source Mesh no longer applies the modifier stack twice; weld estimates
+  no longer refuse ordinary curves.
+- **Export.** Atlas staging duplicates a multi-material prop once; bundles include stitch/weld
+  helpers and pack unsaved paint before writing; the custom pack of constant channels renders.
+- **AI companion.** A fifth image generation no longer tears the session down; the Codex
+  launcher works from a Finder-launched Blender; the director tick no longer redraws every
+  viewport at 20 Hz while idle; switching sets mid-instruction keeps tool calls working.
+- **Texture engine.** Large blurs use a separable/FFT path instead of a direct O(taps)
+  convolution; the procedural lattice cache is released after evaluation.
+- **Reconciliation of the audit's own changes** (a critic and two reviewers read the combined
+  diff): the frame only enters geometry keys and boundary identities for time-dependent assets
+  (animated objects, deforming or referenced-object modifiers), so scrubbing the timeline no
+  longer re-rasters a static prop; `geometry_key` is memoised per update epoch; per-vertex weight
+  and attribute digests are bounded (an epoch token above 250k vertices, salted per load/undo);
+  every bake, doctor, diagnostics and region-rebake path evaluates the same view layer as the CPU
+  reference, and an assigned object no view layer evaluates is reported by validation; superseded
+  maps, canvases, module images, retired layer caches and offline rasters drop their fake user
+  instead of being removed (undo keeps their pixels; the next save purges them), with retention
+  bounded per set/kind; adding or removing a texture set discards only CPU evaluator jobs, not
+  queued cache refreshes and analyses; the layer drag modal has a `cancel()` and session holds
+  time out; sets without high-poly sources bake from themselves without a coincident copy;
+  NORMAL_COMBINE detail images are read raw per evaluator without retagging the artist's image;
+  degree-valued Normal Direction angles from older files migrate to radians once, under a
+  project format version; vector-stroke coverage tests reuse the shared raster cache; failed
+  boundary rasters are inherited by rebuilt graphs and retried only when their identity changes;
+  scene-scope influencer tokens are cheap per member; the scheduler timer survives exceptions in a
+  tick (reported on the status line, backing off on persistent faults); Normal Direction masks key
+  on rotation only; edit-mode meshes are flushed by operator-driven bakes only; face-selection
+  masks that cannot map through a topology-changing modifier are reported as warnings; portable
+  materials carry the vector strokes their layers render and module updates keep instance-local
+  stroke keys; switching a layer back to Live retires its cache images.
+- Eleven findings in `src/open_painter/graph/` (Open Graph mirror) are reported to its owner and
+  left unfixed here: anchor references cleared by node deletion/reroute, filter nodes addressed by
+  index, mask reorders ignoring groups and the active mask, node trees never released, per-node
+  full-stack redraws, repeated viewport splits, and set activation on node clicks.
 
 - **Opening a .blend file silently stopped scene tracking.** The depsgraph handler was not marked
   persistent (the decorator sat on a helper), so after the artist opened any file, mesh masks,

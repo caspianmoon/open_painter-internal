@@ -17,6 +17,10 @@ def validate(ts) -> list[str]:
             issues.append(f"Material assignment changed on {obj.name}.")
         elif not obj.data.uv_layers:
             issues.append(f"No UV map found on {obj.name}.")
+        elif obj.hide_viewport:
+            # No view layer evaluates such an object, so every CPU evaluation, export and
+            # shader boundary refuses it (geometry.snapshots.depsgraph_for): say why up front.
+            issues.append(f"{obj.name} is disabled in viewports: enable it or unassign it.")
     ids = {item.id for item in ts.layers}
     for layer in ts.layers:
         if layer.parent_id and layer.parent_id not in ids:
@@ -41,9 +45,13 @@ def validate(ts) -> list[str]:
 
 
 def warnings(ts) -> list[str]:
-    """Non-blocking problems: missing anchors and published sources read as neutral."""
+    """Non-blocking problems: missing anchors and published sources read as neutral, and
+    a face selection no modifier stack maps through reads as empty. Composed here rather
+    than in ``references`` (bpy-free, run by tests/unit under plain Python): the mesh
+    warnings evaluate geometry, so they need bpy."""
     from ..evaluation.references import warnings as reference_warnings
-    return reference_warnings(ts)
+    from ..evaluation.mesh_masks import warnings as mesh_warnings
+    return reference_warnings(ts) + mesh_warnings(ts)
 
 
 def hierarchy_issues(ts) -> list[str]:

@@ -162,5 +162,62 @@ finally:
 info = ready()
 assert info['graph_builds'] == builds + 1, (builds, info)
 shader_preview.release_hold(key)   # releasing twice, or an ended hold, is harmless
+
+# A modal the window manager cancels (its window closed, a file loaded) never
+# reaches ``finish``: the operator's ``cancel`` lets go of the hold and the drag
+# flag exactly as ``finish`` does, and puts the undropped layer back.
+from types import SimpleNamespace
+from open_painter.ui import native
+builds = info['graph_builds']
+lost = SimpleNamespace(hold=shader_preview.hold(scene, ts), dragging=True, saved=stack.arrangement(ts),
+                       layer_id=dragged)   # a modal's state in the background, where no modal can run
+lost.release = lambda context: native.OP_OT_native_layer_drag.release(lost, context)
+native._drag['active'] = True
+stack.place(ts, dragged, stack.drop_targets(ts, dragged)[1][0])
+assert stack.arrangement(ts) != lost.saved
+for _ in range(3):
+    shader_preview.tick(scene, ts)
+assert shader_preview.diagnostics(scene, ts)['held']
+native.OP_OT_native_layer_drag.cancel(lost, bpy.context)   # no window, no area: nothing to restore on screen
+assert not native._drag['active']
+assert not shader_preview.diagnostics(scene, ts)['held']
+assert stack.arrangement(ts) == lost.saved and stack.active(ts).id == dragged
+info = ready()   # current again: the stack ended as the shader was built, so no rebuild
+assert info['graph_builds'] == builds and info['serial'] == info['bound_serial'], (builds, info)
+
+# And a hold nobody renews for HOLD_SECONDS (a modal lost without even a
+# cancel) is released by the tick itself, with a warning, so the session is
+# current again instead of sitting on its last shader forever.
+import logging
+builds = info['graph_builds']
+key = shader_preview.hold(scene, ts)
+stack.place(ts, dragged, stack.drop_targets(ts, dragged)[1][0])
+for _ in range(3):
+    shader_preview.tick(scene, ts)
+info = shader_preview.diagnostics(scene, ts)
+assert info['held'] and info['graph_builds'] == builds and shader_preview.held(scene, ts), info
+shader_preview.renew_hold(key)
+bound = shader_preview.HOLD_SECONDS
+shader_preview.HOLD_SECONDS = .2
+try:
+    from time import sleep
+    sleep(.3)
+    warnings = []
+    class Catch(logging.Handler):
+        def emit(self, record):
+            warnings.append(record.getMessage())
+    catcher = Catch(level=logging.WARNING)
+    logging.getLogger('open_painter').addHandler(catcher)
+    try:
+        info = ready()
+    finally:
+        logging.getLogger('open_painter').removeHandler(catcher)
+    assert not info['held'] and not shader_preview.held(scene, ts), info
+    assert info['graph_builds'] == builds + 1, (builds, info)
+    assert any('hold' in message and 'releasing' in message for message in warnings), warnings
+    assert len(warnings) == 1, warnings   # released once; the next tick finds no hold to warn about
+finally:
+    shader_preview.HOLD_SECONDS = bound
+stack.restore_arrangement(ts, lost.saved)
 open_painter.unregister()
 print('LAYER_DROP_PASS', flush=True)

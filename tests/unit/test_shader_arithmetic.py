@@ -9,7 +9,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from open_painter.constants import BLEND_ITEMS
 from open_painter.evaluation import blend_modes
-from open_painter.evaluation.shader_math import Signal, blend, blend_value
+from open_painter.evaluation.shader_math import Signal, blend, blend_value, srgb_encode
 from open_painter.evaluation.shader_effects import POINTWISE, UnsupportedEffect, apply_effect
 from open_painter.texture_engine import filters
 
@@ -127,6 +127,16 @@ class ShaderArithmetic(unittest.TestCase):
                 actual = apply_effect(Numeric(), Signal(source, .2), effect(kind, **changes))
                 np.testing.assert_allclose(actual.color, source, atol=1e-12)
                 self.assertEqual(actual.alpha, .2)
+
+    def test_srgb_encode_recovers_stored_bytes(self):
+        # A Normal Combine detail map tagged sRGB is sampled through the Image
+        # Texture node's decode; the encode must hand back the stored value the
+        # CPU's raw read sees (image_snapshots._decode's transfer, inverted).
+        stored = np.concatenate((np.arange(256) / 255., (0., .0031308 * 12.92, .04045, 1e-6)))
+        decoded = np.where(stored <= .04045, stored / 12.92, ((stored + .055) / 1.055) ** 2.4)
+        for value, linear in zip(stored, decoded):
+            actual = srgb_encode(Numeric(), np.full(3, linear))
+            np.testing.assert_allclose(actual, np.full(3, value), atol=1e-6, rtol=1e-6)
 
     def test_spatial_operations_are_explicit_boundaries(self):
         for kind in set(filters.CATALOG) - POINTWISE:

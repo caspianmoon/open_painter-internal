@@ -9,6 +9,7 @@ import bpy
 
 from ..constants import OWNER
 from ..core.layer_stack import copy_ids, invalidate, restore, snapshot
+from ..properties.mesh_selector import degrees_to_radians
 from ..utils.ids import new_id
 from .format import asset_colorspace, read
 
@@ -57,6 +58,11 @@ def decode_assets(assets, loaded):
             if isinstance(value, dict) and "asset" in value:
                 return load(value, painted)
             if isinstance(value, dict):
+                if isinstance(value.get("mesh"), dict):
+                    # A mask saved while selector angles were degrees: converted
+                    # here so the insert, the update's parent and the base
+                    # snapshot written from it all hold radians.
+                    value = dict(value, mesh=degrees_to_radians(value["mesh"]))
                 own = value.get("source") == "PAINT" or value.get("type") == "PAINT"
                 return {k: decode(v, painted or (own and k in ("image", "channels"))) for k, v in value.items()}
             if isinstance(value, list):
@@ -64,6 +70,47 @@ def decode_assets(assets, loaded):
             return value
 
         yield decode
+
+
+def _stroke_records(data):
+    """The document's vector strokes, checked before any layer is added.
+
+    Samples decode to the raster's row shape and finite values; the fields are
+    typed by RNA when the record is restored (a failure there rolls the import
+    back). A stroke keyed to nothing the document renders is dropped.
+    """
+    from binascii import Error as DecodeError
+    import numpy as np
+    from ..painting.stroke_raster import unpack_samples
+    records = data.get('strokes', [])
+    if not isinstance(records, list) or len(records) > 16384:
+        raise ValueError('Invalid smart material strokes.')
+    for record in records:
+        if (not isinstance(record, dict) or not isinstance(record.get('layer_key'), str)
+                or not isinstance(record.get('samples', ''), str)):
+            raise ValueError('Invalid smart material stroke record.')
+        try:
+            samples = unpack_samples(record.get('samples', ''))
+        except (ValueError, DecodeError):
+            raise ValueError('Invalid smart material stroke samples.') from None
+        if not np.isfinite(samples).all():
+            raise ValueError('Invalid smart material stroke samples.')
+    return records
+
+
+def _stroke_keys(layers):
+    """Fresh keys for the stroke keys the document's layers and masks render.
+
+    A key names strokes of the project that saved the material; kept verbatim
+    it would alias another set's strokes here (or render nothing elsewhere).
+    Every layer and mask sharing a saved key shares the new one.
+    """
+    keys = {}
+    for layer in layers:
+        for key in (layer.get('stroke_key', ''), *(mask.get('stroke_key', '') for mask in layer.get('masks', []))):
+            if key and isinstance(key, str):
+                keys.setdefault(key, new_id())
+    return keys
 
 
 def _copyable(layers):
@@ -115,7 +162,11 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     # Anchor ids are mask or effect ids; unknown ones stay verbatim so they report as missing.
     from ..evaluation.anchors import derived_mapping
     anchor_mapping = {**mask_mapping, **effect_mapping, **derived_mapping(mapping)}
+    stroke_keys = _stroke_keys(data['layers'])
+    stroke_records = _stroke_records(data)
+    project = ts.id_data.open_painter
     loaded = []
+    added_strokes = []
     start = len(ts.layers)
     old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")}
     try:
@@ -124,6 +175,12 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                 values = decode(source)
                 values["id"] = mapping[source["id"]]
                 values["parent_id"] = mapping.get(source.get("parent_id"), parent_id)
+                # Vector strokes (0.6.0) follow the layer under a key of this import's own;
+                # a paint link (0.9.7) names layers of the saving project and is dropped
+                # (documents before 0.9.8 carry it).
+                if values.get('stroke_key'):
+                    values['stroke_key'] = stroke_keys[values['stroke_key']]
+                values['paint_link'] = ''
                 for channel in values.get("channels", []):
                     channel["layer_id"] = values["id"]
                     if channel.get('anchor'):
@@ -141,6 +198,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                     for field in ('reference_anchor', 'detail_height_anchor', 'detail_normal_anchor'):
                         if mask.get(field):
                             mask[field] = anchor_mapping.get(mask[field], mask[field])
+                    if mask.get('stroke_key'):
+                        mask['stroke_key'] = stroke_keys[mask['stroke_key']]
                 layer = ts.layers.add()
                 restore(values, layer)
                 if source['id'] in tokens:
@@ -156,6 +215,9 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                             prop.enabled = False
                             prop.color = DEFAULTS[key]
                             prop.value = DEFAULTS[key][0]
+            # The strokes the imported layers render, as the project's own records.
+            from ..painting.strokes import restore_records
+            restore_records(project, ts, [decode(record) for record in stroke_records], stroke_keys, added_strokes)
         from ..evaluation.references import issues
         problems = issues(ts)
         if problems:
@@ -193,6 +255,10 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
             setattr(ts,key,value)
         while len(ts.layers) > start:
             ts.layers.remove(len(ts.layers) - 1)
+        if added_strokes:
+            for index in reversed([i for i, stroke in enumerate(project.strokes) if stroke.id in added_strokes]):
+                project.strokes.remove(index)
+            project.stroke_serial += 1
         for image in loaded:
             bpy.data.images.remove(image)
         raise

@@ -44,14 +44,26 @@ def associated(image):
             and not image.colorspace_settings.is_data)
 
 
+def stored_encoding(image):
+    """The transfer the shader's Image Texture node undoes that a raw read keeps.
+
+    'SRGB' for a byte image tagged sRGB (image.open's default for a PNG or JPG);
+    '' otherwise. Float buffers are scene-linear once loaded, so only byte
+    buffers keep the file's curve. A raw read (a Normal Combine detail map is
+    data) returns the stored values; the shader samples the same image through
+    the node's decode and re-encodes with this transfer, so neither evaluator
+    has to retag a datablock another layer may read as colour.
+    """
+    return 'SRGB' if not image.is_float and image.colorspace_settings.name == 'sRGB' else ''
+
+
 def _decode(value, image, linear):
     _sanitise(value, image)
     if associated(image):
         alpha = value[..., 3:4]
         np.divide(value[..., :3], alpha, out=value[..., :3], where=alpha > 1e-8)
         value[..., :3][value[..., 3] <= 1e-8] = 0
-    # Float buffers are scene-linear once loaded; only byte buffers keep the file's curve.
-    if linear and not image.is_float and image.colorspace_settings.name == 'sRGB':
+    if linear and stored_encoding(image) == 'SRGB':
         rgb = value[..., :3]
         value[..., :3] = np.where(rgb <= .04045, rgb / 12.92,
                                  ((rgb + .055) / 1.055) ** 2.4)

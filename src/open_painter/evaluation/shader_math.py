@@ -123,6 +123,17 @@ def luminance(b, color, weights=(.2126, .7152, .0722)):
     return b.vec("DOT_PRODUCT", color, weights)
 
 
+def srgb_encode(b, color):
+    """Piecewise sRGB transfer per component: the stored bytes of a sample the
+    Image Texture node linearised (image_snapshots.stored_encoding == 'SRGB')."""
+    def encode(v):
+        v = b.math("MAXIMUM", v, 0.0)
+        low = b.math("MULTIPLY", v, 12.92)
+        high = b.math("SUBTRACT", b.math("MULTIPLY", b.math("POWER", v, 1 / 2.4), 1.055), .055)
+        return _choose(b, b.math("LESS_THAN", v, .0031308), low, high)
+    return _per_component(b, encode, color)
+
+
 def _extrema(b, color):
     r, g, blue = b.separate(color)
     return (b.math("MINIMUM", b.math("MINIMUM", r, g), blue),

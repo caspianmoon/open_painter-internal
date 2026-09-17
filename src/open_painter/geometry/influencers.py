@@ -36,25 +36,30 @@ def radii(objs, default):
 
 
 def _token(obj):
-    """A cheap identity for scene-scope members: name, transform, mesh content and radius.
-    The signature is persisted as the field's provenance, so the mesh takes part as its
-    content hash (cached per reported geometry update), never as the session's epoch
-    counter: that restarts on every load, undo and redo, which re-analysed every field on
-    reopen and let a redo land on the epoch an undo had published. Only in Edit Mode, where
-    the authored mesh lags the edit BMesh the analysis reads, does the epoch join in."""
-    from ..evaluation.dependencies import mesh_epoch, mesh_signature
+    """A cheap identity for scene-scope members: names, transform, mesh update epoch and
+    radius. Never the mesh's content hash: the scope can hold every mesh of the scene and
+    the signature is asked for on the depsgraph tick, so hashing the members (tens of
+    millions of vertices on a large assembly, all of them again once every load, undo and
+    redo has emptied the fingerprint cache) would stall the session. The epoch is unique for
+    the session (``mesh_epoch``), so a redo never reads as the members an undo published; a
+    member published untouched keeps its identity across a reopen, one edited in the
+    publishing session re-analyses the field once after it. The field's own object keeps
+    its full record (``object_record`` hashes that one mesh)."""
+    from ..evaluation.dependencies import mesh_epoch
     mesh = obj.data if obj.type == 'MESH' else None
-    return (obj.name_full, tuple(round(v, 6) for row in obj.matrix_world for v in row),
-            mesh_signature(mesh) if mesh is not None else None,
-            mesh_epoch(mesh) if mesh is not None and obj.mode == 'EDIT' else 0,
+    return (obj.name_full, mesh.name_full if mesh is not None else None,
+            tuple(round(v, 6) for row in obj.matrix_world for v in row),
+            mesh_epoch(mesh) if mesh is not None else 0,
             float(obj.get(RADIUS_PROPERTY, 0.0)))
 
 
 def _content(ts, kind, name):
     """What a VERTEX_GROUP / ATTRIBUTE field reads off the assigned meshes: the weights or
     values (which the mesh content hash leaves out, so painting them moved nothing here),
-    the attribute's shape and the group names. As in ``_token``, the digest form and never
-    the session's epoch: the signature persists as the field's provenance."""
+    the attribute's shape and the group names. In digest form (the assigned meshes are few,
+    and ``mesh_masks`` caches each digest per reported update), not the session's epoch that
+    stands in for a scope member's mesh in ``_token``: the signature persists as the field's
+    provenance, and a painted weight must move it, not a reopen."""
     from ..evaluation.mesh_masks import _attribute_token, _content_token
     from ..evaluation.resource_keys import stable_keys
     targets = dict.fromkeys(ref.object for ref in ts.assignments if ref.object and ref.object.type == 'MESH')

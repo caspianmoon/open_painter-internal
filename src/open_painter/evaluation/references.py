@@ -4,6 +4,8 @@ Channel references sample the source layer's own channel before composition;
 mask references sample its mask stack (optionally through a selected effect).
 Anchor points publish a stack prefix at their position; a missing anchor reads as
 neutral and is reported by warnings(), while dependency cycles remain errors.
+This module stays bpy-free (tests/unit run it under plain Python): warnings that need
+evaluated geometry (mesh_masks.warnings) are composed by core.validation.warnings.
 Composite anchors (a layer's blended output, a folder's child composite) are
 modelled with composition nodes ('OUT', layer, channel), ('BELOW', layer,
 channel) and ('GROUP', folder, channel), so "an output may only feed layers
@@ -163,7 +165,8 @@ def issues(ts):
 
 
 def warnings(ts):
-    """Missing anchors and published sources; evaluation continues with neutral values."""
+    """Missing anchors and published sources; evaluation continues with neutral values.
+    Structural only: ``core.validation.warnings`` adds the geometry-dependent ones."""
     return graph(ts)[2]
 
 

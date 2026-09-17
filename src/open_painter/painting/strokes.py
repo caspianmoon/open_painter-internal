@@ -56,6 +56,11 @@ def stroke_identity(project, key):
 
 def touch(project, stroke):
     """A stroke edit: bump its revision and wake every layer rendering it."""
+    from ..core.layer_stack import replaying
+    if replaying():
+        # A snapshot replay (restore_records) writes every field of the record, each
+        # firing this through the property callback: the replayer wakes the key once.
+        return
     stroke.revision += 1
     project.stroke_serial += 1
     enable_channels(project, stroke.layer_key)
@@ -115,6 +120,8 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
     created = []
     # A mask-only key has no paint layer to mirror into other sets.
     if universal and key == layer.stroke_key:
+        from ..evaluation.raster_cache import for_texture_set
+        scene = ts.id_data
         for other in project.texture_sets:
             if other.id == ts.id or any(item.stroke_key == key for item in other.layers):
                 continue
@@ -122,14 +129,58 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
             # object the pointer never crossed, so the raster, not the ray hit, decides,
             # and a set the bounds merely enclose must not gain a layer it re-rasters
             # for nothing on every later edit of the key.
-            if _intersects(other, lo, hi) and stroke_raster.touches(other, stroke, int(other.resolution)):
-                linked = stack.add(other, 'PAINT', layer.name)
-                linked.stroke_key = key
-                created.append(other)
+            if not _intersects(other, lo, hi):
+                continue
+            n = int(other.resolution)
+            raster = stroke_raster.rasters(other, [stroke], n)[0]
+            if not stroke_raster.marks(raster):
+                continue
+            linked = stack.add(other, 'PAINT', layer.name)
+            linked.stroke_key = key
+            created.append(other)
+            # The set reads geometry only now that it renders strokes, so only now does
+            # its shared cache carry the stamp the evaluation keys stroke rasters under:
+            # hand it the raster that decided the link instead of building it again.
+            stroke_raster.adopt(other, stroke, n, for_texture_set(scene, other), raster)
     project.stroke_serial += 1
     enable_channels(project, key)
     _wake(project, key, created)
     return stroke
+
+
+def restore_records(project, ts, records, keys, added=None):
+    """Add stroke snapshots (a material document's ``strokes``) under new keys and ids.
+
+    ``keys`` maps each saved ``layer_key`` to the key the imported layers of ``ts``
+    got; a record whose key no imported layer or mask renders is skipped. The
+    strokes stay independent of the originals (fresh ids, revision 0). The ids
+    added go into ``added`` as they are, so a failed import can take them back out.
+    """
+    from ..core.layer_stack import replay, restore
+    added = [] if added is None else added
+    if not records:
+        return added
+    with replay(ts):
+        for values in records:
+            key = keys.get(values.get('layer_key', ''))
+            if not key:
+                continue
+            samples = stroke_raster.unpack_samples(values.get('samples', ''))
+            stroke = project.strokes.add()
+            known = stroke.bl_rna.properties.keys()
+            restore({k: v for k, v in values.items() if k in known and k not in ('id', 'revision', 'selected')}, stroke)
+            stroke.id, stroke.layer_key = new_id(), key
+            stroke.revision, stroke.selected = 0, False
+            # Derived from the samples, not trusted from the document.
+            stroke.sample_count = len(samples)
+            stroke.bounds_min, stroke.bounds_max = stroke_raster.bounds(samples)
+            added.append(stroke.id)
+    if added:
+        project.stroke_serial += 1
+        for key in dict.fromkeys(keys.values()):
+            enable_channels(project, key)
+            _wake(project, key, [ts])
+    return added
 
 
 def enable_channels(project, key):

@@ -5,6 +5,12 @@ import bpy
 
 from ..core.layer_stack import replaying
 
+# Project file format (``OP_Project.format_version``): 2 stores selector angles in
+# radians. Files before it (0.9.6 and the first 0.9.7 builds) stored degrees under
+# the same properties; ``migrate_angles`` converts them once on load.
+FORMAT_VERSION = 2
+ANGLES = ('angle', 'softness')
+
 KINDS = [
     ('OBJECT', 'Object', 'Faces of one assigned object'),
     ('COLLECTION', 'Collection', 'Faces of every assigned object in a collection (children included); add an object to the collection and the mask follows'),
@@ -55,6 +61,40 @@ def numeric(self, context):
             from ..evaluation.shader_preview import notify
             notify(self, context, structural=False)
             return
+
+
+def in_degrees(value) -> bool:
+    """Whether a stored angle is a degree magnitude from before the radians change.
+
+    Radians never exceed pi (the property maximum) and the old degree ranges
+    were 0..180 and 0..90, so anything past a full turn can only be degrees.
+    Degrees up to 2*pi (about 6 deg) are indistinguishable and stay as they are.
+    """
+    return isinstance(value, (int, float)) and value > 2 * math.pi
+
+
+def degrees_to_radians(values: dict) -> dict:
+    """A selector snapshot (a ``mesh`` dict from a document, module base or copy)
+    with degree-magnitude angles converted; other snapshots come back unchanged."""
+    if not any(in_degrees(values.get(name)) for name in ANGLES):
+        return values
+    return dict(values, **{name: math.radians(values[name]) for name in ANGLES if in_degrees(values.get(name))})
+
+
+def migrate_angles(selector) -> bool:
+    """Convert a live selector's degree-magnitude angles in place; True if it changed.
+
+    A value read straight from an older file is not clamped by the property's
+    maximum: 45 shows as 2578 deg and covers every face. Setting it converts and
+    clamps, and the update callback invalidates the owning set.
+    """
+    changed_any = False
+    for name in ANGLES:
+        value = getattr(selector, name)
+        if in_degrees(value):
+            setattr(selector, name, math.radians(value))
+            changed_any = True
+    return changed_any
 
 
 class OP_MeshSelector(bpy.types.PropertyGroup):

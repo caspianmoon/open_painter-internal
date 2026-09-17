@@ -42,11 +42,15 @@ def inspect(ts, evaluated=False):
         try:
             parts = groups(ts)
             if evaluated:
-                with bpy.context.temp_override(scene=ts.id_data, view_layer=ts.id_data.view_layers[0]):
-                    graph = bpy.context.evaluated_depsgraph_get()
+                # ``validate_topology`` stages from the context's scene and layer: the set's
+                # scene, in the layer the CPU reference evaluates the targets in.
+                from ..geometry.snapshots import view_layer_for
+                scene = ts.id_data
+                lows = [part.low for part in parts]
+                with bpy.context.temp_override(scene=scene, view_layer=view_layer_for(scene, lows)):
                     for part in parts:
                         if part.cage:
-                            validate_topology(part.low, part.cage, graph)
+                            validate_topology(part.low, part.cage)
         except ValueError as exc:
             issues.append(Issue('ERROR', str(exc)))
     if not evaluated or any(i.severity == 'ERROR' for i in issues):
@@ -178,8 +182,11 @@ def ray_coverage(ts, samples=RAY_SAMPLES, seed=0):
     extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
     limit = settings.ray_distance if settings.ray_distance > 0 else None
     scene = ts.id_data
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+    # Sources and cages are read from the layer the targets are evaluated in (``targets``
+    # below); a source disabled in viewports is read from its original, as the bake stages it.
+    from ..geometry.snapshots import depsgraph_for, evaluable
+    others = list(dict.fromkeys(obj for part in parts.values() for obj in (*part.sources, part.cage) if obj))
+    depsgraph = depsgraph_for(scene, [*parts, *evaluable(scene, others)])
     rng = np.random.default_rng(seed)
     issues = []
     with targets(ts) as meshes:
@@ -301,12 +308,17 @@ def select_faces(ts, issues):
         if max(faces) >= len(mesh.polygons):
             skipped.append(name)
             continue
-        scene = ts.id_data
-        with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-            evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-            if len(evaluated.data.polygons) != len(mesh.polygons):
-                skipped.append(name)
-                continue
+        # The layer the issues were found in: another one may evaluate the target to its
+        # base mesh and pass evaluated indices off as base faces.
+        from ..geometry.snapshots import depsgraph_for
+        try:
+            evaluated = obj.evaluated_get(depsgraph_for(ts.id_data, [obj]))
+        except ValueError:
+            skipped.append(name)
+            continue
+        if len(evaluated.data.polygons) != len(mesh.polygons):
+            skipped.append(name)
+            continue
         if obj.mode == 'EDIT':
             import bmesh
             bm = bmesh.from_edit_mesh(mesh)

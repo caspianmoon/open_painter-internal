@@ -91,8 +91,13 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
                 relink_slots(ts)
             LayerEvaluator(context.scene).evaluate_texture_set(ts.id, force=True)
         elif self.action == "VALIDATE":
+            from ..core.validation import warnings
             issues = validate(ts)
+            # Warnings (a missing anchor, a face selection no modifier stack maps through)
+            # do not fail the set, but the artist asked what is wrong with it: list them.
+            notes = warnings(ts) if not issues else []
             context.scene.open_painter.status = (
-                " | ".join(issues) if issues else "Texture set is valid."
+                " | ".join(issues) if issues else
+                " | ".join(notes) if notes else "Texture set is valid."
             )
-            self.report({"WARNING"} if issues else {"INFO"}, context.scene.open_painter.status)
+            self.report({"WARNING"} if issues or notes else {"INFO"}, context.scene.open_painter.status)

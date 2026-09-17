@@ -180,30 +180,30 @@ with Metrics() as counters:
 assert counters.phases['scene_analysis']['calls'] == 1
 print('LIVE_FIELDS job engine: PASS', flush=True)
 
-# 4. A scene-scope provenance names the members by content, not by the session's epoch
-# counter: reopening the file (``dependencies.clear``) leaves it current, and a redo after
-# an undo of a member edit cannot land on the epoch the undo published.
+# 4. A scene-scope provenance names the members by name, placement and update epoch, never
+# by content: the scope can hold every mesh of the scene and the signature is asked for on
+# the depsgraph tick, so it hashes no member (the field's own object keeps its record). The
+# epoch is unique for the session, so a redo never reads as the members an undo published;
+# reopening the file (``dependencies.clear``) keeps a member published untouched current.
 field.mode, field.scope, field.distance = 'LIVE', 'SCENE', .3
 dependencies.refresh(scene)
 while field_jobs.pending(scene):
     field_jobs.tick(scene, budget=.004)
 scene_fields.update(ts, mask)   # publish the current members synchronously
-published = field.provenance
-assert published == repr(scene_fields.signature(ts, field))
-dependencies.clear()                                               # what load_post, undo_post and redo_post run
-assert repr(scene_fields.signature(ts, field)) == published, 'a reopened file re-analysed unchanged members'
-LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
-assert not field_jobs.pending(scene), 'a reopened file requested an analysis for the published members'
+assert repr(scene_fields.signature(ts, field)) == field.provenance
+with Metrics() as counters:
+    influencers.signature(ts, field)
+assert counters.phases.get('geometry_signature', {}).get('calls', 0) == 1, \
+    'a scene-scope signature hashed its members (only the field object, the bolt, is hashed)'
 
 
 def edit_block(z):
+    before = dependencies.mesh_epoch(block.data)
     for vertex in block.data.vertices:
         if vertex.co.z < 0:
             vertex.co.z = z
-    block.data.update(); bpy.context.view_layer.update()
-    pointer = block.data.as_pointer()
-    dependencies._mesh_epochs[pointer] = dependencies.mesh_epoch(block.data) + 1   # the edit's depsgraph update
-    dependencies._candidates.add(scene.as_pointer())
+    block.data.update(); bpy.context.view_layer.update()   # the edit's depsgraph update stamps the mesh
+    assert dependencies.mesh_epoch(block.data) > before, 'the edit reported no geometry update'
 
 
 edit_block(-.6)                                                    # the edit: the block's bottom reaches through the panel
@@ -211,8 +211,23 @@ dependencies.refresh(scene)
 assert field_jobs.pending(scene), 'a member mesh edit did not request the field'
 while field_jobs.pending(scene):
     field_jobs.tick(scene, budget=.004)
-edited = images.pixels(field.image)[..., 0].copy()
-dependencies.clear(); edit_block(-.15)                             # undo: the counter restarts, one update re-stamps the mesh
+edited, edited_provenance = images.pixels(field.image)[..., 0].copy(), field.provenance
+# A reopen: the epochs restart, so a member edited in the publishing session costs one
+# analysis (its content is not in the token) that lands on the same raster ...
+dependencies.clear()                                               # what load_post, undo_post and redo_post run
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+while field_jobs.pending(scene):
+    field_jobs.tick(scene, budget=.004)
+np.testing.assert_allclose(images.pixels(field.image)[..., 0], edited, atol=1e-6)
+assert field.provenance != edited_provenance
+# ... after which a member published untouched keeps its identity: no work on the next reopen.
+dependencies.clear()
+with Metrics() as counters:
+    assert repr(scene_fields.signature(ts, field)) == field.provenance, 'a reopened file re-analysed untouched members'
+assert counters.phases.get('geometry_signature', {}).get('calls', 0) == 2, 'a reopen hashed the members'   # the panel and the bolt
+LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
+assert not field_jobs.pending(scene), 'a reopened file requested an analysis for the published members'
+dependencies.clear(); edit_block(-.15)                             # undo: the epochs restart, one update re-stamps the mesh
 LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)      # the evaluation after an undo step re-requests
 assert field_jobs.pending(scene)
 while field_jobs.pending(scene):
@@ -226,8 +241,8 @@ assert field_jobs.pending(scene), 'the redo did not request the field'
 while field_jobs.pending(scene):
     field_jobs.tick(scene, budget=.004)
 np.testing.assert_allclose(images.pixels(field.image)[..., 0], edited, atol=1e-6)
-# The epoch stamps themselves never repeat within a session (an Edit Mode member keeps
-# its epoch in the token, as the authored mesh lags the edit BMesh the analysis reads).
+# The epoch stamps themselves never repeat within a session: the counter behind them
+# survives the undo and redo that empty the per-mesh map.
 stamps = []
 for step in range(2):                                              # undo, then redo: one reported update each
     dependencies.clear()

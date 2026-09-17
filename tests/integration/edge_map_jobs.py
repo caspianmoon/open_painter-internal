@@ -122,7 +122,11 @@ ts = texture_set()
 assert edge_map_set_complete(ts) and stale_curvature(ts) is None
 landed = {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
 assert landed['CURVATURE'] != old_name
-assert old_name not in bpy.data.images, 'the superseded crease-only map kept its fake user'
+# The superseded map is released, not removed (0.9.7): no fake user and nothing
+# binding it, so the next save purges it, while an undo of the rebake still finds
+# its pixels (a removed generated datablock comes back blank from the memfile).
+superseded = bpy.data.images[old_name]
+assert not superseded.use_fake_user and superseded.users == 0, (superseded.users, superseded.use_fake_user)
 cube = bpy.data.objects['Cube']
 cube.location.x += 1
 bpy.ops.ed.undo_push(message='B')
@@ -135,6 +139,29 @@ assert {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
 assert all(name in bpy.data.images for name in landed.values())
 assert stale_curvature(ts) is None
 print('EDGE_MAP_JOBS landing survives undo of a later edit: PASS', flush=True)
+
+# Undoing the rebake itself brings the previous map back with its pixels.
+ts = texture_set()
+previous = images.create(f'{ts.name}_BakedCurvature', n)
+images.write(previous, __import__('numpy').full((n, n, 4), .375, 'float32'), pack=False)
+register_map(ts, 'CURVATURE', previous)
+previous_name = previous.name
+bpy.ops.ed.undo_push(message='before the rebake')
+from open_painter.baking.bake_manager import register_maps
+register_maps(ts, bake_curvature_set(ts))
+ts = texture_set()
+assert next(m.image.name for m in ts.baked_maps if m.kind == 'CURVATURE') != previous_name
+assert not bpy.data.images[previous_name].use_fake_user and bpy.data.images[previous_name].users == 0
+bpy.ops.ed.undo_push(message='rebaked')
+assert bpy.ops.ed.undo() == {'FINISHED'}
+scene = bpy.data.scenes[SCENE]
+ts = texture_set()
+restored = next(m.image for m in ts.baked_maps if m.kind == 'CURVATURE')
+assert restored is not None and restored.name == previous_name and restored.use_fake_user
+assert abs(float(images.pixels(restored).mean()) - .375) < 1e-6, "the undone rebake lost the previous map's pixels"
+register_maps(ts, bake_curvature_set(ts))   # leave the set with a current map set
+ts = texture_set()
+print('EDGE_MAP_JOBS undo of a rebake restores the previous map: PASS', flush=True)
 
 # Discards: a removed scene or changed inputs release the produced images.
 ts = texture_set()

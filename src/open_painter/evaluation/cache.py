@@ -4,6 +4,7 @@ The legacy debounce below belongs to CPU texture evaluation. Native parameter
 edits are bound synchronously and never enter that full-stack image scheduler.
 """
 
+import json
 from time import monotonic
 
 import bpy
@@ -22,11 +23,17 @@ _live_checks = {}
 _regions = {}
 _states = {}
 _progress = {}   # scene pointer -> the job progress text this scheduler wrote last
+_faults = {}     # scene pointer -> the scheduler fault text ``tick`` wrote last
+_fault_seen = set()   # fault messages whose traceback this run of failures logged
+_fault_streak = 0     # consecutive timer ticks that raised
+_tick_scene = None    # the scene ``_tick`` is servicing (None outside the scene loop)
 _scene_cursor = None
 _set_cursors = {}
 _last_prune = (frozenset(), 0.0)
 IDLE_INTERVAL = 0.1
 ACTIVE_INTERVAL = 0.016
+FAULT_INTERVAL = 1.0   # the rate a persistently failing tick retries at
+FAULT_BACKOFF = 5      # consecutive failures before the timer slows to FAULT_INTERVAL
 
 
 def wake():
@@ -58,7 +65,7 @@ def _prune(live, now):
     layer_cache.prune(live_scenes)
     from . import profile
     profile.prune(live)
-    for table in (_paint_input, _live_checks, _set_cursors, _progress):
+    for table in (_paint_input, _live_checks, _set_cursors, _progress, _faults):
         for key in set(table) - live_scenes:
             table.pop(key, None)
     for identifier in (set(_evaluators) | set(_pending) | set(_jobs) | set(_regions) | set(_states)) - live:
@@ -135,10 +142,30 @@ def discard(key):
     _evaluators.pop(key, None)
 
 
-def cancel_all():
+def discard_evaluators():
+    """Drop the work that reads set structs by address: ``texture_sets.add()``/
+    ``remove()`` relocated them (0.9.7).
+
+    Only the CPU evaluator jobs (generators over the resolved set) and a
+    running field analysis (its strips read the influence through the RNA
+    reference the job was started with) dereference the old addresses. The
+    analysis goes back to the request queue, where its key resolves by id on
+    the next start; queued cache refreshes, field requests and scheduled edge
+    rebakes are keyed by id and resolve when they start, so they stay put:
+    nothing re-issues them, and a full cancel here left a stale layer bound
+    to its old image on every set add or remove.
+    """
     for key in list(_jobs):
         discard(key)
     _evaluators.clear()
+    for key, job in list(field_jobs._jobs.items()):
+        field_jobs._jobs.pop(key, None)
+        field_jobs._requests.setdefault(key, {'signature': job['signature'], 'since': monotonic()})
+
+
+def cancel_all():
+    """Every job and request of every scene: a file load or unregister."""
+    discard_evaluators()
     field_jobs.cancel_all()
     layer_cache.cancel_all()
 
@@ -208,17 +235,90 @@ def _rebake_pending(scene):
 
 
 def tick():
-    global _scene_cursor
+    """The scheduler timer callback: ``_tick`` kept alive whatever it raises.
+
+    Blender unregisters a timer whose function raises, and ``wake`` refuses to
+    revive one that is not registered, so a single failing dependency refresh
+    (a mesh mask signature, a decal image, a depsgraph that is not available)
+    used to stop every live update until Blender restarted. When the timer
+    owns the call the failure is reported instead (the traceback once per
+    distinct message, the project status line every time) and the next tick
+    retries; a run of failures backs off to a slow rate so a persistent fault
+    neither spins the log nor costs the UI its idle rate. A script that drives
+    the scheduler by hand (tests, the unregistered CPU workflow) still sees the
+    raise: there is no timer to lose, and the caller wants the crash.
+    """
+    global _fault_streak
+    try:
+        interval = _tick()
+    except Exception as exc:
+        if not bpy.app.timers.is_registered(tick):
+            raise
+        _fault_streak += 1
+        _report_fault(exc)
+        return FAULT_INTERVAL if _fault_streak >= FAULT_BACKOFF else IDLE_INTERVAL
+    if _fault_streak:
+        _fault_streak = 0
+        _fault_seen.clear()   # a fault that returns after a recovery is a new episode
+        _clear_faults()
+    return interval
+
+
+def _report_fault(exc):
+    """Log the fault and put it on the status line of the scene it broke."""
+    message = f'{type(exc).__name__}: {exc}'
+    if message not in _fault_seen:
+        _fault_seen.add(message)
+        logger.error('Scheduler tick failed (%d in a row): %s', _fault_streak, message, exc_info=True)
+    else:
+        logger.debug('Scheduler tick failed (%d in a row): %s', _fault_streak, message)
+    text = f'Live update failed: {str(exc) or type(exc).__name__}'
+    # The fault interrupted one scene's turn; anything before the scene loop
+    # (the prune) is nobody's in particular and every project learns of it.
+    scenes = [_tick_scene] if _tick_scene is not None else list(bpy.data.scenes)
+    for scene in scenes:
+        try:
+            if hasattr(scene, 'open_painter'):
+                _faults[scene.as_pointer()] = text
+                _set_status(scene, text)
+        except Exception as inner:   # a scene removed mid-tick; the log already has the fault
+            logger.debug('Scheduler fault status: %s', inner)
+
+
+def _clear_faults():
+    """A recovered tick takes its fault line back the way ``_end_progress`` does:
+    only while the line still shows it, so a message written since stays."""
+    from . import shader_preview
+    for scene in bpy.data.scenes:
+        text = _faults.pop(scene.as_pointer(), None) if hasattr(scene, 'open_painter') else None
+        if text is not None and scene.open_painter.status == text:
+            _set_status(scene, '')
+            shader_preview.restate(scene)
+    _faults.clear()
+
+
+def _forget_faults():
+    global _fault_streak, _tick_scene
+    _faults.clear()
+    _fault_seen.clear()
+    _fault_streak = 0
+    _tick_scene = None
+
+
+def _tick():
+    global _scene_cursor, _tick_scene
     from .preview_policy import fair_order
     from .evaluator import LayerEvaluator
 
     from . import live_preview, shader_preview
+    _tick_scene = None
     live = frozenset(key_for(scene, ts) for scene in bpy.data.scenes
                      if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets)
     _prune(live, monotonic())
     for scene in fair_order(list(bpy.data.scenes), _scene_cursor, lambda item: item.as_pointer()):
         if not hasattr(scene, "open_painter"):
             continue
+        _tick_scene = scene
         dependencies.refresh(scene)
         if field_jobs.progress(scene) is None and layer_cache.progress(scene) is None:
             _end_progress(scene)   # a finished job's line goes before the shader loop writes
@@ -405,6 +505,7 @@ def tick():
             _scene_cursor = scene_key
             return .001
         _end_progress(scene)
+    _tick_scene = None
     # Idle projects poll slowly: native edits bind synchronously in their RNA
     # callbacks and structural edits wake the timer, so 60 Hz is only needed
     # while painting or while a shader session still has work to finish.
@@ -458,8 +559,51 @@ def _reset_runtime(*, forget_corrections):
     cancel_all()
     _live_checks.clear()
     _regions.clear()
+    _forget_faults()
     from . import physical
     physical.forget()
+
+
+def _migrate_angles(project):
+    """Mesh selector angles saved as degrees (before project format 2) become radians.
+
+    The properties changed units in place: a file saved before that reads 45
+    where 0.785 is meant, and the value is not clamped on the way in, so the
+    normal-direction mask covers everything. Module base snapshots (JSON texts)
+    carry the same fields and must agree with the migrated instances, or the
+    next Update reports every angle as a local edit. The stamp keeps this to
+    one pass per file: ``texture_set_manager.create`` writes the current
+    format on a project's first set, so only a file saved before the stamp
+    existed enters the scan, and only from ``on_load``. Undo and redo never
+    reach a state older than the loaded (already migrated) file, so they skip
+    it; a scan there would also fight the memfile step it just restored.
+    """
+    from ..properties.mesh_selector import FORMAT_VERSION, degrees_to_radians, migrate_angles
+    if project.format_version >= FORMAT_VERSION:
+        return
+    for ts in project.texture_sets:
+        for layer in ts.layers:
+            for mask in layer.masks:
+                migrate_angles(mask.mesh)
+    from ..smart_materials.modules import BASE_TEXT_PREFIX
+    for text in bpy.data.texts:
+        if not (text.get(OWNER) and text.name.startswith(BASE_TEXT_PREFIX)):
+            continue
+        try:
+            base = json.loads(text.as_string())
+        except ValueError:
+            continue   # read_base treats it as missing; nothing to convert
+        converted = False
+        for layer in base.get('layers') or ():
+            for mask in layer.get('masks', ()) if isinstance(layer, dict) else ():
+                mesh = mask.get('mesh') if isinstance(mask, dict) else None
+                if isinstance(mesh, dict) and degrees_to_radians(mesh) is not mesh:
+                    mask['mesh'] = degrees_to_radians(mesh)
+                    converted = True
+        if converted:
+            text.clear()
+            text.write(json.dumps(base))
+    project.format_version = FORMAT_VERSION
 
 
 def _relearn(*, forget_corrections):
@@ -486,6 +630,11 @@ def _relearn(*, forget_corrections):
 
 @persistent
 def on_load(_):
+    from ..baking.bake_manager import forget as forget_released
+    forget_released()   # the remembered superseded-map names belong to the previous file
+    for scene in bpy.data.scenes:
+        if hasattr(scene, "open_painter"):
+            _migrate_angles(scene.open_painter)   # file-format upgrades: the loaded file only
     _relearn(forget_corrections=True)
 
 
@@ -567,6 +716,13 @@ def on_save(_):
                         set_state(scene, ts, "FAILED", str(exc))
                         logger.error("Save preview: %s", exc)
     finally:
+        # A map a rebake superseded is neither written nor packed; removing it
+        # now keeps a session of rebakes from holding every generation in memory.
+        try:
+            from ..baking.bake_manager import sweep_released
+            sweep_released()
+        except Exception as exc:
+            logger.error('Sweep superseded maps: %s', exc)
         # Whatever failed above, the strokes are packed: an unpacked managed
         # canvas reloads blank.
         _pack_images(source_images)
@@ -648,3 +804,4 @@ def unregister():
     cancel_all()
     _live_checks.clear()
     _regions.clear()
+    _forget_faults()

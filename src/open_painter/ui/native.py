@@ -436,6 +436,11 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
         ts = active_set(context)
         if ts is None or not any(item.id == self.layer_id for item in ts.layers):
             return self.finish(context, "CANCELLED")
+        # Every event the modal still receives proves the gesture is alive; a
+        # hold nobody renews expires (shader_preview.HOLD_SECONDS) so a modal
+        # cancelled underneath us can never freeze the session for good.
+        from ..evaluation import shader_preview
+        shader_preview.renew_hold(self.hold)
         if event.type in {"MOUSEMOVE", "INBETWEEN_MOUSEMOVE"}:
             dx, dy = event.mouse_x - self.origin[0], event.mouse_y - self.origin[1]
             if not self.dragging:
@@ -465,17 +470,40 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
         return {"RUNNING_MODAL"} if self.dragging else {"PASS_THROUGH"}
 
     def finish(self, context, result):
-        _drag["active"] = False
-        from ..evaluation import shader_preview
-        shader_preview.release_hold(self.hold)
+        self.release(context)
         if self.dragging:
-            context.window.cursor_modal_restore()
-            context.workspace.status_text_set(None)
             if context.area is not None:
                 context.area.tag_redraw()
             return {result}
         # A plain click: leave the release to the widgets underneath.
         return {result, "PASS_THROUGH"}
+
+    def cancel(self, context):
+        # The window manager ends a modal without a final event (its window
+        # closed, a file loaded, the handler stack was cleared): ``modal`` never
+        # runs again, so the drop the user never made is undone here and the
+        # hold and the drag flag are released exactly as ``finish`` does them.
+        try:
+            ts = active_set(context)
+            if self.dragging and ts is not None and any(item.id == self.layer_id for item in ts.layers):
+                layer_stack.restore_arrangement(ts, self.saved)
+                ts.active_layer = layer_stack.index_of(ts, self.layer_id)
+        except Exception:
+            logger.debug("Layer drag cancelled without its texture set", exc_info=True)
+        self.release(context)
+
+    def release(self, context):
+        """Let go of everything the drag took: the flag, the shader hold, the cursor and the status text."""
+        _drag["active"] = False
+        from ..evaluation import shader_preview
+        shader_preview.release_hold(self.hold)
+        if self.dragging:
+            try:
+                context.window.cursor_modal_restore()
+                context.workspace.status_text_set(None)
+            except (AttributeError, RuntimeError):
+                # A cancel arrives without the window that showed them.
+                pass
 
 
 class PainterPanel:

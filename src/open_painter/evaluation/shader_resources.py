@@ -42,6 +42,13 @@ class Resources:
         self.queue = []
         self.completed = 0
         self.timings = {}   # owner layer id -> seconds of factory work since the last step report
+        # Leaves a rehydrated or adopted node still samples under an identity this
+        # table does not list (an interrupted placeholder, a leaf of another size):
+        # released once the binding moves on, never cached.
+        self.superseded = []
+
+    def key(self, signature):
+        return sha256(repr((self.size, signature)).encode()).hexdigest()
 
     def request(self, signature, factory, owner=''):
         """Return a cached image or queue just this immutable source snapshot.
@@ -50,7 +57,7 @@ class Resources:
         The iterator must finish with all rows populated. Publication is atomic.
         ``owner`` names the layer whose profile the work is attributed to.
         """
-        key = sha256(repr((self.size, signature)).encode()).hexdigest()
+        key = self.key(signature)
         self.used.add(key)
         if key in self.entries and not alive(self.entries[key].image):
             # Another set's table evicted the shared leaf, or Purge Unused Data
@@ -84,15 +91,75 @@ class Resources:
     def adopt(self, image):
         """List a finished leaf a rehydrated node held under an identity it no
         longer has, so the retention budget evicts it like any superseded source
-        instead of leaving it in bpy.data at 0 users; an unfinished one is
-        removed as soon as nothing samples it."""
+        instead of leaving it in bpy.data at 0 users; an unfinished one (or a
+        leaf of another size) is removed as soon as nothing samples it. While a
+        node still binds it, it waits in ``superseded`` (0.9.8): a node that moves
+        on, or dies with a recompiled unit, would otherwise leave it in bpy.data
+        unlisted forever."""
         key = image.get(RESOURCE)
-        if not key or key in self.entries:
+        if not key:
             return
-        if image.get('op_shader_resource_ready') and tuple(image.size) == (self.size, self.size):
+        listed = self.entries.get(key)
+        if listed is not None and listed.image == image:
+            return
+        if (listed is None and image.get('op_shader_resource_ready')
+                and tuple(image.size) == (self.size, self.size)):
             self.entries[key] = Entry(image)
         elif not image.users:
             bpy.data.images.remove(image)
+        elif not any(held == image for held in self.superseded):
+            self.superseded.append(image)
+
+    def failure(self, signature):
+        """The failed entry this table holds for ``signature``, or None."""
+        entry = self.entries.get(self.key(signature))
+        return entry if entry is not None and entry.error and alive(entry.image) else None
+
+    def inherit(self, signature, previous):
+        """Move ``previous``'s failed raster of ``signature`` into this table (0.9.8).
+
+        A rebuilt graph adopting the binding reports the failure it inherited
+        instead of running the factory again: a permanently failing input would
+        otherwise re-run on every structural rebuild. The entry leaves the
+        previous table so closing that table cannot take the placeholder the
+        binding still shows. Returns the image, or None when nothing failed.
+        """
+        entry = previous.failure(signature)
+        if entry is None:
+            return None
+        key = self.key(signature)
+        del previous.entries[key]
+        self.entries[key] = entry
+        self.used.add(key)
+        return entry.image
+
+    def restore(self, signature, previous):
+        """Hand an inherited failure back (a rolled-back build)."""
+        key = self.key(signature)
+        entry = self.entries.get(key)
+        if entry is not None and entry.error and key not in previous.entries:
+            previous.entries[key] = self.entries.pop(key)
+
+    def forget_failures(self):
+        """Drop every failed entry (Retry) so its source is requested again; a
+        placeholder nothing samples goes with it. Returns the dropped keys."""
+        failed = {key for key, entry in self.entries.items() if entry.error}
+        for key in failed:
+            entry = self.entries.pop(key)
+            if alive(entry.image) and not entry.image.users:
+                bpy.data.images.remove(entry.image)
+        return failed
+
+    def _release_superseded(self):
+        kept = []
+        for image in self.superseded:
+            if not alive(image):
+                continue
+            if image.users:
+                kept.append(image)
+            else:
+                bpy.data.images.remove(image)
+        self.superseded = kept
 
     def _produce(self, entry, parts):
         # Allocate only for an actually scheduled unsupported source. No per-event
@@ -142,6 +209,7 @@ class Resources:
         # set's table or a purge removes an image it still lists.
         for key in [key for key, entry in self.entries.items() if not alive(entry.image)]:
             self._drop(key)
+        self._release_superseded()
         while self.queue:
             key = self.queue[0]
             entry = self.entries[key]
@@ -198,6 +266,7 @@ class Resources:
                 pass
         self.entries.clear()
         self.queue.clear()
+        self._release_superseded()
 
 
 def values(group, excluded=()):

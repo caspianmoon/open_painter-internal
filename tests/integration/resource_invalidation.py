@@ -37,8 +37,9 @@ assert np.max(abs(after-before)) > .01
 LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
 np.testing.assert_array_equal(images.pixels(images.output(ts, 'ROUGHNESS').image), after)
 
-# Real depsgraph updates: unrelated movement preserves geometry; assigned movement,
-# UVs, vertex edits, modifier settings, frame and assignment changes retire it.
+# Real depsgraph updates: unrelated movement and the frame of a static prop preserve
+# geometry; assigned movement, UVs, vertex edits, modifier settings, assignment changes
+# and the frame of a deformed prop retire it.
 obj = ref.object
 other = scene.objects.get('Camera')
 bpy.context.view_layer.update()
@@ -74,7 +75,80 @@ def edit_mesh():
 changed_geometry(edit_mesh, 'mesh')
 modifier = obj.modifiers.new('Lifetime bevel', 'BEVEL')
 changed_geometry(lambda: setattr(modifier, 'width', .15), 'modifier', False)
+# A static prop's key leaves the frame out: scrubbing the timeline keeps its geometry and
+# every raster keyed on it. An armature-deformed prop follows the pose, so its key does not.
+from open_painter.evaluation import dependencies
+assert not dependencies.animated(ts), 'a bevelled static prop counted as animated'
+static_key = dependencies.geometry_key(scene, ts)
+scene.frame_set(scene.frame_current+1)
+bpy.context.view_layer.update()
+assert dependencies.geometry_key(scene, ts) == static_key, 'a frame change re-keyed a static prop'
+with patch.object(projection, 'geometry', wraps=projection.geometry) as geometry:
+    LayerEvaluator(scene).evaluate_texture_set(ts.id)
+    assert geometry.call_count == 0, 'a frame change rebuilt the geometry of a static prop'
+rig = bpy.data.objects.new('Lifetime rig', bpy.data.armatures.new('Lifetime rig'))
+scene.collection.objects.link(rig)
+deform = obj.modifiers.new('Lifetime armature', 'ARMATURE')
+deform.object = rig
+bpy.context.view_layer.update()
+assert dependencies.animated(ts), 'an armature-deformed prop counted as static'
+deformed_key = dependencies.geometry_key(scene, ts)
+assert deformed_key != static_key and deformed_key[1] == (scene.frame_current, scene.frame_subframe)
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
 changed_geometry(lambda: scene.frame_set(scene.frame_current+1), 'frame', False)
+assert dependencies.geometry_key(scene, ts)[1] == (scene.frame_current, scene.frame_subframe)
+obj.modifiers.remove(deform)
+bpy.data.objects.remove(rig)
+bpy.context.view_layer.update()
+assert not dependencies.animated(ts)
+# What a modifier reads is walked too: a static Boolean cutter keeps the prop static, a
+# keyed one (or a cutter deformed by its own rig, or an animated object up the cutter's
+# parent chain) carries the frame into the key; a cutter reading its owner back
+# terminates. Frame-driven kinds the set once missed (a .mdd Mesh Cache) count on their own.
+cutter = bpy.data.objects.new('Lifetime cutter', bpy.data.meshes.new('Lifetime cutter'))
+scene.collection.objects.link(cutter)
+cut = obj.modifiers.new('Lifetime cut', 'BOOLEAN')
+cut.object = cutter
+bpy.context.view_layer.update()
+assert not dependencies.animated(ts), 'a static Boolean cutter counted as animated'
+assert dependencies.geometry_key(scene, ts)[1] is None
+cutter.keyframe_insert('location', frame=1)
+cutter.location.x += .5
+cutter.keyframe_insert('location', frame=10)
+bpy.context.view_layer.update()
+assert dependencies.animated(ts), 'an animated Boolean cutter counted as static'
+assert dependencies.geometry_key(scene, ts)[1] == (scene.frame_current, scene.frame_subframe)
+cutter.animation_data.action = None   # animation_data_clear() crashes 5.2.1 headless
+assert not dependencies.animated(ts)
+cutter_rig = bpy.data.objects.new('Lifetime cutter rig', bpy.data.armatures.new('Lifetime cutter rig'))
+scene.collection.objects.link(cutter_rig)
+cutter.modifiers.new('Lifetime cutter armature', 'ARMATURE').object = cutter_rig
+assert dependencies.animated(ts), 'a rigged Boolean cutter counted as static'
+cutter.modifiers.clear()
+assert not dependencies.animated(ts)
+anchor = bpy.data.objects.new('Lifetime cutter anchor', None)
+scene.collection.objects.link(anchor)
+cutter.parent = anchor
+anchor.keyframe_insert('rotation_euler', frame=1)
+assert dependencies.animated(ts), "an animated parent of a Boolean cutter counted as static"
+cutter.parent = None
+anchor.animation_data.action = None
+assert not dependencies.animated(ts)
+cutter.modifiers.new('Lifetime cut back', 'BOOLEAN').object = obj   # cycle: must terminate
+assert not dependencies.animated(ts)
+cutter.modifiers.clear()
+for kind in ('MESH_CACHE', 'FLUID', 'DYNAMIC_PAINT', 'EXPLODE', 'PARTICLE_INSTANCE'):
+    assert kind in dependencies._TIME_MODIFIERS, kind + ' is frame-driven but left the frame out of the key'
+cache = obj.modifiers.new('Lifetime mesh cache', 'MESH_CACHE')
+assert dependencies.animated(ts), 'a Mesh Cache prop counted as static'
+obj.modifiers.remove(cache)
+obj.modifiers.remove(cut)
+bpy.data.objects.remove(cutter)
+bpy.data.objects.remove(cutter_rig)
+bpy.data.objects.remove(anchor)
+bpy.context.view_layer.update()
+assert not dependencies.animated(ts)
+LayerEvaluator(scene).evaluate_texture_set(ts.id)
 changed_geometry(lambda: setattr(ref, 'slot_index', 1), 'assignment')
 changed_geometry(lambda: setattr(ref, 'slot_index', 0), 'assignment restore')
 def render_uv():

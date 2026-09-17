@@ -72,6 +72,15 @@ def cache_changed(self, context):
         for channel in CHANNELS:
             row = self.cache.add()
             row.channel = channel
+    elif self.cache_mode == 'LIVE' and len(self.cache):
+        # Back to Live: the rows stay (see above) but give up their images, or a
+        # layer cached once would carry full-resolution images in the file for
+        # good. Released, never removed: an undo of the switch must find the
+        # datablocks with their pixels. Not skipped while replaying: a snapshot
+        # lands in a fresh layer (no rows, nothing to give up) and its own rows
+        # are restored after this.
+        from ..evaluation.layer_cache import retire_layer
+        retire_layer(self)
     preview_only(self, context)
 
 

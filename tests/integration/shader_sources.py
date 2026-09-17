@@ -353,6 +353,48 @@ def run():
         add_mask(layer, "REFERENCE", reference_anchor="nowhere")
     check("anchor_missing_neutral", anchor_missing_neutral)
 
+    # An artist's sRGB-tagged byte image (image.open's default for a PNG) feeds
+    # both a Normal fill and its Normal Combine detail. The fill decodes sRGB
+    # like the Image Texture node, the detail is read as stored by both
+    # evaluators, and the datablock keeps its tag: neither read retags it.
+    opened = bpy.data.images.new("Opened normal map", width=N, height=N)
+    opened.colorspace_settings.name = "sRGB"
+    authored = np.ones((N, N, 4), np.float32)
+    authored[..., 0] = .3 + .4 * u
+    authored[..., 1] = .35 + .3 * v
+    authored[..., 2] = .7 + .25 * np.sin(u * np.pi) * np.cos(v * np.pi)
+    opened.pixels.foreach_set(authored.ravel())
+    opened.update()
+    stored = np.empty(N * N * 4, np.float32)
+    opened.pixels.foreach_get(stored)
+    stored = stored.reshape(N, N, 4)
+    assert np.abs(stored - authored).max() <= .5 / 255 + 1e-6   # the byte buffer holds authored values, quantised
+
+    def shared_srgb_detail(layer, prop):
+        prop.image = opened
+        effect = prop.effects.add()
+        effect.kind = "NORMAL_COMBINE"
+        effect.image = opened
+        effect.amount = 1.3
+    check("srgb_detail_shared_fill", shared_srgb_detail, channel="NORMAL")
+    assert opened.colorspace_settings.name == "sRGB", opened.colorspace_settings.name
+    assert not report["failures"], report["failures"]
+    shared = stack.channel_for(ts.layers[-1], "NORMAL")
+    from open_painter.evaluation.image_snapshots import read
+    detail_reference = channel_eval.source(shared, "FILL", N, 0, N, {}, small, {})
+    shared.effects[0].strength = 0.
+    fill = channel_eval.source(shared, "FILL", N, 0, N, {}, small, {})
+    decoded = read({}, opened, linear=True)
+    np.testing.assert_allclose(fill[..., :3], decoded[..., :3], atol=1e-6)   # the fill still decodes sRGB
+    assert np.abs(decoded[..., :3] - stored[..., :3]).max() > .05
+    # The detail combined with the decoded fill was the stored map, not the decoded one.
+    combined = filters.apply(decoded[..., :3], "NORMAL_COMBINE",
+                             detail=filters.apply(stored[..., :3], "NORMAL_STRENGTH", strength=1.3))
+    np.testing.assert_allclose(detail_reference[..., :3], combined, atol=1e-6)
+    wrong = filters.apply(decoded[..., :3], "NORMAL_COMBINE",
+                          detail=filters.apply(decoded[..., :3], "NORMAL_STRENGTH", strength=1.3))
+    assert np.abs(detail_reference[..., :3] - wrong).max() > .02
+
     bump = images.create("Bump disc", N)
     disc = np.full((N, N, 4), .5, np.float32)
     disc[..., 3] = 1

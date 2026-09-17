@@ -172,12 +172,14 @@ from open_painter.ui import bake_corrections as correction_ui
 other = project.texture_sets[0]
 assert correction_ui.session_set(bpy.context) is not None and correction_ui.session_set(bpy.context).id == ts.id
 rebaked.clear()
-with patch.object(corrections, 'rebake_region', lambda context, target, kinds=None: rebaked.append(target.id) or {}), \
+with patch.object(corrections, 'rebake_region',
+                  lambda context, target, kinds=None, flush=False: rebaked.append((target.id, flush)) or {}), \
         bpy.context.temp_override(scene=scene):
     assert bpy.ops.open_painter.bake_correction(action='REBAKE_REGION') == {'FINISHED'}
-    assert rebaked == [ts.id], f'Rebake Region ran on the set selected in the dock ({rebaked})'
+    # The operator flushes the edit meshes it stages (a user action); the timer above did not.
+    assert rebaked == [(ts.id, True)], f'Rebake Region ran on the set selected in the dock ({rebaked})'
     assert bpy.ops.open_painter.bake_correction(action='REBAKE_REGION', set_id=other.id) == {'FINISHED'}
-    assert rebaked == [ts.id, other.id], 'a button drawn in a set\'s panel acts on that set'
+    assert rebaked == [(ts.id, True), (other.id, True)], 'a button drawn in a set\'s panel acts on that set'
 other.bake.corrections.active = 'SKEW'   # the other set's selector must not re-target the session
 assert project.paint_correction == 'OFFSET' and project.paint_set_id == ts.id and project.paint_image is offset
 with bpy.context.temp_override(scene=scene):
@@ -319,6 +321,82 @@ assert float(np.abs(images.pixels(prop.image)[..., :3] - truth).max()) < .05
 low.modifiers.remove(subsurf)
 print('BAKE_CORRECTIONS_RENDER_FACES_OK', flush=True)
 
+# ---- Edit Mode: bakes and CPU rasters read the mesh the artist is editing (0.9.8) -----------
+# Edit Mode keeps the geometry in the edit BMesh; the datablock every bake stage copies (and
+# ``to_mesh`` with all data layers evaluates) lags behind until the mode ends. A region rebake
+# started from Edit Mode, a custom-graph raster and the CPU reference must all read the moved
+# vertex, not the mesh as it was on entering the mode; only the doctor's checks used to.
+import bmesh
+from types import SimpleNamespace
+from open_painter.baking.maps.utility import bake_utility
+from open_painter.evaluation import custom_graph
+saved_reach = settings.separate_cage_distance, settings.cage_extrusion, settings.ray_distance
+settings.separate_cage_distance, settings.cage_extrusion, settings.ray_distance = True, .1, 1.0
+register_map(ts, 'NORMAL', bake(bpy.context, ts, 'NORMAL'))
+prop = next(m for m in ts.baked_maps if m.kind == 'NORMAL')
+before = images.pixels(prop.image)[..., :3].copy()
+ids, _ = corrections.face_map(bpy.context, ts)[low]
+centre_face = int(ids[int(cv * n), int(cu * n)])
+region = ids == centre_face
+interior = region & ~corrections.dilate(~region, 2)
+bpy.context.view_layer.objects.active = low
+bpy.ops.object.mode_set(mode='EDIT')
+bm = bmesh.from_edit_mesh(low.data); bm.verts.ensure_lookup_table()
+corner = next(v for v in bm.verts if abs(v.co.z - 1.) < 1e-6 and abs(v.co.x - 1 / 3) < .01 and abs(v.co.y - 1 / 3) < .01)
+corner_index, corner.co.z = corner.index, 1.3   # a corner of the centre face
+bmesh.update_edit_mesh(low.data)
+assert abs(low.data.vertices[corner_index].co.z - 1.) < 1e-6, 'the datablock lags behind the edit mesh (the premise)'
+paint('OFFSET', .5 + .01, dab_rows, dab_cols)
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'], flush=True)   # the operator's call
+assert low.mode == 'EDIT' and 0 < result['NORMAL'] <= 4, (low.mode, result)
+assert abs(low.data.vertices[corner_index].co.z - 1.3) < 1e-6, 'the bake staged the datablock without flushing the edit'
+tilted = (np.abs(images.pixels(prop.image)[..., :3] - before).max(-1) > .05)[interior].mean()
+assert tilted > .3, f'the rebaked face bakes flat: the staged mesh is the one from before the edit ({tilted:.2f})'
+# The custom-graph raster (Cycles, staged copies) and the CPU reference (``snapshots.targets``)
+# agree on the raised geometry: world height baked through a Position input against POSITION.
+tree = bpy.data.node_groups.new('OP Height', 'ShaderNodeTree')
+tree.interface.new_socket(name='Position', in_out='INPUT', socket_type='NodeSocketVector')
+tree.interface.new_socket(name='Height', in_out='OUTPUT', socket_type='NodeSocketFloat')
+group_in, group_out = tree.nodes.new('NodeGroupInput'), tree.nodes.new('NodeGroupOutput')
+split = tree.nodes.new('ShaderNodeSeparateXYZ')
+tree.links.new(group_in.outputs['Position'], split.inputs['Vector'])
+tree.links.new(split.outputs['Z'], group_out.inputs['Height'])
+height = custom_graph.raster(ts, SimpleNamespace(node_group=tree, name='Height'), n)
+position = bake_utility(ts, 'POSITION')
+lo, hi = position['world_min'][2], position['world_max'][2]
+reference = images.pixels(position)[..., 2] * (hi - lo) + lo
+assert abs(hi - 1.3) < 1e-4, f'the CPU reference bounds stop at {hi}: it read the mesh from before the edit'
+assert abs(height[interior].max() - 1.3) < .03 and abs(reference[interior].max() - 1.3) < .03, \
+    (height[interior].max(), reference[interior].max())
+worst = float(np.abs(height - reference)[interior].max())
+assert worst < .03, f'the custom-graph bake and the CPU raster disagree on the edited mesh ({worst})'
+bpy.data.images.remove(position)
+# Only operator-driven stages flush. The custom-graph raster runs from the evaluation tick
+# and layer-cache jobs, and the stroke-driven region rebake from the scheduler's timer:
+# ``update_from_editmode`` tags the mesh as changed, so a timer flushing it would repeat
+# the full-mesh flush every tick and fight the edit session. Those stage the datablock as
+# it is (the CPU reference reads the same datablock, so the two still agree); the
+# operator's ``flush=True`` is what loads a later edit.
+bm = bmesh.from_edit_mesh(low.data); bm.verts.ensure_lookup_table()
+bm.verts[corner_index].co.z = 1.6
+bmesh.update_edit_mesh(low.data)
+height = custom_graph.raster(ts, SimpleNamespace(node_group=tree, name='Height'), n)
+assert abs(low.data.vertices[corner_index].co.z - 1.3) < 1e-6, 'a scheduler-driven raster flushed the edit mesh'
+assert abs(height[interior].max() - 1.3) < .03, height[interior].max()
+result = corrections.rebake_region(bpy.context, ts, ['NORMAL'])   # the timer's call
+assert result == {'NORMAL': 0}, result
+assert abs(low.data.vertices[corner_index].co.z - 1.3) < 1e-6, 'the timer-driven region rebake flushed the edit mesh'
+corrections.rebake_region(bpy.context, ts, ['NORMAL'], flush=True)
+assert abs(low.data.vertices[corner_index].co.z - 1.6) < 1e-6, 'the operator-driven region rebake must flush'
+bpy.data.node_groups.remove(tree)
+bm = bmesh.from_edit_mesh(low.data); bm.verts.ensure_lookup_table()
+bm.verts[corner_index].co.z = 1.0
+bmesh.update_edit_mesh(low.data)
+bpy.ops.object.mode_set(mode='OBJECT')
+assert abs(low.data.vertices[corner_index].co.z - 1.) < 1e-6
+settings.separate_cage_distance, settings.cage_extrusion, settings.ray_distance = saved_reach
+print('BAKE_CORRECTIONS_EDIT_MODE_OK', flush=True)
+
 # Changing the set resolution keeps the painted corrections (rescaled) and their map registered.
 corrections.clear(ts)
 offset = paint('OFFSET', 1.0, rows, cols)
@@ -393,8 +471,72 @@ assert low.mode == 'OBJECT' and not low.data.use_paint_mask
 assert scene.tool_settings.image_paint.canvas is None
 assert not corrections._snapshots and not [o for o in scene.objects if o.get(corrections.OVERLAY)]
 assert not [i for i in bpy.data.images if i.get(corrections.TAG)]
-remaining = {i.name for i in bpy.data.images}
-assert not baked_names & remaining and not [i for i in bpy.data.images if i.get('texture_set_id') == ts_id]
+# The set's maps and outputs are released for the next save to purge (no fake user, nothing
+# binding them), not removed: an undo of the deletion still finds their pixels.
+kept = {i.name for i in bpy.data.images if i.users or i.use_fake_user}
+assert not baked_names & kept and not [i for i in bpy.data.images if i.get('texture_set_id') == ts_id and (i.users or i.use_fake_user)]
 print('BAKE_CORRECTIONS_SET_REMOVED_OK', flush=True)
+
+# ---- the face map reads the layer the CPU reference evaluates the target in (0.9.8) ----------
+# A layout/texturing split: the prop's collection is excluded from the first view layer and the
+# artist works in the second. Region rebakes keep the staged faces the face map names; the dirty
+# texels were painted against the evaluation ``snapshots.targets`` reads. Both must come from the
+# same view layer, or the rebaked faces would not be the painted ones.
+from open_painter.core.validation import validate
+from open_painter.geometry.snapshots import targets
+from open_painter.geometry.uv_rasterizer import rasterize
+props = bpy.data.collections.new('Props')
+scene.collection.children.link(props)
+prop = cube('Prop', 2.0, 1)
+for owner in list(prop.users_collection):        # cube() links into the active collection
+    owner.objects.unlink(prop)
+props.objects.link(prop)
+prop.location.x = 8
+subsurf = prop.modifiers.new('Subdivision', 'SUBSURF')
+subsurf.subdivision_type = 'SIMPLE'
+subsurf.levels = subsurf.render_levels = 1       # 24 base faces, 96 evaluated ones
+texturing = scene.view_layers.new('Texturing')
+scene.view_layers[0].layer_collection.children['Props'].exclude = True
+bpy.context.window.view_layer = texturing
+prop_ts = sets.create(scene, 'Prop', 512)
+sets.assign(scene, prop_ts, prop)
+
+
+def reference_ids():
+    """Face ids at the texels of the evaluation the CPU reference reads."""
+    with targets(prop_ts) as meshes:
+        target = meshes[0]
+        ids = np.full((n, n), -1, np.int64)
+        rows, cols, tris, _ = rasterize(target['uv'][target['tri_loops']], n)
+        ids[rows, cols] = target['tri_polygons'][tris]
+        return ids, len(target['mesh'].polygons)
+
+
+for excluded, serving in ((scene.view_layers[0], texturing), (texturing, scene.view_layers[0])):
+    # First the artist's own layer serves; then the artist's layer excludes the prop and the
+    # other one evaluates it: both readers follow the same choice.
+    excluded.layer_collection.children['Props'].exclude = True
+    serving.layer_collection.children['Props'].exclude = False
+    ids, count = reference_ids()
+    staged, staged_count = corrections.face_map(bpy.context, prop_ts)[prop]
+    assert count == staged_count == 96, (count, staged_count)
+    assert np.array_equal(staged, ids), f'{(staged != ids).mean():.4f} of the texels name other faces'
+    assert not [issue for issue in validate(prop_ts) if 'disabled' in issue], validate(prop_ts)
+# Disabled in viewports: no layer evaluates it, so evaluation refuses it and validation says why.
+prop.hide_viewport = True
+issues = validate(prop_ts)
+assert any('Prop is disabled in viewports: enable it or unassign it' in issue for issue in issues), issues
+for reader in (reference_ids, lambda: corrections.face_map(bpy.context, prop_ts)):
+    try:
+        reader()
+        raise AssertionError('a target disabled in viewports must not be read from its base mesh')
+    except ValueError as exc:
+        assert 'Prop' in str(exc) and 'view layer' in str(exc), exc
+prop.hide_viewport = False
+assert not [issue for issue in validate(prop_ts) if 'disabled' in issue]
+bpy.context.window.view_layer = scene.view_layers[0]
+scene.view_layers.remove(texturing)
+sets.remove(scene, next(i for i, t in enumerate(project.texture_sets) if t.id == prop_ts.id))
+print('BAKE_CORRECTIONS_VIEW_LAYER_OK', flush=True)
 print('BAKE_CORRECTIONS_PASS', flush=True)
 open_painter.unregister()

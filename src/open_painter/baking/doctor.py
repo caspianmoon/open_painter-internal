@@ -122,12 +122,14 @@ def _base_topology(ts):
 
     ``diagnostics`` reports polygon indices of the evaluated mesh (the one
     ``geometry.snapshots.targets`` builds); they only address base faces
-    when no modifier changes the face count.
+    when no modifier changes the face count. The same layer as ``targets``:
+    a layer that excludes the target evaluates it to its base mesh, which
+    would pass modifier-changed indices off as base faces.
     """
-    scene = ts.id_data
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]):
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-    return {obj.name: len(obj.evaluated_get(depsgraph).data.polygons) == len(obj.data.polygons) for obj in _lows(ts)}
+    from ..geometry.snapshots import depsgraph_for
+    lows = _lows(ts)
+    depsgraph = depsgraph_for(ts.id_data, lows)
+    return {obj.name: len(obj.evaluated_get(depsgraph).data.polygons) == len(obj.data.polygons) for obj in lows}
 
 
 def _from_issue(check, issue, base_ok=None):
@@ -156,10 +158,13 @@ def _issue_findings(check, issues, ts):
 
 
 def _sync_edit_meshes(ts):
-    """Edit Mode keeps its geometry in the edit BMesh; the datablock the checks read lags behind."""
-    for obj in dict.fromkeys(_lows(ts) + _highs(ts) + _cages(ts)):
-        if obj.mode == 'EDIT':
-            obj.update_from_editmode()
+    """Edit Mode keeps its geometry in the edit BMesh; the datablock the checks read lags behind.
+
+    The same flush every bake stage applies to its originals (``render_geometry``), so the
+    checks and the bakes they gate read one geometry.
+    """
+    from .render_geometry import flush_edit_meshes
+    flush_edit_meshes(_lows(ts) + _highs(ts) + _cages(ts))
 
 
 def _end_paint_session(context):
@@ -445,9 +450,12 @@ def check_cage(ts, tier='PRE_BAKE'):
             return findings
     extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
     scene = ts.id_data
+    from ..geometry.snapshots import view_layer_for
     originals = [obj for part in parts.values() for obj in (part.low, part.cage) if obj is not None]
-    with bpy.context.temp_override(scene=scene, view_layer=scene.view_layers[0]), \
-            scope(bpy.context, originals) as frozen:
+    lows = list(parts)
+    # The bake's own layer choice (the artist's first), so the findings name the staged faces.
+    with bpy.context.temp_override(scene=scene, view_layer=view_layer_for(scene, lows)), \
+            scope(bpy.context, originals, required=lows) as frozen:
         for low, part in parts.items():
             copy = frozen[low]
             mesh = copy.data

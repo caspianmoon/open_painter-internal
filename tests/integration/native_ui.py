@@ -52,8 +52,11 @@ def setup():
             key=lambda a: a.width * a.height,
         )
         region = next(r for r in area.regions if r.type == "WINDOW")
+        area.spaces.active.overlay.show_overlays = True
         with bpy.context.temp_override(area=area, region=region):
             bpy.ops.open_painter.open_editor()
+            # Mounting the editor keeps the artist's overlay toggle (it used to force it off).
+            assert area.spaces.active.overlay.show_overlays, "the editor must not switch overlays off"
             bpy.ops.open_painter.texture_set(action="ADD")
             ts = bpy.context.scene.open_painter.texture_sets[0]
             ts.resolution = "512"

@@ -40,7 +40,8 @@ def mount(window, area):
     area.type = "VIEW_3D"
     _spaces[key] = area.spaces.active.as_pointer()
     area.spaces.active.shading.type = "MATERIAL"
-    area.spaces.active.overlay.show_overlays = False
+    # Overlays (grid, outlines, gizmos, the brush cursor's helpers) stay as the artist
+    # left them: the editor only asks for material shading.
     from .native import prepare_assets, request_focus
 
     prepare_assets()

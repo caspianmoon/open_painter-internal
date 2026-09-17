@@ -4,6 +4,7 @@ from ..constants import RESOLUTIONS
 from .bake import OP_BakedMap, OP_BakeSettings
 from .channel import OP_Output
 from .export import OP_ExportSettings
+from .aging import OP_Aging
 from .layer import OP_Layer, changed
 
 
@@ -88,4 +89,5 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     bake: bpy.props.PointerProperty(type=OP_BakeSettings)
     baked_maps: bpy.props.CollectionProperty(type=OP_BakedMap)
     export: bpy.props.PointerProperty(type=OP_ExportSettings)
+    aging: bpy.props.PointerProperty(type=OP_Aging)
     edit_serial: bpy.props.IntProperty()

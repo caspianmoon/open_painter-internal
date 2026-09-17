@@ -97,6 +97,29 @@ Cycles device/samples, bake properties, visibility, selection, active object and
 materials and scratch images are removed. Successfully completed maps are registered independently.
 Baked map use in shading is explicit via a generated fill layer.
 
+## Material aging (0.10.0)
+
+`OP_TextureSet.aging` (`properties/aging.py`) holds what the thing is (material, conversion,
+primer, paint, top coat, paint colour, coating condition), how old (`age_years`), where
+(environment preset + exposure sliders, or `periods`), how used (`usage` + `use_*`), how kept
+(`maintenance` + `care_*`, dated `events`), the seed and the art-direction multipliers. Every
+update callback runs `engine.apply` while `live` and a folder exist; preset callbacks copy their
+values under `engine.batch()` so the copy is one re-drive, and a slider moved off its preset
+turns the selector to CUSTOM. `aging/model.py` (pure Python) integrates the history monthly:
+`State` (24 outcomes), `Construction`, `Segment`, `Event`, `step`, `apply_event`, `simulate`,
+`severity`/`label`, `readout`, `directed`. `aging/document.py` turns a state into a catalog-style
+recipe with a role per layer; `aging/engine.py` builds the isolated *Material Aging* folder through
+`composer._fill` (raising `MissingMeshMaps` before touching the stack) and then drives it:
+`_driven_values` per role with `mask_pairs` (spec masks paired to built masks by kind, so optional
+geometry masks the folder was built without are skipped and a restructured chain stops the
+pairing), `_read`/`_write` by field path, an override record in `aging.state_data` (`resolved`
+values and `overrides` keys), `_stale` roster comparison for rebuilds, `optional_maps` /
+`rebuild_pending` for the panel's bake and Rebuild hints (`composer.mask_available` decides
+whether an optional recipe mask is built), `prediction` memoised on `signature(aging)`, `follow_animation` from
+`dependencies.refresh`, `export_settings`/`import_settings` for the serializer, loader and set
+duplicate. Layers carry `OP_Layer.aging_role` (an RNA field, so snapshots, documents and copies
+keep it).
+
 ## Decal objects (0.9.6)
 
 `OP_Layer.decal_object` (an image Empty, `open_painter_decal` = layer id) is the projection frame

@@ -192,8 +192,9 @@ def validate(data):
                 raise ValueError("Unknown recipe mask: " + settings["kind"])
             if settings.get("baked") and MAP_REQUIREMENTS[settings["kind"]] != {settings["kind"]}:
                 raise ValueError("A baked recipe mask must name a mesh map: " + settings["kind"])
-            if settings.get("optional") and not settings.get("baked"):
-                raise ValueError("Only baked recipe masks can be optional.")
+            if settings.get("optional") and not settings.get("baked") and (
+                    settings.get("procedural") or settings.get("generated_source") or not MAP_REQUIREMENTS[settings["kind"]]):
+                raise ValueError("Only recipe masks that read mesh maps can be optional.")
             for key, lo, hi in (("amount", 0, 1), ("scale", 1, 512)):
                 value = settings[key]
                 if not math.isfinite(value) or not lo <= value <= hi:
@@ -244,6 +245,15 @@ def _seed(name, number, seed):
 def _baked_image(ts, kind):
     return next((entry.image for entry in ts.baked_maps
                  if entry.kind == kind and entry.image and all(entry.image.size)), None)
+
+
+def mask_available(ts, settings):
+    """Whether the mesh maps a recipe mask reads exist; an optional mask without them is skipped."""
+    if settings.get("baked"):
+        return _baked_image(ts, settings["kind"]) is not None
+    if settings.get("procedural") or settings.get("generated_source"):
+        return True
+    return all(_baked_image(ts, kind) is not None for kind in MAP_REQUIREMENTS.get(settings["kind"], ()))
 
 
 # Reusable catalog modules: recipes can nest them (recipe(..., modules=[(name, overrides)]))
@@ -380,7 +390,7 @@ def _fill(ts, spec, parent_id, seed):
                 effect.kind = "LEVELS"
                 effect.output_black, effect.output_white = spec["height_range"]
     for index, settings in enumerate(masks_for(spec)):
-        if settings.get("optional") and _baked_image(ts, settings["kind"]) is None:
+        if settings.get("optional") and not mask_available(ts, settings):
             continue  # Declared optional: the effect degrades gracefully without this map.
         effect = item.masks.add()
         effect.id, effect.name, effect.source = new_id(), settings["kind"].replace("_", " ").title(), "GENERATOR"

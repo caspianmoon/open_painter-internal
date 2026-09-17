@@ -483,6 +483,8 @@ def refresh(scene):
     from . import field_jobs
     from ..painting import decals
     decals.adopt_duplicates(scene)
+    from ..aging import engine as aging_engine
+    aging_engine.follow_animation(scene)   # a keyframed age re-drives its folder (0.10.0)
     for ts in scene.open_painter.texture_sets:
         refresh_names(ts)
         decals.show_images(ts)   # the picture's aspect is part of the frame (0.9.7): swap it before keying

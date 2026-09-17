@@ -5,6 +5,12 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the core runtime requirements. GPL-3.0-or-later.
 
+**0.10.0 adds material aging:** say what a thing is (carbon steel under epoxy primer and
+polyurethane paint, oak, copper, ABS…), where it lived (a coastal decade, then a shed), how it was
+used and kept, and how old it is; a material-specific simulation predicts fade, gloss loss,
+cracking, coating loss, rust, patina, greying, dirt… and drives a nondestructive aging folder
+placed by the mesh. Age is a keyframable parameter. [Details](docs/material-aging.md).
+
 **0.9.7 adds decal objects:** a decal is a Blender Empty — move, rotate, scale or duplicate it in
 the viewport and the layer's Base Color, Roughness, Metallic, Normal, Height and Emission follow,
 non-destructively. [Details](docs/decal-objects.md).
@@ -74,7 +80,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download or build [`dist/open_painter-0.9.7.zip`](dist/open_painter-0.9.7.zip).
+1. Download or build [`dist/open_painter-0.10.0.zip`](dist/open_painter-0.10.0.zip).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
    choose **Install from Disk**, and select the ZIP. Enable **Open Painter** if needed.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu

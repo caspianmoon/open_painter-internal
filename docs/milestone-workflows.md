@@ -3,6 +3,11 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Material aging (0.10.0):** *Painter* sidebar → *Material Aging*: pick the material and its
+  coats, set the age, an environment (or a history of periods), use and care, add events such as
+  a repaint, read the *Predicted State*, then *Age Material* (bake AO and Curvature first); move
+  any setting or keyframe the age and the folder follows; edit inside it freely — *Reset Art*
+  hands the values back to the physics. [Details](material-aging.md).
 - **Decal objects (0.9.6):** Layers tool strip → *Add Decal* (image icon); move, rotate, scale or
   Shift+D the `OP_Decal_…` Empty in the viewport; the layer's Decal box sets depth, softness and
   facing; the graph node shows the Empty's transform. [Details](decal-objects.md).

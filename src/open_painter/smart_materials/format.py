@@ -88,6 +88,17 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
             raise ValueError('Invalid material state values')
     if not isinstance(state.get('overrides',[]),list) or any(k not in ids for k in state.get('overrides',[])):
         raise ValueError('Invalid material state overrides')
+    aging = data.get("aging")
+    if aging is not None:
+        if (not isinstance(aging, dict) or aging.get("version") != 1 or not isinstance(aging.get("state_data", ""), str)
+                or len(aging.get("state_data", "")) > 65536 or aging.get("folder_id") not in by_id
+                or by_id[aging["folder_id"]].get("type") != "FOLDER"):
+            raise ValueError("Invalid material aging metadata.")
+        records = [aging] + list(aging.get("periods", [])) + list(aging.get("events", []))
+        if len(records) > 129 or any(not isinstance(record, dict) for record in records) or any(
+                isinstance(value, float) and not math.isfinite(value)
+                for record in records for value in record.values()):
+            raise ValueError("Invalid material aging values.")
     for layer in layers:
         if layer.get("type") not in {"FILL", "PAINT", "FOLDER"}:
             raise ValueError("Unknown layer type.")

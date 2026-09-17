@@ -185,6 +185,11 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         data['module'] = module
     if strokes:
         data['strokes'] = strokes
+    if root_id is None and ts.aging.folder_id and any(layer.id == ts.aging.folder_id for layer in ts.layers):
+        # Material Aging travels with the whole set: its history and the driven-value
+        # record, so the import re-simulates from the same settings and keeps overrides.
+        from ..aging import engine as aging_engine
+        data['aging'] = aging_engine.export_settings(ts.aging)
     temp_scene = bpy.data.scenes.new("OP Asset Encoding")
     try:
         fmt = temp_scene.render.image_settings

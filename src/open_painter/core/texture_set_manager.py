@@ -157,6 +157,9 @@ def duplicate(scene, index):
     settings = snapshot(source.bake)
     surface = {key: getattr(source, key) for key in
                ("anisotropy", "coat_weight", "coat_roughness", "height_distance")}
+    # Read everything from ``source`` before ``create`` grows the collection: the reference is stale after that.
+    from ..aging import engine as aging_engine
+    aging_settings = aging_engine.export_settings(source.aging) if source.aging.folder_id else None
     ts = create(scene, name, resolution)
     for key, value in surface.items():
         setattr(ts, key, value)
@@ -203,6 +206,9 @@ def duplicate(scene, index):
             prop.kind = kind
             prop.image = clone(image) if image else None
         restore(settings, ts.bake)
+        if aging_settings is not None:
+            # The copy ages on its own: same history, its own folder (0.10.0).
+            aging_engine.import_settings(ts.aging, aging_settings, mapping.get(aging_settings["folder_id"], ""))
         from ..baking.corrections import FIELDS
         for field in FIELDS.values():
             # Correction canvases belong to one set: clearing them in either would orphan the other.

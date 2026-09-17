@@ -16,6 +16,19 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Material aging 0.10.0 — 2026-09-17
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Material taxonomy with per-material response and process subscriptions; coatings; environment, usage and maintenance presets as physical parameters | done | `tests/unit/test_aging_model.py` |
+| Monthly history simulation (segments, dated events, seed), labels, readout, art direction after the physics | done | `tests/unit/test_aging_model.py` |
+| Aging folder built by role and re-driven nondestructively; overrides; Live; randomize; roster rebuild; missing-map guard | done | `tests/integration/material_aging.py` |
+| Age as a keyframable parameter; document, duplicate and undo portability | done | `tests/integration/material_aging.py` |
+| Age Response removed (fields kept hidden for older files) | done | `tests/integration/material_aging.py` |
+| Age exposed as an Open Graph node input | not started (graph/ is Codex-owned) | — |
+| Geometry placement: convexity, occlusion, upward/downward faces, streak flow, ground proximity (Position); optional maps degrade to procedural bases and join on Rebuild | done | `tests/integration/material_aging.py` |
+| Drainage, water collection and sun exposure as dedicated fields | not covered — placement uses AO, curvature, world normal and position | — |
+
 ## Decal objects 0.9.6 — 2026-09-16
 
 | Item | Status | Evidence |

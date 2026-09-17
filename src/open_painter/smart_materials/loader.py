@@ -239,6 +239,10 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
         for key, value in data.get("surface", {}).items():
             if key in old_surface and module is None:
                 setattr(ts,key,value)
+        aging = data.get('aging')
+        if aging and module is None and aging.get('folder_id') in mapping:
+            from ..aging import engine as aging_engine
+            aging_engine.import_settings(ts.aging, aging, mapping[aging['folder_id']])
         state = data.get('authoring_state',{})
         if state:
             state = dict(state)

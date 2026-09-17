@@ -1,5 +1,50 @@
 # Changes
 
+## 0.10.0
+
+Material aging: a material-specific aging simulation replaces the Age Response presets.
+
+- **What it is.** `Painter` sidebar → *Material Aging*: a substrate from a taxonomy of 31 materials
+  (metals, woods, polymers, minerals; `aging/materials.py`) described by how it responds — light,
+  moisture, salt and heat sensitivity, oxidation and corrosion rates, its oxide, hardness,
+  porosity, brittleness — and the processes it subscribes to (`aging/model.py`: oxidation,
+  atmospheric corrosion, patination, bleaching, greying, checking, water absorption, thermal
+  cycling, deposits, biological growth, water staining, UV degradation, yellowing, chalking,
+  embrittlement, abrasion, handling, impact); a construction on top of it — conversion coating,
+  primer, paint with the artist's colour, top coat (`aging/coatings.py`) — and its starting
+  condition.
+- **How old, where, how used.** *Age* in years; *Environment* presets that are physical exposure
+  parameters (UV, humidity, rain, temperature, cycles, salt, pollution, soil, wind) copied into
+  sliders that turn the preset to *Custom* when moved; *Environment History* as ordered periods;
+  *Use* (handling, abrasion, impact, cleaning) separate from age; *Maintenance* sliders and dated
+  events (repaint, clean, rust removal, polish, treatments) that rewind what they act on.
+- **The simulation** integrates the history monthly: rates are products of exposure, material
+  response and the current state (corrosion needs exposed substrate and moisture and salts;
+  cracking needs a brittle film and cycling; rust under paint lifts it; salts attack only through
+  moisture), growth saturates, maintenance decays, the seed varies the particulars. *Predicted
+  State* reads the outcomes (fade, gloss loss, coating loss, exposed substrate, rust, patina,
+  greying…) with a label from Pristine to Derelict. Pure Python; memoised for the panel.
+- **Nondestructive.** *Age Material* builds the isolated *Material Aging* folder from the state —
+  one fill per outcome in causal order, placed by the mesh through Chips, Edge Wear, Rust, Cavity
+  Dirt, Dust, Drips and Position (needs AO and Curvature; Position and World Normal are optional
+  and the panel offers the bake and a Rebuild once they exist; recipe masks that read mesh maps
+  can now be `optional`) — and afterwards only
+  *drives* it: any settings change re-simulates and rewrites the driven values by `aging_role`;
+  a value the artist moved inside the folder is an override until *Reset Art*; the artist's own
+  layers inside the folder survive; a changed roster rebuilds; *Live* off freezes the layers;
+  *Randomize History* reseeds; *Remove* deletes the folder.
+- **Art direction after the physics.** Corrosion, Fading, Damage and Dirt multipliers scale the
+  outcome groups after the simulation; the readout shows `68 %  (physics 34 %)`.
+- **Age is a parameter.** `ts.aging.age_years` keyframes on the timeline and
+  `dependencies.refresh` re-drives the folder per frame; the same settings and seed age two sets
+  identically; set duplicates, material documents (`aging` block with settings, history and the
+  override record; `format.read` validates it) and undo carry it.
+- **Removed.** Age Response (`effect_semantic` UI, the Age / Environment State dialog,
+  `core/material_states.py`, `core/environment_profiles.py`, its suite). The layer field and
+  `material_state_data` stay hidden for older files.
+- Tests: `tests/unit/test_aging_model.py`, `tests/integration/material_aging.py`.
+  Docs: [material-aging.md](docs/material-aging.md).
+
 ## 0.9.7
 
 Bug fixes from a full-tree audit (all background, GUI and GPU suites pass), artist-session suites

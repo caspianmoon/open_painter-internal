@@ -106,8 +106,12 @@ def decal_object_changed(self, context):
 
 class OP_Layer(bpy.types.PropertyGroup):
     director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
-    effect_semantic: bpy.props.EnumProperty(name='Age Response',items=[(k,k.replace('_',' ').title(),'Explicit artistic effect role')
-        for k in ('NONE','DIRT','DUST','FADE','SCRATCHES','OXIDATION','COATING_LOSS')])
+    aging_role: bpy.props.StringProperty(description="The aging outcome this layer materialises; the Material Aging engine drives it",
+                                         options={'HIDDEN'})
+    # Kept for files and material documents written before 0.10.0; Material Aging
+    # (``aging``) replaced the Age Response roles and drives its own layers.
+    effect_semantic: bpy.props.EnumProperty(name='Age Response',items=[(k,k.replace('_',' ').title(),'Legacy artistic effect role')
+        for k in ('NONE','DIRT','DUST','FADE','SCRATCHES','OXIDATION','COATING_LOSS')],options={'HIDDEN'})
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default="Layer")
     type: bpy.props.EnumProperty(

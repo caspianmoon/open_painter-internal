@@ -936,8 +936,6 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             return
         layout.separator()
         layout.label(text="MATERIAL", icon="MATERIAL")
-        layout.prop(layer,'effect_semantic')
-        layout.operator('open_painter.material_state',text='Age / Environment State')
         row = layout.row(align=True)
         row.prop(context.scene.open_painter, "properties_channel", text="Channel")
         channel = channel_for(layer, context.scene.open_painter.properties_channel)

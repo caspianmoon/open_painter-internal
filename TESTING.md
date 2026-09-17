@@ -214,6 +214,14 @@ measured before/after results, capability reports, the historical-test audit and
 unresolved limits. `scripts/benchmark_textures.py` runs fresh isolated CPU
 fixtures at 512/2048. It reports image transfers and process RSS; it does not
 measure displayed frames or silently use lower-resolution previews.
+## Material aging (0.10.0)
+
+`tests/unit/test_aging_model.py` runs in `scripts/run_pure_tests.py` (no Blender).
+`tests/integration/material_aging.py` (background, in `scripts/run_tests.py`) builds and drives
+the aging folder on synthetic baked maps, evaluates Base Color and Roughness on the CPU reference
+at age 0 and after 25 coastal years, and covers overrides, events, history, animation, the
+document round trip, the set duplicate and undo. It replaces `material_states.py`.
+
 ## Decal objects (0.9.6)
 
 `tests/integration/decal_objects.py` (background; two Cycles EMIT parity bakes at 32 px) is in

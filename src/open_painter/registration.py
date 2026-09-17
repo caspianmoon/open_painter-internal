@@ -15,13 +15,13 @@ from .ui.modules import CLASSES as MODULE_CLASSES
 from .ui.scene_fields import CLASSES as SCENE_FIELD_CLASSES
 from .ui.target_panel import CLASSES as TARGET_CLASSES
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects
-from .ui.material_states import OP_OT_material_state
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
 from .ui.offline_analysis import OP_OT_offline_analysis,OP_PT_offline_analysis
 from .properties.bake import OP_BakeCorrections, OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
+from .properties.aging import CLASSES as AGING_PROPERTY_CLASSES
 from .properties.layer import OP_Layer, OP_LayerCache
 from .properties.mask import OP_Mask
 from .properties.project import OP_PaintCanvas, OP_Project
@@ -46,6 +46,7 @@ from .ui.properties_panel import OP_OT_mask, OP_PT_masks, OP_UL_masks
 from .ui.workspace import OP_OT_workspace
 
 from .ui.native import CLASSES as NATIVE_CLASSES
+from .ui.aging_panel import CLASSES as AGING_UI_CLASSES
 from .ui.performance import CLASSES as PERFORMANCE_CLASSES
 from .ui.texture_operations import CLASSES as TEXTURE_UI_CLASSES
 
@@ -71,6 +72,7 @@ CLASSES = (
     OP_BakeCorrections,
     OP_BakeSettings,
     OP_ExportSettings,
+    *AGING_PROPERTY_CLASSES,
     OP_TextureSet,
     OP_Stroke,
     OP_VectorBrushSettings,
@@ -93,7 +95,6 @@ CLASSES = (
     OP_OT_anchor_channel,
     OP_OT_geometry_effect,
     OP_PT_geometry_effects,
-    OP_OT_material_state,
     OP_OT_material_stamp,
     OP_OT_production_export,
     OP_OT_offline_analysis,
@@ -119,7 +120,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
 
 
 _registered = False

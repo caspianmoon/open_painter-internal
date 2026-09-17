@@ -44,6 +44,8 @@ Material aging: a material-specific aging simulation replaces the Age Response p
   `material_state_data` stay hidden for older files.
 - Tests: `tests/unit/test_aging_model.py`, `tests/integration/material_aging.py`,
   `tests/integration/material_aging_ui.py`. Docs: [material-aging.md](docs/material-aging.md).
+- Events read as moments of the history: a new event has just happened (year = the age), rows
+  say "n y ago", and an event after the age is flagged as not having happened yet.
 - Fixed: duplicating a texture set read the source through a reference that was stale once the
   collection had grown, which deadlocks Blender 5.2 on the next pointer-property read; the shelf
   library build no longer touches `bpy.data` during a restricted startup registration (a headless

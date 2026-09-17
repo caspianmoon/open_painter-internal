@@ -100,7 +100,8 @@ class OP_AgingPeriod(bpy.types.PropertyGroup):
 
 class OP_AgingEvent(bpy.types.PropertyGroup):
     """A maintenance event at one moment of the history."""
-    year: bpy.props.FloatProperty(name='Year', default=10, min=0, soft_max=50, update=_resolve)
+    year: bpy.props.FloatProperty(name='Year', default=10, min=0, soft_max=50, update=_resolve,
+                                  description='Year of the history the event happens: 0 is new, the age is now')
     kind: bpy.props.EnumProperty(name='Event', items=EVENT_ITEMS, default='REPAINT', update=_resolve)
 
 

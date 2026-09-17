@@ -124,6 +124,10 @@ def edit():
     before = {layer.aging_role: round(layer.opacity, 4) for layer in engine.members(ts, engine.folder_of(ts))}
     ts.aging.age_years = 40
     ts.aging.environment = "COASTAL"
+    bpy.ops.open_painter.aging(action="ADD_EVENT")   # the events list draws rows: "just now" / "n y ago" / after the age
+    ts.aging.events[0].year = 15
+    bpy.ops.open_painter.aging(action="ADD_EVENT")
+    ts.aging.events[1].year = 60
     after = {layer.aging_role: round(layer.opacity, 4) for layer in engine.members(ts, engine.folder_of(ts))}
     assert after["corrosion"] > before["corrosion"] and after["salt"] > before["salt"], (before, after)
     checks.append("age-and-environment-edits-re-drive-the-layers")

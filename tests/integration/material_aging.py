@@ -178,8 +178,14 @@ aging.use_impact = .2
 assert aging.usage == "CUSTOM"
 aging.usage = "NONE"
 assert opacities(ts)["handling_polish"] == 0
+untouched = opacities(ts)
 bpy.ops.open_painter.aging(action="ADD_EVENT")
 event = aging.events[0]
+assert event.year == aging.age_years, "a new event has just happened"
+event.kind = "RUST_REMOVAL"
+assert opacities(ts)["corrosion"] < untouched["corrosion"] * .5 and opacities(ts)["oxidation"] < untouched["oxidation"] * .5
+event.year = aging.age_years + 10
+assert opacities(ts) == untouched, "an event after the age has not happened"
 event.kind, event.year = "REPAINT", 11.0
 repainted = opacities(ts)
 assert repainted["cracking"] < base["cracking"] and json.loads(aging.state_data)["years"] == 12

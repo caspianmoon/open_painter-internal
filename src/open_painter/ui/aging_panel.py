@@ -66,7 +66,7 @@ class OP_OT_aging(SafeOperator, bpy.types.Operator):
         elif self.action == "ADD_EVENT":
             with engine.batch():
                 event = aging.events.add()
-                event.year = round(aging.age_years / 2, 1)
+                event.year = round(aging.age_years, 1)     # "just happened"; move it back to let it re-age
                 aging.active_event = len(aging.events) - 1
             if aging.folder_id:
                 engine.apply(ts)
@@ -91,8 +91,13 @@ class OP_UL_aging_periods(bpy.types.UIList):
 class OP_UL_aging_events(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
-        row.prop(item, "year", text="Year")
+        row.prop(item, "year", text="")
         row.prop(item, "kind", text="")
+        ago = float(data.age_years) - float(item.year)
+        if ago < -1e-6:
+            row.label(text="after the age", icon="ERROR")
+        else:
+            row.label(text="just now" if ago < 0.05 else f"{ago:.0f} y ago" if ago >= 1 else f"{ago * 12:.0f} months ago")
 
 
 def draw_aging(layout, context, ts):
@@ -155,6 +160,10 @@ def draw_aging(layout, context, ts):
         column = row.column(align=True)
         column.operator("open_painter.aging", text="", icon="ADD").action = "ADD_EVENT"
         column.operator("open_painter.aging", text="", icon="REMOVE").action = "REMOVE_EVENT"
+        if any(e.year > aging.age_years + 1e-6 for e in aging.events):
+            body.label(text="An event after the age has not happened yet", icon="ERROR")
+        elif len(aging.events):
+            body.label(text="Year 0 is new; the age is now. Rust and dirt return after an event.", icon="INFO")
     # Prediction ------------------------------------------------------------------
     try:
         result = engine.prediction(ts)

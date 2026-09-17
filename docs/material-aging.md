@@ -61,7 +61,11 @@ Abused presets. A thirty-year-old brass handle nobody touched has no polish.
 Treatment, Polishing, Rust Removal, Wood Treatment — and **events** rewind them at
 a moment of the history: Repaint (a new film; the dents stay and the rust keeps
 working under it), Clean, Rust Removal, Polish, Protective Treatment, Wood
-Treatment, each at a year.
+Treatment, each at a year of the history (0 is new, the age is now; the row
+shows "n y ago"). A new event has just happened; move it back to let the thing
+re-age after it — rust and dirt return, so a rust removal twenty-five years
+before the end changes little, and an event after the age has not happened yet
+(the row says so).
 
 ## The simulation
 

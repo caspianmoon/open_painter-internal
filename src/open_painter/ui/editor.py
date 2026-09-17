@@ -210,6 +210,9 @@ def header(self, context):
             self.layout.operator(
                 "open_painter.native_view", text=label, depress=context.area.type == backend
             ).view = backend
+        # The way back to a plain viewport lives next to the backend toggles: the
+        # editor-type menu re-mounts the Painter, so it cannot serve as the exit.
+        self.layout.operator("open_painter.close_editor", text="", icon="X")
 
 
 class OP_OT_open_editor(bpy.types.Operator):

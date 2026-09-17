@@ -102,6 +102,8 @@ that second pass, by subsystem:
   masks that cannot map through a topology-changing modifier are reported as warnings; portable
   materials carry the vector strokes their layers render and module updates keep instance-local
   stroke keys; switching a layer back to Live retires its cache images.
+- The Painter header has its close button back (an X next to the 3D/2D toggles) that returns the
+  area to a plain 3D Viewport; the native header rewrite had dropped it.
 - Switching an area to Open Painter no longer turns the viewport overlays off; the editor only
   asks for material shading and leaves the overlay toggle as the artist set it.
 - Eleven findings in `src/open_painter/graph/` (Open Graph mirror) are reported to its owner and

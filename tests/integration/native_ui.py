@@ -57,6 +57,12 @@ def setup():
             bpy.ops.open_painter.open_editor()
             # Mounting the editor keeps the artist's overlay toggle (it used to force it off).
             assert area.spaces.active.overlay.show_overlays, "the editor must not switch overlays off"
+            # The header's close button hands the area back to a plain 3D Viewport.
+            from open_painter.ui import editor as painter_editor
+            bpy.ops.open_painter.close_editor()
+            assert not painter_editor.is_area(area) and area.type == "VIEW_3D", "close must leave a plain viewport"
+            bpy.ops.open_painter.open_editor()
+            assert painter_editor.is_area(area)
             bpy.ops.open_painter.texture_set(action="ADD")
             ts = bpy.context.scene.open_painter.texture_sets[0]
             ts.resolution = "512"

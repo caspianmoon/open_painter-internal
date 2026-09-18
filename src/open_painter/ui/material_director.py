@@ -199,8 +199,31 @@ def connection_settings(layout, prefs):
     layout.prop(prefs, "director_share_context")
 
 
+def sharing_lines(context, settings):
+    """What the next run will send, from the same attachment list the request is built from
+    (described, not rendered), plus the fixed parts of every request."""
+    ts = active_set(context)
+    lines = ["Instruction and a material summary (layers, masks, values; no pixels, no paths)"]
+    if ts is None:
+        return lines
+    try:
+        attachments, missing = session.attachments_for(context, ts, send_view=settings.send_view,
+                                                       send_maps=settings.send_maps,
+                                                       reference=dict(id="reference") if settings.reference_path.strip() else None,
+                                                       dry=True)
+    except Exception as exc:   # a view that cannot be described must not take the panel down
+        return lines + [f"Views unavailable: {exc}"]
+    views = [item["id"] for item in attachments if item["id"] in {"viewport", "target_view"}]
+    maps = [item["kind"] for item in attachments if item.get("role") == "mesh_map"]
+    lines.append("Model views: " + (", ".join(views) if views else "none"))
+    lines.append("Mesh maps: " + (", ".join(maps) if maps else "none") + (f" (unbaked: {', '.join(missing)})" if missing and settings.send_maps else ""))
+    lines.append("Reference image: " + ("yes" if settings.reference_path.strip() else "no"))
+    lines.append("Texture generation: " + ("allowed" if settings.generate_textures and settings.mode != "EXPLAIN" else "off"))
+    return lines
+
+
 class OP_PT_material_director(PainterPanel, bpy.types.Panel):
-    bl_label = "Material Director"
+    bl_label = "Material Assistant"
     bl_category = "Director"
     bl_order = 0
 
@@ -208,12 +231,50 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         layout = self.layout
         status = session.state
         settings = context.window_manager.open_painter_director
+        running = bool(session.request and session.request["running"])
         text_lines(layout, status["status"], limit=4)
-        ts = active_set(context)
-        layout.label(text="Texture Set: " + ts.name if ts else "Select a texture set in Painter")
-        if settings.scope == "LAYER" and ts and active(ts):
-            layout.label(text="Layer: " + active(ts).name)
-        row = layout.row(align=True)
+        # Target -----------------------------------------------------------------
+        from . import selection
+        target = selection.resolve(context)
+        box = layout.box()
+        box.label(text="Target", icon="RESTRICT_SELECT_OFF")
+        if target.ts is None:
+            box.label(text="Select a texture set in the Painter", icon="ERROR")
+        else:
+            scope = {"SET": target.ts.name, "SCENE": "every managed material in the scene",
+                     "LAYER": selection.breadcrumb_text(target)}[settings.scope]
+            box.label(text=scope, icon="TEXTURE" if settings.scope != "SCENE" else "SCENE_DATA")
+        box.prop(settings, "scope", text="Scope")
+        if settings.scope == "SCENE":
+            count = sum(bool(ts.assignments) for ts in context.scene.open_painter.texture_sets)
+            box.label(text=f"{count} managed material region(s)", icon="INFO")
+        if target.ts is not None:
+            locks = commands.locks(target.ts)
+            box.label(text=f"Protected: {len(locks)} item(s); paint layers always", icon="LOCKED")
+        # Instruction ------------------------------------------------------------
+        box = layout.box()
+        box.label(text="Instruction", icon="TEXT")
+        box.prop(settings, "prompt", text="")
+        row = box.row(align=True)
+        row.prop(settings, "mode", text="Mode")
+        box.prop(settings, "reference_path")
+        head, body = box.panel("painter_director_sharing", default_closed=True)
+        head.label(text="What is sent", icon="EXPORT")
+        if body is not None:
+            body.prop(settings, "send_view")
+            body.prop(settings, "send_maps")
+            sub = body.row()
+            sub.enabled = settings.mode != "EXPLAIN"
+            sub.prop(settings, "generate_textures")
+            for line in sharing_lines(context, settings):
+                body.label(text=line, icon="BLANK1")
+            if status.get("sharing"):
+                body.label(text="Last request sent:", icon="CHECKMARK")
+                for line in status["sharing"]:
+                    body.label(text=line, icon="BLANK1")
+        # Run ---------------------------------------------------------------------
+        box = layout.box()
+        row = box.row(align=True)
         if session.connection is None:
             row.operator("open_painter.director_connection", text="Connect Codex", icon="LINKED").action = "CONNECT"
         else:
@@ -226,49 +287,39 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
                 row.operator("open_painter.director_connection", text="Sign Out").action = "LOGOUT"
             row.operator("open_painter.director_connection", text="", icon="UNLINKED").action = "DISCONNECT"
         if status["plan"]:
-            layout.label(text="ChatGPT plan: " + status["plan"])
-        for name in ("primary", "secondary"):
-            limit = status["limits"].get(name)
-            if isinstance(limit, dict) and "usedPercent" in limit:
-                layout.label(text=f"{name.title()} allowance used: {limit['usedPercent']}%")
-        layout.prop(settings, "mode", expand=True)
-        layout.prop(settings, "scope")
-        if settings.scope == "SCENE":
-            count = sum(bool(ts.assignments) for ts in context.scene.open_painter.texture_sets)
-            layout.label(text=f"Scene: {count} managed material regions")
+            box.label(text="ChatGPT plan: " + status["plan"])
         if status["models"]:
-            layout.prop(settings, "model")
-        layout.prop(settings, "prompt", text="")
-        layout.prop(settings, "send_view")
-        layout.prop(settings, "send_maps")
-        layout.prop(settings, "reference_path")
-        if status.get("visual_inputs"):
-            text_lines(layout, "Last sent: " + ", ".join(item["id"] for item in status["visual_inputs"]))
-        row = layout.row()
-        row.enabled = settings.mode != "EXPLAIN"
-        row.prop(settings, "generate_textures")
-        running = bool(session.request and session.request["running"])
-        row = layout.row()
+            box.prop(settings, "model")
+        row = box.row()
         if running:
             row.operator("open_painter.director_stop", icon="CANCEL")
         else:
-            row.enabled = status["signed_in"] and active_set(context) is not None
-            row.operator("open_painter.director_run", text={"PLAN": "Prepare Draft", "EXPLAIN": "Explain Material"}.get(settings.mode, "Direct Material"), icon="PLAY")
+            row.enabled = status["signed_in"] and target.ts is not None
+            row.operator("open_painter.director_run",
+                         text={"PLAN": "Prepare Draft", "EXPLAIN": "Explain Material", "CREATE": "Create Material"}.get(settings.mode, "Run"),
+                         icon="PLAY")
+            if not status["signed_in"]:
+                box.label(text="Connect and sign in first; connection settings are in the add-on preferences", icon="INFO")
+        # Changes -----------------------------------------------------------------
+        box = layout.box()
+        box.label(text="Changes", icon="TEXT")
         if session.request and not running and session.request["draft"]:
-            row = layout.row(align=True)
+            row = box.row(align=True)
             row.operator("open_painter.director_apply", text="Apply Draft", icon="CHECKMARK").request_id = session.request["id"]
             row.operator("open_painter.director_stop", text="Discard")
+            box.label(text="Applying is one undo step; the target is re-checked first", icon="INFO")
         if status["response"]:
-            box = layout.box()
-            text_lines(box, status["response"], limit=24)
-            op = box.operator("open_painter.director_report", text="Copy Reply", icon="COPYDOWN")
+            sub = box.box()
+            text_lines(sub, status["response"], limit=24)
+            op = sub.operator("open_painter.director_report", text="Copy Reply", icon="COPYDOWN")
             op.response = op.copy = True
-        row = layout.row(align=True)
+        row = box.row(align=True)
         row.operator("open_painter.director_report", text="Show Changes", icon="TEXT")
         row.operator("open_painter.director_report", text="", icon="COPYDOWN").copy = True
-        row = layout.row()
-        row.enabled = active_set(context) is not None and not running
+        row = box.row(align=True)
+        row.enabled = target.ts is not None and not running
         row.operator("open_painter.director_undo", icon="LOOP_BACK")
+        row.operator("open_painter.director_clear_history", text="", icon="TRASH")
 
 
 class OP_PT_director_protection(PainterPanel, bpy.types.Panel):
@@ -295,22 +346,7 @@ class OP_PT_director_protection(PainterPanel, bpy.types.Panel):
                          icon="LOCKED" if locked else "UNLOCKED").kind = kind
 
 
-class OP_PT_director_settings(PainterPanel, bpy.types.Panel):
-    bl_label = "Connection Settings"
-    bl_category = "Director"
-    bl_parent_id = "OP_PT_material_director"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        prefs = session.preferences(context)
-        if prefs:
-            connection_settings(self.layout, prefs)
-        else:
-            self.layout.label(text="Install the extension to configure Codex")
-        self.layout.operator("open_painter.director_clear_history", icon="TRASH")
-
-
 CLASSES = (OP_DirectorSettings, OP_OT_director_connection, OP_OT_director_run, OP_OT_director_stop,
            OP_OT_director_apply, OP_OT_director_undo, OP_OT_director_protect, OP_OT_director_report,
            OP_OT_director_clear_history,
-           OP_PT_material_director, OP_PT_director_protection, OP_PT_director_settings)
+           OP_PT_material_director, OP_PT_director_protection)

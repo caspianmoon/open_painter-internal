@@ -16,7 +16,7 @@ from .transport import Connection
 connection = None
 request = None
 state = dict(status="Not connected", connected=False, signed_in=False, response="", changes=[],
-             models=[], plan="", runtime="", login=False, limits={}, visual_inputs=[])
+             models=[], plan="", runtime="", login=False, limits={}, visual_inputs=[], sharing=[])
 _model_items = [("DEFAULT", "Account default", "", 0)]
 _conversation = []
 _conversation_target = None
@@ -113,7 +113,7 @@ def disconnect():
         connection.close()
         connection = None
     state.update(status="Not connected", connected=False, signed_in=False, login=False,
-                 models=[], plan="", runtime="", limits={}, visual_inputs=[])
+                 models=[], plan="", runtime="", limits={}, visual_inputs=[], sharing=[])
     _model_items = [("DEFAULT", "Account default", "", 0)]
     for wm in bpy.data.window_managers:
         if hasattr(wm, "open_painter_director"):
@@ -222,29 +222,99 @@ def capture(context, *, mode, scope, prompt):
     return result
 
 
-def attachments_for(context, ts, *, send_view, send_maps, reference=None, whole_view=True):
+def attachments_for(context, ts, *, send_view, send_maps, reference=None, whole_view=True, dry=False):
+    """The images a request carries. ``dry`` describes them (ids, labels, meanings) without
+    rendering the viewport or reading map pixels: the UI's sharing summary reads the same list
+    the request is built from."""
     from . import visual_context
     attachments = []
     if send_view:
-        from .viewport import capture as capture_view
         targets = {ref.object for ref in ts.assignments if ref.object}
         isolate = any(obj.type == "MESH" and obj not in targets and not obj.hide_get() for obj in context.view_layer.objects)
         variants = ([False, True] if isolate else [False]) if whole_view else [True]
         for isolated in variants:
-            for side in (768, 512, 384, 256):
-                view = capture_view(context, ts, max_side=side, isolate=isolated, frame_target=isolated and not whole_view)
-                if len(view) <= 250000:
-                    break
+            view = None
+            if not dry:
+                from .viewport import capture as capture_view
+                for side in (768, 512, 384, 256):
+                    view = capture_view(context, ts, max_side=side, isolate=isolated, frame_target=isolated and not whole_view)
+                    if len(view) <= 250000:
+                        break
             attachments.append(dict(id="target_view" if isolated else "viewport", role="target_view" if isolated else "viewport",
                 label=(ts.name + " — only its editable mesh parts") if isolated else "Whole model viewport — current material and lighting",
                 meaning="Only this texture set's assigned geometry is shown" if isolated else "Full 3D view including neighboring parts; use target_view to identify editable geometry.", url=view))
     missing_maps = []
     if send_maps:
-        maps, missing_maps = visual_context.mesh_maps(ts)
+        if dry:
+            maps = [dict(id="map:" + kind, role="mesh_map", kind=kind, label=kind + " mesh map in UV space", meaning=meaning)
+                    for kind, meaning in visual_context.MAPS if any(m.kind == kind and m.image for m in ts.baked_maps)]
+            missing_maps = [kind for kind, _ in visual_context.MAPS if not any(m.kind == kind and m.image for m in ts.baked_maps)]
+        else:
+            maps, missing_maps = visual_context.mesh_maps(ts)
         attachments.extend(maps)
     if reference:
         attachments.append(reference)
     return attachments, missing_maps
+
+
+def compose(context, settings, captured, attachments, missing_maps, *, recent=(), models=()):
+    """The outgoing request, assembled the same way for a real run and for the sharing summary."""
+    from . import visual_context
+    selected_model = "" if settings.model == "DEFAULT" else settings.model
+    generate_textures = settings.generate_textures and settings.mode != "EXPLAIN"
+    captured["context"]["image_generation"] = dict(enabled=generate_textures, max_images=4)
+    captured["context"]["visual_inputs"] = visual_context.manifest(attachments)
+    captured["context"]["visual_context"] = dict(view_sent=settings.send_view, maps_sent=settings.send_maps,
+        missing_maps=missing_maps, reference_sent=bool(settings.reference_path.strip()),
+        target_digest=captured["digest"])
+    return dict(action="run", request_id=captured["id"], model=selected_model,
+                generate_textures=generate_textures, scene_scope=captured["scene_scope"],
+                images=[{k: item.get(k) for k in ("id", "label", "url")} for item in attachments],
+                instructions=authoring.INSTRUCTIONS, tools=authoring.tools(captured["scene_scope"]),
+                input=json.dumps(dict(mode=settings.mode, instruction=captured["prompt"],
+                                      current_context=captured["context"], recent_changes=list(recent),
+                                      recent_conversation=conversation(captured)), allow_nan=False))
+
+
+def sharing_summary(payload):
+    """What an outgoing request contains, read from the payload itself."""
+    body = json.loads(payload["input"])
+    context = body.get("current_context", {})
+    lines = [f"Instruction ({len(body.get('instruction', ''))} characters), mode {body.get('mode', '').title()}"]
+    summary_keys = [key for key in ("material", "materials", "mesh", "meshes", "scene_materials", "history")
+                    if key in context]
+    if summary_keys:
+        lines.append("Material and mesh summaries: " + ", ".join(summary_keys))
+    else:
+        lines.append("Material summary: " + ", ".join(sorted(k for k in context if k not in
+                     {"command_schema", "visual_inputs", "visual_context", "image_generation", "scope",
+                      "scene_proposal_schema", "scene_limits"}))[:80])
+    images = payload.get("images", [])
+    views = [item["id"] for item in images if item["id"] in {"viewport", "target_view"}]
+    maps = [item["id"].split(":", 1)[1] for item in images if item["id"].startswith("map:")]
+    reference = any(item["id"] == "reference" for item in images)
+    lines.append("Model views: " + (", ".join(views) if views else "none"))
+    lines.append("Mesh maps: " + (", ".join(maps) if maps else "none"))
+    lines.append("Reference image: " + ("yes" if reference else "no"))
+    lines.append("Texture generation: " + ("allowed" if payload.get("generate_textures") else "off"))
+    if body.get("recent_changes"):
+        lines.append(f"Recent changes: {len(body['recent_changes'])} receipt(s)")
+    return lines
+
+
+def dry_payload(context):
+    """The request the Run button would send now, without rendering or contacting anything."""
+    settings = context.window_manager.open_painter_director
+    ts = require_set(context)
+    captured = capture(context, mode=settings.mode, scope=settings.scope, prompt=settings.prompt or "(instruction)")
+    reference = (dict(id="reference", role="reference", label="Artist reference") if settings.reference_path.strip() else None)
+    attachments, missing = attachments_for(context, ts, send_view=settings.send_view, send_maps=settings.send_maps,
+                                           reference=reference, dry=True)
+    recent = [dict(summary=r["summary"], changes=r["changes"][:30], reverted=r.get("reverted", False))
+              for r in transactions.history(ts)[-3:]]
+    payload = compose(context, settings, captured, attachments, missing, recent=recent)
+    release(captured)
+    return payload
 
 
 def run(context):
@@ -259,8 +329,6 @@ def run(context):
     recent = [dict(summary=r["summary"], changes=r["changes"][:30], reverted=r.get("reverted", False))
               for r in transactions.history(require_set(context))[-3:]]
     selected_model = "" if settings.model == "DEFAULT" else settings.model
-    generate_textures = settings.generate_textures and settings.mode != "EXPLAIN"
-    captured["context"]["image_generation"] = dict(enabled=generate_textures, max_images=4)
     from . import visual_context
     # Keep the appearance reference last so the native image tool can select
     # the latest image without accidentally treating a normal map as its style.
@@ -276,17 +344,7 @@ def run(context):
                       (not selected_model and m["default"])), None)
         if model and "image" not in model["input_modalities"]:
             raise schema.AuthoringError("Select a model that accepts images to send the reference, model view or mesh maps")
-    captured["context"]["visual_inputs"] = visual_context.manifest(attachments)
-    captured["context"]["visual_context"] = dict(view_sent=settings.send_view, maps_sent=settings.send_maps,
-        missing_maps=missing_maps, reference_sent=bool(settings.reference_path.strip()),
-        target_digest=captured["digest"])
-    payload = dict(action="run", request_id=captured["id"], model=selected_model,
-                   generate_textures=generate_textures, scene_scope=captured["scene_scope"],
-                   images=[{k: item[k] for k in ("id", "label", "url")} for item in attachments],
-                   instructions=authoring.INSTRUCTIONS, tools=authoring.tools(captured["scene_scope"]),
-                   input=json.dumps(dict(mode=settings.mode, instruction=captured["prompt"],
-                                         current_context=captured["context"], recent_changes=recent,
-                                         recent_conversation=conversation(captured)), allow_nan=False))
+    payload = compose(context, settings, captured, attachments, missing_maps, recent=recent)
     connection.send(payload)
     if request and not request["running"] and request["draft"]:
         remember(request, "discarded")
@@ -294,6 +352,7 @@ def run(context):
     request = captured
     state.update(status="Directing material…", response="", changes=[])
     state["visual_inputs"] = visual_context.manifest(attachments)
+    state["sharing"] = sharing_summary(payload)   # what actually went out, for the panel
     redraw()
 
 

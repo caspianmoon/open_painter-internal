@@ -2,7 +2,7 @@
 
 ## 0.12.0 (in progress)
 
-Focused bake and export views, tools in context (UI plan phases 4–6).
+Focused bake and export views, tools in context, nodes and the assistant (UI plan phases 4–7).
 
 - **Bake view:** *Bake Mesh Maps* in the tool header opens the sidebar's *Bake* tab with three
   freely accessible sections. *Setup* shows the targets, the model's size, resolution, margin,
@@ -47,8 +47,18 @@ Focused bake and export views, tools in context (UI plan phases 4–6).
   *Mark Selected Cut Faces* on attribute and face-selection mesh masks, *Performance Inventory*
   in the Performance menu, *Stage Mesh LOD* under Export › Prepare; each names its input, output
   and reader, and all stay searchable.
-- Tests: `tests/integration/bake_view.py`, `export_view.py`, `contextual_tools.py`;
-  `tests/unit/test_bake_queue.py` and `tests/integration/geometry_effects.py` updated.
+- **Nodes:** *Edit Nodes* opens the graph framed on the selected layer, mask or filter; the node
+  header shows the same path as the inspector with *Frame Selected*, *Full Graph* and *Auto
+  Layout*. Sockets say what they carry — *Material* bundles, *Color*, *Scalar*, *Normal* and
+  *Coverage* — with tooltips; trees saved with the previous socket types reconcile once and keep
+  their links and positions.
+- **Material Assistant:** the *Director* tab reads Target → Instruction → Run → Changes; the mode
+  is a compact choice (Refine by default), *What is sent* is generated from the same attachment
+  description the request is composed from and shows the summary of the last request that
+  actually went out, and connection settings live in the add-on preferences.
+- Tests: `tests/integration/bake_view.py`, `export_view.py`, `contextual_tools.py`,
+  `nodes_and_assistant.py`; `tests/unit/test_bake_queue.py` and
+  `tests/integration/geometry_effects.py` updated.
 
 ## 0.11.0
 

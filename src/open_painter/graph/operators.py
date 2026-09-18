@@ -17,15 +17,59 @@ def graph_area(screen, ts):
     return None
 
 
+def target_node_id(context, ts):
+    """The graph node of the Painter session's target (layer, mask or filter), or ''."""
+    from ..ui import selection
+    target = selection.resolve(context, ts)
+    if target.layer is None:
+        return ''
+    if target.kind == 'MASK' and target.mask is not None:
+        index = next(i for i, item in enumerate(target.layer.masks) if item.id == target.mask_id)
+        return mirror.mask_node_id(target.layer, index, target.mask)
+    if target.kind == 'FILTER' and target.effect is not None and target.channel is not None:
+        index = next(i for i, item in enumerate(target.channel.effects) if item.id == target.effect_id)
+        return mirror.effect_node_id(target.layer, target.channel_name, index, target.effect)
+    return target.layer_id
+
+
+def frame(area, tree, node_id=None):
+    """Frame the graph editor on one node (selected) or on everything; the layout is untouched."""
+    region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+    if region is None:
+        return False
+    if node_id:
+        with mirror.syncing():
+            for item in tree.nodes:
+                item.select = getattr(item, 'op_id', '') == node_id
+            target = next((item for item in tree.nodes if getattr(item, 'op_id', '') == node_id), None)
+            if target is not None:
+                tree.nodes.active = target
+        tree['op_active_node'] = node_id
+    try:
+        with bpy.context.temp_override(area=area, region=region):
+            if node_id:
+                bpy.ops.node.view_selected()
+            else:
+                bpy.ops.node.view_all()
+    except RuntimeError:
+        return False   # an area that has not drawn yet cannot be framed; the next open will
+    return True
+
+
 class OP_OT_open_graph(SafeOperator, bpy.types.Operator):
     bl_idname = 'open_painter.open_graph'
-    bl_label = 'Open Graph'
-    bl_description = 'Show the active texture set as a live node graph next to the Painter view'
+    bl_label = 'Edit Nodes'
+    bl_description = ('Show the active texture set as a live node graph next to the Painter view, framed on the '
+                      'selected layer, mask or filter (Full Graph shows everything)')
     bl_options = {'REGISTER'}
+    focus: bpy.props.EnumProperty(name='Open At', default='SELECTED', options={'SKIP_SAVE'}, items=[
+        ('SELECTED', 'Selected Item', 'Frame the node of the selected layer, mask or filter'),
+        ('ALL', 'Full Graph', 'Frame the whole graph')])
 
     def run(self, context):
         ts = require_set(context)
         tree = mirror.ensure_tree(ts)
+        node_id = target_node_id(context, ts) if self.focus == 'SELECTED' else ''
         area = graph_area(context.screen, ts)
         if area is None:
             host = context.area if context.area and context.area.type in {'VIEW_3D', 'IMAGE_EDITOR', 'NODE_EDITOR'} \
@@ -45,7 +89,29 @@ class OP_OT_open_graph(SafeOperator, bpy.types.Operator):
         if hasattr(space, 'show_region_ui'):
             space.show_region_ui = False   # the group sidebar has nothing to say about a mirror
         tree['op_active'] = ''
+        frame(area, tree, node_id)
         area.tag_redraw()
+
+
+class OP_OT_graph_view(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.graph_view'
+    bl_label = 'Graph View'
+    bl_options = {'REGISTER'}
+    scope: bpy.props.EnumProperty(items=[('SELECTED', 'Frame Selected', 'Frame the node of the Painter selection'),
+                                         ('ALL', 'Full Graph', 'Frame the whole graph')], default='ALL')
+
+    @classmethod
+    def description(cls, context, properties):
+        return ('Frame the node of the layer, mask or filter selected in the Painter'
+                if properties.scope == 'SELECTED' else 'Show the whole graph; node positions stay as they are')
+
+    def run(self, context):
+        tree = getattr(context.space_data, 'node_tree', None)
+        ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
+        if ts is None:
+            raise ValueError('This editor shows no Open Painter graph.')
+        node_id = target_node_id(context, ts) if self.scope == 'SELECTED' else ''
+        frame(context.area, tree, node_id)
 
 
 class OP_OT_graph_auto_layout(SafeOperator, bpy.types.Operator):
@@ -270,7 +336,13 @@ def header(self, context):
     if ts is None:
         layout.label(text='Open Painter Graph: open it from the Layers panel', icon='NODETREE')
         return
-    layout.label(text=ts.name, icon='NODETREE')
+    # The scope: the same path the inspector shows, so both views name the same item.
+    from ..ui import selection
+    target = selection.resolve(context, ts)
+    layout.label(text=selection.breadcrumb_text(target), icon='NODETREE')
+    row = layout.row(align=True)
+    row.operator('open_painter.graph_view', text='Frame Selected', icon='RESTRICT_SELECT_OFF').scope = 'SELECTED'
+    row.operator('open_painter.graph_view', text='Full Graph', icon='VIEW_ORTHO').scope = 'ALL'
     layout.operator('open_painter.graph_auto_layout', text='Auto Layout', icon='SNAP_GRID')
     from ..evaluation.references import issues, warnings
     problems = issues(ts)
@@ -302,7 +374,7 @@ def add_menu(self, context):
         layout.operator('open_painter.layer', text=label, icon=icon).action = action
 
 
-CLASSES = (OP_OT_open_graph, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
+CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
            OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
            OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter)
 

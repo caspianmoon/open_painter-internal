@@ -42,8 +42,8 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Material Aging | D | *Material Aging* panel (order 2) | *Material Aging* panel: Applied To / Construction / Environment / Age first, details in sub-panels | done (phase 6) |
 | Geometry Effects (creation buttons, helper box) | D | *Geometry Effects* panel | *Geometry Effects* panel: applied helpers list + inspector; presets behind *Add Geometry Effect* | done (phase 6) |
 | Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare | done (phase 6) |
-| Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More / inspector; scope label in the node header | Phase 7 |
-| Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab: Target / Instruction / Run / Changes; connection settings in Preferences | Phase 7 |
+| Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More and the row menu, framed on the selection; scope path, Frame Selected and Full Graph in the node header | done (phase 7) |
+| Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab (Material Assistant): Target / Instruction / Run / Changes; connection settings in Preferences | done (phase 7) |
 | Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) | Phase 8 |
 
 Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`, `.native_select`,
@@ -190,3 +190,20 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
   *Mark Selected Cut Faces* on attribute / face-selection mesh masks, *Performance Inventory* in the
   Performance menu, *Stage Mesh LOD* under Export › Prepare. `open_painter.offline_analysis` stays
   searchable.
+
+## Phase 7 notes (implemented)
+
+- Graph sockets say what they carry: `OP_SocketContent` is the material bundle (label *Material*),
+  `OP_SocketColor` one colour channel, `OP_SocketScalar` one scalar channel, `OP_SocketNormal` a
+  tangent normal, `OP_SocketCoverage` mask coverage; every socket carries a tooltip description.
+  `mirror.GRAPH_FORMAT` is part of the tree signature, so trees saved with the previous socket
+  types reconcile once; links and positions are kept by the existing reconcile.
+- `open_painter.open_graph` (label *Edit Nodes*) opens the graph framed on the selected layer, mask
+  or filter (`target_node_id` through the selection resolver) or, with `focus='ALL'`, on the
+  whole graph; `open_painter.graph_view` offers *Frame Selected* / *Full Graph* in the node
+  header next to the scope path and *Auto Layout* (still explicit and undoable).
+- The Material Assistant (`ui/material_director.py`) reads Target → Instruction → Run → Changes;
+  the mode is a compact choice with Refine as the default; *What is sent* lists the attachments
+  from `session.attachments_for(..., dry=True)` — the same description the request is composed
+  from — and the summary of the last request from the payload itself (`session.compose`,
+  `session.sharing_summary`); connection settings live in the add-on preferences only.

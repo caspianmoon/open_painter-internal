@@ -10,8 +10,8 @@ to editable layers. The complete material remains a normal Open Painter stack.
 1. Install Open Painter **0.8.0** and open its editor. Select an existing texture set with an assigned,
    UV-unwrapped mesh. Use **Scene Materials** scope to coordinate all assigned texture sets in the scene.
 2. Open the sidebar with **N**, then choose the **Director** tab.
-3. Expand **Connection Settings**. Select a supported **Codex Executable**, or leave it empty to
-   find `codex` on `PATH`. Blender launched from a desktop shortcut may have a different `PATH`
+3. In the add-on preferences (Edit › Preferences › Add-ons › Open Painter › Material Director),
+   select a supported **Codex Executable**, or leave it empty to find `codex` on `PATH`. Blender launched from a desktop shortcut may have a different `PATH`
    from your terminal, so choosing the executable explicitly is often useful.
 4. Enable Blender's **Preferences → System → Allow Online Access** and **Share Material Context
    with Codex**. Choose **OS Keyring** to retain login, or **This Connection Only** to keep
@@ -133,7 +133,19 @@ change, undo that first. Removing a member or clearing its history makes that gr
 Local receipts retain up to eight transactions within an 8 MiB budget per texture set. They include
 before/after material data and the actual parameter report, and survive saving/reopening a `.blend`.
 They are a bounded convenience history, not a replacement for Blender undo or project backups.
-**Connection Settings → Clear AI History** removes those receipts and the current conversation without changing layers.
+**Changes → Clear AI History** (the trash button) removes those receipts and the current conversation without changing layers.
+
+## Panel layout since 0.12.0
+
+The *Director* tab reads **Target → Instruction → Run → Changes**: the target names the set, folder
+or scene the instruction applies to (the same path the inspector shows) with the scope and the
+number of protected items; the instruction holds the prompt, a compact mode choice (Refine by
+default — ordinary requests need no mode decision), the reference image and *What is sent*, a
+list generated from the same attachment description the request is built from (model views,
+mesh maps, reference, texture generation), with the summary of the last request that actually
+went out; Run holds the connection state and the run/stop button; Changes holds the draft's
+Apply / Discard, the reply, the change report and the AI undo. Connection settings live in the
+add-on preferences.
 
 ## What the first implementation can change
 

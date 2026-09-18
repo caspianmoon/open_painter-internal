@@ -17,11 +17,14 @@ from ..core.layer_stack import channel_for
 from ..evaluation import anchors
 from ..evaluation.anchors import DETAIL_KINDS
 from . import layout
-from .tree import (NODE_TYPES, OUTPUT_NODE, SOCKET_CONTENT, SOCKET_COVERAGE, SOCKET_SCALAR,
-                   TREE_ID, is_graph)
+from .tree import (NODE_TYPES, OUTPUT_NODE, SOCKET_COLOR, SOCKET_CONTENT, SOCKET_COVERAGE, SOCKET_DESCRIPTIONS,
+                   SOCKET_NORMAL, SOCKET_SCALAR, TREE_ID, is_graph)
 
 SCALAR_CHANNELS = frozenset({'ROUGHNESS', 'METALLIC', 'HEIGHT', 'AO', 'OPACITY'})
 FRAME_PREFIX = 'frame:'
+# Bumped when the projection's sockets change: trees saved with the previous socket types
+# reconcile once on load (the signature otherwise depends on the stack alone).
+GRAPH_FORMAT = 2
 _syncing = False
 
 
@@ -43,7 +46,10 @@ def is_syncing():
 # ---- projection ------------------------------------------------------------
 
 def _content_socket(channel):
-    return SOCKET_SCALAR if channel in SCALAR_CHANNELS else SOCKET_CONTENT
+    """The socket type a channel's content actually is: scalar, colour or normal (never a bundle)."""
+    if channel in SCALAR_CHANNELS:
+        return SOCKET_SCALAR
+    return SOCKET_NORMAL if channel == 'NORMAL' else SOCKET_COLOR
 
 
 def legacy_targets(ts):
@@ -135,7 +141,7 @@ def project(ts):
                 mask_inputs.append(('ref', 'Published Input', SOCKET_COVERAGE))
             elif mask.source == 'GENERATOR' and mask.generator in DETAIL_KINDS:
                 mask_inputs.append(('detail#HEIGHT', 'Micro Height', SOCKET_SCALAR))
-                mask_inputs.append(('detail#NORMAL', 'Micro Normal', SOCKET_CONTENT))
+                mask_inputs.append(('detail#NORMAL', 'Micro Normal', SOCKET_NORMAL))
             label = mask.name or mask.source.title()
             if mask.source == 'ANCHOR':
                 label = 'Anchor: ' + label
@@ -235,6 +241,7 @@ def signature(ts):
                             for m in layer.masks),
                       tuple((p.channel, p.enabled, p.anchor, p.anchor_channel,
                              tuple((e.kind, e.id, e.name) for e in p.effects)) for p in layer.channels)))
+    parts.append(('format', GRAPH_FORMAT))
     return sha256(repr(parts).encode()).hexdigest()
 
 
@@ -302,6 +309,9 @@ def _sockets(collection, specs):
             existing[identifier] = socket
         if socket.name != name:
             socket.name = name
+        description = SOCKET_DESCRIPTIONS.get(kind, '')
+        if socket.description != description:
+            socket.description = description   # the tooltip says what the socket carries
     for index, (identifier, _, _) in enumerate(specs):
         current = next(i for i, socket in enumerate(collection) if socket.identifier == identifier)
         if current != index:

@@ -1,5 +1,46 @@
 # Changes
 
+## 0.13.0
+
+Add-on quality remedy: continuous material painting with live feedback, geometry-derived
+export padding with correct resampling, transactional export publication, an engine
+validation kit, and product regression evidence. Report: `docs/quality-remedy-0.13.md`.
+
+- **Paint Material.** The paint inspector leads with a material brush: one gesture paints the
+  enabled PBR channels together and the material changes under the pointer. The gesture is
+  resampled at the brush spacing between pointer events and re-projected onto the surface (a
+  fast drag leaves no holes); a miss, an unassigned slot, a hidden object, another set's
+  surface (without *Paint Across Sets*) or a silhouette edge lifts the brush instead of
+  bridging. The stroke goes to the selected set by default; *Paint Across Sets* lists the sets
+  it may reach and links only the ones the pointer crosses. *Pressure Size* and *Pressure
+  Flow* are separate; *Depth Limit* (Stroke Details) keeps a nearby parallel surface clean.
+  Esc discards the stroke in progress and exits when idle; one gesture is one undo step; a
+  save during a gesture commits it once; zero values are valid paint; duplicated layers and
+  masks get their own strokes. Strokes recorded by earlier versions render unchanged.
+- **Faster settle.** The live material's stroke boundary regenerates incrementally (only the
+  rows the changed strokes touch, from the previous leaf), the first boundary of a layer
+  shows its paint canvas rather than a grey slab, stroke rasters are memoised across
+  regenerations, and published boundaries are swept so a long session stays bounded.
+- **UV padding on export.** Validity and island ownership come from the export geometry
+  (never from pixels); resampling filters only valid texels; tangent normals are filtered as
+  vectors; packed maps are padded per channel before packing; every field is extended into
+  the gutters from its nearest valid texel (*Automatic* 4–64 px by resolution, *Custom*,
+  *Fill Empty Space*, *None*), with the effective width shown next to the resolution and a
+  report of islands whose gutters meet. Files from before 0.13 get Automatic padding and the
+  Export view says so (project format 3).
+- **Safe export publication.** A request's maps, manifests and mesh are generated in staging
+  and published as one transaction with backups, atomic replacement, rollback and a journal
+  the next export recovers from; creation stays exclusive unless replacing is allowed; the
+  Export to Target button and evaluated bundles use the same path; an export no longer edits
+  a set's saved settings.
+- **Engine validation kit** (`engine_validation/`): fixtures with hashes, an Unreal Editor
+  Python script and a Unity URP editor script. The engines were not run for this release.
+- **Evidence:** clean-install and 0.12.2-upgrade sessions on the package, a compatibility
+  contract against a 0.12.2 file, all 50 recipes byte-identical to 0.12.2, a 500-stroke
+  session, 2K and 4K painting probes, padding and export-safety suites, all in the canonical
+  runner. Measured limits (latency and settle above the plan's targets on the reference
+  fixture) are in the report.
+
 ## 0.12.2
 
 Launch remedy: truthful amounts, effective recipes, plain names, an explicit blend channel,

@@ -17,6 +17,10 @@ def follow_target_changed(self, context):
         apply(get(project.target), self)
 
 
+def padding_changed(self, context):
+    self.padding_migrated = False    # the artist chose: the upgrade note has served
+
+
 class OP_ExportSettings(bpy.types.PropertyGroup):
     directory: bpy.props.StringProperty(
         name="Output Directory", subtype="DIR_PATH", options={"PATH_SUPPORTS_BLEND_RELATIVE"}
@@ -47,6 +51,18 @@ class OP_ExportSettings(bpy.types.PropertyGroup):
         description="Take preset, format and bit depth from the project's Target renderer")
     prefix: bpy.props.StringProperty(name="Prefix")
     suffix: bpy.props.StringProperty(name="Suffix")
+    padding_mode: bpy.props.EnumProperty(name="UV Padding", default="AUTOMATIC", update=padding_changed,
+        items=[("AUTOMATIC", "Automatic", "A gutter sized for the export resolution: 4 px at 512 up to 64 px at 8K"),
+               ("CUSTOM", "Custom", "A gutter of the given width in output pixels"),
+               ("FILL", "Fill Empty Space", "Extend the nearest surface over every empty texel"),
+               ("NONE", "None", "No gutter: for diagnostics and special workflows")],
+        description="How far exported maps extend past their UV islands so filtering and mips stay clean")
+    padding_pixels: bpy.props.IntProperty(name="Padding", default=16, min=0, max=64, subtype="PIXEL",
+                                          description="Gutter width in output pixels (Custom)")
+    padding_migrated: bpy.props.BoolProperty(default=False, options={"HIDDEN"},
+        description="Automatic padding was set when this file was upgraded; changing the mode clears it")
+    last_report: bpy.props.StringProperty(default="", options={"HIDDEN"}, description="What the last export did about gutters")
+    last_report_detail: bpy.props.StringProperty(default="", options={"HIDDEN"})
     custom_r: bpy.props.EnumProperty(name="R", items=PACK_ITEMS, default="AO")
     custom_g: bpy.props.EnumProperty(name="G", items=PACK_ITEMS, default="ROUGHNESS")
     custom_b: bpy.props.EnumProperty(name="B", items=PACK_ITEMS, default="METALLIC")

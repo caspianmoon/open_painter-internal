@@ -98,9 +98,10 @@ def ensure_key(layer):
     return layer.stroke_key
 
 
-def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key=''):
+def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key='', sets=None):
     """Store a gesture as a stroke of the layer's key (or of ``key``: a Vector Strokes
-    mask's own key); link paint layers in other sets it reaches."""
+    mask's own key); link paint layers in other sets it reaches. ``sets`` (ids) limits
+    the sets a universal stroke may link to those the gesture explicitly crossed."""
     from ..core import layer_stack as stack
     key = key or ensure_key(layer)
     samples = np.ascontiguousarray(samples, np.float32)
@@ -109,8 +110,10 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
     stroke.layer_key = key
     stroke.order = max((s.order for s in project.strokes if s.layer_key == key and s != stroke), default=-1) + 1
     for field in ('radius', 'hardness', 'opacity', 'flow', 'accumulate', 'alpha_image', 'projection', 'blend',
-                  'base_color', 'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal'):
-        setattr(stroke, field, getattr(settings, field))
+                  'base_color', 'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal',
+                  'depth_limit'):
+        if hasattr(settings, field):
+            setattr(stroke, field, getattr(settings, field))
     stroke.channels = ','.join(sorted(settings.channels)) if not isinstance(settings.channels, str) else settings.channels
     stroke.plane_normal = plane_normal
     stroke.samples = stroke_raster.pack_samples(samples)
@@ -125,6 +128,8 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
         for other in project.texture_sets:
             if other.id == ts.id or any(item.stroke_key == key for item in other.layers):
                 continue
+            if sets is not None and other.id not in sets:
+                continue   # the gesture never crossed this set: its neighbourhood is no permission
             # Link only sets the stroke marks: the disc may spill onto a neighbouring
             # object the pointer never crossed, so the raster, not the ray hit, decides,
             # and a set the bounds merely enclose must not gain a layer it re-rasters
@@ -192,6 +197,28 @@ def enable_channels(project, key):
             prop = channel_for(layer, channel)
             if prop is not None and not prop.enabled:
                 prop.enabled = True
+
+
+STROKE_FIELDS = ('name', 'radius', 'hardness', 'opacity', 'flow', 'accumulate', 'alpha_image', 'alpha_rotation',
+                 'alpha_angle', 'projection', 'plane_normal', 'depth_limit', 'blend', 'channels', 'base_color',
+                 'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal', 'samples',
+                 'sample_count', 'bounds_min', 'bounds_max', 'order')
+
+
+def copy_key(project, key):
+    """A fresh key carrying copies of ``key``'s strokes: a duplicated layer or mask renders
+    the same marks but its later strokes stay its own."""
+    fresh = new_id()
+    # Read every source first: adding to the collection may move the structs it holds.
+    sources = [{field: getattr(source, field) for field in (*STROKE_FIELDS, 'revision')}
+               for source in strokes_for(project, key)]
+    for values in sources:
+        stroke = project.strokes.add()
+        stroke.id, stroke.layer_key = new_id(), fresh
+        for field, value in values.items():
+            setattr(stroke, field, value)
+    project.stroke_serial += 1
+    return fresh
 
 
 def remove(project, stroke_id):

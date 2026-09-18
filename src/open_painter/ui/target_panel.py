@@ -33,40 +33,49 @@ class OP_OT_export_target(SafeOperator, bpy.types.Operator):
     all_sets: bpy.props.BoolProperty(name="Sets of Selected Objects", default=False, options={"SKIP_SAVE"})
 
     def run(self, context):
-        from ..export.exporter import export
+        from tempfile import TemporaryDirectory
+        from ..export.exporter import generate, safe_name
+        from ..export.plan import _Overlay
+        from ..export.transaction import Transaction
         project = context.scene.open_painter
         target = get(project.target)
         if not project.export_directory:
             raise ValueError("Choose the project's export directory first (Export panel → Target).")
         directory = Path(bpy.path.abspath(project.export_directory))
-        written = []
-        objects = set()
-        for ts in _sets_for_export(context, project, self.all_sets):
-            settings = ts.export
-            saved = {key: getattr(settings, key) for key in ("preset", "file_format", "bit_depth", "resolution")}
+        transaction = Transaction()
+        generated, objects = [], set()
+        with TemporaryDirectory(prefix="open-painter-target-") as staging:
             try:
-                apply(target, settings)
-                n = resolution(target, ts, settings)
-                if n != int(ts.resolution) or settings.resolution != "SET":
-                    settings.resolution = str(n) if str(n) in {"512", "1024", "2048", "4096", "8192"} else "SET"
-                extension = "png" if settings.file_format == "PNG" else "tif"
-                naming = (lambda set_name, label, ext, prefix=settings.prefix, suffix=settings.suffix:
-                          filename(target, set_name, label, ext, prefix, suffix)) if target.key != "CUSTOM" else None
-                paths = export(context, ts, settings, naming=naming, directory=directory)
-                from ..export.exporter import safe_name
-                labels = [label for label, _ in _definitions(settings)]
-                files = list(zip(labels, paths))
-                written.extend(paths)
-                if target.key != "CUSTOM":
-                    info = directory / f"{safe_name(ts.name)}_manifest.json"
-                    info.write_text(json.dumps(manifest(target, ts, files), indent=2))
-                    written.append(info)
+                for index, ts in enumerate(_sets_for_export(context, project, self.all_sets)):
+                    # The target's preset, format and resolution overlay the set's settings for
+                    # this request; nothing the artist saved is edited.
+                    settings = ts.export
+                    if target.key != "CUSTOM" and target.preset:
+                        n = resolution(target, ts, settings)
+                        settings = _Overlay(settings, preset=target.preset, file_format=target.file_format,
+                                            bit_depth=target.bit_depth,
+                                            resolution=str(n) if str(n) in {"512", "1024", "2048", "4096", "8192"} else "SET")
+                    naming = (lambda set_name, label, ext, prefix=settings.prefix, suffix=settings.suffix:
+                              filename(target, set_name, label, ext, prefix, suffix)) if target.key != "CUSTOM" else None
+                    result = generate(context, ts, settings, naming=naming, directory=directory)
+                    generated.append(result)
+                    for destination, source in zip(result.destinations, result.staged):
+                        transaction.add(destination, source)
+                    if target.key != "CUSTOM":
+                        labels = [label for label, _ in _definitions(settings)]
+                        staged = Path(staging) / f"{index:03d}_manifest.json"
+                        staged.write_text(json.dumps(manifest(target, ts, list(zip(labels, result.destinations))), indent=2))
+                        transaction.add(directory / f"{safe_name(ts.name)}_manifest.json", staged)
+                    objects.update(ref.object for ref in ts.assignments if ref.object)
+                if project.export_mesh and target.mesh_format and objects:
+                    mesh_staging = Path(staging) / "mesh"
+                    mesh_staging.mkdir()
+                    staged_mesh = _export_mesh(context, target, mesh_staging, objects)
+                    transaction.add(directory / staged_mesh.name, staged_mesh)
+                written = transaction.commit(overwrite=False)
             finally:
-                for key, value in saved.items():
-                    setattr(settings, key, value)
-            objects.update(ref.object for ref in ts.assignments if ref.object)
-        if project.export_mesh and target.mesh_format and objects:
-            written.append(_export_mesh(context, target, directory, objects))
+                for result in generated:
+                    result.close()
         context.scene.open_painter.status = f"Exported {len(written)} files for {target.label} to {directory}"
         self.report({"INFO"}, context.scene.open_painter.status)
 

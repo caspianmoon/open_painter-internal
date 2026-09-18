@@ -40,6 +40,9 @@ class OP_Stroke(bpy.types.PropertyGroup):
         items=[('SURFACE', 'Surface', 'Each sample stamps in the plane of the surface it hit'),
                ('PLANAR', 'Planar', 'Every sample stamps along one direction (the view when recorded)')])
     plane_normal: bpy.props.FloatVectorProperty(size=3, default=(0, 0, 1), update=touched)
+    depth_limit: bpy.props.FloatProperty(name='Depth Limit', default=1.0, min=.05, max=1.0, update=touched,
+        description='How far behind or in front of the stamp plane a surface may lie and still receive '
+                    'paint, in radii (strokes recorded before 0.13 keep one radius)')
     blend: bpy.props.EnumProperty(name='Mode', default='PAINT', update=touched,
         items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', 'Remove earlier strokes and paint under it')])
     # Material
@@ -79,7 +82,15 @@ class OP_VectorBrushSettings(bpy.types.PropertyGroup):
         items=[('MAX', 'Max', ''), ('FLOW', 'Flow', '')])
     alpha_image: bpy.props.PointerProperty(name='Alpha', type=bpy.types.Image)
     projection: bpy.props.EnumProperty(name='Projection', default='SURFACE',
-        items=[('SURFACE', 'Surface', ''), ('PLANAR', 'View Planar', '')])
+        items=[('SURFACE', 'Surface', 'Each stamp lies in the plane of the surface it hit and follows it'),
+               ('PLANAR', 'View Planar', 'Every stamp projects along the view direction of the gesture')])
+    depth_limit: bpy.props.FloatProperty(name='Depth Limit', default=.5, min=.05, max=1.0, subtype='FACTOR',
+        description='How far behind or in front of the stamp plane a surface may lie and still receive '
+                    'paint, in radii: a nearby parallel surface further away than this stays clean')
+    pressure_size: bpy.props.BoolProperty(name='Pressure Size', default=True,
+                                          description='Tablet pressure scales the radius')
+    pressure_flow: bpy.props.BoolProperty(name='Pressure Flow', default=False,
+                                          description='Tablet pressure scales the flow of each stamp')
     blend: bpy.props.EnumProperty(name='Mode', default='PAINT', items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', '')])
     channels: bpy.props.EnumProperty(name='Channels', options={'ENUM_FLAG'}, items=[(key, label, '') for key, label, _ in CHANNEL_ITEMS],
                                      default={'BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'HEIGHT'})
@@ -91,5 +102,6 @@ class OP_VectorBrushSettings(bpy.types.PropertyGroup):
     emission: bpy.props.FloatVectorProperty(name='Emission', size=4, subtype='COLOR', default=(0, 0, 0, 1), min=0, max=1)
     opacity_value: bpy.props.FloatProperty(name='Opacity Value', default=1, min=0, max=1)
     normal: bpy.props.FloatVectorProperty(name='Normal', size=4, subtype='COLOR', default=(.5, .5, 1, 1), min=0, max=1)
-    universal: bpy.props.BoolProperty(name='Paint Across Sets', default=True,
-                                      description='A stroke that reaches other texture sets creates linked paint layers there')
+    universal: bpy.props.BoolProperty(name='Paint Across Sets', default=False,
+                                      description='The gesture may cross onto the surfaces of other texture sets; each '
+                                                  'set it touches renders it through a linked paint layer of its own')

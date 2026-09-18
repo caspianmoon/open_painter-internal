@@ -2,11 +2,16 @@
 import numpy as np
 
 
-def tiles(uv, n):
-    """Yield bounded raster tiles and barycentric weights at pixel centers."""
+def tiles(uv, n, clip=None):
+    """Yield bounded raster tiles and barycentric weights at pixel centers; ``clip`` is an
+    optional UV box ((u0, v0), (u1, v1)) limiting the texels considered."""
     coords = uv * n - 0.5
     lo = np.maximum(np.ceil(coords.min(axis=0)).astype(int), 0)
     hi = np.minimum(np.floor(coords.max(axis=0)).astype(int) + 1, n)
+    if clip is not None:
+        window = np.asarray(clip, np.float32) * n - 0.5
+        lo = np.maximum(lo, np.ceil(window[0]).astype(int))
+        hi = np.minimum(hi, np.floor(window[1]).astype(int) + 1)
     a, b, c = coords
     det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
     if abs(det) < 1e-8 or np.any(hi <= lo):
@@ -29,7 +34,7 @@ BLOCKS = (4, 8, 16, 32)
 EMPTY = (np.empty(0, np.int64), np.empty(0, np.int64), np.empty(0, np.int64), np.empty((0, 3), np.float32))
 
 
-def rasterize(uv, n, unique=True):
+def rasterize(uv, n, unique=True, clip=None):
     """Covered texels of many triangles at once: (rows, cols, triangle, weights).
 
     ``uv`` is (T, 3, 2). Triangles are grouped by texel extent and evaluated on
@@ -37,6 +42,8 @@ def rasterize(uv, n, unique=True):
     triangle; the barycentric arithmetic is the float32 sequence of ``tiles``.
     Where triangles overlap, the later triangle wins, matching sequential
     per-triangle writes; ``unique=False`` keeps every (texel, triangle) pair.
+    ``clip`` (T, 2, 2) limits each triangle to a UV box (a brush footprint on a
+    large face rasterises the footprint, not the face).
     """
     uv = np.asarray(uv, np.float32)
     if uv.ndim != 3 or len(uv) == 0:
@@ -44,6 +51,10 @@ def rasterize(uv, n, unique=True):
     coords = uv * n - 0.5
     lo = np.maximum(np.ceil(coords.min(axis=1)).astype(np.int64), 0)
     hi = np.minimum(np.floor(coords.max(axis=1)).astype(np.int64) + 1, n)
+    if clip is not None:
+        window = np.asarray(clip, np.float32) * n - 0.5
+        lo = np.maximum(lo, np.ceil(window[:, 0]).astype(np.int64))
+        hi = np.minimum(hi, np.floor(window[:, 1]).astype(np.int64) + 1)
     a, b, c = coords[:, 0], coords[:, 1], coords[:, 2]
     det = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
     valid = (np.abs(det) >= 1e-8) & np.all(hi > lo, axis=1)
@@ -79,7 +90,7 @@ def rasterize(uv, n, unique=True):
             tris.append(sub[index])
             weights.append(np.stack((w0[inside], w1[inside], w2[inside]), -1))
     for triangle in np.flatnonzero(valid & (extent > BLOCKS[-1])):
-        for (ys, xs), inside, w, _, _ in tiles(uv[triangle], n):
+        for (ys, xs), inside, w, _, _ in tiles(uv[triangle], n, None if clip is None else clip[triangle]):
             yy, xx = np.nonzero(inside)
             rows.append(ys.start + yy)
             cols.append(xs.start + xx)

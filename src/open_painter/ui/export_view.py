@@ -80,6 +80,16 @@ def draw_destination(layout, context, view, plan):
             if settings.preset == "CUSTOM":
                 for c in "rgba":
                     body.prop(settings, "custom_" + c)
+            body.prop(settings, "padding_mode")
+            if settings.padding_mode == "CUSTOM":
+                body.prop(settings, "padding_pixels")
+            from ..export import padding as padding_module
+            size = next((item.size for item in plan.sets if item.set_id == ts.id), int(ts.resolution))
+            body.label(text=padding_module.describe(settings, size) + f" at {size} px", icon="FULLSCREEN_EXIT")
+            if settings.padding_migrated:
+                body.label(text="Set to Automatic when this file was upgraded", icon="INFO")
+            if settings.last_report:
+                body.label(text="Last export: " + settings.last_report, icon="CHECKMARK" if "meet" not in settings.last_report else "ERROR")
     # Effective settings per set, with the set's own values named where they differ.
     for item in plan.sets:
         row = layout.row(align=True)

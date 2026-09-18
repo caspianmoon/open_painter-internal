@@ -58,14 +58,15 @@ def bounds(samples, margin=0.0):
 # ---- kernel ----------------------------------------------------------------------
 
 def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX', planar=None,
-           alpha_texture=None, alpha_rotation='RAKE', alpha_angle=0.0):
+           alpha_texture=None, alpha_rotation='RAKE', alpha_angle=0.0, depth_limit=1.0):
     """Coverage (K,) of texels at world ``positions`` (K, 3) with ``normals`` (K, 3).
 
     Each sample is a disc of its radius in the plane of its normal (or of the
-    ``planar`` normal for planar projection), with a depth band of one radius,
-    front-facing only, falling off from ``hardness`` outwards and scaled by
-    pressure and ``flow``. Samples union with ``MAX`` (a stroke never darkens
-    where it overlaps itself) or ``FLOW`` (1 - prod(1 - a): builds up).
+    ``planar`` normal for planar projection), with a depth band of ``depth_limit``
+    radii either side of that plane, front-facing only, falling off from
+    ``hardness`` outwards and scaled by the sample's pressure column and ``flow``.
+    Samples union with ``MAX`` (a stroke never darkens where it overlaps itself)
+    or ``FLOW`` (1 - prod(1 - a): builds up).
     """
     positions = np.ascontiguousarray(positions, np.float32)
     normals = np.ascontiguousarray(normals, np.float32)
@@ -75,6 +76,7 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
         return result
     samples = np.ascontiguousarray(samples, np.float32)
     soft = max(1.0 - float(hardness), 1e-5)
+    depth_limit = max(float(depth_limit), 1e-3)
     if planar is not None:
         plane = np.asarray(planar, np.float32)
         plane = plane / max(np.linalg.norm(plane), 1e-8)
@@ -95,7 +97,7 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
             lateral = rel - depth[..., None] * axis[None]
             radial = np.linalg.norm(lateral, axis=-1) / radius[None]
             facing = np.einsum('kc,sc->ks', normals[inside_box], axis) > .05
-            inside = facing & (radial < 1.0) & (np.abs(depth) < radius[None])
+            inside = facing & (radial < 1.0) & (np.abs(depth) < radius[None] * depth_limit)
             alpha = np.clip((1.0 - radial) / soft, 0.0, 1.0) * pressure[None] * flow
             if alpha_texture is not None:
                 alpha = alpha * _alpha_lookup(alpha_texture, lateral, sub, radius, alpha_rotation, alpha_angle)
@@ -175,6 +177,35 @@ def _batches(uv, n):
     return np.split(np.arange(len(uv)), np.flatnonzero(np.diff(groups)) + 1)
 
 
+def uv_window(corners, uv, lo, hi, margin=0.0):
+    """Per-triangle UV boxes (T, 2, 2) enclosing where the world box [lo, hi] meets each
+    triangle: the box corners projected onto the triangle's plane, mapped through its
+    barycentric frame into UV space, bounded (an affine map keeps convex hulls, so the box's
+    section of the plane lies inside the projected corners' hull). ``margin`` (UV units)
+    widens the box: one texel of it keeps the neighbours of every marked texel rasterised,
+    so the seam dilation sees the same coverage as an unclipped raster."""
+    corners = np.asarray(corners, np.float64)
+    p0, e1, e2 = corners[:, 0], corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
+    box = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])], np.float64)
+    d = box[None, :, :] - p0[:, None, :]                                     # (T, 8, 3)
+    d00 = np.einsum('tc,tc->t', e1, e1)[:, None]
+    d01 = np.einsum('tc,tc->t', e1, e2)[:, None]
+    d11 = np.einsum('tc,tc->t', e2, e2)[:, None]
+    d20 = np.einsum('tkc,tc->tk', d, e1)
+    d21 = np.einsum('tkc,tc->tk', d, e2)
+    denominator = d00 * d11 - d01 * d01
+    safe = np.abs(denominator) > 1e-18
+    denominator = np.where(safe, denominator, 1.0)
+    v = (d11 * d20 - d01 * d21) / denominator
+    w = (d00 * d21 - d01 * d20) / denominator
+    u = 1.0 - v - w
+    uv = np.asarray(uv, np.float64)
+    projected = u[..., None] * uv[:, None, 0] + v[..., None] * uv[:, None, 1] + w[..., None] * uv[:, None, 2]
+    window = np.stack((projected.min(axis=1) - margin, projected.max(axis=1) + margin), axis=1).astype(np.float32)
+    whole = np.stack((uv.min(axis=1), uv.max(axis=1)), axis=1).astype(np.float32)
+    return np.where(safe[..., None], window, whole)
+
+
 def _rasterise(stroke, n, entries):
     """(n, n) coverage of one stroke over the evaluated ``entries`` of a set."""
     from ..geometry.uv_rasterizer import interpolate, rasterize
@@ -194,19 +225,24 @@ def _rasterise(stroke, n, entries):
             if not len(chosen):
                 continue
             uv = target['uv'][tri_loops[chosen]]
+            window = uv_window(corners[chosen], uv, lo, hi, margin=1.5 / n)
             for batch in _batches(uv, n):
-                rows, cols, tri, weights = rasterize(uv[batch], n, unique=False)
+                rows, cols, tri, weights = rasterize(uv[batch], n, unique=False, clip=window[batch])
                 if not len(rows):
                     continue
                 picked = chosen[batch][tri]
                 positions = interpolate(weights, target['positions'][tri_vertices[picked]])
                 normals = interpolate(weights, target['world_normals'][tri_loops[picked]])
                 alpha = kernel(positions, normals, samples, stroke.hardness, stroke.flow, stroke.accumulate, planar,
-                               texture, stroke.alpha_rotation, stroke.alpha_angle)
+                               texture, stroke.alpha_rotation, stroke.alpha_angle, stroke.depth_limit)
                 np.maximum.at(flat_result, rows * n + cols, alpha)
                 covered[rows, cols] = True
         if covered.any():
-            result = dilate(result, covered)
+            # Dilation on the rows the stroke touched (with one row of slack): a full-canvas
+            # pass at 4k costs more than the raster itself.
+            hit = np.flatnonzero(covered.any(axis=1))
+            lo_row, hi_row = max(int(hit[0]) - 1, 0), min(int(hit[-1]) + 2, n)
+            result[lo_row:hi_row] = dilate(result[lo_row:hi_row], covered[lo_row:hi_row])
     return (result * float(stroke.opacity)).astype(np.float32)
 
 
@@ -242,6 +278,15 @@ def _expand(compact, y0, y1, n):
         first, last = np.searchsorted(flat, (y0 * n, y1 * n))
         rows.reshape(-1)[flat[first:last] - y0 * n] = values[first:last]
     return rows
+
+
+def raster_band(compact, n):
+    """[low, high) rows a compact raster covers (empty as [0, 0))."""
+    kind, lo, *data = compact
+    if kind == 'rows':
+        return [int(lo), int(lo) + len(data[0])] if len(data[0]) else [0, 0]
+    flat = data[0]
+    return [int(lo), int(flat[-1] // n) + 1] if len(flat) else [0, 0]
 
 
 def _key(ts, stroke, n, resources):
@@ -316,16 +361,26 @@ def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache
     rows = np.zeros((y1 - y0, n, 4), np.float32) if base is None else np.array(base, np.float32, copy=True)
     strokes = [stroke for stroke in strokes_for(project, layer.stroke_key) if channel in stroke_channels(stroke)]
     for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
-        alpha = _expand(raster, y0, y1, n)[..., None]
+        if not _touches_rows(raster, y0, y1, n):
+            continue   # a stroke elsewhere on the canvas costs these rows nothing
+        coverage = _expand(raster, y0, y1, n)
+        # Only the columns the stroke reaches in these rows: a brush-sized stroke on a
+        # 4k canvas touches a few percent of a strip.
+        columns = np.flatnonzero(coverage.any(axis=0))
+        if not len(columns):
+            continue
+        c0, c1 = int(columns[0]), int(columns[-1]) + 1
+        alpha = coverage[:, c0:c1, None]
+        window = rows[:, c0:c1]
         if stroke.blend == 'ERASE':
-            rows[..., 3:4] *= 1.0 - alpha
+            window[..., 3:4] *= 1.0 - alpha
             continue
         color = np.asarray(channel_value(stroke, channel), np.float32)
         # Source-over of straight colour.
-        out_alpha = alpha + rows[..., 3:4] * (1.0 - alpha)
-        premultiplied = color * alpha + rows[..., :3] * rows[..., 3:4] * (1.0 - alpha)
-        rows[..., :3] = np.divide(premultiplied, out_alpha, out=np.zeros_like(premultiplied), where=out_alpha > 1e-8)
-        rows[..., 3:4] = out_alpha
+        out_alpha = alpha + window[..., 3:4] * (1.0 - alpha)
+        premultiplied = color * alpha + window[..., :3] * window[..., 3:4] * (1.0 - alpha)
+        window[..., :3] = np.divide(premultiplied, out_alpha, out=np.zeros_like(premultiplied), where=out_alpha > 1e-8)
+        window[..., 3:4] = out_alpha
     return rows
 
 
@@ -336,6 +391,13 @@ def mask_rows(ts, mask, n, y0, y1, resources=None, cache=None):
     rows = np.zeros((y1 - y0, n), np.float32)
     strokes = strokes_for(project, mask.stroke_key)
     for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
+        if not _touches_rows(raster, y0, y1, n):
+            continue
         alpha = _expand(raster, y0, y1, n)
         rows = (rows * (1.0 - alpha)) if stroke.blend == 'ERASE' else np.maximum(rows, alpha)
     return rows
+
+
+def _touches_rows(compact, y0, y1, n):
+    low, high = raster_band(compact, n)
+    return low < y1 and high > y0

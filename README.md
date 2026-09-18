@@ -85,7 +85,7 @@ subsets, missing workflows, external dependencies and acceptance criteria.
 Tested on **Blender 5.2.1 LTS, macOS Apple Silicon**. The manifest requires Blender 5.2 or newer;
 other platforms and newer versions have not been tested.
 
-1. Download `open_painter-0.12.2.zip` from the
+1. Download `open_painter-0.13.0.zip` from the
    [latest GitHub Release](https://github.com/caspianmoon/open_painter/releases/latest), or build it
    with `python3 scripts/build_extension.py` (it lands in `dist/`).
 2. In Blender, open **Edit → Preferences → Add-ons**, open the menu at the top right,
@@ -129,9 +129,13 @@ The native Painter tool header has an **Assets** menu (import, save, refresh) be
 5. Use **Add Layer** (Paint, Fill, Folder, Decal, Smart Material, Module), **Add Mask**, **Add Effect** and **More**
    above the layer list. Select layer content by clicking its name; the mask icon beside it selects its mask stack.
 6. Click **Add Baked Normal and AO Layer** under Bake › Results to add those mesh maps to the material.
-7. Select a Paint layer, choose its paint destination in the **Inspector**, then click **Paint**.
-   Use Blender’s brush selector and native brush settings. The composite refreshes after the stroke ends.
-   Selecting a fill, folder or non-painted mask ends the session; **Finish** also ends painting.
+7. Select a Paint layer. **Paint Material** in the **Inspector** paints the enabled PBR channels
+   (Color, Roughness, Metallic, Height, …) with one continuous stroke that shows on the model while
+   you drag; the destination line says which set, layer and channels receive it, and the stroke stays
+   editable as data. Esc discards a stroke in progress and exits when idle. For single-channel pixel
+   painting choose the paint destination and click **Paint** (Blender’s brush selector and native
+   brush settings); the composite refreshes after the stroke ends. Selecting a fill, folder or
+   non-painted mask ends the session; **Finish** also ends painting.
 8. Click a material thumbnail in the bottom native Asset Shelf to select it: the **Assets** panel names it,
    lists what it needs and the exact target, and its **Apply** button (also in the tool header) applies it.
    Clicking the same thumbnail again applies too. The type filter beside the **Assets** menu in the tool header narrows the shelf
@@ -219,10 +223,15 @@ require their indicated mesh maps. Existing projects keep their authored layers 
 | Custom | One RGBA image; assign scalar channels, smoothness, zero or one independently |
 
 BaseColor and Emission are encoded as sRGB; other maps contain linear data. PNG/TIFF support 8 or 16 bits.
-Export resolution overrides resample the evaluated textures. Files use
-`{prefix}{texture_set}_{channel}{suffix}.{ext}` with filesystem-safe names. Existing files are
-never overwritten; choose a new folder, prefix or suffix. In Unreal/Unity import packed maps as
-linear data and normal maps using the corresponding engine's normal-map import setting.
+Export resolution overrides resample the evaluated textures over the texels the geometry covers.
+Every map is extended into its UV gutters from the nearest valid texel (**UV Padding**: Automatic
+4–64 px by resolution, Custom, Fill Empty Space, or None; validity comes from the export geometry,
+never from pixel values), and the Export view reports islands whose gutters meet. Files use
+`{prefix}{texture_set}_{channel}{suffix}.{ext}` with filesystem-safe names. An export is published
+as one transaction: existing files are only replaced when you allow it, and then all of a request's
+maps, manifests and mesh land together or the originals are restored (a journal beside the outputs
+recovers an interrupted export). In Unreal/Unity import packed maps as linear data and normal maps
+using the corresponding engine's normal-map import setting (`engine_validation/README.md`).
 
 ## Persistence and safety
 

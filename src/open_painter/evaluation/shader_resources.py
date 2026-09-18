@@ -4,6 +4,7 @@ Only operations that cannot run in the material shader request these resources.
 Work advances in bounded row strips. Numeric shader bindings never enter this
 module. Cached images are derived inputs, never authored paint or baked outputs.
 """
+import weakref
 from dataclasses import dataclass
 from hashlib import sha256
 from time import perf_counter
@@ -17,12 +18,17 @@ from . import metrics, purpose
 RESOURCE = 'open_painter_shader_resource'
 
 
+INTERACTIVE_BUDGET = .2    # seconds a step may spend on the leaves that finish a gesture: every
+                           # channel of the stroke publishes in one step, so the viewport re-uploads once
+
+
 @dataclass
 class Entry:
     image: object
     job: object = None
     error: str = ''
     owner: str = ''   # layer id the work is attributed to (0.9.0 profiling)
+    interactive: bool = False   # a small incremental job the artist is waiting on (a stroke's leaf)
 
 
 def alive(image):
@@ -34,8 +40,75 @@ def alive(image):
     return True
 
 
+_leaf_index = {}   # RESOURCE key -> image, rebuilt from bpy.data when a key is missing
+_serial = [0]      # publication order of leaves (their ``op_resource_serial``), for the sweep
+
+
+def _usable(image, key, size):
+    """A published leaf that still holds its pixels: an undo or Blender's image cache can
+    leave a leaf flagged ready but regenerated blank, which must never be bound again."""
+    return (alive(image) and image.get(RESOURCE) == key and image.get('op_shader_resource_ready')
+            and tuple(image.size) == (size, size) and image.has_data)
+
+
+def _published_leaf(key, size):
+    """A ready leaf of ``key`` and ``size`` in bpy.data, found through an index so a request
+    does not walk every image of the file; the index is rebuilt on a miss."""
+    image = _leaf_index.get(key)
+    if image is not None and _usable(image, key, size):
+        return image
+    _leaf_index.clear()
+    found = None
+    for item in bpy.data.images:
+        item_key = item.get(RESOURCE)
+        if item_key and item.get('op_shader_resource_ready'):
+            _leaf_index[item_key] = item
+            if item_key == key and _usable(item, key, size):
+                found = item
+    return found
+
+
+def _touch(image):
+    _serial[0] += 1
+    image['op_resource_serial'] = _serial[0]
+
+
+_tables = weakref.WeakSet()   # every live Resources table, for the orphan sweep
+
+
+def sweep_orphans(keep_bytes=64 * 1024 * 1024):
+    """Published leaves nothing binds and no live table lists (an undo or a rebuilt graph left
+    them behind): the newest ``keep_bytes`` worth stay for revisits, the rest are removed. A
+    session of hundreds of strokes would otherwise keep every leaf it ever published."""
+    listed = {entry.image.as_pointer() for table in _tables for entry in table.entries.values() if alive(entry.image)}
+    orphans = []
+    for image in bpy.data.images:
+        if not image.get(RESOURCE) or not image.get('op_shader_resource_ready') or image.users:
+            continue
+        if image.as_pointer() in listed:
+            continue
+        orphans.append((image.get('op_resource_serial', 0), image))
+    orphans.sort(key=lambda item: -item[0])
+    held = 0
+    removed = 0
+    for _, image in orphans:
+        held += image.size[0] * image.size[1] * 16
+        if held <= keep_bytes:
+            continue
+        try:
+            bpy.data.images.remove(image)
+            removed += 1
+        except (ReferenceError, RuntimeError):
+            pass
+    if removed:
+        _leaf_index.clear()
+        metrics.count('shader_resource_orphans_removed', removed)
+    return removed
+
+
 class Resources:
     def __init__(self, size):
+        _tables.add(self)
         self.size = size
         self.entries = {}
         self.used = set()
@@ -46,16 +119,35 @@ class Resources:
         # table does not list (an interrupted placeholder, a leaf of another size):
         # released once the binding moves on, never cached.
         self.superseded = []
+        # Leaves a pending incremental job reads its base rows from: never evicted while pinned.
+        self.pins = {}
+
+    def pin(self, image):
+        key = image.get(RESOURCE) if alive(image) else None
+        if key:
+            self.pins[key] = self.pins.get(key, 0) + 1
+        return key
+
+    def unpin(self, key):
+        if key in self.pins:
+            self.pins[key] -= 1
+            if self.pins[key] <= 0:
+                del self.pins[key]
 
     def key(self, signature):
         return sha256(repr((self.size, signature)).encode()).hexdigest()
 
-    def request(self, signature, factory, owner=''):
+    def request(self, signature, factory, owner='', placeholder=(.5, .5, .5, 1), interactive=False):
         """Return a cached image or queue just this immutable source snapshot.
 
-        factory() returns an iterator yielding (low_row, HxWxC float data).
-        The iterator must finish with all rows populated. Publication is atomic.
-        ``owner`` names the layer whose profile the work is attributed to.
+        factory() returns an iterator yielding (low_row, HxWxC float data). It may
+        start with ``('base', image)``, a published leaf whose pixels fill every row
+        before the parts that follow overwrite the rows that changed (an incremental
+        re-identification), and end with ``('state', mapping)``, stored on the leaf as
+        ``op_resource_state`` for the next factory to build on. The rows must all be
+        populated when the iterator finishes. Publication is atomic. ``owner`` names
+        the layer whose profile the work is attributed to; ``placeholder`` is the
+        colour the leaf shows until it is published.
         """
         key = self.key(signature)
         self.used.add(key)
@@ -67,11 +159,10 @@ class Resources:
             if self.entries[key].error:
                 raise ValueError(self.entries[key].error)
             return self.entries[key].image
-        image = next((item for item in bpy.data.images
-                      if item.get(RESOURCE) == key and tuple(item.size) == (self.size, self.size)
-                      and item.get('op_shader_resource_ready')), None)
+        image = _published_leaf(key, self.size)
         if image:
             self.entries[key] = Entry(image, owner=owner)
+            _touch(image)
             metrics.count('shader_resource_cache_hits')
             return image
         image = bpy.data.images.new('OP Shader Source · ' + key[:12],
@@ -80,8 +171,8 @@ class Resources:
         image[RESOURCE] = key
         image['op_shader_resource_ready'] = False
         image.colorspace_settings.name = 'Non-Color'
-        image.generated_color = (.5, .5, .5, 1)
-        entry = Entry(image, owner=owner)
+        image.generated_color = tuple(placeholder)
+        entry = Entry(image, owner=owner, interactive=interactive)
         entry.job = self._produce(entry, factory())
         self.entries[key] = entry
         self.queue.append(key)
@@ -164,17 +255,34 @@ class Resources:
     def _produce(self, entry, parts):
         # Allocate only for an actually scheduled unsupported source. No per-event
         # material/output buffers are created by the native graph.
-        data = np.ones((self.size, self.size, 4), np.float32)
+        # Every row must be covered before publication (checked below), so the buffer
+        # needs no fill: at 4k that fill alone was a quarter of a small incremental job.
+        data = np.empty((self.size, self.size, 4), np.float32)
         covered = np.zeros(self.size, dtype=np.bool_)
+        state = None
         for low, rows in parts:
+            if low == 'base':
+                # An earlier leaf of the same source: every row starts as it published it.
+                if not alive(rows) or tuple(rows.size) != (self.size, self.size):
+                    raise ValueError('The base leaf of an incremental shader resource is gone')
+                rows.pixels.foreach_get(data.ravel())
+                covered[:] = True
+                metrics.count('shader_resource_base_rows', self.size)
+                yield
+                continue
+            if low == 'state':
+                state = rows
+                continue
             rows = np.asarray(rows, dtype=np.float32)
             high = low + rows.shape[0]
             if rows.ndim == 2:
                 data[low:high, :, :3] = rows[..., None]
+                data[low:high, :, 3] = 1.0
             elif rows.shape[-1] == 4:
                 data[low:high] = rows
             else:
                 data[low:high, :, :3] = rows
+                data[low:high, :, 3] = 1.0
             covered[low:high] = True
             metrics.count('shader_resource_rows', high - low)
             yield
@@ -184,6 +292,10 @@ class Resources:
         # resource, with a separately instrumented publication boundary.
         entry.image.pixels.foreach_set(data.ravel())
         entry.image.update()
+        if state is not None:
+            import json
+            entry.image['op_resource_state'] = json.dumps(state)
+        _touch(entry.image)
         entry.image['op_shader_resource_ready'] = True
         metrics.count('shader_resource_publications')
         metrics.count('shader_resource_written_bytes', data.nbytes)
@@ -239,16 +351,19 @@ class Resources:
                 raise
             finally:
                 self.timings[entry.owner] = self.timings.get(entry.owner, 0.0) + perf_counter() - job_started
-            if perf_counter() - started >= budget:
+            if perf_counter() - started >= (max(budget, INTERACTIVE_BUDGET) if entry.interactive else budget):
                 break
         # Retain at most 64 MiB of unused completed leaves for undo/slider
         # revisits. Active shader inputs are never evicted.
         unused = [key for key, entry in self.entries.items()
-                  if key not in self.used and not entry.job and not entry.image.users]
+                  if key not in self.used and not entry.job and not entry.image.users and key not in self.pins]
         keep = (64 * 1024 * 1024) // (self.size * self.size * 16)
         for key in unused[:max(0, len(unused) - keep)]:
             entry = self.entries.pop(key)
             bpy.data.images.remove(entry.image)
+        if published != self.completed:
+            # A publication is when leaves change hands: leaves no table lists any more go too.
+            sweep_orphans()
         timings, self.timings = self.timings, {}
         return {'resource_publications': self.completed - published,
                 'pending_resources': len(self.queue),
@@ -267,6 +382,7 @@ class Resources:
         self.entries.clear()
         self.queue.clear()
         self._release_superseded()
+        _tables.discard(self)
 
 
 def values(group, excluded=()):

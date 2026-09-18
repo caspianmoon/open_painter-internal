@@ -321,20 +321,22 @@ print('VECTOR_STROKES batches: PASS', flush=True)
 #     view looks along: every texel facing the viewer failed the raster's front-facing test, so a
 #     planar stroke drew nothing on the visible surface.
 from mathutils import Euler, Vector
-from open_painter.ui.vector_brush import OP_OT_vector_brush
+from open_painter.painting import gesture
+from open_painter.ui.vector_brush import ViewProjector
 view = next(a for s in bpy.data.screens for a in s.areas if a.type == 'VIEW_3D').spaces.active.region_3d
 brush = project.vector_brush
 upper_paint = next(l for l in upper.layers if l.type == 'PAINT' and l.stroke_key == key)
 brush.projection, brush.channels, brush.roughness, brush.radius = 'PLANAR', {'ROUGHNESS'}, .9, .25
 top_face = vertical_stroke(x=0., z0=1., z1=1., count=5)   # samples across the top face at z = 1
 top_face[:, 0] = np.linspace(-.5, .5, 5); top_face[:, 3:6] = (0., 0., 1.)
-fake_context = SimpleNamespace(scene=scene, area=SimpleNamespace(tag_redraw=lambda: None))
 for rotation in (Euler((0., 0., 0.)), Euler((.35, -.2, .6))):
     view.view_rotation = rotation.to_quaternion()
-    recorder = SimpleNamespace(_samples=top_face.tolist(), _points=[], _batch=None, _view=view,
-                               _set_id=upper.id, _layer_id=upper_paint.id, _key='')
+    projector = ViewProjector(None, view)
+    recorder = gesture.Gesture(scene, upper, upper_paint, brush, gesture.Scope.of(project, upper), projector, preview=False)
+    recorder.samples, recorder.hit_sets = top_face.tolist(), {upper.id}
+    recorder.plane = projector.plane_normal()
     count = len(project.strokes)
-    OP_OT_vector_brush._commit(recorder, fake_context, brush)
+    assert recorder.commit() is not None
     assert len(project.strokes) == count + 1
     planar = project.strokes[-1]
     assert planar.projection == 'PLANAR'

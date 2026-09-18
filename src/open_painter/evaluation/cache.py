@@ -581,13 +581,20 @@ def _migrate_angles(project):
     from ..properties.mesh_selector import FORMAT_VERSION, degrees_to_radians, migrate_angles
     if project.format_version >= FORMAT_VERSION:
         return
+    before = project.format_version
     for ts in project.texture_sets:
+        if before < 3 and ts.export.padding_mode == 'AUTOMATIC':
+            # Export gutters arrived with format 3: an older file's exports gain them, and
+            # the Export view shows that this was the upgrade's choice, not the artist's.
+            ts.export.padding_migrated = True
+        if before >= 2:
+            continue
         for layer in ts.layers:
             for mask in layer.masks:
                 migrate_angles(mask.mesh)
     from ..smart_materials.modules import BASE_TEXT_PREFIX
     for text in bpy.data.texts:
-        if not (text.get(OWNER) and text.name.startswith(BASE_TEXT_PREFIX)):
+        if before >= 2 or not (text.get(OWNER) and text.name.startswith(BASE_TEXT_PREFIX)):
             continue
         try:
             base = json.loads(text.as_string())

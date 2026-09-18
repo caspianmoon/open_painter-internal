@@ -139,6 +139,54 @@ class ResourceBinding:
     pending_image: object = None
     owner_factory: object = None
     layer_id: str = ''   # profile attribution of the CPU work (0.9.0)
+    placeholder: object = None   # colour of an unpublished leaf; None for the neutral grey
+    interactive: bool = False    # the leaf finishes a gesture: steps spend a larger budget on it
+
+
+def _previous_strokes_leaf(n, key, channel, base_key, stamp):
+    """The published strokes leaf of the same key, channel, canvas and geometry that
+    shares the most strokes with what is requested now, with its recorded state."""
+    from .shader_resources import RESOURCE
+    best = None
+    for image in bpy.data.images:
+        if (not image.get(RESOURCE) or not image.get('op_shader_resource_ready') or tuple(image.size) != (n, n)
+                or not image.has_data):
+            continue   # a leaf an undo or the image cache regenerated blank is no base
+        text = image.get('op_resource_state')
+        if not text:
+            continue
+        try:
+            state = json.loads(text)
+        except ValueError:
+            continue
+        if (state.get('key') != key or state.get('channel') != channel or state.get('base') != repr(base_key)
+                or state.get('geometry') != repr(stamp)):
+            continue
+        score = len(state.get('identity', []))
+        if best is None or score > best[0]:
+            best = (score, image, state)
+    return None if best is None else (best[1], best[2])
+
+
+def _dirty_rows(before, now, n):
+    """Row ranges that differ between two strokes states: the rows of every stroke
+    present in one and not the other, or present in both at another revision."""
+    old = {identifier: revision for identifier, revision in before.get('identity', [])}
+    new = {identifier: revision for identifier, revision in now.get('identity', [])}
+    changed = {identifier for identifier in set(old) | set(new) if old.get(identifier) != new.get(identifier)}
+    bands = []
+    for identifier in changed:
+        for rows in (before.get('rows', {}).get(identifier), now.get('rows', {}).get(identifier)):
+            if rows and rows[1] > rows[0]:
+                bands.append((max(0, int(rows[0])), min(n, int(rows[1]))))
+    bands.sort()
+    merged = []
+    for low, high in bands:
+        if merged and low <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], high))
+        else:
+            merged.append((low, high))
+    return merged
 
 
 def _descriptor_layer(descriptor):
@@ -564,19 +612,26 @@ class Graph(Math):
             raise ValueError(f'This mask requires a baked {kind.title()} map. Bake mesh maps first.')
         return self.image(prop.image, getter=lambda: prop.image, owner=prop)
 
-    def boundary(self, identifier, owners, identity, factory, descriptor=None):
+    def boundary(self, identifier, owners, identity, factory, descriptor=None, placeholder=None, fallback=None,
+                 interactive=False):
         """Expose one unsupported source/prefix as a stable shader image input.
 
         ``owners`` lists the RNA items whose edits re-identify this input, or a
         callable returning them so an adopted unit can refresh their addresses.
         ``descriptor`` names the site and its owners so the binding can be
-        rebuilt from the persisted node after undo.
+        rebuilt from the persisted node after undo. ``placeholder`` is the colour
+        an unpublished leaf shows; ``fallback`` an existing image the node samples
+        instead until the first leaf publishes (a paint canvas under its strokes).
         """
         signature = identity()
         layer_id = _descriptor_layer(descriptor)
-        image = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
+        image = self._request_leaf(signature, factory, layer_id, placeholder, interactive)
         node = self.node('ShaderNodeTexImage')
-        node.image = image
+        pending = None
+        if fallback is not None and not image.get('op_shader_resource_ready'):
+            node.image, pending = fallback, image
+        else:
+            node.image = image
         node.interpolation, node.extension = 'Linear', 'EXTEND'
         self.link(self.coord_uv(), node.inputs['Vector'])
         if descriptor is not None:
@@ -584,20 +639,28 @@ class Graph(Math):
         owner_factory = owners if callable(owners) else None
         items = owners() if callable(owners) else owners
         binding = ResourceBinding(identifier, {o.as_pointer() for o in items}, identity, factory,
-                                  node, signature, owner_factory=owner_factory, layer_id=layer_id)
+                                  node, signature, owner_factory=owner_factory, layer_id=layer_id,
+                                  placeholder=placeholder, pending_image=pending, interactive=interactive)
         self.resource_bindings.append(binding)
         if self.unit is not None:
             self.unit.resource_bindings.append(binding)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
 
-    def _rebind(self, node, owners, identity, factory):
+    def _request_leaf(self, signature, factory, layer_id, placeholder, interactive=False):
+        if placeholder is None:
+            return self.resources.request(signature, lambda: factory(signature), owner=layer_id, interactive=interactive)
+        return self.resources.request(signature, lambda: factory(signature), owner=layer_id, placeholder=placeholder,
+                                      interactive=interactive)
+
+    def _rebind(self, node, owners, identity, factory, placeholder=None, interactive=False):
         """Reattach a persisted boundary node to fresh closures (undo rehydration)."""
         signature = identity()
         owner_factory = owners if callable(owners) else None
         items = owners() if callable(owners) else owners
         layer_id = _descriptor_layer(json.loads(node['op_boundary']) if node.get('op_boundary') else None)
         binding = ResourceBinding(node.get('op_dependency'), {o.as_pointer() for o in items}, identity,
-                                  factory, node, signature, owner_factory=owner_factory, layer_id=layer_id)
+                                  factory, node, signature, owner_factory=owner_factory, layer_id=layer_id,
+                                  placeholder=placeholder, interactive=interactive)
         image = node.image
         if (image is not None and image.get(RESOURCE) and image.get('op_shader_resource_ready')
                 and not image.has_data and image.packed_file is None):
@@ -607,7 +670,7 @@ class Graph(Math):
         # The persisted image is adopted through the cache-hit path so it lives in
         # this graph's entries: an image no table knows is never evicted once a
         # later re-identification replaces it.
-        fresh = self.resources.request(signature, lambda: factory(signature), owner=layer_id)
+        fresh = self._request_leaf(signature, factory, layer_id, placeholder, interactive)
         if fresh.get('op_shader_resource_ready'):
             node.image = fresh
         else:
@@ -786,7 +849,13 @@ class Graph(Math):
                                  ['channel_prefix', layer.id, prop.channel, count])
 
     def _strokes_boundary(self, layer, prop, rehydrate=None):
-        """The layer's vector strokes for one channel, composited over its paint image on the CPU."""
+        """The layer's vector strokes for one channel, composited over its paint image on the CPU.
+
+        A re-identification (a stroke added, edited or undone) rebuilds only the rows
+        the strokes that differ from the last published leaf touch, starting from
+        that leaf's pixels; the stroke rasters themselves are memoised in the set's
+        shared cache, so a gesture never re-rasterises the layer's history.
+        """
         from ..painting.strokes import stroke_identity
         channel = prop.channel
         def owners():
@@ -797,23 +866,53 @@ class Graph(Math):
         def factory(signature):
             from .snapshots import capture
             snapshot = capture(prop)
+            _, key, _, identity_now, base_key, stamp = signature
+            previous = _previous_strokes_leaf(self.n, key, channel, base_key, stamp)
+            # The base leaf may have lost its last user (a gesture preview stands in for it
+            # on the node): pinned so the retention budget keeps it until this job is done.
+            pinned = self.resources.pin(previous[0]) if previous is not None else None
             def parts():
-                from ..painting.stroke_raster import channel_rows
+                from ..painting.stroke_raster import channel_rows, rasters, raster_band
+                from ..painting.strokes import stroke_channels, strokes_for
                 from .channel_eval import _image_source
-                cache, geometry = {}, {}
-                n = self.n
-                for low in range(0, n, 16):
-                    high = min(low + 16, n)
-                    base = (_image_source(snapshot.image, snapshot, 'PAINT', n, low, high, cache, self.ts, geometry)
-                            if snapshot.image else None)
-                    if base is not None:
-                        base = np.broadcast_to(base, (high - low, n, 4))
-                    yield low, channel_rows(self.ts, layer, channel, n, low, high, geometry, base=base)
+                from .raster_cache import for_texture_set
+                try:
+                    cache = {}
+                    geometry = for_texture_set(self.scene, self.ts)
+                    n = self.n
+                    project = self.scene.open_painter
+                    strokes = [s for s in strokes_for(project, key) if channel in stroke_channels(s)]
+                    bands = {stroke.id: raster_band(raster, n)
+                             for stroke, raster in zip(strokes, rasters(self.ts, strokes, n, geometry))}
+                    state = {'key': key, 'channel': channel, 'base': repr(base_key), 'geometry': repr(stamp),
+                             'identity': [[s.id, s.revision] for s in strokes], 'rows': bands}
+                    if previous is None:
+                        ranges = [(0, n)]
+                    else:
+                        image, before = previous
+                        yield 'base', image
+                        ranges = _dirty_rows(before, state, n)
+                    rows = 16 if previous is None else 64
+                    for low_range, high_range in ranges:
+                        for low in range(low_range, high_range, rows):
+                            high = min(low + rows, high_range)
+                            base = (_image_source(snapshot.image, snapshot, 'PAINT', n, low, high, cache, self.ts, geometry)
+                                    if snapshot.image else None)
+                            if base is not None:
+                                base = np.broadcast_to(base, (high - low, n, 4))
+                            yield low, channel_rows(self.ts, layer, channel, n, low, high, geometry, base=base, cache=cache)
+                    yield 'state', state
+                finally:
+                    if pinned is not None:
+                        self.resources.unpin(pinned)
             return parts()
+        placeholder = (0.0, 0.0, 0.0, 0.0)   # nothing of the layer, never a grey slab, until the leaf publishes
         if rehydrate is not None:
-            return self._rebind(rehydrate, owners, identity, factory)
+            return self._rebind(rehydrate, owners, identity, factory, placeholder=placeholder, interactive=True)
+        fallback = prop.image if (prop.image is not None and tuple(prop.image.size) == (self.n, self.n)) else None
         with self.role(f'Strokes:{layer.id}:{channel}'):
-            return self.boundary(self._role, owners, identity, factory, ['strokes', layer.id, channel])
+            return self.boundary(self._role, owners, identity, factory, ['strokes', layer.id, channel],
+                                 placeholder=placeholder, fallback=fallback, interactive=True)
 
     # ---- cached layers (0.9.0) ----------------------------------------------
 
@@ -2975,8 +3074,8 @@ class Graph(Math):
         before = len(self.resources.queue)
         image = self.resources.inherit(signature, previous.resources) if previous is not None else None
         if image is None:
-            image = self.resources.request(signature, lambda b=binding, s=signature: b.factory(s),
-                                           owner=binding.layer_id)
+            image = self._request_leaf(signature, binding.factory, binding.layer_id, binding.placeholder,
+                                       binding.interactive)
         if image.get('op_shader_resource_ready'):
             binding.node.image, binding.pending_image = image, None
         else:

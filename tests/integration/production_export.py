@@ -110,9 +110,14 @@ with TemporaryDirectory(prefix='op-upscale-') as directory:
     image=bpy.data.images.load(str(files[0])); image.colorspace_settings.name='Non-Color'
     assert tuple(image.size)==(2048,2048),tuple(image.size)
     exported=images.pixels(image)[...,0]; bpy.data.images.remove(image)
-np.testing.assert_allclose(exported[0],1,atol=1/255+.00001)
-np.testing.assert_allclose(exported[1],.75,atol=1/255+.00001)
-assert (exported[-2:]==0).all(),(exported[-1].max(),exported[-2].max())
+# Since 0.13 only texels the geometry covers carry data (the rest is gutter, filled from
+# the nearest covered texel): the clamp is checked where the cube's islands reach the rows.
+from open_painter.export import padding as export_padding
+covered=export_padding.ownership(striped,2048).covered
+assert covered[0].any() and covered[1].any()
+np.testing.assert_allclose(exported[0][covered[0]],1,atol=1/255+.00001)
+np.testing.assert_allclose(exported[1][covered[1]],.75,atol=1/255+.00001)
+assert (exported[-2:][covered[-2:]]==0).all(),(exported[-1].max(),exported[-2].max())
 striped.export.resolution='SET'
 # A multi-material prop whose slots belong to two sets is staged as a single copy
 # with every owned slot remapped into its own cell and assigned to the atlas.

@@ -1,33 +1,71 @@
-"""Vector Brush: a modal stroke recorder. Samples land on whatever assigned surface
-the pointer crosses; the stroke is data, rasterised per set and per resolution."""
+"""Paint Material: a modal brush whose gesture becomes one stroke record.
+
+Samples land on the eligible assigned surfaces the pointer crosses, resampled at the
+brush spacing between pointer events and re-projected onto the surface; the enabled
+channels show the stroke on the model while the pointer is down (``painting.gesture``).
+The stroke is data, rasterised per set and per resolution once it is committed.
+"""
 import bpy
 import gpu
-import numpy as np
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 
 from ..core.layer_stack import active
 from ..core.project_manager import require_set
-from ..painting import strokes as stroke_records
-from ..painting.stroke_raster import SAMPLE_WIDTH
-from .operators import SafeOperator
+from ..painting import gesture
+from ..utils.logging import logger
+
+IDLE_STATUS = 'Paint Material: drag to paint · Esc exits'
+GESTURE_STATUS = 'Paint Material: painting · Esc discards this stroke'
+
+
+class ViewProjector:
+    """Rays and pixel sizes of one 3D viewport region."""
+
+    def __init__(self, region, view):
+        self.region, self.view = region, view
+
+    def ray(self, xy):
+        from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d
+        region = self.region
+        local = (xy[0] - region.x, xy[1] - region.y)
+        if not (0 <= local[0] < region.width and 0 <= local[1] < region.height):
+            return None
+        return region_2d_to_origin_3d(region, self.view, local), region_2d_to_vector_3d(region, self.view, local)
+
+    def world_per_pixel(self, xy, point):
+        from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d
+        region = self.region
+        local = (xy[0] - region.x, xy[1] - region.y)
+        origin = region_2d_to_origin_3d(region, self.view, local)
+        if self.view.is_perspective:
+            direction = region_2d_to_vector_3d(region, self.view, local)
+            side = region_2d_to_vector_3d(region, self.view, (local[0] + 1.0, local[1]))
+            return max((side - direction).length * (point - origin).length, 1e-7)
+        side_origin = region_2d_to_origin_3d(region, self.view, (local[0] + 1.0, local[1]))
+        return max((side_origin - origin).length, 1e-7)
+
+    def plane_normal(self):
+        # The disc axis must face the viewer (the raster culls texels whose normal points away
+        # from it): the view's +Z, not the direction it looks along.
+        return tuple(self.view.view_rotation @ Vector((0, 0, 1)))
 
 
 class OP_OT_vector_brush(bpy.types.Operator):
-    """Paint vector strokes on the assigned surfaces; Esc or right-click finishes"""
+    """Paint the enabled material channels on the assigned surfaces; Esc discards a stroke in progress and exits when idle"""
     bl_idname = 'open_painter.vector_brush'
-    bl_label = 'Vector Brush'
+    bl_label = 'Paint Material'
     bl_options = {'REGISTER', 'UNDO'}
     mask: bpy.props.BoolProperty(default=False, options={'SKIP_SAVE'},
                                  description='Record into the active Vector Strokes mask\'s key instead of the layer\'s')
     _handler = None
+    _active = None      # the running operator, for handlers that must end its gesture
 
     @classmethod
     def poll(cls, context):
         return context.area is not None and context.area.type == 'VIEW_3D'
 
     def invoke(self, context, event):
-        from ..core.layer_stack import channel_for
         try:
             ts = require_set(context)
         except ValueError as error:
@@ -37,136 +75,121 @@ class OP_OT_vector_brush(bpy.types.Operator):
         from .strokes_panel import active_strokes_mask
         mask = active_strokes_mask(layer) if self.mask else None
         if mask is None and (layer is None or layer.type != 'PAINT'):
-            self.report({'ERROR'}, 'Select a paint layer: vector strokes live on paint layers.')
+            self.report({'ERROR'}, 'Select a paint layer: material strokes live on paint layers.')
             return {'CANCELLED'}
-        self._set_id, self._layer_id = ts.id, layer.id
+        if not ts.assignments or any(ref.object is None for ref in ts.assignments):
+            self.report({'ERROR'}, 'Assign the texture set to a mesh first.')
+            return {'CANCELLED'}
+        project = context.scene.open_painter
+        settings = project.vector_brush
+        region = next(region for region in context.area.regions if region.type == 'WINDOW')
+        self._projector = ViewProjector(region, context.space_data.region_3d)
+        scope = gesture.Scope.of(project, ts, across_sets=bool(settings.universal))
         # A Vector Strokes mask with its own key collects the strokes itself (any layer type).
-        self._key = mask.stroke_key if mask is not None else ''
-        self._region = next(region for region in context.area.regions if region.type == 'WINDOW')
-        self._view = context.space_data.region_3d
-        self._points, self._samples, self._last = [], [], None
-        self._painting = False
+        self._gesture = gesture.Gesture(context.scene, ts, layer, settings, scope, self._projector,
+                                        key=mask.stroke_key if mask is not None else '')
         self._batch = None
-        self._sets = {(ref.object.as_pointer(), ref.slot_index): item.id
-                      for item in context.scene.open_painter.texture_sets for ref in item.assignments if ref.object}
         OP_OT_vector_brush._handler = bpy.types.SpaceView3D.draw_handler_add(self._draw, (context,), 'WINDOW', 'POST_VIEW')
+        OP_OT_vector_brush._active = self
         context.window.cursor_modal_set('PAINT_BRUSH')
         context.window_manager.modal_handler_add(self)
-        context.scene.open_painter.status = 'Vector Brush: drag to paint · Esc finishes'
+        project.status = IDLE_STATUS
         return {'RUNNING_MODAL'}
 
+    @property
+    def painting(self):
+        return self._gesture.active
+
     def _finish(self, context):
+        if self._gesture.active:
+            self._end(context, commit=False, reason='the tool closed')
         if OP_OT_vector_brush._handler is not None:
             bpy.types.SpaceView3D.draw_handler_remove(OP_OT_vector_brush._handler, 'WINDOW')
             OP_OT_vector_brush._handler = None
-        context.window.cursor_modal_restore()
-        context.scene.open_painter.status = ''
-        context.area.tag_redraw()
+        if OP_OT_vector_brush._active is self:
+            OP_OT_vector_brush._active = None
+        try:
+            context.window.cursor_modal_restore()
+            context.scene.open_painter.status = ''
+            context.area.tag_redraw()
+        except (AttributeError, ReferenceError):
+            pass
 
     def cancel(self, context):
         self._finish(context)
 
-    def _hit(self, context, event):
-        from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d
-        region = self._region
-        xy = (event.mouse_x - region.x, event.mouse_y - region.y)
-        if not (0 <= xy[0] < region.width and 0 <= xy[1] < region.height):
-            return None
-        origin = region_2d_to_origin_3d(region, self._view, xy)
-        direction = region_2d_to_vector_3d(region, self._view, xy)
-        hit, point, normal, _, obj, _ = context.scene.ray_cast(context.evaluated_depsgraph_get(), origin, direction)
-        if not hit:
-            return None
-        original = obj.original
-        if not any(key[0] == original.as_pointer() for key in self._sets):
-            return None   # not an assigned surface: the stroke lifts here
-        return Vector(point), Vector(normal).normalized(), direction
+    @staticmethod
+    def _attributes(event):
+        pressure = float(event.pressure) if event.is_tablet else 1.0
+        tilt = tuple(event.tilt) if hasattr(event, 'tilt') else (0.0, 0.0)
+        return (pressure, float(tilt[0]), float(tilt[1]), 1.0 if event.is_tablet else 0.0)
 
-    def _radius(self, context, settings, event, point, direction):
-        if settings.radius_mode == 'WORLD':
-            return settings.radius
-        from bpy_extras.view3d_utils import region_2d_to_origin_3d
-        # Screen radius resolved at the hit depth: the world size of `screen_radius` pixels there.
-        region = self._region
-        xy = (event.mouse_x - region.x, event.mouse_y - region.y)
-        a = region_2d_to_origin_3d(region, self._view, xy)
-        depth = (point - a).length
-        from bpy_extras.view3d_utils import region_2d_to_vector_3d
-        side = region_2d_to_vector_3d(region, self._view, (xy[0] + settings.screen_radius, xy[1]))
-        return max((side - direction).length * depth, 1e-5)
+    def _end(self, context, commit, reason='', push=True):
+        stroke = self._gesture.end(commit, reason)
+        self._batch = None
+        if stroke is not None and push:
+            bpy.ops.ed.undo_push(message='Paint Material')
+        elif self._gesture.reason and self._gesture.reason != 'nothing painted':
+            self.report({'INFO'}, f'Stroke discarded: {self._gesture.reason}')
+        try:
+            context.scene.open_painter.status = IDLE_STATUS
+            context.area.tag_redraw()
+        except (AttributeError, ReferenceError):
+            pass
+        return stroke
 
     def modal(self, context, event):
-        settings = context.scene.open_painter.vector_brush
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
-            if self._painting:
-                self._commit(context, settings)
+            if self.painting:
+                self._end(context, commit=False, reason='cancelled')
+                return {'RUNNING_MODAL'}
             self._finish(context)
             return {'FINISHED'}
-        if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
-            hit = self._hit(context, event)
-            if hit is None:
-                return {'PASS_THROUGH'}
-            self._painting = True
-            self._points, self._samples, self._last = [], [], None
-            self._add_sample(context, settings, event, hit)
-            return {'RUNNING_MODAL'}
-        if event.type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'} and self._painting:
-            hit = self._hit(context, event)
-            if hit is not None:
-                self._add_sample(context, settings, event, hit)
+        xy = (event.mouse_x, event.mouse_y)
+        if not self.painting:
+            if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+                hit = self._gesture.hit(xy)
+                if hit is None:
+                    return {'PASS_THROUGH'}
+                if not self._gesture.start(xy, self._attributes(event), hit, self._projector.plane_normal()):
+                    self.report({'WARNING'}, 'The target layer is gone; the tool closed.')
+                    self._finish(context)
+                    return {'FINISHED'}
+                context.scene.open_painter.status = GESTURE_STATUS
+                self._batch = None
+                context.area.tag_redraw()
+                return {'RUNNING_MODAL'}
+            return {'PASS_THROUGH'}
+        if event.type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
+            self._gesture.advance(xy, self._attributes(event))
+            self._batch = None
             context.area.tag_redraw()
             return {'RUNNING_MODAL'}
-        if event.type == 'LEFTMOUSE' and event.value == 'RELEASE' and self._painting:
-            self._painting = False
-            self._commit(context, settings)
+        if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            self._gesture.advance(xy, self._attributes(event))
+            self._end(context, commit=True)
             return {'RUNNING_MODAL'}
-        return {'PASS_THROUGH'}
+        if event.value == 'PRESS' and (event.ctrl or event.oskey or event.alt):
+            # An accelerator during a gesture (save, undo…): the partial stroke commits
+            # once and the gesture ends, then the shortcut runs; the release commits nothing.
+            self._end(context, commit=True)
+            return {'PASS_THROUGH'}
+        return {'RUNNING_MODAL'}
 
-    def _add_sample(self, context, settings, event, hit):
-        point, normal, direction = hit
-        pressure = event.pressure if event.is_tablet else 1.0
-        radius = self._radius(context, settings, event, point, direction) * (1.0 if not event.is_tablet else max(pressure, .05))
-        if self._last is not None and (point - self._last).length < settings.spacing * radius:
-            return
-        tangent = (point - self._last) if self._last is not None else Vector((0, 0, 0))
-        if tangent.length > 1e-9:
-            tangent.normalize()
-        if settings.jitter:
-            rng = np.random.default_rng(settings.seed + len(self._samples))
-            offset = Vector(rng.normal(0, settings.jitter * radius * .5, 3))
-            offset -= normal * offset.dot(normal)
-            point = point + offset
-        tilt = tuple(event.tilt) if hasattr(event, 'tilt') else (0.0, 0.0)
-        self._samples.append([*point, *normal, pressure, radius, tilt[0], tilt[1], *tangent])
-        self._points.append(point.copy())
-        self._last = point
-        self._batch = None
-
-    def _commit(self, context, settings):
-        if not self._samples:
-            return
-        project = context.scene.open_painter
-        ts = next((item for item in project.texture_sets if item.id == self._set_id), None)
-        layer = next((item for item in ts.layers if item.id == self._layer_id), None) if ts else None
-        if ts is None or layer is None:
-            return
-        samples = np.asarray(self._samples, np.float32).reshape(-1, SAMPLE_WIDTH)
-        # The disc axis must face the viewer (the raster culls texels whose normal points away
-        # from it): the view's +Z, not the direction it looks along.
-        plane = tuple(self._view.view_rotation @ Vector((0, 0, 1))) if settings.projection == 'PLANAR' else (0, 0, 1)
-        stroke_records.record(project, ts, layer, samples, settings, plane_normal=plane, universal=settings.universal,
-                              key=self._key)
-        self._samples, self._points, self._batch = [], [], None
-        bpy.ops.ed.undo_push(message='Vector Stroke')
-        context.area.tag_redraw()
+    # ---- guide line -----------------------------------------------------------------------------
 
     def _draw(self, context):
-        if not self._points:
+        segments = [segment for segment in self._gesture.segments if len(segment) > 1]
+        if not segments:
             return
         if self._batch is None:
             shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-            coords = [tuple(p) for p in self._points]
-            self._batch = (shader, batch_for_shader(shader, 'LINE_STRIP', {'pos': coords}))
+            coords, indices, offset = [], [], 0
+            for segment in segments:
+                coords.extend(tuple(p) for p in segment)
+                indices.extend((offset + i, offset + i + 1) for i in range(len(segment) - 1))
+                offset += len(segment)
+            self._batch = (shader, batch_for_shader(shader, 'LINES', {'pos': coords}, indices=indices))
         shader, batch = self._batch
         gpu.state.depth_test_set('LESS_EQUAL')
         gpu.state.line_width_set(2.0)
@@ -177,25 +200,157 @@ class OP_OT_vector_brush(bpy.types.Operator):
         gpu.state.line_width_set(1.0)
 
 
+def interrupt(commit, reason):
+    """End the running gesture from outside its event loop (a save, a file load, undo)."""
+    running = OP_OT_vector_brush._active
+    if running is None:
+        return False
+    try:
+        if running.painting:
+            # No undo push from inside an application handler: the save or load that called
+            # this is the step the artist sees.
+            running._end(bpy.context, commit=commit, reason=reason, push=False)
+    except Exception:
+        logger.exception('Paint Material: ending the gesture on %s failed', reason)
+    return True
+
+
+def _on_save(_):
+    # The documented rule: a save commits the partial gesture once and ends it; the file
+    # never stores a preview image in place of a layer's input.
+    interrupt(commit=True, reason='saving')
+    gesture.discard_all(unbind=True)
+
+
+def _on_load_or_undo(*_):
+    interrupt(commit=False, reason='the file changed')
+    # The data is about to be replaced: nothing is unbound by hand under the undo system.
+    gesture.discard_all(unbind=False)
+    if OP_OT_vector_brush._handler is not None:
+        try:
+            bpy.types.SpaceView3D.draw_handler_remove(OP_OT_vector_brush._handler, 'WINDOW')
+        except ValueError:
+            pass
+        OP_OT_vector_brush._handler = None
+    OP_OT_vector_brush._active = None
+
+
+def _after_undo(*_):
+    # A restored step may reference preview images its nodes have since moved on from.
+    gesture.sweep()
+
+
+_HANDLERS = (('save_pre', _on_save), ('load_pre', _on_load_or_undo), ('undo_pre', _on_load_or_undo),
+             ('redo_pre', _on_load_or_undo), ('undo_post', _after_undo), ('redo_post', _after_undo))
+
+
+def register():
+    for name, fn in _HANDLERS:
+        handlers = getattr(bpy.app.handlers, name)
+        if fn not in handlers:
+            handlers.append(fn)
+
+
+def unregister():
+    _on_load_or_undo()
+    gesture.release_all()
+    for name, fn in _HANDLERS:
+        handlers = getattr(bpy.app.handlers, name)
+        if fn in handlers:
+            handlers.remove(fn)
+
+
+def destination(context):
+    """'Body > Mud Paint | Color, Roughness, Metallic, Height': where the next stroke goes."""
+    from ..constants import CHANNEL_ITEMS
+    project = context.scene.open_painter
+    try:
+        ts = require_set(context)
+    except ValueError:
+        return ''
+    layer = active(ts)
+    settings = project.vector_brush
+    labels = {key: label for key, label, *_ in CHANNEL_ITEMS}
+    channels = [settings.channels] if isinstance(settings.channels, str) else sorted(settings.channels)
+    names = ', '.join(labels.get(c, c) for c in channels if c in labels) or 'no channels'
+    target = f'{ts.name} > {layer.name}' if layer is not None else ts.name
+    return f'{target} | {names}'
+
+
+PRIMARY_CHANNELS = (('BASE_COLOR', 'Color', 'base_color'), ('ROUGHNESS', 'Roughness', 'roughness'),
+                    ('METALLIC', 'Metallic', 'metallic'), ('HEIGHT', 'Height', 'height'))
+
+
+def draw_material_brush(layout, context):
+    """The everyday material brush: destination, size, opacity, flow, hardness, spacing,
+    alpha, channel toggles and the values of the enabled channels."""
+    project = context.scene.open_painter
+    settings = project.vector_brush
+    running = OP_OT_vector_brush._active is not None
+    box = layout.box()
+    row = box.row(align=True)
+    row.label(text=destination(context), icon='MATERIAL')
+    row = box.row(align=True)
+    row.operator('open_painter.vector_brush', text='Painting Material · Esc exits' if running else 'Paint Material',
+                 icon='BRUSH_DATA', depress=running)
+    if running:
+        row.enabled = False
+    column = box.column(align=True)
+    sub = column.row(align=True)
+    sub.prop(settings, 'radius_mode', expand=True)
+    column.prop(settings, 'screen_radius' if settings.radius_mode == 'SCREEN' else 'radius', text='Size')
+    for name in ('opacity', 'flow', 'hardness', 'spacing'):
+        column.prop(settings, name, slider=True)
+    box.template_ID(settings, 'alpha_image', open='image.open', text='Alpha')
+    row = box.row(align=True)
+    row.prop(settings, 'blend', expand=True)
+    grid = box.grid_flow(columns=2, align=True, even_columns=True)
+    for key, label, _ in PRIMARY_CHANNELS:
+        grid.prop_enum(settings, 'channels', key, text=label)
+    enabled = {settings.channels} if isinstance(settings.channels, str) else set(settings.channels)
+    values = box.column(align=True)
+    for key, label, field in PRIMARY_CHANNELS:
+        if key in enabled:
+            values.prop(settings, field, text=label, slider=field != 'base_color')
+    extra = sorted(enabled - {key for key, *_ in PRIMARY_CHANNELS})
+    if extra:
+        box.label(text='Also: ' + ', '.join(extra), icon='INFO')
+    scope = box.column(align=True)
+    scope.prop(settings, 'universal')
+    if settings.universal:
+        from ..core.project_manager import require_set
+        try:
+            ts = require_set(context)
+        except ValueError:
+            ts = None
+        if ts is not None:
+            names = gesture.Scope.of(project, ts, across_sets=True).names(project)
+            scope.label(text='Sets the stroke may reach: ' + ', '.join(names), icon='OUTLINER_COLLECTION')
+    row = box.row(align=True)
+    row.prop(settings, 'pressure_size', toggle=True)
+    row.prop(settings, 'pressure_flow', toggle=True)
+
+
 def draw_vector_brush(layout, context):
+    """Advanced stroke controls, below the ordinary brush controls."""
     settings = context.scene.open_painter.vector_brush
     box = layout.box()
-    box.label(text='Vector Brush', icon='CURVE_BEZCURVE')
-    box.operator('open_painter.vector_brush', text='Paint Vector Strokes', icon='BRUSH_DATA')
-    row = box.row(align=True)
-    row.prop(settings, 'radius_mode', expand=True)
-    box.prop(settings, 'screen_radius' if settings.radius_mode == 'SCREEN' else 'radius')
-    for name in ('hardness', 'opacity', 'flow', 'spacing', 'jitter'):
-        box.prop(settings, name, slider=True)
+    box.label(text='Stroke Details', icon='CURVE_BEZCURVE')
     box.prop(settings, 'accumulate')
     box.prop(settings, 'projection')
-    box.prop(settings, 'blend')
-    box.template_ID(settings, 'alpha_image', open='image.open')
-    box.prop(settings, 'universal')
-    box.label(text='Material', icon='MATERIAL')
-    box.prop(settings, 'channels')
-    for name in ('base_color', 'roughness', 'metallic', 'height'):
-        box.prop(settings, name)
+    box.prop(settings, 'depth_limit', slider=True)
+    row = box.row(align=True)
+    row.prop(settings, 'jitter', slider=True)
+    row.prop(settings, 'seed')
+    more = sorted(key for key, *_ in PRIMARY_CHANNELS)
+    box.label(text='Other channels', icon='MATERIAL')
+    grid = box.grid_flow(columns=2, align=True, even_columns=True)
+    for key in ('AO', 'EMISSION', 'OPACITY', 'NORMAL'):
+        grid.prop_enum(settings, 'channels', key)
+    enabled = {settings.channels} if isinstance(settings.channels, str) else set(settings.channels)
+    for key, field in (('AO', 'ao'), ('EMISSION', 'emission'), ('OPACITY', 'opacity_value'), ('NORMAL', 'normal')):
+        if key in enabled:
+            box.prop(settings, field)
 
 
 CLASSES = (OP_OT_vector_brush,)

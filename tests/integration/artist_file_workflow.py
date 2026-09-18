@@ -343,7 +343,12 @@ with TemporaryDirectory(prefix='op-artist-') as directory:
     exported = bpy.data.images.load(str(next(p for p in written if p.name.endswith('_BaseColor.png'))))
     linear = np.clip(downsampled(next(o.image for o in ts.outputs if o.channel == 'BASE_COLOR'), 1024)[..., :3], 0, 1)
     srgb = np.where(linear <= .0031308, 12.92 * linear, 1.055 * linear ** (1 / 2.4) - .055)   # 8-bit files store sRGB
-    error = float(np.abs(images.pixels(exported)[..., :3] - srgb).mean())
+    # Since 0.13 the exporter filters over the texels the geometry covers and pads the gutters:
+    # the plain box filter is the reference where a 2×2 source block is fully covered.
+    from open_painter.export import padding as export_padding
+    whole = export_padding.ownership(ts, 2048).covered.reshape(1024, 2, 1024, 2).all(axis=(1, 3))
+    assert whole.sum() > 1000, int(whole.sum())
+    error = float(np.abs(images.pixels(exported)[..., :3] - srgb)[whole].mean())
     assert error < .01, error
     bpy.data.images.remove(exported)
 print('ARTIST_FILE_EXPORT_OK', names, flush=True)

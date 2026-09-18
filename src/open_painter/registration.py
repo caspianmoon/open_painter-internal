@@ -150,6 +150,7 @@ def register():
     from .graph import operators as graph_operators
     from .ui.native import toolbar, asset_type_buttons, layer_context_menu
     from .ai import session as director
+    from .ui import vector_brush
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
@@ -168,7 +169,8 @@ def register():
                                     (lifecycle.register,lifecycle.unregister),
                                     (editor.register,editor.unregister),
                                     (graph_operators.register,graph_operators.unregister),
-                                    (director.register,director.unregister)):
+                                    (director.register,director.unregister),
+                                    (vector_brush.register,vector_brush.unregister)):
             # Install rollback before initialization, including partial failures.
             _cleanups.append(cleanup)
             initialize()

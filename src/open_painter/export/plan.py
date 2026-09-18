@@ -13,6 +13,7 @@ Three routes keep their distinct outputs: ``TEXTURES`` is the set's own texture 
 scene bundle (staged scene, textures, manifest) of the existing production export.
 """
 import json
+from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -262,50 +263,76 @@ def execute(context, plan, *, overwrite=False):
             export_bundle(context, [ts], plan.bundle, "ACTUAL")
             written.append(plan.bundle)
         return written
-    from .exporter import export
+    from .exporter import generate
+    from .transaction import Transaction
     target = target_registry.get(project.target)
-    for item in plan.sets:
-        ts = by_id.get(item.set_id)
-        if ts is None:
-            raise ValueError(f"{item.name} no longer exists; resolve the plan again")
-        settings = ts.export
-        saved = {key: getattr(settings, key) for key in ("preset", "file_format", "bit_depth", "resolution")}
-        try:
+    transaction = Transaction()
+    generated, staging = [], TemporaryDirectory(prefix="open-painter-request-")
+    try:
+        for item in plan.sets:
+            ts = by_id.get(item.set_id)
+            if ts is None:
+                raise ValueError(f"{item.name} no longer exists; resolve the plan again")
+            settings = ts.export
             if item.naming == "TARGET":
-                # The exporter reads RNA settings: borrow the target's values and put the set's own back.
-                settings.preset, settings.file_format, settings.bit_depth = item.preset, item.file_format, item.bit_depth
+                # The exporter reads settings attributes: the target's values overlay the set's
+                # own, which stay untouched (an export never edits what the artist saved).
                 size = item.size
-                if size != int(ts.resolution) or settings.resolution != "SET":
-                    settings.resolution = str(size) if str(size) in {"512", "1024", "2048", "4096", "8192"} else "SET"
+                resolution = str(size) if str(size) in {"512", "1024", "2048", "4096", "8192"} else "SET"
+                settings = _Overlay(settings, preset=item.preset, file_format=item.file_format,
+                                    bit_depth=item.bit_depth, resolution=resolution)
                 naming = (lambda set_name, label, ext, prefix=settings.prefix, suffix=settings.suffix:
                           target_registry.filename(target, set_name, label, ext, prefix, suffix))
             else:
                 naming = None
             folder = item.outputs[0].path.parent if item.outputs else plan.directory
-            # Existing files are replaced only when the exporter publishes, after every map
-            # of the set has been generated; nothing is deleted ahead of a write that may fail.
-            paths = export(context, ts, settings, naming=naming, directory=folder, overwrite=overwrite)
+            result = generate(context, ts, settings, naming=naming, directory=folder)
+            generated.append(result)
             expected = [output.path for output in item.outputs]
-            if [p.name for p in paths] != [p.name for p in expected]:
-                raise RuntimeError(f"{item.name}: the exporter wrote {[p.name for p in paths]} but the plan listed "
+            if [p.name for p in result.destinations] != [p.name for p in expected]:
+                raise RuntimeError(f"{item.name}: the exporter wrote {[p.name for p in result.destinations]} but the plan listed "
                                    f"{[p.name for p in expected]}")
-            written.extend(paths)
+            for destination, source in zip(result.destinations, result.staged):
+                transaction.add(destination, source)
             if item.manifest is not None:
                 labels = [output.label for output in item.outputs]
-                item.manifest.write_text(json.dumps(target_registry.manifest(target, ts, list(zip(labels, paths))), indent=2))
-                written.append(item.manifest)
-        finally:
-            for key, value in saved.items():
-                if getattr(settings, key) != value:
-                    setattr(settings, key, value)
-    if plan.mesh is not None:
-        if overwrite:
-            plan.mesh.unlink(missing_ok=True)
-        from ..ui.target_panel import _export_mesh
-        objects = {by_id[item.set_id].assignments[i].object for item in plan.sets
-                   for i in range(len(by_id[item.set_id].assignments)) if by_id[item.set_id].assignments[i].object}
-        written.append(_export_mesh(context, target, plan.mesh.parent, objects))
+                staged_manifest = Path(staging.name) / f"{len(generated):03d}-{item.manifest.name}"
+                staged_manifest.write_text(json.dumps(target_registry.manifest(target, ts, list(zip(labels, result.destinations))), indent=2))
+                transaction.add(item.manifest, staged_manifest)
+        if plan.mesh is not None:
+            from ..ui.target_panel import _export_mesh
+            objects = {by_id[item.set_id].assignments[i].object for item in plan.sets
+                       for i in range(len(by_id[item.set_id].assignments)) if by_id[item.set_id].assignments[i].object}
+            # The mesh is written into staging like every map; the existing mesh stays until
+            # the whole request commits.
+            mesh_staging = Path(staging.name) / "mesh"
+            mesh_staging.mkdir()
+            staged_mesh = _export_mesh(context, target, mesh_staging, objects)
+            transaction.add(plan.mesh, staged_mesh)
+        # Everything of the request exists in staging: publish all of it or none of it.
+        written.extend(transaction.commit(overwrite=overwrite))
+    finally:
+        for result in generated:
+            result.close()
+        staging.cleanup()
     return written
+
+
+class _Overlay:
+    """Export settings read with a few values replaced; writes reach the real settings."""
+
+    def __init__(self, settings, **overrides):
+        object.__setattr__(self, "_settings", settings)
+        object.__setattr__(self, "_overrides", overrides)
+
+    def __getattr__(self, name):
+        overrides = object.__getattribute__(self, "_overrides")
+        if name in overrides:
+            return overrides[name]
+        return getattr(object.__getattribute__(self, "_settings"), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_settings"), name, value)
 
 
 def summary(plan):

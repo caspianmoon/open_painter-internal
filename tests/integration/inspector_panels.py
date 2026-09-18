@@ -109,6 +109,17 @@ def run(context):
     text = layout.text
     assert "Paint destination: Hand Paint" in text and "open_painter.paint" in text
     assert text.index("Paint destination") < text.index("painter_brush") < text.index("Layer Opacity")
+    # Paint Material (0.13): the destination line, the tool button and the channel toggles sit in
+    # the inspector, one control per row (no channel row that a narrow sidebar truncates).
+    assert "painter_material_brush" in text and "open_painter.vector_brush" in text
+    assert " > Hand Paint | " in text, text[text.index("painter_material_brush"):][:300]
+    assert text.index("painter_material_brush") < text.index("painter_brush")
+    material_block = text[text.index("painter_material_brush"):text.index("painter_brush")]
+    items = layout.items[next(i for i, (kind, data) in enumerate(layout.items) if kind == "panel" and data["idname"] == "painter_material_brush"):]
+    toggles = [data for kind, data in items if kind == "prop_enum" and data["name"] == "channels"]
+    assert len(toggles) >= 4 and any(kind == "grid" for kind, _ in items), "channel toggles must sit in a grid, not one row"
+    assert all(line.count("Color") <= 1 for line in material_block.splitlines())
+    assert "universal" in material_block and "pressure_size" in material_block
     assert "Paint layers are always protected" in text
     print("INSPECTOR paint: PASS", flush=True)
 

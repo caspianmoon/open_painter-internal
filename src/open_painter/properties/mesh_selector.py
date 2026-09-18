@@ -7,8 +7,10 @@ from ..core.layer_stack import replaying
 
 # Project file format (``OP_Project.format_version``): 2 stores selector angles in
 # radians. Files before it (0.9.6 and the first 0.9.7 builds) stored degrees under
-# the same properties; ``migrate_angles`` converts them once on load.
-FORMAT_VERSION = 2
+# the same properties; ``migrate_angles`` converts them once on load. 3 (0.13) adds
+# export UV padding: a file from before it exports with Automatic padding, and the
+# Export view says so until the artist picks a mode.
+FORMAT_VERSION = 3
 ANGLES = ('angle', 'softness')
 
 KINDS = [

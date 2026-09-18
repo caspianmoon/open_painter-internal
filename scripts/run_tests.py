@@ -33,7 +33,7 @@ if not args.gui_only and not args.gpu_only:
     started = not args.start_at
     for test in sorted((root / "tests/integration").glob("phase*.py")) + [
         root / "tests/integration" / name
-        for name in ("native_registration.py", "layer_drop.py", "layer_list_ops.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "material_recipe_masks.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "damaged_bevel.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "dock_lifecycle.py", "editor_areas.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "anchor_points.py", "micro_detail_anchors.py", "geometry_effects.py", "geometry_sources.py", "material_aging.py", "material_stamps.py", "production_export.py", "mesh_bundle.py", "surface_relief_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py", "shader_nodes.py", "shader_sources.py", "shader_preview.py", "shader_boundaries.py", "resource_keys.py", "shader_runtime.py", "shader_bypass.py", "shader_units.py", "shader_structural_fields.py", "shader_undo.py", "shader_lifecycle_edges.py", "shader_adoption.py", "edge_map_set.py", "edge_map_jobs.py", "output_anchors.py", "shader_output_anchors.py", "graph_mirror.py", "graph_link_edits.py", "module_documents.py", "module_update.py", "catalog_modules.py", "live_fields.py", "live_edge_exposure.py", "auto_edge_rebake.py", "engine_preview.py", "export_target.py", "vector_strokes.py", "stroke_parity.py", "multi_set_paint.py", "geometry_displace.py", "curve_geometry.py", "bake_back.py", "layer_bypass.py", "layer_cache.py", "layer_profile.py", "paint_freeze.py", "bake_doctor.py", "bake_corrections.py", "mesh_masks.py", "mask_groups.py", "surface_filters.py", "physical_scale.py", "decal_objects.py", "artist_file_workflow.py", "artist_file_baking.py", "artist_file_multiset.py", "artist_file_edits.py", "resolution_switch.py", "texture_set_lifecycle.py", "ui_baseline.py", "selection_target.py", "inspector_panels.py", "asset_workflow.py", "bake_view.py", "export_view.py", "contextual_tools.py", "nodes_and_assistant.py", "ui_release.py", "master_controls.py")
+        for name in ("native_registration.py", "layer_drop.py", "layer_list_ops.py", "smart_masks.py", "projected_masks.py", "edge_wear_textures.py", "geometric_curvature.py", "utility_maps.py", "catalog_materials.py", "material_recipe_masks.py", "generated_material_library.py", "generated_detail_inputs.py", "generated_material_portability.py", "damaged_bevel.py", "texture_operations.py", "procedural_channels.py", "native_texture_operations.py", "persistent_texture_cache.py", "asset_categories.py", "dock_lifecycle.py", "editor_areas.py", "resource_invalidation.py", "multi_scene_scheduling.py", "failed_evaluation.py", "scan_regression.py", "dirty_tiles.py", "memory_budget.py", "typed_buffers.py", "preview_authority.py", "save_during_evaluation.py", "evaluated_projection.py", "immutable_jobs.py", "interactive_preview.py", "bake_diagnostics.py", "bake_pairing.py", "bake_isolation.py", "scene_masks.py", "reference_layers.py", "anchor_points.py", "micro_detail_anchors.py", "geometry_effects.py", "geometry_sources.py", "material_aging.py", "material_stamps.py", "production_export.py", "mesh_bundle.py", "surface_relief_export.py", "offline_analysis.py", "gpu_parity.py", "live_input_dependencies.py", "live_identity_planning.py", "shader_nodes.py", "shader_sources.py", "shader_preview.py", "shader_boundaries.py", "resource_keys.py", "shader_runtime.py", "shader_bypass.py", "shader_units.py", "shader_structural_fields.py", "shader_undo.py", "shader_lifecycle_edges.py", "shader_adoption.py", "edge_map_set.py", "edge_map_jobs.py", "output_anchors.py", "shader_output_anchors.py", "graph_mirror.py", "graph_link_edits.py", "module_documents.py", "module_update.py", "catalog_modules.py", "live_fields.py", "live_edge_exposure.py", "auto_edge_rebake.py", "engine_preview.py", "export_target.py", "vector_strokes.py", "stroke_parity.py", "multi_set_paint.py", "geometry_displace.py", "curve_geometry.py", "bake_back.py", "layer_bypass.py", "layer_cache.py", "layer_profile.py", "paint_freeze.py", "bake_doctor.py", "bake_corrections.py", "mesh_masks.py", "mask_groups.py", "surface_filters.py", "physical_scale.py", "decal_objects.py", "artist_file_workflow.py", "artist_file_baking.py", "artist_file_multiset.py", "artist_file_edits.py", "resolution_switch.py", "texture_set_lifecycle.py", "ui_baseline.py", "selection_target.py", "inspector_panels.py", "asset_workflow.py", "bake_view.py", "export_view.py", "contextual_tools.py", "nodes_and_assistant.py", "ui_release.py", "master_controls.py", "material_painting.py", "export_padding.py", "export_safety.py")
     ] + [root / "tests/integration/material_director.py"]:
         if not started:
             started = test.name == args.start_at
@@ -58,6 +58,16 @@ if not args.gui_only and not args.gpu_only:
             failures.append(test.name)
     if not started:
         raise ValueError(f"Unknown background test: {args.start_at}")
+    # The compatibility contract needs a file written by the 0.12.2 build (see the test's
+    # --build/--record modes); without it the check is reported as skipped, never as passed.
+    if (root / ".blender-test/quality/compat-0.12.2.blend").exists() and (root / ".blender-test/quality/compat-0.12.2.json").exists():
+        print("Running compatibility_contract.py", flush=True)
+        completed = subprocess.run([args.blender, "--background", "--factory-startup", "--python-exit-code", "1", "--python",
+                                    str(root / "tests/integration/compatibility_contract.py")], cwd=root, env=env, check=not args.keep_going)
+        if completed.returncode:
+            failures.append("compatibility_contract.py")
+    else:
+        print("SKIPPED compatibility_contract.py: no 0.12.2 reference file (build it with --build/--record)", flush=True)
     subprocess.run(
         [
             args.blender,
@@ -96,7 +106,9 @@ if args.gui or args.gui_only:
         ("master_controls_ui.py", "master-controls-ui.json"),
         ("launch_audit_ui.py", "launch-audit.json"),
         ("ui_response_ui.py", "ui-response.json"),
-    ]:
+        ("material_painting_ui.py", "material-painting-ui.json"),
+        ("quality_baseline_paint_ui.py", "quality-baseline-painting.json"),
+    ] + ([("material_session_ui.py", "material-session-ui.json")] if os.environ.get("OP_RUN_SESSION") else []):
         result_path = root / ".blender-test" / result_name
         result_path.unlink(missing_ok=True)
         subprocess.run(
@@ -128,12 +140,15 @@ if args.gui or args.gui_only:
                 "master_controls_ui.py": {"OP_MASTER_CONTROLS_UI_REPORT": str(result_path)},
                 "launch_audit_ui.py": {"OP_LAUNCH_AUDIT_REPORT": str(result_path)},
                 "ui_response_ui.py": {"OP_UI_RESPONSE_REPORT": str(result_path)},
+                "material_painting_ui.py": {"OP_MATERIAL_UI_REPORT": str(result_path)},
+                "material_session_ui.py": {"OP_SESSION_REPORT": str(result_path)},
+                "quality_baseline_paint_ui.py": {"OP_QUALITY_BASELINE_PAINT_REPORT": str(result_path)},
             }.get(filename, {}))),
             check=True,
         )
         result = result_path.read_text()
         report = json.loads(result)
-        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py"}:
+        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

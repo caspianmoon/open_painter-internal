@@ -268,15 +268,19 @@ def draw_paint(layout, context, target):
     draw_paint_destination(layout, context, target)
     draw_channel_toggles(layout, layer)
     from ..painting.brush_bridge import draw as draw_brush
-    head, body = layout.panel("painter_brush", default_closed=False)
-    head.label(text="Brush", icon="BRUSH_DATA")
+    from .vector_brush import draw_material_brush, draw_vector_brush
+    head, body = layout.panel("painter_material_brush", default_closed=False)
+    head.label(text="Paint Material", icon="MATERIAL")
+    if body is not None:
+        draw_material_brush(body, context)
+    head, body = layout.panel("painter_brush", default_closed=True)
+    head.label(text="Paint Channel Brush", icon="BRUSH_DATA")
     if body is not None:
         draw_brush(body, context)
     head, body = layout.panel("painter_paint_tools", default_closed=True)
-    head.label(text="Stamps and Vector Strokes", icon="CURVE_BEZCURVE")
+    head.label(text="Stamps and Stroke Details", icon="CURVE_BEZCURVE")
     if body is not None:
         body.operator("open_painter.material_stamp", text="Material Stamp (4 Channels)", icon="BRUSH_DATA")
-        from .vector_brush import draw_vector_brush
         from .strokes_panel import draw_strokes
         draw_vector_brush(body, context)
         draw_strokes(body, context, ts, layer)

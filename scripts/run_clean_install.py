@@ -30,6 +30,12 @@ work = Path(tempfile.mkdtemp(prefix="op-clean-install-"))
 env = dict(os.environ, BLENDER_USER_RESOURCES=str(profile), OP_CLEAN_INSTALL_ZIP=str(args.package.resolve()),
            OP_CLEAN_INSTALL_DIR=str(work))
 env.pop("PYTHONPATH", None)
+# The upgrade session (phase 2, step 18) opens a file saved by the 0.12.2 build when the
+# compatibility fixture exists; the report says SKIPPED otherwise.
+legacy = root / ".blender-test/quality/compat-0.12.2.blend"
+if legacy.is_file():
+    import shutil
+    shutil.copy(legacy, work / legacy.name)
 reports = {}
 for phase in (1, 2):
     env["OP_CLEAN_INSTALL_PHASE"] = str(phase)

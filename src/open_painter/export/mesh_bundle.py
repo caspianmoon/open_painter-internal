@@ -70,12 +70,7 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
             records=[]
             for index,ts in enumerate(texture_sets):
                 folder=root/f'textures_{index:03d}'
-                original=ts.export.directory
-                try:
-                    ts.export.directory=str(folder)
-                    files=export(context,ts,ts.export)
-                finally:
-                    ts.export.directory=original
+                files=export(context,ts,ts.export,directory=folder)   # the set's own settings stay as saved
                 records.append(dict(id=ts.id,name=ts.name,resolution=int(ts.resolution),
                     revision=ts.edit_serial,preset=ts.export.preset,
                     files=[str(path.relative_to(root)) for path in files]))
@@ -90,15 +85,23 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
             (root/'manifest.json').write_text(json.dumps(dict(format_version=1,
                 generated_geometry=geometry,triangles=triangles,texture_sets=records,
                 limitations=['Texture maps alone do not preserve generated silhouette or parallax']),indent=2))
-            destination.mkdir(parents=True,exist_ok=False)
+            # One transaction for the whole bundle: every file lands or none does.
+            from .transaction import Transaction
+            transaction=Transaction()
             for path in root.rglob('*'):
                 if path.is_file():
-                    target=destination/path.relative_to(root); target.parent.mkdir(parents=True,exist_ok=True)
-                    with target.open('xb') as stream:
-                        created.append(target); stream.write(path.read_bytes())
+                    transaction.add(destination/path.relative_to(root),path)
+            destination.mkdir(parents=True,exist_ok=False)
+            created.append(destination)
+            transaction.commit(overwrite=False)
         return destination/'manifest.json'
     except Exception:
-        for path in reversed(created): path.unlink(missing_ok=True)
+        for path in reversed(created):
+            if path.is_dir():
+                import shutil
+                shutil.rmtree(path,ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
         raise
     finally:
         bpy.data.scenes.remove(scene)

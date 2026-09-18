@@ -207,6 +207,38 @@ def phase_one():
     yield .3
     report["steps"].append("9 painted a stroke and finished")
     yield from wait_current(project.texture_sets[0])
+    # 9b. Paint Material (0.13): a four-channel gesture through the modal brush, with the
+    # material changing under the pointer, one stroke record on release.
+    settings = project.vector_brush
+    settings.radius_mode, settings.radius, settings.channels = "WORLD", .1, {"BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT"}
+    settings.base_color, settings.roughness = (.2, .5, .8, 1), .3
+    strokes_before = len(project.strokes)
+    with override():
+        bpy.ops.open_painter.vector_brush("INVOKE_DEFAULT")
+    yield .3
+    brush_module = mod("ui.vector_brush")
+    assert brush_module.OP_OT_vector_brush._handler is not None, "the material brush did not start"
+    window.cursor_warp(x0, cy - 60)
+    mouse("MOUSEMOVE", "NOTHING", x0, cy - 60)
+    yield .2
+    mouse("LEFTMOUSE", "PRESS", x0, cy - 60)
+    previews_seen = False
+    for step in range(1, 13):
+        mouse("MOUSEMOVE", "NOTHING", x0 + (x1 - x0) * step / 12, cy - 60)
+        yield .033
+        active = brush_module.OP_OT_vector_brush._active
+        if active is not None and active._gesture.preview is not None and active._gesture.preview.active:
+            previews_seen = True
+    mouse("LEFTMOUSE", "RELEASE", x1, cy - 60)
+    yield .3
+    project = bpy.context.scene.open_painter
+    assert len(project.strokes) == strokes_before + 1, (len(project.strokes), strokes_before)
+    assert previews_seen, "the material must change under the pointer (live preview)"
+    window.event_simulate(type="ESC", value="PRESS")
+    yield .3
+    assert brush_module.OP_OT_vector_brush._handler is None, "Esc while idle exits the tool"
+    report["steps"].append("9b painted a material stroke with live feedback")
+    yield from wait_current(project.texture_sets[0])
     # 10. Save.
     report["state_before_save"] = project_state()
     bpy.ops.wm.save_as_mainfile(filepath=str(FILE))
@@ -227,7 +259,8 @@ def phase_two():
     assert state["paint_color"] == [.6, .1, .1] and state["chip_amount"] == .5, state
     assert {"NORMAL", "AO", "CURVATURE"} <= set(state["baked"]), state["baked"]
     assert any(t == "PAINT" for _, t in state["layers"]) and any(t == "FILL" for _, t in state["layers"])
-    report["steps"].append("13 project state verified after reopening")
+    assert len(bpy.context.scene.open_painter.strokes) == 1, "the material stroke must survive save and reopen"
+    report["steps"].append("13 project state verified after reopening (material stroke included)")
     with override():
         bpy.ops.open_painter.open_editor()
     yield .5
@@ -246,7 +279,10 @@ def phase_two():
         listed = sorted(p.name for p in plan.files)
         assert written == listed, (target, written, listed)
         report[f"export_{target.lower()}"] = written
-        report["steps"].append(f"{'14' if target == 'BLENDER' else '15'} exported {len(written)} files for {target}")
+        padding_line = project.texture_sets[0].export.last_report
+        assert padding_line.startswith("UV padding: ") and "px" in padding_line, padding_line
+        report[f"padding_{target.lower()}"] = padding_line
+        report["steps"].append(f"{'14' if target == 'BLENDER' else '15'} exported {len(written)} files for {target} · {padding_line}")
     # 16. Disable and re-enable the extension.
     addon_utils.disable(MODULE, default_set=True)
     assert not hasattr(bpy.types.Scene, "open_painter")
@@ -261,6 +297,34 @@ def phase_two():
     assert again["material"] == "Worn Painted Metal" and again["bindings_ok"] and again["paint_color"] == [.6, .1, .1], again
     report["steps"].append("17 project opened again after the re-enable")
     bpy.ops.screen.screenshot(filepath=str(WORK / "clean-install.png"))
+    # 18. An upgrade session: a file saved by 0.12.2 (built by tests/integration/compatibility_contract.py
+    # --build with the 0.12.2 source) opens with the installed 0.13 extension; the migration to
+    # automatic export padding is visible, and its strokes and export still work.
+    legacy = WORK / "compat-0.12.2.blend"
+    if legacy.is_file():
+        bpy.ops.wm.open_mainfile(filepath=str(legacy))
+        yield 1.0
+        project = bpy.context.scene.open_painter
+        assert project.format_version >= 3, project.format_version
+        assert all(ts.export.padding_migrated for ts in project.texture_sets), "the upgrade must be visible"
+        assert len(project.strokes) >= 1 and all(s.sample_count > 0 for s in project.strokes)
+        with override():
+            bpy.ops.open_painter.open_editor()
+        yield .5
+        view = export_view.view_settings(bpy.context)
+        view.contents, view.scope, view.folder_source = "TARGET", "ALL", "PROJECT"
+        project.target = "UNREAL"
+        project.export_directory = str(WORK / "export-upgrade")
+        with override():
+            plan = export_view.current_plan(bpy.context)
+            assert bpy.ops.open_painter.export_plan() == {"FINISHED"}, project.status
+        written = sorted(p.name for p in Path(plan.directory).iterdir())
+        assert written == sorted(p.name for p in plan.files), written
+        report["upgrade"] = {"files": written, "padding": [ts.export.last_report for ts in project.texture_sets]}
+        report["steps"].append(f"18 a 0.12.2 file opened, migrated visibly and exported {len(written)} files")
+    else:
+        report["upgrade"] = "SKIPPED: no 0.12.2 file in the work folder"
+        report["steps"].append("18 upgrade session SKIPPED (no 0.12.2 file)")
 
 
 generator = phase_one() if PHASE == 1 else phase_two()

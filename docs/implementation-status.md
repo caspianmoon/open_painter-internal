@@ -16,6 +16,24 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Add-on quality remedy 0.13.0 — 2026-09-19
+
+Report with measurements, evidence paths and limits: [quality-remedy-0.13.md](quality-remedy-0.13.md).
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Baseline fixtures and 0.12.2 findings (export gutters/mips/downsample contamination, publish losses, painting holes, no feedback, 5.7 s settle, Esc commits, wrong target) | done | `tests/integration/quality_fixtures.py`, `quality_baseline.py`, `quality_baseline_paint_ui.py` |
+| Paint Material: resampled, re-projected gesture; explicit set/slot scope; pressure size/flow; depth limit; live multichannel preview; Esc discard; one undo step; save mid-stroke rule; duplicates independent | done | `tests/integration/material_painting.py` (23 checks), `material_painting_ui.py`, `clean_install_ui.py` step 9b |
+| Incremental strokes boundary, transparent placeholder, canvas fallback, orphan sweep | done | `material_painting.py`, `material_session_ui.py` (53 leaves after 500 strokes) |
+| Latency / settle on the 2K/25-layer prop: p95 123–147 ms (target 100), settle 0.39–0.47 s (target 250 ms); 4K settle ≈ 1.5 s | LIMITED TO the measured figures (profiled in the report) | `.blender-test/quality/material-painting-ui-2048.json`, `-4096.json` |
+| UV padding: geometry-derived ownership, coverage-aware resampling, deterministic nearest-donor extension with an oracle, channel semantics, gutter diagnostics, Automatic/Custom/Fill/None with a visible migration | done | `tests/unit/test_export_padding.py`, `tests/integration/export_padding.py` |
+| Export publication as a request-level transaction with backups, journal recovery and exclusive creation, for textures, target packages and bundles | done | `tests/integration/export_safety.py` |
+| Unreal 5 and Unity URP validation | NOT RUN — no engine on the reference machine; scripts, fixtures and hashes delivered | `engine_validation/`, `scripts/engine_validation.py` |
+| Clean install and 0.12.2 upgrade on the packaged candidate | done | `scripts/run_clean_install.py` (`.blender-test/clean-install.json`) |
+| Compatibility contract (appearance, stroke placement, ownership, export scope, read-only operations) | done | `tests/integration/compatibility_contract.py` |
+| Material baseline: 50 recipes byte-identical to 0.12.2 | done | `scripts/material_baseline.py` |
+| Sustained session: 500 strokes, 20 undo/redo cycles, 5 saves, bounded leaves | done | `tests/integration/material_session_ui.py` |
+
 ## Focused task views and tools in context (UI plan phases 4–8) 0.12.0 — 2026-09-18
 
 | Item | Status | Evidence |

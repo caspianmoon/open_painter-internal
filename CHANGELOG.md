@@ -2,7 +2,7 @@
 
 ## 0.12.0 (in progress)
 
-Focused bake and export views (UI plan phases 4–5).
+Focused bake and export views, tools in context (UI plan phases 4–6).
 
 - **Bake view:** *Bake Mesh Maps* in the tool header opens the sidebar's *Bake* tab with three
   freely accessible sections. *Setup* shows the targets, the model's size, resolution, margin,
@@ -30,8 +30,25 @@ Focused bake and export views (UI plan phases 4–5).
   the export refuses existing files unless *Replace Existing Files* is on, and opening the view
   changes no saved setting. *Prepare Export* keeps Measure Density, Stage Atlas and Stage Mesh
   LOD out of the main write.
-- Tests: `tests/integration/bake_view.py`, `export_view.py`; `tests/unit/test_bake_queue.py`
-  updated.
+- **Material Aging in context:** the panel starts with *Applied to*, the driven folder and a named
+  *Follow Edits Live* toggle, then *Material Construction*, *Environment* and *Age in Years*;
+  exposure, use, maintenance, events, the *Simulated State* (a model estimate, not a
+  measurement) and *Art Direction (after the simulation)* are named sections. Sliders stay
+  relative intensities with their endpoints in the tooltips — temperature is not degrees. A
+  moved slider shows *Custom · modified from <preset>* with *Reset Environment*, separate from
+  *Reset Aging Setup* and *Reset Art Direction*.
+- **Geometry Effects in context:** the panel lists the effects applied to the set with
+  visibility and selection; the selected effect's inspector says whether it adds geometry or
+  changes displacement, where it is distributed, its parameters, Regenerate / Freeze / Remove;
+  creation presets sit behind *Add Geometry Effect* and on the shelf; *Bake Back* names its output
+  and the Keep / Hide / Remove choice for the generated geometry.
+- **Analysis actions where their inputs are:** the Offline Analysis panel is gone. *Sample
+  Contact History* is on Contact scene fields, *Rest-State Strain* on attribute fields and masks,
+  *Mark Selected Cut Faces* on attribute and face-selection mesh masks, *Performance Inventory*
+  in the Performance menu, *Stage Mesh LOD* under Export › Prepare; each names its input, output
+  and reader, and all stay searchable.
+- Tests: `tests/integration/bake_view.py`, `export_view.py`, `contextual_tools.py`;
+  `tests/unit/test_bake_queue.py` and `tests/integration/geometry_effects.py` updated.
 
 ## 0.11.0
 

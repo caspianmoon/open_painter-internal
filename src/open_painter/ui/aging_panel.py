@@ -5,6 +5,7 @@ import bpy
 from ..aging import engine
 from ..aging.environments import EVENT_LABELS
 from ..core.project_manager import active_set, require_set
+from ..properties.aging import ENVIRONMENT_ITEMS
 from .operators import SafeOperator
 
 EXPOSURE_FIELDS = (("uv", "UV Exposure"), ("humidity", "Humidity"), ("rain", "Rain / Wetness"), ("temperature", "Temperature"),
@@ -24,6 +25,9 @@ class OP_OT_aging(SafeOperator, bpy.types.Operator):
         ("REBUILD", "Rebuild", "Rebuild the folder from scratch (drops artist edits inside it)"),
         ("RANDOMIZE", "Randomize History", "Another history of the same kind"),
         ("RESET_ART", "Reset Art Direction", "Forget artist overrides of driven values and re-drive them"),
+        ("RESET_ENVIRONMENT", "Reset Environment", "Put the exposure sliders back to the chosen preset's values"),
+        ("RESET_SETUP", "Reset Aging Setup", "Age, environment, use, care, events, seed and art direction back to their "
+                                            "defaults; the material construction is kept"),
         ("REMOVE", "Remove Aging", "Delete the Material Aging folder"),
         ("ADD_PERIOD", "Add Period", "Append a period to the environment history"),
         ("REMOVE_PERIOD", "Remove Period", "Remove the selected period"),
@@ -46,6 +50,24 @@ class OP_OT_aging(SafeOperator, bpy.types.Operator):
                 engine.apply(ts)
         elif self.action == "RESET_ART":
             engine.reset_overrides(ts)
+        elif self.action == "RESET_ENVIRONMENT":
+            base = aging.environment_base if aging.environment_base in {k for k, *_ in ENVIRONMENT_ITEMS} else "OUTDOOR_URBAN"
+            with engine.batch():
+                aging.environment = base    # the preset's values are copied back by its update
+            if aging.folder_id:
+                engine.apply(ts)
+        elif self.action == "RESET_SETUP":
+            with engine.batch():
+                for name in ("age_years", "use_history", "environment", "usage", "maintenance", "seed",
+                             "direct_corrosion", "direct_fading", "direct_damage", "direct_dirt"):
+                    aging.property_unset(name)
+                aging.periods.clear()
+                aging.events.clear()
+                aging.environment = aging.environment      # re-copies the preset's sliders
+                aging.usage = aging.usage
+                aging.maintenance = aging.maintenance
+            if aging.folder_id:
+                engine.apply(ts)
         elif self.action == "REMOVE":
             engine.remove(ts)
         elif self.action == "ADD_PERIOD":
@@ -100,61 +122,90 @@ class OP_UL_aging_events(bpy.types.UIList):
             row.label(text="just now" if ago < 0.05 else f"{ago:.0f} y ago" if ago >= 1 else f"{ago * 12:.0f} months ago")
 
 
+def environment_label(aging):
+    if aging.environment != "CUSTOM":
+        return None
+    labels = {key: label for key, label, *_ in ENVIRONMENT_ITEMS}
+    base = labels.get(aging.environment_base, "")
+    return f"Custom · modified from {base}" if base else "Custom exposure"
+
+
 def draw_aging(layout, context, ts):
+    """Applied To · Material Construction · Environment · Age first; the details in named sections."""
     aging = ts.aging
-    driven = bool(aging.folder_id) and engine.folder_of(ts) is not None
-    header = layout.row(align=True)
-    header.label(text="What it is", icon="MATERIAL")
-    header.prop(aging, "live", text="", icon="PLAY" if aging.live else "PAUSE")
-    what = layout.column(align=True)
-    what.use_property_split = True
-    what.use_property_decorate = False
-    what.prop(aging, "material")
-    what.prop(aging, "conversion", text="Conversion")
-    what.prop(aging, "primer", text="Primer")
-    row = what.row(align=True)
-    row.prop(aging, "paint", text="Paint")
-    if aging.paint != "NONE":
-        row.prop(aging, "paint_color", text="")
-    what.prop(aging, "topcoat", text="Top Coat")
-    if aging.paint != "NONE" or aging.primer != "NONE" or aging.topcoat != "NONE":
-        what.prop(aging, "coating_condition", text="Condition", slider=True)
-    layout.separator()
-    layout.prop(aging, "age_years", text="Age (years)")
+    folder = engine.folder_of(ts) if aging.folder_id else None
+    driven = folder is not None
+    layout.use_property_split = True
+    layout.use_property_decorate = False
+    # Applied To ------------------------------------------------------------------
+    objects = sorted({ref.object.name for ref in ts.assignments if ref.object})
     row = layout.row(align=True)
-    row.prop(aging, "environment", text="")
-    row.prop(aging, "use_history", text="", icon="TIME", toggle=True)
-    if aging.use_history:
-        row = layout.row()
-        row.template_list("OP_UL_aging_periods", "", aging, "periods", aging, "active_period", rows=3)
-        column = row.column(align=True)
-        column.operator("open_painter.aging", text="", icon="ADD").action = "ADD_PERIOD"
-        column.operator("open_painter.aging", text="", icon="REMOVE").action = "REMOVE_PERIOD"
-        layout.label(text="Periods scale to the age", icon="INFO")
+    row.label(text="Applied to " + (", ".join(objects[:3]) + (" …" if len(objects) > 3 else "") if objects else "no object"),
+              icon="MESH_DATA" if objects else "ERROR")
+    if driven:
+        layout.label(text=f"Drives the folder {folder.name} in {ts.name}", icon="FILE_FOLDER")
     else:
-        head, body = layout.panel("painter_aging_exposure", default_closed=False)
-        head.label(text="Exposure", icon="WORLD")
-        if body:
+        layout.label(text="No aging folder yet: Age Material builds one", icon="INFO")
+    layout.prop(aging, "live", text="Follow Edits Live", toggle=True)
+    # Material Construction -------------------------------------------------------
+    head, body = layout.panel("painter_aging_construction", default_closed=False)
+    head.label(text="Material Construction", icon="MATERIAL")
+    if body is not None:
+        body.prop(aging, "material")
+        body.prop(aging, "conversion", text="Conversion")
+        body.prop(aging, "primer", text="Primer")
+        row = body.row(align=True)
+        row.prop(aging, "paint", text="Paint")
+        if aging.paint != "NONE":
+            row.prop(aging, "paint_color", text="")
+        body.prop(aging, "topcoat", text="Top Coat")
+        if aging.paint != "NONE" or aging.primer != "NONE" or aging.topcoat != "NONE":
+            body.prop(aging, "coating_condition", text="Starting Condition", slider=True)
+    # Environment and age ---------------------------------------------------------
+    row = layout.row(align=True)
+    row.prop(aging, "environment", text="Environment")
+    row.prop(aging, "use_history", text="", icon="TIME", toggle=True)
+    modified = environment_label(aging)
+    if modified and not aging.use_history:
+        row = layout.row(align=True)
+        row.label(text=modified, icon="GREASEPENCIL")
+        row.operator("open_painter.aging", text="Reset Environment", icon="LOOP_BACK").action = "RESET_ENVIRONMENT"
+    layout.prop(aging, "age_years", text="Age in Years")
+    if aging.use_history:
+        head, body = layout.panel("painter_aging_history", default_closed=False)
+        head.label(text=f"Environment History ({len(aging.periods)} periods)", icon="TIME")
+        if body is not None:
+            row = body.row()
+            row.template_list("OP_UL_aging_periods", "", aging, "periods", aging, "active_period", rows=3)
+            column = row.column(align=True)
+            column.operator("open_painter.aging", text="", icon="ADD").action = "ADD_PERIOD"
+            column.operator("open_painter.aging", text="", icon="REMOVE").action = "REMOVE_PERIOD"
+            body.label(text="Periods scale to the age", icon="INFO")
+    else:
+        head, body = layout.panel("painter_aging_exposure", default_closed=True)
+        head.label(text="Exposure (relative intensities)", icon="WORLD")
+        if body is not None:
             column = body.column(align=True)
             for field, label in EXPOSURE_FIELDS:
                 column.prop(aging, field, text=label, slider=True)
-        head, body = layout.panel("painter_aging_use", default_closed=False)
+            body.label(text="0 none to 1 extreme; the model scales its rates by them, no physical units", icon="INFO")
+        head, body = layout.panel("painter_aging_use", default_closed=True)
         head.label(text="Use", icon="HAND")
-        if body:
+        if body is not None:
             column = body.column(align=True)
-            column.prop(aging, "usage", text="")
+            column.prop(aging, "usage", text="Preset")
             for field, label in USE_FIELDS:
                 column.prop(aging, field, text=label, slider=True)
         head, body = layout.panel("painter_aging_care", default_closed=True)
         head.label(text="Maintenance", icon="BRUSH_DATA")
-        if body:
+        if body is not None:
             column = body.column(align=True)
-            column.prop(aging, "maintenance", text="")
+            column.prop(aging, "maintenance", text="Preset")
             for field, label in CARE_FIELDS:
                 column.prop(aging, field, text=label, slider=True)
     head, body = layout.panel("painter_aging_events", default_closed=not len(aging.events))
     head.label(text=f"Events ({len(aging.events)})" if len(aging.events) else "Events", icon="KEYFRAME")
-    if body:
+    if body is not None:
         row = body.row()
         row.template_list("OP_UL_aging_events", "", aging, "events", aging, "active_event", rows=2)
         column = row.column(align=True)
@@ -170,50 +221,54 @@ def draw_aging(layout, context, ts):
     except Exception as exc:   # a broken setting must not take the panel down
         layout.label(text=f"Prediction unavailable: {exc}", icon="ERROR")
         result = None
-    head, body = layout.panel("painter_aging_prediction", default_closed=False)
-    head.label(text=f"Predicted: {result['label'].title()}" if result else "Predicted State", icon="INFO")
-    if body and result is not None:
+    head, body = layout.panel("painter_aging_prediction", default_closed=True)
+    head.label(text=f"Simulated State: {result['label'].title()}" if result else "Simulated State", icon="INFO")
+    if body is not None and result is not None:
+        body.label(text="A model estimate of the history, not a measurement", icon="INFO")
         physical = dict(result["physical"])
         column = body.column(align=True)
         for name, value in result["directed"]:
             row = column.row(align=True)
             row.label(text=name)
             base = physical.get(name)
-            row.label(text=f"{value:.0%}" + ("" if base is None or abs(base - value) < 5e-3 else f"  (physics {base:.0%})"))
-    head, body = layout.panel("painter_aging_art", default_closed=False)
-    head.label(text="Art Direction", icon="BRUSHES_ALL")
-    if body:
+            row.label(text=f"{value:.0%}" + ("" if base is None or abs(base - value) < 5e-3 else f"  (model {base:.0%})"))
+    head, body = layout.panel("painter_aging_art", default_closed=True)
+    head.label(text="Art Direction (after the simulation)", icon="BRUSHES_ALL")
+    if body is not None:
+        body.label(text="Multipliers on the simulated outcomes, not environmental inputs", icon="INFO")
         column = body.column(align=True)
         for field in ("direct_corrosion", "direct_fading", "direct_damage", "direct_dirt"):
             column.prop(aging, field, slider=True)
         row = body.row(align=True)
         row.operator("open_painter.aging", text="Randomize History", icon="FILE_REFRESH").action = "RANDOMIZE"
         row.prop(aging, "seed", text="Seed")
+        row = body.row(align=True)
+        row.operator("open_painter.aging", text="Reset Art Direction", icon="LOOP_BACK").action = "RESET_ART"
     layout.separator()
     missing = engine.missing_maps(ts) if result is not None else []
     if missing:
         row = layout.row(align=True)
         row.label(text="Bake Mesh Maps first: " + ", ".join(m.replace("_", " ").title() for m in missing), icon="ERROR")
-        row.popover(panel="OP_PT_native_bake", text="", icon="RENDER_STILL")
+        row.operator("open_painter.show_task", text="", icon="RENDER_STILL").task = "BAKE"
     if result is not None and not missing:
         optional = engine.optional_maps(ts)
         pending = engine.rebuild_pending(ts) if driven else []
         if pending:
             row = layout.row(align=True)
             row.label(text="Maps baked since aging: " + ", ".join(k.replace("_", " ").title() for k in pending), icon="INFO")
-            row.operator("open_painter.aging", text="", icon="FILE_REFRESH").action = "REBUILD"
+            row.operator("open_painter.aging", text="Rebuild Folder", icon="FILE_REFRESH").action = "REBUILD"
         elif optional:
             row = layout.row(align=True)
             row.label(text="Bake " + ", ".join(m.replace("_", " ").title() for m in optional) + " to place dust and streaks", icon="INFO")
-            row.popover(panel="OP_PT_native_bake", text="", icon="RENDER_STILL")
+            row.operator("open_painter.show_task", text="", icon="RENDER_STILL").task = "BAKE"
     row = layout.row(align=True)
     if driven:
-        row.operator("open_painter.aging", text="Re-age", icon="FILE_REFRESH").action = "APPLY"
-        row.operator("open_painter.aging", text="Reset Art", icon="LOOP_BACK").action = "RESET_ART"
-        row.operator("open_painter.aging", text="", icon="X").action = "REMOVE"
+        row.operator("open_painter.aging", text="Re-age Material", icon="FILE_REFRESH").action = "APPLY"
+        row.operator("open_painter.aging", text="Remove Aging", icon="X").action = "REMOVE"
     else:
         row.enabled = not missing
         row.operator("open_painter.aging", text="Age Material", icon="TIME").action = "APPLY"
+    layout.operator("open_painter.aging", text="Reset Aging Setup", icon="LOOP_BACK").action = "RESET_SETUP"
 
 
 class OP_PT_native_aging(bpy.types.Panel):

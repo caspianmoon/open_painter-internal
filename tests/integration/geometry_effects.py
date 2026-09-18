@@ -201,11 +201,14 @@ from open_painter.ui.geometry_effects import OP_PT_geometry_effects
 class Layout:
     def __init__(self, calls): self.calls = calls
     def row(self, **_): return self
+    def column(self, **_): return self
     def box(self): return self
+    def panel(self, *_a, **_k): return self, self
+    def menu(self, *_a, **_k): pass
     def label(self, **_): pass
     def prop(self, data, path, **_): self.calls.append(('prop', path))
     def operator(self, idname, text='', **_):
-        self.calls.append(('operator', text)); return type('Props', (), {'action': None})()
+        self.calls.append(('operator', text)); return type('Props', (), {'action': None, 'name': None})()
 def panel_actions(active):
     calls = []
     OP_PT_geometry_effects.draw(type('Panel', (), {'layout': Layout(calls)})(), type('Context', (), {'active_object': active})())
@@ -213,7 +216,7 @@ def panel_actions(active):
 assert 'Regenerate' not in panel_actions(None)[0] and 'Regenerate' not in panel_actions(split)[0]
 for regenerable in (body_helper, manager.create(ts, obj, mask, 'RUST', 10, .02, 5)):
     actions, props = panel_actions(regenerable)
-    assert {'Regenerate', 'Freeze', 'Remove Helper'} <= actions and 'Unfreeze' not in actions, (regenerable['kind'], actions)
+    assert {'Regenerate', 'Freeze', 'Remove Effect'} <= actions and 'Unfreeze' not in actions, (regenerable['kind'], actions)
     assert props == {'["follow"]', '["density"]', '["size"]', '["seed"]', '["lift"]', '["match"]'}, props
     regenerable['frozen'] = True
     assert 'Unfreeze' in panel_actions(regenerable)[0]
@@ -221,7 +224,7 @@ for regenerable in (body_helper, manager.create(ts, obj, mask, 'RUST', 10, .02, 
 body_helper['frozen'] = False
 bead = weld.create(scene, curve, radius=.02)
 actions, props = panel_actions(bead)
-assert 'Remove Helper' in actions and not ({'Regenerate', 'Freeze'} & actions) and not props, (actions, props)
+assert 'Remove Effect' in actions and not ({'Regenerate', 'Freeze'} & actions) and not props, (actions, props)
 manager.remove(bead)
 body_helper = manager.regenerate(straps, body_helper)
 assert body_helper['source_texture_set'] == body.id and slots_of(body_helper) == {0}, slots_of(body_helper)

@@ -48,6 +48,14 @@ def draw_mesh_selector(layout, ts, mask):
         layout.prop(selector, 'softness')
     elif kind == 'FACE_SELECTION':
         layout.label(text='Follows the face selection of the assigned meshes', icon='RESTRICT_SELECT_OFF')
+    if kind in {'ATTRIBUTE', 'FACE_SELECTION'}:
+        from .offline_analysis import draw_action
+        box = layout.box()
+        box.label(text='Cut surfaces', icon='MOD_BOOLEAN')
+        draw_action(box, 'MARK', text='Mark Selected Cut Faces', icon='FACESEL')
+        box.label(text='Writes open_painter_cut_surface on the active mesh; read it as the attribute', icon='INFO')
+        if kind == 'ATTRIBUTE':
+            draw_action(box, 'STRAIN', text='Rest-State Strain…', icon='MOD_SIMPLEDEFORM')
     layout.label(text='Exact through the render UVs; follows scene changes live', icon='INFO')
 
 
@@ -377,6 +385,18 @@ def draw_mask_settings(layout, context, ts, layer, mask):
         layout.label(text='Sampled UV field; authored textures unchanged')
         if field.error:
             layout.label(text=field.error, icon='TIME' if field.error.startswith('Analysing') else 'ERROR')
+        from .offline_analysis import draw_action
+        if kind == 'CONTACT':
+            # Contact-driven wear over time: the offline sampler freezes a duration image into this field.
+            box = layout.box()
+            box.label(text='Contact over the animation', icon='TIME')
+            draw_action(box, 'CONTACT', text='Sample Contact History…', icon='RENDER_ANIMATION')
+            box.label(text='Frames in, a frozen contact-duration image on this mask out', icon='INFO')
+        elif kind in {'ATTRIBUTE', 'VERTEX_GROUP'}:
+            box = layout.box()
+            box.label(text='Deformation-driven wear', icon='MOD_SIMPLEDEFORM')
+            draw_action(box, 'STRAIN', text='Rest-State Strain…', icon='MOD_SIMPLEDEFORM')
+            box.label(text='Writes open_painter_strain on the active mesh; read it as the attribute', icon='INFO')
     elif mask.source == "FILL":
         layout.template_ID(mask, "image")
         for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):

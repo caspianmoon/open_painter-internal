@@ -14,7 +14,8 @@ from .graph.operators import CLASSES as GRAPH_OPERATOR_CLASSES
 from .ui.modules import CLASSES as MODULE_CLASSES
 from .ui.scene_fields import CLASSES as SCENE_FIELD_CLASSES
 from .ui.target_panel import CLASSES as TARGET_CLASSES
-from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects, OP_MT_geometry_effect_add
+from .ui.geometry_effects import (OP_OT_geometry_effect, OP_OT_geometry_select, OP_PT_geometry_effects,
+                                  OP_MT_geometry_effect_add)
 from .ui.mask_view import CLASSES as MASK_VIEW_CLASSES
 from .ui.bake_view import CLASSES as BAKE_VIEW_CLASSES
 from .ui import export_view
@@ -22,7 +23,7 @@ from .ui.export_view import CLASSES as EXPORT_VIEW_CLASSES
 from .ui.companion import CLASSES as COMPANION_CLASSES
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
-from .ui.offline_analysis import OP_OT_offline_analysis,OP_PT_offline_analysis
+from .ui.offline_analysis import OP_OT_offline_analysis
 from .properties.bake import OP_BakeCorrections, OP_BakedMap, OP_BakeSettings, OP_ObjectRef
 from .properties.channel import OP_Channel, OP_Output
 from .properties.export import OP_ExportSettings
@@ -100,12 +101,12 @@ CLASSES = (
     OP_OT_anchor_select_consumer,
     OP_OT_anchor_channel,
     OP_OT_geometry_effect,
+    OP_OT_geometry_select,
     OP_MT_geometry_effect_add,
     OP_PT_geometry_effects,
     OP_OT_material_stamp,
     OP_OT_production_export,
     OP_OT_offline_analysis,
-    OP_PT_offline_analysis,
     OP_UL_masks,
     OP_PT_masks,
     OP_OT_bake,

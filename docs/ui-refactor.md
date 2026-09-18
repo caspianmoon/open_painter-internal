@@ -39,9 +39,9 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Use Baked Maps (creates a fill layer) | D | Bake panel bottom | Results › *Add Baked Normal and AO Layer* | done (phase 4) |
 | Export Textures popover (target box, follow target, settings, export, bundle, measure, atlas) | D+F | Tool header popover + *Export Textures* panel | *Export* sidebar tab: Contents / Scope / Destination / Folder / Output Preview; *Prepare Export* sub-panel | done (phase 5) |
 | Export → Target, Selected Objects (with all-sets fallback) | F | Tool header row | Export tab (scope explicit; no fallback); `open_painter.export_target` stays callable | done (phase 5) |
-| Material Aging | D | *Material Aging* panel (order 2) | *Material Aging* panel: Applied To / Construction / Environment / Age first, details in sub-panels | Phase 6 |
-| Geometry Effects (creation buttons, helper box) | D | *Geometry Effects* panel | *Geometry Effects* panel: applied helpers list + inspector; presets behind *Add Geometry Effect* | Phase 6 |
-| Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare (LOD moved in phase 5) | Phase 6 |
+| Material Aging | D | *Material Aging* panel (order 2) | *Material Aging* panel: Applied To / Construction / Environment / Age first, details in sub-panels | done (phase 6) |
+| Geometry Effects (creation buttons, helper box) | D | *Geometry Effects* panel | *Geometry Effects* panel: applied helpers list + inspector; presets behind *Add Geometry Effect* | done (phase 6) |
+| Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare | done (phase 6) |
 | Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More / inspector; scope label in the node header | Phase 7 |
 | Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab: Target / Instruction / Run / Changes; connection settings in Preferences | Phase 7 |
 | Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) | Phase 8 |
@@ -168,3 +168,25 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
   *Prepare Export* holds Measure Density, Stage Atlas and Stage Mesh LOD.
 - The tool header's *Export → Target* one-click button is gone; *Export* opens the tab. The
   legacy operator keeps its all-sets fallback for scripts and is documented as such.
+
+## Phase 6 notes (implemented)
+
+- Material Aging (`ui/aging_panel.py`): *Applied to <objects>* and the driven folder, *Follow Edits
+  Live* (named, no play icon), then *Material Construction*, *Environment* + *Age in Years*, and
+  sub-panels *Exposure (relative intensities)*, *Use*, *Maintenance*, *Events*, *Simulated State*
+  (“a model estimate, not a measurement”) and *Art Direction (after the simulation)*. Sliders keep
+  their 0–1 factors with endpoint meanings in the tooltips (temperature says “not degrees”). A
+  slider moved off a preset shows *Custom · modified from <preset>* (`aging.environment_base`) with
+  *Reset Environment*; *Reset Aging Setup* (age, history, use, care, events, seed, art direction)
+  is separate from *Reset Art Direction*, and the construction is never reset by either.
+- Geometry Effects: *Add Geometry Effect* menu (also shelf entries), the helpers applied to the set
+  with visibility and a select button, and a selection-specific inspector stating what the effect
+  produces (*Adds geometry · N instanced pieces*, *Changes displacement*), its distribution source,
+  its parameters, Regenerate / Freeze / Remove Effect, and a *Bake Back* sub-panel that names its
+  output and the Keep / Hide / Remove choice for the generated geometry.
+- Offline analysis (`ui/offline_analysis.py`): the panel is no longer registered; each action names
+  its input, output and reader in `ACTIONS` (tooltips and dialogs). *Sample Contact History* sits on
+  Contact scene fields, *Rest-State Strain* on attribute scene fields and attribute mesh masks,
+  *Mark Selected Cut Faces* on attribute / face-selection mesh masks, *Performance Inventory* in the
+  Performance menu, *Stage Mesh LOD* under Export › Prepare. `open_painter.offline_analysis` stays
+  searchable.

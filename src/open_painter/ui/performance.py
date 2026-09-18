@@ -167,6 +167,7 @@ class OP_MT_native_performance(bpy.types.Menu):
         layout = self.layout
         layout.operator('open_painter.profile_layers', icon='SORTTIME').action = 'PROFILE'
         layout.operator('open_painter.profile_layers', text='Clear Profile').action = 'CLEAR'
+        layout.operator('open_painter.offline_analysis', text='Performance Inventory', icon='INFO').action = 'REPORT'
         layout.separator()
         layout.operator('open_painter.layer_bypass', text='Bypass Selected', icon='RESTRICT_VIEW_ON').action = 'SELECTED'
         layout.operator('open_painter.layer_bypass', text='Restore Selected').action = 'CLEAR_SELECTED'

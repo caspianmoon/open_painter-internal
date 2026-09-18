@@ -35,13 +35,34 @@ def retire_superseded(field,previous):
     elif SUPERSEDED in field: del field[SUPERSEDED]
 
 
+# Each action names its input, its output and who reads it (UI plan phase 6).
+ACTIONS = (
+    ('CONTACT', 'Sample Contact History',
+     'Input: the animation frames and the selected Contact scene field · Output: a frozen contact-duration '
+     'image on that mask · Read by: the mask (contact-driven wear)'),
+    ('STRAIN', 'Rest-State Strain',
+     'Input: the active mesh and a rest-state copy · Output: the open_painter_strain point attribute · '
+     'Read by: Attribute scene fields and mesh masks (deformation-driven wear)'),
+    ('MARK', 'Mark Selected Cut Faces',
+     'Input: the selected faces of the active mesh · Output: the open_painter_cut_surface face attribute · '
+     'Read by: Attribute mesh masks (cut-surface selection)'),
+    ('REPORT', 'Performance Inventory',
+     'Input: the active texture set · Output: image memory, layer, filter and instance counts in the status · '
+     'Read by: you, when the preview slows down'),
+    ('LOD', 'Stage Mesh LOD',
+     'Input: the active mesh · Output: a decimated evaluated copy for inspection · Read by: Export preparation'),
+)
+
+
 class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
     bl_idname='open_painter.offline_analysis'
     bl_label='Offline Analysis'
     bl_options={'REGISTER','UNDO'}
-    action: bpy.props.EnumProperty(items=[(k,label,'') for k,label in (
-        ('CONTACT','Sample Contact History'),('STRAIN','Rest-State Strain'),
-        ('MARK','Mark Selected Cut Faces'),('REPORT','Performance Inventory'),('LOD','Stage Mesh LOD'))])
+    action: bpy.props.EnumProperty(items=[(k,label,description) for k,label,description in ACTIONS])
+
+    @classmethod
+    def description(cls, context, properties):
+        return next((description for key, _label, description in ACTIONS if key == properties.action), '')
     first_frame: bpy.props.IntProperty(name='First Frame',default=1)
     last_frame: bpy.props.IntProperty(name='Last Frame',default=24)
     step: bpy.props.IntProperty(name='Frame Step',default=1,min=1)
@@ -52,13 +73,14 @@ class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def draw(self,context):
+        description = next((d for key, _label, d in ACTIONS if key == self.action), '')
+        for part in description.split(' · '):
+            self.layout.label(text=part, icon='INFO' if part.startswith('Input') else 'BLANK1')
         if self.action=='CONTACT':
             for name in ('first_frame','last_frame','step'): self.layout.prop(self,name)
-            self.layout.label(text='Uses active Contact scene field; freezes result')
         elif self.action=='STRAIN': self.layout.prop_search(self,'rest_object',context.scene,'objects')
         elif self.action=='LOD':
-            self.layout.prop(self,'ratio'); self.layout.label(text='New evaluated copy; inspect visual quality')
-        elif self.action=='MARK': self.layout.label(text='Write selected faces to open_painter_cut_surface')
+            self.layout.prop(self,'ratio')
 
     def run(self,context):
         from ..core.project_manager import require_set
@@ -109,18 +131,23 @@ class OP_OT_offline_analysis(SafeOperator,bpy.types.Operator):
             attribute.data.foreach_set('value',values)
 
 
+def draw_action(layout, action, text=None, icon='NONE'):
+    """One relocated analysis action with what it needs and what it makes."""
+    label, description = next((l, d) for key, l, d in ACTIONS if key == action)
+    op = layout.operator('open_painter.offline_analysis', text=text or label + '…', icon=icon)
+    op.action = action
+    return op
+
+
 class OP_PT_offline_analysis(bpy.types.Panel):
+    """No longer registered (UI plan phase 6): each action sits where its input is — Contact
+    History on Contact scene fields, Rest-State Strain and Mark Selected Cut Faces on attribute
+    masks, Performance Inventory in the Performance menu, Stage Mesh LOD under Export › Prepare.
+    Every action stays searchable (F3) through ``open_painter.offline_analysis``."""
     bl_label='Offline Analysis'
     bl_space_type='VIEW_3D'; bl_region_type='UI'; bl_category='Painter'
     bl_options={'DEFAULT_CLOSED'}
-    bl_order=7   # after the everyday layer workflow (relocated per action in phase 6)
-
-    @classmethod
-    def poll(cls,context):
-        from .editor import is_area
-        return context.area and is_area(context.area)
 
     def draw(self,context):
-        for action,label in [('CONTACT','Sample Contact History'),('STRAIN','Rest-State Strain'),
-                             ('MARK','Mark Selected Cut Faces'),('REPORT','Performance Inventory'),('LOD','Stage Mesh LOD')]:
+        for action,label,_description in ACTIONS:
             self.layout.operator('open_painter.offline_analysis',text=label).action=action

@@ -214,6 +214,80 @@ class OP_MT_geometry_effect_add(bpy.types.Menu):
             layout.separator()
 
 
+EFFECT_RESULTS = {
+    'DISPLACE': ('Changes displacement', 'A displaced evaluated copy of the mesh; the source stays'),
+    'WELD': ('Adds geometry', 'A weld bead mesh along the seam'),
+    'SEAM': ('Adds geometry', 'A rippled seam mesh'),
+    'STITCH': ('Adds geometry', 'Stitch instances along the curve'),
+    'CURVES': ('Adds geometry', 'Curves traced from the mask'),
+}
+
+
+def helpers_of_set(ts, scene):
+    """Every geometry helper made for this set, frozen ones included, for the applied list."""
+    from ..geometry_effects import manager
+    return [obj for obj in scene.objects if obj.get(manager.TAG) == 'INSTANCE_HELPER'
+            and obj.get('source_texture_set') == ts.id]
+
+
+def effect_result(obj):
+    """What the effect produces: geometry, displacement or texture detail once baked back."""
+    from ..geometry_effects import manager
+    kind = obj.get('kind', '')
+    if kind in manager.KINDS:
+        return 'Adds geometry', f"{obj.get('instance_count', 0):,} instanced pieces; bake back for texture detail"
+    return EFFECT_RESULTS.get(kind, ('Adds geometry', 'Generated helper object'))
+
+
+class OP_OT_geometry_select(bpy.types.Operator):
+    bl_idname = 'open_painter.geometry_select'
+    bl_label = 'Select Geometry Effect'
+    bl_description = 'Make this helper the active object so its controls show below'
+    bl_options = {'REGISTER'}
+    name: bpy.props.StringProperty()
+
+    def execute(self, context):
+        obj = context.scene.objects.get(self.name)
+        if obj is None:
+            self.report({'ERROR'}, 'That helper is gone.')
+            return {'CANCELLED'}
+        for other in context.view_layer.objects:
+            other.select_set(other == obj)
+        context.view_layer.objects.active = obj
+        return {'FINISHED'}
+
+
+def draw_effect_inspector(layout, context, ts, obj):
+    """Controls of the selected helper: what it is, where it comes from, what it produces."""
+    from ..geometry_effects import manager
+    box = layout.box()
+    kind = obj.get('kind', '')
+    what, detail = effect_result(obj)
+    row = box.row(align=True)
+    row.label(text=f"{kind.replace('_', ' ').title()} · {obj.name}", icon='OUTLINER_OB_POINTCLOUD')
+    box.label(text=f"{what} · {detail}", icon='INFO')
+    if obj.get('source_label'):
+        box.label(text=f"Distribution: {obj['source_label']}", icon='MOD_MASK')
+    if obj.get('frozen'):
+        box.label(text='Frozen: keeps its pieces while the material changes', icon='FREEZE')
+    if kind in manager.KINDS or kind == 'DISPLACE':
+        if kind in manager.KINDS and 'follow' in obj:
+            box.prop(obj, '["follow"]', text='Follow the Material', toggle=True)
+        names = ('levels', 'smooth') if kind == 'DISPLACE' else ('size', 'seed', 'lift', 'match') if obj.get('source') == 'SPOTS' else ('density', 'size', 'seed', 'lift', 'match')
+        for name in names:
+            if name in obj:
+                box.prop(obj, f'["{name}"]', text=name.title() if name != 'match' else 'Match Surface')
+        row = box.row(align=True)
+        row.operator('open_painter.geometry_effect', text='Regenerate', icon='FILE_REFRESH').action = 'REGENERATE'
+        row.operator('open_painter.geometry_effect', text='Unfreeze' if obj.get('frozen') else 'Freeze',
+                     icon='FREEZE').action = 'UNFREEZE' if obj.get('frozen') else 'FREEZE'
+    if kind == 'DISPLACE':
+        row = box.row(align=True)
+        row.operator('open_painter.geometry_effect', text='Apply').action = 'APPLY'
+        row.operator('open_painter.geometry_effect', text='Replace Source Mesh').action = 'REPLACE_SOURCE'
+    box.operator('open_painter.geometry_effect', text='Remove Effect', icon='TRASH').action = 'REMOVE'
+
+
 class OP_PT_geometry_effects(bpy.types.Panel):
     bl_label='Geometry Effects'
     bl_space_type='VIEW_3D'
@@ -232,49 +306,36 @@ class OP_PT_geometry_effects(bpy.types.Panel):
         from ..core.project_manager import active_set
         from ..aging import engine
         ts=active_set(context) if getattr(context,'scene',None) is not None else None
-        aged=ts is not None and engine.folder_of(ts) is not None
-        layout.label(text='Pieces where the material shows them' if aged else 'Pieces on the mesh features (age the material first)',
-                     icon='TIME' if aged else 'INFO')
-        layout.label(text='Weathering',icon='MOD_OCEAN')
+        active=getattr(context,'active_object',None)
         row=layout.row(align=True)
-        for action,label in [('RUST','Rust Flakes'),('PEEL','Peel'),('MOSS','Moss')]:
-            row.operator('open_painter.geometry_effect',text=label).action=action
-        row=layout.row(align=True)
-        for action,label in [('SPLINTERS','Splinters'),('SNOW','Snow')]:
-            row.operator('open_painter.geometry_effect',text=label).action=action
-        layout.label(text='Details',icon='MOD_PARTICLES')
-        row=layout.row(align=True)
-        for action,label in [('BOLT','Bolts'),('SCALE','Scales'),('ROCK','Rocks'),('BARK','Bark')]:
-            row.operator('open_painter.geometry_effect',text=label).action=action
-        layout.label(text='Curves and relief',icon='MOD_DISPLACE')
-        row=layout.row(align=True)
-        row.operator('open_painter.geometry_effect',text='Extract').action='EXTRACT_CURVES'
-        row.operator('open_painter.geometry_effect',text='Weld').action='WELD'
-        row.operator('open_painter.geometry_effect',text='Seam').action='SEAM'
-        row.operator('open_painter.geometry_effect',text='Stitches').action='STITCH'
-        row=layout.row(align=True)
-        row.operator('open_painter.geometry_effect',text='Displace from Height').action='DISPLACE'
-        row=layout.row(align=True)
-        row.operator('open_painter.geometry_effect',text='Regenerate All',icon='FILE_REFRESH').action='REGENERATE_ALL'
-        row.operator('open_painter.geometry_effect',text='Bake Back to Normal / AO',icon='RENDER_STILL').action='BAKE_BACK'
-        obj=context.active_object
-        if obj and obj.get('kind')=='DISPLACE':
-            row=layout.row(align=True)
-            row.operator('open_painter.geometry_effect',text='Apply').action='APPLY'
-            row.operator('open_painter.geometry_effect',text='Replace Source Mesh').action='REPLACE_SOURCE'
-        if obj and obj.get('open_painter_geometry_effect')=='INSTANCE_HELPER':
-            from ..geometry_effects import manager
-            box=layout.box()
-            box.label(text=f"{obj.get('instance_count',0):,} pieces on {obj.get('source_label','the published mask')}",icon='OUTLINER_OB_POINTCLOUD')
-            kind=obj.get('kind')
-            # Weld, stitch and seam helpers have no regenerate path; a displaced copy is retuned
-            # through its modifier inputs (Amplitude, Midlevel), so only its creation-time keys show.
-            if kind in manager.KINDS or kind=='DISPLACE':
-                if kind in manager.KINDS and 'follow' in obj:
-                    box.prop(obj,'["follow"]',text='Follow the Material',toggle=True)
-                names=('levels','smooth') if kind=='DISPLACE' else ('size','seed','lift','match') if obj.get('source')=='SPOTS' else ('density','size','seed','lift','match')
-                for name in names:
-                    if name in obj: box.prop(obj,f'["{name}"]',text=name.title() if name!='match' else 'Match Surface')
-                box.operator('open_painter.geometry_effect',text='Regenerate').action='REGENERATE'
-                box.operator('open_painter.geometry_effect',text='Unfreeze' if obj.get('frozen') else 'Freeze').action='UNFREEZE' if obj.get('frozen') else 'FREEZE'
-            box.operator('open_painter.geometry_effect',text='Remove Helper').action='REMOVE'
+        row.menu('OP_MT_geometry_effect_add', text='Add Geometry Effect', icon='ADD')
+        row.operator('open_painter.geometry_effect', text='', icon='FILE_REFRESH').action='REGENERATE_ALL'
+        if ts is None:
+            layout.label(text='Create a texture set to place pieces by its material', icon='INFO')
+            helpers=[]
+        else:
+            aged=engine.folder_of(ts) is not None
+            layout.label(text='Pieces go where the material shows them' if aged else 'Age the material to place pieces by its wear; else by mesh features',
+                         icon='TIME' if aged else 'INFO')
+            helpers=helpers_of_set(ts, context.scene)
+        column=layout.column(align=True)
+        if ts is not None and not helpers:
+            column.label(text='No geometry effect applied to this set yet', icon='BLANK1')
+        for obj in helpers:
+            row=column.row(align=True)
+            row.prop(obj, 'hide_viewport', text='', icon='HIDE_ON' if obj.hide_viewport else 'HIDE_OFF', emboss=False)
+            what=effect_result(obj)[0]
+            label=f"{obj.get('kind','').replace('_',' ').title()} · {obj.get('source_label','') or what}"
+            op=row.operator('open_painter.geometry_select', text=label, icon='OUTLINER_OB_POINTCLOUD',
+                            depress=obj==active, emboss=obj==active)
+            op.name=obj.name
+            if obj.get('frozen'):
+                row.label(text='', icon='FREEZE')
+        if active is not None and active.get('open_painter_geometry_effect')=='INSTANCE_HELPER':
+            draw_effect_inspector(layout, context, ts, active)
+        head,body=layout.panel('painter_geometry_bake_back', default_closed=True)
+        head.label(text='Bake Back to Normal / AO', icon='RENDER_STILL')
+        if body is not None:
+            body.label(text='Output: the set\'s Normal and AO maps gain the pieces\' relief', icon='INFO')
+            body.label(text='Generated geometry is kept unless you choose Hide or Remove', icon='INFO')
+            body.operator('open_painter.geometry_effect', text='Bake Back…', icon='RENDER_STILL').action='BAKE_BACK'

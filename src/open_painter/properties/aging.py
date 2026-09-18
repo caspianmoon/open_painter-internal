@@ -42,6 +42,7 @@ def _copy_preset(self, values, prefix=''):
 def _environment_changed(self, context):
     """Choosing a preset copies its exposure into the custom sliders, which stay editable."""
     if self.environment != 'CUSTOM':
+        self.environment_base = self.environment   # what a later Custom was modified from
         _copy_preset(self, environments.ENVIRONMENTS[self.environment].as_dict())
     _resolve(self, context)
 
@@ -78,8 +79,10 @@ def _slider_changed(group):
 
 
 def _exposure_slider(name, description, default, group='exposure'):
-    return bpy.props.FloatProperty(name=name, description=description, default=default, min=0, max=1, subtype='FACTOR',
-                                   update=_slider_changed(group))
+    # Relative intensities, not physical units: the model scales its rates by them (0 none, 1 the
+    # strongest the presets describe), so the tooltip says what the endpoints mean.
+    return bpy.props.FloatProperty(name=name, description=description + ' — relative intensity, 0 none to 1 extreme',
+                                   default=default, min=0, max=1, subtype='FACTOR', update=_slider_changed(group))
 
 
 ENVIRONMENT_ITEMS = [(key, environments.ENVIRONMENT_LABELS[key], f"Exposure preset: {key.replace('_', ' ').lower()}")
@@ -128,10 +131,12 @@ class OP_Aging(bpy.types.PropertyGroup):
     events: bpy.props.CollectionProperty(type=OP_AgingEvent)
     active_event: bpy.props.IntProperty()
     environment: bpy.props.EnumProperty(name='Environment', items=ENVIRONMENT_ITEMS, default='OUTDOOR_URBAN', update=_environment_changed)
+    environment_base: bpy.props.StringProperty(default='OUTDOOR_URBAN', options={'HIDDEN'},
+                                               description='The preset the custom exposure was modified from')
     uv: _exposure_slider('UV Exposure', 'Sunlight: fading, chalking, embrittlement', .6)
     humidity: _exposure_slider('Humidity', 'Moisture in the air: corrosion, swelling, growth', .55)
     rain: _exposure_slider('Rain / Wetness', 'Direct wetting: washing, streaks, corrosion', .5)
-    temperature: _exposure_slider('Temperature', 'Heat accelerates light and chemical attack', .5)
+    temperature: _exposure_slider('Temperature', 'Heat accelerates light and chemical attack (0 cold, 1 hot; not degrees)', .5)
     temperature_cycles: _exposure_slider('Temperature Cycles', 'Swings crack brittle films and check wood', .55)
     salt: _exposure_slider('Salt Exposure', 'Chlorides: the strongest corrosion accelerator', .1)
     pollution: _exposure_slider('Pollution', 'Acid deposition and soot', .6)

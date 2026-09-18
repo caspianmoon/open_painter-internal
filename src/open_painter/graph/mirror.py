@@ -446,7 +446,6 @@ def sync(window):
 def mirror_selection(tree, ts, window, area):
     """Two-way active selection between the graph and the layer list, without ping-pong."""
     from ..core.layer_stack import active
-    from ..ui.dock import state
     recorded_node, recorded_layer = tree.get('op_active_node', ''), tree.get('op_active', '')
     current = active(ts)
     current_id = current.id if current is not None else ''
@@ -456,19 +455,15 @@ def mirror_selection(tree, ts, window, area):
         # The user clicked a node: follow it in the layer list (and mask/filter selection).
         layer, mask, prop, effect = owner_of(ts, node_id)
         if layer is not None:
-            ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == layer.id)
-            if mask is not None:
-                layer.active_mask = next(i for i, item in enumerate(layer.masks) if item == mask)
-            if effect is not None:
-                prop.active_effect = next(i for i, item in enumerate(prop.effects) if item == effect)
-                if layer.type != 'PAINT':
-                    ts.id_data.open_painter.properties_channel = prop.channel
-            for other in window.screen.areas:
-                if other.type in {'VIEW_3D', 'IMAGE_EDITOR'}:
-                    ui = state.get(other)
-                    ui.selected_layers = {layer.id}
-                    ui.mask_selected = mask is not None
-                    other.tag_redraw()
+            # The shared target rules (ui/selection.py): by id, one session, no evaluation.
+            from ..ui import selection
+            with bpy.context.temp_override(window=window, screen=window.screen, area=area):
+                selection.select(bpy.context, layer.id,
+                                 selection.MASK if mask is not None else
+                                 selection.FILTER if effect is not None else selection.CONTENT,
+                                 mask_id=mask.id if mask is not None else None,
+                                 channel=prop.channel if prop is not None else None,
+                                 effect_id=effect.id if effect is not None else None, ts=ts)
             tree['op_active_node'], tree['op_active'] = node_id, layer.id
             return True
     if current_id and current_id != recorded_layer:

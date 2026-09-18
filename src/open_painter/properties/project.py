@@ -94,11 +94,19 @@ class OP_Project(bpy.types.PropertyGroup):
         default="ALL",
         update=refresh,
     )
-    paint_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="ROUGHNESS")
-    blend_channel: bpy.props.EnumProperty(name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR")
+    # Three channel choices, three properties (ui/selection.py): where the brush writes,
+    # which channel's blend and opacity the layer rows edit, which fill channel the
+    # inspector shows, and (below) which composite the 2D view displays.
+    paint_channel: bpy.props.EnumProperty(name="Paint Channel", items=CHANNEL_ITEMS, default="ROUGHNESS",
+                                          description="Channel of the paint layer the brush writes")
+    blend_channel: bpy.props.EnumProperty(name="Blend Channel", items=CHANNEL_ITEMS, default="BASE_COLOR",
+                                          description="Channel whose blend mode and opacity the layer rows edit")
     properties_channel: bpy.props.EnumProperty(
-        name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR"
+        name="Channel", items=CHANNEL_ITEMS, default="BASE_COLOR",
+        description="Fill channel the inspector shows"
     )
+    display_channel: bpy.props.EnumProperty(name="Composite Channel", items=CHANNEL_ITEMS, default="BASE_COLOR",
+                                            description="Channel the 2D composite snapshot shows")
     paint_mask: bpy.props.BoolProperty()
     paint_mask_id: bpy.props.StringProperty()
     # Bake Correction Brush (0.9.1): the correction map a native paint session targets, or ''.

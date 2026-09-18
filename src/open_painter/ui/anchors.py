@@ -7,7 +7,6 @@ from ..core.project_manager import active_set, require_set
 from ..evaluation import anchors
 from ..evaluation.anchors import CONSUMER_FIELDS, CONSUMER_LABELS
 from ..utils.ids import new_id
-from .dock import state
 from .operators import SafeOperator
 from .texture_operations import SearchPicker, _channel, _layer, _redraw
 
@@ -16,19 +15,9 @@ _items = []
 
 
 def _select_layer(context, ts, layer_id, mask):
-    # Not open_painter.native_select: it dereferences context.area, which is
-    # None for background scripts. Same selection, area-guarded.
-    index = next((i for i, layer in enumerate(ts.layers) if layer.id == layer_id), None)
-    if index is None:
-        raise ValueError("That layer no longer exists.")
-    ts.active_layer = index
-    if context.area:
-        ui = state.get(context.area)
-        ui.mask_selected, ui.selected_layers, ui.properties_scroll = mask, {layer_id}, 0
-        context.area.tag_redraw()
-    from ..painting.paint_session import synchronize
-    synchronize(context, mask=mask)
-    return ts.layers[index]
+    from . import selection
+    target = selection.select(context, layer_id, selection.MASK if mask else selection.CONTENT, ts=ts)
+    return target.layer
 
 
 def _consumer(context, ts, layer, target):

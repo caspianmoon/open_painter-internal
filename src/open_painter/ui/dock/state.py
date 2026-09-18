@@ -14,7 +14,9 @@ class DockState:
     asset_scroll: int = 0
     properties_scroll: int = 0
     properties_limit: float = 0
-    mask_selected: bool = False
+    # What the Painter session edits on the active layer: its content, its mask stack
+    # or one of its channel filters (ui/selection.py resolves the complete target).
+    selection_kind: str = "CONTENT"
     drag: object = None
     drag_original: float = 0
     drag_mouse: float = 0
@@ -35,6 +37,16 @@ class DockState:
     layer_drag: object = None
     layer_drag_start: tuple = (0, 0)
     layer_drag_moved: bool = False
+    # Asset the shelf has selected but not applied yet (Phase 3): its catalog key.
+    pending_asset: str = ""
+
+    @property
+    def mask_selected(self):
+        return self.selection_kind == "MASK"
+
+    @mask_selected.setter
+    def mask_selected(self, value):
+        self.selection_kind = "MASK" if value else "CONTENT"
 
 
 states = {}

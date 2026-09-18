@@ -408,7 +408,7 @@ def _tick():
                 if evaluator is None:
                     evaluator = _evaluators[key] = LayerEvaluator(scene)
                 outputs = [image_manager.output(ts, channel) for channel in CHANNELS]
-                active_channel = scene.open_painter.blend_channel
+                active_channel = scene.open_painter.display_channel
                 outputs.sort(key=lambda output: output.channel != active_channel)
                 from . import preview_policy
                 preview_size = preview_policy.resolution(ts)

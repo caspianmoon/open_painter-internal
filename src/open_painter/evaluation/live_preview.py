@@ -239,7 +239,7 @@ def steps(scene, ts):
     # images and then rebinding proxies would invalidate EEVEE twice per edit.
     material_manager.repair(ts, image_overrides={
         channel: live_display.displayed_image(scene, ts, channel) for channel in CHANNELS})
-    channels = sorted(CHANNELS, key=lambda channel: channel != scene.open_painter.blend_channel)
+    channels = sorted(CHANNELS, key=lambda channel: channel != scene.open_painter.display_channel)
     try:
         for channel in channels:
             signature = builder.signature(channel)

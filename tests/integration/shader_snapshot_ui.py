@@ -64,7 +64,7 @@ def setup():
         sets.assign(bpy.context.scene, ts, bpy.context.scene.objects['Cube'])
         base = stack.add(ts, 'FILL', 'Editable base')
         stack.channel_for(base, 'BASE_COLOR').color = (.1, .25, .4, 1)
-        bpy.context.scene.open_painter.blend_channel = 'BASE_COLOR'
+        bpy.context.scene.open_painter.display_channel = 'BASE_COLOR'
         shader_preview.tick(bpy.context.scene, ts)
         assert shader_preview.current(bpy.context.scene, ts)
     later(open_snapshot)

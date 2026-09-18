@@ -215,7 +215,7 @@ class LayerEvaluator:
         # Retain the active channel only, and never evict reusable sources to
         # save a future output readback. Eight 2K RGBA outputs alone are 512 MiB.
         manager = self.geometry_cache.manager
-        if channel == self.scene.open_painter.blend_channel and result.nbytes <= manager.allowance // 4:
+        if channel == self.scene.open_painter.display_channel and result.nbytes <= manager.allowance // 4:
             for key in tuple(self.geometry_cache):
                 if isinstance(key,tuple) and key[0] == 'cpu_output':
                     self.geometry_cache.pop(key)

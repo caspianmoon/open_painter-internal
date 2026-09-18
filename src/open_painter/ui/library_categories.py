@@ -110,12 +110,14 @@ def refresh(self, context, *, refresh_sources=False):
 def activate(context, entry, source):
     from ..core.layer_stack import active, channel_for, invalidate
     from ..core.project_manager import require_set
-    from .dock import state
+    from . import selection
     from .texture_operations import _mask
 
     ts = require_set(context)
     layer = active(ts)
-    target = "MASK" if state.get(context.area).mask_selected else "CHANNEL"
+    # The raw intent, not the resolved kind: a mask flag on a layer without masks means
+    # the asset becomes its first mask.
+    target = "MASK" if selection.ui_state(context).selection_kind == selection.MASK else "CHANNEL"
     kind, value = entry[1:3]
     if kind == "FILTER":
         bpy.ops.open_painter.choose_filter(choice=value, target=target, create=True)

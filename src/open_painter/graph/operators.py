@@ -79,26 +79,18 @@ class OP_OT_graph_select(SafeOperator, bpy.types.Operator):
             owner = mirror.texture_set_of(tree, context.scene)
             if owner is not None:
                 ts = owner
-        index = next((i for i, layer in enumerate(ts.layers) if layer.id == self.layer_id), None)
-        if index is None:
+        layer = next((item for item in ts.layers if item.id == self.layer_id), None)
+        if layer is None:
             raise ValueError('That layer no longer exists.')
-        ts.active_layer = index
-        layer = ts.layers[index]
-        if 0 <= self.mask_index < len(layer.masks):
-            layer.active_mask = self.mask_index
-        if self.channel:
-            from ..core.layer_stack import channel_for
-            prop = channel_for(layer, self.channel)
-            if prop is not None and layer.type != 'PAINT':
-                context.scene.open_painter.properties_channel = self.channel
-            if prop is not None and 0 <= self.effect_index < len(prop.effects):
-                prop.active_effect = self.effect_index
-        from ..ui.dock import state
-        for area in context.screen.areas:
-            if area.type in {'VIEW_3D', 'IMAGE_EDITOR'}:
-                ui = state.get(area)
-                ui.selected_layers, ui.mask_selected = {self.layer_id}, self.mask_index >= 0
-                area.tag_redraw()
+        from ..core.layer_stack import channel_for
+        from ..ui import selection
+        mask = layer.masks[self.mask_index] if 0 <= self.mask_index < len(layer.masks) else None
+        prop = channel_for(layer, self.channel) if self.channel else None
+        effect = prop.effects[self.effect_index] if prop is not None and 0 <= self.effect_index < len(prop.effects) else None
+        selection.select(context, self.layer_id,
+                         selection.MASK if mask is not None else selection.FILTER if effect is not None else selection.CONTENT,
+                         mask_id=mask.id if mask is not None else None, channel=self.channel or None,
+                         effect_id=effect.id if effect is not None else None, ts=ts)
         if is_graph(tree):
             node_id = self.layer_id
             if 0 <= self.mask_index < len(layer.masks):
@@ -182,12 +174,10 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
             layer.active_mask = len(layer.masks) - 1
             selected_mask = True
         invalidate(ts)
-        from ..ui.dock import state
-        for area in context.screen.areas:
-            if area.type in {'VIEW_3D', 'IMAGE_EDITOR'}:
-                ui = state.get(area)
-                ui.selected_layers, ui.mask_selected = {layer.id}, selected_mask
-                area.tag_redraw()
+        from ..ui import selection
+        layer_id = layer.id
+        selection.select(context, layer_id, selection.MASK if selected_mask else selection.CONTENT,
+                         ts=ts, synchronize=False)
 
 
 class _AddMenu:

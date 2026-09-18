@@ -11,7 +11,7 @@ from ..constants import BLEND_ITEMS
 from ..core import layer_stack
 from ..core.layer_stack import active, channel_for, visible_rows
 from ..core.project_manager import active_set, require_set
-from . import editor
+from . import editor, selection
 from .dock import assets, state
 from .operators import SafeOperator
 from ..utils.logging import logger
@@ -238,13 +238,18 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
             apply(ts, entry[0])
         else:
             assets.apply(context, entry)
-        ui = state.get(context.area)
-        if entry[1] not in {"BRUSH", "ALPHA"}:
+        ts = require_set(context)
+        layer = active(ts)
+        if layer is None:
+            context.area.tag_redraw()
+            return
+        if entry[1] in {"BRUSH", "ALPHA"}:
             # Brushes and alphas change the tool, not the stack: the selected
             # mask stays the paint target.
-            ui.mask_selected = entry[1] == "SMART_MASK"
-        ui.selected_layers = {active(require_set(context)).id}
-        context.area.tag_redraw()
+            kind = selection.ui_state(context).selection_kind
+        else:
+            kind = selection.MASK if entry[1] == "SMART_MASK" else selection.CONTENT
+        selection.select(context, layer.id, kind, ts=ts, synchronize=False)
 
 
 class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
@@ -336,7 +341,7 @@ class OP_OT_native_view(SafeOperator, bpy.types.Operator):
             project = context.scene.open_painter
             space.ui_mode = "PAINT" if project.paint_image else "VIEW"
             from ..evaluation.composite_snapshot import for_view
-            space.image = for_view(context.scene, ts, project.blend_channel)
+            space.image = for_view(context.scene, ts, project.display_channel)
         else:
             space.shading.type = "MATERIAL"
         for prop in (
@@ -369,7 +374,7 @@ class OP_OT_native_snapshot(SafeOperator, bpy.types.Operator):
         if project.paint_image:
             raise ValueError('Finish painting before viewing a composite snapshot')
         from ..evaluation.composite_snapshot import request
-        context.space_data.image = request(context.scene, require_set(context), project.blend_channel)
+        context.space_data.image = request(context.scene, require_set(context), project.display_channel)
         context.space_data.ui_mode = 'VIEW'
         context.area.tag_redraw()
 
@@ -377,19 +382,19 @@ class OP_OT_native_snapshot(SafeOperator, bpy.types.Operator):
 class OP_OT_native_select(SafeOperator, bpy.types.Operator):
     bl_idname = "open_painter.native_select"
     bl_label = "Select Layer Content or Mask"
+    bl_description = "Select this layer's content, its mask stack or one of its masks as the editing target"
     layer_id: bpy.props.StringProperty()
     mask: bpy.props.BoolProperty()
+    # SKIP_SAVE: buttons that leave these unset must not inherit a mask or filter from an earlier click.
+    mask_id: bpy.props.StringProperty(options={"SKIP_SAVE"})
+    channel: bpy.props.StringProperty(options={"SKIP_SAVE"})
+    effect_id: bpy.props.StringProperty(options={"SKIP_SAVE"})
 
     def run(self, context):
-        ts = require_set(context)
-        ts.active_layer = next(i for i, layer in enumerate(ts.layers) if layer.id == self.layer_id)
-        ui = state.get(context.area)
-        ui.mask_selected = self.mask
-        ui.selected_layers = {self.layer_id}
-        from ..painting.paint_session import synchronize
-
-        synchronize(context, mask=self.mask)
-        context.area.tag_redraw()
+        kind = selection.MASK if (self.mask or self.mask_id) else selection.CONTENT
+        selection.select(context, self.layer_id, kind, mask_id=self.mask_id or None,
+                         channel=self.channel or None, effect_id=self.effect_id or None,
+                         ts=require_set(context))
 
 
 _drag = {"active": False}
@@ -441,13 +446,7 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
         if layer is None or event.type != "LEFTMOUSE" or event.value != "PRESS":
             return {"CANCELLED"}
         # The press selects the layer content, as the name button used to.
-        ui = state.get(context.area)
-        ui.mask_selected = False
-        ui.selected_layers = {layer.id}
-        from ..painting.paint_session import synchronize
-
-        synchronize(context, mask=False)
-        context.area.tag_redraw()
+        selection.select(context, layer.id, selection.CONTENT, ts=ts)
         system = context.preferences.system
         # A list row is one widget unit tall; folder levels step sideways by one.
         self.unit = int(round(18 * system.ui_scale) + 2 * system.pixel_size)
@@ -603,7 +602,7 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
                                      icon='TIME' if stale(ts, image) else 'IMAGE_DATA')
                     elif image:
                         layout.label(text='Source image', icon='IMAGE_DATA')
-                    layout.prop(project, 'blend_channel', text='Composite channel')
+                    layout.prop(project, 'display_channel', text='Composite Channel')
                     layout.operator('open_painter.native_snapshot', text='Refresh Composite Snapshot',
                                     icon='FILE_REFRESH')
             if ts.preview_backend == 'CPU' and ts.preview_quality != 'FULL' and ts.dirty:
@@ -877,8 +876,14 @@ class OP_MT_native_masks(bpy.types.Menu):
 
 
 class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
-    bl_label = "Properties"
+    bl_label = "Inspector"
     bl_order = 2
+
+    def draw_header(self, context):
+        # The header names the selected thing, not just "Properties".
+        target = selection.resolve(context)
+        if target.layer is not None:
+            self.layout.label(text=target.label, icon=target.icon)
 
     def draw(self, context):
         layout = self.layout
@@ -889,15 +894,15 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             width = max(20, min(70, int(context.region.width / (7.5 * scale)) - 5))
             for index, line in enumerate(wrap(status, width=width)):
                 box.label(text=line, icon="INFO" if index == 0 else "BLANK1")
-        ts = active_set(context)
-        layer = active(ts) if ts else None
+        target = selection.resolve(context)
+        ts, layer = target.ts, target.layer
+        selection.draw_breadcrumb(layout, target, compact=row_metrics(context)[1])
         if not layer:
             return
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(layer, "name", text="Name")
-        if state.get(context.area).mask_selected and layer.masks:
-            layout.label(text="Mask on " + layer.name, icon="MOD_MASK")
+        if target.is_mask:
             from .properties_panel import OP_PT_masks
 
             OP_PT_masks.draw(self, context)
@@ -1109,6 +1114,7 @@ IMAGE_CLASSES = tuple(
             "bl_order": cls.bl_order,
             "bl_idname": cls.__name__.replace("native_", "image_"),
             "draw": cls.draw,
+            **({"draw_header": cls.draw_header} if "draw_header" in cls.__dict__ else {}),
         },
     )
     for cls in (

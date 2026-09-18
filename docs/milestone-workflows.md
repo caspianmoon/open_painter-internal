@@ -3,6 +3,12 @@
 Use the existing Open Painter editor and native Painter panels. These changes do
 not replace the editor or the material library.
 
+- **Everyday editing workflow (0.11.0):** click a shelf asset, read its target in the *Assets*
+  panel, click it again (or *Apply*) to add it as a named group; select the group in *Layers* to
+  edit its master controls (Worn Painted Metal: Paint Color, Chip Amount, …); press a row's mask
+  button to edit the mask stack, *View Mask* to see the coverage, *Add Paint to Mask* to paint a
+  correction over the generators, *Back to Material* to return; *More › Open Inspector* for a
+  companion Properties area. [Details](ui-refactor.md).
 - **Geometry effects that follow the material (0.10.1):** *Painter* sidebar → *Geometry Effects*:
   age the material, then *Rust Flakes*, *Peel Fragments*, *Moss*, *Splinters* or *Snow* with
   *Where: What the material shows*; paint dots on a mask and *Bolts on Spots*; name a

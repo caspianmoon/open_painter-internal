@@ -1,6 +1,6 @@
 # Changes
 
-## 0.11.0 (in progress)
+## 0.11.0
 
 The everyday editing workflow, as planned in `Open_Painter_UI_Implementation_Plan.md`: one editing
 target, readable layers, a selection-specific inspector, explicit mask editing. Phases 0–3.

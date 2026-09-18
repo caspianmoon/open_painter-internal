@@ -16,6 +16,20 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Everyday editing workflow (UI plan phases 0–3) 0.11.0 — 2026-09-18
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Baseline fixture and recorded reference (digests, structure, CPU channels, exports, older project) | done | `tests/integration/ui_baseline.py`, `tests/fixtures/ui_baseline.json` |
+| One editing target by stable id: layers, nodes, inspector, shelf, assistant; three separate channel properties; breadcrumb; deleted-mask fallback; second-window independence | done | `tests/integration/selection_target.py` |
+| Readable layer rows, selected-item blend row, Add Layer / Add Mask / Add Effect / More menus, drag placement text | done | `tests/integration/inspector_ui.py`, `layer_drag_ui.py` |
+| Selection-specific inspector; authored master controls (Worn Painted Metal, Heavy Chipped Paint, Factory Powder-Coated Metal) bound by instance ids; broken bindings reported | done | `tests/integration/inspector_panels.py`, `inspector_ui.py` |
+| View Mask / Back to Material as an explicit mask snapshot; Add Paint to Mask with an explicit role | done | `tests/integration/inspector_panels.py`, `inspector_ui.py` |
+| Companion inspector in a Properties area (Tool tab), following the screen's session | done (prototype accepted) | `tests/integration/inspector_ui.py` |
+| Shelf catalogs, select-then-apply, Assets panel with target and requirements, explicit Replace, geometry presets on the shelf, layer-row context menu | done | `tests/integration/asset_workflow.py`, `asset_categories.py`, `native_ui.py` |
+| Catalog tabs enabled by default | not possible — Blender exposes no API; the artist enables them once in the shelf's catalog menu (persisted in the preferences) | `docs/asset-categories.md` |
+| Master controls for the remaining 47 catalog recipes | not started — authored per recipe on demand | — |
+
 ## Geometry effects follow the material 0.10.1 — 2026-09-17
 
 | Item | Status | Evidence |

@@ -16,6 +16,22 @@ Earlier small-fixture passes are secondary evidence for individual code paths.
 Earlier reports below describe their named release's evaluator and measurements.
 
 
+## Focused task views and tools in context (UI plan phases 4–8) 0.12.0 — 2026-09-18
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Bake view: Setup / Maps / Results, truthful map states, recommendation without overwriting, previous map kept on failure, queue bound to its set, Stop After This Map, Add Baked Normal and AO Layer | done | `tests/integration/bake_view.py`, `tests/unit/test_bake_queue.py` |
+| Export view: one resolved plan for preview and export; explicit scope with no widening; overrides and folders shown and kept; refuses existing files unless allowed; view opens without mutation | done | `tests/integration/export_view.py` |
+| Material Aging: Applied To / Construction / Environment / Age first, named sections, relative-intensity sliders with endpoint meanings, modified-preset mark, separate resets, named live toggle | done | `tests/integration/contextual_tools.py`, `material_aging_ui.py` |
+| Geometry Effects: applied list with selection-specific inspector, presets behind Add Geometry Effect and on the shelf, explicit bake-back outputs | done | `tests/integration/contextual_tools.py`, `geometry_effects.py`, `geometry_effects_ui.py` |
+| Offline analysis relocated to its inputs (contact fields, attribute masks, performance menu, export preparation), commands searchable | done | `tests/integration/contextual_tools.py`, `offline_analysis.py` |
+| Nodes: typed sockets (material bundle, colour, scalar, normal, coverage) with tooltips, one-time reconcile of older trees, Edit Nodes framed on the selection, Frame Selected / Full Graph, scope path in the header | done | `tests/integration/nodes_and_assistant.py`, `graph_mirror.py`, `graph_view_ui.py` |
+| Material Assistant: Target → Instruction → Run → Changes, compact mode, sharing summary from the composed payload, connection settings in preferences | done | `tests/integration/nodes_and_assistant.py`, `material_director.py`, `material_director_ui.py` |
+| One status model, Clean View, narrow-sidebar layout, reasons on disabled actions | done | `tests/integration/ui_release.py` |
+| Responsiveness on the recorded fixture: selection p95 ≈ 13 ms; warmed control edit p95 ≈ 238 ms (uniform) / ≈ 260 ms (generator amount), callback ≈ 5 ms, the rest viewport redraw; first compile ≈ 19 s | measured | `tests/integration/ui_response_ui.py` (`.blender-test/ui-response.json`) |
+| Task-based sessions with five artists | not run — needs people; the automated matrix above is the release evidence | — |
+| Master controls for the remaining catalog recipes | not started — authored per recipe on demand | — |
+
 ## Everyday editing workflow (UI plan phases 0–3) 0.11.0 — 2026-09-18
 
 | Item | Status | Evidence |

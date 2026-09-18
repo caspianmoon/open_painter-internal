@@ -77,7 +77,11 @@ def of(context, ts=None):
         image = getattr(getattr(context, "space_data", None), "image", None)
         if image is not None and image.get(MARKER) and stale(ts, image):
             return Status("Stale", "composite snapshot out of date")
-    return Status("Idle", _shorten(project.status) if project.status else "")
+    # The shader session writes its generic line into project.status; that is the notice this
+    # status replaces, so only an operator's own message stays as the Idle detail.
+    generic = shader_preview.status(scene, ts) if shader_preview.requested(ts) else ""
+    detail = project.status if project.status and project.status != generic else ""
+    return Status("Idle", _shorten(detail))
 
 
 def draw(layout, context, ts=None, *, compact=False):

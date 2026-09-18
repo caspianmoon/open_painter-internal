@@ -52,7 +52,7 @@ Focused bake and export views, tools in context, nodes, the assistant, one statu
   Layout*. Sockets say what they carry — *Material* bundles, *Color*, *Scalar*, *Normal* and
   *Coverage* — with tooltips; trees saved with the previous socket types reconcile once and keep
   their links and positions.
-- **Material Assistant:** the *Director* tab reads Target → Instruction → Run → Changes; the mode
+- **Material Assistant:** the *Assistant* tab (renamed from *Director*) reads Target → Instruction → Run → Changes; the mode
   is a compact choice (Refine by default), *What is sent* is generated from the same attachment
   description the request is composed from and shows the summary of the last request that
   actually went out, and connection settings live in the add-on preferences.
@@ -65,10 +65,13 @@ Focused bake and export views, tools in context, nodes, the assistant, one statu
   as a whole, the brush cursor and the gizmos stay.
 - **Narrow sidebars** keep labels whole: the inspector drops the property split, the path
   shows the set and the item, the layer strip wraps, the header shows the state alone.
-- **Measured:** on a 48-layer stack with Worn Painted Metal at 512 px, selection feedback
-  p95 ≈ 13 ms; a warmed master-control edit settles in p95 ≈ 238 ms (uniform) / ≈ 260 ms
-  (generator amount), of which the property callback is ≈ 5 ms — the rest is the viewport
-  redrawing the compiled material. `tests/integration/ui_response_ui.py` records it each run.
+- **Measured:** on the reference stack (24 fill layers with generator masks + Worn Painted
+  Metal, 5 924 session nodes, 512 px), selection feedback p95 ≈ 11 ms; a warmed master-control
+  edit settles in p95 ≈ 132 ms (uniform) / ≈ 140 ms (generator amount), of which the property
+  callback is ≈ 3 ms — the rest is Blender re-syncing the session node tree for EEVEE
+  (≈ 25–30 µs per node). A 48-layer stack (10 032 nodes) settles in 230–300 ms: the graph size
+  per layer is recorded as an evaluator finding in `docs/ui-refactor.md`.
+  `tests/integration/ui_response_ui.py` records the numbers and the graph size each run.
 - Tests: `tests/integration/bake_view.py`, `export_view.py`, `contextual_tools.py`,
   `nodes_and_assistant.py`, `ui_release.py`, `ui_response_ui.py`; `tests/unit/test_bake_queue.py`
   and `tests/integration/geometry_effects.py` updated.

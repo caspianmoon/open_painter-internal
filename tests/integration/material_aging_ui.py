@@ -119,7 +119,9 @@ def age():
 
 def edit():
     ts = require_set(bpy.context)
-    assert drawn and "Re-age" in drawn[-1] and "Reset Art" in drawn[-1], drawn[-1][:400]
+    # Art Direction is a closed sub-panel by default (after the simulation); its header is drawn,
+    # its Reset Art Direction button only once the artist opens it.
+    assert drawn and "Re-age" in drawn[-1] and "Art Direction" in drawn[-1] and "Remove Aging" in drawn[-1], drawn[-1][-400:]
     checks.append("panel-shows-the-driven-folder-controls")
     before = {layer.aging_role: round(layer.opacity, 4) for layer in engine.members(ts, engine.folder_of(ts))}
     ts.aging.age_years = 40

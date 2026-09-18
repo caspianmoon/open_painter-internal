@@ -224,7 +224,7 @@ def sharing_lines(context, settings):
 
 class OP_PT_material_director(PainterPanel, bpy.types.Panel):
     bl_label = "Material Assistant"
-    bl_category = "Director"
+    bl_category = "Assistant"
     bl_order = 0
 
     def draw(self, context):
@@ -327,7 +327,7 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
 
 class OP_PT_director_protection(PainterPanel, bpy.types.Panel):
     bl_label = "Protected Content"
-    bl_category = "Director"
+    bl_category = "Assistant"
     bl_parent_id = "OP_PT_material_director"
     bl_options = {"DEFAULT_CLOSED"}
 

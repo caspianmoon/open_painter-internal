@@ -50,7 +50,7 @@ brush stroke ends. [Details](docs/layer-performance.md).
 
 **0.8.0 adds Material Director:** describe a material or a refinement and Codex proposes
 ordinary editable layers, masks, scene fields and filters. Native Codex image generation supplies
-surface textures and grayscale masks, packed into the `.blend`. Open the **Director** sidebar tab
+surface textures and grayscale masks, packed into the `.blend`. Open the **Assistant** sidebar tab
 inside Open Painter. Create and Refine apply validated changes; Plan leaves a draft to review;
 Explain discusses the current material. Protected content, Show Changes, one-step Blender undo,
 and conflict-aware **Undo Last AI Change** keep edits reviewable. **Scene Materials** coordinates

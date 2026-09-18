@@ -24,8 +24,10 @@ area = None
 checks = []
 panel_drawn = []
 dialog_drawn = []
+menu_drawn = []
 original_panel_draw = ui.OP_PT_geometry_effects.draw
 original_dialog_draw = ui.OP_OT_geometry_effect.draw
+original_menu_draw = ui.OP_MT_geometry_effect_add.draw
 
 
 def observe_panel(self, context):
@@ -36,6 +38,11 @@ def observe_panel(self, context):
 def observe_dialog(self, context):
     original_dialog_draw(self, context)
     dialog_drawn.append(str(self.layout.introspect()))
+
+
+def observe_menu(self, context):
+    original_menu_draw(self, context)
+    menu_drawn.append(str(self.layout.introspect()))
 
 
 def finish(error=None):
@@ -76,6 +83,7 @@ def setup():
     panel.draw = observe_panel
     bpy.utils.register_class(panel)
     ui.OP_OT_geometry_effect.draw = observe_dialog
+    ui.OP_MT_geometry_effect_add.draw = observe_menu
     area = next(a for a in bpy.context.screen.areas if a.type == "VIEW_3D")
     with bpy.context.temp_override(area=area):
         bpy.ops.open_painter.open_editor()
@@ -98,9 +106,27 @@ def setup():
 def before_effect():
     assert panel_drawn, "the panel did not draw"
     text = panel_drawn[-1]
-    assert "Pieces where the material shows them" in text and "Rust Flakes" in text and "'Bolts'" in text, text[:300]
-    assert "Regenerate All" in text and "Bake Back" in text
+    # The panel is the applied list (empty so far) with the Add Geometry Effect menu and
+    # Regenerate All above it and Bake Back below; the effect kinds live in the menu.
+    assert "Pieces go where the material shows them" in text and "Add Geometry Effect" in text, text[:300]
+    assert "No geometry effect applied" in text and "REGENERATE_ALL" in text and "Bake Back" in text, text[:400]
     checks.append("panel-draws-material-driven-sections")
+    bpy.ops.wm.call_menu(name="OP_MT_geometry_effect_add")
+    later(menu_open, delay=1.0)
+
+
+def menu_open():
+    assert menu_drawn, "the Add Geometry Effect menu did not draw"
+    text = menu_drawn[-1]
+    assert "Rust Flakes" in text and "Bolts" in text and "Displace from Height" in text, text[:300]
+    checks.append("add-menu-offers-the-effect-kinds")
+    window = bpy.context.window
+    window.event_simulate(type="ESC", value="PRESS")
+    window.event_simulate(type="ESC", value="RELEASE")
+    later(open_dialog, delay=1.0)
+
+
+def open_dialog():
     bpy.context.view_layer.objects.active = bpy.context.scene.objects["Cube"]
     result = bpy.ops.open_painter.geometry_effect("INVOKE_DEFAULT", action="RUST")
     assert result == {"RUNNING_MODAL"} or result == {"FINISHED"}, result
@@ -135,7 +161,10 @@ def place():
 
 def helper_section():
     text = panel_drawn[-1] if panel_drawn else ""
-    assert "pieces on corrosion and surface rust" in text and "Follow the Material" in text and "Match Surface" in text, text[:400]
+    # The applied list names the helper by its distribution; the inspector below shows the
+    # selected helper's source, result and controls.
+    assert "Rust · corrosion and surface rust" in text and "Distribution: corrosion and surface rust" in text, text[:400]
+    assert "instanced pieces" in text and "Follow the Material" in text and "Match Surface" in text, text[:400]
     checks.append("helper-section-shows-source-follow-match")
     ts = require_set(bpy.context)
     count = bpy.context.view_layer.objects.active["instance_count"]

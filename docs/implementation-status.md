@@ -28,7 +28,8 @@ Earlier reports below describe their named release's evaluator and measurements.
 | Nodes: typed sockets (material bundle, colour, scalar, normal, coverage) with tooltips, one-time reconcile of older trees, Edit Nodes framed on the selection, Frame Selected / Full Graph, scope path in the header | done | `tests/integration/nodes_and_assistant.py`, `graph_mirror.py`, `graph_view_ui.py` |
 | Material Assistant: Target → Instruction → Run → Changes, compact mode, sharing summary from the composed payload, connection settings in preferences | done | `tests/integration/nodes_and_assistant.py`, `material_director.py`, `material_director_ui.py` |
 | One status model, Clean View, narrow-sidebar layout, reasons on disabled actions | done | `tests/integration/ui_release.py` |
-| Responsiveness on the recorded fixture: selection p95 ≈ 13 ms; warmed control edit p95 ≈ 238 ms (uniform) / ≈ 260 ms (generator amount), callback ≈ 5 ms, the rest viewport redraw; first compile ≈ 19 s | measured | `tests/integration/ui_response_ui.py` (`.blender-test/ui-response.json`) |
+| Responsiveness on the reference fixture (24 fill layers + Worn Painted Metal, 5 924 session nodes): selection p95 ≈ 11 ms; warmed control edit p95 ≈ 132 ms (uniform) / ≈ 140 ms (generator amount), callback ≈ 3 ms, the rest EEVEE re-syncing the session tree (≈ 25–30 µs per node); first compile ≈ 12 s | measured | `tests/integration/ui_response_ui.py` (`.blender-test/ui-response.json`) |
+| Session graph size: ≈ 170 nodes per fill layer with a generator mask; a 48-layer stack (10 032 nodes) settles in 230–300 ms after a parameter edit and misses the 250 ms target | recorded — evaluator work, not UI (`docs/ui-refactor.md`) | `OP_UI_RESPONSE_LAYERS=48 … ui_response_ui.py` |
 | Task-based sessions with five artists | not run — needs people; the automated matrix above is the release evidence | — |
 | Master controls for the remaining catalog recipes | not started — authored per recipe on demand | — |
 

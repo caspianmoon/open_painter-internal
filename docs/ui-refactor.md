@@ -43,7 +43,7 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Geometry Effects (creation buttons, helper box) | D | *Geometry Effects* panel | *Geometry Effects* panel: applied helpers list + inspector; presets behind *Add Geometry Effect* | done (phase 6) |
 | Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare | done (phase 6) |
 | Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More and the row menu, framed on the selection; scope path, Frame Selected and Full Graph in the node header | done (phase 7) |
-| Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab (Material Assistant): Target / Instruction / Run / Changes; connection settings in Preferences | done (phase 7) |
+| Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Assistant* tab (Material Assistant): Target / Instruction / Run / Changes; connection settings in Preferences | done (phase 7) |
 | Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) in the Texture Set panel and the header | done (phase 8) |
 
 Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`, `.native_select`,
@@ -222,12 +222,20 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
 - Narrow sidebars: `row_metrics` marks widths under 300 logical px compact; the inspector then
   draws without the property split (labels stay whole), the breadcrumb shows the set and the
   item, the layer strip wraps onto two rows, and the header shows the status state alone.
-- Responsiveness (`tests/integration/ui_response_ui.py`, real window, 48-layer stack + Worn
-  Painted Metal, 512 px, this Mac): selection feedback p95 ≈ 13 ms (target 100); a warmed
-  master-control edit settles in p95 ≈ 238 ms for a shader uniform (target 250) and ≈ 260 ms for
-  a generator amount (bounded at 375), of which the property callback itself is p95 ≈ 5 ms — the
-  rest is the viewport redrawing the compiled material, which no UI code can pre-empt. The first
-  compile of that stack takes ≈ 19 s and is reported separately.
+- Responsiveness (`tests/integration/ui_response_ui.py`, real window, reference stack of 24 fill
+  layers with generator masks + Worn Painted Metal = 5 924 session nodes, 512 px, this M-series
+  Mac): selection feedback p95 ≈ 11 ms (target 100); a warmed master-control edit settles in
+  p95 ≈ 132 ms for a shader uniform (target 250) and ≈ 140 ms for a generator amount (bounded at
+  375); the property callback itself is ≈ 3 ms and the panel draws ≈ 2 ms. The first compile of
+  that stack takes ≈ 12 s and is reported separately.
+- Recorded separately, not a UI cost: the settle time is Blender re-syncing the whole session
+  node tree for EEVEE after every parameter edit — ≈ 25–30 µs per node, resolution independent
+  (solid shading settles in ≈ 25 ms; a 30 %-width viewport changes nothing; the depsgraph update
+  is ≈ 8 ms). The session tree grows by ≈ 170 nodes per fill layer with a generator mask, so a
+  48-layer stack (10 032 nodes) settles in 230–300 ms depending on machine load and misses the
+  250 ms target (`OP_UI_RESPONSE_LAYERS=48` reproduces it). Meeting the target beyond ≈ 35 such
+  layers means a smaller per-layer graph in the shader session (`evaluation/shader_graph.py`),
+  which is evaluator work outside this UI plan.
 - `tests/integration/ui_release.py`: the status model, Clean View, compact metrics, reasons on
   disabled actions, reorder + group, the 3D / 2D / Nodes switch with a truthful snapshot state,
   and drawing that never dirties the material. Maximize / split / join / second-window behaviour

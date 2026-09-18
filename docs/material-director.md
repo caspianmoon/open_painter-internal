@@ -9,7 +9,7 @@ to editable layers. The complete material remains a normal Open Painter stack.
 
 1. Install Open Painter **0.8.0** and open its editor. Select an existing texture set with an assigned,
    UV-unwrapped mesh. Use **Scene Materials** scope to coordinate all assigned texture sets in the scene.
-2. Open the sidebar with **N**, then choose the **Director** tab.
+2. Open the sidebar with **N**, then choose the **Assistant** tab (the *Material Assistant* panel).
 3. In the add-on preferences (Edit › Preferences › Add-ons › Open Painter › Material Director),
    select a supported **Codex Executable**, or leave it empty to find `codex` on `PATH`. Blender launched from a desktop shortcut may have a different `PATH`
    from your terminal, so choosing the executable explicitly is often useful.
@@ -137,7 +137,7 @@ They are a bounded convenience history, not a replacement for Blender undo or pr
 
 ## Panel layout since 0.12.0
 
-The *Director* tab reads **Target → Instruction → Run → Changes**: the target names the set, folder
+The *Assistant* tab reads **Target → Instruction → Run → Changes**: the target names the set, folder
 or scene the instruction applies to (the same path the inspector shows) with the scope and the
 number of protected items; the instruction holds the prompt, a compact mode choice (Refine by
 default — ordinary requests need no mode decision), the reference image and *What is sent*, a

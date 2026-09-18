@@ -101,7 +101,7 @@ def setup():
 def start_instruction():
     sidebar = next(r for r in area.regions if r.type == "UI")
     with bpy.context.temp_override(area=area, region=sidebar):
-        sidebar.active_panel_category = "Director"
+        sidebar.active_panel_category = "Assistant"
     sidebar.tag_redraw()
     assert bpy.ops.open_painter.director_run() == {"FINISHED"}
     sent = session.connection.sent[-1]

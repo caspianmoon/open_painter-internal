@@ -8,7 +8,7 @@ not replace the editor or the material library.
   the *Export* tab (Contents → Scope → Destination Preset → Folder → Output Preview, one plan for
   the preview and the write); *Clean View* hides the scene furniture and puts it back; the
   Texture Set panel's status line says Idle / Updating / Stale / Baking / Failed / Paused; *Edit
-  Nodes* frames the selected item; the *Director* tab reads Target → Instruction → Run → Changes.
+  Nodes* frames the selected item; the *Assistant* tab reads Target → Instruction → Run → Changes.
   [Details](ui-refactor.md).
 - **Everyday editing workflow (0.11.0):** click a shelf asset, read its target in the *Assets*
   panel, click it again (or *Apply*) to add it as a named group; select the group in *Layers* to

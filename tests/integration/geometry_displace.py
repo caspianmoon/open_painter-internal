@@ -109,15 +109,18 @@ from open_painter.ui.geometry_effects import OP_PT_geometry_effects
 class Layout:
     def __init__(self, calls): self.calls = calls
     def row(self, **_): return self
+    def column(self, **_): return self
     def box(self): return self
+    def panel(self, *_a, **_k): return self, self
+    def menu(self, *_a, **_k): pass
     def label(self, **_): pass
     def prop(self, data, path, **_): self.calls.append(('prop', path))
     def operator(self, idname, text='', **_):
-        self.calls.append(('operator', text)); return type('Props', (), {'action': None})()
+        self.calls.append(('operator', text)); return type('Props', (), {'action': None, 'name': None})()
 panel_calls = []
 OP_PT_geometry_effects.draw(type('Panel', (), {'layout': Layout(panel_calls)})(), type('Context', (), {'active_object': helper})())
 panel_actions = {text for kind, text in panel_calls if kind == 'operator'}
-assert {'Apply', 'Replace Source Mesh', 'Regenerate', 'Freeze', 'Remove Helper'} <= panel_actions, panel_actions
+assert {'Apply', 'Replace Source Mesh', 'Regenerate', 'Freeze', 'Remove Effect'} <= panel_actions, panel_actions
 assert {path for kind, path in panel_calls if kind == 'prop'} == {'["levels"]', '["smooth"]'}, panel_calls
 try:
     displace.create(ts, helper, height, levels=1, amplitude=.2)

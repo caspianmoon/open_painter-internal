@@ -49,7 +49,7 @@ objects — into the project's export directory with the target's packing,
 naming, format and resolution cap, writes the manifest, and exports the
 assigned objects as FBX or glTF with the target's axis and scale options. The
 set's own export settings are restored afterwards; sets with *Follow Project
-Target* off keep their preset for the ordinary Export Textures button. Existing
+Target* off keep their preset for the Export tab. Existing
 files are never overwritten.
 
 Files: `targets/__init__.py` (registry, `apply`, `filename`, `manifest`),

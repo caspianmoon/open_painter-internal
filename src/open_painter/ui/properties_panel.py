@@ -169,6 +169,60 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         synchronize(context, mask=True)
 
 
+class OP_OT_mask_paint(SafeOperator, bpy.types.Operator):
+    """Paint over a procedural mask without rasterising it (UI plan phase 2).
+
+    The generator stays; a paint mask joins the stack on top of it with an explicit
+    role: *Add Coverage* is a black image combined with Add (paint white where the
+    layer should show), *Remove Coverage* a white image combined with Multiply (paint
+    black where it should not).
+    """
+    bl_idname = "open_painter.mask_paint"
+    bl_label = "Add Paint to Mask"
+    bl_description = "Add a paint mask above the selected mask stack so corrections are painted, not rasterised"
+    bl_options = {"REGISTER", "UNDO"}
+    role: bpy.props.EnumProperty(name="Role", default="REMOVE", items=[
+        ("ADD", "Add Coverage", "Black paint mask combined with Add: paint white where the layer should show"),
+        ("REMOVE", "Remove Coverage", "White paint mask combined with Multiply: paint black where the layer should not show")])
+    start_painting: bpy.props.BoolProperty(name="Start Painting", default=True,
+                                           description="Enter native texture painting on the new mask")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "role", expand=True)
+        self.layout.label(text={"ADD": "Paint white to add coverage; the generator is kept",
+                                "REMOVE": "Paint black to remove coverage; the generator is kept"}[self.role], icon="INFO")
+        self.layout.prop(self, "start_painting")
+
+    def run(self, context):
+        ts = require_set(context)
+        layer = active(ts)
+        if layer is None:
+            raise ValueError("Select a layer with a mask first.")
+        mask = layer.masks.add()
+        mask.id, mask.source = new_id(), "PAINT"
+        mask.name = "Paint · " + ("Add Coverage" if self.role == "ADD" else "Remove Coverage")
+        mask.operation = "ADD" if self.role == "ADD" else "MULTIPLY"
+        black = self.role == "ADD"
+        mask.image = create(f"{ts.name}_{layer.name}_Paint", int(ts.resolution),
+                            (0, 0, 0, 1) if black else (1, 1, 1, 1))
+        mask.image.pack()
+        mask_id = mask.id
+        layer.active_mask = len(layer.masks) - 1
+        invalidate(ts)
+        from . import selection
+        target = selection.select(context, layer.id, selection.MASK, mask_id=mask_id, ts=ts, synchronize=False)
+        if self.start_painting:
+            from ..painting.paint_session import begin
+            try:
+                begin(context, ts, context.scene.open_painter.paint_channel, True)
+            except ValueError as exc:
+                self.report({"INFO"}, f"Paint mask added; painting not started: {exc}")
+        context.scene.open_painter.status = f"{mask.name} added above {target.layer.name}'s generators"
+
+
 MASK_ICONS = {'GROUP': 'FILE_FOLDER', 'GRAPH': 'NODETREE', 'MESH': 'OUTLINER_COLLECTION', 'PAINT': 'BRUSH_DATA',
               'FILTER': 'MODIFIER', 'SCENE': 'WORLD', 'REFERENCE': 'LINKED', 'STROKES': 'GREASEPENCIL',
               'GENERATOR': 'PHYSICS', 'PROCEDURAL': 'TEXTURE', 'BAKED': 'IMAGE_DATA'}
@@ -208,6 +262,19 @@ class OP_UL_masks(bpy.types.UIList):
                                      'MIN': 'SORT_ASC'}.get(item.operation, 'DOT'))
 
 
+def draw_mask_stack(layout, context, ts, layer):
+    """The mask stack list with its add, order, group and delete controls."""
+    row = layout.row(align=True)
+    row.menu("OP_MT_native_masks", text="Add Mask Effect", icon="ADD")
+    op = row.operator("open_painter.choose_filter", text="Filter", icon="MODIFIER")
+    op.target, op.create = "MASK", True
+    layout.template_list("OP_UL_masks", "", layer, "masks", layer, "active_mask", rows=2)
+    row = layout.row(align=True)
+    for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ('INTO_GROUP', 'IMPORT'),
+                         ('OUT_OF_GROUP', 'EXPORT'), ("DELETE", "TRASH")):
+        row.operator("open_painter.mask", text="", icon=icon).action = action
+
+
 class OP_PT_masks(bpy.types.Panel):
     bl_order = 2
     bl_label = "Masks"
@@ -223,200 +290,197 @@ class OP_PT_masks(bpy.types.Panel):
         if not layer:
             layout.label(text="Select a layer to add a mask.")
             return
-        row = layout.row(align=True)
-        row.menu("OP_MT_native_masks", text="Add Mask Effect", icon="ADD")
-        op = row.operator("open_painter.choose_filter", text="Filter", icon="MODIFIER")
-        op.target, op.create = "MASK", True
-        layout.template_list("OP_UL_masks", "", layer, "masks", layer, "active_mask", rows=2)
-        row = layout.row(align=True)
-        for action, icon in (("UP", "TRIA_UP"), ("DOWN", "TRIA_DOWN"), ('INTO_GROUP', 'IMPORT'),
-                             ('OUT_OF_GROUP', 'EXPORT'), ("DELETE", "TRASH")):
-            row.operator("open_painter.mask", text="", icon=icon).action = action
+        draw_mask_stack(layout, context, ts, layer)
         if not layer.masks:
             return
         mask = layer.masks[min(layer.active_mask, len(layer.masks) - 1)]
-        if mask.source == 'GROUP':
-            layout.prop(mask, 'source', text='Source')
-            from ..core.mask_stack import members
-            count = len(members(layer.masks, min(layer.active_mask, len(layer.masks) - 1)))
-            layout.label(text=f'{count} member(s) combine first, then the group blends into the stack', icon='INFO')
-            layout.operator('open_painter.mask', text='Dissolve Group').action = 'DISSOLVE'
-            for name in ('operation', 'strength', 'black', 'white', 'invert'):
-                layout.prop(mask, name)
-            return
-        if mask.source == 'GRAPH':
-            layout.prop(mask, 'source', text='Source')
-            row = layout.row(align=True)
-            row.template_ID(mask, 'node_group')
-            row.operator('open_painter.mask', text='', icon='ADD').action = 'NEW_GRAPH'
-            layout.label(text='First output drives the mask; UV, Position, Normal inputs wire by name', icon='INFO')
-            layout.label(text='Native in the viewport; export bakes the group with Cycles', icon='INFO')
-            for name in ('operation', 'strength', 'black', 'white', 'invert'):
-                layout.prop(mask, name)
-            return
-        layout.operator(
-            "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
-        ).action = "BAKE"
-        layout.prop(mask, "source", text="Source")
-        if mask.source == 'ANCHOR':
-            from .anchors import draw_anchor_settings
-            draw_anchor_settings(layout, ts, mask)
-            layout.label(text='Publishes the mask result up to here; changes nothing itself', icon='INFO')
-            return
-        if mask.source == 'REFERENCE':
-            from .anchors import draw_anchor_field, draw_anchor_channel
-            anchor = draw_anchor_field(layout, ts, 'REFERENCE_MASK', mask.reference_anchor, text='Anchor')
-            if anchor is not None:
-                draw_anchor_channel(layout, anchor, mask)
-            if not mask.reference_anchor:
-                source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
-                layout.label(text='Legacy layer source')
-                layout.operator('open_painter.reference_source',text=source.name if source else 'Choose Source Layer',icon='LINKED')
-                layout.prop(mask,'reference_channel')
-                layout.prop(mask,'reference_stage')
-            layout.label(text='Source layer input, before stack blending')
-        elif mask.source == 'MESH':
-            draw_mesh_selector(layout, ts, mask)
-        elif mask.source == 'SCENE':
-            field = mask.influence
-            layout.menu('OP_MT_scene_field_presets', text='Presets', icon='PRESET')
-            layout.prop(field, 'kind')
-            layout.prop(field, 'mode')
-            layout.prop(field, 'resolution')
-            kind = field.kind
-            if kind in {'DISTANCE', 'CONTACT', 'EXPOSURE', 'PROXIMITY'}:
-                layout.prop(field, 'scope')
-                if field.scope == 'SCENE':
-                    layout.prop(field, 'exclude_collection')
-                    layout.prop(field, 'max_objects')
-                else:
-                    layout.prop(field, 'object')
-                    layout.prop(field, 'collection')
-                layout.label(text='Per-object radius: custom property open_painter_field_radius', icon='INFO')
-            elif kind in {'HEIGHT', 'HEAT', 'MOISTURE', 'SOOT'}:
-                layout.prop(field, 'object')
-            elif kind == 'GROUND':
-                layout.prop(field, 'ground_object')
-            if kind in {'UP', 'DOWN', 'HEIGHT', 'WORLD_HEIGHT', 'GROUND', 'EXPOSURE', 'SOOT'}:
-                layout.prop(field, 'direction')
-            if kind in {'HEIGHT', 'WORLD_HEIGHT'}:
-                layout.prop(field, 'bounds')
-            if kind in {'DISTANCE', 'CONTACT', 'PROXIMITY', 'EXPOSURE', 'HEAT', 'MOISTURE', 'SOOT', 'GROUND',
-                        'CONVEXITY', 'CONCAVITY', 'EDGE'}:
-                layout.prop(field, 'distance', text='Reach' if kind in {'CONVEXITY', 'CONCAVITY', 'EDGE'} else 'Distance / Radius')
-            if kind in {'ATTRIBUTE', 'VERTEX_GROUP'}:
-                layout.prop(field, 'attribute')
-            layout.prop(field, 'falloff')
-            row = layout.row(align=True)
-            row.operator('open_painter.mask',text='Update Analysis').action = 'ANALYZE'
-            row.operator('open_painter.mask',text='Freeze Analysis').action = 'FREEZE'
-            layout.label(text='Sampled UV field; authored textures unchanged')
-            if field.error:
-                layout.label(text=field.error, icon='TIME' if field.error.startswith('Analysing') else 'ERROR')
-        elif mask.source == "FILL":
-            layout.template_ID(mask, "image")
-            for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
-                layout.prop(mask, name)
-            if mask.projection == "TRIPLANAR":
-                layout.prop(mask, "triplanar_hardness")
-        elif mask.source == "PAINT":
-            layout.template_ID(mask, "image")
-            if hasattr(bpy.types, "OP_OT_paint"):
-                layout.operator(
-                    "open_painter.paint", text="Paint Mask", icon="BRUSH_DATA"
-                ).mask = True
-        elif mask.source == "BAKED":
-            layout.prop(mask, "map_type")
-        elif mask.source == 'STROKES':
-            from ..painting import strokes as stroke_records
-            keys = {item.stroke_key: item.name for other in context.scene.open_painter.texture_sets
-                    for item in other.layers if item.stroke_key}
-            if mask.stroke_key:
-                count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key))
-                # A key minted for the mask (New Key) is named after the mask itself.
-                layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, mask.name)}"', icon='CURVE_BEZCURVE')
-            else:
-                layout.label(text='No strokes linked yet', icon='INFO')
-            row = layout.row(align=True)
-            row.operator('open_painter.mask_strokes', text="This Layer's Strokes", icon='LINKED').action = 'OWN'
-            row.operator('open_painter.mask_strokes', text='New Key', icon='ADD').action = 'NEW'
-            row.operator('open_painter.mask_strokes', text='', icon='X').action = 'CLEAR'
-            if mask.stroke_key and hasattr(bpy.types, 'OP_OT_vector_brush'):
-                from .strokes_panel import draw_strokes
-                layout.operator('open_painter.vector_brush', text='Paint Vector Strokes', icon='BRUSH_DATA').mask = True
-                draw_strokes(layout, context, ts, layer, mask=mask)
-        elif mask.source == "PROCEDURAL":
-            op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
-            op.target, op.create = "MASK", False
-            from .physical_scale import draw_size
-            for name in ("projection", "tiling"):
-                layout.prop(mask, name)
-            draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
-            for name in ("seed", "scale", "rotation", "offset"):
-                layout.prop(mask, name)
-            if mask.projection == "TRIPLANAR":
-                layout.prop(mask,"triplanar_hardness")
-        elif mask.source == "FILTER":
-            from .texture_operations import draw_effect_settings
-            op = layout.operator("open_painter.choose_filter", text=mask.effect.kind.replace("_", " ").title(), icon="MODIFIER")
-            op.target, op.create = "MASK", False
-            layout.prop(mask.effect, "enabled", text="Enabled")
-            draw_effect_settings(layout, mask.effect, "MASK")
-            for name in ("invert", "black", "white", "strength"):
-                layout.prop(mask, name)
-            return
-        elif mask.source == "GENERATOR":
-            layout.prop(mask, "generator")
-            if mask.generator in {"MATERIAL_ID","OBJECT_ID","UV_ISLAND"}:
-                row = layout.row(align=True)
-                row.prop(mask,"id_color",text="Selected ID Color")
-                row.operator("open_painter.choose_baked_id", text="", icon="VIEWZOOM")
-            if mask.generator in {"EDGE_WEAR", "CHIPS"}:
-                from ..constants import OWNER
+        draw_mask_settings(layout, context, ts, layer, mask)
 
-                image = next(
-                    (m.image for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None
-                )
-                if (
-                    image
-                    and image.get(OWNER)
-                    and "BakedCurvature" in image.name
-                    and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
-                ):
-                    layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
-                from ..baking.maps.curvature import edge_map_set_complete
-                radius = ts.bake.mean_curvature_distance
-                if edge_map_set_complete(ts):
-                    layout.prop(mask, "edge_size", text=f"Edge Size (thin {radius * 50:.1f} cm ↔ extreme {radius * 400:.1f} cm)", slider=True)
-                else:
-                    layout.label(text="Rebake the edge maps for a live Edge Size control", icon="INFO")
-                layout.prop(mask, "edge_width", text="Edge Width", slider=True)
-                box = layout.box()
-                box.label(text="Baked edge maps: thin, normal, wide, extreme", icon="IMAGE_DATA")
-                box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
-                box.prop(ts.bake, "curvature_angle")
-                box.prop(ts.bake, "curvature_width")
-                box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA").set_id = ts.id
-            from ..generators.micro_details import KINDS as MICRO_KINDS
-            if mask.generator in MICRO_KINDS:
-                from .anchors import draw_anchor_field
-                box = layout.box()
-                box.label(text="Micro Details", icon="ANCHOR_CENTER")
-                for target, field, strength, text in (
-                        ("DETAIL_HEIGHT", "detail_height_anchor", "detail_height_strength", "Micro Height"),
-                        ("DETAIL_NORMAL", "detail_normal_anchor", "detail_normal_strength", "Micro Normal")):
-                    draw_anchor_field(box, ts, target, getattr(mask, field), text=text)
-                    if getattr(mask, field):
-                        box.prop(mask, strength, slider=True)
-                if mask.detail_height_anchor or mask.detail_normal_anchor:
-                    box.prop(mask, "detail_radius", text="Micro Radius (px)")
 
-        if mask.source in {"GENERATOR", "NOISE"}:
-            from .physical_scale import draw_size
-            for name in ("amount", "contrast"):
-                layout.prop(mask, name)
-            draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
-            for name in ("noise_strength", "seed"):
-                layout.prop(mask, name)
-        for name in ("operation", "invert", "black", "white", "strength"):
+def draw_mask_settings(layout, context, ts, layer, mask):
+    """Controls of one mask entry: its source, the source's own settings, then combine and levels."""
+    if mask.source == 'GROUP':
+        layout.prop(mask, 'source', text='Source')
+        from ..core.mask_stack import members
+        count = len(members(layer.masks, min(layer.active_mask, len(layer.masks) - 1)))
+        layout.label(text=f'{count} member(s) combine first, then the group blends into the stack', icon='INFO')
+        layout.operator('open_painter.mask', text='Dissolve Group').action = 'DISSOLVE'
+        for name in ('operation', 'strength', 'black', 'white', 'invert'):
             layout.prop(mask, name)
+        return
+    if mask.source == 'GRAPH':
+        layout.prop(mask, 'source', text='Source')
+        row = layout.row(align=True)
+        row.template_ID(mask, 'node_group')
+        row.operator('open_painter.mask', text='', icon='ADD').action = 'NEW_GRAPH'
+        layout.label(text='First output drives the mask; UV, Position, Normal inputs wire by name', icon='INFO')
+        layout.label(text='Native in the viewport; export bakes the group with Cycles', icon='INFO')
+        for name in ('operation', 'strength', 'black', 'white', 'invert'):
+            layout.prop(mask, name)
+        return
+    layout.operator(
+        "open_painter.mask", text="Bake Mask Stack to Texture", icon="IMAGE_DATA"
+    ).action = "BAKE"
+    layout.prop(mask, "source", text="Source")
+    if mask.source == 'ANCHOR':
+        from .anchors import draw_anchor_settings
+        draw_anchor_settings(layout, ts, mask)
+        layout.label(text='Publishes the mask result up to here; changes nothing itself', icon='INFO')
+        return
+    if mask.source == 'REFERENCE':
+        from .anchors import draw_anchor_field, draw_anchor_channel
+        anchor = draw_anchor_field(layout, ts, 'REFERENCE_MASK', mask.reference_anchor, text='Anchor')
+        if anchor is not None:
+            draw_anchor_channel(layout, anchor, mask)
+        if not mask.reference_anchor:
+            source = next((item for item in ts.layers if item.id == mask.reference_layer),None)
+            layout.label(text='Legacy layer source')
+            layout.operator('open_painter.reference_source',text=source.name if source else 'Choose Source Layer',icon='LINKED')
+            layout.prop(mask,'reference_channel')
+            layout.prop(mask,'reference_stage')
+        layout.label(text='Source layer input, before stack blending')
+    elif mask.source == 'MESH':
+        draw_mesh_selector(layout, ts, mask)
+    elif mask.source == 'SCENE':
+        field = mask.influence
+        layout.menu('OP_MT_scene_field_presets', text='Presets', icon='PRESET')
+        layout.prop(field, 'kind')
+        layout.prop(field, 'mode')
+        layout.prop(field, 'resolution')
+        kind = field.kind
+        if kind in {'DISTANCE', 'CONTACT', 'EXPOSURE', 'PROXIMITY'}:
+            layout.prop(field, 'scope')
+            if field.scope == 'SCENE':
+                layout.prop(field, 'exclude_collection')
+                layout.prop(field, 'max_objects')
+            else:
+                layout.prop(field, 'object')
+                layout.prop(field, 'collection')
+            layout.label(text='Per-object radius: custom property open_painter_field_radius', icon='INFO')
+        elif kind in {'HEIGHT', 'HEAT', 'MOISTURE', 'SOOT'}:
+            layout.prop(field, 'object')
+        elif kind == 'GROUND':
+            layout.prop(field, 'ground_object')
+        if kind in {'UP', 'DOWN', 'HEIGHT', 'WORLD_HEIGHT', 'GROUND', 'EXPOSURE', 'SOOT'}:
+            layout.prop(field, 'direction')
+        if kind in {'HEIGHT', 'WORLD_HEIGHT'}:
+            layout.prop(field, 'bounds')
+        if kind in {'DISTANCE', 'CONTACT', 'PROXIMITY', 'EXPOSURE', 'HEAT', 'MOISTURE', 'SOOT', 'GROUND',
+                    'CONVEXITY', 'CONCAVITY', 'EDGE'}:
+            layout.prop(field, 'distance', text='Reach' if kind in {'CONVEXITY', 'CONCAVITY', 'EDGE'} else 'Distance / Radius')
+        if kind in {'ATTRIBUTE', 'VERTEX_GROUP'}:
+            layout.prop(field, 'attribute')
+        layout.prop(field, 'falloff')
+        row = layout.row(align=True)
+        row.operator('open_painter.mask',text='Update Analysis').action = 'ANALYZE'
+        row.operator('open_painter.mask',text='Freeze Analysis').action = 'FREEZE'
+        layout.label(text='Sampled UV field; authored textures unchanged')
+        if field.error:
+            layout.label(text=field.error, icon='TIME' if field.error.startswith('Analysing') else 'ERROR')
+    elif mask.source == "FILL":
+        layout.template_ID(mask, "image")
+        for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):
+            layout.prop(mask, name)
+        if mask.projection == "TRIPLANAR":
+            layout.prop(mask, "triplanar_hardness")
+    elif mask.source == "PAINT":
+        layout.template_ID(mask, "image")
+        if hasattr(bpy.types, "OP_OT_paint"):
+            layout.operator(
+                "open_painter.paint", text="Paint Mask", icon="BRUSH_DATA"
+            ).mask = True
+    elif mask.source == "BAKED":
+        layout.prop(mask, "map_type")
+    elif mask.source == 'STROKES':
+        from ..painting import strokes as stroke_records
+        keys = {item.stroke_key: item.name for other in context.scene.open_painter.texture_sets
+                for item in other.layers if item.stroke_key}
+        if mask.stroke_key:
+            count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key))
+            # A key minted for the mask (New Key) is named after the mask itself.
+            layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, mask.name)}"', icon='CURVE_BEZCURVE')
+        else:
+            layout.label(text='No strokes linked yet', icon='INFO')
+        row = layout.row(align=True)
+        row.operator('open_painter.mask_strokes', text="This Layer's Strokes", icon='LINKED').action = 'OWN'
+        row.operator('open_painter.mask_strokes', text='New Key', icon='ADD').action = 'NEW'
+        row.operator('open_painter.mask_strokes', text='', icon='X').action = 'CLEAR'
+        if mask.stroke_key and hasattr(bpy.types, 'OP_OT_vector_brush'):
+            from .strokes_panel import draw_strokes
+            layout.operator('open_painter.vector_brush', text='Paint Vector Strokes', icon='BRUSH_DATA').mask = True
+            draw_strokes(layout, context, ts, layer, mask=mask)
+    elif mask.source == "PROCEDURAL":
+        op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
+        op.target, op.create = "MASK", False
+        from .physical_scale import draw_size
+        for name in ("projection", "tiling"):
+            layout.prop(mask, name)
+        draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
+        for name in ("seed", "scale", "rotation", "offset"):
+            layout.prop(mask, name)
+        if mask.projection == "TRIPLANAR":
+            layout.prop(mask,"triplanar_hardness")
+    elif mask.source == "FILTER":
+        from .texture_operations import draw_effect_settings
+        op = layout.operator("open_painter.choose_filter", text=mask.effect.kind.replace("_", " ").title(), icon="MODIFIER")
+        op.target, op.create = "MASK", False
+        layout.prop(mask.effect, "enabled", text="Enabled")
+        draw_effect_settings(layout, mask.effect, "MASK")
+        for name in ("invert", "black", "white", "strength"):
+            layout.prop(mask, name)
+        return
+    elif mask.source == "GENERATOR":
+        layout.prop(mask, "generator")
+        if mask.generator in {"MATERIAL_ID","OBJECT_ID","UV_ISLAND"}:
+            row = layout.row(align=True)
+            row.prop(mask,"id_color",text="Selected ID Color")
+            row.operator("open_painter.choose_baked_id", text="", icon="VIEWZOOM")
+        if mask.generator in {"EDGE_WEAR", "CHIPS"}:
+            from ..constants import OWNER
+
+            image = next(
+                (m.image for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None
+            )
+            if (
+                image
+                and image.get(OWNER)
+                and "BakedCurvature" in image.name
+                and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
+            ):
+                layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
+            from ..baking.maps.curvature import edge_map_set_complete
+            radius = ts.bake.mean_curvature_distance
+            if edge_map_set_complete(ts):
+                layout.prop(mask, "edge_size", text=f"Edge Size (thin {radius * 50:.1f} cm ↔ extreme {radius * 400:.1f} cm)", slider=True)
+            else:
+                layout.label(text="Rebake the edge maps for a live Edge Size control", icon="INFO")
+            layout.prop(mask, "edge_width", text="Edge Width", slider=True)
+            box = layout.box()
+            box.label(text="Baked edge maps: thin, normal, wide, extreme", icon="IMAGE_DATA")
+            box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
+            box.prop(ts.bake, "curvature_angle")
+            box.prop(ts.bake, "curvature_width")
+            box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA").set_id = ts.id
+        from ..generators.micro_details import KINDS as MICRO_KINDS
+        if mask.generator in MICRO_KINDS:
+            from .anchors import draw_anchor_field
+            box = layout.box()
+            box.label(text="Micro Details", icon="ANCHOR_CENTER")
+            for target, field, strength, text in (
+                    ("DETAIL_HEIGHT", "detail_height_anchor", "detail_height_strength", "Micro Height"),
+                    ("DETAIL_NORMAL", "detail_normal_anchor", "detail_normal_strength", "Micro Normal")):
+                draw_anchor_field(box, ts, target, getattr(mask, field), text=text)
+                if getattr(mask, field):
+                    box.prop(mask, strength, slider=True)
+            if mask.detail_height_anchor or mask.detail_normal_anchor:
+                box.prop(mask, "detail_radius", text="Micro Radius (px)")
+
+    if mask.source in {"GENERATOR", "NOISE"}:
+        from .physical_scale import draw_size
+        for name in ("amount", "contrast"):
+            layout.prop(mask, name)
+        draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
+        for name in ("noise_strength", "seed"):
+            layout.prop(mask, name)
+    for name in ("operation", "invert", "black", "white", "strength"):
+        layout.prop(mask, name)

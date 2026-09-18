@@ -105,6 +105,9 @@ def on_load(_):
     _focus_pending.clear()
     _display.clear()
     state.reset()
+    from .. import companion, mask_view
+    mask_view.clear()
+    companion.forget()
 
 
 @persistent
@@ -114,9 +117,15 @@ def on_undo(_):
     # group nothing or turn the next shelf click into a mask.
     from ...core.layer_stack import active
 
+    from .. import mask_view
     for window in bpy.context.window_manager.windows:
         if not hasattr(window.scene, "open_painter"):
             continue
+        try:
+            mask_view.resync(window.scene)
+        except Exception:
+            from ...utils.logging import logger
+            logger.debug("Mask view resync after undo", exc_info=True)
         ts = _active_set(window.scene)
         layer = active(ts) if ts else None
         existing = {item.id for item in ts.layers} if ts else set()

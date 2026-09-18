@@ -153,6 +153,8 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
                       for owner, kind, _ in anchors.consumers(ts, identifier) if owner.id not in doomed]
             layer_stack.remove_tree(ts, layer.id)
             report_broken(self, context, broken)
+            from . import mask_view
+            mask_view.on_layer_removed(ts)
         elif self.action == "DUPLICATE":
             layer_stack.duplicate(ts, ts.active_layer)
         elif self.action in {"UP", "DOWN"}:

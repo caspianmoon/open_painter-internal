@@ -429,6 +429,19 @@ def layer_row_pressed(ts, context):
         pass
 
 
+def placement_text(ts, target):
+    """Words for a drop candidate: before, after or inside which layer."""
+    _depth, parent_id, kind, anchor_id = target
+    names = {item.id: item.name for item in ts.layers}
+    if kind == "FIRST_CHILD":
+        return f"Into {names.get(anchor_id, 'folder')} (first)"
+    if kind == "END":
+        return "Bottom of the stack"
+    where = "Above" if kind == "ABOVE" else "Below"
+    inside = f" in {names[parent_id]}" if parent_id in names else ""
+    return f"{where} {names.get(anchor_id, 'layer')}{inside}"
+
+
 class OP_OT_native_layer_drag(bpy.types.Operator):
     """Drag a layer up or down the stack; move sideways to change its folder"""
 
@@ -498,6 +511,8 @@ class OP_OT_native_layer_drag(bpy.types.Operator):
             if target != self.current:
                 layer_stack.place(ts, self.layer_id, target)
                 self.current = target
+                # The row already sits where it would drop; the status bar says it in words.
+                context.workspace.status_text_set(placement_text(ts, target) + " · Esc cancels")
                 context.region.tag_redraw()
             return {"RUNNING_MODAL"}
         if event.type == "LEFTMOUSE" and event.value == "RELEASE":
@@ -558,8 +573,41 @@ class PainterPanel:
         return editor.is_area(context.area)
 
 
+def draw_2d_view(layout, context, ts):
+    """What the 2D editor shows, named truthfully: the paint source, a mask snapshot, a
+    composite snapshot (with its out-of-date state) or a plain source image."""
+    from ..evaluation.composite_snapshot import MARKER, stale
+    from . import mask_view
+    project = context.scene.open_painter
+    image = context.space_data.image
+    box = layout.box()
+    box.label(text="2D View", icon="IMAGE_DATA")
+    view = mask_view.active(ts)
+    if project.paint_image:
+        box.label(text="Paint Source · the authored canvas, live", icon="BRUSH_DATA")
+    elif view is not None and image is not None and image.name == view["image"]:
+        out_of_date = mask_view.stale(ts, view)
+        box.label(text="Mask Snapshot" + (" · out of date" if out_of_date else " · current"),
+                  icon="TIME" if out_of_date else "MOD_MASK")
+        row = box.row(align=True)
+        row.operator("open_painter.view_mask", text="Refresh", icon="FILE_REFRESH").action = "REFRESH"
+        row.operator("open_painter.view_mask", text="Back to Material", icon="MATERIAL").action = "BACK"
+        return
+    elif image and image.get(MARKER):
+        channel = image.get("channel", "").replace("_", " ").title()
+        out_of_date = stale(ts, image)
+        box.label(text=f"{channel} Composite Snapshot" + (" · out of date" if out_of_date else " · current"),
+                  icon="TIME" if out_of_date else "IMAGE_DATA")
+    elif image:
+        box.label(text="Source Image · not a composite", icon="IMAGE_DATA")
+    else:
+        box.label(text="No image shown yet", icon="INFO")
+    box.prop(project, "display_channel", text="Composite Channel")
+    box.operator("open_painter.native_snapshot", text="Refresh Composite Snapshot", icon="FILE_REFRESH")
+
+
 class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
-    bl_label = "Texture Set List"
+    bl_label = "Texture Set"
     bl_order = 0
 
     def draw(self, context):
@@ -580,33 +628,50 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         for action, icon in [("ADD", "ADD"), ("ASSIGN", "LINKED"), ("DUPLICATE", "DUPLICATE")]:
             row.operator("open_painter.texture_set", text="", icon=icon).action = action
         ts = active_set(context)
-        if ts:
-            row.prop(ts, "resolution", text="")
-            layout.prop(ts, 'preview_backend')
-            if ts.preview_backend == 'CPU':
-                layout.prop(ts, 'preview_quality')
-            from .physical_scale import draw_set_scale
-            draw_set_scale(layout, context, ts)
-            if ts.preview_backend == 'LIVE':
-                from .performance import draw_freeze_status
-                draw_freeze_status(layout, context, ts)
-                if context.area.type == 'IMAGE_EDITOR':
-                    from ..evaluation.composite_snapshot import MARKER, stale
-                    image = context.space_data.image
-                    if project.paint_image:
-                        layout.label(text='Paint source canvas', icon='BRUSH_DATA')
-                    elif image and image.get(MARKER):
-                        channel = image.get('channel', '').replace('_', ' ').title()
-                        suffix = ' · out of date' if stale(ts, image) else ''
-                        layout.label(text=channel + ' Snapshot' + suffix,
-                                     icon='TIME' if stale(ts, image) else 'IMAGE_DATA')
-                    elif image:
-                        layout.label(text='Source image', icon='IMAGE_DATA')
-                    layout.prop(project, 'display_channel', text='Composite Channel')
-                    layout.operator('open_painter.native_snapshot', text='Refresh Composite Snapshot',
-                                    icon='FILE_REFRESH')
-            if ts.preview_backend == 'CPU' and ts.preview_quality != 'FULL' and ts.dirty:
-                layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
+        if not ts:
+            return
+        row.prop(ts, "resolution", text="")
+        # The active target at a glance: what it is assigned to, then the settings behind one click.
+        objects = sorted({ref.object.name for ref in ts.assignments if ref.object})
+        compact = row_metrics(context)[1]
+        shown = objects[:2 if compact else 3]
+        summary = ", ".join(shown) + (f" +{len(objects) - len(shown)}" if len(objects) > len(shown) else "")
+        layout.label(text=(f"Assigned to {summary}" if objects else "Not assigned to any object yet"),
+                     icon="MESH_DATA" if objects else "ERROR")
+        if ts.preview_backend == 'LIVE':
+            from .performance import draw_freeze_status
+            draw_freeze_status(layout, context, ts)
+        if context.area.type == 'IMAGE_EDITOR':
+            draw_2d_view(layout, context, ts)
+        if ts.preview_backend == 'CPU' and ts.preview_quality != 'FULL' and ts.dirty:
+            layout.label(text=f'Preview {min(int(ts.preview_quality), int(ts.resolution))} · final {ts.resolution} pending', icon='TIME')
+        head, body = layout.panel("painter_set_settings", default_closed=True)
+        head.label(text="Texture Set Settings", icon="PREFERENCES")
+        if body is None:
+            return
+        body.use_property_split = True
+        body.use_property_decorate = False
+        body.prop(ts, "name", text="Name")
+        body.prop(ts, 'preview_backend', text="Evaluation")
+        if ts.preview_backend == 'CPU':
+            body.prop(ts, 'preview_quality')
+        from .physical_scale import draw_set_scale
+        draw_set_scale(body, context, ts)
+        body.prop(ts, "preview_ao")
+        body.prop(ts, "height_distance")
+        objects_row = body.row(align=True)
+        objects_row.operator("open_painter.texture_set", text="Assign Selected", icon="LINKED").action = "ASSIGN"
+        objects_row.operator("open_painter.texture_set", text="Remove Slot", icon="UNLINKED").action = "UNASSIGN"
+        body.template_list("OP_UL_assignments", "native", ts, "assignments", ts, "active_assignment", rows=2)
+        from .strokes_panel import pending_resample
+        pending = pending_resample(ts)
+        if pending:
+            body.label(text=f"{pending} paint image{'s' if pending != 1 else ''} at another size", icon="INFO")
+            body.operator("open_painter.resample_paint_images", icon="IMAGE_DATA")
+        actions = body.row(align=True)
+        actions.operator("open_painter.texture_set", text="Repair Material").action = "REPAIR"
+        actions.operator("open_painter.texture_set", text="Validate", icon="CHECKMARK").action = "VALIDATE"
+        actions.operator("open_painter.texture_set", text="", icon="TRASH").action = "DELETE"
 
 
 _row_depths = {}
@@ -625,6 +690,17 @@ BLEND_SHORT = {
 OPACITY_WIDTH = 52
 
 
+def preferences(context):
+    addon = context.preferences.addons.get(__package__.rsplit(".", 1)[0])
+    return addon.preferences if addon else None
+
+
+def dense_rows(context):
+    """Whether layer rows carry their own blend menu and opacity field (Preferences)."""
+    prefs = preferences(context)
+    return bool(prefs and prefs.dense_layer_rows)
+
+
 def row_metrics(context):
     """Unscaled row width, whether rows are compact, and the blend menu width.
 
@@ -632,7 +708,8 @@ def row_metrics(context):
     the blend menu shows short names so the layer name keeps its room.
     """
     scale = max(.5, context.preferences.system.ui_scale)
-    width = context.region.width / scale - 80
+    region = getattr(context, "region", None)
+    width = (region.width if region is not None else 400) / scale - 80
     compact = width < 300
     return width, compact, 50 if compact else 78
 
@@ -723,12 +800,17 @@ class OP_UL_native_layers(bpy.types.UIList):
             depths = _row_depths[data.as_pointer()] = dict(visible_rows(data))
         depth = depths.get(index, 0)
         # Everything left of the controls is the row itself: press to select,
-        # drag to reorder, double-click the name to rename. The controls keep
-        # a readable width; the name takes whatever the sidebar adds.
+        # drag to reorder, double-click the name to rename. Dense rows keep a
+        # blend menu and opacity field of readable width; otherwise the name
+        # takes the whole row and the selected layer's blend sits above the list.
         width, compact, blend_width = row_metrics(context)
+        dense = dense_rows(context)
         controls_width = blend_width + OPACITY_WIDTH
-        split = layout.split(factor=1 - controls_width / max(2 * controls_width, width))
-        row = split.row(align=True)
+        if dense:
+            split = layout.split(factor=1 - controls_width / max(2 * controls_width, width))
+            row = split.row(align=True)
+        else:
+            row = layout.row(align=True)
         row.prop(
             layer, "visible", text="", icon="HIDE_OFF" if layer.visible else "HIDE_ON", emboss=False
         )
@@ -753,12 +835,15 @@ class OP_UL_native_layers(bpy.types.UIList):
                 emboss=False,
             )
         row.label(text="", icon=LAYER_ICONS[layer.type])
+        selected = index == data.active_layer
+        mask_selected = selected and selection.ui_state(context).selection_kind == selection.MASK
         if layer.masks:
+            # Content versus mask is shown by the pressed state and the icon, never by colour alone.
             op = row.operator(
                 "open_painter.native_select",
                 text="",
-                icon="MOD_MASK",
-                depress=index == data.active_layer and state.get(context.area).mask_selected,
+                icon="CLIPUV_HLT" if mask_selected else "MOD_MASK",
+                depress=mask_selected,
             )
             op.layer_id, op.mask = layer.id, True
         row.prop(layer, "name", text="", emboss=False)
@@ -776,6 +861,8 @@ class OP_UL_native_layers(bpy.types.UIList):
             row.label(text="", icon=icon)
         if mark:
             row.label(text="" if compact else mark[0], icon=mark[1])
+        if not dense:
+            return
         controls = split.split(factor=blend_width / controls_width, align=True)
         if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
             controls.prop_menu_enum(layer, "group_mode", text="Pass" if compact else "Pass Through")
@@ -801,29 +888,21 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         if not ts:
             layout.label(text="Create a texture set to start painting.")
             return
-        # Channel selector on the left, add/delete tools on the right, as a
-        # single strip above the stack; a narrow sidebar stacks the two.
-        header = layout.row() if row_metrics(context)[0] >= 280 else layout.column()
-        header.prop(context.scene.open_painter, "blend_channel", text="")
-        tools = header.row(align=True)
-        tools.alignment = "RIGHT"
-        for action, icon in [
-            ("PAINT", LAYER_ICONS["PAINT"]),
-            ("FILL", LAYER_ICONS["FILL"]),
-            ("FOLDER", "NEWFOLDER"),
-        ]:
-            tools.operator("open_painter.layer", text="", icon=icon).action = action
-        tools.menu("OP_MT_native_masks", text="", icon="MOD_MASK")
-        tools.separator()
-        tools.operator("open_painter.decal", text="", icon="OUTLINER_OB_IMAGE").action = "ADD"
-        tools.operator("open_painter.open_graph", text="", icon="NODETREE")
-        tools.operator("open_painter.profile_layers", text="", icon="SORTTIME").action = "PROFILE"
-        tools.menu("OP_MT_native_performance", text="", icon="DOWNARROW_HLT")
-        tools.operator("open_painter.module_insert", text="", icon="PACKAGE")
-        tools.operator("open_painter.catalog_material", text="", icon="ASSET_MANAGER")
-        tools.operator("open_painter.catalog_effect", text="", icon="MODIFIER")
-        tools.separator()
-        tools.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
+        width, compact, _ = row_metrics(context)
+        # Labelled menus instead of an icon strip; Duplicate and Delete stay one click away.
+        # A narrow sidebar wraps the strip onto two rows rather than shortening the labels.
+        if compact:
+            strip = layout.column(align=True)
+            first, second = strip.row(align=True), strip.row(align=True)
+        else:
+            first = second = layout.row(align=True)
+        first.menu("OP_MT_native_add_layer", text="Add Layer", icon="ADD")
+        first.menu("OP_MT_native_masks", text="Add Mask", icon="MOD_MASK")
+        second.menu("OP_MT_native_add_effect", text="Add Effect", icon="MODIFIER")
+        second.menu("OP_MT_native_more", text="More", icon="DOWNARROW_HLT")
+        second.operator("open_painter.layer", text="", icon="DUPLICATE").action = "DUPLICATE"
+        second.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
+        draw_selected_row(layout, context, ts)
         layout.template_list(
             "OP_UL_native_layers",
             "stack",
@@ -835,15 +914,97 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
             maxrows=12,
             sort_lock=True,
         )
+        # Keyboard-free alternatives to dragging: step through the visible hierarchy.
         footer = layout.row(align=True)
         footer.alignment = "LEFT"
         for action, icon in [
             ("UP", "TRIA_UP"),
             ("DOWN", "TRIA_DOWN"),
-            ("DUPLICATE", "DUPLICATE"),
             ("PARENT", "FOLDER_REDIRECT"),
         ]:
             footer.operator("open_painter.layer", text="", icon=icon).action = action
+
+
+def draw_selected_row(layout, context, ts):
+    """Blend channel, blend mode and opacity of the selected layer, above the list.
+
+    Layer opacity, channel opacity, an inherited blend and a folder's compositing are
+    four different things; the row edits the selected layer's *channel* blend and
+    channel opacity for the blend channel, as the dense rows do per layer.
+    """
+    project = context.scene.open_painter
+    layer = active(ts)
+    width, compact, _ = row_metrics(context)
+    row = layout.row(align=True)
+    row.prop(project, "blend_channel", text="")
+    if layer is None:
+        row.label(text="No layer selected")
+        return
+    if dense_rows(context):
+        row.label(text=f"{layer.name}: blend per row", icon="INFO")
+        return
+    channel = channel_for(layer, project.blend_channel)
+    if layer.type == "FOLDER" and layer.group_mode == "PASSTHROUGH":
+        row.prop_menu_enum(layer, "group_mode", text="Pass Through")
+    elif channel is not None:
+        blend = layer.blend_mode if channel.blend_mode == "INHERIT" else channel.blend_mode
+        row.prop_menu_enum(channel, "blend_mode", text=BLEND_LABELS.get(blend, blend.title())
+                           + (" (layer)" if channel.blend_mode == "INHERIT" and not compact else ""))
+    if channel is not None:
+        row.prop(channel, "opacity_percent", text="")
+
+
+class OP_MT_native_add_layer(bpy.types.Menu):
+    bl_label = "Add Layer"
+
+    def draw(self, context):
+        layout = self.layout
+        for action, label, icon in (("PAINT", "Paint Layer", LAYER_ICONS["PAINT"]),
+                                    ("FILL", "Fill Layer", LAYER_ICONS["FILL"]),
+                                    ("FOLDER", "Folder", "NEWFOLDER")):
+            layout.operator("open_painter.layer", text=label, icon=icon).action = action
+        layout.separator()
+        layout.operator("open_painter.decal", text="Decal Layer…", icon="OUTLINER_OB_IMAGE").action = "ADD"
+        layout.operator("open_painter.catalog_material", text="Smart Material…", icon="ASSET_MANAGER")
+        layout.operator("open_painter.module_insert", text="Module Instance…", icon="PACKAGE")
+        layout.separator()
+        layout.operator("open_painter.layer", text="Group Selected", icon="FILE_FOLDER").action = "GROUP"
+
+
+class OP_MT_native_add_effect(bpy.types.Menu):
+    bl_label = "Add Effect"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("open_painter.catalog_effect", text="Surface Effect Layer…", icon="MATERIAL")
+        op = layout.operator("open_painter.choose_filter", text="Channel Filter…", icon="MODIFIER")
+        op.target, op.create = "CHANNEL", True
+        op = layout.operator("open_painter.choose_filter", text="Mask Filter…", icon="MOD_MASK")
+        op.target, op.create = "MASK", True
+        layout.separator()
+        layout.operator("open_painter.anchor", text="Anchor Point (channel)", icon="ANCHOR_CENTER").action = "ADD_CHANNEL"
+        layout.separator()
+        layout.menu("OP_MT_geometry_effect_add", text="Geometry Effect", icon="MOD_PARTICLES")
+
+
+class OP_MT_native_more(bpy.types.Menu):
+    bl_label = "More"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("open_painter.layer", text="Move Up", icon="TRIA_UP").action = "UP"
+        layout.operator("open_painter.layer", text="Move Down", icon="TRIA_DOWN").action = "DOWN"
+        layout.operator("open_painter.layer", text="Move into Folder…", icon="FOLDER_REDIRECT").action = "PARENT"
+        layout.operator("open_painter.layer", text="Ungroup Folder", icon="X").action = "UNGROUP"
+        layout.separator()
+        layout.operator("open_painter.open_graph", text="Edit Nodes", icon="NODETREE")
+        layout.operator("open_painter.open_inspector", text="Open Inspector", icon="PROPERTIES")
+        layout.separator()
+        layout.operator("open_painter.save_material", text="Save Set as Smart Material…", icon="FILE_TICK")
+        layout.operator("open_painter.module_save", text="Save Folder as Module…", icon="PACKAGE")
+        layout.separator()
+        layout.operator("open_painter.profile_layers", text="Profile Layers", icon="SORTTIME").action = "PROFILE"
+        layout.menu("OP_MT_native_performance", text="Performance", icon="TIME")
 
 
 class OP_MT_native_masks(bpy.types.Menu):
@@ -895,109 +1056,14 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
             for index, line in enumerate(wrap(status, width=width)):
                 box.label(text=line, icon="INFO" if index == 0 else "BLANK1")
         target = selection.resolve(context)
-        ts, layer = target.ts, target.layer
-        selection.draw_breadcrumb(layout, target, compact=row_metrics(context)[1])
-        if not layer:
-            return
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        layout.prop(layer, "name", text="Name")
-        if target.is_mask:
-            from .properties_panel import OP_PT_masks
-
-            OP_PT_masks.draw(self, context)
-            return
-        layout.prop(layer, "opacity", slider=True)
-        if layer.type != "FOLDER":
-            layout.prop(layer, "blend_mode", text="Layer Blend")
-        draw_generator_controls(layout, ts, layer)
-        from .anchors import draw_publish_controls
-        from .performance import draw_performance_section
-        if layer.type == "FOLDER":
-            layout.prop(layer, "group_mode", text="Blend")
-            layout.label(text="Folder masks affect all child layers.")
-            draw_publish_controls(layout, ts, layer)
-            from .modules import draw_module_box
-            draw_module_box(layout, context, ts, layer)
-            draw_performance_section(layout, context, ts, layer)
-            return
-        draw_publish_controls(layout, ts, layer)
-        from .decals import draw_decal_controls
-        draw_decal_controls(layout, context, ts, layer)
-        if layer.type == "PAINT":
-            from ..painting.brush_bridge import draw
-
-            layout.prop(context.scene.open_painter, "paint_channel")
-            layout.prop(context.scene.open_painter, "paint_all_sets")
-            layout.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
-            layout.operator('open_painter.material_stamp',text='Material Stamp (4 Channels)',icon='BRUSH_DATA')
-            from .vector_brush import draw_vector_brush
-            from .strokes_panel import draw_strokes
-            draw_vector_brush(layout, context)
-            draw_strokes(layout, context, ts, layer)
-            draw(layout, context)
-            from .texture_operations import draw_channel_effects
-            draw_channel_effects(layout, context, layer)
-            draw_performance_section(layout, context, ts, layer)
-            return
-        layout.separator()
-        layout.label(text="MATERIAL", icon="MATERIAL")
-        row = layout.row(align=True)
-        row.prop(context.scene.open_painter, "properties_channel", text="Channel")
-        channel = channel_for(layer, context.scene.open_painter.properties_channel)
-        if channel:
-            layout.prop(channel, "enabled", text="Enabled")
-            body = layout.column()
-            body.enabled = channel.enabled
-            from .anchors import draw_anchor_field
-            anchor = draw_anchor_field(body, ts, "CHANNEL", channel.anchor, text="Content Anchor")
-            if channel.anchor:
-                from .anchors import draw_anchor_channel
-                draw_anchor_channel(body, anchor, channel)
-                body.label(text="Anchor replaces the color and image; detail and filters still apply", icon="INFO")
-            body.prop(
-                channel,
-                "color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "value",
-                text="Color" if channel.channel in {"BASE_COLOR", "NORMAL", "EMISSION"} else "Value",
-            )
-            body.template_ID(channel, "image", open="image.open")
-            body.label(text="Surface Detail", icon="TEXTURE")
-            body.template_ID(channel, "detail_image", open="image.open")
-            row = body.row(align=True)
-            source_label = ("Replace with Procedural" if channel.detail_image else
-                            channel.procedural.replace("_", " ").title() if channel.procedural else
-                            "Choose Procedural")
-            row.operator("open_painter.choose_procedural", text=source_label, icon="TEXTURE")
-            if channel.procedural and not channel.detail_image:
-                row.operator("open_painter.clear_procedural", text="", icon="X")
-                from .physical_scale import draw_size
-                draw_size(body, ts, channel, "procedural_scale", "feature_size", "Feature Size")
-                body.prop(channel, "procedural_seed")
-            if channel.detail_image or channel.procedural:
-                if channel.channel not in {"HEIGHT", "NORMAL"}:
-                    body.prop(channel, "procedural_detail")
-                if channel.channel in {"HEIGHT", "NORMAL"}:
-                    body.prop(channel, "procedural_height")
-            if channel.image or channel.detail_image or channel.procedural:
-                body.separator()
-                body.label(text="FILL", icon="TEXTURE")
-                for key in ("projection", "filtering", "tiling"):
-                    body.prop(channel, key)
-                body.separator()
-                body.label(text="UV TRANSFORM")
-                for key in ("scale", "rotation", "offset"):
-                    body.prop(channel, key)
-                if channel.projection == "TRIPLANAR":
-                    body.prop(channel, "triplanar_hardness")
-            from .texture_operations import draw_channel_effects
-            draw_channel_effects(body, context, layer)
-        layout.separator()
-        panel_header, panel = layout.panel("painter_material_surface", default_closed=True)
-        panel_header.label(text="Surface Response")
-        if panel:
-            for key in ("anisotropy", "coat_weight", "coat_roughness", "height_distance"):
-                panel.prop(ts, key)
-        draw_performance_section(layout, context, ts, layer)
+        compact = row_metrics(context)[1]
+        selection.draw_breadcrumb(layout, target, compact=compact)
+        if target.layer is not None:
+            row = layout.row(align=True)
+            row.use_property_split = False
+            row.prop(target.layer, "name", text="")
+        from . import inspector
+        inspector.draw(layout, context, target, compact=compact)
 
 
 class OP_PT_native_library(PainterPanel, bpy.types.Panel):
@@ -1063,6 +1129,9 @@ CLASSES = (
     OP_PT_native_sets,
     OP_PT_native_layers,
     OP_MT_native_masks,
+    OP_MT_native_add_layer,
+    OP_MT_native_add_effect,
+    OP_MT_native_more,
     OP_PT_native_properties,
     OP_PT_native_library,
     OP_PT_native_bake,

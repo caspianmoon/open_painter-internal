@@ -192,12 +192,35 @@ class OP_OT_geometry_effect(SafeOperator,bpy.types.Operator):
             helper.select_set(True); context.view_layer.objects.active=helper
 
 
+PRESETS = (('Weathering', 'MOD_OCEAN', (('RUST', 'Rust Flakes'), ('PEEL', 'Peel Fragments'), ('MOSS', 'Moss'),
+                                        ('SPLINTERS', 'Splinters'), ('SNOW', 'Snow'))),
+           ('Details', 'MOD_PARTICLES', (('BOLT', 'Bolts'), ('SCALE', 'Scales'), ('ROCK', 'Rocks'), ('BARK', 'Bark'))),
+           ('Curves and Relief', 'MOD_DISPLACE', (('EXTRACT_CURVES', 'Extract Curves from Mask'), ('WELD', 'Weld Seam'),
+                                                  ('SEAM', 'Rippled Seam'), ('STITCH', 'Stitches'),
+                                                  ('DISPLACE', 'Displace from Height'))))
+
+
+class OP_MT_geometry_effect_add(bpy.types.Menu):
+    """Creation presets of geometry effects (also on the asset shelf)."""
+    bl_idname = 'OP_MT_geometry_effect_add'
+    bl_label = 'Add Geometry Effect'
+
+    def draw(self, context):
+        layout = self.layout
+        for group, icon, items in PRESETS:
+            layout.label(text=group, icon=icon)
+            for action, label in items:
+                layout.operator('open_painter.geometry_effect', text=label).action = action
+            layout.separator()
+
+
 class OP_PT_geometry_effects(bpy.types.Panel):
     bl_label='Geometry Effects'
     bl_space_type='VIEW_3D'
     bl_region_type='UI'
     bl_category='Painter'
     bl_options={'DEFAULT_CLOSED'}
+    bl_order=6   # after the everyday layer workflow, before bake and export
 
     @classmethod
     def poll(cls,context):

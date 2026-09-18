@@ -103,6 +103,18 @@ def painter_area(context):
     return area
 
 
+def session_area(context):
+    """The Painter area of this screen, or None when the screen shows no Painter session."""
+    from . import editor
+    area = getattr(context, "area", None)
+    if area is not None and editor.is_area(area):
+        return area
+    screen = getattr(context, "screen", None)
+    if screen is not None:
+        return next((candidate for candidate in screen.areas if editor.is_area(candidate)), None)
+    return None
+
+
 def ui_state(context):
     """The DockState carrying the selection kind for this context (shared fallback without areas)."""
     from .dock import state

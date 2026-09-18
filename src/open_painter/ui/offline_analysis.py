@@ -113,6 +113,7 @@ class OP_PT_offline_analysis(bpy.types.Panel):
     bl_label='Offline Analysis'
     bl_space_type='VIEW_3D'; bl_region_type='UI'; bl_category='Painter'
     bl_options={'DEFAULT_CLOSED'}
+    bl_order=7   # after the everyday layer workflow (relocated per action in phase 6)
 
     @classmethod
     def poll(cls,context):

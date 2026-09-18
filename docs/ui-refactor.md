@@ -23,16 +23,16 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 
 | Capability | Owner | Old location | New location | Status |
 | --- | --- | --- | --- | --- |
-| Texture set list, add/assign/duplicate, resolution, backend, quality, physical scale, freeze status | D | *Texture Set List* panel | *Texture Set* panel (name, resolution, assigned objects, settings sub-panel) | Phase 2 |
-| 2D view: paint-source / snapshot label, composite channel, refresh | D+P | *Texture Set List* panel (2D only) | *Texture Set* panel › *2D View* box; `display_channel` is its own property | Phase 1 |
-| Layer rows: eye, bypass, expand, type icon, mask button, name, module/anchor/cache/profile badges, blend menu, opacity | D | `OP_UL_native_layers` | Same list; blend/opacity move to the selected-item row above the list (dense rows optional in Preferences) | Phase 2 |
-| Blend channel selector for the rows | D | Layers header (unlabelled) | Selected-item row, labelled *Blend Channel* | Phase 1/2 |
-| Add Paint / Fill / Folder, mask menu, decal, graph, profile, performance menu, module insert, catalog material, catalog effect, delete, up/down/duplicate/parent | D | Icon strip above and below the list | *Add Layer*, *Add Mask*, *Add Effect*, *More* menus; Duplicate and Delete stay visible | Phase 2 |
-| Properties: status box, name, opacity, layer blend, generator quick controls, publish, module, performance, decal, paint controls, material channel editor, surface response | D | *Properties* panel | *Inspector* panel, selection-specific first controls, secondary sections after | Phase 2 |
-| Mask stack editing (`OP_PT_masks.draw`) | D | *Properties* panel when the mask button is pressed | Inspector › mask selection (`selection_kind == 'MASK'`) | Phase 2 |
-| Smart-material master controls | D | none | Inspector › material selection (authored per catalog recipe) | Phase 2 |
-| View Mask / Back to Material | P (+display material wiring) | none | Inspector mask header | Phase 2 |
-| Add Paint to Mask | D | none (only *Add White/Black Mask*) | Inspector mask header, explicit role | Phase 2 |
+| Texture set list, add/assign/duplicate, resolution, backend, quality, physical scale, freeze status | D | *Texture Set List* panel | *Texture Set* panel (name, resolution, assigned objects, settings sub-panel) | done (phase 2) |
+| 2D view: paint-source / snapshot label, composite channel, refresh | D+P | *Texture Set List* panel (2D only) | *Texture Set* panel › *2D View* box; `display_channel` is its own property | done (phase 1/2) |
+| Layer rows: eye, bypass, expand, type icon, mask button, name, module/anchor/cache/profile badges, blend menu, opacity | D | `OP_UL_native_layers` | Same list; blend/opacity move to the selected-item row above the list (dense rows optional in Preferences) | done (phase 2) |
+| Blend channel selector for the rows | D | Layers header (unlabelled) | Selected-item row, labelled *Blend Channel* | done (phase 2) |
+| Add Paint / Fill / Folder, mask menu, decal, graph, profile, performance menu, module insert, catalog material, catalog effect, delete, up/down/duplicate/parent | D | Icon strip above and below the list | *Add Layer*, *Add Mask*, *Add Effect*, *More* menus; Duplicate and Delete stay visible | done (phase 2) |
+| Properties: status box, name, opacity, layer blend, generator quick controls, publish, module, performance, decal, paint controls, material channel editor, surface response | D | *Properties* panel | *Inspector* panel, selection-specific first controls, secondary sections after | done (phase 2) |
+| Mask stack editing (`OP_PT_masks.draw`) | D | *Properties* panel when the mask button is pressed | Inspector › mask selection (`selection_kind == 'MASK'`) | done (phase 2) |
+| Smart-material master controls | D | none | Inspector › material selection (authored per catalog recipe) | done (phase 2) |
+| View Mask / Back to Material | P (+display material wiring) | none | Inspector mask header | done (phase 2) |
+| Add Paint to Mask | D | none (only *Add White/Black Mask*) | Inspector mask header, explicit role | done (phase 2) |
 | Asset shelf categories, refresh, import texture/alpha | D+F | Tool header strip | Shelf header (catalog tabs) and *Assets* sidebar panel | Phase 3 |
 | Asset Library panel (catalog material/effect, saved material apply/save/import/delete) | D+F | *Asset Library* panel | *Assets* panel selected-asset box, material context menu, *More* menu | Phase 3 |
 | Bake Mesh Maps popover (doctor, sources, cages, settings, maps, corrections, queue, use maps) | D+F | Tool header popover + *Bake Mesh Maps* panel | *Bake* sidebar tab: Setup / Maps / Results; header *Bake Mesh Maps* opens it | Phase 4 |
@@ -79,3 +79,32 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
 | Inspected fill channel | `project.properties_channel` | inspector channel editor, filter picker, anchors, graph select |
 | Paint destination channel | `project.paint_channel` (+ `paint_mask`) | `paint_session`, brush bridge, live preview |
 | Content vs mask vs filter selection | per-area `DockState.selection_kind` (`mask_selected` kept as an alias) | inspector, shelf application target, breadcrumb |
+
+## Phase 1–2 notes (implemented)
+
+- `ui/selection.py` — `resolve(context)` returns the `Target` (kind `SET`, `MATERIAL`, `FOLDER`,
+  `FILL`, `PAINT`, `MASK` or `FILTER`, the RNA items, the breadcrumb path and the
+  `PaintDestination`); `select(context, layer_id, kind, mask_id=…, channel=…, effect_id=…)` is the
+  only way selection changes. `session_area(context)` finds the Painter area of a screen so a
+  companion inspector follows its own window's session.
+- `ui/inspector.py` — one `draw(layout, context, target)` shared by the sidebar panel
+  (`OP_PT_native_properties`), the 2D editor copy and the companion Properties area
+  (`ui/companion.py`, hosted in the Properties editor's Tool tab, which shows the 3D viewport's
+  *Tool* sidebar panels for any active object).
+- `smart_materials/controls.py` — authored master controls per catalog recipe, resolved through the
+  instance's deterministic ids (`composer._stamp_module`); the inspector draws the bound property
+  itself, so an edit is one undo step and the control follows edits made on the layer. A deleted
+  target is reported as a broken binding; nothing is matched by name.
+- `ui/mask_view.py` — *View Mask* evaluates the layer's mask stack into a bounded display image
+  (`MAX_SIDE` 1024) and `material_manager.repair` wires it to the surface (flat, roughness 1);
+  *Back to Material* restores the shaded material. The 2D editor shows the same image labelled
+  *Mask Snapshot · current / out of date*. Nothing is written into the mask.
+- `open_painter.mask_paint` (*Add Paint to Mask*) adds a paint mask on top of the stack with an
+  explicit role (*Add Coverage*: black image + Add; *Remove Coverage*: white image + Multiply) and
+  keeps the generators.
+- Layer rows: the name has the row; the selected layer's blend channel, channel blend and channel
+  opacity sit in the row above the list; Preferences › *Blend and Opacity in Layer Rows* restores
+  the dense rows. Dragging shows *Above X / Below X / Into Y (first)* in the status bar; Esc cancels.
+- Tests: `tests/integration/selection_target.py`, `inspector_panels.py` (background, through
+  `ui_layout_recorder.Recorder` because `UILayout.introspect()` truncates long layouts) and
+  `inspector_ui.py` (real window, with screenshots in `.blender-test/inspector-*.png`).

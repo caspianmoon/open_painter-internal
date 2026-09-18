@@ -150,6 +150,9 @@ def repair(ts, image_overrides=None):
     connect(normal.outputs["Normal"], bump.inputs["Normal"])
     connect(colors["HEIGHT"], bump.inputs["Height"])
     connect(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    # View Mask (ui/mask_view.py): while a mask snapshot is shown, the surface reads it instead.
+    from ..ui import mask_view
+    mask_view.wire(ts, nodes, links, node, connect, bsdf)
     for ref in ts.assignments:
         if ref.object and ref.slot_index < len(ref.object.material_slots):
             slot = ref.object.material_slots[ref.slot_index]

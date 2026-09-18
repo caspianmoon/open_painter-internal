@@ -25,6 +25,10 @@ class OP_Preferences(bpy.types.AddonPreferences):
         ("ephemeral", "This Connection Only", "Sign in again after disconnecting; keep credentials in memory")])
     director_share_context: bpy.props.BoolProperty(name="Share Material Context with Codex",
         description="Allow selected material/mesh summaries, enabled model/map previews and a chosen reference image to be sent through your Codex account")
+    dense_layer_rows: bpy.props.BoolProperty(
+        name="Blend and Opacity in Layer Rows", default=False,
+        description="Show each layer row's blend menu and opacity field (dense rows); off keeps the "
+                    "row for the name and edits the selected layer's blend above the list")
     texture_cache_mb: bpy.props.IntProperty(
         name="Texture Cache (MiB)", default=256, min=0, max=8192,
         description="Shared disposable CPU cache across all texture sets; excludes editable images and working memory",
@@ -36,6 +40,7 @@ class OP_Preferences(bpy.types.AddonPreferences):
     def draw(self, context):
         self.layout.prop(self, "developer_mode")
         self.layout.prop(self, "library_directory")
+        self.layout.prop(self, "dense_layer_rows")
         self.layout.prop(self, "texture_cache_mb")
         self.layout.prop(self, "live_preview_budget_mb")
         box = self.layout.box()

@@ -39,6 +39,10 @@ def for_view(scene, ts, channel):
         return scene.open_painter.paint_image
     if ts is None:
         return None
+    from ..ui import mask_view
+    view = mask_view.active(ts)
+    if view is not None and mask_view.image_of(view) is not None:
+        return mask_view.image_of(view)   # View Mask: the 2D editor shows the same snapshot
     from .shader_preview import requested
     if requested(ts):
         return request(scene, ts, channel)

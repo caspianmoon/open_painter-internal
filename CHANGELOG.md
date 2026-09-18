@@ -1,5 +1,46 @@
 # Changes
 
+## 0.11.0 (in progress)
+
+The everyday editing workflow, as planned in `Open_Painter_UI_Implementation_Plan.md`: one editing
+target, readable layers, a selection-specific inspector, explicit mask editing. Phases 0–2.
+
+- **One editing target** (`ui/selection.py`): Layers, the Open Graph, the inspector, the shelf and
+  the Material Director resolve the same texture set, layer, selection kind (content, mask stack,
+  one mask, a channel filter), inspected channel and actual paint destination, by stable id.
+  Reordering keeps the paint destination; deleting the selected mask falls back to another mask
+  or the content; a second window keeps its own selection kind. The inspector header names the
+  selected item and shows the path *Body › Worn Painted Metal › Blue paint coat › Chips*.
+- **Three channels, three properties:** the 2D composite snapshot has its own *Composite Channel*
+  (`display_channel`); the layer rows' *Blend Channel* and the brush's *Paint Channel* are no
+  longer connected to it. `native_select` takes a mask id, a channel and a filter id.
+- **Layers:** the name has the row; the selected layer's blend channel, channel blend and channel
+  opacity sit above the list (Preferences › *Blend and Opacity in Layer Rows* brings the dense rows
+  back). *Add Layer*, *Add Mask*, *Add Effect* and *More* menus replace the icon strip; Duplicate
+  and Delete stay visible. Dragging reports *Above X / Below X / Into Y (first)* in the status bar.
+- **Inspector:** a smart material shows its authored master controls first (Worn Painted Metal:
+  Paint Color, Paint Roughness, Chip Amount, Scratch Amount, Dirt Amount, Rust Amount — bound to
+  the real layer, mask and channel properties through the instance's ids; a deleted target reports
+  a broken binding, never a similarly named layer), then its component layers and group controls;
+  a fill layer its enabled channels, values, sources, projection and scale; a paint layer its
+  paint destination and brush; a mask its stack, *View Mask* / *Back to Material*, *Add Paint to
+  Mask* and its settings; a filter its parameters. Publishing, modules, surface response,
+  performance and AI protection follow in collapsed sections. Layer opacity, channel opacity,
+  the inherited blend and group compositing are labelled as four different things.
+- **View Mask** shows the layer's mask coverage on the model and in the 2D editor as an explicit
+  *Mask Snapshot* (current / out of date, refresh); nothing is rasterised into the mask.
+  **Add Paint to Mask** adds a paint mask above the generators with an explicit role
+  (*Add Coverage*, *Remove Coverage*).
+- **Open Inspector** (More menu) hosts the same inspector in a companion Properties area (split
+  from the Painter area, or an existing Properties area when chosen) so the layer stack and the
+  detailed controls scroll independently; *Close Inspector* closes only the area it split.
+- **Texture Set** panel: the assigned objects at a glance, the 2D view's state named truthfully
+  (*Paint Source*, *Mask Snapshot*, *Composite Snapshot · out of date*, *Source Image*), settings
+  in a sub-panel. Geometry Effects and Offline Analysis no longer sit above the layer workflow.
+- Tests: `tests/integration/ui_baseline.py` (recorded fixture baseline, phase 0),
+  `selection_target.py`, `inspector_panels.py`, `inspector_ui.py` (real window).
+  Docs: [ui-refactor.md](docs/ui-refactor.md).
+
 ## 0.10.1
 
 Geometry effects follow the material. The Geometry Effects panel scattered prototypes inside

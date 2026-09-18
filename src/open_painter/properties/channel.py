@@ -104,6 +104,7 @@ class OP_Channel(bpy.types.PropertyGroup):
         description="Opacity of this channel, in percent",
         min=0,
         max=100,
+        subtype="PERCENTAGE",
         get=lambda self: int(round(self.opacity * 100)),
         set=lambda self, value: setattr(self, "opacity", value / 100),
     )

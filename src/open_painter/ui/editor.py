@@ -210,6 +210,8 @@ def header(self, context):
             self.layout.operator(
                 "open_painter.native_view", text=label, depress=context.area.type == backend
             ).view = backend
+        # Nodes: the same material as a graph, opened at the selected item (UI plan phase 7).
+        self.layout.operator("open_painter.open_graph", text="Nodes", icon="NODETREE")
         # The way back to a plain viewport lives next to the backend toggles: the
         # editor-type menu re-mounts the Painter, so it cannot serve as the exit.
         self.layout.operator("open_painter.close_editor", text="", icon="X")

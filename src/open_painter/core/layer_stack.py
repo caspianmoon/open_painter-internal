@@ -7,7 +7,7 @@ from ..utils.ids import new_id
 
 # Properties a getter/setter pair derives from another one: replaying them after
 # their source would overwrite it (opacity_percent rounds opacity to 1/100).
-DERIVED = {('OP_Channel', 'opacity_percent'), ('OP_BakeCorrections', 'value')}
+DERIVED = {('OP_Channel', 'opacity_percent'), ('OP_Layer', 'opacity_percent'), ('OP_BakeCorrections', 'value')}
 
 _replays = 0
 

@@ -123,6 +123,13 @@ class OP_Layer(bpy.types.PropertyGroup):
     )
     visible: bpy.props.BoolProperty(default=True, update=numeric)
     opacity: bpy.props.FloatProperty(name="Opacity", default=1, min=0, max=1, update=numeric)
+    # A percent view of ``opacity`` for the panels (UI plan phase 8); derived, never stored
+    # (layer_stack.DERIVED keeps snapshots and replays from writing it back).
+    opacity_percent: bpy.props.IntProperty(
+        name="Layer Opacity", description="Opacity of the whole layer, in percent", min=0, max=100,
+        subtype="PERCENTAGE",
+        get=lambda self: int(round(self.opacity * 100)),
+        set=lambda self, value: setattr(self, "opacity", value / 100))
     blend_mode: bpy.props.EnumProperty(
         name="Blend",
         items=BLEND_ITEMS,

@@ -116,7 +116,7 @@ def draw_folder(layout, context, target):
 
 def draw_folder_settings(layout, context, ts, folder):
     column = layout.column()
-    column.prop(folder, "opacity", text="Group Opacity", slider=True)
+    column.prop(folder, "opacity_percent", text="Group Opacity", slider=True)
     column.prop(folder, "group_mode", text="Group Compositing")
     if folder.group_mode == "ISOLATED":
         column.prop(folder, "blend_mode", text="Group Blend")
@@ -141,7 +141,7 @@ def _draw_mask_summary(layout, ts, layer, label="Mask"):
 
 def draw_layer_blend(layout, ts, layer):
     column = layout.column(align=True)
-    column.prop(layer, "opacity", text="Layer Opacity", slider=True)
+    column.prop(layer, "opacity_percent", text="Layer Opacity", slider=True)
     column.prop(layer, "blend_mode", text="Layer Blend")
 
 
@@ -182,7 +182,7 @@ def _draw_channel_blend(layout, layer, channel):
     if body is None:
         return
     body.prop(channel, "blend_mode", text=f"{label} Blend")
-    body.prop(channel, "opacity_percent", text=f"{label} Opacity %", slider=True)
+    body.prop(channel, "opacity_percent", text=f"{label} Opacity", slider=True)
     if channel.blend_mode == "INHERIT":
         body.label(text=f"Inherits the layer blend ({layer.blend_mode.replace('_', ' ').title()})", icon="INFO")
     body.label(text="Channel opacity multiplies the layer opacity", icon="INFO")

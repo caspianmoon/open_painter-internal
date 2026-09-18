@@ -80,6 +80,11 @@ def run(context):
         fake = SimpleNamespace(preferences=context.preferences, region=SimpleNamespace(width=pixels))
         width, compact, blend_width = native.row_metrics(fake)
         assert compact == expected, (pixels, width, compact)
+    # An enlarged UI scale halves the logical width: the same sidebar wraps sooner.
+    for ui_scale, pixels, expected in ((2.0, 640, True), (2.0, 900, False), (1.5, 480, True), (1.5, 700, False)):
+        fake = SimpleNamespace(preferences=SimpleNamespace(system=SimpleNamespace(ui_scale=ui_scale)),
+                               region=SimpleNamespace(width=pixels))
+        assert native.row_metrics(fake)[1] == expected, (ui_scale, pixels)
     bpy.ops.open_painter.native_select(layer_id=ids["material_layers"]["Blue paint coat"], mask=True)
     target = selection.resolve(context)
     wide, narrow = Recorder(), Recorder()

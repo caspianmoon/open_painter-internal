@@ -16,7 +16,22 @@ Focused bake and export views (UI plan phases 4–5).
   the Bake Check findings, *Add Baked Normal and AO Layer* (the renamed *Use Baked Maps*) and
   *Reselect Baked Faces*. Bake, progress, *Stop After This Map* and *Back to Painting* sit in
   the view; a failed rebake keeps the previous map; the queue is bound to the set it started on.
-- Tests: `tests/integration/bake_view.py`; `tests/unit/test_bake_queue.py` updated.
+- **Export view:** *Export* in the tool header opens the sidebar's *Export* tab: *Contents*
+  (Textures — the set's own preset and naming; Target Package — the target's textures, a
+  manifest per set and the mesh; Evaluated Bundle), *Scope* (Active Texture Set, Selected
+  Objects' Texture Sets, All Texture Sets — the resolved sets and objects are listed, and an
+  empty selection stays empty and says why instead of widening to every set), *Destination
+  Preset* (the project target with its conventions, the engine preview, the active set's own
+  settings, and each set's effective settings with its overrides named rather than dropped),
+  *Folder* (the project folder and the set's own folder side by side; when they differ the
+  export asks which to write to and keeps both) and *Output Preview* (every file with its
+  size, format, bit depth, packing and colour space, the manifest, the mesh, and the files that
+  already exist). One resolved plan (`export/plan.py`) feeds the preview and the export button;
+  the export refuses existing files unless *Replace Existing Files* is on, and opening the view
+  changes no saved setting. *Prepare Export* keeps Measure Density, Stage Atlas and Stage Mesh
+  LOD out of the main write.
+- Tests: `tests/integration/bake_view.py`, `export_view.py`; `tests/unit/test_bake_queue.py`
+  updated.
 
 ## 0.11.0
 

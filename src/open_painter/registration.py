@@ -17,6 +17,8 @@ from .ui.target_panel import CLASSES as TARGET_CLASSES
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects, OP_MT_geometry_effect_add
 from .ui.mask_view import CLASSES as MASK_VIEW_CLASSES
 from .ui.bake_view import CLASSES as BAKE_VIEW_CLASSES
+from .ui import export_view
+from .ui.export_view import CLASSES as EXPORT_VIEW_CLASSES
 from .ui.companion import CLASSES as COMPANION_CLASSES
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
@@ -126,7 +128,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + BAKE_VIEW_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + BAKE_VIEW_CLASSES + EXPORT_VIEW_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
 
 
 _registered = False
@@ -158,6 +160,8 @@ def register():
         bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
         bpy.types.WindowManager.open_painter_director = bpy.props.PointerProperty(type=OP_DirectorSettings)
         _cleanups.append(lambda: delattr(bpy.types.WindowManager, 'open_painter_director'))
+        export_view.register()
+        _cleanups.append(export_view.unregister)
         for initialize, cleanup in ((cache.register,cache.unregister),
                                     (lifecycle.register,lifecycle.unregister),
                                     (editor.register,editor.unregister),

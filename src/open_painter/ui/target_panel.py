@@ -10,6 +10,9 @@ from .operators import SafeOperator
 
 
 def _sets_for_export(context, project, everything):
+    """Legacy one-click route (scripts): an empty selection still falls back to every set.
+    The Export view resolves its scope through export/plan.py, where an empty selection
+    stays empty and says so."""
     if everything:
         selected = {obj.as_pointer() for obj in context.selected_objects}
         chosen = [ts for ts in project.texture_sets

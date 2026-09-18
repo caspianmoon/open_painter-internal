@@ -1324,13 +1324,13 @@ def toolbar(self, context):
     from .bake_view import CATEGORY as BAKE_TAB
     row.operator("open_painter.show_task", text="Bake Mesh Maps", icon="RENDER_STILL",
                  depress=category == BAKE_TAB).task = "BAKE"
-    row.popover(panel="OP_PT_native_export", text="Export Textures")
+    from .export_view import CATEGORY as EXPORT_TAB
+    row.operator("open_painter.show_task", text="Export", icon="EXPORT",
+                 depress=category == EXPORT_TAB).task = "EXPORT"
     project = context.scene.open_painter
     row = self.layout.row(align=True)
     row.prop(project, "target", text="")
     row.prop(project, "engine_preview", text="", icon="SHADING_RENDERED", toggle=True)
-    from ..targets import get
-    row.operator("open_painter.export_target", text="Export → " + get(project.target).label, icon="EXPORT")
 
 
 class OP_PT_native_bake(PainterPanel, bpy.types.Panel):
@@ -1351,14 +1351,16 @@ class OP_PT_native_bake(PainterPanel, bpy.types.Panel):
 
 
 class OP_PT_native_export(PainterPanel, bpy.types.Panel):
-    bl_label = "Export Textures"
+    """The compact export view, kept collapsed in the Painter sidebar."""
+    bl_label = "Export"
     bl_options = {"DEFAULT_CLOSED"}
     bl_order = 4
 
     def draw(self, context):
-        from .export_panel import OP_PT_export
-
-        OP_PT_export.draw(self, context)
+        row = self.layout.row(align=True)
+        row.operator("open_painter.show_task", text="Open the Export Tab", icon="EXPORT").task = "EXPORT"
+        from .export_view import draw_view
+        draw_view(self.layout, context, compact=True)
 
 
 CLASSES = (

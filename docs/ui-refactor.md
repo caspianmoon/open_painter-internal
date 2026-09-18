@@ -37,11 +37,11 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Asset Library panel (catalog material/effect, saved material apply/save/import/delete) | D+F | *Asset Library* panel | *Assets* panel selected-asset box, layer-row context menu, *Assets* menu | done (phase 3) |
 | Bake Mesh Maps popover (doctor, sources, cages, settings, maps, corrections, queue, use maps) | D+F | Tool header popover + *Bake Mesh Maps* panel | *Bake* sidebar tab: Setup / Maps / Results; header *Bake Mesh Maps* opens it | done (phase 4) |
 | Use Baked Maps (creates a fill layer) | D | Bake panel bottom | Results › *Add Baked Normal and AO Layer* | done (phase 4) |
-| Export Textures popover (target box, follow target, settings, export, bundle, measure, atlas) | D+F | Tool header popover + *Export Textures* panel | *Export* sidebar tab: Contents / Scope / Destination / Folder / Output Preview; *Prepare Export* sub-panel | Phase 5 |
-| Export → Target, Selected Objects (with all-sets fallback) | F | Tool header row | Export tab (scope explicit; no fallback) | Phase 5 |
+| Export Textures popover (target box, follow target, settings, export, bundle, measure, atlas) | D+F | Tool header popover + *Export Textures* panel | *Export* sidebar tab: Contents / Scope / Destination / Folder / Output Preview; *Prepare Export* sub-panel | done (phase 5) |
+| Export → Target, Selected Objects (with all-sets fallback) | F | Tool header row | Export tab (scope explicit; no fallback); `open_painter.export_target` stays callable | done (phase 5) |
 | Material Aging | D | *Material Aging* panel (order 2) | *Material Aging* panel: Applied To / Construction / Environment / Age first, details in sub-panels | Phase 6 |
 | Geometry Effects (creation buttons, helper box) | D | *Geometry Effects* panel | *Geometry Effects* panel: applied helpers list + inspector; presets behind *Add Geometry Effect* | Phase 6 |
-| Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare | Phase 6 |
+| Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare (LOD moved in phase 5) | Phase 6 |
 | Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More / inspector; scope label in the node header | Phase 7 |
 | Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab: Target / Instruction / Run / Changes; connection settings in Preferences | Phase 7 |
 | Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) | Phase 8 |
@@ -150,3 +150,21 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
   queue at the next map boundary (a running Cycles map cannot be interrupted, and the UI says so).
 - *Use Baked Maps* is now *Add Baked Normal and AO Layer*; registration for generators happens
   when maps land, independently.
+
+## Phase 5 notes (implemented)
+
+- `export/plan.py`: `resolve(context, contents, scope, folder_source)` returns the `Plan` — the
+  sets and objects of the scope (an empty selection stays empty with a reason), each set's
+  effective preset / format / bit depth / size / naming / normal convention, every output file with
+  its packing and colour space, the manifest and mesh outputs of the target route, the bundle
+  folder of the bundle route, existing-file conflicts, and notes about overrides and differing
+  saved folders. `execute(context, plan, overwrite)` writes exactly those files through the
+  existing exporter, target naming, manifest and mesh code (borrowing the target's settings and
+  putting the set's own back, as `open_painter.export_target` does) and raises if the exporter's
+  names ever differ from the plan.
+- `ui/export_view.py`: the *Export* tab and the compact popover/legacy panel draw the same view
+  from the same plan. View choices (contents, scope, folder source, replace existing) live on
+  `WindowManager.open_painter_export` with `SKIP_SAVE`; opening the view mutates no saved setting.
+  *Prepare Export* holds Measure Density, Stage Atlas and Stage Mesh LOD.
+- The tool header's *Export → Target* one-click button is gone; *Export* opens the tab. The
+  legacy operator keeps its all-sets fallback for scripts and is documented as such.

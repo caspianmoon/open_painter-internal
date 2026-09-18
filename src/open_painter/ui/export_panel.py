@@ -19,7 +19,7 @@ class OP_OT_export(SafeOperator, bpy.types.Operator):
 
 class OP_PT_export(bpy.types.Panel):
     bl_order = 5
-    bl_label = "Export Textures"
+    bl_label = "Export"
     bl_parent_id = "OP_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -27,34 +27,7 @@ class OP_PT_export(bpy.types.Panel):
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
-        ts = active_set(context)
-        layout = self.layout
-        if not ts:
+        if not active_set(context):
             return
-        from .target_panel import draw_target
-        draw_target(layout, context)
-        settings = ts.export
-        layout.prop(settings, "follow_target")
-        for key in (
-            "directory",
-            "preset",
-            "resolution",
-            "file_format",
-            "bit_depth",
-            "prefix",
-            "suffix",
-        ):
-            layout.prop(settings, key)
-        if settings.preset == "CUSTOM":
-            for c in "rgba":
-                layout.prop(settings, "custom_" + c)
-        elif settings.preset == "UNREAL":
-            layout.label(text="ORM: R=AO · G=Roughness · B=Metallic")
-            layout.label(text="Normal: DirectX (green inverted)")
-        elif settings.preset == "UNITY":
-            layout.label(text="MetallicSmoothness: R=Metal · A=Smooth")
-        layout.operator("open_painter.export", icon="EXPORT")
-        layout.operator('open_painter.production_export',text='Export Evaluated Bundle').action='BUNDLE'
-        row=layout.row(align=True)
-        row.operator('open_painter.production_export',text='Measure Density').action='MEASURE'
-        row.operator('open_painter.production_export',text='Stage Atlas').action='ATLAS'
+        from .export_view import draw_view
+        draw_view(self.layout, context, compact=True)

@@ -91,7 +91,7 @@ other platforms and newer versions have not been tested.
 3. Click the **Editor Type** selector at the upper-left corner of any Blender editor—the menu
    containing 3D Viewport, Image Editor, Shader Editor, and the other editors.
 4. Choose **Open Painter**. It opens in that same area with Assets along the bottom, the paint viewport
-   in the center, and Texture Sets, Layers and Properties on the right. It does not create a workspace
+   in the center, and Texture Set, Layers, Inspector and Assets on the right. It does not create a workspace
    or rearrange your screen. Use Blender's usual **Ctrl+Space** to maximize the area if desired.
 5. Use Blender’s Editor Type selector to switch to another editor.
 
@@ -110,26 +110,34 @@ Version 0.2.0 adds all **50 requested smart materials**, **16 stackable effects*
 **65 procedural sources** and **52 texture filters**. They form editable layer and mask recipes.
 See the [v1 workflow and controls](docs/texture-workflow-v1.md) and the [material catalog with required maps](docs/material-catalog.md).
 
-The native Painter toolbar has **Materials, Smart Materials, Smart Masks, Filters, Brushes, Alphas, and Textures** buttons that filter the bottom shelf. **All Types** clears that type filter. See [asset category controls](docs/asset-categories.md) for activation and import behavior.
+The native Painter tool header has an **Assets** menu (import, save, refresh) beside a type filter — **Materials, Smart Materials, Smart Masks, Filters, Brushes, Alphas, Textures, Geometry Effects** — for the bottom shelf; **All Types** clears it. The shelf's own catalog tabs offer the same categories once enabled in its ☰ menu. See [asset category controls](docs/asset-categories.md) for activation and import behavior.
 
 ## First use
 
 1. Select your low-poly mesh. It needs a UV map in the 0–1 tile. A new texture set immediately creates and assigns a Principled material with all eight initialized texture images connected.
-2. Click **+** in Texture Set List. A selected UV-unwrapped mesh is assigned automatically; use the link icon for additional meshes. For a mesh with multiple materials,
-   choose the intended active material slot before assigning. Repeat for additional objects/slots.
-3. Use the resolution dropdown in Texture Set List to choose resolution (default 2048).
-4. Expand **Bake Mesh Maps** or open its top-bar popover. Select high-poly objects and click **Add Selected High Poly**.
-   Set ray distance and bake Normal, AO, and Curvature. For self-bakes, disable **Bake from High Poly**.
-5. Use the paint, fill and folder icons beside the stack channel selector to add layers.
-   Select layer content by clicking its name; the adjacent mask icon selects its mask effects.
-6. Click **Use Baked Normal + AO in Stack** to add those mesh maps to the material.
-7. Select a Paint layer, choose its paint channel in Properties, then click **Paint**.
+2. Click **+** in the **Texture Set** panel. A selected UV-unwrapped mesh is assigned automatically; the panel
+   names the assigned objects, and **Texture Set Settings › Assign Selected** links additional meshes. For a mesh
+   with multiple materials, choose the intended active material slot before assigning. Repeat for additional objects/slots.
+3. Use the resolution dropdown in the Texture Set panel to choose resolution (default 2048).
+4. Click **Bake Mesh Maps** in the tool header to open the **Bake** tab (Setup, Maps, Results). Under Setup, select
+   high-poly objects and click **Add Selected**, then set the ray distance. Maps shows every map's real state
+   (Missing, Up to Date, Out of Date, Baking, Failed or Not Checked); **Select** picks the maps the material reads,
+   **Bake Selected Maps** bakes them. For self-bakes, disable **Bake from High Poly**. Previous maps stay until a
+   replacement lands, and **Stop After This Map** ends the queue honestly.
+5. Use **Add Layer** (Paint, Fill, Folder, Decal, Smart Material, Module), **Add Mask**, **Add Effect** and **More**
+   above the layer list. Select layer content by clicking its name; the mask icon beside it selects its mask stack.
+6. Click **Add Baked Normal and AO Layer** under Bake › Results to add those mesh maps to the material.
+7. Select a Paint layer, choose its paint destination in the **Inspector**, then click **Paint**.
    Use Blender’s brush selector and native brush settings. The composite refreshes after the stroke ends.
    Selecting a fill, folder or non-painted mask ends the session; **Finish** also ends painting.
-8. Click a material thumbnail in the bottom native Asset Shelf to apply it. The **Assets** selector in
-   the tool header filters **Materials** and **Smart Masks**. Search and thumbnail size use Blender’s shelf controls.
-   **Asset Library** in the sidebar contains portable smart-material import, save and library commands.
-9. Expand **Export Textures**, choose a directory and an export preset, then export.
+8. Click a material thumbnail in the bottom native Asset Shelf to select it: the **Assets** panel names it,
+   lists what it needs and the exact target, and its **Apply** button (also in the tool header) applies it.
+   Clicking the same thumbnail again applies too. The type filter beside the **Assets** menu in the tool header narrows the shelf
+   (**Materials**, **Smart Materials**, **Smart Masks**, **Filters**, **Brushes**, **Alphas**, **Textures**,
+   **Geometry Effects**); search and thumbnail size use Blender’s shelf controls. The panel's **Library** sub-panel
+   holds portable smart-material import, save and library commands.
+9. Click **Export** in the tool header to open the **Export** tab: choose Contents, Scope, a destination preset
+   and folder, read the Output Preview, then export.
 
 Layers are displayed top-first and evaluated bottom-first. Press a row to select its content and
 drag it up or down to move the layer (a folder moves with its contents); move the mouse sideways
@@ -140,39 +148,42 @@ double-click a name to rename it. Delete removes a folder and its descendants. U
 Folder duplication copies children and their paint images. The native panel uses single selection.
 
 **T** toggles Blender’s native left toolbar. **N** toggles the right sidebar containing Painter’s
-Texture Set List, Layers and Properties. These are Blender’s standard shortcuts, with no custom
-modal interception. Toggle **Asset Shelf** through Blender’s View menu. Resize the sidebar and shelf
+Texture Set, Layers, Inspector and Assets panels, and the Bake and Export tabs. These are Blender’s standard
+shortcuts, with no custom modal interception. **More › Open Inspector** shows the full inspector in a Properties
+area beside the viewport. Toggle **Asset Shelf** through Blender’s View menu. Resize the sidebar and shelf
 using their native borders. No surrounding editor areas are rearranged.
 
 The mask menu offers white/black painted masks, projected fill masks, generators, baked maps and
 anchor points; anchors in mask or filter stacks feed Published Input masks, fill channel content and
 generator micro details ([anchor points](docs/anchor-points.md)).
-Select **Assets → Smart Masks**, select the target layer, then click a preset. Normal application
-adds an editable effect; **Ctrl-click / Cmd-click** replaces the target’s effect stack. Required mesh
-maps are checked before modifying the stack. The 18 bundled presets include edge, cavity, dust, rust, scratch and drip masks.
+Select **Assets → Smart Masks**, select the target layer, select a preset and click **Apply**. Application
+adds an editable effect on top of the existing masks; **Replace Masks with This** in the asset's right-click
+menu (and the Assets panel) is the separate, visible replacement. Required mesh maps are checked before
+modifying the stack. The 18 bundled presets include edge, cavity, dust, rust, scratch and drip masks.
 
 A mask on a **folder affects every child**, including the metal substrate in Painted Steel. For
-chipped paint over metal, select **Paint coat** before applying a smart mask. Properties identifies
+chipped paint over metal, select **Paint coat** before applying a smart mask. The Inspector identifies
 the target and exposes generator, invert, levels, strength and **Normal / Multiply / Add** combination.
 New smart-mask effects use Normal; saved effects keep their previous combination.
 Edge Wear uses baked geometric crease coverage; noise only breaks up that coverage. After upgrading from an older bake, click **Rebake Edge Map** in Edge Wear properties. **Minimum Edge Angle** determines which convex target-mesh creases qualify; **Edge Width (px)** determines their texture width. Re-bake after changing either; generator intensity does not change edge classification. **Bake Mask Stack to Texture** converts the selected layer’s mask effects into one packed, editable grayscale UV texture. The material node graph only displays channel textures; it does not implement edge-wear or grunge effects. This is an editable
 mask-effect workflow, not complete Substance Painter generator parity.
 
-Properties shows one selected material channel at a time, with native color/image and UV/triplanar transform controls. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. Per-channel blend and
-opacity are editable directly in layer rows, independently of the paint channel. **Use Layer Blend**
+The Inspector shows the selected item's own controls first — a smart material's master controls, a fill's channel content with native color/image and UV/triplanar transform controls, a paint layer's destination, a mask's settings — and publishing, module, cache and profiling controls after them. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. The selected layer's blend and
+opacity for the display channel sit in the row above the list (every row shows them with the **Blend and Opacity in Layer Rows** preference), independently of the paint destination. **Use Layer Blend**
 keeps the layer-wide setting. Blender draws the controls, handles numeric editing and scrolling,
 and applies its current theme and interface scale.
 
 Brush Properties exposes color or scalar value, size, strength, spacing, erase and alpha controls.
-Scroll the Properties dock to reach all controls. **Import Alpha** loads a grayscale image and packs
+Scroll the Inspector to reach all controls. **Import Alpha** loads a grayscale image and packs
 it into the blend. Alpha thumbnails show the imported image; **Clear Alpha** removes the brush mask.
 Bundled brushes are copied to local brush assets so imported textures work and persist without
 modifying Blender's bundled library. For painted masks, **Black · Hide** and **White · Reveal**
 set the brush value directly.
 
-The mask Properties dock provides mask selection/reorder/delete, enable/invert, strength, levels,
-and generator controls. **Settings** opens the full native mask properties. Texture Set **Settings**
-also exposes renaming, assignment repair, validation and resolution. **Library** opens smart-material
+The Inspector's mask section provides mask selection/reorder/delete, enable/invert, strength, levels,
+and generator controls, with the selected mask's settings in their own sub-panel; **View Mask** shows the
+mask alone in the viewport and **Back to Material** returns. **Texture Set Settings** exposes renaming,
+evaluation, assignment, repair and validation. **Assets › Library** holds smart-material
 apply/import/save/delete actions.
 
 3D painting uses a temporary face-selection mask to protect material slots outside the current

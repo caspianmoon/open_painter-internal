@@ -181,10 +181,13 @@ CATALOG = {
         layer("Polished chromium", CHROME, .065, 1),
         layer("Hairline scratches", CHROME, .24, 1, channels=("ROUGHNESS", "HEIGHT"), opacity=.25, height_value=0.493,
               mask=mask("NOISE", generated_source={"id": "abrasion_mask_v2", "scale": (.85, .85)}, black=.035, white=.62, projection="TRIPLANAR", triplanar_hardness=8)),
-        layer("Wipe smudges", CHROME, .15, 1, channels=("ROUGHNESS",), opacity=.22,
-              mask=mask("NOISE", generated_source={"id":"surface_smudges"}, black=.48, white=.70)),
+        # 0.12.2: the wipe haze used to be a 0.085 roughness step at 22 % opacity, invisible on the
+        # mirror; it is now a readable haze that Wipe Marks can remove or strengthen.
+        layer("Wipe smudges", CHROME, .30, 1, channels=("ROUGHNESS",), opacity=.35,
+              mask=mask("NOISE", generated_source={"id":"surface_smudges"}, black=.44, white=.72)),
         layer("Fingerprints", CHROME, .25, 1, channels=("ROUGHNESS",), opacity=.15,
-              mask=mask("NOISE", scale=6, procedural="FINGERPRINTS"))),
+              mask=mask("NOISE", scale=6, procedural="FINGERPRINTS")),
+        version=2),
     "Old Brass": recipe("Metals",
         "Warm brass dulled by fine tarnish, with dark recessed oxidation and lightly polished handling areas.",
         layer("Brass alloy", BRASS, .34, 1, height=0.016,
@@ -433,9 +436,12 @@ CATALOG = {
               projection="TRIPLANAR", triplanar_hardness=8, height_range=(.505,.54)),
         layer("Protected cavity grease", OIL, .19, opacity=.72, height_value=.525,
               mask=mask("CAVITY_DIRT", .58, 65, contrast=4, noise_strength=.25)),
-        layer("Dust stuck in grease", (.080,.048,.022), .91, opacity=.55, height_value=.545,
-              mask=mask("NOISE", generated_source={"id":"grease_deposits_v2", "scale":(.65,.65)}, black=.56, white=.83, projection="TRIPLANAR", triplanar_hardness=8),
-              mask_effects=(mask("NOISE", generated_source={"id":"concrete_pores", "scale":(2,2)}, black=.36, white=.63, projection="TRIPLANAR"),))),
+        # 0.12.2: the dust used to sit on the top 17 % of the grease field behind a second breakup and
+        # never read; it now dusts the grease deposits themselves.
+        layer("Dust stuck in grease", (.11,.075,.040), .93, opacity=.70, height_value=.545,
+              mask=mask("NOISE", generated_source={"id":"grease_deposits_v2", "scale":(.65,.65)}, black=.40, white=.80, projection="TRIPLANAR", triplanar_hardness=8),
+              mask_effects=(mask("NOISE", generated_source={"id":"concrete_pores", "scale":(2,2)}, black=.25, white=.60, projection="TRIPLANAR"),)),
+        version=2),
     "Abandoned Machinery": recipe("Rust, Damage and Industrial",
         "Sharp broken paint over granular corrosion, with localized oil leakage, protected grime and sparse surface dust.",
         layer("Machine steel", STEEL, .63, 1, height=0.048,

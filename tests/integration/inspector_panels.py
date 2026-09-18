@@ -55,7 +55,9 @@ def run(context):
     assert bindings["Paint Color"].owner == stack.channel_for(coat, "BASE_COLOR") and bindings["Paint Color"].field == "color"
     assert bindings["Chip Amount"].owner == coat.masks[0] and coat.masks[0].generator == "CHIPS"
     dirt = next(item for item in body.layers if item.id == ids["material_layers"]["Recess dirt"])
-    assert bindings["Dirt Amount"].owner == dirt.masks[0] and dirt.masks[0].generator == "CAVITY_DIRT"
+    # Dirt Amount is a coverage-gated amount (0.12.2): the mask's generator amount, opacity gated.
+    assert bindings["Dirt Amount"].control.mode == "coverage" and bindings["Dirt Amount"].owner == folder
+    assert bindings["Dirt Amount"].members[1][0] == dirt.masks[0] and dirt.masks[0].generator == "CAVITY_DIRT"
     scratches = next(item for item in body.layers if item.id == ids["material_layers"]["Scratched exposed steel"])
     assert bindings["Scratch Amount"].owner == scratches and bindings["Scratch Amount"].field == "opacity"
     # Editing the layer moves the control (same property); the control edits the layer.

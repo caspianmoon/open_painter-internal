@@ -701,7 +701,9 @@ dusts the brighter half of the spangles at a restrained opacity; Burnt Wood's an
 Painted Metal's ash lost their dust-speckle multiply for a soft noise breakup and show on
 upward surfaces; Scratched Aluminum's dents are sparse real recesses (scale 18, height 0.47,
 opacity 0.6) that Dent Amount and Dent Depth move on their own; Automotive Painted Metal's
-fine clearcoat scratches cut into the coat (0.494) instead of standing proud. The remaining
+fine clearcoat scratches cut into the coat (0.494) instead of standing proud; Polished
+Chrome's wipe haze (roughness 0.30 at 35 %) and Greasy Machinery's dust in the grease (wider
+mask, 70 %) read at their defaults and move with Wipe Marks and Dust in Grease. The remaining
 findings are recorded as they stand.
 
 - Raw Industrial Steel: the mill-scale layer (no mask, full opacity) covers the rolled

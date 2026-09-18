@@ -140,7 +140,7 @@ def material():
     layers, panel = last("layers"), rendered()
     for label in ("Add Layer", "Add Mask", "Add Effect", "More"):
         assert f"'draw_string': '{label}'" in layers, (label, layers[:300])
-    assert "active_layer" in layers and "blend_channel" in layers, layers[:300]
+    assert "active_layer" in layers and "Blend Channel: " in layers, layers[:300]
     for label in ("Paint Color", "Paint Roughness", "Chip Amount", "Scratch Amount", "Dirt Amount", "Rust Amount"):
         assert label in panel, f"{label} missing from the material inspector: {panel[:500]}"
     assert panel.index("Paint Color") < panel.index("Published Outputs"), "appearance controls come first"

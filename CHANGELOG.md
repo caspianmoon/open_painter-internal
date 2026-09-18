@@ -16,7 +16,8 @@ an audited UI, a clean-install test and one release state.
   Galvanized Steel's white oxidation now shows and grows; Burnt Wood's and Burned Painted
   Metal's ash appears on upward surfaces and takes its colour; Scratched Aluminum's dents are
   real recesses whose amount and depth read on their own; Automotive Painted Metal's fine
-  clearcoat scratches cut into the coat.
+  clearcoat scratches cut into the coat; Polished Chrome's wipe haze and Greasy Machinery's
+  dust in the grease read at their defaults.
 - **Names say what they move.** Heavy Chipped Paint's *Paint Loss Black/White* are *Paint
   Loss* (threshold position, the primer ring following the chips) and *Paint Loss Contrast*
   (softness); Canvas Fabric's *Fiber Roughness* is *Loose Fibers*; *Polish / Roughness* is

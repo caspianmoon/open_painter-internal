@@ -25,7 +25,8 @@ from ..evaluation.anchors import derived_mapping
 VOLATILE = frozenset({'dirty', 'order', 'active_mask', 'active_effect', 'expanded', 'image_name',
                       'detail_image_name', 'revision', 'module_id', 'module_version', 'module_source',
                       'module_instance', 'module_name', 'module_detached', 'layer_id',
-                      'bypass', 'cache_mode', 'cache', 'stroke_key', 'paint_link'})
+                      'bypass', 'cache_mode', 'cache', 'stroke_key', 'paint_link', 'opacity_percent',
+                      'master_factor', 'master_scale'})
 BASE_TEXT_PREFIX = 'OP Module Base · '
 DIRECTOR_PREFIX = 'md.'   # Material Director ids (authoring.commands.allocate) are plain, dot and all
 ASSET_HASH = 'open_painter_asset_hash'   # on decoded module images: sha256 of the EXR bytes

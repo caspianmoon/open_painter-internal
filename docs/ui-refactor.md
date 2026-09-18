@@ -30,7 +30,7 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Add Paint / Fill / Folder, mask menu, decal, graph, profile, performance menu, module insert, catalog material, catalog effect, delete, up/down/duplicate/parent | D | Icon strip above and below the list | *Add Layer*, *Add Mask*, *Add Effect*, *More* menus; Duplicate and Delete stay visible | done (phase 2) |
 | Properties: status box, name, opacity, layer blend, generator quick controls, publish, module, performance, decal, paint controls, material channel editor, surface response | D | *Properties* panel | *Inspector* panel, selection-specific first controls, secondary sections after | done (phase 2) |
 | Mask stack editing (`OP_PT_masks.draw`) | D | *Properties* panel when the mask button is pressed | Inspector › mask selection (`selection_kind == 'MASK'`) | done (phase 2) |
-| Smart-material master controls | D | none | Inspector › material selection (authored per catalog recipe) | done (phase 2) |
+| Smart-material master controls | D | none | Inspector › material selection (authored per catalog recipe; all fifty since 0.12.1, `docs/master-controls.md`) | done (phase 2, completed 0.12.1) |
 | View Mask / Back to Material | P (+display material wiring) | none | Inspector mask header | done (phase 2) |
 | Add Paint to Mask | D | none (only *Add White/Black Mask*) | Inspector mask header, explicit role | done (phase 2) |
 | Asset shelf categories, refresh, import texture/alpha | D+F | Tool header strip | Shelf header (catalog tabs) and *Assets* sidebar panel | done (phase 3) |

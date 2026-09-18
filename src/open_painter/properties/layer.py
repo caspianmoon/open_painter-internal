@@ -104,6 +104,16 @@ def decal_object_changed(self, context):
     changed(self, context)
 
 
+def _master(layer, family):
+    from ..smart_materials import controls
+    return controls.master_values(layer, family)
+
+
+def _set_master(layer, family, value):
+    from ..smart_materials import controls
+    controls.set_master_values(layer, family, value)
+
+
 class OP_Layer(bpy.types.PropertyGroup):
     director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
     aging_role: bpy.props.StringProperty(description="The aging outcome this layer materialises; the Material Aging engine drives it",
@@ -130,6 +140,18 @@ class OP_Layer(bpy.types.PropertyGroup):
         subtype="PERCENTAGE",
         get=lambda self: int(round(self.opacity * 100)),
         set=lambda self, value: setattr(self, "opacity", value / 100))
+    # A smart material folder's computed master controls (smart_materials.controls): each
+    # component reads and writes the recipe layers it binds, nothing is stored here, and
+    # layer_stack.DERIVED keeps snapshots, documents and signatures from carrying them.
+    master_factor: bpy.props.FloatVectorProperty(
+        name="Master Control", description="Master control of the smart material (0–1)",
+        size=8, min=0, max=1, get=lambda self: _master(self, "factor"),
+        set=lambda self, value: _set_master(self, "factor", value))
+    master_scale: bpy.props.FloatVectorProperty(
+        name="Master Control", description="Master control of the smart material, times the authored value",
+        size=8, min=0, max=32, soft_min=0, soft_max=4, precision=2,
+        get=lambda self: _master(self, "multiplier"),
+        set=lambda self, value: _set_master(self, "multiplier", value))
     blend_mode: bpy.props.EnumProperty(
         name="Blend",
         items=BLEND_ITEMS,

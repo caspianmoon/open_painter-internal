@@ -77,6 +77,10 @@ def draw_material(layout, context, target, *, compact=False):
                 continue
             if control.kind == "color":
                 column.prop(binding.owner, binding.field, text=control.label)
+            elif control.computed:
+                # One component of the folder's family vector: it reads and writes its members.
+                column.prop(binding.owner, binding.field, index=binding.index, text=control.label,
+                            slider=control.kind == "factor")
             else:
                 column.prop(binding.owner, binding.field, text=control.label, slider=True)
     else:

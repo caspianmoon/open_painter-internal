@@ -7,7 +7,7 @@ from .schema import AuthoringError
 
 SURFACE = ("anisotropy", "coat_weight", "coat_roughness", "height_distance")
 TRANSIENT = {"dirty", "revision", "active_mask", "active_effect", "expanded", "order",
-             "opacity_percent", "image_name", "detail_image_name"}
+             "opacity_percent", "master_factor", "master_scale", "image_name", "detail_image_name"}
 
 
 def clone(value):
@@ -27,7 +27,7 @@ def snapshot(ts):
 def encode(value, *, digest=False, path=()):
     """JSON-safe local receipts. No pixels, executable text, or material node trees."""
     if isinstance(value, dict):
-        skip = TRANSIENT if digest else {"opacity_percent"}
+        skip = TRANSIENT if digest else {"opacity_percent", "master_factor", "master_scale"}
         if digest and path and path[-1] == "influence":
             skip = skip | {"image", "provenance", "error", "update_serial"}
         return {k: encode(v, digest=digest, path=(*path, k)) for k, v in value.items() if k not in skip}
@@ -102,7 +102,7 @@ def defaults(identifier):
     result = {}
     for prop in rna.properties:
         name = prop.identifier
-        if name in {"rna_type", "id_data", "opacity_percent"}:
+        if name in {"rna_type", "id_data", "opacity_percent", "master_factor", "master_scale"}:
             continue
         if prop.type == "COLLECTION":
             result[name] = []
@@ -122,7 +122,7 @@ def reconcile(group, desired):
     """Write only changed values, retaining unchanged layers, images and shader bindings."""
     import bpy
     for name, value in desired.items():
-        if name in {"opacity_percent", "rna_type", "id_data"}:
+        if name in {"opacity_percent", "master_factor", "master_scale", "rna_type", "id_data"}:
             continue
         prop = group.bl_rna.properties.get(name)
         if prop is None:

@@ -279,7 +279,8 @@ def values(group, excluded=()):
     # ``opacity``: callers excluding the uniform must not get it back in 1% steps.
     skip = {'rna_type', 'id_data', 'id', 'name', 'dirty', 'order', 'active_effect',
             'active_mask', 'expanded', 'image_name', 'detail_image_name', 'cache', 'cache_mode',
-            'units', 'feature_size', 'physical_radius', 'opacity_percent', *excluded}
+            'units', 'feature_size', 'physical_radius', 'opacity_percent', 'master_factor', 'master_scale',
+            *excluded}
     result = []
     for field in group.bl_rna.properties:
         name = field.identifier

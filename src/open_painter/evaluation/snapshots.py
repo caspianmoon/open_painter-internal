@@ -34,8 +34,8 @@ def capture(group, pixel_scale=1.0):
     values = {'id_data': group.id_data}
     for field in group.bl_rna.properties:
         name = field.identifier
-        if name in {'rna_type', 'id_data'}:
-            continue
+        if name in {'rna_type', 'id_data', 'opacity_percent', 'master_factor', 'master_scale'}:
+            continue   # derived views of other fields (a computed master control reads its members)
         value = getattr(group, name)
         if field.type == 'COLLECTION':
             values[name] = tuple(capture(item, pixel_scale) for item in value)

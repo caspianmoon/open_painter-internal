@@ -1,5 +1,42 @@
 # Changes
 
+## 0.12.1
+
+Master controls for all fifty built-in smart materials.
+
+- **Every catalog recipe has authored, artist-facing master controls** (4–8 each; the two
+  hero materials 8), shown before the component layers when the material folder is selected.
+  Worn Painted Metal, Heavy Chipped Paint and Factory Powder-Coated Metal are unchanged.
+  `docs/master-controls.md` lists every control, what it binds and where it departs from
+  the specification.
+- **Bindings** resolve through the instance's deterministic ids: renaming, reordering,
+  saving and reopening keep them; a duplicate binds its own layers; a deleted target is
+  reported as unavailable, never rebound by name.
+- **Computed controls** join the direct ones: an inverted amount (*Paint Remaining*,
+  *Oxide Coverage*), a groove depth (*Scratch Depth*, 0 flush → 0.1 height units), a
+  coverage factor (*Crater Amount*) and multipliers of the authored values — relief
+  amplitude, detail amount, the shared UV scale of a generated pattern across every channel
+  and mask that samples it (*Grain Scale*, *Weave Scale*, *Flake Size*), an elevated film's
+  Levels span (*Weld Relief*, *Blister Relief*), and the compound *Heat Pattern Scale* over
+  the eight temper gradients. They are components of the folder's `master_factor` /
+  `master_scale` vectors: nothing is stored, the getter reads the members, the setter writes
+  them, one drag is one undo step, and snapshots, documents, module diffs and evaluation
+  signatures never carry them.
+- **Rules where the recipe differs from the specification:** an image- or
+  procedural-masked layer takes its amount from opacity (a mask's amount only drives
+  generators); a cavity-dirt layer likewise (the generator keeps deep cavities covered at
+  amount 0); a surface control named on a fully covered layer binds the visible layer (Raw
+  Industrial Steel, Oxidized Copper, Cast Iron, Antique Bronze). Omitted for want of a
+  layer: Welded Steel *Blue Heat Tint*, Greasy Machinery *Oil Drips*, Old Worn Wood *Dents*,
+  Old Dirty Concrete *Cracks*, Painted Concrete *Paint Cracks*; Burned Painted Metal's
+  *Paint Remaining* became *Crater Amount*.
+- **Validation:** `scripts/render_master_controls.py` renders every control at its extremes
+  on the cavity cube with real mesh maps (one sheet per material, per-channel deltas in
+  `report.json`); the sheets were inspected by eye and the recipe problems found are listed
+  in `docs/master-controls.md`. Tests: `tests/integration/master_controls.py` (bindings,
+  effect, rename/reorder, duplicate, delete, save/reopen) and `master_controls_ui.py`
+  (drawing, undo/redo, duplicate, delete in a real window).
+
 ## 0.12.0
 
 Focused bake and export views, tools in context, nodes, the assistant, one status and measured responsiveness (UI plan phases 4–8).

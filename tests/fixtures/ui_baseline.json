@@ -1,0 +1,2209 @@
+{
+ "geometry": {
+  "helper": true,
+  "instances": 95
+ },
+ "project": {
+  "export_directory": "//exports",
+  "export_mesh": true,
+  "target": "UNREAL"
+ },
+ "sets": {
+  "body": {
+   "aging": {
+    "folder": true,
+    "material": "CARBON_STEEL",
+    "years": 6.0
+   },
+   "channels": {
+    "AO": {
+     "hash": "2a32d9a94209e87b",
+     "mean": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "BASE_COLOR": {
+     "hash": "de5055c1ecab7b15",
+     "mean": [
+      0.15677660703659058,
+      0.22383442521095276,
+      0.30174362659454346
+     ],
+     "std": [
+      0.13099491596221924,
+      0.10796071588993073,
+      0.07919071614742279
+     ]
+    },
+    "EMISSION": {
+     "hash": "f3cc103136423a57",
+     "mean": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "HEIGHT": {
+     "hash": "964caf379227a60c",
+     "mean": [
+      0.5001580119132996,
+      0.5001580119132996,
+      0.5001580119132996
+     ],
+     "std": [
+      0.0023914005141705275,
+      0.0023914005141705275,
+      0.0023914005141705275
+     ]
+    },
+    "METALLIC": {
+     "hash": "0ad90479bfe7daf5",
+     "mean": [
+      0.06286131590604782,
+      0.06286131590604782,
+      0.06286131590604782
+     ],
+     "std": [
+      0.193578839302063,
+      0.193578839302063,
+      0.193578839302063
+     ]
+    },
+    "NORMAL": {
+     "hash": "86ab5669c7ffaed6",
+     "mean": [
+      0.5,
+      0.5,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "OPACITY": {
+     "hash": "2a32d9a94209e87b",
+     "mean": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "ROUGHNESS": {
+     "hash": "ea0e892b54057c03",
+     "mean": [
+      0.5433268547058105,
+      0.5433268547058105,
+      0.5433268547058105
+     ],
+     "std": [
+      0.037284597754478455,
+      0.037284597754478455,
+      0.037284597754478455
+     ]
+    }
+   },
+   "digest": "988e49618e6dc59288c2db10b7167947fb83308ec41f948d6131ea56dd1e5462",
+   "export": [
+    {
+     "mean": [
+      0.4091115891933441,
+      0.5001435279846191,
+      0.5818750858306885,
+      1.0
+     ],
+     "name": "Body_BaseColor.png",
+     "size": [
+      512,
+      512
+     ]
+    },
+    {
+     "mean": [
+      0.5010955333709717,
+      0.5010987520217896,
+      1.0,
+      1.0
+     ],
+     "name": "Body_Normal.png",
+     "size": [
+      512,
+      512
+     ]
+    },
+    {
+     "mean": [
+      1.0,
+      0.5437526702880859,
+      0.06249785050749779,
+      1.0
+     ],
+     "name": "Body_ORM.png",
+     "size": [
+      512,
+      512
+     ]
+    }
+   ],
+   "export_settings": {
+    "bit_depth": "8",
+    "directory": "",
+    "file_format": "PNG",
+    "follow_target": true,
+    "prefix": "",
+    "preset": "UNREAL",
+    "resolution": "SET",
+    "suffix": ""
+   },
+   "name": "Body",
+   "resolution": "512",
+   "structure": [
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       true,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.0e0a0f618c325134872d572be9d67602",
+     "masks": [],
+     "name": "Worn Painted Metal",
+     "opacity": 1.0,
+     "parent": "",
+     "type": "FOLDER"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       true,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "232346eaf48548c5b23836cce13e87fb",
+     "masks": [],
+     "name": "Details",
+     "opacity": 1.0,
+     "parent": "",
+     "type": "FOLDER"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "69998a37e61d4aeab360e0255dc47744",
+     "masks": [
+      [
+       "Cavity",
+       "GENERATOR",
+       "MULTIPLY",
+       0.4,
+       1.0
+      ],
+      [
+       "Speckle",
+       "NOISE",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ],
+      [
+       "Grunge",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ],
+      [
+       "Occlusion",
+       "BAKED",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ],
+      [
+       "Levels",
+       "FILTER",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ],
+      [
+       "Custom Graph",
+       "GRAPH",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ]
+     ],
+     "name": "Grime",
+     "opacity": 0.7,
+     "parent": "",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       true,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "e7aefd79646c4ad2a2e0ca43be2249a4",
+     "masks": [],
+     "name": "Material Aging",
+     "opacity": 1.0,
+     "parent": "",
+     "type": "FOLDER"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "0b745c637d68412098f2897ceb6e564c",
+     "masks": [],
+     "name": "Carbon Steel substrate",
+     "opacity": 1.0,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "3b4c8e49c1f340549bf39873857f5819",
+     "masks": [
+      [
+       "Rust",
+       "GENERATOR",
+       "NORMAL",
+       0.05782,
+       1.0
+      ],
+      [
+       "Rust Detail",
+       "FILL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Surface rust",
+     "opacity": 0.00956,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "53559cb8bf254b1f96b35f1e9d0a2235",
+     "masks": [
+      [
+       "Chips",
+       "GENERATOR",
+       "NORMAL",
+       0.00016,
+       1.0
+      ],
+      [
+       "Grunge Heavy",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Epoxy Primer",
+     "opacity": 1.0,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "53f0efea28cf48ac84b777aa3bffbf6a",
+     "masks": [
+      [
+       "Chips",
+       "GENERATOR",
+       "NORMAL",
+       0.08813,
+       1.0
+      ],
+      [
+       "Grunge Heavy",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Polyurethane Paint",
+     "opacity": 1.0,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "ab86df12cf1a4b688953e4514a766d4f",
+     "masks": [
+      [
+       "Cracks",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Grunge Heavy",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ],
+      [
+       "Dust",
+       "GENERATOR",
+       "MULTIPLY",
+       0.6,
+       1.0
+      ]
+     ],
+     "name": "Coating cracks",
+     "opacity": 0.0581,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "1a6fc309948b401ba123f323585bfd8b",
+     "masks": [
+      [
+       "Abrasion Mask V2",
+       "FILL",
+       "NORMAL",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Micro scratches",
+     "opacity": 0.30698,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "358ab88a712b458786ee631b38879011",
+     "masks": [
+      [
+       "Edge Wear",
+       "GENERATOR",
+       "NORMAL",
+       0.21881,
+       1.0
+      ]
+     ],
+     "name": "Handling polish",
+     "opacity": 0.29703,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "47861f9d0c164d0480530bca4758f033",
+     "masks": [
+      [
+       "Chips",
+       "GENERATOR",
+       "NORMAL",
+       0.15142,
+       1.0
+      ],
+      [
+       "Grunge Heavy",
+       "PROCEDURAL",
+       "ADD",
+       0.35,
+       1.0
+      ],
+      [
+       "Rust Detail",
+       "FILL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Corrosion at damage",
+     "opacity": 0.0183,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "33ac91a122c54aeb97f59a9d660216bf",
+     "masks": [
+      [
+       "Concrete Pores",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Impact dents",
+     "opacity": 0.09122,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "b34a998c2d5b4a618509a366ebd7b9b9",
+     "masks": [
+      [
+       "Grunge Streaks",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Drips",
+       "GENERATOR",
+       "MULTIPLY",
+       0.1143,
+       1.0
+      ]
+     ],
+     "name": "Water streaks",
+     "opacity": 0.01787,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "dfa2b9c8c7a44c0ca075107aa9d5e973",
+     "masks": [
+      [
+       "Grunge Spots",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Cavity Dirt",
+       "GENERATOR",
+       "ADD",
+       0.2,
+       1.0
+      ]
+     ],
+     "name": "Salt deposits",
+     "opacity": 0.03833,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "ada3a63a9225412c84750fd36f9377b1",
+     "masks": [
+      [
+       "Grunge Medium",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Cavity Dirt",
+       "GENERATOR",
+       "ADD",
+       0.25,
+       1.0
+      ]
+     ],
+     "name": "Biological growth",
+     "opacity": 0.0,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "5baa4feab80e4baaab77437acbddf700",
+     "masks": [
+      [
+       "Grunge Medium",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Concrete Pores",
+       "FILL",
+       "MULTIPLY",
+       0.35,
+       0.5
+      ],
+      [
+       "Cavity Dirt",
+       "GENERATOR",
+       "ADD",
+       0.2,
+       1.0
+      ],
+      [
+       "Position",
+       "GENERATOR",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ]
+     ],
+     "name": "Soil",
+     "opacity": 0.09512,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "3b87f9a041f84a13b7c81ccc57b47306",
+     "masks": [
+      [
+       "Grunge Medium",
+       "PROCEDURAL",
+       "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Dust",
+       "GENERATOR",
+       "MULTIPLY",
+       0.25735,
+       1.0
+      ]
+     ],
+     "name": "Dust",
+     "opacity": 0.08193,
+     "parent": "Material Aging",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "cf0a605363804b1e82f2f598dc1ea1b6",
+     "masks": [],
+     "name": "Stripes",
+     "opacity": 0.8,
+     "parent": "Details",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "3cd136ab746e4c92acef4001fb54361a",
+     "masks": [
+      [
+       "Painted Mask",
+       "PAINT",
+       "MULTIPLY",
+       0.5,
+       1.0
+      ]
+     ],
+     "name": "Hand Paint",
+     "opacity": 1.0,
+     "parent": "Details",
+     "type": "PAINT"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.2adb8799c0ed5b70adb6674b3f72ddc9",
+     "masks": [],
+     "name": "Steel substrate",
+     "opacity": 1.0,
+     "parent": "Worn Painted Metal",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.24b67a4034b452338ea55814beb63dfc",
+     "masks": [
+      [
+       "Rust",
+       "GENERATOR",
+       "NORMAL",
+       0.16,
+       1.0
+      ]
+     ],
+     "name": "Oxide beneath paint",
+     "opacity": 0.7,
+     "parent": "Worn Painted Metal",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.9d3c6686d4a85adf8b34788eb5888756",
+     "masks": [
+      [
+       "Chips",
+       "GENERATOR",
+       "NORMAL",
+       0.29,
+       1.0
+      ]
+     ],
+     "name": "Blue paint coat",
+     "opacity": 1.0,
+     "parent": "Worn Painted Metal",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.ef1dbfde399251e48b6301ed98c82271",
+     "masks": [
+      [
+       "Abrasion Mask V2",
+       "FILL",
+       "NORMAL",
+       0.35,
+       1.0
+      ]
+     ],
+     "name": "Scratched exposed steel",
+     "opacity": 0.9,
+     "parent": "Worn Painted Metal",
+     "type": "FILL"
+    },
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "7f37cf26.5739119c68125d73bdba8bb8f4c7c9ed",
+     "masks": [
+      [
+       "Cavity Dirt",
+       "GENERATOR",
+       "NORMAL",
+       0.3,
+       1.0
+      ]
+     ],
+     "name": "Recess dirt",
+     "opacity": 0.7,
+     "parent": "Worn Painted Metal",
+     "type": "FILL"
+    }
+   ]
+  },
+  "panel": {
+   "aging": {
+    "folder": true,
+    "material": "CARBON_STEEL",
+    "years": 10.0
+   },
+   "channels": {
+    "AO": {
+     "hash": "2a32d9a94209e87b",
+     "mean": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "BASE_COLOR": {
+     "hash": "44f8cce0b495a395",
+     "mean": [
+      0.20000770688056946,
+      0.30000096559524536,
+      0.5
+     ],
+     "std": [
+      7.718961569480598e-06,
+      9.5367431640625e-07,
+      0.0
+     ]
+    },
+    "EMISSION": {
+     "hash": "f3cc103136423a57",
+     "mean": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "HEIGHT": {
+     "hash": "2203a98fd84adfbd",
+     "mean": [
+      0.5,
+      0.5,
+      0.5
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "METALLIC": {
+     "hash": "2a32d9a94209e87b",
+     "mean": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "NORMAL": {
+     "hash": "86ab5669c7ffaed6",
+     "mean": [
+      0.5,
+      0.5,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "OPACITY": {
+     "hash": "2a32d9a94209e87b",
+     "mean": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "std": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "ROUGHNESS": {
+     "hash": "f558b7fb00279494",
+     "mean": [
+      0.34998583793640137,
+      0.34998583793640137,
+      0.34998583793640137
+     ],
+     "std": [
+      1.4155866665532812e-05,
+      1.4155866665532812e-05,
+      1.4155866665532812e-05
+     ]
+    }
+   },
+   "digest": "6def7e0f675205a88516107c2582f83bd4083ccbf3ed6d4b67580443dddbfad9",
+   "export": [
+    {
+     "mean": [
+      0.4843812882900238,
+      0.5835462808609009,
+      0.7346238493919373,
+      1.0
+     ],
+     "name": "P_Panel_BaseColor.tif",
+     "size": [
+      512,
+      512
+     ]
+    },
+    {
+     "mean": [
+      0.5000000596046448,
+      0.5000000596046448,
+      1.0,
+      1.0
+     ],
+     "name": "P_Panel_Normal.tif",
+     "size": [
+      512,
+      512
+     ]
+    },
+    {
+     "mean": [
+      1.0,
+      0.0,
+      0.0,
+      0.6505835056304932
+     ],
+     "name": "P_Panel_MetallicSmoothness.tif",
+     "size": [
+      512,
+      512
+     ]
+    },
+    {
+     "mean": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "name": "P_Panel_Occlusion.tif",
+     "size": [
+      512,
+      512
+     ]
+    }
+   ],
+   "export_settings": {
+    "bit_depth": "16",
+    "directory": "//exports/panel",
+    "file_format": "TIFF",
+    "follow_target": false,
+    "prefix": "P_",
+    "preset": "UNITY",
+    "resolution": "SET",
+    "suffix": ""
+   },
+   "name": "Panel",
+   "resolution": "512",
+   "structure": [
+    {
+     "blend": "NORMAL",
+     "channels": [
+      [
+       "BASE_COLOR",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "ROUGHNESS",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "METALLIC",
+       true,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "NORMAL",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "HEIGHT",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "AO",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "EMISSION",
+       false,
+       "INHERIT",
+       1.0
+      ],
+      [
+       "OPACITY",
+       false,
+       "INHERIT",
+       1.0
+      ]
+     ],
+     "group": "ISOLATED",
+     "id": "b89f3b9050b6445da1f593411feca708",
+     "masks": [],
+     "name": "Panel Base",
+     "opacity": 1.0,
+     "parent": "",
+     "type": "FILL"
+    }
+   ]
+  }
+ }
+}

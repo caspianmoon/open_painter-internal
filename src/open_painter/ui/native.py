@@ -1104,11 +1104,18 @@ def draw_selected_row(layout, context, ts):
     four different things; the row edits the selected layer's *channel* blend and
     channel opacity for the blend channel, as the dense rows do per layer.
     """
+    from ..constants import CHANNEL_LABELS
     project = context.scene.open_painter
     layer = active(ts)
     width, compact, _ = row_metrics(context)
-    row = layout.row(align=True)
-    row.prop(project, "blend_channel", text="")
+    column = layout.column(align=True)
+    row = column.row(align=True)
+    # The channel this row (and the dense rows) blend is named on the button itself, so it is
+    # never mistaken for the composite, paint or inspector channel (0.12.2). A narrow sidebar
+    # gives the name its own row rather than truncating it.
+    row.prop_menu_enum(project, "blend_channel", text="Blend Channel: " + CHANNEL_LABELS[project.blend_channel])
+    if compact:
+        row = column.row(align=True)
     if layer is None:
         row.label(text="No layer selected")
         return

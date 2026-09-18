@@ -50,7 +50,8 @@ def folder_of(folder_id):
 def get(binding):
     if binding.control.computed:
         return list(getattr(binding.owner, binding.field))[binding.index]
-    return getattr(binding.owner, binding.field)
+    value = getattr(binding.owner, binding.field)
+    return tuple(value) if binding.control.kind == "color" else value   # a copy, not the live array
 
 
 def put(binding, value):
@@ -91,6 +92,13 @@ for name in CATALOG:
     for label in labels:
         assert label.lower() not in GENERIC, (name, label)
         assert not any(word in label for word in IMPLEMENTATION_WORDS), (name, label)
+        assert "Loss Black" not in label and "Loss White" not in label and "/" not in label, (name, label)
+    for control in authored:
+        # A generator amount stays a direct binding only where the generator is none at 0.
+        if control.field == "amount" and not control.computed:
+            spec = next(item for item in CATALOG[name]["layers"] if item["name"] == control.layer)
+            kind = composer.masks_for(spec)[control.mask]["kind"]
+            assert kind in {"EDGE_WEAR", "CHIPS", "DUST", "WORLD_NORMAL"}, (name, control.label, kind)
     ts.layers.clear()
     ts.active_layer = -1
     folder_id = composer.apply(ts, name).id
@@ -117,6 +125,27 @@ for name in CATALOG:
             assert getattr(owner, member.field) < amount_low, (name, control.label, "inverted control must lower the amount")
         if control.mode == "depth":
             assert at_high["HEIGHT"].mean() < at_low["HEIGHT"].mean(), (name, control.label)
+        if control.mode == "coverage":
+            # 0 shows none of the layer (the composite equals the layer hidden); the authored value
+            # restores the authored opacity and amount; 1 keeps the opacity and spreads the generator.
+            layer_owner, mask_owner = binding.members[0][0], binding.members[1][0]
+            assert abs(mask_owner.amount - 1) < 1e-6 and abs(layer_owner.opacity - binding.members[0][2]) < 1e-6
+            put(binding, 0.0)
+            assert layer_owner.opacity == 0 and mask_owner.amount == 0
+            at_zero = maps()
+            layer_owner.visible = False
+            put(binding, before)
+            hidden = maps()
+            layer_owner.visible = True
+            for channel in at_zero:
+                assert np.abs(at_zero[channel] - hidden[channel]).max() < 1e-5, (name, control.label, channel, "0 must be none")
+            assert abs(layer_owner.opacity - binding.members[0][2]) < 1e-6 and abs(mask_owner.amount - binding.members[1][2]) < 1e-6
+            assert np.abs(maps()["BASE_COLOR"] - baseline["BASE_COLOR"]).max() < 1e-5, (name, control.label, "authored restored")
+        if control.mode == "levels_center":
+            # At 1 the ramp sits at the bottom of the image range (all lost), its width kept whole.
+            owner = binding.members[0][0]
+            assert owner.black < 0.01 and abs((owner.white - owner.black) - 0.08) < 1e-3, (name, control.label, owner.black, owner.white)
+            assert at_high["BASE_COLOR"].mean() != at_low["BASE_COLOR"].mean()
         if control.channel == "ROUGHNESS" and control.field == "value":
             assert at_high["ROUGHNESS"].mean() > at_low["ROUGHNESS"].mean(), (name, control.label)
         change = max(float(np.abs(at_high[channel] - at_low[channel]).mean()) for channel in baseline)

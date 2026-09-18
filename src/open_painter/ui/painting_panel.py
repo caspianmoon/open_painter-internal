@@ -42,7 +42,7 @@ class OP_PT_paint(bpy.types.Panel):
         layout = self.layout
         if not active_set(context):
             return
-        layout.prop(context.scene.open_painter, "paint_channel", text="Channel")
+        layout.prop(context.scene.open_painter, "paint_channel", text="Paint Channel")
         row = layout.row(align=True)
         row.operator("open_painter.paint", icon="BRUSH_DATA")
         row.operator("open_painter.paint", text="Finish").stop = True

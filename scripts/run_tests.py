@@ -94,6 +94,7 @@ if args.gui or args.gui_only:
         ("artist_file_ui.py", "artist-file-ui.json"),
         ("inspector_ui.py", "inspector-ui.json"),
         ("master_controls_ui.py", "master-controls-ui.json"),
+        ("launch_audit_ui.py", "launch-audit.json"),
         ("ui_response_ui.py", "ui-response.json"),
     ]:
         result_path = root / ".blender-test" / result_name
@@ -125,6 +126,7 @@ if args.gui or args.gui_only:
                 "artist_file_ui.py": {"OP_ARTIST_FILE_UI_REPORT": str(result_path)},
                 "inspector_ui.py": {"OP_INSPECTOR_UI_REPORT": str(result_path)},
                 "master_controls_ui.py": {"OP_MASTER_CONTROLS_UI_REPORT": str(result_path)},
+                "launch_audit_ui.py": {"OP_LAUNCH_AUDIT_REPORT": str(result_path)},
                 "ui_response_ui.py": {"OP_UI_RESPONSE_REPORT": str(result_path)},
             }.get(filename, {}))),
             check=True,
@@ -135,7 +137,7 @@ if args.gui or args.gui_only:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue
-        if filename in {"shader_preview_ui.py", "shader_snapshot_ui.py", "material_director_ui.py", "material_aging_ui.py", "geometry_effects_ui.py", "inspector_ui.py", "master_controls_ui.py", "ui_response_ui.py"}:
+        if filename in {"shader_preview_ui.py", "shader_snapshot_ui.py", "material_director_ui.py", "material_aging_ui.py", "geometry_effects_ui.py", "inspector_ui.py", "master_controls_ui.py", "launch_audit_ui.py", "ui_response_ui.py"}:
             if report.get("result") != "PASS":
                 raise RuntimeError(result)
             continue

@@ -48,42 +48,14 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
     for path in sorted((root / "src" / "open_painter").rglob("*")):
         if path.is_file() and "__pycache__" not in path.parts:
             write_file(archive, path, path.relative_to(root / "src" / "open_painter"))
-    for name in ("blender_manifest.toml", "LICENSE", "README.md", "ARCHITECTURE.md", "SMART_MATERIAL_FORMAT.md", "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md", "PARITY.md", "docs/substance_parity.json", "docs/channel_blending.png", "docs/reference_layout.png", "docs/repaired_workspace.png", "docs/bottom-shelf.png", "docs/research/improvements-0.1.9.md", "docs/research/performance-0.1.9.json", "docs/research/workflows-0.1.10.md", "docs/research/projection-0.1.11.md", "docs/research/smart-masks-0.1.12.md", "docs/research/native-ui-0.1.13.md", "docs/native-painter.png", "docs/texture-workflow-v1.md", "docs/material-catalog.md", "docs/asset-categories.md", "docs/research/utility-mesh-maps.md", "docs/research/texture-performance-0.2.0.json"):
-        if (root / name).exists():
-            write_file(archive, root / name, name)
-    for path in [root / "docs/implementation-status.md", root / "docs/live-procedural-preview.md",
-                 root / "docs/material-director.md", root / "docs/material-director-plan.md",
-                 root / "docs/material-director-live-validation.md",
-                 root / "docs/material-director-imagegen-validation.md",
-                 *sorted((root / "docs/validation").glob("material-director-*.json")),
-                 *sorted((root / "docs/validation").glob("material-director-*.png")),
-                 root / "docs/anchor-points.md", root / "docs/milestone-workflows.md",
-                 root / "docs/generated-material-quality.md",
-                 root / "docs/shader-preview-architecture.md",
-                 root / "docs/validation/shader-preview-contact.html",
-                 root / "docs/validation/shader-user-project-contact.html",
-                 *sorted((root / "docs/validation").glob("shader-*.json")),
-                 root / "docs/validation/actual-project-persistence-export.json",
-                 root / "docs/material-surface-quality.md",
-                 root / "docs/material-review-metals.md",
-                 root / "docs/material-review-natural.md",
-                 root / "docs/material-relief-metal-review.md",
-                 root / "docs/material-relief-industrial-review.md",
-                 root / "docs/material-relief-natural-review.md",
-                 root / "docs/research/material-relief-source-index.md",
-                 root / "docs/research/natural-relief-review.md",
-                 root / "docs/research/natural-final-review.json",
-                 root / "docs/research/generated-material-prompts.json",
-                 root / "docs/research/generated-material-prompts-specialized.json",
-                 root / "docs/research/generated-material-refinement.json",
-                 *sorted((root / "docs/research").glob("*-relief-prompts.json")),
-                 *sorted((root / "docs/research").glob("*-relief-provenance.json")),
-                 *sorted((root / "docs/validation").glob("generated-material-*.json")),
-                 *sorted(p for p in (root / "docs/validation").glob("material-relief-*.json")
-                         if p.name != "material-relief-release.json"),
-                 root / "docs/live-preview-latency.md", root / "docs/live-preview-latency-research.md",
-                 root / "docs/bake-queue-fix.md", *sorted((root / "docs/validation").glob("bake-queue-*.json")),
-                 *sorted((root / "docs/performance").glob("*"))]:
-        if path.is_file():
-            write_file(archive, path, path.relative_to(root))
+    for name in ("blender_manifest.toml", "LICENSE", "README.md", "ARCHITECTURE.md", "SMART_MATERIAL_FORMAT.md",
+                 "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md", "PARITY.md", "docs/substance_parity.json"):
+        write_file(archive, root / name, Path(name))
+    # The user-facing guides and their images; validation reports, performance records and
+    # research notes stay in the repository (0.12.2: a release package carries no development
+    # artefacts).
+    for path in sorted(p for p in (root / "docs").iterdir() if p.is_file() and p.suffix == ".md"):
+        write_file(archive, path, path.relative_to(root))
+    for name in ("docs/native-painter.png", "docs/open_graph.png", "docs/mask_controls.png", "docs/vector_strokes.png"):
+        write_file(archive, root / name, Path(name))
 print(output)

@@ -21,12 +21,20 @@ Two kinds of binding:
 
   - ``invert``: 1 − a mask amount, for a label that reads the other way (*Paint Remaining*
     over an inverted chips mask);
+  - ``coverage``: the amount of a generator mask whose generator keeps coverage at amount 0
+    (cavity dirt, rust, drips), gated so that 0 means none: the layer's opacity fades from
+    its authored value to nothing as the amount falls below the authored amount;
   - ``depth``: a groove layer's height level below the surface (0 flush, 1 =
     ``DEPTH_SPAN`` height units deep);
+  - ``levels``: the position (``levels_center``) or the softness (``levels_width``) of an
+    image mask's black/white thresholds, moved together for masks that share one image;
   - ``scale``: a multiplier of the authored values of one or more members — a relief
     amplitude, a detail amount, the shared UV scale of a generated pattern across every
     channel and mask that samples it, an elevated film's Levels span. ``× 1`` is the
     material as authored; the bases come from the module base the stamp recorded.
+
+  An artist-facing amount reaches visually none at 0: a generator amount that cannot is
+  wrapped in ``coverage``, and an image-masked layer takes its amount from its opacity.
 
   Nothing is stored for a computed control: it reads and writes its members, so undo,
   save and duplication work on the members alone.
@@ -36,6 +44,7 @@ from dataclasses import dataclass, field as dataclass_field
 from uuid import UUID, uuid5
 
 DEPTH_SPAN = 0.1
+LEVELS_SPAN = 0.4          # a Levels width control at 0 is this wide (fully soft), at 1 a hard edge
 FAMILIES = {"factor": "master_factor", "multiplier": "master_scale"}
 SLOTS = 8
 
@@ -108,8 +117,28 @@ def opacity(label, layer, description=""):
 
 
 def amount(label, layer, mask=0, description=""):
-    """The amount of a generator mask (edge wear, chips, cavity dirt, rust, dust, drips, ...)."""
+    """The amount of a generator mask that is none at 0 (edge wear, chips, dust, world normal)."""
     return Control(label, layer, "amount", mask=mask, description=description)
+
+
+def coverage_amount(label, layer, mask=0, description=""):
+    """The amount of a cavity-dirt, rust or drips mask, gated so that 0 shows none of the layer."""
+    return Control(label, kind="factor", mode="coverage",
+                   members=(Member(layer, "opacity"), Member(layer, "amount", mask=mask)), description=description)
+
+
+def levels_center(label, *targets, description=""):
+    """Where an image mask's thresholds sit: 1 − the centre of the first mask; the other masks
+    (sharing the image) move by the same amount, so a primer ring keeps following its chips."""
+    return Control(label, kind="factor", mode="levels_center",
+                   members=tuple(Member(layer, "black", mask=mask, part="levels") for layer, mask in targets),
+                   description=description)
+
+
+def levels_width(label, layer, mask=0, description=""):
+    """How hard an image mask's edge is: 1 − its black-to-white width over LEVELS_SPAN."""
+    return Control(label, kind="factor", mode="levels_width",
+                   members=(Member(layer, "black", mask=mask, part="levels"),), description=description)
 
 
 def level(label, layer, mask, field, description=""):
@@ -207,9 +236,9 @@ def _paint_controls(coat, chips_mask_layer=None, scratches=None, dirt=None, rust
     if scratches:
         result.append(opacity("Scratch Amount", scratches, "Opacity of the scratched-steel layer"))
     if dirt:
-        result.append(amount("Dirt Amount", dirt, description="Amount of the cavity-dirt mask"))
+        result.append(coverage_amount("Dirt Amount", dirt, description="Amount of the cavity dirt; none at 0"))
     if rust:
-        result.append(amount("Rust Amount", rust, description="Amount of the rust mask under the paint"))
+        result.append(coverage_amount("Rust Amount", rust, description="Amount of the rust under the paint; none at 0"))
     return result
 
 
@@ -217,8 +246,10 @@ def _paint_controls(coat, chips_mask_layer=None, scratches=None, dirt=None, rust
 # count the recipe's masks_for(spec) order. docs/master-controls.md lists every control,
 # what it binds and where it departs from the product specification. Two rules recur:
 # a layer masked by an image or a procedural takes its amount from ``opacity`` (the mask's
-# ``amount`` only drives generators), and so does a cavity-dirt layer, whose generator keeps
-# deep cavities dirty at amount 0 and would leave an "amount" control that cannot reach none.
+# ``amount`` only drives generators); a cavity-dirt, rust or drips layer takes a
+# ``coverage_amount`` (its generator keeps coverage at amount 0, so the gate makes 0 none).
+# Pattern-scale controls follow Blender's texture convention: a larger scale repeats the
+# pattern more often, so its features get smaller.
 CONTROLS = {
     # ---- Metals ----
     "Clean Brushed Steel": [
@@ -235,7 +266,7 @@ CONTROLS = {
         opacity("Scratch Amount", "Cross scratches"),
         amount("Edge Polish", "Polished edges"),
         opacity("Handling Marks", "Handling oils"),
-        opacity("Grime Amount", "Recess grime"),
+        coverage_amount("Grime Amount", "Recess grime"),
         color("Grime Color", "Recess grime"),
         surface("Anisotropy", "anisotropy"),
     ],
@@ -263,8 +294,8 @@ CONTROLS = {
         relief("Surface Relief", "Casting oxide skin"),
         inverted("Oxide Coverage", "Casting oxide skin",
                  description="How much of the casting keeps its oxide skin (the inverted edge mask)"),
-        amount("Rust Speckling", "Pinpoint oxidation"),
-        opacity("Cavity Deposits", "Cavity deposits"),
+        coverage_amount("Rust Speckling", "Pinpoint oxidation"),
+        coverage_amount("Cavity Deposits", "Cavity deposits"),
     ],
     "Raw Industrial Steel": [
         # The mill scale covers the rolled steel completely (no mask, full opacity): the
@@ -274,10 +305,10 @@ CONTROLS = {
         opacity("Mill Scale Amount", "Blue black mill scale"),
         opacity("Scratch Amount", "Rolling scratches"),
         depth("Scratch Depth", "Rolling scratches"),
-        amount("Flash Rust", "Light flash rust"),
+        coverage_amount("Flash Rust", "Light flash rust"),
     ],
     "Polished Chrome": [
-        roughness("Polish / Roughness", "Polished chromium"),
+        roughness("Surface Roughness", "Polished chromium"),
         opacity("Hairline Scratches", "Hairline scratches"),
         depth("Scratch Depth", "Hairline scratches"),
         opacity("Wipe Marks", "Wipe smudges"),
@@ -288,7 +319,7 @@ CONTROLS = {
         roughness("Brass Roughness", "Brass alloy"),
         opacity("Tarnish Amount", "Brown tarnish"),
         opacity("Scratch Amount", "Handling scratches"),
-        opacity("Dark Oxidation", "Dark recess oxidation"),
+        coverage_amount("Dark Oxidation", "Dark recess oxidation"),
         amount("Edge Polish", "Touched edges"),
         color("Tarnish Color", "Brown tarnish"),
     ],
@@ -297,7 +328,7 @@ CONTROLS = {
         roughness("Bronze Roughness", "Aged brown surface"),
         inverted("Brown Aging", "Aged brown surface",
                  description="How much of the bronze keeps its brown aged surface (the inverted edge mask)"),
-        opacity("Green Patina", "Green cavity patina"),
+        coverage_amount("Green Patina", "Green cavity patina"),
         color("Patina Color", "Green cavity patina"),
         opacity("Fine Scratches", "Fine handling scratches"),
         amount("Polished High Points", "Polished high points"),
@@ -308,8 +339,8 @@ CONTROLS = {
         opacity("Brown Oxidation", "Brown copper oxide"),
         opacity("Turquoise Patina", "Turquoise patina"),
         color("Patina Color", "Turquoise patina"),
-        opacity("Cavity Deposits", "Sheltered green deposits"),
-        amount("Rain Streaking", "Rain washed copper"),
+        coverage_amount("Cavity Deposits", "Sheltered green deposits"),
+        coverage_amount("Rain Streaking", "Rain washed copper"),
     ],
     # ---- Painted and coated metals ----
     "Worn Painted Metal": _paint_controls("Blue paint coat", chips_mask_layer="Blue paint coat",
@@ -318,12 +349,12 @@ CONTROLS = {
     "Heavy Chipped Paint": [
         color("Paint Color", "Flaking yellow paint"),
         roughness("Paint Roughness", "Flaking yellow paint"),
-        level("Paint Loss Black", "Flaking yellow paint", 0, "black",
-              "Black level of the paint-loss mask: higher keeps more paint"),
-        level("Paint Loss White", "Flaking yellow paint", 0, "white",
-              "White level of the paint-loss mask: lower removes more paint"),
+        levels_center("Paint Loss", ("Flaking yellow paint", 0), ("Old primer", 0),
+                      description="How much of the paint has flaked away; the primer ring follows the chips"),
+        levels_width("Paint Loss Contrast", "Flaking yellow paint", 0,
+                     description="How hard the chip edges are: soft flaking at 0, a crisp break at 1"),
         opacity("Scoring Amount", "Deep scoring"),
-        amount("Dust Amount", "Trapped dust"),
+        coverage_amount("Dust Amount", "Trapped dust"),
     ],
     "Factory Powder-Coated Metal": [
         color("Coat Color", "Powder coat"),
@@ -335,17 +366,17 @@ CONTROLS = {
         color("Paint Color", "Olive drab coating"),
         roughness("Paint Roughness", "Olive drab coating"),
         amount("Paint Wear", "Olive drab coating", description="Amount of the chips that expose the steel"),
-        amount("Rust Amount", "Corrosion undercoat"),
+        coverage_amount("Rust Amount", "Corrosion undercoat"),
         opacity("Scratches", "Abrasion scoring"),
-        opacity("Earth / Mud", "Cavity earth"),
+        coverage_amount("Mud", "Cavity earth"),
         amount("Dust", "Settled dust"),
     ],
     "Old Enamel Metal": [
         color("Enamel Color", "Crazed cream enamel"),
         roughness("Enamel Roughness", "Crazed cream enamel"),
         amount("Paint Loss", "Crazed cream enamel", description="Amount of the chips that break the enamel"),
-        detail("Crazing", "Old Enamel Metal", "Crazed cream enamel"),
-        amount("Rust Amount", "Rust at coating failures"),
+        detail("Enamel Grain", "Old Enamel Metal", "Crazed cream enamel"),
+        coverage_amount("Rust Amount", "Rust at coating failures"),
         opacity("Fading", "Faded enamel islands"),
         opacity("Surface Scratches", "Hairline surface marks"),
     ],
@@ -353,9 +384,9 @@ CONTROLS = {
         color("Paint Color", "Red paint coat"),
         amount("Paint Wear", "Red paint coat", mask=1, description="Amount of the chips that break the paint"),
         opacity("Deep Rust", "Deep oxide"),
-        amount("Fresh Rust", "Active orange corrosion"),
-        amount("Rust Runoff", "Rust runoff"),
-        opacity("Recess Grime", "Recess grime"),
+        coverage_amount("Fresh Rust", "Active orange corrosion"),
+        coverage_amount("Rust Runoff", "Rust runoff"),
+        coverage_amount("Recess Grime", "Recess grime"),
     ],
     "Automotive Painted Metal": [
         color("Paint Color", "Deep red base coat"),
@@ -371,16 +402,16 @@ CONTROLS = {
                  description="How much of the paint the burst blisters have taken"),
         film_relief("Blister Relief", "Blistered green paint"),
         opacity("Scorching", "Scorched blister rims"),
-        opacity("Soot", "Protected soot"),
+        coverage_amount("Soot", "Protected soot"),
         amount("Ash", "Fine ash"),
     ],
     # ---- Rust, damage and industrial ----
     "Heavy Rust": [
         opacity("Rust Coverage", "Rust flakes"),
-        pattern_scale("Flake Size", "Heavy Rust", layers=("Rust flakes",), masks=(("Rust flakes", 0),)),
+        pattern_scale("Flake Scale", "Heavy Rust", layers=("Rust flakes",), masks=(("Rust flakes", 0),)),
         relief("Flake Relief", "Rust flakes"),
         opacity("Fresh Orange Rust", "Bright new rust"),
-        opacity("Deep Cavity Rust", "Dark rust cavities"),
+        coverage_amount("Deep Cavity Rust", "Dark rust cavities"),
         roughness("Base Roughness", "Dark oxide bed"),
     ],
     "Surface Rust": [
@@ -395,12 +426,12 @@ CONTROLS = {
         roughness("Wet Roughness", "Surface moisture"),
         opacity("Dry Scale Amount", "Dry oxide scales"),
         relief("Scale Relief", "Dry oxide scales"),
-        opacity("Wet Cavities", "Wet recesses"),
+        coverage_amount("Wet Cavities", "Wet recesses"),
         relief("Corrosion Relief", "Dark wet corrosion"),
     ],
     "Galvanized Steel": [
         roughness("Metal Roughness", "Zinc spangle"),
-        pattern_scale("Spangle Size", "Galvanized Steel", layers=("Zinc spangle",),
+        pattern_scale("Spangle Scale", "Galvanized Steel", layers=("Zinc spangle",),
                       masks=(("Sparse zinc oxidation", 0),)),
         relief("Spangle Relief", "Zinc spangle"),
         opacity("White Oxidation", "Sparse zinc oxidation"),
@@ -412,7 +443,7 @@ CONTROLS = {
         pattern_scale("Weld Pattern Scale", "Welded Steel", layers=("Solidified weld pools",),
                       masks=(("Solidified weld pools", 0), ("Tempered weld shoulders", 0))),
         opacity("Heat Tint", "Tempered weld shoulders"),
-        opacity("Weld Soot", "Weld recess soot"),
+        coverage_amount("Weld Soot", "Weld recess soot"),
     ],
     "Heat-Treated Metal": [
         roughness("Metal Roughness", "Steel substrate"),
@@ -429,7 +460,7 @@ CONTROLS = {
     "Greasy Machinery": [
         roughness("Metal Roughness", "Machined steel"),
         opacity("Scratches", "Maintenance scratches"),
-        opacity("Grease Buildup", "Protected cavity grease"),
+        coverage_amount("Grease Buildup", "Protected cavity grease"),
         opacity("Oil Film", "Dragged oil film"),
         opacity("Grease Deposits", "Thick grease deposits"),
         opacity("Dust in Grease", "Dust stuck in grease"),
@@ -439,9 +470,9 @@ CONTROLS = {
         inverted("Paint Remaining", "Peeling teal paint", mask=1,
                  description="How much of the teal paint the chips have left"),
         opacity("Deep Corrosion", "Deep corrosion"),
-        amount("Fresh Rust", "Orange corrosion blooms"),
-        amount("Oil Leakage", "Stale oil leakage"),
-        opacity("Grime", "Dense cavity grime"),
+        coverage_amount("Fresh Rust", "Orange corrosion blooms"),
+        coverage_amount("Oil Leakage", "Stale oil leakage"),
+        coverage_amount("Grime", "Dense cavity grime"),
         amount("Dust", "Settled dust"),
     ],
     # ---- Plastic and rubber ----
@@ -460,7 +491,7 @@ CONTROLS = {
         opacity("Scratches", "Stress-whitened abrasion"),
         amount("Edge Polish", "Polished plastic edges"),
         opacity("Fingerprints", "Oily handling smears"),
-        opacity("Dirt", "Accumulated dirt"),
+        coverage_amount("Dirt", "Accumulated dirt"),
     ],
     "Soft-Touch Plastic": [
         color("Plastic Color", "Rubberized coating"),
@@ -483,7 +514,7 @@ CONTROLS = {
         detail("Grain Amount", "Dirty Rubber", "Rubber compound"),
         opacity("Scoring", "Rubber scoring"),
         amount("Edge Wear", "Rubbed edges"),
-        opacity("Embedded Dirt", "Embedded cavity earth"),
+        coverage_amount("Embedded Dirt", "Embedded cavity earth"),
     ],
     "Cracked Old Rubber": [
         color("Rubber Color", "Aged rubber"),
@@ -492,7 +523,7 @@ CONTROLS = {
         depth("Crack Depth", "Open rubber cracks"),
         detail("Dry Grain", "Cracked Old Rubber", "Aged rubber"),
         opacity("Bleaching", "Bleached patches"),
-        opacity("Dust in Cracks", "Dust in cracks"),
+        coverage_amount("Dust in Cracks", "Dust in cracks"),
     ],
     # ---- Wood ----
     "Fresh Oak": [
@@ -510,7 +541,7 @@ CONTROLS = {
         opacity("Dark Pores", "Dark open pores"),
         opacity("Scratches", "Scuffed fiber bundles"),
         amount("Edge Polish", "Polished edges"),
-        opacity("Crevice Dirt", "Crevice dirt"),
+        coverage_amount("Crevice Dirt", "Crevice dirt"),
     ],
     "Painted Wood": [
         color("Paint Color", "Raised blue paint film"),
@@ -518,7 +549,7 @@ CONTROLS = {
         amount("Paint Wear", "Raised blue paint film", description="Amount of the edge wear that breaks the paint film"),
         detail("Wood Grain", "Painted Wood", "Timber substrate"),
         opacity("Paint Scratches", "Scored paint film"),
-        opacity("Crevice Dirt", "Dark crevices"),
+        coverage_amount("Crevice Dirt", "Dark crevices"),
     ],
     "Weathered Outdoor Wood": [
         color("Wood Color", "Weathered growth grain"),
@@ -526,8 +557,8 @@ CONTROLS = {
         opacity("Raised Fibers", "Raised gray fibers"),
         opacity("Splitting", "Split timber beds"),
         depth("Split Depth", "Split timber beds"),
-        amount("Moisture Streaks", "Moisture tracks"),
-        opacity("Crevice Dirt", "Crevice dirt"),
+        coverage_amount("Moisture Streaks", "Moisture tracks"),
+        coverage_amount("Crevice Dirt", "Crevice dirt"),
     ],
     "Burnt Wood": [
         color("Char Color", "Carbonized timber"),
@@ -559,19 +590,19 @@ CONTROLS = {
         relief("Surface Relief", "Weathered cement relief"),
         opacity("Pores", "Deep concrete pores"),
         opacity("Mineral Grime", "Embedded mineral grime"),
-        amount("Water Stains", "Water stains"),
-        opacity("Dirt", "Cavity dirt"),
+        coverage_amount("Water Stains", "Water stains"),
+        coverage_amount("Dirt", "Cavity dirt"),
     ],
     "Painted Concrete": [
         color("Paint Color", "Raised wall paint"),
         roughness("Paint Roughness", "Raised wall paint"),
         amount("Paint Wear", "Raised wall paint", description="Amount of the edge wear that breaks the paint"),
         opacity("Concrete Pitting", "Pitted cement"),
-        opacity("Recess Dirt", "Dirt along recesses"),
+        coverage_amount("Recess Dirt", "Dirt along recesses"),
     ],
     "Polished Marble": [
         color("Marble Color", "Marble body"),
-        roughness("Polish / Roughness", "Marble body"),
+        roughness("Surface Roughness", "Marble body"),
         pattern_scale("Vein Scale", "Polished Marble", layers=("Marble body",), masks=(("Warm mineral wisps", 0),)),
         detail("Vein Detail", "Polished Marble", "Marble body"),
         opacity("Warm Mineral Variation", "Warm mineral wisps"),
@@ -590,9 +621,9 @@ CONTROLS = {
         color("Stone Color", "Stone mineral substrate"),
         opacity("Erosion", "Eroded grain beds"),
         depth("Erosion Depth", "Eroded grain beds"),
-        opacity("Cavity Darkening", "Dark stone cavities"),
+        coverage_amount("Cavity Darkening", "Dark stone cavities"),
         opacity("Moisture Stains", "Damp mineral staining"),
-        opacity("Moss Amount", "Optional moss buildup"),
+        coverage_amount("Moss Amount", "Optional moss buildup"),
         color("Moss Color", "Optional moss buildup"),
     ],
     # ---- Fabric and leather ----
@@ -602,7 +633,7 @@ CONTROLS = {
         relief("Grain Relief", "Leather grain relief"),
         opacity("Creases", "Leather crease beds"),
         opacity("Scratches", "Soft surface scuffing"),
-        opacity("Dark Recesses", "Dark recesses"),
+        coverage_amount("Dark Recesses", "Dark recesses"),
         amount("Burnished Edges", "Burnished edges"),
     ],
     "Cracked Old Leather": [
@@ -611,7 +642,7 @@ CONTROLS = {
         opacity("Cracking", "Recessed dry fissures"),
         depth("Crack Depth", "Recessed dry fissures"),
         opacity("Fading", "Faded grain crowns"),
-        opacity("Deep Stains", "Deep stains"),
+        coverage_amount("Deep Stains", "Deep stains"),
         amount("Edge Abrasion", "Abraded hide edges"),
     ],
     "Denim Fabric": [
@@ -622,16 +653,16 @@ CONTROLS = {
         opacity("Visible Weft", "Pale yarn crowns"),
         amount("Fading", "Faded weave ridges"),
         opacity("Abrasion", "Cotton abrasion"),
-        opacity("Dirt", "Embedded dirt"),
+        coverage_amount("Dirt", "Embedded dirt"),
     ],
     "Canvas Fabric": [
         color("Canvas Color", "Canvas woven relief"),
         pattern_scale("Weave Scale", "Canvas Fabric", layers=("Canvas woven relief",),
                       masks=(("Rough fiber crowns", 0), ("Frayed edge fibers", 1))),
         relief("Weave Relief", "Canvas woven relief"),
-        opacity("Fiber Roughness", "Rough fiber crowns"),
+        opacity("Loose Fibers", "Rough fiber crowns"),
         opacity("Staining", "Irregular stains"),
-        opacity("Fold Dirt", "Dirt in folds"),
+        coverage_amount("Fold Dirt", "Dirt in folds"),
         amount("Fraying", "Frayed edge fibers"),
     ],
     # ---- Specialized hero materials ----
@@ -640,10 +671,10 @@ CONTROLS = {
         roughness("Coating Roughness", "Raised panel coating"),
         amount("Coating Wear", "Raised panel coating", description="Amount of the edge wear that breaks the coating"),
         color("Repair Patch Color", "Contrasting repair coating"),
-        opacity("Repair Patch Amount", "Contrasting repair coating"),
+        coverage_amount("Repair Patch Amount", "Contrasting repair coating"),
         opacity("Service Scratches", "Service abrasion"),
         amount("Exposed Edges", "Exposed panel edges"),
-        opacity("Recess Grime", "Panel recess grime"),
+        coverage_amount("Recess Grime", "Panel recess grime"),
     ],
     "Post-Apocalyptic Scrap Metal": [
         color("Old Paint Color", "Old yellow paint film"),
@@ -652,8 +683,8 @@ CONTROLS = {
         color("Repair Paint Color", "Later blue repair film"),
         opacity("Deep Rust", "Granular rust scales"),
         opacity("Gouges", "Abraded coating edges"),
-        amount("Oil Leakage", "Oil leakage"),
-        opacity("Cavity Grime", "Deep cavity grime"),
+        coverage_amount("Oil Leakage", "Oil leakage"),
+        coverage_amount("Cavity Grime", "Deep cavity grime"),
         amount("Dust", "Windblown dust"),
     ],
 }
@@ -766,7 +797,10 @@ def _base_value(folder, member):
                 return effect[member.field]
             return channel[member.field]
         if member.mask >= 0:
-            return layer["masks"][member.mask][member.field]
+            mask = layer["masks"][member.mask]
+            if member.part == "levels":
+                return (mask["black"] + mask["white"]) / 2, mask["white"] - mask["black"]
+            return mask[member.field]
         return layer[member.field]
     except (KeyError, IndexError, StopIteration):
         return None
@@ -792,8 +826,8 @@ def resolve(ts, folder, control):
             if not hasattr(owner, member.field):
                 binding.reason = f"{member.field} is not a property of {member.layer}"
                 return binding
-            base = _base_value(folder, member) if control.mode == "scale" else None
-            if control.mode == "scale" and base is None:
+            base = _base_value(folder, member) if control.mode in {"scale", "coverage", "levels_center"} else None
+            if control.mode in {"scale", "coverage", "levels_center"} and base is None:
                 binding.reason = f"the authored value of '{member.layer}' is not recorded"
                 return binding
             binding.members.append((owner, member, base))
@@ -847,6 +881,13 @@ def read(binding):
         return 1 - getattr(owner, member.field)
     if control.mode == "depth":
         return min(max((0.5 - getattr(owner, member.field)) / DEPTH_SPAN, 0.0), 1.0)
+    if control.mode == "coverage":
+        layer_owner, mask_owner = binding.members[0][0], binding.members[1][0]
+        return 0.0 if layer_owner.opacity <= 0 else mask_owner.amount
+    if control.mode == "levels_center":
+        return min(max(1 - (owner.black + owner.white) / 2, 0.0), 1.0)
+    if control.mode == "levels_width":
+        return min(max(1 - (owner.white - owner.black) / LEVELS_SPAN, 0.0), 1.0)
     for owner, member, base in binding.members:
         if _magnitude(base):
             value = _current(owner, member) / (base[0] if isinstance(base, (list, tuple)) else base)
@@ -865,6 +906,23 @@ def write(binding, value):
         owner, member, _ = binding.members[0]
         setattr(owner, member.field, 0.5 - min(max(value, 0.0), 1.0) * DEPTH_SPAN)
         return
+    if control.mode == "coverage":
+        # The amount is the generator's; the opacity fades out below the authored amount.
+        (layer_owner, _, base_opacity), (mask_owner, _, base_amount) = binding.members
+        value = min(max(value, 0.0), 1.0)
+        mask_owner.amount = value
+        layer_owner.opacity = base_opacity * min(1.0, value / base_amount if base_amount > 0 else 1.0)
+        return
+    if control.mode == "levels_center":
+        base_center = binding.members[0][2][0]
+        shift = (1 - min(max(value, 0.0), 1.0)) - base_center
+        for owner, _, (center, _) in binding.members:
+            _set_levels(owner, center + shift, owner.white - owner.black)
+        return
+    if control.mode == "levels_width":
+        owner, _, _ = binding.members[0]
+        _set_levels(owner, (owner.black + owner.white) / 2, (1 - min(max(value, 0.0), 1.0)) * LEVELS_SPAN)
+        return
     for owner, member, base in binding.members:
         if member.part == "range":
             owner.output_white = min(owner.output_black + base * value, 1.0)
@@ -872,6 +930,13 @@ def write(binding, value):
             setattr(owner, "scale", (max(base[0] * value, 0.001), max(base[1] * value, 0.001)))
         else:
             setattr(owner, member.field, base * value)
+
+
+def _set_levels(mask, middle, width):
+    """Black and white of a mask around ``middle``, the ramp kept whole inside 0–1."""
+    width = min(max(width, 0.005), 1.0)
+    middle = min(max(middle, width / 2), 1 - width / 2)
+    mask.black, mask.white = middle - width / 2, middle + width / 2
 
 
 def _owning_set(folder):

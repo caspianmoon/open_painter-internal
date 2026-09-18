@@ -1,5 +1,44 @@
 # Changes
 
+## 0.12.2
+
+Launch remedy: truthful amounts, effective recipes, plain names, an explicit blend channel,
+an audited UI, a clean-install test and one release state.
+
+- **Amount controls reach none at 0.** Every master control on a cavity-dirt, rust or drips
+  layer is a *coverage-gated amount*: the value is the generator's own amount (the spread the
+  recipe was authored with), and the layer's opacity fades to nothing as the amount falls below
+  the authored one — 0 is none, the authored value restores the material, 1 spreads the effect.
+  Applies to Dirt Amount, Dust Amount, Rain Streaking, Rust Runoff, Oil Leakage, Moisture
+  Streaks, Water Stains, every Rust/Grime/Soot/Deposits amount — 46 controls, Worn Painted
+  Metal and Heavy Chipped Paint included. The generators themselves are unchanged.
+- **Recipes whose top-level control did nothing visible were fixed** (versions bumped to 2):
+  Galvanized Steel's white oxidation now shows and grows; Burnt Wood's and Burned Painted
+  Metal's ash appears on upward surfaces and takes its colour; Scratched Aluminum's dents are
+  real recesses whose amount and depth read on their own; Automotive Painted Metal's fine
+  clearcoat scratches cut into the coat.
+- **Names say what they move.** Heavy Chipped Paint's *Paint Loss Black/White* are *Paint
+  Loss* (threshold position, the primer ring following the chips) and *Paint Loss Contrast*
+  (softness); Canvas Fabric's *Fiber Roughness* is *Loose Fibers*; *Polish / Roughness* is
+  *Surface Roughness*; *Flake Size* and *Spangle Size* are *Flake Scale* and *Spangle Scale*
+  (a larger scale means smaller features, Blender's convention); *Crazing* is *Enamel Grain*;
+  *Earth / Mud* is *Mud*. `docs/master-controls.md` records every binding.
+- **Blend Channel is labelled** on the Layers strip ("Blend Channel: BaseColor", its own row in
+  a narrow sidebar), distinct from the 2D *Composite Channel*, the inspector's *Edit Channel*
+  and the *Paint Channel*. Selecting a target from a component row, a node or the shelf opens
+  the folders above it so the row shows in the list. Mask-header texts fit a narrow sidebar
+  and a paint mask says what the brush does ("Paint black to remove coverage").
+- **Audited workflows** (`tests/integration/launch_audit_ui.py`, screenshots in
+  `.blender-test/audit/`): smart material → component mask → back; View Mask → Add Paint to
+  Mask → paint → back; a real target-only bake whose maps go *Out of date* after a mesh edit;
+  the Export tab's Output Preview equal to the files written for Unreal; shelf browsing that
+  selects before it applies and names the target, without catalog tabs.
+- **Clean-install test** (`scripts/run_clean_install.py`): an empty profile, the ZIP alone,
+  two Blender processes through install, set-up, bake, material, controls, layers, mask, a
+  real stroke, save, reopen, export for Blender and Unreal, disable/re-enable, reopen.
+- **Package:** validation reports, performance records and research notes stay in the
+  repository; the ZIP carries the add-on, its assets and the user documentation.
+
 ## 0.12.1
 
 Master controls for all fifty built-in smart materials.

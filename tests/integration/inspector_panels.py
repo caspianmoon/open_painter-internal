@@ -134,7 +134,7 @@ def run(context):
     assert not bsdf.inputs["Normal"].links and not bsdf.inputs["Roughness"].links
     assert [(m.source, m.generator) for m in dirt.masks] == sources, "never rasterised"
     target, layout = draw(context)
-    assert "Back to Material" in layout.text and "Mask Snapshot · current" in layout.text
+    assert "Back to Material" in layout.text and "Snapshot current" in layout.text
     dirt.masks[0].amount = .61
     assert mask_view.stale(body)
     target, layout = draw(context)

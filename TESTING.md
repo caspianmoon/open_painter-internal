@@ -101,6 +101,24 @@ The archive is checked using Blender's `--command extension validate` command.
 enables/disables it repeatedly under its real `bl_ext` namespace, then creates and evaluates a material.
 No existing user extension or preference file is replaced by these tests.
 
+`python3 scripts/run_clean_install.py` (0.12.2) is the launch test: an empty Blender profile, the
+built ZIP and nothing from the checkout on the path. Phase 1 installs and enables the extension,
+opens the Painter, creates a set, bakes, applies a smart material, moves its master controls, adds
+fill and paint layers and a mask, paints a real stroke and saves; phase 2 is a second Blender
+process that reopens the file, exports for Blender and Unreal (the written files equal the Output
+Preview), disables and re-enables the extension and opens the project again. The record lands in
+`.blender-test/clean-install.json` with the Blender version, platform and machine.
+
+## Launch audit
+
+`tests/integration/launch_audit_ui.py` (GUI, in the `--gui-only` list) walks the five remedy-plan
+workflows — smart material, mask correction, baking with a real target-only bake and a mesh edit,
+export with the Unreal preset, asset browsing — asserting the words an artist relies on and
+saving screenshots to `.blender-test/audit/`. `tests/integration/master_controls.py` and
+`master_controls_ui.py` cover the master controls (bindings, coverage-gated amounts reaching none,
+duplication, deletion, save/reopen, undo/redo); `scripts/render_master_controls.py` renders every
+control at its extremes for the visual pass (`docs/master-controls.md`).
+
 ## Performance
 
 The earlier CPU-only 2K stack of 20 constant fill layers with six channels enabled measured approximately **0.67 seconds**

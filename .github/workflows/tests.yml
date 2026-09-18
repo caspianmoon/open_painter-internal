@@ -1,4 +1,13 @@
 name: CPU reference and Blender acceptance
+# Three tiers, kept apart on purpose:
+#   pure-reference       — the NumPy reference and unit suites, every push and pull request,
+#                          GitHub-hosted (no Blender).
+#   blender-background   — the background Blender integration suites against the built ZIP,
+#                          a trusted self-hosted runner with Blender 5.2, manual dispatch only
+#                          (never arbitrary pull-request code on a workstation).
+#   blender-gui          — the real-window probes (event simulation, screenshots, the launch
+#                          audit and the clean-install test); needs a display, so it runs on
+#                          the same trusted runner, manual dispatch only.
 on:
   push:
   pull_request:
@@ -8,6 +17,10 @@ on:
         description: Absolute Blender 5.2+ executable on the labelled isolated runner
         required: true
         default: /usr/local/bin/blender
+      gui:
+        description: Also run the real-window probes and the clean-install test (needs a display)
+        type: boolean
+        default: false
 jobs:
   pure-reference:
     runs-on: ubuntu-latest
@@ -19,7 +32,6 @@ jobs:
       - run: python -m pip install numpy==2.2.6
       - run: python scripts/run_pure_tests.py
   blender-background:
-    # Explicit trusted dispatch: never run arbitrary PR code on a workstation.
     if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, blender-5.2]
     steps:
@@ -28,3 +40,28 @@ jobs:
       - run: python3 scripts/run_tests.py --blender "$BLENDER_BIN" --package .blender-test/candidate.zip
         env:
           BLENDER_BIN: ${{ inputs.blender_binary }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-package
+          path: .blender-test/candidate.zip
+  blender-gui:
+    if: github.event_name == 'workflow_dispatch' && inputs.gui
+    needs: blender-background
+    runs-on: [self-hosted, blender-5.2, display]
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build_extension.py --output .blender-test/candidate.zip
+      - run: python3 scripts/run_tests.py --blender "$BLENDER_BIN" --gui-only
+        env:
+          BLENDER_BIN: ${{ inputs.blender_binary }}
+      - run: python3 scripts/run_clean_install.py --blender "$BLENDER_BIN" --package .blender-test/candidate.zip
+        env:
+          BLENDER_BIN: ${{ inputs.blender_binary }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-audit
+          path: |
+            .blender-test/audit
+            .blender-test/clean-install.json

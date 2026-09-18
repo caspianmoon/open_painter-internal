@@ -163,7 +163,7 @@ def draw_fill(layout, context, target):
     project = context.scene.open_painter
     draw_channel_toggles(layout, layer)
     row = layout.row(align=True)
-    row.prop(project, "properties_channel", text="Channel")
+    row.prop(project, "properties_channel", text="Edit Channel")
     channel = channel_for(layer, project.properties_channel)
     if channel is not None:
         draw_channel_content(layout, context, ts, layer, channel)
@@ -307,23 +307,30 @@ def draw_mask_header(layout, context, target):
     else:
         row.operator("open_painter.view_mask", text="View Mask", icon="HIDE_OFF").action = "VIEW"
     row.operator("open_painter.mask_paint", text="Add Paint to Mask", icon="BRUSH_DATA")
+    # Short lines: a narrow sidebar truncates the middle of a long label, which is worse than none.
     if viewing:
         stale = mask_view.stale(ts, view)
-        box.label(text="Mask Snapshot" + (" · out of date, refresh to update" if stale else " · current"),
+        box.label(text="Snapshot out of date · refresh" if stale else "Snapshot current",
                   icon="TIME" if stale else "IMAGE_DATA")
     elif view is not None:
         other = mask_view.viewed_layer(ts)
-        box.label(text=f"Viewing the mask of {other.name if other else 'another layer'}", icon="HIDE_OFF")
+        box.label(text=f"Viewing {other.name if other else 'another layer'}'s mask", icon="HIDE_OFF")
     paint = target.paint
     if paint.kind == "MASK":
         row = box.row(align=True)
-        row.label(text=("Painting this mask" if paint.live else "Paintable mask"), icon="BRUSH_DATA")
+        row.label(text=("Painting" if paint.live else "Paintable mask"), icon="BRUSH_DATA")
         if paint.live:
             row.operator("open_painter.paint", text="Finish", icon="CHECKMARK").stop = True
         else:
             row.operator("open_painter.paint", text="Paint Mask", icon="BRUSH_DATA").mask = True
+        if mask is not None and mask.source == "PAINT":
+            # What the brush does here, in the words of the correction the mask was added for.
+            box.label(text={"ADD": "Paint white to add coverage",
+                            "MULTIPLY": "Paint black to remove coverage"}.get(
+                          mask.operation, "White shows the layer, black hides"), icon="INFO")
     elif mask is not None and mask.source != "PAINT":
-        box.label(text=f"{mask.name} is procedural; Add Paint to Mask paints a correction above it", icon="INFO")
+        box.label(text=f"{mask.name}: procedural mask", icon="INFO")
+        box.label(text="Corrections are painted above it", icon="BLANK1")
     return box
 
 

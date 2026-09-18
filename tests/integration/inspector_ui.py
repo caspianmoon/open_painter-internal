@@ -205,7 +205,7 @@ def mask_drawn():
 def viewing_drawn():
     shot("view-mask")
     panel = rendered()
-    assert "Back to Material" in panel and "Mask Snapshot" in panel, panel[:400]
+    assert "Back to Material" in panel and "Snapshot" in panel, panel[:400]
     ts = body()
     coat = next(l for l in ts.layers if l.id == state["ids"]["material_layers"]["Blue paint coat"])
     coat.masks[0].amount = .5

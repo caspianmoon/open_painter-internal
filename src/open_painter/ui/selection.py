@@ -282,6 +282,11 @@ def select(context, layer_id, kind=CONTENT, *, mask_id=None, channel=None, effec
                 kind = FILTER
     if kind == MASK and not layer.masks:
         kind = CONTENT
+    # A target chosen from outside the list (a component row, a node, the shelf's target)
+    # must be visible in the list: its folders open so the row can show (0.12.2).
+    for folder in ancestors(ts, layer):
+        if not folder.expanded:
+            folder.expanded = True
     ui.selection_kind = kind
     ui.selected_layers = {layer_id}
     ui.properties_scroll = 0

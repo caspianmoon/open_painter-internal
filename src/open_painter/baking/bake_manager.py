@@ -160,9 +160,12 @@ def bake_steps(context, ts):
         tasks.append(("CURVATURE", lambda: bake_curvature_set(ts)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)
     from ..geometry.provenance import record
+    from . import history
     expected = {kind: record(ts, kind) for kind, _ in tasks}
+    history.start(ts, [kind for kind, _ in tasks])
     for kind, run in tasks:
         yield kind  # Cancellation boundary before allocating/baking the next map.
+        history.step(ts, kind)
         if record(ts, kind) != expected[kind]:
             raise ValueError("Bake inputs changed; restart the bake queue")
         image = run()
@@ -173,12 +176,19 @@ def bake_steps(context, ts):
                 bpy.data.images.remove(item)
             raise ValueError("Bake inputs changed; discarded stale map")
         register_maps(ts, produced)
+        history.landed(ts, kind)
     invalidate(ts)
 
 
 def bake_selected(context, ts):
-    for _ in bake_steps(context, ts):
-        pass
+    from . import history
+    try:
+        for _ in bake_steps(context, ts):
+            pass
+    except Exception as exc:
+        history.finish(ts, error=str(exc))
+        raise
+    history.finish(ts)
 
 
 def owned_curvature(ts):

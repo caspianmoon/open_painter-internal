@@ -106,8 +106,10 @@ def on_load(_):
     _display.clear()
     state.reset()
     from .. import companion, mask_view
+    from ...baking import history
     mask_view.clear()
     companion.forget()
+    history.clear()
 
 
 @persistent

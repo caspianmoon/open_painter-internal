@@ -35,8 +35,8 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Add Paint to Mask | D | none (only *Add White/Black Mask*) | Inspector mask header, explicit role | done (phase 2) |
 | Asset shelf categories, refresh, import texture/alpha | D+F | Tool header strip | Shelf header (catalog tabs) and *Assets* sidebar panel | done (phase 3) |
 | Asset Library panel (catalog material/effect, saved material apply/save/import/delete) | D+F | *Asset Library* panel | *Assets* panel selected-asset box, layer-row context menu, *Assets* menu | done (phase 3) |
-| Bake Mesh Maps popover (doctor, sources, cages, settings, maps, corrections, queue, use maps) | D+F | Tool header popover + *Bake Mesh Maps* panel | *Bake* sidebar tab: Setup / Maps / Results; header *Bake Mesh Maps* opens it | Phase 4 |
-| Use Baked Maps (creates a fill layer) | D | Bake panel bottom | Results › *Add Baked Normal and AO Layer* | Phase 4 |
+| Bake Mesh Maps popover (doctor, sources, cages, settings, maps, corrections, queue, use maps) | D+F | Tool header popover + *Bake Mesh Maps* panel | *Bake* sidebar tab: Setup / Maps / Results; header *Bake Mesh Maps* opens it | done (phase 4) |
+| Use Baked Maps (creates a fill layer) | D | Bake panel bottom | Results › *Add Baked Normal and AO Layer* | done (phase 4) |
 | Export Textures popover (target box, follow target, settings, export, bundle, measure, atlas) | D+F | Tool header popover + *Export Textures* panel | *Export* sidebar tab: Contents / Scope / Destination / Folder / Output Preview; *Prepare Export* sub-panel | Phase 5 |
 | Export → Target, Selected Objects (with all-sets fallback) | F | Tool header row | Export tab (scope explicit; no fallback) | Phase 5 |
 | Material Aging | D | *Material Aging* panel (order 2) | *Material Aging* panel: Applied To / Construction / Environment / Age first, details in sub-panels | Phase 6 |
@@ -127,3 +127,26 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
   one opens the `open_painter.geometry_effect` dialog for the selected object.
 - `assets_panel.apply_document` wraps a saved whole-set document in one named group.
 - `native.layer_context_menu` extends Blender's list-item context menu on the layer rows.
+
+## Phase 4 notes (implemented)
+
+- `ui/bake_view.py`: the *Bake* sidebar tab (`OP_PT_bake_setup` / `_maps` / `_results`, 3D and 2D)
+  with `draw_actions` (Bake Selected Maps, progress, *Stop After This Map*, Back to Painting) in
+  Setup and Results. `open_painter.show_task` switches the sidebar category (`Painter`, `Bake`,
+  `Export`); the tool header's *Bake Mesh Maps* button uses it. The old popover
+  (`OP_PT_native_bake`) and the legacy `OP_PT_bake` draw the same sections stacked (`draw_compact`).
+- Setup shows target names and the model's world size, hides sources, matching and the cage
+  unless *Bake from High Poly* is on, and Cycles sampling unless a Cycles map is ticked.
+- Maps: one collapsible row per map — checkbox, full name, state — whose body names the method
+  (target-edge curvature and signed mean curvature stay distinct) and holds the map's own
+  sampling/distance settings. *The material reads: …* + *Select* (`open_painter.bake` action
+  `SELECT_RECOMMENDED`) only adds to the selection.
+- States (`map_state`): *Missing*, *Up to date*, *Out of date* (provenance record differs —
+  mesh, UVs, assignments, sources, settings), *Baking*, *Failed* (from `baking/history.py`, kept
+  until a later success), *Not checked* (an image without a provenance record).
+- `baking/history.py` records what the last queue did; `bake_steps` registers each map as it
+  lands, so a failure keeps the previous map of that kind. `OP_OT_bake_queue` captures its set
+  by id and address at invoke and stops if the sets change; `open_painter.bake_stop` ends the
+  queue at the next map boundary (a running Cycles map cannot be interrupted, and the UI says so).
+- *Use Baked Maps* is now *Add Baked Normal and AO Layer*; registration for generators happens
+  when maps land, independently.

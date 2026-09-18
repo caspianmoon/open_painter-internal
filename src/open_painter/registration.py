@@ -3,7 +3,7 @@
 import bpy
 
 from .preferences import OP_Preferences, update_debug
-from .baking.jobs import OP_OT_bake_queue, OP_OT_edge_map_refresh
+from .baking.jobs import OP_OT_bake_queue, OP_OT_bake_stop, OP_OT_edge_map_refresh
 from .properties.influencer import OP_Influencer
 from .properties.mesh_selector import OP_MeshSelector
 from .ui.references import OP_OT_reference_source
@@ -16,6 +16,7 @@ from .ui.scene_fields import CLASSES as SCENE_FIELD_CLASSES
 from .ui.target_panel import CLASSES as TARGET_CLASSES
 from .ui.geometry_effects import OP_OT_geometry_effect, OP_PT_geometry_effects, OP_MT_geometry_effect_add
 from .ui.mask_view import CLASSES as MASK_VIEW_CLASSES
+from .ui.bake_view import CLASSES as BAKE_VIEW_CLASSES
 from .ui.companion import CLASSES as COMPANION_CLASSES
 from .ui.material_stamp import OP_OT_material_stamp
 from .ui.production_export import OP_OT_production_export
@@ -108,6 +109,7 @@ CLASSES = (
     OP_OT_bake,
     OP_OT_bake_doctor,
     OP_OT_bake_queue,
+    OP_OT_bake_stop,
     OP_OT_edge_map_refresh,
     OP_UL_high,
     OP_PT_bake,
@@ -124,7 +126,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + BAKE_VIEW_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
 
 
 _registered = False

@@ -5,16 +5,29 @@ import bpy
 class OP_OT_bake_queue(bpy.types.Operator):
     bl_idname = 'open_painter.bake_queue'
     bl_label = 'Bake Selected Maps'
-    bl_description = 'Queue maps; Esc cancels between maps. Each Cycles map blocks while baking'
+    bl_description = 'Queue maps; Esc or Stop ends the queue between maps. Each Cycles map blocks while baking'
     bl_options = {'REGISTER', 'UNDO'}
     _timer = None
     _job = None
     _last_timer_duration = 0.
+    _set_id = ''
+    _set_pointer = 0
+    running_set_id = ''      # the set a live queue serves ('' when idle)
+    stop_requested = False   # set by open_painter.bake_stop; honoured at the next map boundary
+
+    def _set(self, context):
+        """The captured set, or None when the sets changed underneath the queue."""
+        ts = next((item for item in context.scene.open_painter.texture_sets if item.id == self._set_id), None)
+        if ts is None or ts.as_pointer() != self._set_pointer:
+            return None
+        return ts
 
     def finish(self, context):
         job, timer = self._job, self._timer
         self._job = self._timer = None
         self._last_timer_duration = 0.
+        OP_OT_bake_queue.running_set_id = ''
+        OP_OT_bake_queue.stop_requested = False
         try:
             if job is not None:
                 job.close()
@@ -34,22 +47,39 @@ class OP_OT_bake_queue(bpy.types.Operator):
     def invoke(self, context, event):
         from ..core.project_manager import require_set
         from .bake_manager import bake_steps
+        from . import history
+        if OP_OT_bake_queue.running_set_id:
+            self.report({'ERROR'}, 'A bake queue is already running')
+            return {'CANCELLED'}
         try:
-            self._job = bake_steps(context, require_set(context))
+            # The target is captured now, by id and address: whatever the artist selects
+            # while the queue runs, the maps land on this set or nowhere.
+            ts = require_set(context)
+            self._set_id, self._set_pointer = ts.id, ts.as_pointer()
+            self._job = bake_steps(context, ts)
             kind = next(self._job)
-            context.scene.open_painter.status = f'Bake queued: {kind} · Esc between maps'
+            OP_OT_bake_queue.running_set_id = ts.id
+            OP_OT_bake_queue.stop_requested = False
+            context.scene.open_painter.status = f'Baking {kind} · Esc or Stop ends the queue after this map'
             self._timer = context.window_manager.event_timer_add(.1, window=context.window)
             self._last_timer_duration = self._timer.time_duration
             context.window_manager.modal_handler_add(self)
         except Exception as exc:
             self.finish(context)
+            ts = self._set(context)
+            if ts is not None:
+                history.finish(ts, error=str(exc))
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        if event.type == 'ESC':
+        from . import history
+        if event.type == 'ESC' or OP_OT_bake_queue.stop_requested:
+            ts = self._set(context)
             self.finish(context)
+            if ts is not None:
+                history.finish(ts, stopped=True)
             context.scene.open_painter.status = 'Bake queue stopped; completed maps retained'
             return {'FINISHED'}
         if event.type != 'TIMER' or self._timer is None:
@@ -61,15 +91,22 @@ class OP_OT_bake_queue(bpy.types.Operator):
         if duration <= self._last_timer_duration:
             return {'RUNNING_MODAL'}
         self._last_timer_duration = duration
+        ts = self._set(context)
+        if ts is None:
+            self.finish(context)
+            context.scene.open_painter.status = 'Bake stopped: the texture sets changed; completed maps retained'
+            return {'FINISHED'}
         try:
             kind = next(self._job)
-            context.scene.open_painter.status = f'Bake queued: {kind} · Esc between maps'
+            context.scene.open_painter.status = f'Baking {kind} · Esc or Stop ends the queue after this map'
         except StopIteration:
             self.finish(context)
+            history.finish(ts)
             context.scene.open_painter.status = 'Mesh maps complete'
             return {'FINISHED'}
         except Exception as exc:
             self.finish(context)
+            history.finish(ts, error=str(exc))
             self.report({'ERROR'}, str(exc))
             context.scene.open_painter.status = f'Bake failed: {exc}'
             return {'FINISHED'}  # Completed maps still belong to this undo step.
@@ -77,6 +114,23 @@ class OP_OT_bake_queue(bpy.types.Operator):
 
     def cancel(self, context):
         self.finish(context)
+
+
+class OP_OT_bake_stop(bpy.types.Operator):
+    bl_idname = 'open_painter.bake_stop'
+    bl_label = 'Stop After This Map'
+    bl_description = ('End the bake queue at the next map boundary; a Cycles map that is baking cannot be '
+                      'interrupted and completed maps are kept')
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(OP_OT_bake_queue.running_set_id)
+
+    def execute(self, context):
+        OP_OT_bake_queue.stop_requested = True
+        context.scene.open_painter.status = 'Stopping after the current map…'
+        return {'FINISHED'}
 
 
 def land_edge_maps(scene_name, set_id, expected, produced):

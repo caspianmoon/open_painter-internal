@@ -14,7 +14,11 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
             ("BAKE", "Bake", ""),
             ("ADD_HIGH", "Add Selected High Poly", ""),
             ("REMOVE_HIGH", "Remove High Poly", ""),
-            ("USE_MAPS", "Use Baked Maps", ""),
+            ("USE_MAPS", "Add Baked Normal and AO Layer",
+             "Add a fill layer that shows the baked Normal and AO maps in the shading; mesh maps are "
+             "already registered for generators when they land"),
+            ("SELECT_RECOMMENDED", "Select Recommended Maps",
+             "Tick the maps the material's generators read, keeping the maps already selected"),
             (
                 "CURVATURE",
                 "Rebake Edge Map",
@@ -107,6 +111,13 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
                     channel = channel_for(layer, prop.kind)
                     channel.enabled = True
                     channel.image = prop.image
+        elif self.action == "SELECT_RECOMMENDED":
+            from .bake_view import KIND_TO_KEY, recommended
+            kinds = recommended(ts)
+            for kind in kinds:
+                setattr(ts.bake, KIND_TO_KEY[kind], True)
+            self.report({"INFO"}, ("Selected " + ", ".join(k.replace("_", " ").title() for k in kinds))
+                        if kinds else "No layer reads a mesh map yet")
         elif self.action == "REMOVE_HIGH":
             if ts.bake.high_objects:
                 ts.bake.high_objects.remove(min(ts.bake.active_high, len(ts.bake.high_objects) - 1))
@@ -242,87 +253,7 @@ class OP_PT_bake(bpy.types.Panel):
 
     def draw(self, context):
         ts = active_set(context)
-        layout = self.layout
         if not ts:
             return
-        settings = ts.bake
-        draw_bake_doctor(layout, context, ts)
-        layout.label(text=f"Low Poly: {len(ts.assignments)} assigned slots")
-        layout.prop(settings, "selected_to_active")
-        layout.template_list(
-            "OP_UL_high", "", settings, "high_objects", settings, "active_high", rows=2
-        )
-        row = layout.row(align=True)
-        row.operator("open_painter.bake", text="Add Selected High Poly").action = "ADD_HIGH"
-        row.operator("open_painter.bake", text="", icon="REMOVE").action = "REMOVE_HIGH"
-        layout.prop(settings, 'source_mode')
-        layout.operator('open_painter.bake', text='Match Sources by Name', icon='LINKED').action = 'MATCH_SOURCES'
-        if settings.high_objects:
-            ref = settings.high_objects[min(settings.active_high, len(settings.high_objects)-1)]
-            layout.prop(ref, 'target')
-            if settings.cage_mode == 'CUSTOM' and len({r.object for r in ts.assignments if r.object}) > 1:
-                layout.prop(ref, 'cage')
-        layout.prop(ts, "resolution")
-        for key in ("margin", "cage_mode", "ray_distance", "samples", "device", "supersample"):
-            layout.prop(settings, key)
-        if settings.cage_mode == 'AUTO':
-            layout.prop(settings, 'separate_cage_distance')
-            if settings.separate_cage_distance:
-                layout.prop(settings, 'cage_extrusion')
-        if settings.cage_mode == "CUSTOM":
-            if len({ref.object for ref in ts.assignments if ref.object}) == 1:
-                layout.prop(settings, "cage_object")
-            else:
-                layout.label(text='Choose each cage on its high-poly source row')
-        layout.operator('open_painter.bake', text='Create Editable Cages', icon='MESH_CUBE').action = 'CREATE_CAGES'
-        for key in ("normal", "ao", "curvature"):
-            layout.prop(settings, key)
-        if settings.ao:
-            layout.prop(settings, 'ao_scope')
-            layout.prop(settings, 'ao_distance')
-        if settings.curvature:
-            layout.prop(settings, "curvature_angle")
-            layout.prop(settings, "curvature_width")
-            layout.prop(settings, "mean_curvature_distance")
-            layout.prop(settings, "auto_edge_rebake")
-            layout.label(text="Creases plus smooth bevels within the radius; target mesh only.")
-            layout.operator(
-                "open_painter.bake", text="Rebake Edge Map", icon="IMAGE_DATA"
-            ).action = "CURVATURE"
-        bevel = layout.column(align=True)
-        bevel.label(text="Bevel Maps (Cycles-baked, engine independent)")
-        bevel.prop(settings, "bevel_normal")
-        bevel.prop(settings, "bevel_mask")
-        if settings.bevel_normal or settings.bevel_mask:
-            bevel.prop(settings, "bevel_radius")
-            bevel.prop(settings, "bevel_samples")
-        section = layout.column(align=True)
-        section.label(text="Target Mesh Utility Maps")
-        for key in ("position", "world_normal", "object_normal", "material_id", "object_id", "uv_island", "uv_border", "thickness", "mean_curvature", "selection"):
-            section.prop(settings, key)
-        if settings.uv_border:
-            section.prop(settings, "uv_border_width")
-        if settings.mean_curvature and not settings.curvature:
-            section.prop(settings, "mean_curvature_distance")
-        if settings.selection:
-            section.label(text="Face selection of the assigned meshes; face count must survive modifiers.")
-        if settings.thickness:
-            section.prop(settings, "thickness_resolution")
-            section.prop(settings, "thickness_samples")
-            section.prop(settings, "thickness_max_distance")
-            section.label(text="Closed surfaces; sampled inward rays.")
-        section.label(text="Utility maps use evaluated target UVs.")
-        from .bake_corrections import draw_corrections
-        draw_corrections(layout, context, ts)
-        layout.operator('open_painter.bake_queue', icon='RENDER_STILL')
-        layout.label(text='Esc stops between maps; Cycles maps block.')
-        layout.operator(
-            "open_painter.bake", text="Use Baked Normal + AO in Stack"
-        ).action = "USE_MAPS"
-        for prop in ts.baked_maps:
-            from ..geometry.provenance import status
-            layout.label(
-                text=f"{prop.kind}: {status(ts, prop)}", icon="IMAGE_DATA"
-            )
-        if any(prop.kind == 'SELECTION' and prop.image for prop in ts.baked_maps):
-            layout.operator('open_painter.bake', text='Reselect Baked Faces', icon='RESTRICT_SELECT_OFF').action = 'RESELECT_MAP'
+        from .bake_view import draw_compact
+        draw_compact(self.layout, context, ts)

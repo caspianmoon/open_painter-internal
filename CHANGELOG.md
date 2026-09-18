@@ -1,5 +1,23 @@
 # Changes
 
+## 0.12.0 (in progress)
+
+Focused bake and export views (UI plan phases 4–5).
+
+- **Bake view:** *Bake Mesh Maps* in the tool header opens the sidebar's *Bake* tab with three
+  freely accessible sections. *Setup* shows the targets, the model's size, resolution, margin,
+  and only what applies: high-poly sources, matching and the projection cage when *Bake from
+  High Poly* is on, Cycles sampling when a Cycles map is ticked. *Maps* lists every map with its
+  full name and state; each row opens to its method (target-edge curvature and signed mean
+  curvature stay distinct) and its own sampling and distance settings; *The material reads: …*
+  offers the maps the generators need without touching the selection. *Results* shows the last
+  bake (what landed, what failed and why, what a stop skipped), each registered map's state —
+  *Missing · Up to date · Out of date · Baking · Failed · Not checked* — with a 2D view button,
+  the Bake Check findings, *Add Baked Normal and AO Layer* (the renamed *Use Baked Maps*) and
+  *Reselect Baked Faces*. Bake, progress, *Stop After This Map* and *Back to Painting* sit in
+  the view; a failed rebake keeps the previous map; the queue is bound to the set it started on.
+- Tests: `tests/integration/bake_view.py`; `tests/unit/test_bake_queue.py` updated.
+
 ## 0.11.0
 
 The everyday editing workflow, as planned in `Open_Painter_UI_Implementation_Plan.md`: one editing

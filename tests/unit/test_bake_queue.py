@@ -29,10 +29,12 @@ Operator = load_operator()
 class Queue:
     finish = Operator.finish
     invoke = Operator.invoke
+    _set = Operator._set
 
     def __init__(self):
         self._job = self._timer = None
         self._last_timer_duration = 0.
+        self._set_id, self._set_pointer = "", 0
         self.reports = []
 
     def report(self, level, message):
@@ -79,14 +81,22 @@ class WindowManager:
             raise ReferenceError("Timer already removed with its window")
 
 
+class TextureSet:
+    """The captured target: the queue records its id and address (UI plan phase 4)."""
+    id = "set-1"
+
+    def as_pointer(self):
+        return 4096
+
+
 def context_for(manager):
     return SimpleNamespace(window_manager=manager, window=object(),
-                           scene=SimpleNamespace(open_painter=SimpleNamespace(status="")))
+                           scene=SimpleNamespace(open_painter=SimpleNamespace(status="", texture_sets=[TextureSet()])))
 
 
 class BakeQueueCleanupTests(unittest.TestCase):
     def invoke_with_job(self, queue, context, job):
-        texture_set = object()
+        texture_set = context.scene.open_painter.texture_sets[0]
 
         def bake_steps(actual_context, actual_set):
             self.assertIs(actual_context, context)
@@ -116,6 +126,7 @@ class BakeQueueCleanupTests(unittest.TestCase):
         self.assertEqual(manager.removed, [])
         self.assertEqual(queue.reports, [({"ERROR"}, "Timer creation failed")])
         self.assert_released(queue)
+        self.assertEqual(Operator.running_set_id, "", "a failed start leaves no running set")
         queue.finish(context)
         self.assertEqual(job.close_calls, 1)
 

@@ -1319,7 +1319,11 @@ def toolbar(self, context):
     row = self.layout.row(align=True)
     row.operator("open_painter.paint", text="Paint", icon="BRUSH_DATA")
     row.operator("open_painter.paint", text="Finish").stop = True
-    row.popover(panel="OP_PT_native_bake", text="Bake Mesh Maps")
+    sidebar = next((r for r in context.area.regions if r.type == "UI"), None)
+    category = getattr(sidebar, "active_panel_category", "") if sidebar is not None else ""
+    from .bake_view import CATEGORY as BAKE_TAB
+    row.operator("open_painter.show_task", text="Bake Mesh Maps", icon="RENDER_STILL",
+                 depress=category == BAKE_TAB).task = "BAKE"
     row.popover(panel="OP_PT_native_export", text="Export Textures")
     project = context.scene.open_painter
     row = self.layout.row(align=True)
@@ -1330,14 +1334,20 @@ def toolbar(self, context):
 
 
 class OP_PT_native_bake(PainterPanel, bpy.types.Panel):
+    """The compact bake view: reached from popovers (aging, assets) and kept collapsed in the sidebar."""
     bl_label = "Bake Mesh Maps"
     bl_options = {"DEFAULT_CLOSED"}
     bl_order = 3
 
     def draw(self, context):
-        from .baking_panel import OP_PT_bake
-
-        OP_PT_bake.draw(self, context)
+        ts = active_set(context)
+        if not ts:
+            self.layout.label(text="Create a texture set first.")
+            return
+        row = self.layout.row(align=True)
+        row.operator("open_painter.show_task", text="Open the Bake Tab", icon="RENDER_STILL").task = "BAKE"
+        from .bake_view import draw_compact
+        draw_compact(self.layout, context, ts)
 
 
 class OP_PT_native_export(PainterPanel, bpy.types.Panel):

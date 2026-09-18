@@ -397,8 +397,12 @@ def draw_secondary(layout, context, ts, layer, *, module=False, surface=False):
 
 def _draw_protection(layout, context, ts, layer):
     """AI protection, separate from preview bypass and visibility."""
-    from ..authoring import commands
-    locks = commands.locks(ts)
+    from ..authoring import commands, schema
+    try:
+        locks = commands.locks(ts)
+    except schema.AuthoringError as exc:   # invalid saved protection data must not break drawing
+        layout.label(text=str(exc), icon="ERROR")
+        return
     path = ("layers", layer.id)
     locked = path in locks
     row = layout.row(align=True)

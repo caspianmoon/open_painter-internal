@@ -249,8 +249,11 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
             count = sum(bool(ts.assignments) for ts in context.scene.open_painter.texture_sets)
             box.label(text=f"{count} managed material region(s)", icon="INFO")
         if target.ts is not None:
-            locks = commands.locks(target.ts)
-            box.label(text=f"Protected: {len(locks)} item(s); paint layers always", icon="LOCKED")
+            try:
+                count = len(commands.locks(target.ts))
+                box.label(text=f"Protected: {count} item(s); paint layers always", icon="LOCKED")
+            except Exception as exc:
+                box.label(text=str(exc), icon="ERROR")
         # Instruction ------------------------------------------------------------
         box = layout.box()
         box.label(text="Instruction", icon="TEXT")

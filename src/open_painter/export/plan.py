@@ -282,12 +282,9 @@ def execute(context, plan, *, overwrite=False):
             else:
                 naming = None
             folder = item.outputs[0].path.parent if item.outputs else plan.directory
-            if overwrite:
-                for output in item.outputs:
-                    output.path.unlink(missing_ok=True)
-                if item.manifest is not None:
-                    item.manifest.unlink(missing_ok=True)
-            paths = export(context, ts, settings, naming=naming, directory=folder)
+            # Existing files are replaced only when the exporter publishes, after every map
+            # of the set has been generated; nothing is deleted ahead of a write that may fail.
+            paths = export(context, ts, settings, naming=naming, directory=folder, overwrite=overwrite)
             expected = [output.path for output in item.outputs]
             if [p.name for p in paths] != [p.name for p in expected]:
                 raise RuntimeError(f"{item.name}: the exporter wrote {[p.name for p in paths]} but the plan listed "

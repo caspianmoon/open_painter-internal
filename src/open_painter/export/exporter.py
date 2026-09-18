@@ -25,8 +25,12 @@ def filename(ts_name, channel, extension, prefix="", suffix=""):
     return f"{safe_name(prefix + ts_name)}_{safe_name(channel + suffix)}.{extension}"
 
 
-def export(context: bpy.types.Context, ts, settings, naming=None, directory=None) -> list[Path]:
-    """Write the set's maps; ``naming(ts_name, label, extension)`` overrides file names."""
+def export(context: bpy.types.Context, ts, settings, naming=None, directory=None, overwrite=False) -> list[Path]:
+    """Write the set's maps; ``naming(ts_name, label, extension)`` overrides file names.
+
+    Files are generated into a temporary folder first and published at the end, so a
+    failure leaves nothing half-written; with ``overwrite`` an existing file is replaced
+    only at that publish step, after every map has been generated."""
     if directory is None:
         if not settings.directory:
             raise ValueError("Choose an export directory.")
@@ -44,7 +48,7 @@ def export(context: bpy.types.Context, ts, settings, naming=None, directory=None
                      else filename(ts.name, key, extension, settings.prefix, settings.suffix))
         for key, _ in definitions
     ]
-    if any(p.exists() for p in destinations):
+    if not overwrite and any(p.exists() for p in destinations):
         raise ValueError("Export files already exist. Choose another folder, prefix or suffix.")
     from ..painting.paint_session import detect
 
@@ -117,7 +121,7 @@ def export(context: bpy.types.Context, ts, settings, naming=None, directory=None
                 staged.append(path)
                 cache.clear()
             for source, destination in zip(staged, destinations):
-                with destination.open("xb") as out:
+                with destination.open("wb" if overwrite else "xb") as out:
                     created.append(destination)
                     out.write(source.read_bytes())
     except Exception:

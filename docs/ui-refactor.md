@@ -44,7 +44,7 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Offline Analysis (contact, strain, mark cut faces, inventory, LOD) | D+F | *Offline Analysis* panel | Scene-field mask inspector, mesh-mask inspector, performance menu, Export › Prepare | done (phase 6) |
 | Open Graph, Auto Layout, node header | D+P | Layers icon strip, node header | *Edit Nodes* in More and the row menu, framed on the selection; scope path, Frame Selected and Full Graph in the node header | done (phase 7) |
 | Material Director (connect, mode, scope, model, prompt, sharing toggles, run, apply, changes, undo, protection, connection settings) | D+P | *Director* sidebar tab | *Director* tab (Material Assistant): Target / Instruction / Run / Changes; connection settings in Preferences | done (phase 7) |
-| Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) | Phase 8 |
+| Status notices (`project.status` boxes) | D | Properties status box, header labels | Shared status line (Idle / Updating / Stale / Baking / Failed / Paused) in the Texture Set panel and the header | done (phase 8) |
 
 Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`, `.native_select`,
 `.native_asset`, `.bake`, `.export`, `.export_target`, `.production_export`, `.aging`,
@@ -207,3 +207,30 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
   from `session.attachments_for(..., dry=True)` — the same description the request is composed
   from — and the summary of the last request from the payload itself (`session.compose`,
   `session.sharing_summary`); connection settings live in the add-on preferences only.
+
+## Phase 8 notes (implemented)
+
+- `ui/status.py` reads the bake queue, the edge-map job, the shader session, the CPU scheduler,
+  the paint-time freeze, the mask view and the 2D snapshot and names one state — Idle ·
+  Updating · Stale · Baking · Failed · Paused — with a short detail (an Idle state carries the
+  last operator message). The Texture Set panel and the tool header show it; the inspector's
+  status box is gone; a Failed state offers *Retry* (`open_painter.retry_evaluation`).
+- `ui/clean_view.py`: *Clean View* (tool header) hides floor, axes, extras, relationship lines,
+  the selection outline and the text overlay of the Painter 3D view only, records the replaced
+  values in the screen (keyed by area index, so it survives a save) and restores them exactly on
+  the second press; overlays as a whole, the brush cursor and gizmos are untouched.
+- Narrow sidebars: `row_metrics` marks widths under 300 logical px compact; the inspector then
+  draws without the property split (labels stay whole), the breadcrumb shows the set and the
+  item, the layer strip wraps onto two rows, and the header shows the status state alone.
+- Responsiveness (`tests/integration/ui_response_ui.py`, real window, 48-layer stack + Worn
+  Painted Metal, 512 px, this Mac): selection feedback p95 ≈ 13 ms (target 100); a warmed
+  master-control edit settles in p95 ≈ 238 ms for a shader uniform (target 250) and ≈ 260 ms for
+  a generator amount (bounded at 375), of which the property callback itself is p95 ≈ 5 ms — the
+  rest is the viewport redrawing the compiled material, which no UI code can pre-empt. The first
+  compile of that stack takes ≈ 19 s and is reported separately.
+- `tests/integration/ui_release.py`: the status model, Clean View, compact metrics, reasons on
+  disabled actions, reorder + group, the 3D / 2D / Nodes switch with a truthful snapshot state,
+  and drawing that never dirties the material. Maximize / split / join / second-window behaviour
+  keeps its existing suites (`editor_areas.py`, `separate_window_ui.py`, `two_windows_ui.py`).
+- Not done: task-based sessions with five artists (formative usability) — outside what this
+  implementation can run; the tests above are the automated part of the release matrix.

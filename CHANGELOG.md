@@ -1,8 +1,8 @@
 # Changes
 
-## 0.12.0 (in progress)
+## 0.12.0
 
-Focused bake and export views, tools in context, nodes and the assistant (UI plan phases 4–7).
+Focused bake and export views, tools in context, nodes, the assistant, one status and measured responsiveness (UI plan phases 4–8).
 
 - **Bake view:** *Bake Mesh Maps* in the tool header opens the sidebar's *Bake* tab with three
   freely accessible sections. *Setup* shows the targets, the model's size, resolution, margin,
@@ -56,9 +56,22 @@ Focused bake and export views, tools in context, nodes and the assistant (UI pla
   is a compact choice (Refine by default), *What is sent* is generated from the same attachment
   description the request is composed from and shows the summary of the last request that
   actually went out, and connection settings live in the add-on preferences.
+- **One status, truthful:** the Texture Set panel and the tool header show one state — *Idle ·
+  Updating · Stale · Baking · Failed · Paused* — read from what the bake queue, the shader
+  session, the CPU scheduler, the paint-time freeze, the mask view and the 2D snapshot actually
+  report, with *Retry* on a failure; the inspector no longer repeats backend notices.
+- **Clean View** (tool header) hides the floor, axes, extras, relationship lines, selection
+  outline and text overlay of the Painter view only and restores exactly what it hid; overlays
+  as a whole, the brush cursor and the gizmos stay.
+- **Narrow sidebars** keep labels whole: the inspector drops the property split, the path
+  shows the set and the item, the layer strip wraps, the header shows the state alone.
+- **Measured:** on a 48-layer stack with Worn Painted Metal at 512 px, selection feedback
+  p95 ≈ 13 ms; a warmed master-control edit settles in p95 ≈ 238 ms (uniform) / ≈ 260 ms
+  (generator amount), of which the property callback is ≈ 5 ms — the rest is the viewport
+  redrawing the compiled material. `tests/integration/ui_response_ui.py` records it each run.
 - Tests: `tests/integration/bake_view.py`, `export_view.py`, `contextual_tools.py`,
-  `nodes_and_assistant.py`; `tests/unit/test_bake_queue.py` and
-  `tests/integration/geometry_effects.py` updated.
+  `nodes_and_assistant.py`, `ui_release.py`, `ui_response_ui.py`; `tests/unit/test_bake_queue.py`
+  and `tests/integration/geometry_effects.py` updated.
 
 ## 0.11.0
 

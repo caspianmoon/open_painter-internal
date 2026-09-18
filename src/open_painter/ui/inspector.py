@@ -23,7 +23,9 @@ def draw(layout, context, target, *, compact=False):
     if target.layer is None:
         draw_set(layout, context, target)
         return
-    layout.use_property_split = True
+    # A narrow sidebar keeps every label readable: fields carry their own label instead of
+    # the split's 40 % column, which would ellipsize essential words.
+    layout.use_property_split = not compact
     layout.use_property_decorate = False
     kind = target.kind
     if kind == "MATERIAL":

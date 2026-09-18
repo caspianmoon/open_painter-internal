@@ -1,7 +1,6 @@
 """Painter arrangement using Blender panels, RNA widgets and its native asset shelf."""
 
 from pathlib import Path
-from textwrap import wrap
 
 import bpy
 from bpy.app.handlers import persistent
@@ -811,9 +810,9 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         summary = ", ".join(shown) + (f" +{len(objects) - len(shown)}" if len(objects) > len(shown) else "")
         layout.label(text=(f"Assigned to {summary}" if objects else "Not assigned to any object yet"),
                      icon="MESH_DATA" if objects else "ERROR")
-        if ts.preview_backend == 'LIVE':
-            from .performance import draw_freeze_status
-            draw_freeze_status(layout, context, ts)
+        # One truthful status line (ui/status.py) instead of the backend's notices in every panel.
+        from . import status
+        status.draw(layout, context, ts, compact=compact)
         if context.area.type == 'IMAGE_EDITOR':
             draw_2d_view(layout, context, ts)
         if ts.preview_backend == 'CPU' and ts.preview_quality != 'FULL' and ts.dirty:
@@ -1221,13 +1220,6 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        status = context.scene.open_painter.status.strip()
-        if status:
-            box = layout.box()
-            scale = max(.5, context.preferences.system.ui_scale)
-            width = max(20, min(70, int(context.region.width / (7.5 * scale)) - 5))
-            for index, line in enumerate(wrap(status, width=width)):
-                box.label(text=line, icon="INFO" if index == 0 else "BLANK1")
         target = selection.resolve(context)
         compact = row_metrics(context)[1]
         selection.draw_breadcrumb(layout, target, compact=compact)
@@ -1331,6 +1323,13 @@ def toolbar(self, context):
     row = self.layout.row(align=True)
     row.prop(project, "target", text="")
     row.prop(project, "engine_preview", text="", icon="SHADING_RENDERED", toggle=True)
+    if context.area.type == "VIEW_3D":
+        from . import clean_view
+        row.operator("open_painter.clean_view", text="", icon="SHADING_SOLID", depress=clean_view.active(context))
+    # The current operation, in the header the plan asks for: one state, not a notice.
+    from . import status
+    current = status.of(context)
+    self.layout.label(text=current.state if row_metrics(context)[1] else current.text[:60], icon=current.icon)
 
 
 class OP_PT_native_bake(PainterPanel, bpy.types.Panel):

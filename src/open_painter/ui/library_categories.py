@@ -5,6 +5,8 @@ import numpy as np
 
 from ..constants import OWNER
 
+from uuid import UUID, uuid5
+
 # Keep the first three numeric values compatible with existing .blend files.
 CATEGORY_ITEMS = [
     ("ALL", "All Types", "Show every Painter asset type", 0),
@@ -15,19 +17,38 @@ CATEGORY_ITEMS = [
     ("BRUSHES", "Brushes", "Texture painting brushes", 5),
     ("ALPHAS", "Alphas", "Brush alpha textures", 6),
     ("TEXTURES", "Textures", "Procedural and imported texture inputs", 7),
+    ("GEOMETRY_EFFECTS", "Geometry", "Geometry effect presets for the selected object", 8),
 ]
 KIND_CATEGORY = {
     "FILL": "MATERIALS", "SMART": "SMART_MATERIALS",
     "SMART_RECIPE": "SMART_MATERIALS", "SMART_MASK": "MASKS",
     "FILTER": "FILTERS", "BRUSH": "BRUSHES", "ALPHA": "ALPHAS",
-    "PROCEDURAL": "TEXTURES", "TEXTURE": "TEXTURES",
+    "PROCEDURAL": "TEXTURES", "TEXTURE": "TEXTURES", "GEOMETRY": "GEOMETRY_EFFECTS",
+}
+KIND_LABELS = {
+    "FILL": "Material", "SMART": "Smart Material", "SMART_RECIPE": "Smart Material", "SMART_MASK": "Smart Mask",
+    "FILTER": "Filter", "BRUSH": "Brush", "ALPHA": "Brush Alpha", "PROCEDURAL": "Procedural Texture",
+    "TEXTURE": "Image Texture", "GEOMETRY": "Geometry Effect",
 }
 ASSET_CATEGORY_KEY = "open_painter_asset_category"
 SOURCE_KEY = "open_painter_asset_source"
+# Asset catalogs: the shelf shows one tab per category, next to its search field.
+CATALOG_NAMESPACE = UUID("2b6f7d3e-6f0c-4c5a-9b18-3d1f5a7c2e41")
+CATALOG_IDS = {identifier: str(uuid5(CATALOG_NAMESPACE, identifier)) for identifier, *_ in CATEGORY_ITEMS
+               if identifier != "ALL"}
+CATALOG_LABELS = {identifier: label for identifier, label, *_ in CATEGORY_ITEMS if identifier != "ALL"}
 
 
 def key(entry):
     return entry[0] if entry[1] in {"FILL", "SMART", "SMART_RECIPE", "SMART_MASK"} else entry[1] + ":" + str(entry[2])
+
+
+def catalog_definitions():
+    """Lines of a ``blender_assets.cats.txt`` for the Painter categories."""
+    lines = ["# Open Painter asset catalogs: one per shelf category.", "", "VERSION 1", ""]
+    for identifier, label in CATALOG_LABELS.items():
+        lines.append(f"{CATALOG_IDS[identifier]}:{label}:{label}")
+    return "\n".join(lines) + "\n"
 
 
 def extras(local=True):
@@ -48,6 +69,8 @@ def extras(local=True):
         result += [item(texture.name, "ALPHA", texture.name) for texture in bpy.data.textures
                    if texture.type == "IMAGE" and texture.image and all(texture.image.size)]
     result += [item(name.replace("_", " ").title(), "PROCEDURAL", name) for name in procedurals]
+    from .geometry_effects import PRESETS
+    result += [item(label, "GEOMETRY", action) for _group, _icon, items in PRESETS for action, label in items]
     if local:
         result += [item(image.name, "TEXTURE", image.name) for image in bpy.data.images
                    if not image.library and not image.get("open_painter_catalog_entry")
@@ -90,6 +113,10 @@ def make_preview(entry, size=48):
     elif kind == "BRUSH":
         width = .035 if value == "Paint Hard" else .065
         rgb = np.exp(-((v - .5 - .22 * np.sin(u * 8)) / width) ** 2)
+    elif kind == "GEOMETRY":
+        # Scattered pieces on a surface: a swatch, not a render of the effect.
+        cells = np.stack(((u * 6) % 1, (v * 6) % 1), axis=-1) - .5
+        rgb = .25 + .6 * (np.hypot(cells[..., 0], cells[..., 1]) < .28)
     else:
         rgb = ((np.floor(u * 8) + np.floor(v * 8)) % 2) * .18 + .24
     if rgb.ndim == 2:
@@ -147,6 +174,14 @@ def activate(context, entry, source):
         brush.mask_texture = source
         if source:
             brush.mask_texture_slot.mask_map_mode = "VIEW_PLANE"
+    elif kind == "GEOMETRY":
+        # The preset opens its own dialog (density, size, placement) on the selected object.
+        if context.active_object is None:
+            raise ValueError("Select the object the geometry effect goes on.")
+        if getattr(context, "window", None) is not None and not bpy.app.background:
+            bpy.ops.open_painter.geometry_effect("INVOKE_DEFAULT", action=value)
+        else:
+            bpy.ops.open_painter.geometry_effect(action=value)
     else:
         return False
     return True

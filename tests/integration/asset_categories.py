@@ -152,7 +152,8 @@ def run():
     assert set.union(*(values for name, values in groups.items() if name != "ALL")) == groups["ALL"]
     assert sum(len(values) for name, values in groups.items() if name != "ALL") == len(groups["ALL"])
     expected_category_values = {"ALL": 0, "MATERIALS": 1, "MASKS": 2, "SMART_MATERIALS": 3,
-                                "FILTERS": 4, "BRUSHES": 5, "ALPHAS": 6, "TEXTURES": 7}
+                                "FILTERS": 4, "BRUSHES": 5, "ALPHAS": 6, "TEXTURES": 7, "GEOMETRY_EFFECTS": 8}
+    assert "GEOMETRY:BOLT" in groups["GEOMETRY_EFFECTS"], sorted(groups["GEOMETRY_EFFECTS"])
     assert {item.identifier: item.value for item in project.bl_rna.properties["asset_category"].enum_items} == expected_category_values
 
     apply("FILTER:LEVELS")

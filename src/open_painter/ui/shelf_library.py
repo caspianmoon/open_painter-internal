@@ -28,9 +28,11 @@ from ..constants import VERSION
 LIBRARY_NAME = "Open Painter"
 LIBRARY_FILE = "painter_assets.blend"
 MANIFEST = "painter_assets.json"
+CATALOGS_FILE = "blender_assets.cats.txt"
+CATALOGS_FORMAT = 1          # bump when the catalog layout changes: the library is rebuilt
 KEY_TAG = "op-key:"
 CATEGORY_TAG = "op-category:"
-BUILTIN_KINDS = {"FILL", "SMART", "SMART_RECIPE", "SMART_MASK", "FILTER", "BRUSH", "PROCEDURAL"}
+BUILTIN_KINDS = {"FILL", "SMART", "SMART_RECIPE", "SMART_MASK", "FILTER", "BRUSH", "PROCEDURAL", "GEOMETRY"}
 _process = None
 _manifest = None
 
@@ -82,7 +84,8 @@ def current():
     """Whether the library on disk carries this version's catalog."""
     data = manifest()
     from .library_categories import key
-    return bool(data) and data.get("version") == VERSION and library_path().is_file() \
+    return bool(data) and data.get("version") == VERSION and data.get("catalogs") == CATALOGS_FORMAT \
+        and library_path().is_file() and (directory() / CATALOGS_FILE).is_file() \
         and set(data.get("names", {}).values()) == {key(entry) for entry in builtin_entries()}
 
 
@@ -122,7 +125,8 @@ def build(target=None):
     Runs in whichever Blender calls it: the temporary images exist only until
     ``libraries.write`` has stored them and are removed afterwards.
     """
-    from .library_categories import ASSET_CATEGORY_KEY, KIND_CATEGORY, key, make_preview
+    from .library_categories import (ASSET_CATEGORY_KEY, CATALOG_IDS, KIND_CATEGORY, catalog_definitions, key,
+                                     make_preview)
     from .native import ASSET_KEY, description_of
     from ..smart_materials.catalog import CATALOG
     target = Path(target) if target else directory()
@@ -141,6 +145,7 @@ def build(target=None):
             image.asset_data.description = description_of(entry, CATALOG)
             image.asset_data.tags.new(KEY_TAG + entry_key, skip_if_exists=True)
             image.asset_data.tags.new(CATEGORY_TAG + category, skip_if_exists=True)
+            image.asset_data.catalog_id = CATALOG_IDS[category]   # the shelf's category tab
             rendered = previews / (entry[0].replace(" ", "_") + ".png")
             if rendered.exists() and category in {"MATERIALS", "SMART_MATERIALS", "MASKS"}:
                 with bpy.context.temp_override(id=image):
@@ -154,7 +159,9 @@ def build(target=None):
             names[image.name] = entry_key
         path = target / LIBRARY_FILE
         bpy.data.libraries.write(str(path), set(created), fake_user=True, compress=True)
-        (target / MANIFEST).write_text(json.dumps({"version": VERSION, "names": names}, indent=1))
+        (target / CATALOGS_FILE).write_text(catalog_definitions())
+        (target / MANIFEST).write_text(json.dumps({"version": VERSION, "catalogs": CATALOGS_FORMAT, "names": names},
+                                                  indent=1))
     finally:
         for image in created:
             try:

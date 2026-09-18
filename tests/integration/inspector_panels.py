@@ -200,6 +200,8 @@ def run(context):
     row = Recorder()
     native.draw_selected_row(row, context, body)
     assert "blend_channel" in row.text and "opacity_percent" in row.text, "an isolated folder blends per channel"
+    # Re-resolved by id: the reference taken before the stack changed is stale (RNA reallocation).
+    plain = next(item for item in body.layers if item.id == ids["details"])
     plain.group_mode = "PASSTHROUGH"
     row = Recorder()
     native.draw_selected_row(row, context, body)

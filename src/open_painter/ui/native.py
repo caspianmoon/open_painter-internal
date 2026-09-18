@@ -62,6 +62,7 @@ def description_of(entry, CATALOG):
         else "Apply to the selected channel or mask" if entry[1] in {"FILTER", "PROCEDURAL", "TEXTURE"}
         else "Texture painting brush" if entry[1] == "BRUSH"
         else "Brush alpha" if entry[1] == "ALPHA"
+        else "Geometry effect: adds pieces to the selected object" if entry[1] == "GEOMETRY"
         else "Open Painter material"
     )
 
@@ -113,6 +114,8 @@ def prepare_assets(*, refresh_sources=False):
             image["open_painter_preview_kind"] = "COLOR_SWATCH"
         image[ASSET_KEY] = entry_key
         image[categories.ASSET_CATEGORY_KEY] = category
+        if image.asset_data and image.asset_data.catalog_id != categories.CATALOG_IDS[category]:
+            image.asset_data.catalog_id = categories.CATALOG_IDS[category]   # the shelf's category tab
         if source:
             image[categories.SOURCE_KEY] = source
         old_handle = handles.get(entry_key)
@@ -122,6 +125,7 @@ def prepare_assets(*, refresh_sources=False):
         image.name = entry[0] if source is None else entry[0] + " · Painter Asset"
         if not image.asset_data:
             image.asset_mark()
+        image.asset_data.catalog_id = categories.CATALOG_IDS[category]
         description = description_of(entry, CATALOG)
         if (path.exists() or category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}) and "open_painter_preview_kind" in image:
             del image["open_painter_preview_kind"]
@@ -161,7 +165,117 @@ def prepare_assets(*, refresh_sources=False):
             handle.asset_clear()
 
 
+def resolve_entry(context, *, entry_key="", asset=None, library_type="LOCAL", library_identifier="",
+                  relative_identifier=""):
+    """(entry, source image or texture, key) for a shelf activation or an explicit key."""
+    from . import shelf_library
+    handle, source = None, None
+    if not entry_key:
+        asset = asset if asset is not None else getattr(context, "asset", None)
+        handle = asset.local_id if asset else None
+        if asset is not None and handle is None and shelf_library.is_library_asset(asset):
+            entry_key = shelf_library.key_of(asset)
+        elif handle is None and library_type == "LOCAL" and relative_identifier:
+            handle = bpy.data.images.get(relative_identifier.split("/", 1)[-1])
+        elif handle is None and library_identifier == shelf_library.LIBRARY_NAME:
+            # Activation without an asset in context (scripts, tests): the
+            # identifier ends in the library image's name.
+            entry_key = shelf_library.key_for_name(relative_identifier.rsplit("/", 1)[-1])
+    if handle is not None:
+        if ASSET_KEY not in handle:
+            raise ValueError("Select an Open Painter asset.")
+        entry_key, source = handle[ASSET_KEY], handle.get(categories.SOURCE_KEY)
+    elif entry_key:
+        local = next((image for image in bpy.data.images if image.get(ASSET_KEY) == entry_key), None)
+        if local is not None:
+            source = local.get(categories.SOURCE_KEY)
+    if not entry_key:
+        raise ValueError("Select an Open Painter asset.")
+    entry = next((e for e in catalog() if categories.key(e) == entry_key), None)
+    if entry is None:
+        raise ValueError("This asset is no longer available. Refresh the library.")
+    return entry, source, entry_key
+
+
+def entry_for_key(entry_key):
+    return next((e for e in catalog() if categories.key(e) == entry_key), None)
+
+
+def application_target(context, entry):
+    """What applying ``entry`` would change, in words, or why it cannot be applied."""
+    from ..core.project_manager import active_set
+    from . import selection
+    kind = entry[1]
+    if kind == "GEOMETRY":
+        obj = context.active_object
+        return (f"Adds pieces to {obj.name}" if obj is not None else "Select an object first"), obj is not None
+    if kind in {"BRUSH", "ALPHA"}:
+        return "Sets the brush; the paint destination stays as it is", True
+    ts = active_set(context)
+    if ts is None:
+        return "Create a texture set first", False
+    target = selection.resolve(context, ts)
+    layer = target.layer
+    if kind in {"FILL", "SMART", "SMART_RECIPE"}:
+        return f"Adds an editable group to {ts.name}", True
+    if kind == "SMART_MASK":
+        if layer is None:
+            return "Select a layer or folder for the mask", False
+        return f"Adds to the mask stack of {layer.name}", True
+    if kind in {"FILTER", "PROCEDURAL", "TEXTURE"}:
+        if layer is None:
+            return "Select a layer first", False
+        if selection.ui_state(context).selection_kind == selection.MASK:
+            return f"Applies to the mask stack of {layer.name}", True
+        if layer.type != "FILL":
+            return f"{layer.name} is not a fill layer: select its mask or a fill layer", kind == "FILTER" and layer.type == "PAINT"
+        channel = context.scene.open_painter.properties_channel.replace("_", " ").title()
+        return f"Applies to {layer.name} › {channel}", True
+    return "Applies to the active texture set", True
+
+
+def missing_requirements(context, entry):
+    """Mesh maps the asset reads that the active set has not baked."""
+    from ..core.project_manager import active_set
+    ts = active_set(context)
+    if ts is None:
+        return []
+    required = set()
+    if entry[1] == "SMART_RECIPE":
+        from ..smart_materials.composer import requirements
+        required = requirements(entry[0])
+    elif entry[1] == "SMART_MASK":
+        from ..smart_masks.library import PRESETS
+        from ..generators.base import required_maps
+        preset = next((p for p in PRESETS if p[0] == entry[0]), None)
+        required = required_maps(preset[1]) if preset else set()
+    available = {entry.kind for entry in ts.baked_maps if entry.image and all(entry.image.size)}
+    return sorted(required - available)
+
+
+def select_click(context, entry, key):
+    """A shelf click: the first selects the asset, the second on the same asset applies it.
+
+    Returns True when the click should apply; otherwise the asset is recorded as the
+    session's pending asset and the status says what applying would do.
+    """
+    ui = selection.ui_state(context)
+    if ui.pending_asset == key:
+        return True
+    ui.pending_asset = key
+    target, _possible = application_target(context, entry)
+    context.scene.open_painter.status = f"Selected {entry[0]} · {target} · click again or press Apply"
+    screen = getattr(context, "screen", None)
+    if screen is not None:
+        for area in screen.areas:
+            area.tag_redraw()
+    return False
+
+
 class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
+    """Select, then apply: a click in the shelf selects the asset (the Assets panel shows its
+    name, type, requirements and the exact target with an Apply button); a second click on the
+    same asset applies it. Scripts and buttons run execute(), which applies at once."""
     bl_idname = "open_painter.native_asset"
     bl_label = "Apply Painter Asset"
     bl_options = {"UNDO"}
@@ -176,42 +290,55 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
     )
     asset_library_identifier: bpy.props.StringProperty()
     relative_asset_identifier: bpy.props.StringProperty()
-    replace_masks: bpy.props.BoolProperty(options={"HIDDEN"})
+    # SKIP_SAVE: a Replace click must not turn later plain clicks into replacements, and a key
+    # given by the Assets panel must not stick to the next shelf activation.
+    entry_key: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
+    replace: bpy.props.BoolProperty(name="Replace Masks", default=False, options={"SKIP_SAVE"},
+                                    description="Smart masks only: remove the layer's masks before adding this one")
+    replace_masks: bpy.props.BoolProperty(options={"HIDDEN", "SKIP_SAVE"})   # older scripts
+    apply_now: bpy.props.BoolProperty(default=False, options={"HIDDEN", "SKIP_SAVE"},
+                                      description="Apply on the first click instead of selecting")
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.replace or properties.replace_masks:
+            return "Replace the selected layer's masks with this smart mask"
+        return "Apply this asset to the target shown in the Assets panel"
 
     def invoke(self, context, event):
         # Native shelf activation can fire on both press and release.
         if event.type == "LEFTMOUSE" and event.value == "RELEASE":
             return {"CANCELLED"}
-        self.replace_masks = event.ctrl or event.oskey
-        return self.execute(context)
+        if self.apply_now or self.entry_key:
+            return self.execute(context)
+        try:
+            entry, _source, key = resolve_entry(context, asset=getattr(context, "asset", None),
+                                                library_type=self.asset_library_type,
+                                                library_identifier=self.asset_library_identifier,
+                                                relative_identifier=self.relative_asset_identifier)
+        except ValueError as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+        if select_click(context, entry, key):
+            return self.execute(context)
+        return {"CANCELLED"}   # selection only: no document change, no undo step
 
     # Blender's shelf invokes this with the active AssetRepresentation in context.
     def run(self, context):
-        from . import shelf_library
-        asset = context.asset
-        handle = asset.local_id if asset else None
-        entry_key, source = None, None
-        if asset is not None and handle is None and shelf_library.is_library_asset(asset):
-            entry_key = shelf_library.key_of(asset)
-        elif handle is None and self.asset_library_type == "LOCAL":
-            handle = bpy.data.images.get(self.relative_asset_identifier.split("/", 1)[-1])
-        elif handle is None and self.asset_library_identifier == shelf_library.LIBRARY_NAME:
-            # Activation without an asset in context (scripts, tests): the
-            # identifier ends in the library image's name.
-            entry_key = shelf_library.key_for_name(self.relative_asset_identifier.rsplit("/", 1)[-1])
-        if handle is not None:
-            if ASSET_KEY not in handle:
-                raise ValueError("Select an Open Painter asset.")
-            entry_key, source = handle[ASSET_KEY], handle.get(categories.SOURCE_KEY)
-        if entry_key is None:
-            raise ValueError("Select an Open Painter asset.")
-        entry = next((e for e in catalog() if categories.key(e) == entry_key), None)
-        if entry is None:
-            raise ValueError("This asset is no longer available. Refresh the library.")
-        region = next(r for r in context.area.regions if r.type == "WINDOW")
-        with context.temp_override(region=region):
+        entry, source, key = resolve_entry(context, entry_key=self.entry_key, asset=getattr(context, "asset", None),
+                                           library_type=self.asset_library_type,
+                                           library_identifier=self.asset_library_identifier,
+                                           relative_identifier=self.relative_asset_identifier)
+        area = context.area
+        region = next((r for r in area.regions if r.type == "WINDOW"), None) if area is not None else None
+        if region is not None:
+            with context.temp_override(region=region):
+                self.apply_entry(context, entry, source)
+        else:
             self.apply_entry(context, entry, source)
-        context.area.tag_redraw()
+        selection.ui_state(context).pending_asset = key
+        if area is not None:
+            area.tag_redraw()
 
     def apply_entry(self, context, entry, source):
         if categories.activate(context, entry, source):
@@ -226,7 +353,7 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
             if refreshed:
                 self.report({"INFO"}, "Rebaking the edge map in the background; the mask updates when it lands"
                             if refreshed == 'QUEUED' else "Edge map rebaked with smooth curvature before adding the mask")
-            apply(ts, entry[0], replace=self.replace_masks)
+            apply(ts, entry[0], replace=self.replace or self.replace_masks)
         elif entry[1] == "SMART_RECIPE":
             from ..smart_materials.composer import apply, requirements
             from ..baking.bake_manager import refresh_stale_curvature
@@ -241,7 +368,8 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
         ts = require_set(context)
         layer = active(ts)
         if layer is None:
-            context.area.tag_redraw()
+            if context.area is not None:
+                context.area.tag_redraw()
             return
         if entry[1] in {"BRUSH", "ALPHA"}:
             # Brushes and alphas change the tool, not the stack: the selected
@@ -252,9 +380,31 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
         selection.select(context, layer.id, kind, ts=ts, synchronize=False)
 
 
+def draw_asset_context_menu(context, asset, layout):
+    """Right-click on a shelf asset: the same actions as the Assets panel."""
+    try:
+        entry, _source, key = resolve_entry(context, asset=asset)
+    except ValueError:
+        layout.label(text="Not an Open Painter asset", icon="INFO")
+        return
+    target, possible = application_target(context, entry)
+    layout.label(text=entry[0], icon="ASSET_MANAGER")
+    layout.label(text=target, icon="INFO" if possible else "ERROR")
+    op = layout.operator("open_painter.native_asset", text="Apply", icon="CHECKMARK")
+    op.entry_key, op.apply_now = key, True
+    if entry[1] == "SMART_MASK":
+        op = layout.operator("open_painter.native_asset", text="Replace Masks with This", icon="TRASH")
+        op.entry_key, op.apply_now, op.replace = key, True, True
+    if entry[1] in {"TEXTURE", "ALPHA"} and entry[2]:
+        layout.separator()
+        layout.operator("open_painter.refresh_assets", text="Refresh Library", icon="FILE_REFRESH")
+
+
 class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
     bl_space_type = "VIEW_3D"
-    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG"}
+    # Catalog tabs (one per Painter category) are enabled by the artist in the shelf's own
+    # catalog menu — Blender exposes no API for that — and persist in the preferences.
+    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG", "STORE_ENABLED_CATALOGS_IN_PREFERENCES"}
     bl_default_preview_size = 80
     bl_activate_operator = "OPEN_PAINTER_OT_native_asset"
 
@@ -277,21 +427,44 @@ class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
             return False
         return category == "ALL" or handle.get(categories.ASSET_CATEGORY_KEY) == category
 
+    @classmethod
+    def draw_context_menu(cls, context, asset, layout):
+        draw_asset_context_menu(context, asset, layout)
+
 
 def asset_type_buttons(self, context):
+    """The shelf's category tabs and search sit in the shelf itself; the tool header keeps
+    one menu for the library actions (import, refresh, save)."""
     if not editor.is_area(context.area):
         return
     row = self.layout.row(align=True)
-    row.label(text="Assets:")
-    for identifier, label, _description, _value in categories.CATEGORY_ITEMS:
-        row.prop_enum(context.scene.open_painter, "asset_category", identifier, text=label)
-    row.operator("open_painter.refresh_assets", text="", icon="FILE_REFRESH")
-    category = context.scene.open_painter.asset_category
-    if category == "ALPHAS":
-        row.operator("open_painter.import_alpha", text="Import Alpha", icon="IMPORT")
-    elif category == "TEXTURES":
-        row.operator("open_painter.import_texture", text="Import Texture", icon="IMPORT")
+    row.menu("OP_MT_native_assets", text="Assets", icon="ASSET_MANAGER")
+    # One type filter button; the shelf's own catalog tabs do the same once enabled there.
+    row.prop(context.scene.open_painter, "asset_category", text="")
+    ui = selection.ui_state(context)
+    if ui.pending_asset:
+        entry = entry_for_key(ui.pending_asset)
+        if entry is not None:
+            op = row.operator("open_painter.native_asset", text=f"Apply {entry[0]}", icon="CHECKMARK")
+            op.entry_key, op.apply_now = ui.pending_asset, True
     self.layout.separator()
+
+
+class OP_MT_native_assets(bpy.types.Menu):
+    bl_label = "Assets"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("open_painter.import_material", text="Import Smart Material…", icon="IMPORT")
+        layout.operator("open_painter.import_texture", text="Import Texture…", icon="IMPORT")
+        layout.operator("open_painter.import_alpha", text="Import Alpha…", icon="IMPORT")
+        layout.separator()
+        layout.operator("open_painter.save_material", text="Save Set as Smart Material…", icon="FILE_TICK")
+        layout.operator("open_painter.module_save", text="Save Folder as Module…", icon="PACKAGE")
+        layout.operator("open_painter.library", text="Delete Local Material…", icon="TRASH").action = "DELETE"
+        layout.separator()
+        layout.operator("open_painter.refresh_assets", text="Refresh Library", icon="FILE_REFRESH")
+        layout.prop_menu_enum(context.scene.open_painter, "asset_category", text="Show Type")
 
 
 class OP_OT_refresh_assets(SafeOperator, bpy.types.Operator):
@@ -1067,15 +1240,77 @@ class OP_PT_native_properties(PainterPanel, bpy.types.Panel):
 
 
 class OP_PT_native_library(PainterPanel, bpy.types.Panel):
-    bl_label = "Asset Library"
-    bl_options = {"DEFAULT_CLOSED"}
+    """The selected shelf asset: what it is, what it needs, what Apply will change."""
+    bl_label = "Assets"
     bl_order = 5
 
     def draw(self, context):
-        self.layout.prop(context.scene.open_painter, "asset_category", text="Show")
-        from .assets_panel import OP_PT_assets
+        layout = self.layout
+        ui = selection.ui_state(context)
+        entry = entry_for_key(ui.pending_asset) if ui.pending_asset else None
+        box = layout.box()
+        if entry is None:
+            box.label(text="Click a shelf asset to select it", icon="ASSET_MANAGER")
+            box.label(text="A second click, Apply or the right-click menu applies it", icon="INFO")
+            box.label(text="Category tabs: enable them once in the shelf's catalog menu", icon="COLLAPSEMENU")
+        else:
+            row = box.row(align=True)
+            row.label(text=entry[0], icon="ASSET_MANAGER")
+            row.label(text=categories.KIND_LABELS.get(entry[1], entry[1].title()))
+            missing = missing_requirements(context, entry)
+            if missing:
+                box.label(text="Needs baked " + ", ".join(m.replace("_", " ").title() for m in missing),
+                          icon="ERROR")
+                box.popover(panel="OP_PT_native_bake", text="Bake Mesh Maps", icon="RENDER_STILL")
+            target, possible = application_target(context, entry)
+            box.label(text=target, icon="FORWARD" if possible else "ERROR")
+            row = box.row(align=True)
+            row.enabled = possible and not missing
+            op = row.operator("open_painter.native_asset", text="Apply", icon="CHECKMARK")
+            op.entry_key, op.apply_now = ui.pending_asset, True
+            if entry[1] == "SMART_MASK":
+                op = row.operator("open_painter.native_asset", text="Replace Masks", icon="TRASH")
+                op.entry_key, op.apply_now, op.replace = ui.pending_asset, True, True
+        head, body = layout.panel("painter_library_actions", default_closed=True)
+        head.label(text="Library", icon="FILE_FOLDER")
+        if body is not None:
+            body.operator("open_painter.library", text="Apply Saved Material…", icon="ASSET_MANAGER").action = "APPLY"
+            body.operator("open_painter.import_material", text="Import Smart Material…", icon="IMPORT")
+            body.operator("open_painter.save_material", text="Save Set as Smart Material…", icon="FILE_TICK")
+            body.operator("open_painter.module_save", text="Save Folder as Module…", icon="PACKAGE")
+            body.operator("open_painter.library", text="Delete Local Material…", icon="TRASH").action = "DELETE"
+            row = body.row(align=True)
+            row.operator("open_painter.import_texture", text="Import Texture…", icon="IMPORT")
+            row.operator("open_painter.import_alpha", text="Import Alpha…", icon="IMPORT")
+            body.operator("open_painter.refresh_assets", text="Refresh Library", icon="FILE_REFRESH")
+            body.prop(context.scene.open_painter, "asset_category", text="Show Type")
 
-        OP_PT_assets.draw(self, context)
+
+def layer_context_menu(self, context):
+    """Right-click on a layer row: selection, library and stack actions for that layer."""
+    ui_list = getattr(context, "ui_list", None)
+    if ui_list is None or ui_list.bl_idname != "OP_UL_native_layers":
+        return
+    ts = active_set(context)
+    layer = active(ts) if ts else None
+    if layer is None:
+        return
+    layout = self.layout
+    layout.separator()
+    layout.label(text=layer.name, icon=LAYER_ICONS[layer.type])
+    op = layout.operator("open_painter.native_select", text="Select Content", icon="MATERIAL")
+    op.layer_id = layer.id
+    if layer.masks:
+        op = layout.operator("open_painter.native_select", text="Select Mask", icon="MOD_MASK")
+        op.layer_id, op.mask = layer.id, True
+    layout.separator()
+    if layer.type == "FOLDER":
+        layout.operator("open_painter.module_save", text="Save Folder as Module…", icon="PACKAGE")
+    layout.operator("open_painter.save_material", text="Save Set as Smart Material…", icon="FILE_TICK")
+    layout.separator()
+    layout.operator("open_painter.layer", text="Duplicate", icon="DUPLICATE").action = "DUPLICATE"
+    layout.operator("open_painter.layer", text="Delete", icon="TRASH").action = "DELETE"
+    layout.operator("open_painter.open_graph", text="Edit Nodes", icon="NODETREE")
 
 
 def toolbar(self, context):
@@ -1132,6 +1367,7 @@ CLASSES = (
     OP_MT_native_add_layer,
     OP_MT_native_add_effect,
     OP_MT_native_more,
+    OP_MT_native_assets,
     OP_PT_native_properties,
     OP_PT_native_library,
     OP_PT_native_bake,
@@ -1199,7 +1435,7 @@ IMAGE_CLASSES = tuple(
 
 class IMAGE_AST_open_painter(bpy.types.AssetShelf):
     bl_space_type = "IMAGE_EDITOR"
-    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG"}
+    bl_options = {"DEFAULT_VISIBLE", "NO_ASSET_DRAG", "STORE_ENABLED_CATALOGS_IN_PREFERENCES"}
     bl_default_preview_size = 80
     bl_activate_operator = "OPEN_PAINTER_OT_native_asset"
 
@@ -1210,6 +1446,10 @@ class IMAGE_AST_open_painter(bpy.types.AssetShelf):
     @classmethod
     def asset_poll(cls, asset):
         return VIEW3D_AST_open_painter.asset_poll(asset)
+
+    @classmethod
+    def draw_context_menu(cls, context, asset, layout):
+        draw_asset_context_menu(context, asset, layout)
 
 
 CLASSES += IMAGE_CLASSES + (IMAGE_AST_open_painter,)

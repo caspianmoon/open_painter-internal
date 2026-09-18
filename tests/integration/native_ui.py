@@ -129,6 +129,40 @@ def release_asset():
     bpy.context.window.event_simulate(
         type="LEFTMOUSE", value="RELEASE", x=shelf.x + 60, y=shelf.y + 60
     )
+    bpy.app.timers.register(selected, first_interval=1)
+
+
+def selected():
+    """The first click selects the asset: nothing changes in the material yet."""
+    try:
+        from open_painter.core.layer_stack import active
+        from open_painter.ui.dock import state
+
+        ts = bpy.context.scene.open_painter.texture_sets[0]
+        layer = active(ts)
+        assert layer.name == "Paint coat" and len(layer.masks) == 1, [(m.name, m.source) for m in layer.masks]
+        assert state.get(area).pending_asset, "the click selected no asset"
+        assert "Selected" in bpy.context.scene.open_painter.status, bpy.context.scene.open_painter.status
+        bpy.app.timers.register(click_again, first_interval=.5)
+    except Exception:
+        result.write_text(traceback.format_exc())
+        traceback.print_exc()
+        bpy.ops.wm.quit_blender()
+
+
+def click_again():
+    """The second click on the selected asset applies it."""
+    region = next(r for r in area.regions if r.type == "WINDOW")
+    with bpy.context.temp_override(area=area, region=region):
+        bpy.ops.ed.undo_push(message="before the shelf click")   # the step the undo below returns to
+    shelf = next(r for r in area.regions if r.type == "ASSET_SHELF")
+    bpy.context.window.event_simulate(type="LEFTMOUSE", value="PRESS", x=shelf.x + 60, y=shelf.y + 60)
+    bpy.app.timers.register(release_again, first_interval=0.2)
+
+
+def release_again():
+    shelf = next(r for r in area.regions if r.type == "ASSET_SHELF")
+    bpy.context.window.event_simulate(type="LEFTMOUSE", value="RELEASE", x=shelf.x + 60, y=shelf.y + 60)
     bpy.app.timers.register(applied, first_interval=1)
 
 
@@ -143,6 +177,16 @@ def applied():
             (m.name, m.source) for m in layer.masks
         ]
         assert layer.masks[-1].operation == "NORMAL"
+        # One shelf application is one undo step: undo removes the mask, redo brings it back.
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(area=area, region=region):
+            assert bpy.ops.ed.undo() == {"FINISHED"}
+            ts = bpy.context.scene.open_painter.texture_sets[0]
+            assert len(active(ts).masks) == 1, [(m.name, m.source) for m in active(ts).masks]
+            assert bpy.ops.ed.redo() == {"FINISHED"}
+            ts = bpy.context.scene.open_painter.texture_sets[0]
+            layer = active(ts)
+            assert len(layer.masks) == 2 and layer.masks[-1].source == "GENERATOR"
         data = json.loads(result.read_text())
         data["native_asset_click"] = "PASS"
         result.write_text(json.dumps(data))

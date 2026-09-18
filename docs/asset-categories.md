@@ -1,6 +1,33 @@
-# Asset categories — 0.2.1
+# Asset categories
 
-The Painter toolbar now exposes seven labeled native Blender asset-type buttons in both 3D and 2D. They filter the bottom shelf immediately. **All Types** shows their union. The **All** tab beside the shelf's hamburger menu is Blender's separate catalog selector; it does not change the Painter asset type. The same type selector is available under **Asset Library → Show**.
+## Since 0.11.0: catalog tabs, select then apply
+
+The shelf library assigns every built-in entry (and every local handle) to an asset catalog per
+category — **Materials · Smart Materials · Smart Masks · Filters · Brushes · Alphas · Textures ·
+Geometry** — so the shelf's own header can show them as tabs beside its search field. Blender
+exposes no API to enable catalog tabs, so the artist ticks the categories once in the shelf's ☰
+catalog menu; the choice persists in the preferences (`STORE_ENABLED_CATALOGS_IN_PREFERENCES`).
+The former seven-button tool-header strip is gone: the tool header keeps one **Assets** menu
+(Import Smart Material / Texture / Alpha, Save Set as Smart Material, Save Folder as Module, Delete
+Local Material, Refresh Library) and one type dropdown (`asset_category`, also in the *Assets*
+sidebar panel › *Library*), which filters the shelf together with the tabs.
+
+A click on a shelf asset **selects** it: the *Assets* panel shows its name, type, the mesh maps it
+still needs and the exact target (*Adds an editable group to Body*, *Adds to the mask stack of
+Blue paint coat*, *Applies to Base › Roughness*, *Adds pieces to Cube*), with **Apply** and, for
+smart masks, **Replace Masks**. A second click on the same asset, the Apply button in the tool
+header or the shelf's right-click menu applies it. Browsing never changes the material; one
+application is one undo step. Replacing masks is its own named action — no modifier key.
+
+Application rules: a material or smart material adds a named, editable group to the active set
+(saved `.openpaintmaterial` documents too); a smart mask joins the selected layer's or folder's mask
+stack; a filter, procedural or texture goes to the inspected channel of a fill layer, or to the mask
+stack when the mask is selected; a geometry preset opens its dialog for the selected object; brushes
+and alphas set the tool. `tests/integration/asset_workflow.py` covers these rules.
+
+## 0.2.1
+
+The Painter toolbar exposed seven labeled native Blender asset-type buttons in both 3D and 2D. They filtered the bottom shelf immediately. **All Types** showed their union. The same type selector was available under **Asset Library → Show**.
 
 | Category | Contents and click behavior |
 | --- | --- |

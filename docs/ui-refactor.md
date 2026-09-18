@@ -33,8 +33,8 @@ never saved), **F** external file. Locations are Painter sidebar panels unless s
 | Smart-material master controls | D | none | Inspector › material selection (authored per catalog recipe) | done (phase 2) |
 | View Mask / Back to Material | P (+display material wiring) | none | Inspector mask header | done (phase 2) |
 | Add Paint to Mask | D | none (only *Add White/Black Mask*) | Inspector mask header, explicit role | done (phase 2) |
-| Asset shelf categories, refresh, import texture/alpha | D+F | Tool header strip | Shelf header (catalog tabs) and *Assets* sidebar panel | Phase 3 |
-| Asset Library panel (catalog material/effect, saved material apply/save/import/delete) | D+F | *Asset Library* panel | *Assets* panel selected-asset box, material context menu, *More* menu | Phase 3 |
+| Asset shelf categories, refresh, import texture/alpha | D+F | Tool header strip | Shelf header (catalog tabs) and *Assets* sidebar panel | done (phase 3) |
+| Asset Library panel (catalog material/effect, saved material apply/save/import/delete) | D+F | *Asset Library* panel | *Assets* panel selected-asset box, layer-row context menu, *Assets* menu | done (phase 3) |
 | Bake Mesh Maps popover (doctor, sources, cages, settings, maps, corrections, queue, use maps) | D+F | Tool header popover + *Bake Mesh Maps* panel | *Bake* sidebar tab: Setup / Maps / Results; header *Bake Mesh Maps* opens it | Phase 4 |
 | Use Baked Maps (creates a fill layer) | D | Bake panel bottom | Results › *Add Baked Normal and AO Layer* | Phase 4 |
 | Export Textures popover (target box, follow target, settings, export, bundle, measure, atlas) | D+F | Tool header popover + *Export Textures* panel | *Export* sidebar tab: Contents / Scope / Destination / Folder / Output Preview; *Prepare Export* sub-panel | Phase 5 |
@@ -108,3 +108,22 @@ Operator identifiers are kept callable throughout (`open_painter.layer`, `.mask`
 - Tests: `tests/integration/selection_target.py`, `inspector_panels.py` (background, through
   `ui_layout_recorder.Recorder` because `UILayout.introspect()` truncates long layouts) and
   `inspector_ui.py` (real window, with screenshots in `.blender-test/inspector-*.png`).
+
+## Phase 3 notes (implemented)
+
+- `shelf_library.build` writes `blender_assets.cats.txt` next to the library and sets each asset's
+  `catalog_id` (`library_categories.CATALOG_IDS`, one uuid5 per category); local handles get the
+  same ids, so the shelf's native catalog tabs can filter by category beside its search field.
+  Blender enables catalog tabs only through the shelf's own catalog menu (no RNA/operator:
+  `asset_shelf_settings.cc`), so the shelves opt into `STORE_ENABLED_CATALOGS_IN_PREFERENCES` and
+  the tool header keeps one type dropdown. The manifest carries `catalogs`; a library without it
+  is rebuilt.
+- `native.OP_OT_native_asset.invoke` selects on the first click (`select_click`, per-area
+  `DockState.pending_asset`) and applies on the second; `execute` (buttons, scripts) applies at
+  once. `entry_key` / `apply_now` / `replace` are `SKIP_SAVE` properties for the Assets panel,
+  the tool header's Apply button and the shelf context menu (`draw_asset_context_menu`).
+  `application_target` and `missing_requirements` word the target and the missing mesh maps.
+- Geometry effect presets are shelf entries of kind `GEOMETRY` (category *Geometry*); activating
+  one opens the `open_painter.geometry_effect` dialog for the selected object.
+- `assets_panel.apply_document` wraps a saved whole-set document in one named group.
+- `native.layer_context_menu` extends Blender's list-item context menu on the layer rows.

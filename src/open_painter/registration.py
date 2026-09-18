@@ -142,7 +142,7 @@ def register():
     from .ui.dock import lifecycle
     from .ui import editor, workspace
     from .graph import operators as graph_operators
-    from .ui.native import toolbar, asset_type_buttons
+    from .ui.native import toolbar, asset_type_buttons, layer_context_menu
     from .ai import session as director
     try:
         for cls in CLASSES:
@@ -173,7 +173,8 @@ def register():
             logger.exception('Shelf library unavailable; the shelf shows local handles only')
         for owner, method, callback in ((bpy.types.VIEW3D_HT_tool_header,'prepend',asset_type_buttons),
                                         (bpy.types.IMAGE_HT_tool_header,'prepend',asset_type_buttons),
-                                        (bpy.types.VIEW3D_HT_tool_header,'append',toolbar)):
+                                        (bpy.types.VIEW3D_HT_tool_header,'append',toolbar),
+                                        (bpy.types.UI_MT_list_item_context_menu,'append',layer_context_menu)):
             getattr(owner,method)(callback)
             _cleanups.append(lambda owner=owner,callback=callback: owner.remove(callback))
         _registered = True

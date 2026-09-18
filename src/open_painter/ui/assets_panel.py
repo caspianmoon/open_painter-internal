@@ -27,6 +27,25 @@ class OP_OT_save_material(SafeOperator, bpy.types.Operator, ExportHelper):
         self.report({"INFO"}, "Smart material saved with bundled textures.")
 
 
+def apply_document(context, ts, path):
+    """Apply a library document as one named, editable group (a module document is already one)."""
+    from ..core import layer_stack
+    roots = loader.apply(ts, path)
+    ids = [layer.id for layer in roots]
+    if len(ids) == 1 and next(layer for layer in ts.layers if layer.id == ids[0]).type == "FOLDER":
+        folder = next(layer for layer in ts.layers if layer.id == ids[0])
+    elif ids:
+        folder = layer_stack.group(ts, set(ids), name=Path(path).stem.replace("_", " "))
+        folder.group_mode = "ISOLATED"
+    else:
+        return None
+    ts.active_layer = layer_stack.index_of(ts, folder.id)
+    from . import selection
+    if context.area is not None:
+        selection.select(context, folder.id, selection.CONTENT, ts=ts, synchronize=False)
+    return folder
+
+
 class OP_OT_import_material(SafeOperator, bpy.types.Operator, ImportHelper):
     bl_idname = "open_painter.import_material"
     bl_label = "Import and Apply Smart Material"
@@ -35,7 +54,7 @@ class OP_OT_import_material(SafeOperator, bpy.types.Operator, ImportHelper):
     filter_glob: bpy.props.StringProperty(default="*.openpaintmaterial", options={"HIDDEN"})
 
     def run(self, context):
-        loader.apply(require_set(context), self.filepath)
+        apply_document(context, require_set(context), self.filepath)
         folder = library.directory(context)
         folder.mkdir(parents=True, exist_ok=True)
         target = folder / Path(self.filepath).name
@@ -63,7 +82,7 @@ class OP_OT_library(SafeOperator, bpy.types.Operator):
     def run(self, context):
         path = Path(self.material)
         if self.action == "APPLY":
-            loader.apply(require_set(context), path)
+            apply_document(context, require_set(context), path)
         else:
             if path.resolve().parent != library.directory(context).resolve():
                 raise ValueError("Built-in materials cannot be deleted.")

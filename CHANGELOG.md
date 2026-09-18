@@ -3,7 +3,7 @@
 ## 0.11.0 (in progress)
 
 The everyday editing workflow, as planned in `Open_Painter_UI_Implementation_Plan.md`: one editing
-target, readable layers, a selection-specific inspector, explicit mask editing. Phases 0–2.
+target, readable layers, a selection-specific inspector, explicit mask editing. Phases 0–3.
 
 - **One editing target** (`ui/selection.py`): Layers, the Open Graph, the inspector, the shelf and
   the Material Director resolve the same texture set, layer, selection kind (content, mask stack,
@@ -34,12 +34,25 @@ target, readable layers, a selection-specific inspector, explicit mask editing. 
 - **Open Inspector** (More menu) hosts the same inspector in a companion Properties area (split
   from the Painter area, or an existing Properties area when chosen) so the layer stack and the
   detailed controls scroll independently; *Close Inspector* closes only the area it split.
+- **Assets:** every shelf entry sits in a catalog per category, so the shelf's own catalog tabs
+  filter by type beside its search field once enabled in its catalog menu (Blender has no API to
+  enable them; the choice persists in the preferences). The tool header's seven-button strip
+  becomes one *Assets* menu (import, save, refresh) and one type dropdown. A click selects
+  an asset — the *Assets* panel shows its name, type, missing mesh maps and the exact target
+  (*Adds an editable group to Body*, *Adds to the mask stack of Blue paint coat*, *Applies to
+  Base › Roughness*) with Apply and, for smart masks, *Replace Masks* — and a second click, the
+  Apply button or the right-click menu applies it; browsing never edits the material and one
+  application is one undo step. Replacing masks is its own action, no modifier key. Saved
+  material documents become one named group. Geometry effect presets are shelf entries.
+  Right-click on a layer row: select content or mask, save as smart material or module,
+  duplicate, delete, edit nodes.
 - **Texture Set** panel: the assigned objects at a glance, the 2D view's state named truthfully
   (*Paint Source*, *Mask Snapshot*, *Composite Snapshot · out of date*, *Source Image*), settings
   in a sub-panel. Geometry Effects and Offline Analysis no longer sit above the layer workflow.
 - Tests: `tests/integration/ui_baseline.py` (recorded fixture baseline, phase 0),
-  `selection_target.py`, `inspector_panels.py`, `inspector_ui.py` (real window).
-  Docs: [ui-refactor.md](docs/ui-refactor.md).
+  `selection_target.py`, `inspector_panels.py`, `inspector_ui.py` (real window),
+  `asset_workflow.py`. Docs: [ui-refactor.md](docs/ui-refactor.md),
+  [asset-categories.md](docs/asset-categories.md).
 
 ## 0.10.1
 

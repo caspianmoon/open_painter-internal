@@ -165,84 +165,92 @@ with tempfile.TemporaryDirectory(prefix="op-export-safety-") as tmp:
 
     attempt("a later texture set failing", SetFault)
 
-    # A crash between two replacements: simulate by stopping the transaction after the backups
-    # were made and one destination written, leaving the journal behind; the next request recovers.
-    class Crash(BaseException):
-        pass
+    # Hard process terminations at the publication boundaries, on the real commit path: a
+    # background Blender runs the same export (with padding None, so its bytes differ from the
+    # published Automatic export) and is killed by the failpoint; recovery runs here.
+    import subprocess
+    blender = Path(bpy.app.binary_path)
 
-    class CrashFault:
-        def __init__(self):
-            self.count = 0
+    def crash_export(failpoint, padding_mode="NONE"):
+        env = dict(os.environ, OP_EXPORT_FAILPOINT=failpoint, OP_WORKER_FOLDER=str(folder), OP_WORKER_PADDING=padding_mode)
+        env.pop(transaction.FAULT_VARIABLE, None)
+        completed = subprocess.run([str(blender), "--background", "--factory-startup", "--python",
+                                    str(ROOT / "tests/integration/export_safety_worker.py")], env=env, capture_output=True, text=True)
+        assert completed.returncode == 3, (failpoint, completed.returncode, completed.stdout[-800:], completed.stderr[-800:])
+        return completed
 
-        def __enter__(self):
-            self.real_replace = os.replace
+    # The bytes a padding-None export publishes (for the post-commit expectation).
+    none_folder = Path(tmp) / "none"
+    project.export_directory = str(none_folder)
+    for ts in project.texture_sets:
+        ts.export.padding_mode = "NONE"
+    request(overwrite=False)
+    none_maps = {name: digest for name, digest in snapshot(none_folder).items() if name.endswith(".png")}
+    for ts in project.texture_sets:
+        ts.export.padding_mode = "AUTOMATIC"
+    project.export_directory = str(folder)
+    original_maps = {name: digest for name, digest in original.items() if name.endswith(".png")}
+    assert none_maps != original_maps, "the two padding modes must produce different bytes"
 
-            def replacing(src, dst):
-                self.real_replace(src, dst)
-                if ".op-staging-" in str(src):
-                    self.count += 1
-                    if self.count == 2:
-                        raise Crash()
-            self.patched = replacing
-            transaction.os.replace = replacing
-            return self
-
-        def __exit__(self, *_):
-            transaction.os.replace = self.real_replace
-
-    crash = CrashFault()
-    crash.__enter__()
-    try:
-        # The rollback runs on BaseException too; to leave a crash scene behind, disable it.
-        real_commit_cleanup = transaction.Transaction.commit
-
-        def commit_without_rollback(self, overwrite=False):
-            self.validate(overwrite)
-            for folder_ in self.journals():
-                transaction.recover(folder_)
-            for item in self.items:
-                item.staging = item.destination.with_name(f'{item.destination.name}.op-staging-{self.identifier}')
-                if item.destination.exists():
-                    item.backup = item.destination.with_name(f'{item.destination.name}.op-backup-{self.identifier}')
-            for folder_, items in self.journals().items():
-                (folder_ / transaction.JOURNAL).write_text(json.dumps({'transaction': self.identifier, 'items': [i.record() for i in items]}))
-            for item in self.items:
-                if item.backup is not None:
-                    transaction.os.replace(item.destination, item.backup)
-            for item in self.items:
-                transaction._copy_flushed(item.source, item.staging)
-                transaction.os.replace(item.staging, item.destination)     # the injected crash fires here
-            raise AssertionError("the crash did not fire")
-        transaction.Transaction.commit = commit_without_rollback
-        try:
+    for failpoint, expected_maps, label in (("after_backups", original_maps, "before the decision"),
+                                            ("after_first_publish", original_maps, "mid-publication"),
+                                            ("before_commit_decision", original_maps, "just before the decision"),
+                                            ("after_commit_decision", none_maps, "just after the decision"),
+                                            ("after_first_backup_removed", none_maps, "during cleanup")):
+        crash_export(failpoint)
+        left = leftovers(folder)
+        assert transaction.JOURNAL in left, (failpoint, left)
+        restored = transaction.recover(folder)
+        maps = {name: digest for name, digest in snapshot(folder).items() if name.endswith(".png")}
+        assert maps == expected_maps, (failpoint, label)
+        assert not leftovers(folder), (failpoint, leftovers(folder))
+        assert transaction.recover(folder) == []
+        check(f"hard termination {label} ({failpoint}) recovers to one coherent state", actions=restored[:3])
+        if expected_maps is none_maps:
+            # Put the Automatic export back for the next case.
             request(overwrite=True)
-        except Crash:
-            pass
-        finally:
-            transaction.Transaction.commit = real_commit_cleanup
-    finally:
-        crash.__exit__()
-    left = leftovers(folder)
-    assert transaction.JOURNAL in left and any(".op-backup-" in name for name in left), left
-    after_crash = snapshot(folder)
-    assert any(after_crash.get(name) != digest for name, digest in original.items()), "the crash scene should be partial"
-    restored = transaction.recover(folder)
-    assert snapshot(folder) == original and not leftovers(folder), (restored, leftovers(folder))
-    check("a crash between replacements is recovered from the journal", restored=restored)
-    # Recovery also runs at the start of the next request: leave a journal and export again.
-    crash2 = CrashFault(); crash2.__enter__()
-    transaction.Transaction.commit = commit_without_rollback
-    try:
-        request(overwrite=True)
-    except Crash:
-        pass
-    finally:
-        transaction.Transaction.commit = real_commit_cleanup
-        crash2.__exit__()
+            assert {n: d for n, d in snapshot(folder).items() if n.endswith(".png")} == original_maps
+    original = snapshot(folder)
+
+    # Recovery also runs at the start of the next request: leave a crashed journal, export again.
+    crash_export("after_backups")
     assert leftovers(folder)
     request(overwrite=True)
     assert not leftovers(folder) and set(snapshot(folder)) == set(original)
     check("the next request recovers a crashed one first")
+
+    # A cleanup failure after the decision keeps every new file and says so.
+    os.environ[transaction.FAULT_VARIABLE] = "cleanup"
+    try:
+        plan = planning.resolve(bpy.context, contents="TARGET", scope="ALL", folder_source="PROJECT")
+        planning.execute(bpy.context, plan, overwrite=True)
+    finally:
+        os.environ.pop(transaction.FAULT_VARIABLE, None)
+    assert plan.outcome.cleanup_pending and "cleanup pending" in plan.outcome.message, plan.outcome
+    assert {n: d for n, d in snapshot(folder).items() if n.endswith(".png")} == original_maps
+    transaction.recover(folder)
+    assert not leftovers(folder)
+    check("post-commit cleanup failure keeps the complete export and reports cleanup pending")
+
+    # Another process publishing into the folder: this one refuses instead of racing it.
+    holder = subprocess.Popen([sys.executable, "-c", (
+        "import sys, time; sys.path.insert(0, sys.argv[1]); from open_painter.export import transaction;"
+        "transaction._Lock(sys.argv[2]).acquire(); print('held', flush=True); time.sleep(60)"),
+        str(ROOT / "src"), str(folder)], stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == "held"
+        refused = None
+        try:
+            request(overwrite=True)
+        except transaction.ExportBusy as error:
+            refused = str(error)
+        assert refused, "a second export into a locked folder must be refused"
+        assert {n: d for n, d in snapshot(folder).items() if n.endswith(".png")} == original_maps
+    finally:
+        holder.kill(); holder.wait()
+    request(overwrite=True)       # the dead holder's lock is stale
+    assert not leftovers(folder)
+    check("an overlapping export is refused while the folder is locked", message=refused[:80])
     # The maps are byte-identical across requests; the FBX carries a creation timestamp.
     fresh = snapshot(folder)
     assert all(fresh[name] == digest for name, digest in original.items() if name.endswith(".png")), "maps differ between requests"

@@ -416,7 +416,7 @@ def draw_mask_settings(layout, context, ts, layer, mask):
         keys = {item.stroke_key: item.name for other in context.scene.open_painter.texture_sets
                 for item in other.layers if item.stroke_key}
         if mask.stroke_key:
-            count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key))
+            count = len(stroke_records.strokes_for(context.scene.open_painter, mask.stroke_key, ts))
             # A key minted for the mask (New Key) is named after the mask itself.
             layout.label(text=f'{count} strokes of "{keys.get(mask.stroke_key, mask.name)}"', icon='CURVE_BEZCURVE')
         else:

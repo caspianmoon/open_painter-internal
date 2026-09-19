@@ -51,6 +51,73 @@ def _usable(image, key, size):
             and tuple(image.size) == (size, size) and image.has_data)
 
 
+_released = []   # accounting only
+
+
+def release_image(image):
+    """Remove a leaf, placeholder or preview datablock nothing binds any more.
+
+    Only zero-user datablocks come here; the datablock is removed as 0.13.0 did (its
+    references are remapped, which is what keeps the draw engine safe — scaling or unpacking
+    an image a compiled material still sampled crashed it instead). A leaf a node still
+    binds is never released: after an undo or reload its pixels are regenerated into the
+    same datablock (``Resources.request(..., reuse=)``)."""
+    try:
+        if not alive(image) or image.users:
+            return
+        bpy.data.images.remove(image)
+    except (ReferenceError, RuntimeError):
+        pass
+
+
+def sweep_graveyard(now=None, force=False):
+    """Kept for callers: nothing is deferred any more."""
+    return 0
+
+
+def released_count():
+    return 0
+
+
+def forget_graveyard():
+    _released.clear()
+
+
+def released(image):
+    """True once ``release_image`` let the image go: the datablock is gone."""
+    return not alive(image)
+
+
+def retire_unloaded_leaves():
+    """Leaves whose pixels did not survive an undo, a redo or a file load: the datablock came
+    back from the memfile or the file flagged ready, without its buffer (``has_data`` False,
+    nothing packed to reload). Left alone, the first viewport draw regenerates such a leaf
+    blank — and from then on it passes every ``has_data`` check while showing nothing and
+    seeding incremental updates with empty rows. Called from the undo/redo/load handlers,
+    before any draw, so the session rebuilds these leaves instead of trusting them."""
+    retired = 0
+    now = perf_counter()
+    for image in bpy.data.images:
+        if not image.get(RESOURCE) or not image.get('op_shader_resource_ready'):
+            continue
+        if image.has_data or image.packed_file is not None:
+            continue
+        image['op_shader_resource_ready'] = False
+        # Marked, never removed in the session: a node that still binds it gets its pixels
+        # regenerated into this datablock (``Resources.request(reuse=)``); an unbound one
+        # stays a datablock header until reopen.
+        image['op_resource_retired'] = now
+        if 'op_resource_state' in image:
+            del image['op_resource_state']
+        retired += 1
+    if retired:
+        _leaf_index.clear()
+        metrics.count('shader_resource_leaves_retired_unloaded', retired)
+    return retired
+
+
+
+
 def _published_leaf(key, size):
     """A ready leaf of ``key`` and ``size`` in bpy.data, found through an index so a request
     does not walk every image of the file; the index is rebuilt on a miss."""
@@ -83,7 +150,11 @@ def sweep_orphans(keep_bytes=64 * 1024 * 1024):
     listed = {entry.image.as_pointer() for table in _tables for entry in table.entries.values() if alive(entry.image)}
     orphans = []
     for image in bpy.data.images:
-        if not image.get(RESOURCE) or not image.get('op_shader_resource_ready') or image.users:
+        if not image.get(RESOURCE) or image.users:
+            continue
+        if image.get('op_resource_retired') is not None:
+            continue   # bufferless since an undo or reload: left alone (a datablock header) until reopen
+        if not image.get('op_shader_resource_ready'):
             continue
         if image.as_pointer() in listed:
             continue
@@ -96,13 +167,14 @@ def sweep_orphans(keep_bytes=64 * 1024 * 1024):
         if held <= keep_bytes:
             continue
         try:
-            bpy.data.images.remove(image)
+            release_image(image)
             removed += 1
         except (ReferenceError, RuntimeError):
             pass
     if removed:
         _leaf_index.clear()
         metrics.count('shader_resource_orphans_removed', removed)
+    sweep_graveyard()
     return removed
 
 
@@ -137,7 +209,7 @@ class Resources:
     def key(self, signature):
         return sha256(repr((self.size, signature)).encode()).hexdigest()
 
-    def request(self, signature, factory, owner='', placeholder=(.5, .5, .5, 1), interactive=False):
+    def request(self, signature, factory, owner='', placeholder=(.5, .5, .5, 1), interactive=False, reuse=None):
         """Return a cached image or queue just this immutable source snapshot.
 
         factory() returns an iterator yielding (low_row, HxWxC float data). It may
@@ -147,7 +219,10 @@ class Resources:
         ``op_resource_state`` for the next factory to build on. The rows must all be
         populated when the iterator finishes. Publication is atomic. ``owner`` names
         the layer whose profile the work is attributed to; ``placeholder`` is the
-        colour the leaf shows until it is published.
+        colour the leaf shows until it is published. ``reuse`` is a leaf datablock the
+        requesting node still binds whose pixels did not survive an undo or reload: the
+        source is produced into that datablock instead of a new one, so the node never
+        swaps images and the draw engine never sees the old one go (0.13 hardening).
         """
         key = self.key(signature)
         self.used.add(key)
@@ -165,11 +240,19 @@ class Resources:
             _touch(image)
             metrics.count('shader_resource_cache_hits')
             return image
-        image = bpy.data.images.new('OP Shader Source · ' + key[:12],
-                                    width=self.size, height=self.size, alpha=True, float_buffer=True)
+        if (reuse is not None and alive(reuse) and tuple(reuse.size) == (self.size, self.size)
+                and not reuse.get('op_shader_resource_ready')
+                and not any(entry.image == reuse for table in _tables for entry in table.entries.values())):
+            image = reuse
+            metrics.count('shader_resource_reused_datablocks')
+        else:
+            image = bpy.data.images.new('OP Shader Source · ' + key[:12],
+                                        width=self.size, height=self.size, alpha=True, float_buffer=True)
         image[OWNER] = True
         image[RESOURCE] = key
         image['op_shader_resource_ready'] = False
+        if 'op_resource_state' in image:
+            del image['op_resource_state']
         image.colorspace_settings.name = 'Non-Color'
         image.generated_color = tuple(placeholder)
         entry = Entry(image, owner=owner, interactive=interactive)
@@ -196,8 +279,10 @@ class Resources:
         if (listed is None and image.get('op_shader_resource_ready')
                 and tuple(image.size) == (self.size, self.size)):
             self.entries[key] = Entry(image)
+        elif image.get('op_resource_retired') is not None:
+            return   # the orphan sweep removes it after its grace period
         elif not image.users:
-            bpy.data.images.remove(image)
+            release_image(image)
         elif not any(held == image for held in self.superseded):
             self.superseded.append(image)
 
@@ -238,7 +323,7 @@ class Resources:
         for key in failed:
             entry = self.entries.pop(key)
             if alive(entry.image) and not entry.image.users:
-                bpy.data.images.remove(entry.image)
+                release_image(entry.image)
         return failed
 
     def _release_superseded(self):
@@ -249,7 +334,7 @@ class Resources:
             if image.users:
                 kept.append(image)
             else:
-                bpy.data.images.remove(image)
+                release_image(image)
         self.superseded = kept
 
     def _produce(self, entry, parts):
@@ -335,7 +420,7 @@ class Resources:
                 # this parameter value must schedule its source again.
                 self.entries.pop(key)
                 if not entry.image.users:
-                    bpy.data.images.remove(entry.image)
+                    release_image(entry.image)
                 continue
             job_started = perf_counter()
             try:
@@ -360,7 +445,7 @@ class Resources:
         keep = (64 * 1024 * 1024) // (self.size * self.size * 16)
         for key in unused[:max(0, len(unused) - keep)]:
             entry = self.entries.pop(key)
-            bpy.data.images.remove(entry.image)
+            release_image(entry.image)
         if published != self.completed:
             # A publication is when leaves change hands: leaves no table lists any more go too.
             sweep_orphans()
@@ -376,7 +461,7 @@ class Resources:
                 entry.job.close()
             try:
                 if not entry.image.users:
-                    bpy.data.images.remove(entry.image)
+                    release_image(entry.image)
             except ReferenceError:
                 pass
         self.entries.clear()

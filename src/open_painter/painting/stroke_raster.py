@@ -58,7 +58,7 @@ def bounds(samples, margin=0.0):
 # ---- kernel ----------------------------------------------------------------------
 
 def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX', planar=None,
-           alpha_texture=None, alpha_rotation='RAKE', alpha_angle=0.0, depth_limit=1.0):
+           alpha_texture=None, alpha_rotation='RAKE', alpha_angle=0.0, depth_limit=1.0, eligible=None):
     """Coverage (K,) of texels at world ``positions`` (K, 3) with ``normals`` (K, 3).
 
     Each sample is a disc of its radius in the plane of its normal (or of the
@@ -66,7 +66,9 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
     radii either side of that plane, front-facing only, falling off from
     ``hardness`` outwards and scaled by the sample's pressure column and ``flow``.
     Samples union with ``MAX`` (a stroke never darkens where it overlaps itself)
-    or ``FLOW`` (1 - prod(1 - a): builds up).
+    or ``FLOW`` (1 - prod(1 - a): builds up). ``eligible(texels, start, stop)``, when
+    given, answers which (texel, sample) pairs a stamp may paint at all (the surface
+    reach of a SURFACE stroke, ``surface_reach.Sheets.mask``): pairs it refuses score 0.
     """
     positions = np.ascontiguousarray(positions, np.float32)
     normals = np.ascontiguousarray(normals, np.float32)
@@ -98,6 +100,8 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
             radial = np.linalg.norm(lateral, axis=-1) / radius[None]
             facing = np.einsum('kc,sc->ks', normals[inside_box], axis) > .05
             inside = facing & (radial < 1.0) & (np.abs(depth) < radius[None] * depth_limit)
+            if eligible is not None:
+                inside &= eligible(inside_box, start + sub_start, start + sub_start + len(sub))
             alpha = np.clip((1.0 - radial) / soft, 0.0, 1.0) * pressure[None] * flow
             if alpha_texture is not None:
                 alpha = alpha * _alpha_lookup(alpha_texture, lateral, sub, radius, alpha_rotation, alpha_angle)
@@ -159,10 +163,13 @@ def dilate(mask, coverage, iterations=1):
 # ---- Blender binding ---------------------------------------------------------------
 
 def alpha_pixels(image):
+    """The red channel of a brush alpha as authored: decoded like every other image input,
+    so a packed or file-backed alpha whose float buffer Blender associates (premultiplies)
+    reads the same after a reopen as the generated image it was painted with."""
     if image is None:
         return None
-    from ..core import image_manager as images
-    return images.pixels(image)[..., 0].astype(np.float32)
+    from ..evaluation.image_snapshots import read
+    return read(None, image)[..., 0].astype(np.float32)
 
 
 def _batches(uv, n):
@@ -206,6 +213,27 @@ def uv_window(corners, uv, lo, hi, margin=0.0):
     return np.where(safe[..., None], window, whole)
 
 
+def reach_for(entries, stroke, samples, planar, anchors=None):
+    """The surface reach of a SURFACE stroke on each target (``surface_reach.Sheets`` per entry),
+    or Nones for a depth-band stroke (recorded before 0.13.0, or with Reach set to Depth Band).
+    ``anchors`` (a gesture's, not yet recorded) stand in for the stroke's own."""
+    if getattr(stroke, 'reach', 'DEPTH') != 'SURFACE':
+        return [None] * len(entries)
+    from .surface_reach import for_targets, unpack_anchors
+    if anchors is None:
+        anchors = unpack_anchors(getattr(stroke, 'anchors', ''))
+    return for_targets(entries, samples, anchors if len(anchors) == len(samples) else None, planar,
+                       float(getattr(stroke, 'depth_limit', 1.0)))
+
+
+def eligibility(sheets, target, picked):
+    """The kernel's ``eligible`` callback for texels on the chosen triangles ``picked``."""
+    if sheets is None:
+        return None
+    triangles = np.asarray(target['tri_indices'], np.int64)[picked]
+    return lambda texels, start, stop: sheets.mask(triangles[texels], start, stop)
+
+
 def _rasterise(stroke, n, entries):
     """(n, n) coverage of one stroke over the evaluated ``entries`` of a set."""
     from ..geometry.uv_rasterizer import interpolate, rasterize
@@ -218,7 +246,7 @@ def _rasterise(stroke, n, entries):
         texture = alpha_pixels(stroke.alpha_image)
         planar = tuple(stroke.plane_normal) if stroke.projection == 'PLANAR' else None
         flat_result = result.reshape(-1)
-        for target in entries:
+        for target, sheets in zip(entries, reach_for(entries, stroke, samples, planar)):
             tri_vertices, tri_loops = target['tri_vertices'], target['tri_loops']
             corners = target['positions'][tri_vertices]                       # (T, 3, 3)
             chosen = np.flatnonzero(np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1))
@@ -234,7 +262,8 @@ def _rasterise(stroke, n, entries):
                 positions = interpolate(weights, target['positions'][tri_vertices[picked]])
                 normals = interpolate(weights, target['world_normals'][tri_loops[picked]])
                 alpha = kernel(positions, normals, samples, stroke.hardness, stroke.flow, stroke.accumulate, planar,
-                               texture, stroke.alpha_rotation, stroke.alpha_angle, stroke.depth_limit)
+                               texture, stroke.alpha_rotation, stroke.alpha_angle, stroke.depth_limit,
+                               eligible=eligibility(sheets, target, picked))
                 np.maximum.at(flat_result, rows * n + cols, alpha)
                 covered[rows, cols] = True
         if covered.any():
@@ -355,11 +384,12 @@ def adopt(ts, stroke, n, resources, raster):
 
 
 def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache=None):
-    """Straight RGBA rows of a layer's strokes for one channel, composited over ``base`` rows."""
+    """Straight RGBA rows of a layer's strokes for one channel, composited over ``base`` rows.
+    Only the strokes whose scope permits ``ts`` take part (``strokes.strokes_for``)."""
     from .strokes import channel_value, stroke_channels, strokes_for
     project = ts.id_data.open_painter
     rows = np.zeros((y1 - y0, n, 4), np.float32) if base is None else np.array(base, np.float32, copy=True)
-    strokes = [stroke for stroke in strokes_for(project, layer.stroke_key) if channel in stroke_channels(stroke)]
+    strokes = [stroke for stroke in strokes_for(project, layer.stroke_key, ts) if channel in stroke_channels(stroke)]
     for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
         if not _touches_rows(raster, y0, y1, n):
             continue   # a stroke elsewhere on the canvas costs these rows nothing
@@ -374,6 +404,9 @@ def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache
         window = rows[:, c0:c1]
         if stroke.blend == 'ERASE':
             window[..., 3:4] *= 1.0 - alpha
+            # A texel erased to nothing carries no colour: the rows then compose the same
+            # whichever strips or column windows produced them (incremental = full).
+            window[..., :3][window[..., 3] <= 1e-8] = 0.0
             continue
         color = np.asarray(channel_value(stroke, channel), np.float32)
         # Source-over of straight colour.
@@ -389,7 +422,7 @@ def mask_rows(ts, mask, n, y0, y1, resources=None, cache=None):
     from .strokes import strokes_for
     project = ts.id_data.open_painter
     rows = np.zeros((y1 - y0, n), np.float32)
-    strokes = strokes_for(project, mask.stroke_key)
+    strokes = strokes_for(project, mask.stroke_key, ts)
     for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
         if not _touches_rows(raster, y0, y1, n):
             continue

@@ -200,6 +200,9 @@ class OP_OT_export_plan(bpy.types.Operator):
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
         message = f"Exported {len(written)} file(s) to {plan.directory} · {planning.summary(plan)}"
+        if plan.outcome is not None and plan.outcome.cleanup_pending:
+            message = f"{plan.outcome.message} · {message}"
+            self.report({"WARNING"}, plan.outcome.message)
         context.scene.open_painter.status = message
         self.report({"INFO"}, message)
         return {"FINISHED"}

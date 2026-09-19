@@ -41,6 +41,45 @@ validation kit, and product regression evidence. Report: `docs/quality-remedy-0.
   runner. Measured limits (latency and settle above the plan's targets on the reference
   fixture) are in the report.
 
+Hardening of the candidate (report: `docs/quality-hardening-0.13.md`):
+
+- **Export publication is a transaction with a durable decision.** A request's folders share
+  one journal state (preparing → prepared → publishing → committed → cleanup complete); a
+  crash or a cleanup failure after the commit keeps the complete new export, one before it
+  restores every original across all folders; files are published without replacing a
+  competitor (hard link or exclusive create, never a second existence check); an unreadable
+  journal keeps its evidence and stops the export with an explicit error; recovery is
+  idempotent and refuses to act on a running export's folder.
+- **Fill Empty Space is complete.** The full-domain propagation finishes on any atlas (an
+  8 px island in a 4K corner included); every empty texel gets a valid donor or the export
+  reports the failure. Finite padding is unchanged.
+- **The brush paints the displayed target.** Every pointer-down resolves the selection and
+  captures that gesture's target, scope and brush values; changing the target, hiding or
+  deleting it, or editing the assigned geometry during a gesture discards the gesture with a
+  reason; the destination label shows the captured target while painting. Each stroke records
+  the sets it may render (*scope*): a stroke painted without *Paint Across Sets* never reaches
+  a set an earlier cross-set stroke linked, in the CPU evaluation, the live material, a full
+  recompute at another resolution and the export; strokes recorded before the field render
+  wherever their key is shared, as before. Duplicated layers and sets and imported materials
+  copy the strokes their source could render, scoped to the copy.
+- **Reach: Surface (default) or Depth Band.** A material stroke now paints the surface the
+  pointer hit and what connects to it without turning away from the stamp: a same-facing sheet
+  8 mm behind, a neighbouring object, a disconnected piece or a pocket under a lip stays clean
+  whatever the depth limit. *Depth Band* keeps the previous behaviour (every surface within the
+  limit) and is what strokes recorded before this version keep.
+- **Undo, redo and reopen keep the live material honest.** A published stroke leaf whose pixels
+  did not survive an undo, redo or file load is retired before the first draw instead of
+  showing blank; erased texels carry no colour, so incremental leaves equal a full recompute
+  bit for bit; a stroke's brush alpha is saved with the project (a generated one as
+  channel-packed full-precision data) and read as authored after reopening or importing a
+  material document, which now records its assets' alpha modes. A leaf an undo or reload left
+  without pixels is regenerated into the same datablock rather than replaced and removed —
+  the replacement's removal crashed the draw engine in a long session. Undoing the first
+  stroke on a layer no longer crashes: that stroke's structural graph rebuild is now built
+  inside the stroke's own undo step (before the push) instead of in the next timer tick, so a
+  following undo reverts between two consistent graphs rather than freeing node trees the
+  material still points at.
+
 ## 0.12.2
 
 Launch remedy: truthful amounts, effective recipes, plain names, an explicit blend channel,

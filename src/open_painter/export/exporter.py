@@ -99,9 +99,19 @@ class _Channels:
         valid = self.ownership.covered & has_data
         self.report.update({"valid_texels": int(valid.sum()), **self.ownership.diagnostics})
         if self.pad:
+            if not valid.any():
+                self.report["note"] = "no valid texel: nothing to extend into the gutters"
+                self.pad = 0
+                return
             self.donor, self.d2 = padding.nearest_donors(valid, self.ownership.island, self.pad)
+            if not padding.donors_valid(valid, self.donor):
+                raise ValueError("UV padding produced a donor outside the valid texels; the export was not published")
+            unresolved = padding.unresolved_texels(valid, self.donor)
+            if self.pad == "FILL" and unresolved:
+                raise ValueError(f"Fill Empty Space left {unresolved} texels without a donor; the export was not published")
             self.report["gutters"] = padding.gutters(self.ownership, self.donor, self.d2, self.pad)
             self.report["padded_texels"] = int((self.donor >= 0).sum())
+            self.report["unresolved_texels"] = unresolved
 
     def resampled(self, key):
         """A channel at the export resolution, before padding (the base of the combined normal)."""
@@ -235,15 +245,21 @@ def _record_report(ts, settings, n, report):
         pass
 
 
+last_outcome = None   # the transaction outcome of the last publish() (cleanup-pending details)
+
+
 def publish(generated, overwrite=False):
     """Move staged maps to their destinations as one transaction (``export.transaction``):
-    all of them or none, with the previous files restored on failure."""
+    all of them or none, with the previous files restored on failure. Returns the
+    destinations; ``last_outcome`` keeps the outcome (a cleanup still pending, for instance)."""
+    global last_outcome
     from .transaction import Transaction
     transaction = Transaction()
     try:
         for destination, source in zip(generated.destinations, generated.staged):
             transaction.add(destination, source)
-        return transaction.commit(overwrite=overwrite)
+        last_outcome = transaction.commit(overwrite=overwrite)
+        return last_outcome.destinations
     finally:
         generated.close()
 

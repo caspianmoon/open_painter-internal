@@ -72,11 +72,14 @@ class OP_OT_export_target(SafeOperator, bpy.types.Operator):
                     mesh_staging.mkdir()
                     staged_mesh = _export_mesh(context, target, mesh_staging, objects)
                     transaction.add(directory / staged_mesh.name, staged_mesh)
-                written = transaction.commit(overwrite=False)
+                outcome = transaction.commit(overwrite=False)
             finally:
                 for result in generated:
                     result.close()
-        context.scene.open_painter.status = f"Exported {len(written)} files for {target.label} to {directory}"
+        context.scene.open_painter.status = f"Exported {len(outcome.destinations)} files for {target.label} to {directory}"
+        if outcome.cleanup_pending:
+            context.scene.open_painter.status = f"{outcome.message} · {context.scene.open_painter.status}"
+            self.report({"WARNING"}, outcome.message)
         self.report({"INFO"}, context.scene.open_painter.status)
 
 

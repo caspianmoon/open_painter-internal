@@ -84,6 +84,7 @@ class Plan:
     problems: list = field(default_factory=list)
     conflicts: list = field(default_factory=list)
     notes: list = field(default_factory=list)
+    outcome: object = None          # the publication outcome of execute() (cleanup pending, message)
 
     @property
     def files(self):
@@ -310,7 +311,8 @@ def execute(context, plan, *, overwrite=False):
             staged_mesh = _export_mesh(context, target, mesh_staging, objects)
             transaction.add(plan.mesh, staged_mesh)
         # Everything of the request exists in staging: publish all of it or none of it.
-        written.extend(transaction.commit(overwrite=overwrite))
+        plan.outcome = transaction.commit(overwrite=overwrite)
+        written.extend(plan.outcome.destinations)
     finally:
         for result in generated:
             result.close()

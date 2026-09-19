@@ -9,11 +9,32 @@ CHANNEL_FIELDS = {'BASE_COLOR': 'base_color', 'ROUGHNESS': 'roughness', 'METALLI
                   'AO': 'ao', 'EMISSION': 'emission', 'OPACITY': 'opacity_value', 'NORMAL': 'normal'}
 
 
-def strokes_for(project, key):
-    """Strokes rendered by layers with this key, in stack order."""
+def permits(stroke, ts):
+    """Whether the stroke's scope lets texture set ``ts`` render it (0.13 hardening, H2).
+
+    A stroke records the sets it may reach when it is recorded (``scope``); one recorded
+    before the field existed (``scope_version`` 0) renders wherever its key is shared, as
+    it always did."""
+    if ts is None or not getattr(stroke, 'scope_version', 0):
+        return True
+    return ts.id in scope_ids(stroke)
+
+
+def scope_ids(stroke):
+    return {item for item in getattr(stroke, 'scope', '').split(',') if item}
+
+
+def strokes_for(project, key, ts=None):
+    """Strokes rendered by layers with this key, in stack order; with ``ts``, only those
+    whose scope permits that set."""
     if not key:
         return []
-    return sorted((s for s in project.strokes if s.layer_key == key), key=lambda s: (s.order, s.id))
+    return sorted((s for s in project.strokes if s.layer_key == key and permits(s, ts)), key=lambda s: (s.order, s.id))
+
+
+def permitted_sets(project, stroke):
+    """(texture set, layer) pairs that render the stroke: the linked layers its scope permits."""
+    return [(ts, layer) for ts, layer in linked_layers(project, stroke.layer_key) if permits(stroke, ts)]
 
 
 def linked_layers(project, key):
@@ -49,9 +70,10 @@ def _wake(project, key, created=()):
         mask_numeric(mask, None)
 
 
-def stroke_identity(project, key):
-    """Repr-stable identity of a key's strokes, for cache keys and boundary identities."""
-    return tuple((s.id, s.revision) for s in strokes_for(project, key))
+def stroke_identity(project, key, ts=None):
+    """Repr-stable identity of a key's strokes (those ``ts`` may render, when given), for
+    cache keys and boundary identities."""
+    return tuple((s.id, s.revision) for s in strokes_for(project, key, ts))
 
 
 def touch(project, stroke):
@@ -98,10 +120,21 @@ def ensure_key(layer):
     return layer.stroke_key
 
 
-def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key='', sets=None):
+SCOPE_VERSION = 1   # explicit per-stroke permission (0.13 hardening, H2)
+
+
+def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key='', sets=None,
+           anchors=None):
     """Store a gesture as a stroke of the layer's key (or of ``key``: a Vector Strokes
     mask's own key); link paint layers in other sets it reaches. ``sets`` (ids) limits
-    the sets a universal stroke may link to those the gesture explicitly crossed."""
+    the sets a universal stroke may link to those the gesture explicitly crossed.
+
+    The stroke's permission (``scope``) is decided here and never widens later: its own
+    set, plus — for a universal layer stroke — every other set the gesture may reach
+    (``sets``, or any set when the caller names none) that already renders the key or that
+    the raster marks now (which links it). A set linked by an earlier stroke gains nothing
+    from a stroke that never reached it. ``anchors`` are the (x, y, z, polygon) surface hits
+    of the samples, the seeds of a SURFACE stroke's reach (``settings.reach``)."""
     from ..core import layer_stack as stack
     key = key or ensure_key(layer)
     samples = np.ascontiguousarray(samples, np.float32)
@@ -111,25 +144,33 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
     stroke.order = max((s.order for s in project.strokes if s.layer_key == key and s != stroke), default=-1) + 1
     for field in ('radius', 'hardness', 'opacity', 'flow', 'accumulate', 'alpha_image', 'projection', 'blend',
                   'base_color', 'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal',
-                  'depth_limit'):
+                  'depth_limit', 'reach'):
         if hasattr(settings, field):
             setattr(stroke, field, getattr(settings, field))
     stroke.channels = ','.join(sorted(settings.channels)) if not isinstance(settings.channels, str) else settings.channels
     stroke.plane_normal = plane_normal
     stroke.samples = stroke_raster.pack_samples(samples)
     stroke.sample_count = len(samples)
+    if anchors is not None and len(anchors) == len(samples):
+        from .surface_reach import pack_anchors
+        stroke.anchors = pack_anchors(anchors)
     lo, hi = stroke_raster.bounds(samples)
     stroke.bounds_min, stroke.bounds_max = lo, hi
-    created = []
+    permitted = [ts.id]
+    stroke.scope, stroke.scope_version = ts.id, SCOPE_VERSION
+    created, staged = [], []
     # A mask-only key has no paint layer to mirror into other sets.
+    from ..evaluation.raster_cache import for_texture_set
+    scene = ts.id_data
     if universal and key == layer.stroke_key:
-        from ..evaluation.raster_cache import for_texture_set
-        scene = ts.id_data
         for other in project.texture_sets:
-            if other.id == ts.id or any(item.stroke_key == key for item in other.layers):
+            if other.id == ts.id:
                 continue
             if sets is not None and other.id not in sets:
                 continue   # the gesture never crossed this set: its neighbourhood is no permission
+            if any(item.stroke_key == key for item in other.layers):
+                permitted.append(other.id)   # already linked, and reached by this gesture
+                continue
             # Link only sets the stroke marks: the disc may spill onto a neighbouring
             # object the pointer never crossed, so the raster, not the ray hit, decides,
             # and a set the bounds merely enclose must not gain a layer it re-rasters
@@ -143,10 +184,14 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
             linked = stack.add(other, 'PAINT', layer.name)
             linked.stroke_key = key
             created.append(other)
-            # The set reads geometry only now that it renders strokes, so only now does
-            # its shared cache carry the stamp the evaluation keys stroke rasters under:
-            # hand it the raster that decided the link instead of building it again.
-            stroke_raster.adopt(other, stroke, n, for_texture_set(scene, other), raster)
+            permitted.append(other.id)
+            staged.append((other, n, raster))
+    stroke.scope = ','.join(permitted)   # the last write: every field write bumps the revision the raster keys carry
+    for other, n, raster in staged:
+        # The set reads geometry only now that it renders strokes, so only now does
+        # its shared cache carry the stamp the evaluation keys stroke rasters under:
+        # hand it the raster that decided the link instead of building it again.
+        stroke_raster.adopt(other, stroke, n, for_texture_set(scene, other), raster)
     project.stroke_serial += 1
     enable_channels(project, key)
     _wake(project, key, created)
@@ -162,6 +207,7 @@ def restore_records(project, ts, records, keys, added=None):
     added go into ``added`` as they are, so a failed import can take them back out.
     """
     from ..core.layer_stack import replay, restore
+    from .surface_reach import unpack_anchors
     added = [] if added is None else added
     if not records:
         return added
@@ -179,6 +225,11 @@ def restore_records(project, ts, records, keys, added=None):
             # Derived from the samples, not trusted from the document.
             stroke.sample_count = len(samples)
             stroke.bounds_min, stroke.bounds_max = stroke_raster.bounds(samples)
+            if len(unpack_anchors(values.get('anchors', ''))) != len(samples):
+                stroke.anchors = ''   # anchors that do not describe these samples seed by proximity
+            # The document's scope named sets of the project that saved it: the copies
+            # belong to the importing set alone, never to a set of similar name.
+            stroke.scope, stroke.scope_version = ts.id, SCOPE_VERSION
             added.append(stroke.id)
     if added:
         project.stroke_serial += 1
@@ -202,21 +253,29 @@ def enable_channels(project, key):
 STROKE_FIELDS = ('name', 'radius', 'hardness', 'opacity', 'flow', 'accumulate', 'alpha_image', 'alpha_rotation',
                  'alpha_angle', 'projection', 'plane_normal', 'depth_limit', 'blend', 'channels', 'base_color',
                  'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal', 'samples',
-                 'sample_count', 'bounds_min', 'bounds_max', 'order')
+                 'sample_count', 'bounds_min', 'bounds_max', 'order', 'anchors', 'reach', 'scope', 'scope_version')
 
 
-def copy_key(project, key):
+def copy_key(project, key, ts=None, into=None):
     """A fresh key carrying copies of ``key``'s strokes: a duplicated layer or mask renders
-    the same marks but its later strokes stay its own."""
+    the same marks but its later strokes stay its own.
+
+    With ``ts`` (the set whose layer is copied) only the strokes that set may render are
+    copied, and the copies' scope names ``into`` (the set the copy lives in; ``ts`` itself
+    for a duplicated layer) alone: a copy never widens a stroke's reach to sets the
+    original was not permitted, nor keeps naming the set it was copied from."""
     fresh = new_id()
+    into = into if into is not None else ts
     # Read every source first: adding to the collection may move the structs it holds.
     sources = [{field: getattr(source, field) for field in (*STROKE_FIELDS, 'revision')}
-               for source in strokes_for(project, key)]
+               for source in strokes_for(project, key, ts)]
     for values in sources:
         stroke = project.strokes.add()
         stroke.id, stroke.layer_key = new_id(), fresh
         for field, value in values.items():
             setattr(stroke, field, value)
+        if into is not None and values.get('scope_version', 0):
+            stroke.scope = into.id
     project.stroke_serial += 1
     return fresh
 

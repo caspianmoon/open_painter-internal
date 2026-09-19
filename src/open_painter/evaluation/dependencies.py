@@ -13,6 +13,7 @@ from .resource_keys import datablock_key, key_for
 from .metrics import measured
 
 _mesh_epochs = {}
+_object_epochs = {}   # object pointer -> the counter value of its last evaluated-geometry update
 _epoch = 0
 _mesh_fingerprints = {}
 _known = {}
@@ -105,6 +106,11 @@ def mesh_epoch(mesh):
     Stamps are drawn from the scene-wide update counter, which no undo or redo resets, so a
     redo never lands on the value an undo's update carried."""
     return _mesh_epochs.get(mesh.as_pointer(), 0)
+
+
+def object_epoch(obj):
+    """The stamp of the object's last reported evaluated-geometry update (0 before the first)."""
+    return _object_epochs.get(obj.as_pointer(), 0)
 
 
 _layer_digests = {}   # (mesh pointer, layer name) -> (mesh epoch, digest)
@@ -441,6 +447,10 @@ def on_depsgraph(scene, depsgraph):
             _mesh_epochs[pointer] = _epoch+1   # unique for the session: ``clear`` empties the map, never the counter
             relevant = True
         elif isinstance(item, bpy.types.Object) and (update.is_updated_geometry or update.is_updated_transform):
+            if update.is_updated_geometry:
+                # The evaluated surface changed without the mesh datablock (a modifier or
+                # its inputs): a running material gesture reads this to cancel safely.
+                _object_epochs[item.as_pointer()] = _epoch + 1
             relevant = True
         elif isinstance(item, (bpy.types.Collection, bpy.types.Material, bpy.types.Object)):
             # Collection membership, material slots and selection feed mesh masks (0.9.2).
@@ -617,7 +627,7 @@ def clear():
     global _SESSION
     from . import mesh_masks
     from ..painting import decals
-    _mesh_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
+    _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
     decals.forget()      # which Empties this session's layers held: another file's layers start over

@@ -14,11 +14,14 @@ production path (``nearest_donors``) is an exact banded separable transform for
 distances up to ``FILL_BAND`` pixels: a vertical scan finds each column's nearest valid
 texel, a horizontal window of ±distance pixels then finds the global minimum of
 (d², island, index) per texel, so any tie resolves by the same key whatever the
-processing order. "Fill Empty Space" continues beyond the band at 8× and 64× coarser
-resolution with the same transform: texels farther than ``FILL_BAND`` pixels from any
-island take the representative texel of the nearest coarse cell, which is the exact
-nearest donor up to the coarse cell size. ``reference_donors`` is the brute-force
-oracle the tests hold the production path to.
+processing order. "Fill Empty Space" continues beyond the band at 8×, 64×, 512×… coarser
+resolution with the same transform until the band spans the whole grid, so it terminates
+with every empty texel resolved whenever any texel is valid (``unresolved_texels`` and
+``donors_valid`` are the checks the exporter runs before publishing). A texel resolved at
+a level with cells of ``c`` texels takes the representative (lowest index) of the nearest
+valid cell: its donor is at most 2·√2·c texels farther than the true nearest valid texel
+(the declared error bound, tested against the oracle). ``reference_donors`` is the
+brute-force oracle the tests hold the production path to.
 
 Memory: the ownership map (bool coverage + int32 islands) is built once per export and
 shared by every channel; the transform keeps int64 keys only for the row band it
@@ -28,7 +31,7 @@ channels are extended one at a time, each borrowing one image-sized copy.
 import numpy as np
 
 FILL_BAND = 64            # pixels the exact transform reaches; the fill mode continues coarser
-COARSE_FACTORS = (8, 64)  # further levels of the fill mode
+COARSE_STEP = 8           # the fill mode's cells grow by this factor per level until the band spans the grid
 D2_SHIFT, ISLAND_SHIFT = 46, 26
 INDEX_MASK = (1 << ISLAND_SHIFT) - 1
 INF = np.int64(1) << np.int64(62)
@@ -230,25 +233,51 @@ def nearest_donors(covered, island, limit):
         return donor, d2.astype(np.int32)
     donor, d2 = _banded(covered, island, min(FILL_BAND, n))
     d2 = d2.astype(np.int32)
-    for factor in COARSE_FACTORS:
+    factor = COARSE_STEP
+    index = np.arange(n * n, dtype=np.int64).reshape(n, n)
+    while True:
         unresolved = ~covered & (donor < 0)
-        if not unresolved.any() or n // factor < 2:
+        if not unresolved.any():
             break
-        nc = n // factor
-        index = np.arange(n * n, dtype=np.int64).reshape(n, n)
-        blocks = np.where(covered, index, np.int64(n * n)).reshape(nc, factor, nc, factor).min(axis=(1, 3))
+        # One level coarser: each cell's representative is its lowest valid texel index; the
+        # banded transform on the coarse grid reaches ``limit`` cells, and the loop continues
+        # with 8× larger cells until the band spans the whole grid (nc·√2 ≤ limit) — so it
+        # terminates with every empty texel resolved whenever any valid texel exists.
+        nc = -(-n // factor)
+        padded = n if nc * factor == n else nc * factor
+        blocks = np.full((padded, padded), np.int64(n * n), np.int64)
+        blocks[:n, :n] = np.where(covered, index, np.int64(n * n))
+        blocks = blocks.reshape(nc, factor, nc, factor).min(axis=(1, 3))
         coarse_covered = blocks < n * n
         representative = np.where(coarse_covered, blocks, 0)
         coarse_island = np.where(coarse_covered, island.reshape(-1)[representative], -1).astype(np.int32)
-        coarse_donor, coarse_d2 = _banded(coarse_covered, coarse_island, min(FILL_BAND, nc))
+        limit = min(FILL_BAND, int(np.ceil(nc * np.sqrt(2.0))) + 1)   # the band spans the grid once it can
+        coarse_donor, coarse_d2 = _banded(coarse_covered, coarse_island, limit)
         coarse_d2 = coarse_d2.astype(np.int32)
-        fine_donor = np.where(coarse_donor >= 0, representative.reshape(-1)[np.clip(coarse_donor, 0, None)], -1)
-        expanded = np.repeat(np.repeat(fine_donor, factor, axis=0), factor, axis=1)
-        expanded_d2 = np.repeat(np.repeat(coarse_d2 * (factor * factor), factor, axis=0), factor, axis=1)
+        # An occupied cell resolves its own empty texels with its representative; an empty
+        # cell takes the representative of its nearest occupied cell.
+        fine_donor = np.where(coarse_covered, representative,
+                              np.where(coarse_donor >= 0, representative.reshape(-1)[np.clip(coarse_donor, 0, None)], -1))
+        expanded = np.repeat(np.repeat(fine_donor, factor, axis=0), factor, axis=1)[:n, :n]
+        expanded_d2 = np.repeat(np.repeat(coarse_d2 * (factor * factor), factor, axis=0), factor, axis=1)[:n, :n]
         take = unresolved & (expanded >= 0)
         donor[take] = expanded[take].astype(np.int32)
         d2[take] = np.minimum(expanded_d2[take], np.iinfo(np.int32).max).astype(np.int32)
+        if nc == 1:
+            break
+        factor *= COARSE_STEP
     return donor, d2
+
+
+def unresolved_texels(covered, donor):
+    """Empty texels without a donor (must be 0 in fill mode when any texel is valid)."""
+    return int((~covered & (donor < 0)).sum())
+
+
+def donors_valid(covered, donor):
+    """Every donor index points at a valid texel of the same image."""
+    chosen = donor[donor >= 0]
+    return bool(chosen.size == 0 or ((chosen < covered.size).all() and covered.ravel()[chosen].all()))
 
 
 def reference_donors(covered, island, limit):
@@ -260,21 +289,22 @@ def reference_donors(covered, island, limit):
     if not len(valid):
         return donor, d2
     vy, vx = valid // n, valid % n
-    keys_valid = (island.ravel()[valid].astype(np.int64) << ISLAND_SHIFT) | valid.astype(np.int64)
+    tie_key = (island.ravel()[valid].astype(np.int64) << ISLAND_SHIFT) | valid.astype(np.int64)
     empty = np.flatnonzero(~covered.ravel())
     limit2 = None if limit == 'FILL' else int(limit) * int(limit)
-    for start in range(0, len(empty), 4096):
-        chunk = empty[start:start + 4096]
+    for start in range(0, len(empty), 2048):
+        chunk = empty[start:start + 2048]
         ey, ex = chunk // n, chunk % n
-        distance = (ey[:, None] - vy[None, :]) ** 2 + (ex[:, None] - vx[None, :]) ** 2
-        key = (distance.astype(np.int64) << D2_SHIFT) | keys_valid[None, :]
-        best = key.min(axis=1)
-        best_d2 = (best >> D2_SHIFT).astype(np.int64)
+        distance = ((ey[:, None] - vy[None, :]) ** 2 + (ex[:, None] - vx[None, :]) ** 2).astype(np.int64)
+        best_d2 = distance.min(axis=1)
+        # Among the nearest, the lowest (island, index): the same order the production key uses.
+        contenders = np.where(distance == best_d2[:, None], tie_key[None, :], np.int64(1) << np.int64(62))
+        best = contenders.min(axis=1)
         take = np.ones(len(chunk), bool) if limit2 is None else best_d2 <= limit2
         if limit2 is not None and limit2 <= 0:
             take[:] = False
         donor.reshape(-1)[chunk[take]] = (best[take] & INDEX_MASK).astype(np.int32)
-        d2.reshape(-1)[chunk[take]] = best_d2[take].astype(np.int32)
+        d2.reshape(-1)[chunk[take]] = np.minimum(best_d2[take], np.iinfo(np.int32).max).astype(np.int32)
     d2[covered] = 0
     return donor, d2
 

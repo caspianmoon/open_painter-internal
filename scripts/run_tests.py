@@ -107,6 +107,7 @@ if args.gui or args.gui_only:
         ("launch_audit_ui.py", "launch-audit.json"),
         ("ui_response_ui.py", "ui-response.json"),
         ("material_painting_ui.py", "material-painting-ui.json"),
+        ("material_target_ui.py", "material-target-ui.json"),
         ("quality_baseline_paint_ui.py", "quality-baseline-painting.json"),
     ] + ([("material_session_ui.py", "material-session-ui.json")] if os.environ.get("OP_RUN_SESSION") else []):
         result_path = root / ".blender-test" / result_name
@@ -141,6 +142,7 @@ if args.gui or args.gui_only:
                 "launch_audit_ui.py": {"OP_LAUNCH_AUDIT_REPORT": str(result_path)},
                 "ui_response_ui.py": {"OP_UI_RESPONSE_REPORT": str(result_path)},
                 "material_painting_ui.py": {"OP_MATERIAL_UI_REPORT": str(result_path)},
+                "material_target_ui.py": {"OP_MATERIAL_TARGET_REPORT": str(result_path)},
                 "material_session_ui.py": {"OP_SESSION_REPORT": str(result_path)},
                 "quality_baseline_paint_ui.py": {"OP_QUALITY_BASELINE_PAINT_REPORT": str(result_path)},
             }.get(filename, {}))),
@@ -148,7 +150,7 @@ if args.gui or args.gui_only:
         )
         result = result_path.read_text()
         report = json.loads(result)
-        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
+        if filename in {"bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_target_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

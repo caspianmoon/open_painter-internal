@@ -77,8 +77,11 @@ Full report with measurements and limits: `docs/quality-remedy-0.13.md`.
   ≈ 120–150 ms (target 100), release-to-current ≈ 0.4–0.5 s with four channels (target 250 ms;
   faster with fewer channels), ≈ 1.5 s at 4K. The first stroke on a layer that had none
   rebuilds the material once (≈ 0.7 s at 2K).
-- Surface following uses a depth band (front-facing, within Depth Limit × radius); a
-  same-facing surface closer than that still receives paint.
+- Surface following: the default *Surface* reach paints the surface under the pointer and
+  what connects to it without turning away (a same-facing sheet behind, a neighbouring
+  object, a disconnected piece or a pocket under a lip stays clean); a surface that
+  continues smoothly under something else is painted along. *Depth Band* is the explicit
+  broader reach (every surface within Depth Limit × radius) and what older strokes keep.
 - Fill Empty Space is exact within 64 px of an island and coarser beyond.
 - Unreal and Unity validation: NOT RUN (scripts and fixtures delivered).
 - Tablet pressure and tilt: tested with synthetic input only.

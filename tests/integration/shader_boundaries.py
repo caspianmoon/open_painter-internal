@@ -129,11 +129,12 @@ resources.step()
 assert alive(stale) and alive(superseded) and resources.entries[listed[RESOURCE]].image == listed
 holder.image = None
 resources.step()
-assert not alive(stale), 'a superseded placeholder outlived the binding that held it'
+from open_painter.evaluation.shader_resources import released
+assert released(stale), 'a superseded placeholder outlived the binding that held it'   # released, not removed (0.13 hardening)
 assert alive(superseded) and superseded.users == 1
 sibling.image = None
 resources.step()
-assert not alive(superseded) and alive(listed), 'the listed entry was released with its superseded twin'
+assert released(superseded) and alive(listed) and not released(listed), 'the listed entry was released with its superseded twin'
 assert not resources.superseded
 bpy.data.node_groups.remove(tree)
 other.close()

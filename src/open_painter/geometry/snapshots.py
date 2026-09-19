@@ -189,6 +189,9 @@ def targets(ts):
                 "object": obj, "mesh": mesh, "slots": slots, "tri_indices": chosen,
                 "tri_vertices": tri_vertices[chosen], "tri_loops": tri_loops[chosen],
                 "tri_polygons": tri_polygons[chosen], "tri_material": tri_material[chosen],
+                # Every triangle of the object, all slots: the surface reach of a material
+                # stroke walks the whole mesh (a slot seam is not a fold), then paints the set's own.
+                "all_tri_vertices": tri_vertices, "all_tri_polygons": tri_polygons,
                 "positions": coords, "object_normals": loop_normals,
                 "world_normals": world_normals, "uv": uv_coords,
                 "minimum": coords[used].min(axis=0), "maximum": coords[used].max(axis=0),

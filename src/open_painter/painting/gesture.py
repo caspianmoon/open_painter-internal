@@ -28,7 +28,8 @@ PREVIEW_TEXELS = 2 * 1024 * 1024
 PREVIEW_INTERVAL = .016    # seconds between preview publications (coalesces pointer events within a frame)
 RETIRE_TIMEOUT = 20.0      # seconds a retired preview may stay bound waiting for its leaf
 RETIRE_PREVIEWS = True     # keep the preview bound after release until the committed leaf publishes
-ENTRY_KEYS = ('tri_vertices', 'tri_loops', 'positions', 'world_normals', 'uv')
+ENTRY_KEYS = ('tri_vertices', 'tri_loops', 'positions', 'world_normals', 'uv',
+              'all_tri_vertices', 'all_tri_polygons', 'tri_indices')   # the last three: surface reach
 
 
 # ---- input resampling ------------------------------------------------------------------------
@@ -74,19 +75,88 @@ class Scope:
         return [by_id.get(identifier, identifier) for identifier in self.sets]
 
 
-def geometry_signature(scope):
-    """What a gesture's face references depend on: the assigned objects' meshes, their
-    counts, transforms and modes. A change discards the gesture rather than redirecting it."""
+def geometry_signature(scope, project=None):
+    """What a gesture's surface references depend on, read from the existing dependency
+    revisions rather than by hashing the meshes: for every assigned object its mesh's and
+    its own evaluated-geometry epochs (UV edits, vertex motion, modifier changes and their
+    inputs all report there), its modifier values, transform, mode and visibility, and the
+    participating sets' slot assignments. A change discards the gesture rather than
+    redirecting it."""
     import bpy
+    from ..evaluation import dependencies
     parts = []
     for obj in bpy.data.objects:
         if obj.as_pointer() not in scope.slots:
             continue
         mesh = obj.data
         parts.append((obj.as_pointer(), mesh.as_pointer() if mesh else 0, obj.mode,
+                      dependencies.mesh_epoch(mesh) if mesh else 0, dependencies.object_epoch(obj),
+                      dependencies.modifier_signature(obj),
                       len(mesh.vertices) if mesh else 0, len(mesh.polygons) if mesh else 0,
+                      obj.hide_viewport, obj.hide_get(),
                       tuple(round(v, 6) for row in obj.matrix_world for v in row)))
+    if project is not None:
+        for ts in project.texture_sets:
+            if ts.id in scope.sets:
+                parts.append((ts.id, tuple((ref.object.as_pointer() if ref.object is not None else 0, ref.slot_index)
+                                           for ref in ts.assignments)))
     return tuple(parts)
+
+
+def brush_snapshot(settings):
+    """The brush values frozen for one gesture (a plain namespace): the preview, the
+    re-projection and the committed record read these, so a setting changed while the pointer
+    is down applies to the next gesture."""
+    from types import SimpleNamespace
+    values = {}
+    for prop in settings.bl_rna.properties:
+        key = prop.identifier
+        if key == 'rna_type':
+            continue
+        value = getattr(settings, key)
+        if isinstance(value, (set, frozenset)):
+            value = frozenset(value)
+        elif getattr(prop, 'is_array', False):
+            value = tuple(value)
+        values[key] = value
+    return SimpleNamespace(**values)
+
+
+def target_state(scene, ts_id, layer_id, mask_id=''):
+    """(ts, layer, mask, reason): the material destination resolved from ids, or why it is not
+    paintable now — gone, hidden, under a hidden folder, or a mask that no longer renders
+    strokes. Shared by the tool's pointer-down and the running gesture's checks."""
+    project = scene.open_painter if scene is not None else None
+    ts = next((item for item in project.texture_sets if item.id == ts_id), None) if project is not None else None
+    if ts is None:
+        return None, None, None, 'the texture set is gone'
+    layer = next((item for item in ts.layers if item.id == layer_id), None)
+    if layer is None:
+        return ts, None, None, 'the target layer is gone'
+    if not ts.assignments or any(ref.object is None for ref in ts.assignments):
+        return ts, layer, None, 'the texture set is not assigned to a mesh'
+    visible = layer.visible
+    by_id = {item.id: item for item in ts.layers}
+    cursor, seen = layer.parent_id, {layer.id}
+    while visible and cursor:
+        parent = by_id.get(cursor)
+        if parent is None or cursor in seen or not parent.visible:
+            visible = False
+            break
+        seen.add(cursor)
+        cursor = parent.parent_id
+    if not visible:
+        return ts, layer, None, 'the target layer is hidden (or lies under a hidden folder)'
+    if mask_id:
+        mask = next((item for item in layer.masks if item.id == mask_id), None)
+        if mask is None:
+            return ts, layer, None, 'the target mask is gone'
+        if mask.source != 'STROKES' or not mask.stroke_key:
+            return ts, layer, mask, 'the target mask no longer renders vector strokes'
+        return ts, layer, mask, ''
+    if layer.type != 'PAINT':
+        return ts, layer, None, 'material strokes live on paint layers'
+    return ts, layer, None, ''
 
 
 def snapshot_entries(ts):
@@ -197,19 +267,24 @@ class Preview:
                 return prop.channel
         return None
 
-    def stamp(self, samples, stroke_settings):
-        """Rasterise new ``samples`` into the coverage and publish the rows they touch."""
+    def stamp(self, samples, stroke_settings, anchors=None):
+        """Rasterise new ``samples`` (with their ``anchors``) into the coverage and publish the
+        rows they touch; a SURFACE gesture reaches the same surface here as its record will."""
         if not self.active or not len(samples):
             return
         started = perf_counter()
-        from .stroke_raster import _batches, bounds, kernel, uv_window
+        from types import SimpleNamespace
+        from .stroke_raster import _batches, bounds, eligibility, kernel, reach_for, uv_window
         from ..geometry.uv_rasterizer import interpolate, rasterize
         samples = np.asarray(samples, np.float32)
         lo, hi = bounds(samples)
         size = self.size
         flat = self.coverage.reshape(-1)
         rows_touched = []
-        for target in self.entries:
+        pseudo = SimpleNamespace(reach=stroke_settings.get('reach', 'DEPTH'), depth_limit=stroke_settings['depth_limit'],
+                                 anchors='')
+        reaches = reach_for(self.entries, pseudo, samples, stroke_settings['planar'], anchors=anchors)
+        for target, sheets in zip(self.entries, reaches):
             tri_vertices, tri_loops = target['tri_vertices'], target['tri_loops']
             corners = target['positions'][tri_vertices]
             chosen = np.flatnonzero(np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1))
@@ -227,7 +302,7 @@ class Preview:
                 alpha = kernel(positions, normals, samples, stroke_settings['hardness'], stroke_settings['flow'],
                                stroke_settings['accumulate'], stroke_settings['planar'], stroke_settings['alpha_texture'],
                                stroke_settings['alpha_rotation'], stroke_settings['alpha_angle'],
-                               stroke_settings['depth_limit'])
+                               stroke_settings['depth_limit'], eligible=eligibility(sheets, target, picked))
                 self.covered[rows, cols] = True
                 hit = alpha > 0
                 if not hit.any():
@@ -266,6 +341,7 @@ class Preview:
             rows = np.array(self.bases[channel][low:high], copy=True)
             if stroke_settings['blend'] == 'ERASE':
                 rows[..., 3:4] *= 1.0 - alpha
+                rows[..., :3][rows[..., 3] <= 1e-8] = 0.0   # as the committed rows: no colour under nothing
             else:
                 color = np.asarray(channel_value(stroke_settings['values'], channel), np.float32)
                 out_alpha = alpha + rows[..., 3:4] * (1.0 - alpha)
@@ -345,12 +421,15 @@ class Gesture:
     point's depth. The 3D viewport provides one; a replay test provides a synthetic view.
     """
 
-    def __init__(self, scene, ts, layer, settings, scope, projector, key='', preview=True):
+    def __init__(self, scene, ts, layer, settings, scope, projector, key='', preview=True, mask_id=''):
         self.scene_name, self.ts_id, self.layer_id, self.key = scene.name, ts.id, layer.id, key
+        self.mask_id = mask_id
         self.settings_group = settings
+        self.brush = None       # the brush snapshot taken at start (``brush_snapshot``)
         self.scope, self.projector = scope, projector
         self.wants_preview = preview
         self.samples, self.segments, self.new = [], [[]], []
+        self.anchors, self.new_anchors = [], []   # (x, y, z, polygon) surface hits, one per sample
         self.last, self.last_screen, self.last_attributes = None, None, None
         self.previous = None    # the last re-projection since the last sample (point, normal, owner)
         self.hit_sets = set()
@@ -360,6 +439,7 @@ class Gesture:
         self.active = False
         self.result = None      # the recorded stroke after a committed end
         self.reason = ''        # why the gesture was discarded, if it was
+        self.new_source = False  # the target had no strokes yet: this gesture adds a source unit
         self.profile = {'advance_ms': [], 'start_ms': 0.0, 'end_ms': 0.0}
 
     # ---- resolution -----------------------------------------------------------------------
@@ -379,8 +459,28 @@ class Gesture:
     def _layer(self, ts):
         return next((item for item in ts.layers if item.id == self.layer_id), None) if ts is not None else None
 
+    def target(self):
+        """(ts, layer, mask, reason) of the captured destination as it stands now (``target_state``)."""
+        return target_state(self.scene, self.ts_id, self.layer_id, self.mask_id)
+
+    def describe(self, project=None):
+        """'Body > Mud Paint | Color, Roughness' for the captured target and enabled channels."""
+        from ..constants import CHANNEL_ITEMS
+        ts, layer, mask, _ = self.target()
+        labels = {key: label for key, label, *_ in CHANNEL_ITEMS}
+        brush = self.brush if self.brush is not None else self.settings_group
+        channels = [brush.channels] if isinstance(brush.channels, str) else sorted(brush.channels)
+        names = ', '.join(labels.get(c, c) for c in channels if c in labels) or 'no channels'
+        parts = [ts.name if ts is not None else '?']
+        if layer is not None:
+            parts.append(layer.name)
+        if mask is not None:
+            parts.append(mask.name or 'Vector Strokes mask')
+        return f"{' > '.join(parts)} | {names}"
+
     def hit(self, xy):
-        """(point, normal, direction, set id) of an eligible surface under ``xy``, or None."""
+        """(point, normal, direction, set id, polygon, object) of an eligible surface under
+        ``xy``, or None; ``polygon`` is the evaluated face the ray hit (the sample's anchor)."""
         import bpy
         from mathutils import Vector
         ray = self.projector.ray(xy)
@@ -402,10 +502,10 @@ class Gesture:
         owner = self.scope.owner(original, material_index)
         if owner is None:
             return None   # not an eligible face of a participating set: the stroke lifts here
-        return Vector(point), Vector(normal).normalized(), direction, owner
+        return Vector(point), Vector(normal).normalized(), direction, owner, int(index), original.as_pointer()
 
     def base_radius(self, xy, point):
-        settings = self.settings_group
+        settings = self.brush or self.settings_group
         if settings.radius_mode == 'WORLD':
             return settings.radius
         return max(settings.screen_radius * self.projector.world_per_pixel(xy, point), 1e-5)
@@ -414,7 +514,7 @@ class Gesture:
         """Screen distance between re-projections: a quarter of the brush spacing at the
         last hit's depth, so a sample lands within a quarter spacing of where it belongs
         before ``place`` interpolates it onto the exact spacing."""
-        settings = self.settings_group
+        settings = self.brush or self.settings_group
         if settings.radius_mode == 'SCREEN':
             return max(1.0, settings.spacing * settings.screen_radius * STEP_FRACTION)
         if self.last is None:
@@ -424,21 +524,27 @@ class Gesture:
     # ---- lifecycle ------------------------------------------------------------------------
 
     def start(self, xy, attributes, hit, plane_normal=None):
-        """Begin at a hit: capture settings and geometry, hold the shader, open the preview."""
+        """Begin at a hit: snapshot the brush, capture the target and geometry, hold the
+        shader, open the preview. False (with ``reason``) when the target is not paintable."""
         from ..evaluation import shader_preview
         from ..utils.logging import logger
-        ts = self._set()
-        layer = self._layer(ts)
-        if ts is None or layer is None:
+        ts, layer, mask, reason = self.target()
+        if reason:
+            self.reason = reason
             return False
+        # First stroke on this target: its source unit does not exist in the live graph yet,
+        # so committing it is a structural change the operator must build before its undo push
+        # (see ``ui/vector_brush.OP_OT_vector_brush._end``; 0.13 hardening, H4).
+        holder = mask if (self.key and mask is not None) else layer
+        self.new_source = holder is not None and not getattr(holder, 'stroke_key', '')
         opened = perf_counter()
         sweep()
-        settings = self.settings_group
+        settings = self.brush = brush_snapshot(self.settings_group)
         self.active = True
         self.result, self.reason = None, ''
         self.plane = tuple(plane_normal) if (plane_normal is not None and settings.projection == 'PLANAR') else (0.0, 0.0, 1.0)
         self.settings = stroke_settings(settings, self.plane if settings.projection == 'PLANAR' else None)
-        self.geometry = geometry_signature(self.scope)
+        self.geometry = geometry_signature(self.scope, self.scene.open_painter)
         self.hold = shader_preview.hold(self.scene, ts)
         if self.wants_preview and not self.key:
             try:
@@ -453,6 +559,20 @@ class Gesture:
         self.flush()
         self.profile['start_ms'] = (perf_counter() - opened) * 1000
         return True
+
+    def invalidated(self):
+        """Why the captured target can no longer take this gesture ('' while it can): the
+        destination went away or hid, or the assigned geometry changed under the stroke."""
+        if not self.active:
+            return ''
+        _, _, mask, reason = self.target()
+        if reason:
+            return reason
+        if self.key and mask is not None and mask.stroke_key != self.key:
+            return 'the target mask was re-keyed during the stroke'
+        if geometry_signature(self.scope, self.scene.open_painter) != self.geometry:
+            return 'the geometry changed during the stroke'
+        return ''
 
     def advance(self, xy, attributes):
         """Walk from the last pointer position to ``xy`` at the brush spacing, re-projecting
@@ -487,8 +607,9 @@ class Gesture:
         spacing; the sample is interpolated back onto the exact spacing between the previous
         re-projection and this one, so the spacing does not depend on the step or event rate."""
         from mathutils import Vector
-        settings = self.settings_group
-        point, normal, direction, owner = hit
+        settings = self.brush or self.settings_group
+        point, normal, direction, owner, polygon, _ = hit
+        anchor = [float(point[0]), float(point[1]), float(point[2]), float(polygon)]
         pressure, tilt_x, tilt_y, tablet = attributes
         radius = self.base_radius(xy, point)
         if tablet and settings.pressure_size:
@@ -527,6 +648,8 @@ class Gesture:
         row = [*point, *normal, flow_pressure, radius, tilt_x, tilt_y, *tangent]
         self.samples.append(row)
         self.new.append(row)
+        self.anchors.append(anchor)
+        self.new_anchors.append(anchor)
         self.segments[-1].append(point.copy())
         self.hit_sets.add(owner)
         self.last = point
@@ -547,12 +670,13 @@ class Gesture:
         if self.preview is not None and self.new:
             from .stroke_raster import SAMPLE_WIDTH
             try:
-                self.preview.stamp(np.asarray(self.new, np.float32).reshape(-1, SAMPLE_WIDTH), self.settings)
+                self.preview.stamp(np.asarray(self.new, np.float32).reshape(-1, SAMPLE_WIDTH), self.settings,
+                                   np.asarray(self.new_anchors, np.float32).reshape(-1, 4))
             except Exception:
                 logger.exception('Paint Material: the live preview failed; the stroke commits on release')
                 self.preview.restore()
                 self.preview = None
-        self.new = []
+        self.new, self.new_anchors = [], []
 
     def end(self, commit, reason=''):
         """Close the gesture: one stroke record (``self.result``) or nothing."""
@@ -560,10 +684,12 @@ class Gesture:
         if not self.active:
             return None
         opened = perf_counter()
-        self.active = False
         stroke = None
-        if commit and self.samples and geometry_signature(self.scope) != self.geometry:
-            commit, reason = False, 'the geometry changed during the stroke'
+        if commit and self.samples:
+            invalid = self.invalidated()
+            if invalid:
+                commit, reason = False, invalid
+        self.active = False
         if commit and self.samples:
             stroke = self.commit()
         if self.preview is not None:
@@ -578,6 +704,7 @@ class Gesture:
             self.hold = None
         self.result, self.reason = stroke, ('' if stroke is not None else (reason or 'nothing painted'))
         self.samples, self.segments, self.new = [], [[]], []
+        self.anchors, self.new_anchors = [], []
         self.last, self.last_screen, self.previous = None, None, None
         self.profile['end_ms'] = (perf_counter() - opened) * 1000
         return stroke
@@ -590,9 +717,10 @@ class Gesture:
         if ts is None or layer is None:
             return None
         samples = np.asarray(self.samples, np.float32).reshape(-1, SAMPLE_WIDTH)
-        settings = self.settings_group
+        anchors = np.asarray(self.anchors, np.float32).reshape(-1, 4)
+        settings = self.brush or brush_snapshot(self.settings_group)
         return records.record(self.scene.open_painter, ts, layer, samples, settings, plane_normal=self.plane,
-                              universal=settings.universal, key=self.key, sets=set(self.hit_sets))
+                              universal=settings.universal, key=self.key, sets=set(self.hit_sets), anchors=anchors)
 
 
 # Preview images are made for one gesture and removed a while after nothing binds them: a
@@ -641,11 +769,13 @@ def _reap():
         if image.users or perf_counter() - since < ORPHAN_GRACE:
             waiting.append((image, since if not image.users else perf_counter()))
             continue
-        try:
-            bpy.data.images.remove(image)
-        except (ReferenceError, RuntimeError):
-            pass
+        # Released, not removed: the material that sampled the preview may still be compiling
+        # its replacement and sampling the old one (see shader_resources.release_image).
+        from ..evaluation.shader_resources import release_image
+        release_image(image)
     _orphans[:] = waiting
+    from ..evaluation.shader_resources import sweep_graveyard
+    sweep_graveyard()
     return .25 if (_retired or _orphans) else None
 
 
@@ -680,10 +810,11 @@ def release_all():
     """Remove every preview image now (unregister)."""
     import bpy
     discard_all()
+    from ..evaluation.shader_resources import release_image
     for image, _ in _orphans:
         try:
             if not image.users:
-                bpy.data.images.remove(image)
+                release_image(image)
         except (ReferenceError, RuntimeError):
             pass
     _orphans.clear()
@@ -697,4 +828,5 @@ def stroke_settings(settings, plane_normal=None):
     return {'hardness': float(settings.hardness), 'flow': float(settings.flow), 'opacity': float(settings.opacity),
             'accumulate': settings.accumulate, 'blend': settings.blend, 'planar': plane_normal,
             'alpha_texture': alpha_pixels(settings.alpha_image), 'alpha_rotation': 'RAKE', 'alpha_angle': 0.0,
-            'depth_limit': float(getattr(settings, 'depth_limit', 1.0)), 'values': settings}
+            'depth_limit': float(getattr(settings, 'depth_limit', 1.0)), 'reach': getattr(settings, 'reach', 'DEPTH'),
+            'values': settings}

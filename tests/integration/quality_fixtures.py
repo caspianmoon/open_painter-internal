@@ -300,6 +300,30 @@ def surface_isolation(scene, resolution=512):
     return ts, parts
 
 
+def shelf(scene, resolution=512, location=(0, 0, 0)):
+    """An occluded recess in one connected surface, all in one material slot: a lip (top sheet
+    at z=.2, x from -1 to .6) joined through a vertical wall at x=.6 to a floor at z=0 (x from 0
+    to 1). Seen from above, the floor under the lip (x .0-.6) is hidden and faces the same way as
+    the lip; the floor past the wall (x .6-1) is open. Returns (ts, parts) with polygon indices."""
+    verts = [(-1, -1, .2), (.6, -1, .2), (.6, 1, .2), (-1, 1, .2),       # lip 0-3
+             (.6, -1, 0), (.6, 1, 0),                                     # wall foot 4-5
+             (0, -1, 0), (0, 1, 0), (1, -1, 0), (1, 1, 0)]                # floor 6-9
+    # The floor is split at x=.6 so it shares the wall's foot edge: hidden and open quads.
+    faces = [(0, 1, 2, 3),          # lip, facing up
+             (1, 4, 5, 2),          # wall at x=.6, facing +X
+             (6, 4, 5, 7),          # floor under the lip (x 0-.6), facing up
+             (4, 8, 9, 5)]          # open floor (x .6-1), facing up
+    obj = _mesh_object("Shelf", verts, faces, location=location)
+    _unwrap(obj)
+    ts = _set(scene, "Shelf", obj, resolution)
+    polygons = obj.data.polygons
+    parts = {"lip": 0, "wall": 1, "hidden_floor": 2, "open_floor": 3,
+             "object": obj.name}
+    assert polygons[parts["lip"]].normal.z > .9 and polygons[parts["hidden_floor"]].normal.z > .9, \
+        [tuple(polygon.normal) for polygon in polygons]
+    return ts, parts
+
+
 def transparency_card(scene, resolution=512):
     """A plane with bright colour under a cutout and a soft alpha edge; returns (ts, expected_opacity)."""
     obj = _mesh_object("Transparency card", [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], [(0, 1, 2, 3)],

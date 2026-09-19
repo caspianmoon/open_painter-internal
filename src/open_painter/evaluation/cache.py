@@ -638,6 +638,9 @@ def _relearn(*, forget_corrections):
 @persistent
 def on_load(_):
     from ..baking.bake_manager import forget as forget_released
+    from .shader_resources import forget_graveyard, retire_unloaded_leaves
+    forget_graveyard()         # the previous file's released datablocks went with it
+    retire_unloaded_leaves()   # before any draw regenerates a bufferless leaf blank
     forget_released()   # the remembered superseded-map names belong to the previous file
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
@@ -650,6 +653,8 @@ def on_undo(_):
     # Memfile undo restores properties without their update callbacks: every
     # session, job and dirty flag starts over. Correction records stay (see
     # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
+    from .shader_resources import retire_unloaded_leaves
+    retire_unloaded_leaves()   # a leaf re-read from the memfile lost its pixels: never ready
     _relearn(forget_corrections=False)
 
 
@@ -694,6 +699,21 @@ def on_save(_):
                 continue
             detect(scene, force=True)
             stroke_finished(scene)
+            # A brush alpha a stroke keeps (or the brush holds) is an authored input too: a
+            # generated one saved without its pixels reloads blank and every stroke using it
+            # would render differently after reopening (0.13 hardening, H4). A generated float
+            # alpha is packed as full-precision, channel-packed data so it reloads as stored
+            # (a straight-alpha EXR comes back premultiplied and at half precision).
+            alphas = [stroke.alpha_image for stroke in scene.open_painter.strokes if stroke.alpha_image is not None]
+            if scene.open_painter.vector_brush.alpha_image is not None:
+                alphas.append(scene.open_painter.vector_brush.alpha_image)
+            for image in alphas:
+                source_images.add(image.as_pointer())
+                if image.source == 'GENERATED' and image.is_float:
+                    if image.alpha_mode != 'CHANNEL_PACKED':
+                        image.alpha_mode = 'CHANNEL_PACKED'
+                    if image.use_half_precision:
+                        image.use_half_precision = False
             for ts in scene.open_painter.texture_sets:
                 sources = [item.image for item in ts.baked_maps]
                 for layer in ts.layers:

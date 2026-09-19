@@ -22,7 +22,9 @@ class OP_UL_strokes(bpy.types.UIList):
         layer = active(ts)
         key = getattr(layer, 'stroke_key', '') if layer else ''
         items = getattr(data, propname)
-        flags = [self.bitflag_filter_item if item.layer_key == key else 0 for item in items]
+        # The strokes this set renders: one its scope excludes is listed where it was painted.
+        flags = [self.bitflag_filter_item if item.layer_key == key and stroke_records.permits(item, ts) else 0
+                 for item in items]
         return flags, []
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -35,10 +37,12 @@ class OP_UL_strokes(bpy.types.UIList):
 class OP_UL_mask_strokes(OP_UL_strokes):
     """The strokes of the active Vector Strokes mask's key (the mask section's list)."""
     def filter_items(self, context, data, propname):
-        mask = active_strokes_mask(active(require_set(context)))
+        ts = require_set(context)
+        mask = active_strokes_mask(active(ts))
         key = mask.stroke_key if mask is not None else ''
         items = getattr(data, propname)
-        flags = [self.bitflag_filter_item if item.layer_key == key else 0 for item in items]
+        flags = [self.bitflag_filter_item if item.layer_key == key and stroke_records.permits(item, ts) else 0
+                 for item in items]
         return flags, []
 
 
@@ -147,7 +151,7 @@ def _rasterize(context, project, ts, stroke):
     import numpy as np
     from ..core import image_manager as images
     key = stroke.layer_key
-    linked = stroke_records.linked_layers(project, key)
+    linked = stroke_records.permitted_sets(project, stroke)   # only where the stroke's scope lets it render
     if not linked:
         raise ValueError('No paint layer renders that stroke; only layer strokes can be rasterised.')
     if stroke_records.linked_masks(project, key):
@@ -189,7 +193,7 @@ def draw_strokes(layout, context, ts, layer, mask=None):
     box = layout.box()
     row = box.row(align=True)
     row.label(text='Vector Strokes', icon='CURVE_BEZCURVE')
-    count = len(stroke_records.strokes_for(project, key))
+    count = len(stroke_records.strokes_for(project, key, ts))
     row.label(text=f'{count}')
     if not key:
         box.label(text='Paint with the Vector Brush to add strokes.')
@@ -208,9 +212,14 @@ def draw_strokes(layout, context, ts, layer, mask=None):
         box.template_ID(stroke, 'alpha_image', open='image.open')
         for name in ('base_color', 'roughness', 'metallic', 'height'):
             box.prop(stroke, name)
-        linked = stroke_records.linked_layers(project, stroke.layer_key)
+        box.prop(stroke, 'reach')
+        linked = stroke_records.permitted_sets(project, stroke)
         if len(linked) > 1:
             box.label(text='Also on: ' + ', '.join(other.name for other, _ in linked if other.id != ts.id), icon='LINKED')
+        excluded = [other.name for other, _ in stroke_records.linked_layers(project, stroke.layer_key)
+                    if not stroke_records.permits(stroke, other)]
+        if excluded:
+            box.label(text='Not permitted on: ' + ', '.join(excluded), icon='LOCKED')
 
 
 class OP_OT_resample_paint_images(SafeOperator, bpy.types.Operator):

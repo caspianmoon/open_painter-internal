@@ -106,7 +106,7 @@ def _stack_signature(ts, layer, geometry_cache):
                      mask.reference_channel, mask.reference_stage, mask.reference_anchor)
         elif mask.source == 'STROKES':
             from ..painting.strokes import stroke_identity
-            extra = (stroke_identity(ts.id_data.open_painter, mask.stroke_key),
+            extra = (stroke_identity(ts.id_data.open_painter, mask.stroke_key, ts),
                      getattr(geometry_cache, "geometry_stamp", None))
         elif mask.source == 'MESH':
             from .mesh_masks import signature as mesh_signature

@@ -646,11 +646,12 @@ class Graph(Math):
             self.unit.resource_bindings.append(binding)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
 
-    def _request_leaf(self, signature, factory, layer_id, placeholder, interactive=False):
+    def _request_leaf(self, signature, factory, layer_id, placeholder, interactive=False, reuse=None):
         if placeholder is None:
-            return self.resources.request(signature, lambda: factory(signature), owner=layer_id, interactive=interactive)
+            return self.resources.request(signature, lambda: factory(signature), owner=layer_id, interactive=interactive,
+                                          reuse=reuse)
         return self.resources.request(signature, lambda: factory(signature), owner=layer_id, placeholder=placeholder,
-                                      interactive=interactive)
+                                      interactive=interactive, reuse=reuse)
 
     def _rebind(self, node, owners, identity, factory, placeholder=None, interactive=False):
         """Reattach a persisted boundary node to fresh closures (undo rehydration)."""
@@ -662,15 +663,22 @@ class Graph(Math):
                                   factory, node, signature, owner_factory=owner_factory, layer_id=layer_id,
                                   placeholder=placeholder, interactive=interactive)
         image = node.image
+        reuse = None
         if (image is not None and image.get(RESOURCE) and image.get('op_shader_resource_ready')
                 and not image.has_data and image.packed_file is None):
             # A reloaded leaf reads its packed pixels on first use; one saved
             # without them comes back as its neutral fill: never adopt it again.
             image['op_shader_resource_ready'] = False
+        if (image is not None and image.get(RESOURCE) and not image.get('op_shader_resource_ready')
+                and image.packed_file is None):
+            # The datablock the node binds lost its pixels (an undo, a reload): the fresh
+            # source is produced into it rather than into a replacement, so the node keeps
+            # its image and nothing is removed under a material that may still sample it.
+            reuse = image
         # The persisted image is adopted through the cache-hit path so it lives in
         # this graph's entries: an image no table knows is never evicted once a
         # later re-identification replaces it.
-        fresh = self._request_leaf(signature, factory, layer_id, placeholder, interactive)
+        fresh = self._request_leaf(signature, factory, layer_id, placeholder, interactive, reuse=reuse)
         if fresh.get('op_shader_resource_ready'):
             node.image = fresh
         else:
@@ -784,7 +792,7 @@ class Graph(Math):
         stamp = ()
         if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
             from ..painting.strokes import stroke_identity
-            stamp += (('strokes', stroke_identity(self.scene.open_painter, layer.stroke_key)),)
+            stamp += (('strokes', stroke_identity(self.scene.open_painter, layer.stroke_key, self.ts)),)
         if layer.type == 'FILL' and prop.projection == 'DECAL':
             from ..painting import decals
             stamp += (('decal', decals.signature(layer)),)
@@ -861,7 +869,9 @@ class Graph(Math):
         def owners():
             return [layer, prop]
         def identity():
-            return ('strokes', layer.stroke_key, channel, stroke_identity(self.scene.open_painter, layer.stroke_key),
+            # The strokes this set may render (per-stroke scope, 0.13 hardening H2): a stroke
+            # excluded here neither identifies nor rebuilds the leaf.
+            return ('strokes', layer.stroke_key, channel, stroke_identity(self.scene.open_painter, layer.stroke_key, self.ts),
                     image_key(prop.image) if prop.image else None, self._geometry_stamp(True))
         def factory(signature):
             from .snapshots import capture
@@ -881,7 +891,7 @@ class Graph(Math):
                     geometry = for_texture_set(self.scene, self.ts)
                     n = self.n
                     project = self.scene.open_painter
-                    strokes = [s for s in strokes_for(project, key) if channel in stroke_channels(s)]
+                    strokes = [s for s in strokes_for(project, key, self.ts) if channel in stroke_channels(s)]
                     bands = {stroke.id: raster_band(raster, n)
                              for stroke, raster in zip(strokes, rasters(self.ts, strokes, n, geometry))}
                     state = {'key': key, 'channel': channel, 'base': repr(base_key), 'geometry': repr(stamp),
@@ -1903,7 +1913,7 @@ class Graph(Math):
                 return ('scene-field', self._scene_identity(mask.influence))
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
-                return ('strokes-mask', mask.stroke_key, stroke_identity(self.scene.open_painter, mask.stroke_key),
+                return ('strokes-mask', mask.stroke_key, stroke_identity(self.scene.open_painter, mask.stroke_key, self.ts),
                         self._geometry_stamp(True))
             if mask.source == 'MESH':
                 from .mesh_masks import signature as mesh_signature
@@ -2016,7 +2026,7 @@ class Graph(Math):
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
                 owners.extend(self._stroke_layers(mask))
-                stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key), self._geometry_stamp(True)),)
+                stamp += (('strokes', stroke_identity(self.scene.open_painter, mask.stroke_key, self.ts), self._geometry_stamp(True)),)
             if mask.source == 'FILTER' and surface(mask.effect):
                 # Surface-space filters pad each UV island from the set's seam map.
                 stamp += (('geometry', self._geometry_stamp(True)),)
@@ -3144,8 +3154,10 @@ class Graph(Math):
                 binding.node.image, binding.pending_image = binding.pending_image, None
                 if (stale is not None and stale is not binding.node.image and not stale.users
                         and stale.get(RESOURCE) and not stale.get('op_shader_resource_ready')):
-                    # An interrupted placeholder from a superseded graph.
-                    bpy.data.images.remove(stale)
+                    # An interrupted placeholder from a superseded graph: released, never
+                    # removed while the material that sampled it may still be compiling.
+                    from .shader_resources import release_image
+                    release_image(stale)
         return result
     def close(self):
         try:

@@ -114,6 +114,20 @@ with tempfile.TemporaryDirectory(prefix="op-export-padding-") as tmp:
                                  "report": atlas.export.last_report})
     check("all modes keep the interior and copy donors", islands=own.diagnostics["islands"],
           gutter_report=reports["AUTOMATIC"][0])
+    # Fill Empty Space, per channel (hardening H3): every empty texel of every map is a copy of a
+    # valid texel, for colour, normal, height, the packed Unreal ORM and the URP smoothness alpha.
+    donor, _ = padding.nearest_donors(covered, island, "FILL")
+    assert padding.unresolved_texels(covered, donor) == 0 and padding.donors_valid(covered, donor)
+    padded = (donor >= 0).ravel()
+    for preset, labels in (("BLENDER", ("BaseColor", "Normal", "Height", "Roughness", "Metallic", "Opacity")),
+                           ("UNREAL", ("ORM", "Normal")), ("UNITY_URP", ("MetallicGlossMap", "BaseMap"))):
+        files = do_export(atlas, root / f"atlas-fill-{preset}", mode="FILL", preset=preset)
+        for label in labels:
+            exported = read(by_label(files, label)).reshape(-1, 4)
+            assert np.array_equal(exported[padded], exported[donor.ravel()[padded]]), (preset, label)
+        detail = json.loads(atlas.export.last_report_detail)
+        assert detail.get("unresolved_texels") == 0, detail
+    check("fill empty space is complete per channel", presets=["BLENDER", "UNREAL", "UNITY_URP"])
     assert "closer than" in reports["AUTOMATIC"][0], reports["AUTOMATIC"][0]   # the close pair is reported
     assert reports["NONE"][0] == "UV padding: none", reports["NONE"][0]
     detail = json.loads(reports["AUTOMATIC"][1])

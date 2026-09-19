@@ -28,18 +28,45 @@ and the strokes re-render crisp.
   the gap.
 - **Pressure Size** scales the radius with tablet pressure, **Pressure Flow** scales
   each stamp's flow; either, both or neither, never both through one value.
-- **Depth Limit** (Stroke Details) is the surface-following rule: a texel receives
-  paint when it faces the stamp and lies within Depth Limit × radius of the stamp
-  plane. Strokes recorded before 0.13 keep the old band of one radius; the brush
-  default is half a radius, so a parallel surface farther than that stays clean.
-  There is no per-texel visibility test: a same-facing surface closer than the
-  limit is painted too.
+- **Reach** decides which surfaces a stamp may touch. **Surface** (the default)
+  paints the surface the pointer hit and what connects to it without turning away
+  from the stamp: starting at the face the ray hit (stored with every sample as its
+  *anchor*), the stamp walks across shared edges onto neighbouring faces that face
+  it and lie inside its box, so a same-facing sheet behind the one under the
+  pointer, a neighbouring object, a disconnected piece or the floor of a pocket
+  under a lip stays clean whatever the depth limit says; a fold, a rim or a wall
+  that turns away stops the walk. The rule reads the geometry snapshot only, so the
+  accepted surface is the same after the camera moves, after reopening and at every
+  resolution; a stroke whose anchors no longer land on their faces (the mesh was
+  edited or renumbered) seeds from the nearest surface within its band instead, on
+  one target only. Its known reach: a surface that continues smoothly under
+  something else (an open floor running under a shelf) is one surface and is
+  painted along; a smoothly ramped tunnel is not blocked. **Depth Band** paints
+  every surface within the depth limit of the stamp plane, including hidden and
+  separate ones, and is what strokes recorded before this version keep.
+- **Depth Limit** (Stroke Details) bounds how far behind or in front of the stamp
+  plane a texel may lie, in radii, in either reach. Strokes recorded before 0.13
+  keep the old band of one radius; the brush default is half a radius.
 - **Paint Across Sets**: off by default (the stroke stays on the selected set and the
   brush lifts at its edge). On, the section lists the sets the stroke may reach; a
   set receives the stroke only when the pointer actually crosses its surface, and
   then a paint layer with the same name is created there and *linked* (same stroke
   key), so the stroke is one record rendered by several sets. The *Vector Strokes*
-  box lists "Also on: …".
+  box lists "Also on: …". Every stroke records the sets it was permitted to reach
+  when it was painted (its *scope*): a later stroke painted without Paint Across
+  Sets stays on its own set even where an earlier stroke linked another one, and
+  the box lists "Not permitted on: …" for the sets that share the key but may not
+  render the stroke. Strokes recorded before the field existed render wherever
+  their key is shared, as they always did. Duplicating a layer or a set, and
+  applying a saved material, copies the strokes the source could render, scoped
+  to the copy.
+- The target of a gesture is fixed at pointer-down from the current selection
+  (set, layer or Vector Strokes mask) together with the brush values: change the
+  selection and the next stroke goes there without leaving the tool; change it,
+  hide or delete the target, or edit the assigned geometry, UVs or slots while the
+  pointer is down and the gesture is discarded with a reason. The destination
+  label follows the selection while idle and names the captured target while
+  painting.
 - While the pointer is down the enabled channels show the stroke through bounded
   preview images (512² for four channels, 1024² for one or two) bound to the layer's
   inputs of the live material, rasterised with the same kernel and compositing as

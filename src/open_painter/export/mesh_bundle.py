@@ -93,7 +93,10 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
                     transaction.add(destination/path.relative_to(root),path)
             destination.mkdir(parents=True,exist_ok=False)
             created.append(destination)
-            transaction.commit(overwrite=False)
+            outcome=transaction.commit(overwrite=False)
+            if outcome.cleanup_pending:
+                from ..utils.logging import logger
+                logger.warning('Bundle %s: %s',destination,outcome.message)
         return destination/'manifest.json'
     except Exception:
         for path in reversed(created):

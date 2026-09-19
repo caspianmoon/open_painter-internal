@@ -320,15 +320,16 @@ def duplicate(ts, index):
                 row.image = None
                 row.provenance = ''
             if getattr(target, 'stroke_key', ''):
-                # The copy keeps the strokes it shows, under a key of its own: painting on
-                # either layer afterwards must not reach the other.
+                # The copy keeps the strokes it shows (those this set may render), under a
+                # key of its own scoped to this set: painting on either layer afterwards
+                # must not reach the other, and the copy widens no stroke's reach.
                 from ..painting.strokes import copy_key
-                target.stroke_key = copy_key(ts.id_data.open_painter, target.stroke_key)
+                target.stroke_key = copy_key(ts.id_data.open_painter, target.stroke_key, ts)
             for mask in target.masks:
                 mask.id = ids[mask.id]
                 if mask.source == 'STROKES' and mask.stroke_key:
                     from ..painting.strokes import copy_key
-                    mask.stroke_key = copy_key(ts.id_data.open_painter, mask.stroke_key)
+                    mask.stroke_key = copy_key(ts.id_data.open_painter, mask.stroke_key, ts)
                 if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
                     mask.parent_id = ids.get(mask.parent_id, '')
                 if mask.source == 'REFERENCE':

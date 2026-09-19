@@ -35,11 +35,16 @@ def decode_assets(assets, loaded):
             if key not in assets:
                 raise ValueError(f"Missing smart material texture: {key}")
             colorspace = asset_colorspace(value.get("colorspace", "Non-Color"))
-            identity = (key, colorspace, painted)
+            alpha_mode = value.get("alpha_mode")
+            if alpha_mode not in {"STRAIGHT", "PREMUL", "CHANNEL_PACKED", "NONE"}:
+                alpha_mode = None      # documents before the field: Blender's default for the file
+            identity = (key, colorspace, painted, alpha_mode)
             if identity in decoded_images:
                 return decoded_images[identity]
             digest = sha256(assets[key]).hexdigest()
             image = None if painted else asset_image(digest, colorspace)
+            if image is not None and alpha_mode is not None and image.alpha_mode != alpha_mode:
+                image = None           # shared by content, but read differently: its own copy
             if image is None:
                 dest = Path(directory) / f"{new_id()}.exr"
                 dest.write_bytes(assets[key])
@@ -47,6 +52,8 @@ def decode_assets(assets, loaded):
                 loaded.append(image)
                 image[OWNER] = True
                 image.colorspace_settings.name = colorspace
+                if alpha_mode is not None:
+                    image.alpha_mode = alpha_mode
                 image.pack()
                 image.use_fake_user = True
                 if not painted:
@@ -82,6 +89,7 @@ def _stroke_records(data):
     from binascii import Error as DecodeError
     import numpy as np
     from ..painting.stroke_raster import unpack_samples
+    from ..painting.surface_reach import unpack_anchors
     records = data.get('strokes', [])
     if not isinstance(records, list) or len(records) > 16384:
         raise ValueError('Invalid smart material strokes.')
@@ -91,8 +99,11 @@ def _stroke_records(data):
             raise ValueError('Invalid smart material stroke record.')
         try:
             samples = unpack_samples(record.get('samples', ''))
+            anchors = unpack_anchors(record.get('anchors', '') if isinstance(record.get('anchors', ''), str) else '')
         except (ValueError, DecodeError):
             raise ValueError('Invalid smart material stroke samples.') from None
+        if not np.isfinite(anchors).all():
+            raise ValueError('Invalid smart material stroke anchors.')
         if not np.isfinite(samples).all():
             raise ValueError('Invalid smart material stroke samples.')
     return records

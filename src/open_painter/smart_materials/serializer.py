@@ -42,7 +42,9 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
             # The EXR holds what save_render wrote: scene-linear for every
             # non-data source, a byte sRGB albedo included.
             colorspace = "Non-Color" if value.colorspace_settings.is_data else LINEAR
-            return {"asset": key, "colorspace": colorspace}
+            # The alpha mode travels too: a channel-packed brush alpha reloaded as a
+            # premultiplied EXR would be divided by its own alpha on read.
+            return {"asset": key, "colorspace": colorspace, "alpha_mode": value.alpha_mode}
         if isinstance(value, bpy.types.ID):
             # Any other datablock still in the snapshot is a gap in layer_data;
             # name the field rather than let json.dumps fail on the type.
@@ -112,7 +114,9 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                     keys.append(key)
         records = []
         for key in keys:
-            for stroke in strokes_for(project, key):
+            # Only what this set may render travels: a stroke another set's layer shares the
+            # key with, but that was never permitted here, must not appear in the copy.
+            for stroke in strokes_for(project, key, ts):
                 values = snapshot(stroke)
                 # Identity and UI state are the project's; the loader issues new ids.
                 for field in ('id', 'revision', 'selected'):

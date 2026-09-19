@@ -180,6 +180,87 @@ class PaddingTests(unittest.TestCase):
         assert np.array_equal(donor[near], reference[near])
 
 
+    # ---- fill completeness (hardening H3) --------------------------------------------------------
+    def test_fill_sparse_corner_islands_resolve_every_texel(self):
+        for n in (128, 256, 512, 1024):
+            for corner in ((0, 0), (0, n - 8), (n - 8, 0), (n - 8, n - 8)):
+                covered = np.zeros((n, n), bool)
+                covered[corner[0]:corner[0] + 8, corner[1]:corner[1] + 8] = True
+                island = np.where(covered, 0, -1).astype(np.int32)
+                donor, d2 = padding.nearest_donors(covered, island, "FILL")
+                self.assertEqual(padding.unresolved_texels(covered, donor), 0, (n, corner))
+                self.assertTrue(padding.donors_valid(covered, donor), (n, corner))
+                self.assertTrue((donor[covered] == -1).all())
+
+    def test_fill_hierarchy_edge_cases(self):
+        n = 512
+        layouts = {}
+        one = np.zeros((n, n), bool); one[300, 77] = True; layouts["one texel"] = one
+        edge = np.zeros((n, n), bool); edge[0, 200:210] = True; layouts["isolated edge seed"] = edge
+        centre = np.zeros((n, n), bool); centre[250:262, 250:262] = True; layouts["central island"] = centre
+        diagonal = np.zeros((n, n), bool); idx = np.arange(0, n, 3); diagonal[idx, idx] = True; layouts["thin diagonal"] = diagonal
+        separated = np.zeros((n, n), bool); separated[10:20, 10:20] = True; separated[480:500, 470:490] = True; layouts["separated islands"] = separated
+        occupied_cell = np.zeros((n, n), bool); occupied_cell[100, 100] = True; occupied_cell[5:8, 5:8] = True
+        layouts["occupied coarse cell, mostly empty children"] = occupied_cell
+        for label, covered in layouts.items():
+            island = np.zeros((n, n), np.int32)
+            island[~covered] = -1
+            if label == "separated islands":
+                island[480:500, 470:490] = 1
+            donor, d2 = padding.nearest_donors(covered, island, "FILL")
+            self.assertEqual(padding.unresolved_texels(covered, donor), 0, label)
+            self.assertTrue(padding.donors_valid(covered, donor), label)
+            again, _ = padding.nearest_donors(covered, island, "FILL")
+            self.assertTrue(np.array_equal(donor, again), label)
+
+    def test_fill_all_valid_none_valid_and_zero_distance(self):
+        n = 64
+        full = np.ones((n, n), bool)
+        donor, d2 = padding.nearest_donors(full, np.zeros((n, n), np.int32), "FILL")
+        self.assertEqual(padding.unresolved_texels(full, donor), 0)
+        self.assertTrue((donor == -1).all() and (d2 == 0).all())
+        empty = np.zeros((n, n), bool)
+        donor, d2 = padding.nearest_donors(empty, np.full((n, n), -1, np.int32), "FILL")
+        self.assertEqual(padding.unresolved_texels(empty, donor), n * n, "no valid texel: nothing can be filled")
+        covered = np.zeros((n, n), bool); covered[10:20, 10:20] = True
+        donor, _ = padding.nearest_donors(covered, np.where(covered, 0, -1).astype(np.int32), 0)
+        self.assertTrue((donor == -1).all(), "a zero finite distance pads nothing")
+
+    def test_fill_distant_donors_within_the_declared_error_bound(self):
+        """Beyond the exact band a donor is the representative of the nearest coarse cell: no
+        farther than 2·√2·c from the true nearest valid texel, c the level's cell size."""
+        n = 512
+        covered = np.zeros((n, n), bool); covered[:8, :8] = True; covered[500:508, 300:306] = True
+        island = np.where(covered, 0, -1).astype(np.int32)
+        island[500:508, 300:306] = 1
+        donor, _ = padding.nearest_donors(covered, island, "FILL")
+        reference, reference_d2 = padding.reference_donors(covered, island, "FILL")
+        ys, xs = np.nonzero(~covered)
+        chosen = donor[ys, xs]
+        dy, dx = ys - chosen // n, xs - chosen % n
+        chosen_distance = np.sqrt((dy * dy + dx * dx).astype(np.float64))
+        true_distance = np.sqrt(reference_d2[ys, xs].astype(np.float64))
+        excess = chosen_distance - true_distance
+        # Within the exact band the donors agree with the oracle exactly.
+        near = true_distance <= padding.FILL_BAND
+        self.assertTrue(np.array_equal(donor[ys[near], xs[near]], reference[ys[near], xs[near]]))
+        # Beyond it the excess stays within the bound of the coarsest level that can have resolved
+        # the texel (cells of 8, 64 or 512 texels): 2·√2·c.
+        bound = 2 * np.sqrt(2.0) * 64      # the 512-square needs at most the 64-texel level
+        self.assertLessEqual(float(excess[~near].max()), bound + 1e-6, float(excess[~near].max()))
+        self.assertLess(float(np.median(excess[~near])), bound / 4)
+
+    def test_fill_hierarchy_bounded_time_at_2k(self):
+        n = 2048
+        covered = np.zeros((n, n), bool); covered[:16, :16] = True
+        island = np.where(covered, 0, -1).astype(np.int32)
+        started = time.perf_counter()
+        donor, _ = padding.nearest_donors(covered, island, "FILL")
+        seconds = time.perf_counter() - started
+        self.assertEqual(padding.unresolved_texels(covered, donor), 0)
+        self.assertLess(seconds, 30, seconds)
+        print(f"fill 2K sparse: {seconds:.1f}s")
+
     def test_scratch_memory_is_bounded_at_4k(self):
         n = 4096
         covered, island = blobs(n, 24, 5, radius=(64, 300))

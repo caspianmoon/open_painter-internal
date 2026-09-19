@@ -51,6 +51,35 @@ class ViewProjector:
         return tuple(self.view.view_rotation @ Vector((0, 0, 1)))
 
 
+def material_destination(context, mask_requested=False):
+    """(ts, layer, mask, reason) where the next material stroke goes, from the shared
+    selection resolver (``ui.selection.resolve``): the active paint layer, or the active
+    Vector Strokes mask when the selection is a mask (or the tool was opened for masks).
+    ``reason`` says why nothing is paintable; the tool never falls back to another layer."""
+    from . import selection
+    try:
+        ts = require_set(context)
+    except ValueError as error:
+        return None, None, None, str(error)
+    target = selection.resolve(context, ts)
+    layer = target.layer
+    if layer is None:
+        return ts, None, None, 'Select a paint layer: material strokes live on paint layers.'
+    from .strokes_panel import active_strokes_mask
+    strokes_mask = active_strokes_mask(layer)
+    if mask_requested or target.kind == 'MASK':
+        if strokes_mask is None:
+            if target.kind == 'MASK' and target.mask is not None:
+                return ts, layer, None, f'{target.mask.name or "The selected mask"} is not a Vector Strokes mask with a key of its own.'
+            return ts, layer, None, 'Select a Vector Strokes mask (with a key of its own) to paint into.'
+        _, _, mask, reason = gesture.target_state(context.scene, ts.id, layer.id, strokes_mask.id)
+        return ts, layer, mask, (reason[0].upper() + reason[1:] + '.') if reason else ''
+    _, _, _, reason = gesture.target_state(context.scene, ts.id, layer.id)
+    if reason:
+        return ts, layer, None, reason[0].upper() + reason[1:] + '.'
+    return ts, layer, None, ''
+
+
 class OP_OT_vector_brush(bpy.types.Operator):
     """Paint the enabled material channels on the assigned surfaces; Esc discards a stroke in progress and exits when idle"""
     bl_idname = 'open_painter.vector_brush'
@@ -66,28 +95,16 @@ class OP_OT_vector_brush(bpy.types.Operator):
         return context.area is not None and context.area.type == 'VIEW_3D'
 
     def invoke(self, context, event):
-        try:
-            ts = require_set(context)
-        except ValueError as error:
-            self.report({'ERROR'}, str(error))
-            return {'CANCELLED'}
-        layer = active(ts)
-        from .strokes_panel import active_strokes_mask
-        mask = active_strokes_mask(layer) if self.mask else None
-        if mask is None and (layer is None or layer.type != 'PAINT'):
-            self.report({'ERROR'}, 'Select a paint layer: material strokes live on paint layers.')
-            return {'CANCELLED'}
-        if not ts.assignments or any(ref.object is None for ref in ts.assignments):
-            self.report({'ERROR'}, 'Assign the texture set to a mesh first.')
+        # The tool opens on a paintable destination; every pointer-down resolves it again.
+        ts, layer, mask, reason = material_destination(context, self.mask)
+        if reason:
+            self.report({'ERROR'}, reason)
             return {'CANCELLED'}
         project = context.scene.open_painter
-        settings = project.vector_brush
         region = next(region for region in context.area.regions if region.type == 'WINDOW')
         self._projector = ViewProjector(region, context.space_data.region_3d)
-        scope = gesture.Scope.of(project, ts, across_sets=bool(settings.universal))
-        # A Vector Strokes mask with its own key collects the strokes itself (any layer type).
-        self._gesture = gesture.Gesture(context.scene, ts, layer, settings, scope, self._projector,
-                                        key=mask.stroke_key if mask is not None else '')
+        self._view = context.space_data.region_3d.as_pointer()   # the view the rays come from
+        self._gesture = None    # built at pointer-down from the selection of that moment
         self._batch = None
         OP_OT_vector_brush._handler = bpy.types.SpaceView3D.draw_handler_add(self._draw, (context,), 'WINDOW', 'POST_VIEW')
         OP_OT_vector_brush._active = self
@@ -98,10 +115,10 @@ class OP_OT_vector_brush(bpy.types.Operator):
 
     @property
     def painting(self):
-        return self._gesture.active
+        return self._gesture is not None and self._gesture.active
 
     def _finish(self, context):
-        if self._gesture.active:
+        if self.painting:
             self._end(context, commit=False, reason='the tool closed')
         if OP_OT_vector_brush._handler is not None:
             bpy.types.SpaceView3D.draw_handler_remove(OP_OT_vector_brush._handler, 'WINDOW')
@@ -125,11 +142,27 @@ class OP_OT_vector_brush(bpy.types.Operator):
         return (pressure, float(tilt[0]), float(tilt[1]), 1.0 if event.is_tablet else 0.0)
 
     def _end(self, context, commit, reason='', push=True):
-        stroke = self._gesture.end(commit, reason)
+        new_source = self._gesture is not None and self._gesture.new_source
+        ts_id = self._gesture.ts_id if self._gesture is not None else None
+        stroke = self._gesture.end(commit, reason) if self._gesture is not None else None
         self._batch = None
         if stroke is not None and push:
+            if new_source:
+                # The first stroke on a layer adds a source unit to the live shader graph.
+                # Build that structural change now, before the undo push, so the pushed step
+                # captures a consistent graph. Left to the next timer tick it lands after the
+                # push; a following undo then cannot revert the node trees the rebuild created
+                # and leaves the material's Procedural Graph pointing at freed data — a hard
+                # crash on the next depsgraph build (0.13 hardening, H4).
+                try:
+                    from ..evaluation import shader_preview
+                    ts = next((t for t in context.scene.open_painter.texture_sets if t.id == ts_id), None)
+                    if ts is not None and shader_preview.requested(ts):
+                        shader_preview.ensure(context.scene, ts)
+                except Exception:
+                    logger.exception('Paint Material: could not flush the shader graph before the undo step')
             bpy.ops.ed.undo_push(message='Paint Material')
-        elif self._gesture.reason and self._gesture.reason != 'nothing painted':
+        elif self._gesture is not None and self._gesture.reason and self._gesture.reason != 'nothing painted':
             self.report({'INFO'}, f'Stroke discarded: {self._gesture.reason}')
         try:
             context.scene.open_painter.status = IDLE_STATUS
@@ -138,7 +171,61 @@ class OP_OT_vector_brush(bpy.types.Operator):
             pass
         return stroke
 
+    def _begin(self, context, event, xy):
+        """Pointer-down: resolve the selection now, capture the target, the scope and the brush
+        for this gesture alone, and start it at the surface under the pointer."""
+        ts, layer, mask, reason = material_destination(context, self.mask)
+        if reason:
+            self.report({'WARNING'}, reason)
+            return {'RUNNING_MODAL'}
+        project = context.scene.open_painter
+        settings = project.vector_brush
+        scope = gesture.Scope.of(project, ts, across_sets=bool(settings.universal))
+        # A Vector Strokes mask with its own key collects the strokes itself (any layer type).
+        pending = gesture.Gesture(context.scene, ts, layer, settings, scope, self._projector,
+                                  key=mask.stroke_key if mask is not None else '',
+                                  mask_id=mask.id if mask is not None else '')
+        hit = pending.hit(xy)
+        if hit is None:
+            return {'PASS_THROUGH'}
+        if not pending.start(xy, self._attributes(event), hit, self._projector.plane_normal()):
+            self.report({'WARNING'}, f'Nothing painted: {pending.reason or "the target is not paintable"}.')
+            return {'RUNNING_MODAL'}
+        self._gesture = pending
+        project.status = GESTURE_STATUS
+        self._batch = None
+        context.area.tag_redraw()
+        return {'RUNNING_MODAL'}
+
+    def _check(self, context):
+        """A change that invalidates the captured target ends the gesture without a record:
+        the selection moved to another destination, the destination went away or hid, or
+        the assigned geometry changed. The next pointer-down starts over from the new state."""
+        reason = self._gesture.invalidated()
+        if not reason:
+            ts, layer, mask, _ = material_destination(context, self.mask)
+            now = (ts.id if ts is not None else '', layer.id if layer is not None else '', mask.id if mask is not None else '')
+            if now != (self._gesture.ts_id, self._gesture.layer_id, self._gesture.mask_id):
+                reason = 'the target changed'
+        if reason:
+            self._end(context, commit=False, reason=reason)
+            return True
+        return False
+
+    def _displaced(self, context):
+        """The area the tool opened in is no longer the 3D view its rays come from (re-typed,
+        closed, or its view replaced): the tool ends rather than paint from a stale view."""
+        area, space = getattr(context, 'area', None), getattr(context, 'space_data', None)
+        view = getattr(space, 'region_3d', None) if space is not None else None
+        try:
+            return area is None or area.type != 'VIEW_3D' or view is None or view.as_pointer() != self._view
+        except ReferenceError:
+            return True
+
     def modal(self, context, event):
+        if self._displaced(context):
+            self._finish(context)
+            return {'FINISHED'}
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
             if self.painting:
                 self._end(context, commit=False, reason='cancelled')
@@ -148,24 +235,18 @@ class OP_OT_vector_brush(bpy.types.Operator):
         xy = (event.mouse_x, event.mouse_y)
         if not self.painting:
             if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
-                hit = self._gesture.hit(xy)
-                if hit is None:
-                    return {'PASS_THROUGH'}
-                if not self._gesture.start(xy, self._attributes(event), hit, self._projector.plane_normal()):
-                    self.report({'WARNING'}, 'The target layer is gone; the tool closed.')
-                    self._finish(context)
-                    return {'FINISHED'}
-                context.scene.open_painter.status = GESTURE_STATUS
-                self._batch = None
-                context.area.tag_redraw()
-                return {'RUNNING_MODAL'}
+                return self._begin(context, event, xy)
             return {'PASS_THROUGH'}
         if event.type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
+            if self._check(context):
+                return {'RUNNING_MODAL'}
             self._gesture.advance(xy, self._attributes(event))
             self._batch = None
             context.area.tag_redraw()
             return {'RUNNING_MODAL'}
         if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
+            if self._check(context):
+                return {'RUNNING_MODAL'}
             self._gesture.advance(xy, self._attributes(event))
             self._end(context, commit=True)
             return {'RUNNING_MODAL'}
@@ -179,6 +260,8 @@ class OP_OT_vector_brush(bpy.types.Operator):
     # ---- guide line -----------------------------------------------------------------------------
 
     def _draw(self, context):
+        if self._gesture is None:
+            return
         segments = [segment for segment in self._gesture.segments if len(segment) > 1]
         if not segments:
             return
@@ -261,19 +344,24 @@ def unregister():
 
 
 def destination(context):
-    """'Body > Mud Paint | Color, Roughness, Metallic, Height': where the next stroke goes."""
+    """'Body > Mud Paint | Color, Roughness, Metallic, Height': where the next stroke goes —
+    the current selection while the tool is idle, the captured target while a gesture runs
+    (what the renderer is writing), or why nothing is paintable."""
     from ..constants import CHANNEL_ITEMS
+    running = OP_OT_vector_brush._active
+    if running is not None and running.painting:
+        return running._gesture.describe(context.scene.open_painter)
     project = context.scene.open_painter
-    try:
-        ts = require_set(context)
-    except ValueError:
-        return ''
-    layer = active(ts)
+    ts, layer, mask, reason = material_destination(context, running.mask if running is not None else False)
+    if reason:
+        return reason
     settings = project.vector_brush
     labels = {key: label for key, label, *_ in CHANNEL_ITEMS}
     channels = [settings.channels] if isinstance(settings.channels, str) else sorted(settings.channels)
     names = ', '.join(labels.get(c, c) for c in channels if c in labels) or 'no channels'
     target = f'{ts.name} > {layer.name}' if layer is not None else ts.name
+    if mask is not None:
+        target += f' > {mask.name or "Vector Strokes mask"}'
     return f'{target} | {names}'
 
 
@@ -316,6 +404,7 @@ def draw_material_brush(layout, context):
     if extra:
         box.label(text='Also: ' + ', '.join(extra), icon='INFO')
     scope = box.column(align=True)
+    scope.prop(settings, 'reach')
     scope.prop(settings, 'universal')
     if settings.universal:
         from ..core.project_manager import require_set

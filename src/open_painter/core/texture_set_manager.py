@@ -144,6 +144,10 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
     scene.open_painter.active_texture_set = max(0, index - 1)
 
 
+def _set_by_id(project, identifier):
+    return next((item for item in project.texture_sets if item.id == identifier), None)
+
+
 def duplicate(scene, index):
     """Copy a texture project without stealing the source object's material slots."""
     from .image_manager import clone
@@ -160,6 +164,7 @@ def duplicate(scene, index):
     # Read everything from ``source`` before ``create`` grows the collection: the reference is stale after that.
     from ..aging import engine as aging_engine
     aging_settings = aging_engine.export_settings(source.aging) if source.aging.folder_id else None
+    source_id = source.id
     ts = create(scene, name, resolution)
     for key, value in surface.items():
         setattr(ts, key, value)
@@ -167,6 +172,9 @@ def duplicate(scene, index):
     mapping = {item["id"]: ids[item["id"]] for item in layers}
     from ..evaluation.anchors import derived_mapping
     anchor_mapping = {**ids, **derived_mapping(mapping)}
+    from ..painting.strokes import copy_key
+    project = scene.open_painter
+    stroke_keys = {}   # the source's stroke keys -> keys of the copy's own strokes
     with replay(ts):
         for data in layers:
             layer = ts.layers.add()
@@ -179,6 +187,15 @@ def duplicate(scene, index):
                 # A cached image belongs to one layer; the copy rebuilds its own.
                 row.image = None
                 row.provenance = ''
+            # The copy renders copies of the strokes the source set may render, under keys
+            # of its own scoped to the copy (0.13 hardening, H2): sharing the source's keys
+            # would let a stroke painted on either set afterwards reach the other, and a
+            # scoped stroke of the source would not render on the copy at all.
+            if getattr(layer, 'stroke_key', ''):
+                key = layer.stroke_key
+                if key not in stroke_keys:
+                    stroke_keys[key] = copy_key(project, key, _set_by_id(project, source_id), ts)
+                layer.stroke_key = stroke_keys[key]
             for channel in layer.channels:
                 channel.layer_id = layer.id
                 if channel.anchor:
@@ -190,6 +207,11 @@ def duplicate(scene, index):
                     channel.image = clone(channel.image)
             for mask in layer.masks:
                 mask.id = ids[mask.id]
+                if mask.source == 'STROKES' and mask.stroke_key:
+                    key = mask.stroke_key
+                    if key not in stroke_keys:
+                        stroke_keys[key] = copy_key(project, key, _set_by_id(project, source_id), ts)
+                    mask.stroke_key = stroke_keys[key]
                 if mask.parent_id:   # mask group membership (0.9.3) follows the new ids
                     mask.parent_id = ids.get(mask.parent_id, '')
                 if mask.source == 'REFERENCE':

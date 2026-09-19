@@ -64,6 +64,23 @@ class OP_Stroke(bpy.types.PropertyGroup):
     sample_count: bpy.props.IntProperty(default=0)
     bounds_min: bpy.props.FloatVectorProperty(size=3)
     bounds_max: bpy.props.FloatVectorProperty(size=3)
+    # Where the samples were placed (0.13 hardening, H2): one row per sample, the surface point
+    # the pointer hit and the evaluated polygon it hit (``painting.surface_reach``), packed like
+    # the samples. Empty for strokes recorded before the field existed.
+    anchors: bpy.props.StringProperty(options={'HIDDEN'})
+    reach: bpy.props.EnumProperty(name='Reach', default='DEPTH', update=touched,
+        items=[('SURFACE', 'Surface', 'Each stamp paints the surface the pointer hit and what connects to it '
+                                      'without turning away: a nearby hidden or separate surface stays clean'),
+               ('DEPTH', 'Depth Band', 'Each stamp paints every surface within the depth limit of its plane, '
+                                       'including surfaces behind the one the pointer hit (strokes recorded '
+                                       'before 0.13.0 keep this)')],
+        description='Which surfaces a stamp may reach')
+    # Permission (0.13 hardening, H2): the texture sets this stroke may render on, comma separated,
+    # decided when it was recorded. ``scope_version`` 0 marks a stroke recorded before the field
+    # existed: every layer or mask sharing its key renders it, as it always did.
+    scope: bpy.props.StringProperty(options={'HIDDEN'}, update=touched,
+                                    description='Texture set ids permitted to render this stroke')
+    scope_version: bpy.props.IntProperty(default=0, options={'HIDDEN'}, update=touched)
 
 
 class OP_VectorBrushSettings(bpy.types.PropertyGroup):
@@ -105,3 +122,11 @@ class OP_VectorBrushSettings(bpy.types.PropertyGroup):
     universal: bpy.props.BoolProperty(name='Paint Across Sets', default=False,
                                       description='The gesture may cross onto the surfaces of other texture sets; each '
                                                   'set it touches renders it through a linked paint layer of its own')
+    reach: bpy.props.EnumProperty(name='Reach', default='SURFACE',
+        items=[('SURFACE', 'Surface', 'Each stamp paints the surface under the pointer and what connects to it '
+                                      'without turning away from the stamp: a nearby hidden or separate surface '
+                                      'inside the brush stays clean'),
+               ('DEPTH', 'Depth Band', 'Each stamp paints every surface within the depth limit of its plane, '
+                                       'including hidden and separate surfaces behind or beside the one under '
+                                       'the pointer')],
+        description='Which surfaces a stamp may reach; Surface is the safe default for ordinary painting')

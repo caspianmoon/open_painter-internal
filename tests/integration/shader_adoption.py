@@ -270,7 +270,11 @@ def run():
     voronoi_binding = binding_of(graph, 'MaskSource:' + noisy_id)
     assert voronoi_binding.node.image.get('op_shader_resource_ready') and voronoi_binding.pending_image is None
     assert voronoi_binding.node.image != settled and voronoi_binding.signature == voronoi_binding.identity()
-    assert not alive(failed) and not alive(retried), 'failed placeholders outlived Retry'
+    # Released, not removed (0.13 hardening): a datablock a compiling material may still
+    # sample keeps existing at zero users, stripped of its keys and pixels, until Blender
+    # purges it; nothing can find or bind it again.
+    from open_painter.evaluation.shader_resources import released
+    assert released(failed) and released(retried), 'failed placeholders outlived Retry'
     assert not [i for i in bpy.data.images if i.get(RESOURCE) and not i.get('op_shader_resource_ready')], \
         'an interrupted placeholder was left in bpy.data'
     print('ADOPTION_FAILURE_INHERITED_OK', flush=True)

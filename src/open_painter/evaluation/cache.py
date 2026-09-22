@@ -638,10 +638,11 @@ def _relearn(*, forget_corrections):
 @persistent
 def on_load(_):
     from ..baking.bake_manager import forget as forget_released
-    from .shader_resources import forget_graveyard, retire_unloaded_leaves
+    from .shader_resources import forget_graveyard, retire_unloaded_leaves, freeze_new_leaves
     forget_graveyard()         # the previous file's released datablocks went with it
     retire_unloaded_leaves()   # before any draw regenerates a bufferless leaf blank
     forget_released()   # the remembered superseded-map names belong to the previous file
+    freeze_new_leaves(False)   # a fresh file: normal building is allowed
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             _migrate_angles(scene.open_painter)   # file-format upgrades: the loaded file only
@@ -653,8 +654,12 @@ def on_undo(_):
     # Memfile undo restores properties without their update callbacks: every
     # session, job and dirty flag starts over. Correction records stay (see
     # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
-    from .shader_resources import retire_unloaded_leaves
+    from .shader_resources import retire_unloaded_leaves, freeze_new_leaves
     retire_unloaded_leaves()   # a leaf re-read from the memfile lost its pixels: never ready
+    # No new leaf datablock may be bound into the persisted material tree until the next authored
+    # gesture: one created in this between-undo-steps window is freed by a later undo while the
+    # tree still points at it (the open 0.13 crash; docs/quality-stability-0.13.md, S2).
+    freeze_new_leaves(True)
     _relearn(forget_corrections=False)
 
 

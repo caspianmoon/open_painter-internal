@@ -279,7 +279,7 @@ def steps():
     assert OP_OT_vector_brush._handler is not None
     tool = OP_OT_vector_brush._active
 
-    rng = np.random.default_rng(7)
+    rng = np.random.default_rng(int(os.environ.get("OP_SESSION_SEED", "7")))
     # Where the body (a 1.6 cube, bevelled) and the barrel (radius .4 at x 1.6) sit on screen.
     body_lo, body_hi = px((-.7, -.7, .8)), px((.7, .7, .8))
     barrel_c = px((1.6, 0, .6))
@@ -683,6 +683,16 @@ def steps():
                         base = _image_source(prop.image, prop, "PAINT", n, 0, n, {}, ts, {})
                     fresh = stroke_raster.channel_rows(ts, layer, channel, n, 0, n, resources, base=base)
                     leaf_pixels = images.pixels(image)
+                    if tuple(image.size) != (n, n):
+                        agreement.append({"set": ts.name, "layer": layer.name, "channel": channel,
+                                          "leaf_size": list(image.size), "size_mismatch": True, "image_name": image.name,
+                                          "is_resource": bool(image.get(RESOURCE)), "has_state": bool(state),
+                                          "leaf_ready": bool(image.get("op_shader_resource_ready")),
+                                          "strokes": len(identity)})
+                        report["errors"].append(f"leaf {ts.name}/{layer.name}/{channel} is {list(image.size)} "
+                                                f"(name={image.name!r} resource={bool(image.get(RESOURCE))} "
+                                                f"ready={bool(image.get('op_shader_resource_ready'))}), expected {n}")
+                        continue
                     difference = np.abs(fresh - leaf_pixels)
                     error = float(difference.max())
                     if error >= 1e-4 and os.environ.get("OP_SESSION_DEBUG"):

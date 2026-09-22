@@ -50,6 +50,17 @@ Hardening of the candidate (report: `docs/quality-hardening-0.13.md`):
   competitor (hard link or exclusive create, never a second existence check); an unreadable
   journal keeps its evidence and stops the export with an explicit error; recovery is
   idempotent and refuses to act on a running export's folder.
+- **Recovery preserves an unchanged original whose replacement is byte-identical (stability
+  S1).** Recovery no longer infers that a transaction created a file from its content digest:
+  equal bytes prove content equality, not authorship, and an export whose new file matches the
+  old one made the two indistinguishable, so an interrupted recovery deleted the untouched
+  original. A published file is now proven this transaction's only by an ownership fact — its
+  staging sibling is the same inode (or its exclusive creation was recorded in the journal) and
+  it still holds the recorded staged bytes — so an unchanged original survives every interruption
+  before its backup exists and every repeated recovery after it is restored; an original that is
+  missing, a file with our bytes but no ownership proof, and a competitor's file are kept and
+  reported rather than deleted. Journal format 3; format-2 journals are still recovered, keeping
+  (never deleting) their unprovable files. Report: `docs/quality-stability-0.13.md`.
 - **Fill Empty Space is complete.** The full-domain propagation finishes on any atlas (an
   8 px island in a 4K corner included); every empty texel gets a valid donor or the export
   reports the failure. Finite padding is unchanged.
@@ -79,6 +90,18 @@ Hardening of the candidate (report: `docs/quality-hardening-0.13.md`):
   inside the stroke's own undo step (before the push) instead of in the next timer tick, so a
   following undo reverts between two consistent graphs rather than freeing node trees the
   material still points at.
+- **Repeated painting and Undo are crash-free (stability S2).** The full production workload —
+  500 gestures at 2K across three sets, an undo/redo cycle every 25, and a new paint layer
+  created mid-session — used to crash Blender (a memfile undo freed a preview leaf the material
+  still sampled). Three sources are closed: a stroke boundary now keeps **one** leaf datablock
+  for its life and regenerates its content in place (no per-stroke datablock churn to be freed
+  by a later undo; leaf count is flat instead of growing into the hundreds); after an undo or
+  redo the timer only rehydrates and never creates a new leaf until the next gesture (no leaf is
+  bound between undo steps); and a committed stroke hands its node back to that persistent leaf
+  instead of leaving a transient gesture preview bound, so an undo step never captures a preview.
+  Undo/redo restore the exact authored strokes and a valid material before the first redraw, one
+  gesture stays one undo step, save/reopen is byte-identical, and preview memory stays bounded.
+  Report: `docs/quality-stability-0.13.md`.
 
 ## 0.12.2
 

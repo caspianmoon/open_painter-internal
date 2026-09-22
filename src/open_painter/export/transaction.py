@@ -1,10 +1,11 @@
-"""Transactional publication of an export request (quality remedy M2B, hardened in 0.13 H1).
+"""Transactional publication of an export request (quality remedy M2B, hardened in 0.13 H1,
+ownership-proven recovery in 0.13 S1).
 
 Every file of a request (the maps of every set, manifests, the mesh, a bundle's files) is
 generated into staging first. Publication is one request-level transaction with a durable
 decision record:
 
-    PREPARED -> (publishing) -> COMMITTED -> cleanup complete (journal removed)
+    PREPARED -> (staged, backed up, published) -> COMMITTED -> cleanup complete (journal removed)
 
 1. The participating folders are locked in sorted order (``LOCK`` files owned by this
    process; a stale lock of a dead process is broken, a live one refuses with ExportBusy),
@@ -15,29 +16,50 @@ decision record:
    name, whether the destination was absent, the original's size/mtime/sha256, the backup
    and staging names, and the sha256 of the staged bytes. Journals are written through a
    temporary file, fsync'd and renamed, with the directory fsync'd where the platform allows.
-4. Existing destinations are renamed to backups; each staged file is copied beside its
-   destination (flushed) and moved into place — ``os.replace`` when replacing, otherwise an
-   atomic no-clobber hard link (``os.link``) with an exclusive-create copy as the fallback
-   for filesystems without hard links. A competing file that appeared at the destination
-   is never overwritten: the request rolls back and reports the conflict.
-5. Once every output is in place, COMMITTED is written to the coordinator journal, then to
-   the others, before any backup is removed. From then on the new outputs are the result:
-   cleanup (backups, journals) is retryable housekeeping; a failure there returns
-   ``Outcome.cleanup_pending`` and leaves the journals for the next recovery.
+4. Each staged file is copied beside its destination (flushed) as a *staging sibling*;
+   existing destinations are renamed to backups; each sibling is published by an atomic
+   no-clobber hard link (``os.link``), or by an exclusive create whose ownership is recorded
+   in the coordinator journal before any byte is written, where hard links are unavailable.
+   The sibling stays until the request is committed: it is the proof that a destination
+   is this request's file (``os.path.samefile``). A competing file that appeared at the
+   destination is never overwritten, whatever ``overwrite`` says about files that existed
+   when the request was prepared: the request rolls back and reports the conflict.
+5. Once every output is in place, COMMITTED is written to the coordinator journal, before
+   any backup is removed. From then on the new outputs are the result: participant
+   journals, backups, siblings and the journals are retryable housekeeping; a failure there
+   returns ``Outcome.cleanup_pending`` and leaves the journals for the next recovery.
 
 ``recover(folder)`` reads the folder's journal, validates it (format, id, names inside the
-folder), consults the coordinator's decision and applies it to every participating folder:
-pre-commit → remove the files this transaction published (recognised by the recorded
-digest), put backups back; post-commit → remove backups and staging leftovers, keep every
-new output. A file whose bytes are neither the original's nor ours is foreign: it is kept
-and reported; an unreadable or invalid journal, a missing coordinator or a conflict raises
-RecoveryRequired with the evidence (journal, backups) left in place. Recovery is
-idempotent and refuses to touch a transaction whose owner process is alive.
+folder), consults the coordinator's decision and applies it to every participating folder.
+Post-commit it removes backups and siblings and keeps every new output. Pre-commit it
+returns the request to its pre-request state, deciding per file from separate evidence —
+whether an original existed, whether a verified backup exists, whether the destination is
+provably this request's file, and what the destination's bytes are — never from a digest
+alone (equal bytes prove equality, not authorship, and an original may equal its
+replacement):
 
-Tested scope: local APFS (macOS) with process interruption at every boundary
-(tests/unit/test_export_transaction.py). Power-loss durability and network filesystems
-are not established by those tests.
+* an original present at its destination with its recorded digest is preserved, whether
+  untouched or already restored by an earlier recovery (a surviving backup is then a
+  duplicate and goes);
+* a destination proven ours (its sibling is the same file, or its exclusive creation is
+  claimed in the journal) is removed and the backup, if any, put back;
+* a destination that is neither is foreign or unproven: it is kept and reported, as is an
+  original that is missing with no backup; RecoveryRequired names the evidence (journal,
+  backups) left in place.
+
+Recovery is idempotent (an interrupted recovery converges on the next run), refuses to
+touch a transaction whose owner process is alive, and applies one decision to all folders
+of a request. Journals of the previous implementation (format 2, siblings removed at
+publication) are recovered by the same rules; their published-but-uncommitted files cannot
+be proven and are kept with an error rather than deleted.
+
+Tested scope: local APFS (macOS) with process interruption at every boundary, including
+inside recovery (tests/unit/test_export_transaction.py). Power-loss durability, network
+filesystems and instantaneous atomic visibility of the whole request to unrelated readers
+are not established by those tests: the request is coherent and recoverable, not atomic to
+a concurrent reader.
 """
+import errno
 import hashlib
 import json
 import os
@@ -49,10 +71,12 @@ from pathlib import Path
 
 JOURNAL = '.open_painter_export_journal.json'
 LOCK = '.open_painter_export.lock'
-FORMAT = 2
+FORMAT = 3
+ACCEPTED_FORMATS = {2, 3}
 BACKUP_SUFFIX, STAGING_SUFFIX = '.op-backup-', '.op-staging-'
 FAILPOINT_VARIABLE = 'OP_EXPORT_FAILPOINT'
 FAULT_VARIABLE = 'OP_EXPORT_FAULT'
+COPY_CHUNK = 1 << 20
 
 
 class ExportBusy(RuntimeError):
@@ -75,14 +99,14 @@ def failpoint(name):
 
 def _fault(name):
     """A catchable failure at a boundary (tests), raised as OSError."""
-    if os.environ.get(FAULT_VARIABLE) == name:
+    if name and os.environ.get(FAULT_VARIABLE) == name:
         raise OSError(f'injected fault at {name}')
 
 
 def _sha256(path):
     digest = hashlib.sha256()
     with open(path, 'rb') as stream:
-        for chunk in iter(lambda: stream.read(1 << 20), b''):
+        for chunk in iter(lambda: stream.read(COPY_CHUNK), b''):
             digest.update(chunk)
     return digest.hexdigest()
 
@@ -115,39 +139,16 @@ def _write_json(path, data):
 
 def _copy_flushed(source, target):
     with open(source, 'rb') as inp, open(target, 'wb') as out:
-        shutil.copyfileobj(inp, out, 1 << 20)
+        shutil.copyfileobj(inp, out, COPY_CHUNK)
         out.flush()
         os.fsync(out.fileno())
 
 
-def _copy_exclusive(source, target):
-    """Create ``target`` exclusively and fill it: the fallback no-clobber publication where
-    hard links are unavailable (the create is exclusive; the bytes follow)."""
-    fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    with open(source, 'rb') as inp, os.fdopen(fd, 'wb') as out:
-        shutil.copyfileobj(inp, out, 1 << 20)
-        out.flush()
-        os.fsync(out.fileno())
-
-
-def _publish_no_clobber(staging, destination):
-    """Move the completed sibling ``staging`` to ``destination`` without ever replacing an
-    existing file. Returns the method used. Raises FileExistsError when the destination
-    exists (a competing writer)."""
+def _same_file(a, b):
     try:
-        os.link(staging, destination)
-    except FileExistsError:
-        raise
-    except OSError as error:
-        # No hard links here (some network or FAT volumes): exclusive create, then fill.
-        import errno
-        if error.errno not in {errno.EPERM, errno.ENOTSUP, getattr(errno, 'EOPNOTSUPP', errno.ENOTSUP), errno.EMLINK, errno.ENOSYS}:
-            raise
-        _copy_exclusive(staging, destination)
-        os.unlink(staging)
-        return 'exclusive-create'
-    os.unlink(staging)
-    return 'hard-link'
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
 
 
 def _pid_alive(pid):
@@ -241,16 +242,18 @@ class Item:
     absent: bool = True          # no destination existed when the request was prepared
     original: dict = None        # size, mtime_ns, sha256 of the destination that existed
     backup: Path = None
-    staging: Path = None
+    staging: Path = None         # the sibling copy beside the destination (kept until commit)
     staged_sha256: str = ''
     published_sha256: str = ''
     method: str = ''
+    claimed: bool = False        # the destination was created exclusively by this request (fallback)
 
     def record(self):
         return {'name': self.destination.name, 'folder': str(self.destination.parent), 'absent': self.absent,
                 'original': self.original, 'backup': self.backup.name if self.backup else None,
                 'staging': self.staging.name if self.staging else None, 'staged_sha256': self.staged_sha256,
-                'published_sha256': self.published_sha256 or None, 'method': self.method or None}
+                'published_sha256': self.published_sha256 or None, 'method': self.method or None,
+                'claimed': self.claimed}
 
 
 @dataclass
@@ -310,6 +313,37 @@ class Transaction:
         for folder in order:
             _write_json(Path(folder) / JOURNAL, record)
 
+    def _publish(self, item):
+        """Put the staging sibling at the destination without ever replacing an existing file.
+        The sibling stays (it proves ownership until commit). Raises FileExistsError when the
+        destination exists (a competing writer)."""
+        try:
+            if os.environ.get(FAULT_VARIABLE) == 'no_hard_links':     # tests: the fallback path
+                raise OSError(errno.EPERM, 'injected: no hard links')
+            os.link(item.staging, item.destination)
+        except FileExistsError:
+            raise
+        except OSError as error:
+            # No hard links here (some network or FAT volumes): exclusive create, claim, then fill.
+            if error.errno not in {errno.EPERM, errno.ENOTSUP, getattr(errno, 'EOPNOTSUPP', errno.ENOTSUP), errno.EMLINK, errno.ENOSYS}:
+                raise
+            fd = os.open(str(item.destination), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            try:
+                failpoint('after_exclusive_create')
+                item.claimed = True
+                _write_json(self._coordinator, self._journal_record('PREPARED'))   # durable: this file is ours
+                failpoint('after_exclusive_claim')
+                with open(item.staging, 'rb') as inp:
+                    for index, chunk in enumerate(iter(lambda: inp.read(COPY_CHUNK), b'')):
+                        os.write(fd, chunk)
+                        if index == 0:
+                            failpoint('during_exclusive_fill')
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            return 'exclusive-create'
+        return 'hard-link'
+
     def commit(self, overwrite=False):
         """Publish every item as one request. Returns an Outcome; raises on refusal or failure
         (with the pre-request state restored, or RecoveryRequired naming the evidence)."""
@@ -326,6 +360,7 @@ class Transaction:
             for item in self.items:
                 item.staging = item.destination.with_name(f'{item.destination.name}{STAGING_SUFFIX}{self.identifier}')
                 item.staged_sha256 = _sha256(item.source)
+                item.absent, item.original, item.backup, item.claimed = True, None, None, False
                 if item.destination.exists():
                     item.absent = False
                     stat = item.destination.stat()
@@ -336,6 +371,10 @@ class Transaction:
             published, moved = [], []
             try:
                 for item in self.items:
+                    _fault('stage' if item is self.items[-1] else '')
+                    _copy_flushed(item.source, item.staging)
+                failpoint('after_staging')
+                for item in self.items:
                     if item.backup is not None:
                         _fault('backup')
                         os.replace(item.destination, item.backup)
@@ -344,17 +383,12 @@ class Transaction:
                 failpoint('after_backups')
                 for item in self.items:
                     _fault('publish' if item is self.items[-1] else '')
-                    _copy_flushed(item.source, item.staging)
-                    if overwrite:
-                        os.replace(item.staging, item.destination)
-                        item.method = 'replace'
-                    else:
-                        try:
-                            item.method = _publish_no_clobber(item.staging, item.destination)
-                        except FileExistsError:
-                            raise PublicationConflict(
-                                f'{item.destination.name} was created by another writer while this export ran; '
-                                f'nothing was replaced (allow overwriting to replace it)')
+                    try:
+                        item.method = self._publish(item)
+                    except FileExistsError:
+                        raise PublicationConflict(
+                            f'{item.destination.name} was created by another writer while this export ran; '
+                            f'nothing was replaced (remove or rename that file, or export elsewhere)')
                     item.published_sha256 = item.staged_sha256
                     published.append(item)
                     if len(published) == 1:
@@ -362,9 +396,6 @@ class Transaction:
                 failpoint('before_commit_decision')
                 # The durable decision: the coordinator's COMMITTED record, before any backup goes.
                 _write_json(self._coordinator, self._journal_record('COMMITTED'))
-                failpoint('after_commit_decision')
-                for folder in folders[1:]:
-                    _write_json(Path(folder) / JOURNAL, self._journal_record('COMMITTED'))
             except BaseException as failure:
                 problems = self._rollback(published, moved)
                 if problems:
@@ -373,8 +404,15 @@ class Transaction:
                         f'{JOURNAL} and the backups stay in {folders[0]} for recovery') from failure
                 self._remove_journals()
                 raise
-            # Committed: what follows is housekeeping.
+            failpoint('after_commit_decision')
+            # Committed: what follows is housekeeping. A failure here never rolls anything back.
             pending = []
+            for folder in folders[1:]:
+                try:
+                    _fault('participant_journal')
+                    _write_json(Path(folder) / JOURNAL, self._journal_record('COMMITTED'))
+                except OSError as error:
+                    pending.append(f'{Path(folder) / JOURNAL}: {error}')
             for index, item in enumerate(self.items):
                 if item.backup is not None and item.backup.exists():
                     try:
@@ -384,12 +422,11 @@ class Transaction:
                         pending.append(f'{item.backup.name}: {error}')
                     if index == 0:
                         failpoint('after_first_backup_removed')
-                for leftover in (item.staging,):
-                    if leftover is not None and leftover.exists():
-                        try:
-                            leftover.unlink()
-                        except OSError as error:
-                            pending.append(f'{leftover.name}: {error}')
+                if item.staging is not None and item.staging.exists():
+                    try:
+                        item.staging.unlink()
+                    except OSError as error:
+                        pending.append(f'{item.staging.name}: {error}')
             if not pending:
                 self._remove_journals()
             message = 'Export completed' if not pending else (
@@ -407,24 +444,19 @@ class Transaction:
                 pass
 
     def _rollback(self, published, moved):
-        """Undo a pre-commit failure: remove what this request published (verified by digest),
-        put backups back where the destination is free. Returns the problems it could not fix."""
+        """Undo a pre-commit failure: remove what this request published (proven by its sibling or
+        claim, never by bytes alone), put backups back where the destination is free. Returns
+        the problems it could not fix."""
         problems = []
         for item in published:
             try:
                 if item.destination.exists():
-                    if _sha256(item.destination) == item.published_sha256:
+                    if _owned(item.destination, item.staging, item.claimed, item.staged_sha256):
                         item.destination.unlink()
                     else:
                         problems.append(f'{item.destination.name} was changed by another writer since this export published it')
             except OSError as error:
                 problems.append(f'{item.destination.name}: {error}')
-        for item in self.items:
-            if item.staging is not None and item.staging.exists():
-                try:
-                    item.staging.unlink()
-                except OSError:
-                    pass
         for item in moved:
             try:
                 if item.backup.exists():
@@ -434,10 +466,42 @@ class Transaction:
                         os.replace(item.backup, item.destination)
             except OSError as error:
                 problems.append(f'{item.destination.name} (backup {item.backup.name}): {error}')
+        for item in self.items:
+            if item.staging is not None and item.staging.exists():
+                try:
+                    item.staging.unlink()
+                except OSError:
+                    pass
         return problems
 
 
 # ---- recovery -----------------------------------------------------------------------------------
+
+def _owned(destination, staging, claimed, staged_sha256):
+    """Whether the file at ``destination`` is provably this transaction's, untouched by anyone
+    else: its staging sibling is the same file (hard-link publication) and it still holds the
+    recorded staged bytes, or its exclusive creation was recorded and it holds a prefix of the
+    staged bytes (a complete or interrupted fill). A published file another writer edited in
+    place (which edits the sibling too) is not ours to delete."""
+    if claimed:
+        if staging is not None and staging.exists():
+            return _is_prefix(destination, staging)
+        return _sha256(destination) == staged_sha256
+    if staging is not None and staging.exists() and _same_file(staging, destination):
+        return _sha256(destination) == staged_sha256
+    return False
+
+
+def _is_prefix(path, whole):
+    """Whether ``path`` holds a (possibly complete) prefix of ``whole``."""
+    with open(path, 'rb') as part, open(whole, 'rb') as full:
+        while True:
+            chunk = part.read(COPY_CHUNK)
+            if not chunk:
+                return True
+            if full.read(len(chunk)) != chunk:
+                return False
+
 
 def _load_journal(folder):
     """The folder's journal as a validated record, or None when there is none.
@@ -451,7 +515,7 @@ def _load_journal(folder):
     except (ValueError, OSError) as error:
         raise RecoveryRequired(f'the export journal {journal} cannot be read ({error}); it and any '
                                f'{BACKUP_SUFFIX.strip(".")}* files in {folder} are kept for recovery') from error
-    if not isinstance(data, dict) or data.get('format') != FORMAT:
+    if not isinstance(data, dict) or data.get('format') not in ACCEPTED_FORMATS:
         raise RecoveryRequired(f'the export journal {journal} has an unsupported format ({data.get("format") if isinstance(data, dict) else "?"}); '
                                f'kept for recovery')
     identifier = data.get('transaction')
@@ -481,6 +545,11 @@ def _load_journal(folder):
             value = item.get(key)
             if value is not None and value != f'{name}{suffix}{identifier}':
                 raise RecoveryRequired(f'the export journal {journal} has an unexpected {key} name for {name}; kept for recovery')
+        original = item.get('original')
+        if original is not None and not (isinstance(original, dict) and isinstance(original.get('sha256'), str)):
+            raise RecoveryRequired(f'the export journal {journal} has an invalid original record for {name}; kept for recovery')
+        if not item.get('absent') and original is None:
+            raise RecoveryRequired(f'the export journal {journal} records an original of {name} without its digest; kept for recovery')
     data['_path'] = journal
     return data
 
@@ -518,6 +587,80 @@ def recover(folder):
         _unlock(locks)
 
 
+def _finish_committed(item, destination, staging, backup, actions):
+    """Post-commit housekeeping for one item: the new output stays, backup and sibling go."""
+    problems = []
+    for leftover, label in ((backup, 'backup'), (staging, 'staging')):
+        if leftover is not None and leftover.exists():
+            try:
+                leftover.unlink()
+                actions.append(f'removed {label} {leftover.name}')
+            except OSError as error:
+                problems.append(f'{leftover.name}: {error}')
+    if not destination.exists():
+        actions.append(f'note: committed output {destination.name} is missing (removed by another writer)')
+    return problems
+
+
+def _undo_item(item, destination, staging, backup, original, actions):
+    """Return one pre-commit item to its pre-request state. Returns a problem description
+    when the safe course is to keep what is there, else None. Order: decide the destination
+    from evidence, restore, and only then remove the sibling (the proof of ownership)."""
+    name = destination.name
+    absent = bool(item.get('absent'))
+    original_sha = (original or {}).get('sha256')
+    staged_sha = item.get('staged_sha256') or ''
+    backup_exists = backup is not None and backup.exists()
+    if destination.exists():
+        if _owned(destination, staging, item.get('claimed'), staged_sha):
+            if not absent and not backup_exists:
+                # Our file stands where the original was and the backup is gone: the destination is
+                # the only copy of whatever it holds. Equal to the original, it is the original's
+                # content and stays; otherwise the original is lost and nothing may be deleted.
+                if _sha256(destination) == original_sha:
+                    actions.append(f'kept {name} (unchanged content; its backup was already gone)')
+                    _remove_sibling(staging, actions)
+                    return None
+                return (f'the previous version of {name} is missing (no backup) and the destination holds this '
+                        f'export\'s file; both are kept as they are')
+            destination.unlink()
+            actions.append(f'removed unpublished {name}')
+        else:
+            current = _sha256(destination)
+            if not absent and current == original_sha:
+                # The original, untouched or already restored — even when the replacement had the
+                # same bytes. A surviving backup is a duplicate of a verified copy.
+                if backup_exists:
+                    backup.unlink()
+                    actions.append(f'removed duplicate backup {backup.name}')
+                actions.append(f'kept {name} (the original)')
+                _remove_sibling(staging, actions)
+                return None
+            tail = ('' if absent else (f'; the previous version stays in {backup.name}' if backup_exists
+                                       else ' and its previous version has no backup'))
+            if current == staged_sha:
+                return (f'{name} has this export\'s bytes but cannot be attributed to this export (another writer '
+                        f'may have created it, or an older journal recorded no proof); it is kept{tail}')
+            if destination.stat().st_size == 0:
+                return (f'{name} is empty: another writer\'s file, or a creation of this export interrupted before '
+                        f'it was recorded; it is kept{tail}')
+            return f'{name} holds another writer\'s file; it is kept{tail}'
+    if not destination.exists():
+        if backup_exists:
+            os.replace(backup, destination)
+            actions.append(f'restored {name}')
+        elif not absent:
+            return f'{name} existed before this export and is now missing with no backup to restore; nothing was deleted'
+    _remove_sibling(staging, actions)
+    return None
+
+
+def _remove_sibling(staging, actions):
+    if staging is not None and staging.exists():
+        staging.unlink()
+        actions.append(f'removed staging {staging.name}')
+
+
 def _apply_decision(decision, folders):
     identifier = decision['transaction']
     committed = decision['state'] == 'COMMITTED'
@@ -527,66 +670,36 @@ def _apply_decision(decision, folders):
         destination = folder / item['name']
         staging = folder / item['staging'] if item.get('staging') else None
         backup = folder / item['backup'] if item.get('backup') else None
-        original = item.get('original') or {}
-        if staging is not None and staging.exists():
-            try:
-                staging.unlink()
-                actions.append(f'removed staging {staging.name}')
-            except OSError as error:
-                conflicts.append(f'{staging.name}: {error}')
+        changed_before = len(actions)
         if committed:
-            if backup is not None and backup.exists():
-                try:
-                    backup.unlink()
-                    actions.append(f'removed backup {backup.name}')
-                except OSError as error:
-                    conflicts.append(f'{backup.name}: {error}')
-            if not destination.exists():
-                actions.append(f'note: committed output {destination.name} is missing (removed by another writer)')
-            continue
-        # Pre-commit: undo what this transaction did, and only that.
-        ours = item.get('staged_sha256') or ''
-        if destination.exists():
-            current = _sha256(destination)
-            if current == ours:
-                try:
-                    destination.unlink()
-                    actions.append(f'removed unpublished {destination.name}')
-                except OSError as error:
-                    conflicts.append(f'{destination.name}: {error}')
-                    continue
-            elif backup is not None and backup.exists():
-                if current != original.get('sha256'):
-                    conflicts.append(f'{destination.name} holds another writer\'s file; the previous version stays in {backup.name}')
-                    continue
-                # The original is back at its place already (an earlier recovery): the backup is a duplicate.
-                try:
-                    backup.unlink()
-                    actions.append(f'removed duplicate backup {backup.name}')
-                except OSError as error:
-                    conflicts.append(f'{backup.name}: {error}')
-                continue
-            elif item.get('absent'):
-                conflicts.append(f'{destination.name} was created by another writer; it is kept')
-                continue
-            else:
-                continue   # the untouched original (its backup was never made, or is already back)
-        if backup is not None and backup.exists():
+            conflicts.extend(_finish_committed(item, destination, staging, backup, actions))
+        else:
             try:
-                os.replace(backup, destination)
-                actions.append(f'restored {destination.name}')
+                problem = _undo_item(item, destination, staging, backup, item.get('original'), actions)
             except OSError as error:
-                conflicts.append(f'{destination.name} (backup {backup.name}): {error}')
+                problem = f'{destination.name}: {error}'
+            if problem:
+                conflicts.append(problem)
+        if len(actions) > changed_before:
+            failpoint('recover_after_first_change')
     if conflicts:
         raise RecoveryRequired(f'recovery of export {identifier} needs attention: ' + '; '.join(conflicts)
                                + f'; the journal(s) and backups are kept in {", ".join(str(f) for f in folders)}')
+    failpoint('recover_before_journal_removal')
     # Complete: participants' journals first, the coordinator (the decision) last.
     coordinator = Path(decision['coordinator']).resolve()
-    for folder in sorted(folders, key=lambda f: f == coordinator.parent):
-        journal = folder / JOURNAL
-        if journal.exists() and journal.resolve() != coordinator:
-            journal.unlink()
-    if coordinator.exists():
-        coordinator.unlink()
+    try:
+        for folder in sorted(folders, key=lambda f: f == coordinator.parent):
+            journal = folder / JOURNAL
+            if journal.exists() and journal.resolve() != coordinator:
+                _fault('recover_journal_removal')
+                journal.unlink()
+                failpoint('recover_after_participant_journals')
+        if coordinator.exists():
+            _fault('recover_journal_removal')
+            coordinator.unlink()
+    except OSError as error:
+        raise RecoveryRequired(f'recovery of export {identifier} restored the files but could not remove its journal '
+                               f'({error}); run it again') from error
     actions.append('committed outputs kept' if committed else 'previous export restored')
     return actions

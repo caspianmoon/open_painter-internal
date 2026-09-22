@@ -44,6 +44,9 @@ from pathlib import Path
 sys.path.insert(0, sys.argv[1])
 from open_painter.export import transaction
 spec = json.loads(Path(sys.argv[2]).read_text())
+if spec.get("recover"):
+    print(json.dumps({"actions": transaction.recover(spec["recover"])}))
+    sys.exit(0)
 tx = transaction.Transaction(identifier=spec["identifier"])
 for destination, source in spec["items"]:
     tx.add(destination, source)
@@ -85,12 +88,18 @@ class Scene:
             tx.add(destination, source)
         return tx
 
-    def run_subprocess(self, failpoint, overwrite=True, identifier="feedfacecafe"):
+    def run_subprocess(self, failpoint, overwrite=True, identifier="feedfacecafe", fault=None, recover=None):
+        """The real commit (or, with ``recover``, the real recovery of that folder) in a worker
+        process of this interpreter, terminated hard at ``failpoint``. The worker and its files
+        belong to this test: the folders are under this scene's temporary directory."""
         spec = self.root / "spec.json"
-        spec.write_text(json.dumps({"identifier": identifier, "overwrite": overwrite,
+        spec.write_text(json.dumps({"identifier": identifier, "overwrite": overwrite, "recover": str(recover) if recover else None,
                                     "items": [(str(d), str(s)) for d, s in self.items]}))
-        env = dict(os.environ, OP_EXPORT_FAILPOINT=failpoint)
+        env = dict(os.environ, OP_EXPORT_FAILPOINT=failpoint or "")
         env.pop("OP_EXPORT_FAULT", None)
+        if fault:
+            env["OP_EXPORT_FAULT"] = fault
+        assert str(self.out).startswith(self.tmp.name) and (self.other is None or str(self.other).startswith(self.tmp.name))
         return subprocess.run([sys.executable, "-c", SUBPROCESS, str(Path(__file__).resolve().parents[2] / "src"), str(spec)],
                               env=env, capture_output=True, text=True)
 
@@ -484,6 +493,332 @@ class TransactionTests(unittest.TestCase):
             self.assertEqual(snapshot(scene.out), ORIGINAL)
         finally:
             scene.close()
+
+
+class IdenticalScene(Scene):
+    """The stability plan's payload set (S1 §5.3): A unchanged (its replacement has identical
+    bytes), B changed, C newly created; with ``all_same`` every original equals its replacement;
+    with two folders, D in the other folder is unchanged too."""
+
+    def __init__(self, folders=1, all_same=False):
+        super().__init__(folders=folders)
+        (self.staging / "A.png").write_bytes(PAYLOADS["old_a"])
+        if all_same:
+            (self.staging / "B.png").write_bytes(PAYLOADS["old_b"])
+        if self.other is not None:
+            (self.staging / "D.png").write_bytes(PAYLOADS["old_a"])
+        self.all_same = all_same
+        self.originals = {"A.png": HASHES["old_a"], "B.png": HASHES["old_b"]}
+        self.committed = {"A.png": HASHES["old_a"], "B.png": HASHES["old_b"] if all_same else HASHES["new_b"], "C.png": HASHES["new_c"]}
+
+
+PRE_COMMIT = ("after_prepared", "after_staging", "after_first_backup", "after_backups", "after_first_publish", "before_commit_decision")
+
+
+class IdenticalContentTests(unittest.TestCase):
+    """Recovery when an original and its replacement hold the same bytes (stability plan S1):
+    equal digests prove equality, never authorship. Every case runs the production commit in a
+    worker process and the public ``recover`` afterwards, and asserts file sets and hashes."""
+
+    def setUp(self):
+        transaction._held_locks.clear()
+
+    def _assert_pre_request(self, scene, label):
+        self.assertEqual(snapshot(scene.out), scene.originals, label)
+        self.assertEqual(leftovers(scene.out), [], label)
+        if scene.other is not None:
+            self.assertEqual(snapshot(scene.other), {"D.png": HASHES["old_a"]}, label)
+            self.assertEqual(leftovers(scene.other), [], label)
+
+    def test_unchanged_originals_survive_every_pre_commit_interruption(self):
+        """The audit's first failure (after PREPARED, before any backup) and every later boundary:
+        A (identical), B (changed) and D (identical, other folder) come back byte-identical; C never
+        appears; a second recovery is a no-op."""
+        for all_same in (False, True):
+            for folders in (1, 2):
+                for failpoint in PRE_COMMIT:
+                    label = (failpoint, "all_same" if all_same else "mixed", folders)
+                    scene = IdenticalScene(folders=folders, all_same=all_same)
+                    try:
+                        completed = scene.run_subprocess(failpoint)
+                        self.assertEqual(completed.returncode, 3, (label, completed.stdout, completed.stderr))
+                        self.assertTrue((scene.out / transaction.JOURNAL).exists(), label)
+                        actions = transaction.recover(scene.out)
+                        if failpoint in ("after_prepared", "after_staging", "after_first_backup", "after_backups"):
+                            self.assertNotIn("removed unpublished A.png", actions, (label, actions))
+                        self._assert_pre_request(scene, (label, actions))
+                        self.assertEqual(transaction.recover(scene.out), [], label)
+                        self._assert_pre_request(scene, label)
+                    finally:
+                        scene.close()
+
+    def test_restored_identical_original_survives_failed_journal_cleanup(self):
+        """The audit's second failure: recovery restores the original from its backup, journal
+        removal fails; the next recovery must keep the restored original although it also matches
+        the staged digest."""
+        for failpoint in ("after_backups", "after_first_publish"):
+            scene = IdenticalScene()
+            try:
+                completed = scene.run_subprocess(failpoint)
+                self.assertEqual(completed.returncode, 3, completed.stderr)
+                os.environ[transaction.FAULT_VARIABLE] = "recover_journal_removal"
+                try:
+                    with self.assertRaises(transaction.RecoveryRequired) as raised:
+                        transaction.recover(scene.out)
+                finally:
+                    os.environ.pop(transaction.FAULT_VARIABLE, None)
+                self.assertIn("run it again", str(raised.exception))
+                files = snapshot(scene.out)
+                self.assertEqual(files.get("A.png"), HASHES["old_a"], (failpoint, files))
+                self.assertEqual(files.get("B.png"), HASHES["old_b"], (failpoint, files))
+                self.assertIn(transaction.JOURNAL, files, "the decision stays until cleanup completes")
+                for _ in range(2):
+                    actions = transaction.recover(scene.out)
+                    self.assertNotIn("removed unpublished A.png", actions, actions)
+                    self._assert_pre_request(scene, (failpoint, actions))
+            finally:
+                scene.close()
+
+    def test_hard_interruption_inside_recovery_converges(self):
+        """Recovery itself terminated hard (after its first change, before journal removal, after
+        the participants' journals went): repeating it reaches the same pre-request state."""
+        for failpoint in ("recover_after_first_change", "recover_before_journal_removal", "recover_after_participant_journals"):
+            for start in ("out", "other"):
+                scene = IdenticalScene(folders=2)
+                try:
+                    completed = scene.run_subprocess("after_first_publish")
+                    self.assertEqual(completed.returncode, 3, completed.stderr)
+                    interrupted = scene.run_subprocess(failpoint, recover=getattr(scene, start))
+                    self.assertEqual(interrupted.returncode, 3, (failpoint, start, interrupted.stdout, interrupted.stderr))
+                    self.assertTrue((scene.out / transaction.JOURNAL).exists() or (scene.other / transaction.JOURNAL).exists(),
+                                    (failpoint, "the decision must survive an interrupted recovery"))
+                    for folder in (scene.out, scene.other, scene.out):
+                        transaction.recover(folder)
+                    self._assert_pre_request(scene, (failpoint, start))
+                finally:
+                    scene.close()
+
+    def test_committed_outputs_survive_participant_journal_failure(self):
+        """The coordinator's COMMITTED record is the decision: a participant journal that cannot be
+        written afterwards is housekeeping, never a rollback."""
+        scene = IdenticalScene(folders=2)
+        try:
+            os.environ[transaction.FAULT_VARIABLE] = "participant_journal"
+            try:
+                outcome = scene.transaction().commit(overwrite=True)
+            finally:
+                os.environ.pop(transaction.FAULT_VARIABLE, None)
+            self.assertTrue(outcome.cleanup_pending, outcome)
+            files = snapshot(scene.out)
+            self.assertEqual({k: files[k] for k in scene.committed}, scene.committed)
+            self.assertEqual(snapshot(scene.other).get("D.png"), HASHES["old_a"])
+            for folder in (scene.other, scene.out):
+                transaction.recover(folder)
+            self.assertEqual(snapshot(scene.out), scene.committed)
+            self.assertEqual(snapshot(scene.other), {"D.png": HASHES["old_a"]})
+            self.assertEqual(leftovers(scene.out), [])
+            self.assertEqual(leftovers(scene.other), [])
+        finally:
+            scene.close()
+
+    def test_committed_outputs_survive_interruption_during_cleanup(self):
+        for failpoint in ("after_commit_decision", "after_first_backup_removed"):
+            scene = IdenticalScene(folders=2)
+            try:
+                completed = scene.run_subprocess(failpoint)
+                self.assertEqual(completed.returncode, 3, completed.stderr)
+                actions = transaction.recover(scene.other)
+                self.assertIn("committed outputs kept", actions)
+                self.assertEqual(snapshot(scene.out), scene.committed, failpoint)
+                self.assertEqual(snapshot(scene.other), {"D.png": HASHES["old_a"]}, failpoint)
+                self.assertEqual(leftovers(scene.out), [], failpoint)
+                self.assertEqual(leftovers(scene.other), [], failpoint)
+            finally:
+                scene.close()
+
+    def test_competing_file_with_our_bytes_at_publish_is_preserved(self):
+        """A writer that creates the destination with exactly our bytes before the link: their
+        file (same inode) stays; nothing of the request is published."""
+        scene = IdenticalScene()
+        try:
+            for path in (scene.out / "A.png", scene.out / "B.png"):
+                path.unlink()
+            real_copy = transaction._copy_flushed
+            inode = {}
+
+            def racing_copy(source, target):
+                destination = Path(str(target).split(transaction.STAGING_SUFFIX)[0])
+                if destination.name == "C.png" and not destination.exists():
+                    destination.write_bytes(PAYLOADS["new_c"])          # same bytes as ours
+                    inode["C.png"] = destination.stat().st_ino
+                return real_copy(source, target)
+            transaction._copy_flushed = racing_copy
+            try:
+                with self.assertRaises(transaction.PublicationConflict):
+                    scene.transaction().commit(overwrite=False)
+            finally:
+                transaction._copy_flushed = real_copy
+            files = snapshot(scene.out)
+            self.assertEqual(files, {"C.png": HASHES["new_c"]}, "only the competitor's C remains")
+            self.assertEqual((scene.out / "C.png").stat().st_ino, inode["C.png"], "the competitor's own file, not a copy")
+            self.assertEqual(leftovers(scene.out), [])
+        finally:
+            scene.close()
+
+    def test_competing_file_after_backup_is_never_replaced(self):
+        """With overwriting allowed, a file that appears at a destination after its original was
+        moved aside is a competing writer's: the request rolls back and names it; the original
+        stays in its backup for the artist."""
+        scene = IdenticalScene()
+        try:
+            real_replace = os.replace
+
+            def racing_replace(source, target):
+                result = real_replace(source, target)
+                if transaction.BACKUP_SUFFIX in str(target) and Path(target).name.startswith("B.png"):
+                    Path(str(target).split(transaction.BACKUP_SUFFIX)[0]).write_bytes(PAYLOADS["foreign"])
+                return result
+            os.replace = racing_replace
+            try:
+                with self.assertRaises(transaction.RecoveryRequired) as raised:
+                    scene.transaction().commit(overwrite=True)
+            finally:
+                os.replace = real_replace
+            self.assertIn("B.png", str(raised.exception))
+            files = snapshot(scene.out)
+            self.assertEqual(files["B.png"], HASHES["foreign"])
+            self.assertEqual(files["A.png"], HASHES["old_a"])
+            self.assertNotIn("C.png", files)
+            self.assertIn(f"B.png{transaction.BACKUP_SUFFIX}", "".join(files), "B's original stays in its backup")
+            self.assertIn(transaction.JOURNAL, files)
+            (scene.out / "B.png").unlink()                              # the artist removes the intruder
+            transaction.recover(scene.out)
+            self._assert_pre_request(scene, "after the conflict is resolved")
+        finally:
+            scene.close()
+
+    def test_exclusive_create_fallback_interrupted(self):
+        """No hard links: the destination is created exclusively, claimed in the journal, then
+        filled. Interrupted before the claim the empty file is ambiguous and kept with an error;
+        after the claim (empty or partly filled) it is ours and removed; a claimed file another
+        writer replaced is not."""
+        big = b"big C\n" * (300 * 1024)                                  # > one copy chunk: a real partial fill
+        for failpoint, expectation in (("after_exclusive_create", "ambiguous"), ("after_exclusive_claim", "ours"),
+                                       ("during_exclusive_fill", "ours"), ("during_exclusive_fill", "replaced")):
+            scene = IdenticalScene()
+            try:
+                (scene.staging / "C.png").write_bytes(big)
+                completed = scene.run_subprocess(failpoint, fault="no_hard_links")
+                self.assertEqual(completed.returncode, 3, (failpoint, completed.stderr))
+                files = snapshot(scene.out)
+                if expectation == "ambiguous":
+                    self.assertEqual((scene.out / "A.png").stat().st_size, 0, "A was created, not yet claimed")
+                    with self.assertRaises(transaction.RecoveryRequired) as raised:
+                        transaction.recover(scene.out)
+                    self.assertIn("A.png is empty", str(raised.exception))
+                    self.assertIn(transaction.JOURNAL, snapshot(scene.out))
+                    (scene.out / "A.png").unlink()                      # resolved by hand
+                    transaction.recover(scene.out)
+                    self._assert_pre_request(scene, failpoint)
+                    continue
+                journal = json.loads((scene.out / transaction.JOURNAL).read_text())
+                claimed = {item["name"] for item in journal["items"] if item.get("claimed")}
+                self.assertEqual(claimed, {"A.png"}, (failpoint, journal["items"]))
+                if failpoint == "during_exclusive_fill":
+                    self.assertGreater((scene.out / "A.png").stat().st_size, 0)
+                if expectation == "replaced":
+                    (scene.out / "A.png").write_bytes(PAYLOADS["foreign"])
+                    with self.assertRaises(transaction.RecoveryRequired) as raised:
+                        transaction.recover(scene.out)
+                    self.assertIn("A.png", str(raised.exception))
+                    self.assertEqual(snapshot(scene.out)["A.png"], HASHES["foreign"])
+                    self.assertTrue(any(name.startswith(f"A.png{transaction.BACKUP_SUFFIX}") for name in snapshot(scene.out)))
+                    continue
+                actions = transaction.recover(scene.out)
+                self.assertIn("removed unpublished A.png", actions)
+                self._assert_pre_request(scene, (failpoint, actions))
+            finally:
+                scene.close()
+        scene = IdenticalScene()
+        try:
+            completed = scene.run_subprocess("", fault="no_hard_links")
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(snapshot(scene.out), scene.committed)
+            self.assertEqual(leftovers(scene.out), [])
+        finally:
+            scene.close()
+
+    def test_missing_original_is_reported_not_restored(self):
+        """A backup that vanished before recovery: the missing original is named, nothing else is
+        touched, and no "restored" result accompanies it."""
+        scene = IdenticalScene()
+        try:
+            completed = scene.run_subprocess("after_backups")
+            self.assertEqual(completed.returncode, 3, completed.stderr)
+            (scene.out / f"A.png{transaction.BACKUP_SUFFIX}feedfacecafe").unlink()
+            with self.assertRaises(transaction.RecoveryRequired) as raised:
+                transaction.recover(scene.out)
+            self.assertIn("A.png existed before this export and is now missing", str(raised.exception))
+            files = snapshot(scene.out)
+            self.assertNotIn("A.png", files)
+            self.assertEqual(files.get("B.png"), HASHES["old_b"], "B is restored regardless")
+            self.assertIn(transaction.JOURNAL, files)
+        finally:
+            scene.close()
+
+    def test_previous_format_journal_is_recovered_without_deleting_unproven_files(self):
+        """A format-2 journal (siblings were removed at publication, so nothing proves a
+        published file): the unchanged original is kept, the unproven new file is kept and named."""
+        scene = IdenticalScene()
+        try:
+            (scene.out / "C.png").write_bytes(PAYLOADS["new_c"])          # published by the old implementation
+            (scene.out / f"B.png{transaction.BACKUP_SUFFIX}feedfacecafe").write_bytes(PAYLOADS["old_b"])
+            (scene.out / "B.png").write_bytes(PAYLOADS["new_b"])
+            journal = {"format": 2, "transaction": "feedfacecafe", "state": "PREPARED", "pid": 1, "created": 0,
+                       "coordinator": str(scene.out / transaction.JOURNAL), "folders": [str(scene.out)], "items": []}
+            for name, absent, original, backup, staged in (("A.png", False, HASHES["old_a"], None, HASHES["old_a"]),
+                                                            ("B.png", False, HASHES["old_b"], "B.png", HASHES["new_b"]),
+                                                            ("C.png", True, None, None, HASHES["new_c"])):
+                journal["items"].append({"name": name, "folder": str(scene.out), "absent": absent,
+                                         "original": None if original is None else {"size": 0, "mtime_ns": 0, "sha256": original},
+                                         "backup": f"{backup}{transaction.BACKUP_SUFFIX}feedfacecafe" if backup else None,
+                                         "staging": f"{name}{transaction.STAGING_SUFFIX}feedfacecafe", "staged_sha256": staged,
+                                         "published_sha256": None, "method": None})
+            (scene.out / transaction.JOURNAL).write_text(json.dumps(journal))
+            with self.assertRaises(transaction.RecoveryRequired) as raised:
+                transaction.recover(scene.out)
+            message = str(raised.exception)
+            self.assertIn("C.png has this export's bytes but cannot be attributed", message)
+            self.assertIn("B.png has this export's bytes but cannot be attributed", message)
+            files = snapshot(scene.out)
+            self.assertEqual(files["A.png"], HASHES["old_a"], "the unchanged original stays")
+            self.assertEqual(files["C.png"], HASHES["new_c"])
+            self.assertEqual(files["B.png"], HASHES["new_b"])
+            self.assertEqual(files[f"B.png{transaction.BACKUP_SUFFIX}feedfacecafe"], HASHES["old_b"], "B's original stays in its backup")
+            self.assertIn(transaction.JOURNAL, files)
+            for name in ("B.png", "C.png"):
+                (scene.out / name).unlink()                              # resolved by hand
+            transaction.recover(scene.out)
+            self._assert_pre_request(scene, "old journal after manual resolution")
+        finally:
+            scene.close()
+
+    def test_successful_export_with_identical_and_changed_outputs(self):
+        for all_same in (False, True):
+            for folders in (1, 2):
+                scene = IdenticalScene(folders=folders, all_same=all_same)
+                try:
+                    outcome = scene.transaction().commit(overwrite=True)
+                    self.assertEqual(outcome.cleanup_pending, [])
+                    self.assertEqual(outcome.message, "Export completed")
+                    self.assertEqual(snapshot(scene.out), scene.committed, (all_same, folders))
+                    self.assertEqual(leftovers(scene.out), [])
+                    if scene.other is not None:
+                        self.assertEqual(snapshot(scene.other), {"D.png": HASHES["old_a"]})
+                        self.assertEqual(leftovers(scene.other), [])
+                    self.assertEqual(transaction.recover(scene.out), [])
+                finally:
+                    scene.close()
 
 
 if __name__ == "__main__":

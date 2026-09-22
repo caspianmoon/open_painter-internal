@@ -53,6 +53,24 @@ def _usable(image, key, size):
 
 _released = []   # accounting only
 
+# After a memfile undo/redo the timer reconstructs the graph from the persisted material tree.
+# Creating a *new* leaf datablock in that window (and binding it to a persisted node) is the
+# open 0.13 crash: a later undo frees the datablock while the tree still points at it, and the
+# next rehydration walks a freed pointer (docs/quality-stability-0.13.md, S2). While frozen,
+# ``request`` never allocates a new datablock: it regenerates into the datablock the node already
+# binds (``reuse``) or returns None so the node keeps its current binding until the next authored,
+# undo-pushed gesture releases the freeze. Content still refreshes; only creation is deferred.
+_frozen_new_leaves = [False]
+
+
+def freeze_new_leaves(value):
+    """Enter (True) or leave (False) the post-undo window where no new leaf datablock is created."""
+    _frozen_new_leaves[0] = bool(value)
+
+
+def new_leaves_frozen():
+    return _frozen_new_leaves[0]
+
 
 def release_image(image):
     """Remove a leaf, placeholder or preview datablock nothing binds any more.
@@ -209,8 +227,14 @@ class Resources:
     def key(self, signature):
         return sha256(repr((self.size, signature)).encode()).hexdigest()
 
-    def request(self, signature, factory, owner='', placeholder=(.5, .5, .5, 1), interactive=False, reuse=None):
+    def request(self, signature, factory, owner='', placeholder=(.5, .5, .5, 1), interactive=False, reuse=None, stable=None):
         """Return a cached image or queue just this immutable source snapshot.
+
+        ``stable`` is the datablock a node already binds that must stay bound: the new content is
+        produced into it in place (re-keyed) rather than into a new datablock, so a stroke boundary
+        keeps one leaf for its life and a memfile undo never frees a leaf the material still samples
+        (the open 0.13 crash). The datablock is left ready while ``factory()`` runs so an incremental
+        base can read its current pixels, then flipped to pending; content, not the datablock, changes.
 
         factory() returns an iterator yielding (low_row, HxWxC float data). It may
         start with ``('base', image)``, a published leaf whose pixels fill every row
@@ -230,6 +254,35 @@ class Resources:
             # Another set's table evicted the shared leaf, or Purge Unused Data
             # took it: the source is scheduled again rather than handed back dead.
             self._drop(key)
+        if (stable is not None and alive(stable) and stable.get(RESOURCE)
+                and tuple(stable.size) == (self.size, self.size)):
+            existing = self.entries.get(key)
+            if existing is not None and existing.image == stable and not existing.job and not existing.error:
+                return stable   # already this content in this datablock
+            # Re-key the bound datablock and produce the new content into it. Any entry that lists
+            # this datablock (this binding's previous content, under the old key) is dropped, and
+            # its job closed; the datablock itself is kept and never removed.
+            for other in [k for k, e in self.entries.items() if e.image == stable or k == key]:
+                dropped = self.entries.pop(other)
+                if dropped.job:
+                    dropped.job.close()
+                if other in self.queue:
+                    self.queue.remove(other)
+                if dropped.image is not stable and alive(dropped.image) and not dropped.image.users:
+                    release_image(dropped.image)   # a cached datablock for this content is superseded
+            entry = Entry(stable, owner=owner, interactive=interactive)
+            # factory() reads the incremental base (the still-ready ``stable``) as it is built.
+            entry.job = self._produce(entry, factory())
+            stable[OWNER] = True
+            stable[RESOURCE] = key
+            stable['op_shader_resource_ready'] = False
+            if 'op_resource_state' in stable:
+                del stable['op_resource_state']
+            self.entries[key] = entry
+            self.queue.append(key)
+            _leaf_index.clear()
+            metrics.count('shader_resource_inplace_regenerations')
+            return stable
         if key in self.entries:
             if self.entries[key].error:
                 raise ValueError(self.entries[key].error)
@@ -245,6 +298,12 @@ class Resources:
                 and not any(entry.image == reuse for table in _tables for entry in table.entries.values())):
             image = reuse
             metrics.count('shader_resource_reused_datablocks')
+        elif _frozen_new_leaves[0]:
+            # Post-undo reconstruction: do not create a new datablock to bind into the persisted
+            # tree (the open memfile-undo crash). The caller keeps its current binding; the next
+            # authored gesture releases the freeze and the source is requested again then.
+            metrics.count('shader_resource_creation_frozen')
+            return None
         else:
             image = bpy.data.images.new('OP Shader Source · ' + key[:12],
                                         width=self.size, height=self.size, alpha=True, float_buffer=True)

@@ -141,6 +141,11 @@ class ResourceBinding:
     layer_id: str = ''   # profile attribution of the CPU work (0.9.0)
     placeholder: object = None   # colour of an unpublished leaf; None for the neutral grey
     interactive: bool = False    # the leaf finishes a gesture: steps spend a larger budget on it
+    stable: bool = False         # regenerate content into the bound datablock, never a new one
+                                 # (undo-consistent: a stroke boundary keeps one leaf for its life,
+                                 # so a memfile undo never frees a leaf the material still binds)
+    stable_image: object = None  # the RESOURCE leaf this stable binding owns, so its content is
+                                 # regenerated in place even while a gesture preview stands on the node
 
 
 def _previous_strokes_leaf(n, key, channel, base_key, stamp):
@@ -613,7 +618,7 @@ class Graph(Math):
         return self.image(prop.image, getter=lambda: prop.image, owner=prop)
 
     def boundary(self, identifier, owners, identity, factory, descriptor=None, placeholder=None, fallback=None,
-                 interactive=False):
+                 interactive=False, stable=False):
         """Expose one unsupported source/prefix as a stable shader image input.
 
         ``owners`` lists the RNA items whose edits re-identify this input, or a
@@ -628,7 +633,13 @@ class Graph(Math):
         image = self._request_leaf(signature, factory, layer_id, placeholder, interactive)
         node = self.node('ShaderNodeTexImage')
         pending = None
-        if fallback is not None and not image.get('op_shader_resource_ready'):
+        if image is None:
+            # Only reachable if a build ran while new leaves are frozen (post-undo); the build
+            # guard in shader_preview.ensure keeps that from happening. Bind the fallback if any
+            # and leave the binding un-signed so it is requested once the freeze lifts.
+            node.image, pending = fallback, None
+            signature = None
+        elif fallback is not None and not image.get('op_shader_resource_ready'):
             node.image, pending = fallback, image
         else:
             node.image = image
@@ -640,20 +651,22 @@ class Graph(Math):
         items = owners() if callable(owners) else owners
         binding = ResourceBinding(identifier, {o.as_pointer() for o in items}, identity, factory,
                                   node, signature, owner_factory=owner_factory, layer_id=layer_id,
-                                  placeholder=placeholder, pending_image=pending, interactive=interactive)
+                                  placeholder=placeholder, pending_image=pending, interactive=interactive, stable=stable)
+        if stable and image is not None and image.get(RESOURCE):
+            binding.stable_image = image
         self.resource_bindings.append(binding)
         if self.unit is not None:
             self.unit.resource_bindings.append(binding)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
 
-    def _request_leaf(self, signature, factory, layer_id, placeholder, interactive=False, reuse=None):
+    def _request_leaf(self, signature, factory, layer_id, placeholder, interactive=False, reuse=None, stable=None):
         if placeholder is None:
             return self.resources.request(signature, lambda: factory(signature), owner=layer_id, interactive=interactive,
-                                          reuse=reuse)
+                                          reuse=reuse, stable=stable)
         return self.resources.request(signature, lambda: factory(signature), owner=layer_id, placeholder=placeholder,
-                                      interactive=interactive, reuse=reuse)
+                                      interactive=interactive, reuse=reuse, stable=stable)
 
-    def _rebind(self, node, owners, identity, factory, placeholder=None, interactive=False):
+    def _rebind(self, node, owners, identity, factory, placeholder=None, interactive=False, stable=False):
         """Reattach a persisted boundary node to fresh closures (undo rehydration)."""
         signature = identity()
         owner_factory = owners if callable(owners) else None
@@ -661,7 +674,7 @@ class Graph(Math):
         layer_id = _descriptor_layer(json.loads(node['op_boundary']) if node.get('op_boundary') else None)
         binding = ResourceBinding(node.get('op_dependency'), {o.as_pointer() for o in items}, identity,
                                   factory, node, signature, owner_factory=owner_factory, layer_id=layer_id,
-                                  placeholder=placeholder, interactive=interactive)
+                                  placeholder=placeholder, interactive=interactive, stable=stable)
         image = node.image
         reuse = None
         if (image is not None and image.get(RESOURCE) and image.get('op_shader_resource_ready')
@@ -679,11 +692,19 @@ class Graph(Math):
         # this graph's entries: an image no table knows is never evicted once a
         # later re-identification replaces it.
         fresh = self._request_leaf(signature, factory, layer_id, placeholder, interactive, reuse=reuse)
-        if fresh.get('op_shader_resource_ready'):
+        if fresh is None:
+            # Frozen after undo and no datablock to reuse: keep whatever the node binds (its
+            # retired leaf, or nothing) and leave the binding without a signature so the next
+            # authored gesture — which releases the freeze — requests the source afresh. No new
+            # datablock is created into the persisted tree in this between-undo-steps window.
+            binding.pending_image, binding.signature = None, None
+        elif fresh.get('op_shader_resource_ready'):
             node.image = fresh
         else:
             binding.pending_image = fresh
-        if image is not None and image != fresh and image.get(RESOURCE):
+        if stable and fresh is not None and fresh.get(RESOURCE):
+            binding.stable_image = fresh
+        if fresh is not None and image is not None and image != fresh and image.get(RESOURCE):
             self.resources.adopt(image)   # superseded: the table, not bpy.data, keeps it
         self.resource_bindings.append(binding)
         if self.unit is not None:
@@ -917,12 +938,15 @@ class Graph(Math):
                         self.resources.unpin(pinned)
             return parts()
         placeholder = (0.0, 0.0, 0.0, 0.0)   # nothing of the layer, never a grey slab, until the leaf publishes
+        # A stroke boundary keeps one leaf datablock for its life and regenerates content into it
+        # (``stable``): a new stroke never makes a new datablock, so a memfile undo never frees a
+        # leaf the material still binds — the open 0.13 crash (docs/quality-stability-0.13.md, S2).
         if rehydrate is not None:
-            return self._rebind(rehydrate, owners, identity, factory, placeholder=placeholder, interactive=True)
+            return self._rebind(rehydrate, owners, identity, factory, placeholder=placeholder, interactive=True, stable=True)
         fallback = prop.image if (prop.image is not None and tuple(prop.image.size) == (self.n, self.n)) else None
         with self.role(f'Strokes:{layer.id}:{channel}'):
             return self.boundary(self._role, owners, identity, factory, ['strokes', layer.id, channel],
-                                 placeholder=placeholder, fallback=fallback, interactive=True)
+                                 placeholder=placeholder, fallback=fallback, interactive=True, stable=True)
 
     # ---- cached layers (0.9.0) ----------------------------------------------
 
@@ -3084,8 +3108,24 @@ class Graph(Math):
         before = len(self.resources.queue)
         image = self.resources.inherit(signature, previous.resources) if previous is not None else None
         if image is None:
+            stable = None
+            if binding.stable and previous is None:
+                # Regenerate into the leaf this binding owns even when a gesture preview or a
+                # fallback canvas currently stands on the node: the datablock stays put, so no
+                # per-stroke churn leaves an orphan for a later undo to free (0.13 S2).
+                for candidate in (binding.stable_image, binding.pending_image, binding.node.image):
+                    if candidate is not None and alive(candidate) and candidate.get(RESOURCE):
+                        stable = candidate
+                        break
             image = self._request_leaf(signature, binding.factory, binding.layer_id, binding.placeholder,
-                                       binding.interactive)
+                                       binding.interactive, stable=stable)
+        if image is not None and binding.stable and image.get(RESOURCE):
+            binding.stable_image = image
+        if image is None:
+            # Frozen after undo, nothing to reuse: leave the binding un-signed so the next
+            # authored gesture requests it once the freeze lifts (no new datablock right now).
+            binding.pending_image, binding.signature = None, None
+            return 0
         if image.get('op_shader_resource_ready'):
             binding.node.image, binding.pending_image = image, None
         else:
@@ -3152,6 +3192,8 @@ class Graph(Math):
             if binding.pending_image and binding.pending_image.get('op_shader_resource_ready'):
                 stale = binding.node.image
                 binding.node.image, binding.pending_image = binding.pending_image, None
+                if binding.stable and binding.node.image.get(RESOURCE):
+                    binding.stable_image = binding.node.image
                 if (stale is not None and stale is not binding.node.image and not stale.users
                         and stale.get(RESOURCE) and not stale.get('op_shader_resource_ready')):
                     # An interrupted placeholder from a superseded graph: released, never

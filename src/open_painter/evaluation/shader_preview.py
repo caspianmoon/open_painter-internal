@@ -170,6 +170,24 @@ def texture_sets_changed(scene):
             _release(scene, ts, entry)
 
 
+def _has_persisted_graph(ts):
+    """Whether the material carries a compiled Procedural Graph for this set (one rehydrate
+    could adopt). Used to tell a first build (safe) from replacing a persisted graph while
+    frozen after undo (unsafe)."""
+    from ..constants import OWNER
+    material = getattr(ts, 'material', None)
+    tree = getattr(material, 'node_tree', None)
+    if tree is None:
+        return False
+    try:
+        instance = next((node for node in tree.nodes
+                         if node.get(OWNER) and node.get('role') == 'Procedural Graph'), None)
+    except ReferenceError:
+        return False
+    top = instance.node_tree if instance is not None else None
+    return top is not None and top.get('op_shader_graph') == ts.id and bool(top.get('op_signature'))
+
+
 def _pending(graph):
     return bool(getattr(graph, 'pending_resources', False))
 
@@ -355,6 +373,7 @@ def ensure(scene, ts):
             if not entry.get('rebuild'):
                 return entry['graph']
         from .shader_graph import Graph, RebuildRequired
+        from .shader_resources import new_leaves_frozen
         previous = entry.get('graph') if entry else None
         candidate = None
         rehydrated = False
@@ -377,9 +396,29 @@ def ensure(scene, ts):
                         # attached with a recoverable error, as on a live session,
                         # instead of being deleted for an invalid slider range.
                         corrections, failure = {}, exc
+                    if scope is not None and new_leaves_frozen():
+                        # Post-undo window: a spurious/precautionary structural mismatch on the
+                        # freshly adopted trees must not force a rebuild that recreates leaves
+                        # outside an undo step (the open crash). Keep the adopted graph; the next
+                        # authored gesture releases the freeze and rebuilds if still needed.
+                        scope = None
                     candidate._last = {**report, **corrections,
                                        'rehydration_corrections': corrections.get('updated_bindings', 0)}
             if not rehydrated:
+                if new_leaves_frozen() and _has_persisted_graph(ts):
+                    # A persisted graph exists but did not rehydrate, and we are between undo
+                    # steps: building a replacement now would create node trees and leaf
+                    # datablocks the next undo frees while the material still points at them.
+                    # Keep the current material; rebuild on the next authored gesture.
+                    if candidate is not None:
+                        try:
+                            candidate.close()
+                        except Exception:
+                            pass
+                    entry = _sessions.setdefault(key, {'material': ts.material})
+                    entry.update(serial=ts.edit_serial, rebuild=True, error='')
+                    _publish_status(scene, ts, entry)
+                    return entry.get('graph') or previous
                 candidate = Graph(scene, ts, ts.material)
                 # Units whose structure and owners are unchanged move over intact.
                 candidate.build(reuse=previous)
@@ -481,6 +520,11 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         entry = _sessions.get(key)
         if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts):
             continue
+        # An authored edit reaching a live session ends the post-undo window (its operator pushes
+        # an undo step): new leaves may be created and bound again. Reached only for a rehydrated
+        # session, so the relearn that runs during undo — with sessions cleared — cannot trip it.
+        from .shader_resources import freeze_new_leaves
+        freeze_new_leaves(False)
         _busy.add(key)
         try:
             if not entry.get('rebuild'):

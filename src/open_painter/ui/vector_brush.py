@@ -147,6 +147,7 @@ class OP_OT_vector_brush(bpy.types.Operator):
         stroke = self._gesture.end(commit, reason) if self._gesture is not None else None
         self._batch = None
         if stroke is not None and push:
+            from ..evaluation import shader_preview
             if new_source:
                 # The first stroke on a layer adds a source unit to the live shader graph.
                 # Build that structural change now, before the undo push, so the pushed step
@@ -155,7 +156,6 @@ class OP_OT_vector_brush(bpy.types.Operator):
                 # and leaves the material's Procedural Graph pointing at freed data — a hard
                 # crash on the next depsgraph build (0.13 hardening, H4).
                 try:
-                    from ..evaluation import shader_preview
                     ts = next((t for t in context.scene.open_painter.texture_sets if t.id == ts_id), None)
                     if ts is not None and shader_preview.requested(ts):
                         shader_preview.ensure(context.scene, ts)
@@ -174,6 +174,11 @@ class OP_OT_vector_brush(bpy.types.Operator):
     def _begin(self, context, event, xy):
         """Pointer-down: resolve the selection now, capture the target, the scope and the brush
         for this gesture alone, and start it at the surface under the pointer."""
+        # An authored gesture is starting and will push its own undo step: leave the post-undo
+        # window where new leaf datablocks are withheld, so this stroke's boundaries build normally
+        # and are captured by the push (see cache.on_undo; docs/quality-stability-0.13.md, S2).
+        from ..evaluation.shader_resources import freeze_new_leaves
+        freeze_new_leaves(False)
         ts, layer, mask, reason = material_destination(context, self.mask)
         if reason:
             self.report({'WARNING'}, reason)

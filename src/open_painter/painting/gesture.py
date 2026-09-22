@@ -379,13 +379,32 @@ class Preview:
         self._remove()
 
     def retire(self):
-        """Keep the preview bound until the committed stroke's leaf replaces it, then let it go."""
+        """Hand each node back to the leaf datablock it owned before the gesture, then let the
+        preview go. The committed stroke regenerates into that same leaf in place, so the node
+        binds one persistent datablock across the gesture — a following undo push captures that
+        leaf, never the transient preview (whose later removal would strand the node after undo;
+        0.13 stability S2). A node whose owned leaf is gone keeps the preview until its
+        replacement publishes, as before."""
+        from ..evaluation.shader_resources import RESOURCE, alive
         if not self.images:
             return
+        stranded = False
+        for channel, (node, source) in list(self.nodes.items()):
+            try:
+                if node.image != self.images[channel]:
+                    continue                      # already moved on to its published leaf
+                if source is not None and alive(source) and source.get(RESOURCE):
+                    node.image = source           # the persistent leaf, refreshed in place next
+                else:
+                    stranded = True               # nothing safe to bind: keep the preview a while
+            except ReferenceError:
+                continue
         self.active = False
         self.retired_at = perf_counter()
-        _retired.append(self)
+        _retired.append(self)                     # reaped once nothing binds the preview images
         _watch()
+        if stranded:
+            return
 
     def _still_bound(self):
         for channel, (node, source) in self.nodes.items():

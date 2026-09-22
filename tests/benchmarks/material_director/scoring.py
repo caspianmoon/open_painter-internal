@@ -21,6 +21,13 @@ FAILURE_CATEGORIES = frozenset({"missing_capability", "perception_context", "pla
                                 "surface_generation_quality", "material_construction_evaluation",
                                 "transaction_persistence", "export", "infrastructure"})
 
+# Versioned policy. Calibration is declared separately from independent human
+# ratings; synthetic unit tests exercise the gate without inventing reviews.
+QUALITY_POLICY = {"version": "director_quality_v1", "final_overall_minimum": 80,
+                  "final_appearance_minimum": 4, "final_dimension_minimum": 3,
+                  "stage_appearance_minimum": 3, "require_all_stage_reviews": True,
+                  "require_all_stage_acceptance": True}
+
 
 def _number(value):
     return type(value) in (int, float) and isfinite(value)
@@ -103,21 +110,25 @@ def reviewed_score(ratings, reviewers):
     return {"status": "SCORED", "score": round(total, 4), "dimensions": medians,
             "reviewer_count": len(used), "reviewer_ids": used,
             "errors": [], "limitations": limitations,
-            "numeric_pass_threshold": None}
+            "numeric_pass_threshold": 80, "raw_ratings": ratings,
+            "dimension_ranges": {dimension: [min(scores), max(scores)] for dimension, scores in values.items()}}
 
 
 def _hard_failures(result):
     failures = list(result.get("hard_failures", []))
     for stage_name, stage in stage_map(result).items():
-        if stage.get("claimed_apply") is True and stage.get("visible_complete") is False:
+        if stage.get("claimed_apply") is True and stage.get("applied") is not True and stage.get("visible_complete") is False:
             failures.append({"kind": "missing_final_material_after_claimed_apply", "stage": stage_name,
                              "evidence": stage.get("evidence", [])})
     return failures
 
 
-def score_session(result, case, review=None):
+def score_session(result, case, review=None, *, policy=None):
     """A delivered session only passes after its independent review and handoff checks."""
     review = review or {}
+    policy = policy or QUALITY_POLICY
+    if policy != QUALITY_POLICY:
+        raise ValueError("Unknown quality policy; declare and implement a new policy version")
     status = result.get("status", "NOT_RUN")
     hard_failures = _hard_failures(result)
     checks = {key: _check(result.get("checks", {}).get(key)) for key in WORKFLOW_CHECKS}
@@ -131,7 +142,8 @@ def score_session(result, case, review=None):
             checks[key] = False
     acceptance = {f"AC-{index:02d}": _check(review.get("acceptance_checks", {}).get(f"AC-{index:02d}"))
                   for index in range(1, len(case["requirements"]) + 1)}
-    invalid_input = checks["input_integrity"] is False or checks["evidence_delivery"] is False
+    invalid_input = checks["input_integrity"] is False
+    evidence_failed = checks["evidence_delivery"] is False
     stages = {}
     for name in ("create", "refine_1", "refine_2"):
         stage = stage_map(result).get(name, {})
@@ -141,28 +153,59 @@ def score_session(result, case, review=None):
         accepted_no_op = name != "create" and (
             (stage.get("no_op_confirmed") is True and bool(stage.get("no_op_evidence")))
             or _check(stage_review.get("no_op_acceptance")) is True)
+        execution = stage.get("execution", {})
+        execution_state = execution.get("state", stage.get("status")) if isinstance(execution, dict) else execution
+        role = stage.get("evidence", {}).get("role") if isinstance(stage.get("evidence"), dict) else None
+        failed_execution = execution_state in {"PROVIDER_FAILED", "CANCELLED", "NEEDS_INPUT", "VALIDATION_FAILED",
+            "SETUP_FAILED", "SKIPPED_DEPENDENCY", "FAILED", "UNAVAILABLE", "BLOCKED", "INTERRUPTED"}
+        failed_evidence_role = role in {"FAILURE_STATE", "UNCHANGED_AFTER_ATTEMPT", "RECOVERED_EVIDENCE"}
+        if failed_execution or failed_evidence_role:
+            accepted_no_op = False
         delivered = (stage.get("applied") is True or accepted_no_op) and stage.get("visible_complete") is True
+        delivered = delivered and not failed_execution and not failed_evidence_role
         ratings = stage_review.get("ratings", [])
         rating = reviewed_score(ratings, review.get("reviewers", [])) if delivered and not invalid_input else {
             "status": "NOT_SCORED", "score": None, "dimensions": {},
             "reviewer_count": 0, "errors": [], "limitations": ["Fixture/input prerequisite failed" if invalid_input else "No completed visible output"]}
-        stages[name] = {"delivery": delivered, "execution_status": stage.get("status", "NOT_RUN"),
+        stages[name] = {"delivery": delivered, "execution_status": execution_state or "NOT_RUN",
                         "confirmed_no_op": accepted_no_op,
                         "review": rating,
                         "acceptance": _check(stage_review.get("acceptance"))}
     final_review = stages["refine_2"]["review"]
-    all_checks = list(checks.values()) + list(acceptance.values())
+    all_checks = list(checks.values()) + list(acceptance.values()) + [s["acceptance"] for s in stages.values()]
     final_delivered = all(stages[stage]["delivery"] for stage in stages)
     intervention_count = interventions(result, review)
+    quality_failures = []
+    for name, stage in stages.items():
+        rating = stage["review"]
+        if rating["score"] is not None and rating["dimensions"]["material_appearance"] < policy["stage_appearance_minimum"]:
+            quality_failures.append({"stage": name, "code": "STAGE_APPEARANCE_BELOW_GATE"})
+        if stage["acceptance"] is False:
+            quality_failures.append({"stage": name, "code": "STAGE_ACCEPTANCE_FAILED"})
+    if final_review["score"] is not None:
+        if final_review["score"] < policy["final_overall_minimum"]:
+            quality_failures.append({"stage": "refine_2", "code": "FINAL_OVERALL_BELOW_GATE"})
+        if final_review["dimensions"]["material_appearance"] < policy["final_appearance_minimum"]:
+            quality_failures.append({"stage": "refine_2", "code": "FINAL_APPEARANCE_BELOW_GATE"})
+        if any(v < policy["final_dimension_minimum"] for v in final_review["dimensions"].values()):
+            quality_failures.append({"stage": "refine_2", "code": "FINAL_DIMENSION_BELOW_GATE"})
+    missing_reviews = any(stage["review"]["score"] is None for stage in stages.values())
+    for name, stage in stages.items():
+        failures = [item for item in quality_failures if item.get("stage") == name]
+        stage["quality_failures"] = failures
+        stage["quality_status"] = ("NOT_ASSESSABLE" if not stage["delivery"] or invalid_input else
+            "FAIL" if failures else "NOT_REVIEWED" if stage["review"]["score"] is None or stage["acceptance"] is None else "PASS")
     if hard_failures or (intervention_count is not None and intervention_count >= 3):
         verdict = "FAIL"
-    elif invalid_input:
+    elif invalid_input and not any(stage.get("submitted") for stage in stage_map(result).values()):
         verdict = "BLOCKED"
+    elif quality_failures or evidence_failed:
+        verdict = "FAIL"
     elif status in {"NOT_RUN", "RUNNING", "BLOCKED", "UNAVAILABLE", "INTERRUPTED"}:
         verdict = status
     elif status == "FAILED" or not final_delivered or False in all_checks:
         verdict = "FAIL"
-    elif final_review["score"] is None or None in all_checks or intervention_count is None:
+    elif missing_reviews or None in all_checks or intervention_count is None:
         verdict = "NOT_SCORED"
     elif result.get("assisted") and intervention_count == 0:
         verdict = "NOT_SCORED"
@@ -172,6 +215,9 @@ def score_session(result, case, review=None):
     return {
         "run_id": result.get("run_id"), "status": status, "verdict": verdict,
         "passed": verdict == "PASS", "attempted": result.get("attempted", False),
+        "quality_status": "NOT_ASSESSABLE" if not stages["refine_2"]["delivery"] or invalid_input else
+                          "FAIL" if quality_failures or False in all_checks else "NOT_REVIEWED" if missing_reviews or None in all_checks else "PASS",
+        "quality_policy": policy, "quality_failures": quality_failures,
         "conditional_quality_eligible": stages["refine_2"]["delivery"] and not invalid_input,
         "artist_intervention_count": intervention_count,
         "intervention_class": intervention_class(intervention_count),
@@ -219,12 +265,15 @@ def summarize(manifest, results, baselines=None, reviews=None):
     if manifest.get("schema_version") == 1:
         from .legacy.scoring import summarize as legacy_summary
         return legacy_summary(manifest, results, baselines, reviews)
+    if manifest.get("schema_version") == 2:
+        from .v2.scoring import summarize as v2_summary
+        return v2_summary(manifest, results, baselines, reviews)
     results, reviews = results or {}, reviews or {}
     cases = {case["id"]: case for case in manifest["specification"]["cases"]}
     scheduled = {entry["run_id"] for entry in manifest["schedule"]}
     if set(results) - scheduled:
         raise ValueError("Unscheduled retries or diagnostics cannot enter the frozen comparison")
-    core, robustness = [], []
+    core, ablation, robustness = [], [], []
     for entry in manifest["schedule"]:
         result = results.get(entry["run_id"], {"run_id": entry["run_id"], "status": "NOT_RUN"})
         if result.get("run_id") != entry["run_id"]:
@@ -232,9 +281,11 @@ def summarize(manifest, results, baselines=None, reviews=None):
         record = (score_session(result, cases[entry["case_id"]], reviews.get(entry["review_id"]))
                   if entry["kind"] == "core" else score_robustness(result))
         record.update({key: entry[key] for key in ("case_id", "mode", "repeat", "order")})
+        record.update(build_id=entry.get("build_id"), correction_enabled=entry.get("correction_enabled"))
         if entry["kind"] == "core":
             record["review_id"] = entry["review_id"]
-            core.append(record)
+            record["ablation"] = entry.get("ablation")
+            (ablation if entry.get("ablation") == "correction" else core).append(record)
         else:
             robustness.append(record)
     modes = {}
@@ -277,15 +328,38 @@ def summarize(manifest, results, baselines=None, reviews=None):
                                     "baking_export_seconds", "active_operator_seconds", "elapsed_seconds")},
             "cases": per_case,
         }
+    groups = {}
+    for record in core + ablation:
+        key = f"{record.get('build_id') or 'unspecified'}/{record['mode']}/correction-{'on' if record.get('correction_enabled') else 'off'}"
+        groups.setdefault(key, []).append(record)
+    comparison_groups = {key: dict(planned=len(records), attempted=sum(r["attempted"] for r in records),
+        assessable_appearance=sum(r["conditional_quality_eligible"] for r in records),
+        workflow_passes=sum(r["passed"] for r in records),
+        final_quality=_stats(r["final_score"] for r in records),
+        initial_quality=_stats(r["stages"]["create"]["review"]["score"] for r in records),
+        outcomes=dict(Counter(r["verdict"] for r in records)),
+        elapsed_seconds=_stats(r["metrics"].get("elapsed_seconds") for r in records),
+        peak_process_rss_bytes=_stats(r["metrics"].get("peak_process_rss_bytes") for r in records),
+        candidate_preview_seconds=_stats(r["metrics"].get("candidate_preview_seconds") for r in records),
+        tool_calls=_stats(r["metrics"].get("tool_calls") for r in records)) for key, records in groups.items()}
     return {
-        "schema_version": 2, "protocol": manifest["protocol"], "comparison_id": manifest["configuration"]["comparison_id"],
+        "schema_version": 3, "protocol": manifest["protocol"], "comparison_id": manifest["configuration"]["comparison_id"],
+        "denominators": {"planned": len(core + ablation), "attempted": sum(r["attempted"] for r in core + ablation),
+                         "assessable_appearance": sum(r["conditional_quality_eligible"] for r in core + ablation)},
+        "primary_denominators": {"planned": len(core), "attempted": sum(r["attempted"] for r in core),
+                         "assessable_appearance": sum(r["conditional_quality_eligible"] for r in core)},
+        "ablation_denominators": {"planned": len(ablation), "attempted": sum(r["attempted"] for r in ablation),
+                         "assessable_appearance": sum(r["conditional_quality_eligible"] for r in ablation)},
         "configuration": manifest["configuration"], "core_scheduled": len(core), "robustness_scheduled": len(robustness),
-        "modes": modes, "core_results": core, "robustness_results": robustness,
-        "failures": [record for record in core + robustness if record["verdict"] in {"FAIL", "UNAVAILABLE", "BLOCKED", "INTERRUPTED"}],
+        "ablation_scheduled": len(ablation), "ablation_results": ablation,
+        "modes": modes, "comparison_groups": comparison_groups, "core_results": core, "robustness_results": robustness,
+        "failures": [record for record in core + ablation + robustness if record["verdict"] in {"FAIL", "UNAVAILABLE", "BLOCKED", "INTERRUPTED"}],
         "supplements": manifest["configuration"]["supplements"],
         "limitations": [
             "Only texturing receives points; fixed Eevee setup is a prerequisite.",
-            "The revised protocol declares no numeric pass threshold; weighted scores and evidenced requirement decisions are reported separately.",
+            "Concurrency is frozen; paired-wave timings share a device and must not be compared as uncontended smoke performance.",
+            "Primary P/H aggregates include the 60 baseline/improved sessions only. Correction-off ablation runs in a separate randomized phase and is never pooled into primary means.",
+            "Frozen director_quality_v1 gates apply to all stages; independent raw ratings and acceptance checks remain visible.",
             "Zero artist corrections is an autonomous success only when actual material requirements and primary checks pass.",
             "Unmeasured intervention counts, active operator time, reviews and costs remain unknown.",
             "Blocked and unavailable attempts remain in scheduled denominators and receive no invented aesthetic score.",

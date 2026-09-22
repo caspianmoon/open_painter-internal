@@ -16,6 +16,7 @@ import bpy
 import numpy as np
 
 CACHE = 'mesh_mask'
+REGION_SAMPLING_VERSION = 'region-gutters-v1'
 POOLS = {'object': 'objects', 'collection': 'collections', 'material': 'materials'}
 
 
@@ -243,6 +244,10 @@ def signature(ts, mask):
     if kind == 'OBJECT':
         obj = resolve(selector, 'object')
         parts.append(obj.name if obj else None)
+    elif kind == 'REGION':
+        obj = resolve(selector, 'object')
+        parts.append((obj.name if obj else None, selector.region_id, selector.region_faces,
+                      selector.region_topology))
     elif kind == 'COLLECTION':
         collection = resolve(selector, 'collection')
         members = _collection_objects(collection, selector.include_children)
@@ -349,6 +354,13 @@ def _triangle_coverage(ts, mask, target):
     if kind == 'OBJECT':
         chosen = resolve(selector, 'object')
         return np.full(tris, 1.0 if chosen is not None and chosen == obj else 0.0, np.float32)
+    if kind == 'REGION':
+        chosen = resolve(selector, 'object')
+        if chosen is None or chosen != obj:
+            return np.zeros(tris, np.float32)
+        from ..authoring.regions import face_indices
+        faces = face_indices(selector, mesh)
+        return np.isin(target['tri_polygons'], faces).astype(np.float32)
     if kind == 'COLLECTION':
         members = _collection_objects(resolve(selector, 'collection'), selector.include_children)
         return np.full(tris, 1.0 if obj in members else 0.0, np.float32)
@@ -438,9 +450,20 @@ def raster(ts, mask, n):
     return result
 
 
+def sampling_signature(ts, mask):
+    """Version every consumer of derived REGION pixels, including cached prefixes.
+
+    ``signature`` still identifies exact authored membership. Sampling changes
+    belong in this identity, shared by CPU stacks and shader dependency trees.
+    """
+    membership = signature(ts, mask)
+    return (REGION_SAMPLING_VERSION, membership) if mask.mesh.kind == 'REGION' else membership
+
+
 def evaluate(ts, mask, n, y0, y1, geometry_cache, cache=None):
     """Rows [y0, y1) of the mask, cached per signature in the set's raster cache."""
-    key = (CACHE, ts.id, mask.id, signature(ts, mask), n)
+    region = mask.mesh.kind == 'REGION'
+    key = (CACHE, ts.id, mask.id, sampling_signature(ts, mask), n)
     store = geometry_cache if geometry_cache is not None else {}
     if cache is not None and key in cache:
         return cache[key][y0:y1]
@@ -448,6 +471,13 @@ def evaluate(ts, mask, n, y0, y1, geometry_cache, cache=None):
         values = store[key]
     else:
         values = raster(ts, mask, n)
+        if region:
+            from .uv_gutters import padded
+            # Linear filtering at a UV chart edge must not blend a selected
+            # surface with the atlas's zero background. Only unowned texels in
+            # this disposable buffer change; selected and excluded face texels
+            # retain their exact membership, as do persisted authoring inputs.
+            values = padded(ts, values)
         try:
             store[key] = values
         except TypeError:

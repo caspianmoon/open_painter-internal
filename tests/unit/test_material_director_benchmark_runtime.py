@@ -9,7 +9,7 @@ import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks/material_director"))
-from runtime import isolated_login, redact, save_attachment, sha256
+from runtime import AuthRefreshRequired, MAX_AUTH_BYTES, isolated_login, preflight_login, redact, save_attachment, sha256
 
 
 class BenchmarkRuntimeTests(unittest.TestCase):
@@ -43,6 +43,35 @@ class BenchmarkRuntimeTests(unittest.TestCase):
                     self.fail("Expiring login was accepted")
             self.assertEqual(source.read_bytes(), before)
 
+    def test_preflight_is_bounded_read_only_and_returns_no_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source=self.auth(directory,time.time()+3600);original=source.read_bytes()
+            report=preflight_login(source,minimum_seconds=1920)
+            self.assertEqual(report['status'],'READY')
+            self.assertFalse(report['refresh_performed'])
+            self.assertNotIn('test-',json.dumps(report))
+            self.assertNotIn('never-copy-me',json.dumps(report))
+            self.assertEqual(list(Path(directory).iterdir()),[source])
+            self.assertEqual(source.read_bytes(),original)
+            for value in ('{}','[]','{"tokens":"private-token"}',json.dumps({'tokens':{'access_token':123,'id_token':'private-token'}}),'x'*(MAX_AUTH_BYTES+1)):
+                source.write_text(value)
+                with self.assertRaises(AuthRefreshRequired) as caught:
+                    preflight_login(source,minimum_seconds=1920)
+                self.assertNotIn('private-token',str(caught.exception))
+                self.assertEqual(source.read_text(),value)
+            source.unlink()
+            with self.assertRaises(AuthRefreshRequired):
+                preflight_login(source,minimum_seconds=1920)
+
+    def test_preflight_rejects_nonfinite_and_invalid_expiry_without_token_disclosure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for expiry in (None,True,'private-token',float('nan'),float('inf'),time.time()+1900):
+                with self.subTest(expiry=expiry):
+                    source=self.auth(directory,expiry);original=source.read_bytes()
+                    with self.assertRaises(AuthRefreshRequired):
+                        preflight_login(source,minimum_seconds=1920)
+                    self.assertEqual(source.read_bytes(),original)
+
     def test_evidence_redaction_and_host_owned_attachment_paths(self):
         sensitive = {"nested": {"access_token": "private", "refresh_token": "private"},
             "text": f"Bearer private-token {Path.home()}/secret /private/tmp/cache/secret sk-abcdefghijklmnopq",
@@ -58,6 +87,15 @@ class BenchmarkRuntimeTests(unittest.TestCase):
             self.assertTrue(target.is_relative_to(directory))
             self.assertEqual(target.read_bytes(), b"image-data")
             self.assertEqual(item["sha256"], sha256(target))
+
+    def test_numeric_tool_ids_remain_json_safe_and_nested_secrets_are_redacted(self):
+        value={'tool_started':{7:{'name':'get_context','at':1.5,'access_token':'private'}},
+               'nested':[{42:{'REFRESH_TOKEN':'private'}}]}
+        cleaned=json.loads(json.dumps(redact(value)))
+        self.assertEqual(cleaned['tool_started']['7']['name'],'get_context')
+        self.assertEqual(cleaned['tool_started']['7']['access_token'],'<REDACTED>')
+        self.assertEqual(cleaned['nested'][0]['42']['REFRESH_TOKEN'],'<REDACTED>')
+        self.assertEqual(value['tool_started'][7]['access_token'],'private')
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+PRODUCT_ROOT = Path(os.environ.get("OP_MD_PRODUCT_ROOT", ROOT)).resolve()
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 from capture_evidence import (capture_checkpoint, capture_channels, compare_checkpoints,
@@ -364,8 +365,8 @@ def finalize_session(context, output_dir, *, config=None):
                   packing_errors=packing_errors, configuration=config,
                   offline=dict(status="NOT_TESTED", reason="Run verify_final.py after provider exits in an empty isolated CODEX_HOME"))
     if config.get("primary_evidence"):
-        from capture_evidence import PRIMARY_VIEWS
-        expected = [filename for views in PRIMARY_VIEWS.values() for _, filename in views]
+        from view_inventory import filenames
+        expected = filenames(config)
         present = {filename: sha256(output / filename) for filename in expected if (output / filename).is_file()}
         missing = [filename for filename in expected if filename not in present]
         result["primary_evidence"] = dict(status="CAPTURED" if not missing else "INCOMPLETE", files=present, missing=missing,
@@ -434,7 +435,7 @@ def main():
     parser.add_argument("--skip-4k", action="store_true")
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = parser.parse_args(argv)
-    sys.path.insert(0, str(ROOT / "src"))
+    sys.path.insert(0, str(PRODUCT_ROOT / "src"))
     import open_painter
     open_painter.register()
     report = verify_offline(args.output, render=not args.skip_renders, export=not args.skip_export, check_4k=not args.skip_4k)

@@ -14,7 +14,7 @@ import traceback
 import bpy
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(os.environ.get("OP_MD_PRODUCT_ROOT", str(HERE.parents[2])))
 sys.path[:0] = [str(ROOT / "src"), str(HERE)]
 import open_painter
 from open_painter.ai import session, generated_images
@@ -24,6 +24,7 @@ from open_painter.core.project_manager import require_set
 from open_painter.evaluation import shader_preview
 from runtime import append_trace, redact, save_attachment, sha256, write_json
 from capture_evidence import capture_checkpoint, fixed_rig_check
+from outcomes import terminal_execution, skip_dependencies
 
 
 class EvidenceCaptureError(RuntimeError):
@@ -39,13 +40,14 @@ class LiveRun:
         self.started = time.monotonic()
         self.deadline = self.started + 120
         self.turn = None
+        self.tool_started = {}
         self.turn_index = 0
         self.ready_frames = 0
         self.last_status = None
         self.pending_action = None
         self.fixture_config = {}
         self.checkpoints = {}
-        self.result = dict(run_id=job["run_id"], case_id=job["case"]["id"], mode=job["mode"],
+        self.result = dict(record_version=3, protocol=job.get("protocol", "five_asset_eevee_v3"), run_id=job["run_id"], case_id=job["case"]["id"], mode=job["mode"],
             repeat=job.get("repeat", 1), status="RUNNING", stages=[], checks={}, hard_failures=[],
             failures=[], actual_generated_inputs=[], cost=None, cost_status="UNKNOWN_NOT_EXPOSED",
             manual_artistic_interventions=0, artist_intervention_count=0,
@@ -63,6 +65,14 @@ class LiveRun:
 
     def save(self):
         self.result["elapsed_seconds"] = round(time.monotonic() - self.started, 3)
+        try:
+            import resource
+            peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            self.result["resources"] = dict(process_id=os.getpid(), peak_rss_bytes=int(peak if sys.platform == "darwin" else peak*1024),
+                measurement="Process resident-memory high-water mark; excludes companion and GPU driver allocations",
+                concurrent_jobs=self.job.get("concurrent_jobs", 1), wave_id=self.job.get("wave_id"))
+        except ImportError:
+            self.result["resources"] = dict(peak_rss_bytes=None, measurement="UNAVAILABLE")
         write_json(self.out / "result.json", redact(self.result))
 
     def log(self, direction, value):
@@ -118,6 +128,7 @@ class LiveRun:
                 self.turn.setdefault("provider_errors", []).append(event)
             if kind == "tool":
                 self.turn["tool_call_count"] = self.turn.get("tool_call_count", 0) + 1
+                self.tool_started[str(event.get("call_id"))] = dict(name=event.get("tool"), at=time.monotonic())
                 if event.get("tool") in {"propose_changes", "propose_scene_changes"}:
                     self.turn.setdefault("proposal_attempts", []).append(event.get("arguments", {}))
             if kind == "text":
@@ -129,6 +140,11 @@ class LiveRun:
     def observe_send(self, message):
         record = {key: value for key, value in message.items() if key not in {"images", "token"}}
         prefix = self.turn["name"] if self.turn else "setup"
+        if self.turn and message.get("action") == "tool_result":
+            started = self.tool_started.pop(str(message.get("call_id")), None)
+            if started:
+                self.turn.setdefault("tool_timings", []).append(dict(name=started["name"], call_id=message.get("call_id"),
+                    seconds=round(time.monotonic()-started["at"], 6), success=message.get("success", True)))
         attachments = [save_attachment(self.out, item, prefix=prefix) for item in message.get("images", [])]
         for attachment in attachments:
             if attachment["id"] in {"viewport", "target_view"}:
@@ -166,7 +182,9 @@ class LiveRun:
             if obj.get("type") != "MESH" or obj.get("name") not in allowed:
                 raise RuntimeError("Non-model object appeared in Material Director context")
         supported = {"get_context", "get_material_context", "search_library", "describe_asset",
-                     "list_generated_images", "propose_changes", "propose_scene_changes"}
+                     "list_generated_images", "propose_changes", "propose_scene_changes",
+                     "preview_proposal", "inspect_candidate", "list_regions", "inspect_region", "query_region",
+                     "inspect_material_channels", "inspect_mask_coverage", "compare_candidates", "report_inability"}
         if tools is not None and any(tool.get("name") not in supported for tool in tools):
             raise RuntimeError("Benchmark provider was offered a tool outside material authoring")
 
@@ -333,6 +351,16 @@ class LiveRun:
         if failed:
             self.result.setdefault("evidence_failures", []).append(dict(checkpoint=label, components=failed))
             raise EvidenceCaptureError("Required evidence capture did not complete: " + json.dumps(failed))
+        if self.job.get("protocol_version", 2) >= 3:
+            from verify_final import _pack_sources
+            packing_errors = _pack_sources(bpy.context.scene)
+            if packing_errors:
+                raise EvidenceCaptureError("Checkpoint packing failed: " + repr(packing_errors))
+            checkpoint_path = self.out / (label + ".blend")
+            bpy.ops.wm.save_as_mainfile(filepath=str(checkpoint_path), check_existing=False)
+            value["saved_state"] = dict(path=checkpoint_path.name, sha256=sha256(checkpoint_path))
+            self.result["last_valid_checkpoint"] = dict(label=label, **value["saved_state"])
+            write_json(self.out / (label + "_state.json"), value)
         return value
 
     def capture_ui(self, label):
@@ -407,9 +435,14 @@ class LiveRun:
         settings.model = self.job["model_id"]
         settings.send_view = settings.send_maps = True
         settings.generate_textures = self.job["mode"] == "H"
+        if hasattr(settings, "correction_enabled"):
+            settings.correction_enabled = self.job.get("correction_enabled", True)
+        elif self.job.get("build_id") == "improved" and self.job.get("correction_enabled") is False:
+            raise RuntimeError("Improved product does not expose the ordinary correction_enabled setting")
         settings.reference_path = self.job.get("reference", "") if self.job["case"].get("reference") else ""
         self.turn = dict(name=name, mode=mode, prompt=prompt, status="RUNNING", submitted=False, started_monotonic=time.monotonic(),
                          before_documents=self.documents(), provider_wait_seconds=None, validation_errors=[])
+        self.tool_started.clear()
         self.result["stages"].append(self.turn)
         write_json(self.out / "prompts.json", [dict(name=n, mode=m, prompt=p) for n,m,p in self.instructions])
         self.log("operator", dict(action="director_run", name=name, mode=mode, scope=settings.scope, prompt=prompt))
@@ -445,6 +478,9 @@ class LiveRun:
         self.turn["document_changed"] = self.turn["before_documents"] != self.documents()
         self.turn["status"] = "APPLIED" if receipts else "DRAFT" if session.request and session.request["draft"] else "RESPONSE_ONLY"
         self.turn["applied"] = bool(receipts)
+        self.turn["structured_outcome"] = dict(session.state.get("outcome") or {})
+        self.turn["execution"] = terminal_execution(self.turn, self.turn["structured_outcome"])
+        self.turn["quality"] = {"state": "NOT_REVIEWED" if receipts else "NOT_ASSESSABLE"}
         write_json(self.out / (self.turn["name"] + "_receipt.json"), receipts)
         write_json(self.out / (self.turn["name"] + "_proposal.json"), self.turn.get("proposal_attempts", []))
         if self.robust:
@@ -506,6 +542,10 @@ class LiveRun:
             self.turn["prompt_to_visible_seconds"] = round(time.monotonic() - self.turn["started_monotonic"], 3)
             self.capture("after_" + self.turn["name"])
             self.turn["visible_complete"] = True
+            execution = self.turn.get("execution", {}).get("state")
+            role = "APPLIED_STATE" if self.turn.get("applied") else "UNCHANGED_PENDING_NO_OP_REVIEW" if execution == "RESPONSE_ONLY" else "UNCHANGED_AFTER_ATTEMPT"
+            self.turn["evidence"] = {"state": "CAPTURED_VERIFIED", "role": role,
+                                     "checkpoint": self.turn["checkpoint"]}
             if time.monotonic() > self.deadline:
                 raise TimeoutError("Predeclared turn cap reached while collecting the settled result")
             self.turn_index += 1
@@ -529,21 +569,77 @@ class LiveRun:
             raise TimeoutError("Predeclared turn/setup cap reached in " + self.phase)
 
     def finish(self, status, category=None, message=None):
+        """A failed terminal evidence write must never strand Blender/provider."""
+        try:
+            self._finish_records(status, category, message)
+        except Exception as exc:
+            self.phase = "finished"
+            failure = dict(category="evidence", cause_code="TERMINAL_EVIDENCE_WRITE_FAILED",message=redact(str(exc)))
+            emergency = dict(record_version=3,run_id=self.job["run_id"],status="FAILED",requested_terminal_status=status,
+                failures=[failure],terminal_cleanup_required=True)
+            try:
+                previous = json.loads((self.out / "result.json").read_text())
+                previous.update(status="FAILED",terminal_emergency=emergency)
+                previous.setdefault("failures",[]).append(failure)
+                write_json(self.out / "result.json",redact(previous))
+            except Exception:
+                pass
+            try:
+                write_json(self.out / "terminal_emergency.json",emergency)
+            except Exception:
+                pass
+            print("BENCHMARK_TERMINAL_ERROR",json.dumps(emergency),flush=True)
+        finally:
+            self.phase = "finished"
+            try:
+                session.disconnect()
+            finally:
+                bpy.ops.wm.quit_blender()
+
+    def _finish_records(self, status, category=None, message=None):
         self.phase = "finished"
         if category:
             self.result["failures"].append(dict(category=category, message=message))
+        if status == "COMPLETED" and any(s.get("execution", {}).get("state") in {
+                "PROVIDER_FAILED", "VALIDATION_FAILED", "NEEDS_INPUT", "CANCELLED", "SETUP_FAILED", "SKIPPED_DEPENDENCY"}
+                for s in self.result["stages"]):
+            status = "FAILED"
         self.result["status"] = status
         if self.turn and self.turn.get("status") == "RUNNING":
             self.turn["status"] = status
+        if self.turn:
+            self.turn.setdefault("execution", terminal_execution(self.turn))
+            self.turn.setdefault("quality", {"state": "NOT_REVIEWED" if self.turn.get("applied") else "NOT_ASSESSABLE"})
+            if status != "COMPLETED" and self.turn["name"] in {"create", "refine_1", "refine_2"}:
+                skip_dependencies(self.result["stages"], self.turn["name"])
+        # Persist the original outcome before best-effort diagnostic work. A
+        # render failure must never replace the provider/delivery failure.
+        self.save()
+        write_json(self.out / "terminal_attempt.json", redact(self.result))
         if status in {"FAILED", "BLOCKED"}:
+            if self.turn and not self.turn.get("applied") and self.turn.get("submitted") and self.fixture_config:
+                label = "failure_" + self.turn["name"]
+                role = "UNCHANGED_AFTER_ATTEMPT" if not self.turn.get("document_changed") else "FAILURE_STATE"
+                try:
+                    options = dict(self.job.get("evidence", {}), case_id=self.job["case"]["id"])
+                    captured = capture_checkpoint(bpy.context, self.out, label, config=options)
+                    state = "CAPTURED_VERIFIED" if captured.get("views", {}).get("status") == "CAPTURED" else "CAPTURE_FAILED"
+                    self.turn["evidence"] = {"state": state, "role": role, "checkpoint": label + "_state.json",
+                                             "errors": captured.get("views", {}).get("errors", [])}
+                except Exception as exc:
+                    self.turn["evidence"] = {"state": "CAPTURE_FAILED", "role": role,
+                        "cause_code": "FAILURE_STATE_CAPTURE_EXCEPTION", "exception": repr(exc),
+                        "last_valid_checkpoint": self.result.get("last_valid_checkpoint")}
             try:
+                from verify_final import _pack_sources
+                packing_errors = _pack_sources(bpy.context.scene)
                 bpy.ops.wm.save_as_mainfile(filepath=str(self.out / "failure.blend"))
+                self.result["failure_state"] = dict(path="failure.blend", sha256=sha256(self.out / "failure.blend"), packing_errors=packing_errors)
             except Exception as exc:
                 self.result["failures"].append(dict(category="persistence", message=str(exc)))
-        session.disconnect()
         self.save()
+        write_json(self.out / "terminal_attempt.json", redact(self.result))
         print("BENCHMARK_SESSION", self.job["run_id"], status, flush=True)
-        bpy.ops.wm.quit_blender()
 
 
 def main():
@@ -563,7 +659,10 @@ def main():
         except Exception as exc:
             run.log("exception", dict(traceback=traceback.format_exc()))
             submitted = any(stage.get("submitted") for stage in run.result["stages"])
-            run.finish("FAILED" if submitted and not isinstance(exc, EvidenceCaptureError) else "BLOCKED",
+            if run.turn and run.turn.get("status") == "RUNNING":
+                run.turn["execution"] = {"state": "PROVIDER_FAILED" if submitted else "SETUP_FAILED",
+                    "cause_code": "TURN_TIMEOUT" if isinstance(exc, TimeoutError) else "HOST_RUNTIME_EXCEPTION"}
+            run.finish("FAILED" if submitted else "BLOCKED",
                        "evidence" if isinstance(exc, EvidenceCaptureError) else
                        "timeout" if isinstance(exc, TimeoutError) else "infrastructure", str(exc))
         return None if run.phase == "finished" else .1

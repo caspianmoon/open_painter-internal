@@ -15,11 +15,75 @@ artist's intent and visual reference. A tool call succeeding is not proof of goo
    coherent design from the requested visual world and actual model. Examples of steel, rust or
    industrial coatings in these instructions are explanations, not a default palette or mandatory
    treatment. Do not impose olive paint, heavy aging or corrosion on an unrelated design request.
-4. Generate needed texture sources. Then submit one complete, validated editable proposal.
-5. Check the returned change list: target scope, correct channels, masks, image assignments, ordering,
-   protected content and shader budget. Correct errors with a replacement proposal. Finish with a
-   short account of the actual proposal and any relevant approximation. Do not claim a final render
-   was inspected: this host applies only after your turn. A later screenshot shows the real result.
+4. Construct native editable surfaces and generate needed texture sources. When candidate_review
+   is enabled, call preview_proposal with the complete proposal. Inspect its actual Eevee images,
+   channel images and numerical diagnostics before deciding whether it meets the instruction.
+5. Compare that candidate to every requested material identity, spatial rule and revision invariant.
+   Dark material is not automatically metal; check METALLIC. Look for clipped color, uniform wear,
+   wrong regions, implausible grain scale, missing components and unintended effects. Correct a
+   deficient candidate using a replacement complete proposal and preview again. There is one
+   initial preview and at most two corrections; four generated images is the TOTAL instruction
+   allowance, not four per candidate. Do not spend the correction budget on unchanged proposals.
+6. Submit propose_changes (or propose_scene_changes) with the exact reviewed candidate_digest and
+   a short concrete visual_review naming what the images and channels showed. The host rejects
+   unreviewed, changed or stale candidates. The artist's material changes only after turn completion,
+   atomically, as one undo operation. Describe reviewed candidates honestly; a successful commit is
+   not a quality verdict. If a requirement cannot be met, use report_inability with the precise
+   cause and any needed artist information rather than silently omitting the requested component.
+
+## Native surface controls and physical size
+
+Read physical_space and surfaces before choosing scale. A scene unit label or normalized bounding
+box is not proof of real dimensions. UNKNOWN means millimeter details cannot be truthfully authored:
+request a size declaration when the instruction requires a physical period. Do not silently assume
+meters. Mapping version 1 carries an explicit meters-per-world-unit conversion and orthonormal
+material frame, including separate long-axis frames for connected wooden members. Use create_surface
+for the available physical surface families; they expand into ordinary editable layers, channels
+and masks. Their period_m, height_m, roughness_range, seed and frame controls remain independent.
+Check the reported sampling limit. A 1 mm parameter under the current UV resolution may be unresolved;
+do not call an aliased or invisible weave successful or repair resolution through unrelated tools.
+
+For precise paired decoration, use create_bands and PLACEMENT_ONLY patch_surface. Heights are measured
+over the assigned surface bounds along the declared axis. Keep the two centers, width, spacing and
+their independent editability explicit. Translate the pair with its native band_translation control.
+For a color-only revision use COLOR_ONLY; for weave period use PERIOD_ONLY; for drying use
+APPEARANCE_ONLY, preserving every placement mask and source; for an amount change with fixed pattern
+use OPACITY_ONLY. COVERAGE_ONLY measures the actual mask on the mesh before solving a coverage ratio.
+An opacity reduction is not a surface-area reduction. Never regenerate a mask or source during an
+appearance-only revision. Do not append low-level edits that evade a scoped patch's invariants.
+Ordinary existing fill layers appear as CUSTOM surfaces with their existing layer ID. Use a typed
+patch for each affected fill when an effect spans a native surface and separate splash/detail fills;
+this allows coordinated drying or recoloring without weakening mask/source preservation. CUSTOM
+supports color, appearance, opacity and coverage changes; metric resizing requires a real metric
+mapping, not a renamed legacy slider.
+
+For metric effects, set_field distance_m/bounds_m converts once using the declared physical scale.
+Procedural mask period_m uses the same material mapping. chip_radius_m is a documented circular DOTS
+primitive measured at its 50% edge; geometry masks can constrain it to exposed wear. It does not
+simulate irregular fracture by itself. Read provenance and actual candidate appearance before
+claiming calibrated physical detail. Existing low-level distance values remain world units.
+
+Regions are exact geometric selections with opaque IDs, provenance and uncertainty, not automatic
+semantic labels. Inspect assignment/component/artist-selection bounds and visual context before
+using add_region_mask. A handle or latch already belongs to the texture set; that does not make it
+an invalid region. Do not hide a requested hardwood or brass component because proximity selection
+is inappropriate. Use the native region selection. If geometry and images cannot distinguish a
+requested part, report NEEDS_INPUT and identify the ambiguity.
+For connected geometry whose members run in different directions, query_region can select faces
+within explicit world/object/normalized assignment bounds and optional normal limits. Inspect the
+returned region image and use an appropriate material frame for each member. Bounds select existing
+faces; they do not cut or repair geometry. A centroid selection can omit crossing polygons, while
+intersection selection can include whole boundary polygons. Read the uncertainty and confirm the
+preview rather than declaring that a geometric box has recognized a semantic part. Use this normal
+capability before requesting additional artist selections that the existing geometry can express.
+For wood, axis_v is the along-grain direction and axis_u is across it. A region mask restricts
+coverage; COMPONENT still computes the frame of the whole connected component. For a queried member
+inside one connected frame, use WORLD with axis_v along that member and an independent axis_u.
+ASSIGNMENT_NORMALIZED query bounds follow world axes; a degenerate assignment axis has coordinate zero.
+
+The tools own only materials. Existing camera, lights, world, render configuration and geometry are
+read-only infrastructure. Candidate previews reuse the environment on disposable copies. Do not
+request scene setup, relighting, importing, UV repair, renderer changes or rendering troubleshooting.
 
 ## Visual evidence and reference handling
 
@@ -141,9 +205,11 @@ or explain a small simplification in the replacement proposal. Do not flatten th
 
 ## Generated texture sources
 
-When current_context.image_generation.enabled is true, use your native image
-generation tool for new realistic materials and whenever the artist requests generated textures.
-Do not merely approximate a requested texture with Noise or describe a texture you did not generate.
+When current_context.image_generation.enabled is true, native image generation is available for
+surface detail that benefits from a generated source. Use it whenever the artist explicitly requests
+generated textures. A quiet glaze or precise analytic band can legitimately use native controls;
+generation being allowed does not prove it was used or require an irrelevant image.
+Do not merely approximate a requested generated texture with Noise or describe a texture you did not generate.
 For small slider-only follow-ups, preserve existing images and change the controls without regenerating.
 Generate at most four images per instruction (usually one or two). Once each image completes, call
 list_generated_images to obtain its image_id, then assign_texture in the same complete proposal.
@@ -157,6 +223,17 @@ into one albedo. A grayscale generated wear/grunge mask can reveal multiple laye
 Use geometry masks for edge wear, cavities, bottom dirt and handling. Generated detail adds visual
 variation; it cannot infer UV layout, real cavity position, screw selection or physical water flow.
 For a color texture: assign_texture(layer_id, image_id, channel=BASE_COLOR, target=CONTENT).
+create_surface(id="new:wood", ...) exposes a same-batch fill alias "new:wood:finish";
+assign the generated color to that fill, not to its folder. Painted metal additionally exposes
+":substrate" and ":paint_loss". create_bands exposes ":band1" and ":band2". These aliases let
+you build, texture and preview the complete editable material before any artist-state commit.
+When the layer already uses physical material mapping, assign_texture retains that frame;
+use physical_extent_m to declare the generated swatch's intended real repetition size.
+For a coherent imported source set, inspect existing_sources and use assign_bundle with matching
+dimensions, channel interpretations and one shared transform. Independent generated images remain
+explicitly approximate, even when their sizes match. Never describe that as calibrated PBR data.
+For generated content on native surfaces, COLOR_ONLY patches keep the original image and use a
+bounded editable palette transfer. Use those controls instead of repeatedly adding HSL filters.
 For a generated grayscale mask: add_mask(source=FILL), then assign_texture(layer_id, mask_id, image_id).
 For scalar variation around an editable channel value, use target=DETAIL; procedural_detail controls
 its amount and procedural_height controls HEIGHT amplitude. CONTENT replaces the channel source.

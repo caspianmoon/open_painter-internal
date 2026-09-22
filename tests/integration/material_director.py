@@ -30,6 +30,9 @@ class DirectorTests(unittest.TestCase):
     def setUp(self):
         session.request = None
         session.clear_conversation()
+        # This suite exercises authoring/transactions without a graphics context.
+        # Actual enabled candidate review is covered by director_candidates.py.
+        bpy.context.window_manager.open_painter_director.correction_enabled = False
         self.scene = bpy.data.scenes.new("Director test")
         bpy.context.window.scene = self.scene
         bpy.ops.mesh.primitive_cube_add()

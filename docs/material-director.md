@@ -47,6 +47,7 @@ Codex instead of implementing identity OAuth or attempting to reuse ChatGPT sess
 | **Send Mesh Maps** | Enabled by default. Send bounded previews of available AO, curvature, normal, world-normal, position and thickness maps, with provenance and missing-map information. |
 | **Reference Image** | Send an optional appearance reference. It is labeled separately from geometry maps and available to Codex's native image generation. |
 | **Generate Surface Textures** | Enabled by default. Allow native Codex image generation for new materials and requested texture changes. Explain disables it; small control edits retain existing textures. |
+| **Review Candidate Appearance** | Enabled by default. Let Director inspect disposable Eevee previews and correct its proposal before applying it. Requires **Send Current 3D View**. |
 | **Stop** | Cancel the instruction and discard its uncommitted draft. Late replies cannot commit it. |
 | **Show Changes / Copy Changes** | Read the draft's predicted changes, or the latest committed receipt's actual changes. |
 | **Undo Last AI Change** | Reverse the latest unreverted AI transaction while keeping conflicting later manual edits. The status reports retained conflicts. |
@@ -77,6 +78,33 @@ reversal keeps that layer. A new protection lock can prevent reversal; the mater
 All controls remain normal Open Painter controls in the **Painter** sidebar and Open Graph.
 There is no requirement to keep Codex connected to edit, save, reopen or export the result.
 
+## Physical materials and candidate review
+
+Director can build painted metal, bare metal, wood, woven fabric, rubber, ceramic glaze, mud,
+stone and moss with editable surface controls. Paint loss shares a mask between the coating
+and exposed substrate. Color, pattern scale, material appearance, opacity and occupied area
+have separate revision controls. For example, “Dry the existing mud without moving it” can
+change its color and roughness while preserving the placement mask and source.
+
+Set **Physical Size**, **Meters per World Unit** and **Size Provenance** in the texture set's
+physical-scale controls before requesting millimeter-sized details. A declared size can come
+from a measurement, documented source units or your explicit assumption; the declaration does
+not establish that a downloaded asset was measured. Unknown-size surfaces use disclosed relative
+world mapping. Member-specific frames require a physical-size declaration. Detail smaller than
+the available texel spacing is reported as under-resolved.
+
+With candidate review enabled, Director validates a proposal, renders it in disposable Eevee
+scene copies, and receives front, back, assigned-face views and composed channel diagnostics.
+It can make up to two corrections after the initial preview. All previews share a three-minute
+rendering budget and the instruction's existing time and generated-image limits. A final proposal
+must match the reviewed candidate and unchanged artist state before it can commit. Plan can
+review candidates without applying them; Explain remains read-only.
+
+The tool can inspect material assignments, connected components, artist selections and bounded
+geometric regions. Region queries create editable masks over existing faces. They do not alter
+geometry or material slots, and ambiguous parts can still require an artist's selection. The
+model's visual review is a diagnostic step, not an independent quality rating.
+
 ## Generated textures
 
 With **Generate Surface Textures** enabled, try: “Generate dark olive enamel and an irregular
@@ -95,8 +123,9 @@ Generate at most four PNGs per instruction, each up to 4096 × 4096 and 16 MiB. 
 budget is shared across the entire scene: one generated paint source can serve many editable stacks.
 Native image output is decoded in the companion;
 the Blender connection carries small metadata messages. Only verified artifacts from the active
-instruction can be newly assigned. Plan keeps them in the private cache until Apply; no Blender
-image datablocks are allocated for an uncommitted draft. Stop/discard never applies pending images.
+instruction can be newly assigned. Plan keeps them in the private cache until Apply. Disposable
+candidate previews can load temporary image datablocks and remove them on cleanup; artist materials
+receive the sources only at commit. Stop/discard never applies pending images.
 
 Generated textures supply surface detail. Geometry masks still determine cavities, edge wear,
 bottom dirt and named regions. A generated albedo is not a physical roughness, height or normal map;
@@ -187,11 +216,11 @@ the estimate. This guard does not replace checking the rendered result.
   call Blender operators directly. Destructive delete/reparent commands are outside the initial API.
 - It retrieves bundled recipes, not arbitrary user-directory assets or remote material libraries.
 - Bakes remain explicit Blender actions. It does not launch Cycles baking or destructive mesh preparation.
-- Region-sensitive placement needs an existing named attribute, vertex group or selected reference
-  object. It can suggest a region or discuss a view; it cannot reliably infer physical handles or
-  identify every part of an assembly from names and bounding dimensions.
+- Region-sensitive placement can use assigned faces, connected components, existing artist selections,
+  or bounded geometric queries. These are whole-face selections; they cannot guarantee semantic
+  identification of every handle, seam or part in an assembly.
 - The panel displays the latest reply and carries bounded recent conversation. It does not persist full
-  chat transcripts, support streaming edits, or run an unattended render/refine loop.
+  chat transcripts or support streaming edits. Candidate correction is bounded to one instruction.
 - A committed recipe can still hit an existing shader/resource evaluation limit. The receipt records
   the committed authoring change; it does not certify completed rendering. The normal Painter preview
   diagnostics remain authoritative, and AI undo remains available.
@@ -214,8 +243,9 @@ terminates that companion's process group. The app uses its own Codex state dire
 extension user-data area (the add-on config directory when run from source).
 
 Codex is started with restrictive configuration, disabled execution environments and disabled
-shell/web/apps/plugins/agent features. The model-facing inventory consists of five Painter
-tools, account-supported native image generation, and the runtime's built-in `skills.list`,
+shell/web/apps/plugins/agent features. The model-facing inventory consists of constrained Painter
+authoring, region inspection, channel/mask inspection and candidate-review tools, account-supported
+native image generation, and the runtime's built-in `skills.list`,
 `skills.read`, and `request_user_input` declarations. The fake-provider capability probe does not
 advertise account-gated image generation; the real ChatGPT-account test exercised that feature.
 The host denies unexpected approval/question requests. Those built-ins are not Painter mutation tools;
@@ -237,6 +267,11 @@ Scene scope substitutes `propose_scene_changes` for `propose_changes` and adds
 | Request lifecycle and Codex | [ai/session.py](../src/open_painter/ai/session.py), [ai/codex_client.py](../src/open_painter/ai/codex_client.py), [ai/companion.py](../src/open_painter/ai/companion.py) |
 | Native image output and packed imports | [ai/generated_images.py](../src/open_painter/ai/generated_images.py), [authoring/generated_textures.py](../src/open_painter/authoring/generated_textures.py) |
 | Native UI and explicit visual context | [ui/material_director.py](../src/open_painter/ui/material_director.py), [ai/viewport.py](../src/open_painter/ai/viewport.py) |
+| Physical surfaces, sources and regions | [authoring/surfaces.py](../src/open_painter/authoring/surfaces.py), [authoring/physical_space.py](../src/open_painter/authoring/physical_space.py), [authoring/sources.py](../src/open_painter/authoring/sources.py), [authoring/regions.py](../src/open_painter/authoring/regions.py) |
+| Disposable Eevee candidates | [ai/candidates.py](../src/open_painter/ai/candidates.py) |
+
+See the [capability remedy record](material-director-capability-remedy.md) for deterministic
+checks, live diagnostic failures, calibration provenance and the frozen comparison's status.
 
 Validation performed during implementation:
 

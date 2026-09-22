@@ -63,7 +63,8 @@ def uses_placement(ts):
     signature carries (``mesh_masks._orientation``), so a drag leaves the set's key alone."""
     from ..painting import decals
     from .custom_graph import reads_placement
-    return any(p.projection == 'TRIPLANAR' for l in ts.layers for p in (*l.channels, *l.masks)) \
+    return any(p.projection == 'TRIPLANAR' or getattr(p, 'material_mapping_version', 0) == 1
+               for l in ts.layers for p in (*l.channels, *l.masks)) \
         or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts)) \
         or any(reads_placement(m.node_group) for m in graph_masks(ts))
 

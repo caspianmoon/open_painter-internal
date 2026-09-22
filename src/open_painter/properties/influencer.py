@@ -16,6 +16,15 @@ def changed(self, context):
 
 
 class OP_Influencer(bpy.types.PropertyGroup):
+    physical_mapping_version: bpy.props.IntProperty(default=0, min=0, max=1, update=changed)
+    physical_meters_per_unit: bpy.props.FloatProperty(default=1, min=1e-12, update=changed)
+    physical_provenance: bpy.props.StringProperty(description='Source of the explicit metre conversion')
+    distance_m: bpy.props.FloatProperty(name='Distance / Radius (m)', min=1e-9, precision=6,
+        get=lambda self: self.distance * self.physical_meters_per_unit if self.physical_mapping_version else 0,
+        set=lambda self, value: setattr(self, 'distance', value / self.physical_meters_per_unit))
+    bounds_m: bpy.props.FloatVectorProperty(name='Height Bounds (m)', size=2, precision=6,
+        get=lambda self: tuple(v * self.physical_meters_per_unit for v in self.bounds) if self.physical_mapping_version else (0, 0),
+        set=lambda self, value: setattr(self, 'bounds', tuple(v / self.physical_meters_per_unit for v in value)))
     kind: bpy.props.EnumProperty(name='Scene Field', update=changed, items=[
         (key, label, '') for key, label in (
             ('UP','Upward Orientation'), ('DOWN','Downward Orientation'),

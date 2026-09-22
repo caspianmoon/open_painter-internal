@@ -5,9 +5,11 @@ Only UI selection changes in memory. The source .blend is never saved.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import time
+import resource
 import traceback
 
 import bpy
@@ -25,13 +27,18 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--fixture", type=Path, required=True)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--helper", action="store_true", help="Exercise the shared bounded top-to-bottom capture helper")
+parser.add_argument("--concurrency-barrier", type=Path, help="Both no-provider processes must reach their local window before capture")
+parser.add_argument("--probe-id", default="single")
+parser.add_argument("--render-proof", action="store_true")
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 args.output.mkdir(parents=True, exist_ok=True)
 source_sha = sha256(args.fixture)
 open_painter.register()
+bpy.context.preferences.view.show_splash = False
 bpy.ops.wm.open_mainfile(filepath=str(args.fixture), load_ui=False, use_scripts=False)
 started = time.monotonic()
-report = dict(provider_calls=0, stage="setup", ready_frames=0, fixture_sha256=source_sha)
+report = dict(provider_calls=0, stage="setup", ready_frames=0, fixture_sha256=source_sha,
+              pid=os.getpid(), started_at=time.time(), probe_id=args.probe_id)
 scene = None
 
 
@@ -49,6 +56,9 @@ def finish(error=None):
         report["viewport_size_after"] = [area.width, area.height, region.width, region.height]
         report["viewport_not_resized"] = report["viewport_size_before"] == report["viewport_size_after"]
     report["fixture_file_unchanged"] = sha256(args.fixture) == source_sha
+    report["finished_at"] = time.time()
+    report["elapsed_seconds"] = time.monotonic() - started
+    report["peak_rss_bytes"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
     report["status"] = "FAILED" if error or not all(report.get(k) for k in (
         "state_unchanged", "viewport_not_resized", "fixture_file_unchanged")) else "CAPTURED_REQUIRES_IMAGE_INSPECTION"
     write_json(args.output / "ui_probe.json", report)
@@ -60,8 +70,8 @@ def tick():
     global window, area, region, scene, config, target, before
     global selected_set, selected_layers, selected_masks, selected_kind
     try:
-        if time.monotonic() - started > 60:
-            raise TimeoutError("Companion inspector probe exceeded 60 seconds")
+        if time.monotonic() - started > 180:
+            raise TimeoutError("Companion inspector probe exceeded 180 seconds")
         if report["stage"] == "setup":
             window = bpy.context.window or next(iter(bpy.context.window_manager.windows))
             area = next(a for a in window.screen.areas if a.type == "VIEW_3D")
@@ -91,8 +101,8 @@ def tick():
                 space.region_3d.update()
                 report["viewport_size_before"] = [area.width, area.height, region.width, region.height]
                 assert bpy.ops.open_painter.open_inspector(placement="EXISTING") == {"FINISHED"}
-                layer, mask = next((layer, mask) for layer in target.layers for mask in layer.masks
-                                   if mask.source == "SCENE")
+                masks = [(layer, mask) for layer in target.layers for mask in layer.masks]
+                layer, mask = next(((layer, mask) for layer, mask in masks if mask.source == "SCENE"), masks[0])
                 resolved = selection.select_mask(bpy.context, layer.id, mask.id, ts=target, synchronize=False)
                 report["selected"] = dict(texture_set_id=target.id, layer_id=layer.id,
                     layer_name=layer.name, mask_id=mask.id, mask_name=mask.name,
@@ -101,6 +111,9 @@ def tick():
                 report["inspector"] = dict(area_type=inspector.type, context=inspector.spaces.active.context)
                 shader_preview.tick(scene, target, force_repair=True)
             report["stage"] = "settle"
+            if args.concurrency_barrier:
+                args.concurrency_barrier.mkdir(parents=True, exist_ok=True)
+                (args.concurrency_barrier / (args.probe_id + ".ready")).write_text(str(os.getpid()))
             return .25
         with bpy.context.temp_override(window=window, area=area, region=region):
             shader_preview.tick(scene, target)
@@ -110,10 +123,20 @@ def tick():
             report["ready_frames"] = report["ready_frames"] + 1 if shader_preview.current(scene, target) else 0
             selection.redraw(bpy.context)
             if report["stage"] == "settle" and report["ready_frames"] >= 5 and time.monotonic() - started >= 5:
+                if args.concurrency_barrier and len(list(args.concurrency_barrier.glob("*.ready"))) != 2:
+                    return .1
+                report["capture_started_at"] = time.time()
                 if args.helper:
                     from ui_evidence import capture_inspector_pages
                     report["paged_inspector"] = capture_inspector_pages(bpy.context, area, args.output, "scene-mask-inspector")
                     assert report["paged_inspector"]["status"] == "CAPTURED", report["paged_inspector"]
+                    report["ui_capture_seconds"] = time.time() - report["capture_started_at"]
+                    if args.render_proof:
+                        from capture_evidence import render_views
+                        render_started = time.monotonic()
+                        report["renders"] = render_views(bpy.context, args.output, "concurrency_probe", dict(config, protocol_version=2))
+                        report["eevee_capture_seconds"] = time.monotonic() - render_started
+                        assert report["renders"]["status"] == "CAPTURED", report["renders"]
                     finish()
                     return None
                 bpy.ops.wm.redraw_timer(type="DRAW_WIN_SWAP", iterations=2)

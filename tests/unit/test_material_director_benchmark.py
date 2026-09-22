@@ -11,7 +11,8 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmarks"))
-from material_director import manifest, report, scoring
+from material_director import report
+from material_director.v2 import manifest, scoring
 from material_director import runner
 
 
@@ -266,6 +267,21 @@ class RunnerTests(unittest.TestCase):
                                    "actual_settings": {"generate_textures": False, "model": "pinned-model"}}]}
             job = {"case": {"id": "T04"}, "mode": "P", "model_id": "pinned-model"}
             self.assertTrue(runner._input_checks(result, job, out)["passed"])
+            result['status']='BLOCKED'
+            result['stages'].append(dict(name='refine_1',status='REJECTED',submitted=False))
+            shared=runner._input_checks(result,job,out)
+            self.assertTrue(shared['passed'])
+            self.assertEqual(shared['stages'][1]['status'],'NOT_APPLICABLE')
+            self.assertEqual(shared['stages'][1]['cause_code'],'REQUEST_NOT_SUBMITTED')
+            self.assertEqual(shared['stages'][1]['errors'],[])
+            self.assertEqual(result['status'],'BLOCKED')
+            unsubmitted=runner._input_checks({'stages':[result['stages'][1]]},job,out)
+            self.assertIsNone(unsubmitted['passed'])
+            self.assertEqual(unsubmitted['status'],'NOT_APPLICABLE')
+            contradiction=json.dumps({'turn':'refine_1','action':'run','attachments':attachments})+'\n'
+            with log.open('a') as stream:stream.write(contradiction)
+            self.assertFalse(runner._input_checks(result,job,out)['passed'])
+            log.write_text(json.dumps({'turn':'create','action':'run','attachments':attachments})+'\n')
             attachments[0]["sanity"]["passed"] = False
             log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n")
             self.assertFalse(runner._input_checks(result, job, out)["passed"])
@@ -334,6 +350,7 @@ class RunnerTests(unittest.TestCase):
             args = ["run", "--comparison", str(comparison), "--fixtures", str(fixture_dir),
                     "--use-codex-login", "--max-sessions", "1"]
             with patch.object(runner, "_verify_run_pins", return_value="fake-codex"), \
+                    patch.object(runner, "preflight_login", return_value={"status":"READY"}), \
                     patch.object(runner, "execute", side_effect=fake_execute), redirect_stdout(io.StringIO()):
                 self.assertEqual(runner.main(args), 0)
                 self.assertEqual(runner.main(args), 0)
@@ -343,10 +360,10 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(len(summary["failures"]), 2)
             self.assertEqual(summary["core_scheduled"], 5)
 
-    def test_pristine_template_can_start_and_auth_unavailable_is_recorded(self):
+    def test_auth_unavailable_preserves_pristine_template_without_an_attempt(self):
         @contextmanager
         def unavailable(*args, **kwargs):
-            raise RuntimeError("Synthetic expired access-only login")
+            raise runner.AuthRefreshRequired("Synthetic expired access-only login")
             yield
 
         with tempfile.TemporaryDirectory() as path:
@@ -359,19 +376,18 @@ class RunnerTests(unittest.TestCase):
             codex.write_text("synthetic executable boundary")
             entry = manifest.build_schedule()[0]
             (out / "result.json").write_text(json.dumps(manifest.result_template(entry)))
+            pristine = (out / "result.json").read_bytes()
             case = next(case for case in manifest.load_cases()["cases"] if case["id"] == entry["case_id"])
             job = runner.make_job(case, mode=entry["mode"], repeat=1, fixture=fixture, output=out, model="model-pinned")
             with patch.object(runner, "runtime_version", return_value="runtime-test"), \
                     patch.object(runner, "source_fingerprint", return_value=configuration()["build"]), \
                     patch.object(runner, "library_fingerprint", return_value="c" * 64), \
                     patch.object(runner, "isolated_login", side_effect=unavailable):
-                result = runner.execute(job, codex=str(codex), use_login=True)
-                self.assertEqual(result["status"], "UNAVAILABLE")
-                self.assertFalse(result["attempted"])
-                self.assertIsNone(result["metrics"]["active_operator_seconds"])
-                self.assertEqual(result, json.loads((out / "result.json").read_text()))
-                with self.assertRaisesRegex(ValueError, "already has evidence"):
-                    runner.execute(job, codex=str(codex), use_login=True)
+                for _ in range(2):
+                    with self.assertRaises(runner.AuthRefreshRequired):
+                        runner.execute(job, codex=str(codex), use_login=True)
+                    self.assertEqual((out / "result.json").read_bytes(),pristine)
+                    self.assertFalse((out / "attempt.json").exists())
 
     def test_manual_review_can_complete_pending_workflow_but_not_override_failure(self):
         with tempfile.TemporaryDirectory() as path:

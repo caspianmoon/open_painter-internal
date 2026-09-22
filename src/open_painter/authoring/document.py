@@ -78,12 +78,14 @@ def digest(ts):
             if mask.image:
                 image = mask.image
                 sources.append((image.name_full, tuple(image.size), image.get("open_painter_pixel_revision", 0)))
+    from .physical_space import capture as material_space
     inputs = dict(document=encode(snapshot(ts), digest=True), geometry=record(ts, "SCENE_FIELD"),
                   maps=[(entry.kind, entry.provenance, encode(entry.image),
                          entry.image.get("open_painter_pixel_revision", 0) if entry.image else 0)
                         for entry in ts.baked_maps],
                   fields=[signature(ts, mask.influence) for layer in ts.layers for mask in layer.masks
                           if mask.source == "SCENE" or mask.edge_source == "LIVE"],
+                  physical_space=material_space(ts),
                   sources=sources, locks=getattr(ts, "director_locks", ""),
                   assignments=[(ref.object.name_full if ref.object else None, ref.slot_index,
                                 ref.object.material_slots[ref.slot_index].material.name_full
@@ -95,6 +97,7 @@ def digest(ts):
 
 def defaults(identifier):
     import bpy
+    from ..core.layer_stack import DERIVED
     cls = bpy.types.PropertyGroup.bl_rna_get_subclass_py(identifier)
     if cls is None:
         raise AuthoringError(f"Unregistered authoring type: {identifier}")
@@ -102,7 +105,7 @@ def defaults(identifier):
     result = {}
     for prop in rna.properties:
         name = prop.identifier
-        if name in {"rna_type", "id_data", "opacity_percent", "master_factor", "master_scale"}:
+        if name in {"rna_type", "id_data", "opacity_percent", "master_factor", "master_scale"} or (identifier, name) in DERIVED:
             continue
         if prop.type == "COLLECTION":
             result[name] = []

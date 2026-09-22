@@ -16,32 +16,125 @@ def png(width, height, rgba):
 
 
 @contextmanager
-def isolated(context, targets):
-    """Hide every other visible mesh for the block; selection survives the round trip."""
+def isolated(context, targets, assignments=None, region_faces=None, region_topologies=None):
+    """Isolate exact assigned faces using disposable evaluated-mesh copies.
+
+    Source geometry, UVs, material slots, modifiers and selection are never edited.
+    The objects-only form remains useful to callers explicitly asking for objects.
+    """
     # Hiding a base drops its selected flag on the next view-layer evaluation, and
     # unhiding never brings it back, so the artist's selection is put back by hand.
-    hidden = []
+    hidden, copies, meshes, collection = [], [], [], None
+    active = context.view_layer.objects.active
     try:
-        for obj in context.view_layer.objects:
-            if obj.type == "MESH" and obj not in targets and not obj.hide_get():
+        if assignments is not None:
+            import bpy
+            import bmesh
+            depsgraph = context.evaluated_depsgraph_get()
+            collection = bpy.data.collections.new('Open Painter temporary target view')
+            context.scene.collection.children.link(collection)
+            for obj in targets:
+                if region_faces is not None and obj not in region_faces:
+                    continue
+                slots = {ref.slot_index for ref in assignments if ref.object == obj}
+                evaluated = obj.evaluated_get(depsgraph)
+                mesh = bpy.data.meshes.new_from_object(evaluated, preserve_all_data_layers=True, depsgraph=depsgraph)
+                meshes.append(mesh)
+                chosen = region_faces.get(obj) if region_faces is not None else None
+                if chosen is not None and region_topologies is not None:
+                    from ..authoring.regions import topology
+                    if topology(mesh) != region_topologies.get(obj):
+                        raise ValueError('Region topology changed before capture; inspect the current regions again')
+                # Object-linked material overrides must follow the copied faces too.
+                for index, slot in enumerate(obj.material_slots):
+                    if index < len(mesh.materials):
+                        mesh.materials[index] = slot.material
+                bm = bmesh.new()
+                try:
+                    bm.from_mesh(mesh)
+                    bm.faces.ensure_lookup_table()
+                    bm.faces.index_update()
+                    bmesh.ops.delete(bm, geom=[face for face in bm.faces if face.material_index not in slots
+                                             or (chosen is not None and face.index not in chosen)], context='FACES')
+                    bmesh.ops.delete(bm, geom=[vertex for vertex in bm.verts if not vertex.link_faces], context='VERTS')
+                    bm.to_mesh(mesh)
+                finally:
+                    bm.free()
+                if not len(mesh.polygons):
+                    raise ValueError('This texture-set assignment has no visible evaluated faces')
+                copy = bpy.data.objects.new('Open Painter isolated target', mesh)
+                copies.append(copy)
+                collection.objects.link(copy)
+                copy.matrix_world = obj.matrix_world.copy()
+            if not copies:
+                raise ValueError('The selected region does not belong to this texture set')
+        geometry_types = {'MESH', 'CURVE', 'SURFACE', 'META', 'FONT', 'VOLUME', 'POINTCLOUD', 'GREASEPENCIL'}
+        for obj in list(context.view_layer.objects):
+            if obj.type in geometry_types and obj not in copies and (assignments is not None or obj not in targets) and not obj.hide_get():
                 hidden.append((obj, obj.select_get()))
                 obj.hide_set(True)
         context.view_layer.update()
-        yield
+        yield copies if assignments is not None else targets
     finally:
+        if collection is not None:
+            import bpy
+            for obj in copies:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            for mesh in meshes:
+                bpy.data.meshes.remove(mesh)
+            bpy.data.collections.remove(collection)
         for obj, selected in hidden:
             obj.hide_set(False)
             obj.select_set(selected)
+        context.view_layer.objects.active = active
         if hidden:
             context.view_layer.update()
 
 
-def capture(context, ts, *, max_side=512, isolate=False, frame_target=False):
+def framing_matrices(view, points, aspect):
+    """Explicit offscreen matrices work even when the viewport is in CAMERA mode.
+
+    Moving RegionView3D.view_location does not reframe a camera view. These matrices
+    retain the viewing orientation and perspective while leaving its camera alone.
+    """
+    from mathutils import Matrix, Vector
+    import math
+    if not points:
+        raise ValueError('The target has no points to frame')
+    lower = Vector(tuple(min(point[i] for point in points) for i in range(3)))
+    upper = Vector(tuple(max(point[i] for point in points) for i in range(3)))
+    center = (lower + upper) * .5
+    radius = max(.00001, max((point - center).length for point in points))
+    original = view.window_matrix
+    perspective = abs(original[3][3]) < .5
+    rotation = view.view_matrix.to_3x3()
+    if perspective:
+        fy = max(.1, abs(original[1][1]))
+        fx = fy / aspect
+        half_angle = min(math.atan(1. / fx), math.atan(1. / fy))
+        distance = radius / math.sin(half_angle) * 1.15
+        near, far = max(radius * .001, 1e-7), distance + radius * 4.
+        projection = Matrix(((fx, 0, 0, 0), (0, fy, 0, 0),
+                             (0, 0, -(far + near) / (far - near), -2 * far * near / (far - near)),
+                             (0, 0, -1, 0)))
+    else:
+        extent = radius * 1.15 * max(1., 1. / aspect)
+        distance = radius * 3.
+        near, far = radius * .001, radius * 8.
+        projection = Matrix(((1. / (extent * aspect), 0, 0, 0), (0, 1. / extent, 0, 0),
+                             (0, 0, -2. / (far - near), -(far + near) / (far - near)), (0, 0, 0, 1)))
+    eye = center + rotation.inverted_safe() @ Vector((0., 0., distance))
+    matrix = rotation.to_4x4()
+    matrix.translation = -(rotation @ eye)
+    return matrix, projection
+
+
+def capture(context, ts, *, max_side=512, isolate=False, frame_target=False, region_faces=None, region_topologies=None):
     import bpy
     import gpu
     import numpy as np
     from ..evaluation import shader_preview
-    if bpy.app.background or context.area.type != "VIEW_3D":
+    if bpy.app.background or context.area is None or context.area.type != "VIEW_3D":
         raise ValueError("Send the current 3D view from a visible Painter viewport")
     space = context.area.spaces.active
     region = next(r for r in context.area.regions if r.type == "WINDOW")
@@ -67,28 +160,23 @@ def capture(context, ts, *, max_side=512, isolate=False, frame_target=False):
     offscreen = gpu.types.GPUOffScreen(width, height, format="RGBA8")
     overlays = space.overlay.show_overlays
     view = space.region_3d
-    old_location, old_distance = view.view_location.copy(), view.view_distance
-    targets = {ref.object for ref in ts.assignments if ref.object}
+    targets = set(region_faces) if region_faces is not None else {ref.object for ref in ts.assignments if ref.object}
     try:
-        with isolated(context, targets) if isolate else nullcontext():
+        with isolated(context, targets, ts.assignments, region_faces, region_topologies) if isolate else nullcontext(targets) as shown:
+            view_matrix, projection_matrix = view.view_matrix.copy(), view.window_matrix.copy()
             if isolate and frame_target:
                 from mathutils import Vector
-                points = [obj.matrix_world @ Vector(corner) for obj in targets for corner in obj.bound_box]
-                center = sum(points, Vector()) / len(points)
-                view.view_location = center
-                view.view_distance = max(.001, max((p - center).length for p in points) * 3.2)
-                view.update()
+                points = [obj.matrix_world @ Vector(corner) for obj in shown for corner in obj.bound_box]
+                view_matrix, projection_matrix = framing_matrices(view, points, width / height)
             space.overlay.show_overlays = False
             with context.temp_override(area=context.area, region=region):
                 offscreen.draw_view3d(context.scene, context.view_layer, space, region,
-                                     space.region_3d.view_matrix, space.region_3d.window_matrix,
+                                     view_matrix, projection_matrix,
                                      do_color_management=True, draw_background=True)
             with offscreen.bind():
                 pixels = gpu.state.active_framebuffer_get().read_color(0, 0, width, height, 4, 0, "UBYTE")
                 data = np.asarray(pixels, dtype=np.uint8).reshape(height, width, 4)[::-1].tobytes()
     finally:
-        view.view_location, view.view_distance = old_location, old_distance
-        view.update()
         space.overlay.show_overlays = overlays
         offscreen.free()
     return "data:image/png;base64," + base64.b64encode(png(width, height, data)).decode()

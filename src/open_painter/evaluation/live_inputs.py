@@ -12,7 +12,7 @@ import numpy as np
 
 from ..core.layer_stack import channel_for
 from ..constants import DEFAULTS, OWNER
-from . import metrics
+from . import metrics, material_space
 from .channel_eval import TILE_ROWS, _procedural_tile, _detail_tile, source
 from .image_snapshots import ImageSnapshots
 from .mask_eval import _effect_signature, _stack_signature, evaluate_masks, map_pixels
@@ -83,16 +83,16 @@ class Builder:
     def _field_key(self, prop):
         detail = getattr(prop, 'detail_image', None)
         if detail:
-            return (*self.prefix, 'detail-scalar-v1', image_key(detail), prop.projection,
+            return (*self.prefix, 'detail-scalar-v1', material_space.identity(prop), image_key(detail), prop.projection,
                     prop.filtering, prop.tiling, tuple(prop.scale), prop.rotation,
                     tuple(prop.offset), prop.triplanar_hardness,
-                    self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
+                    self.geometry_stamp if prop.projection == 'TRIPLANAR' or material_space.enabled(prop) else None)
         if self._gpu_field_supported(prop):
             return self._scalar_key(prop.procedural, prop.procedural_scale, prop.procedural_seed)
-        return (*self.prefix, 'procedural', prop.procedural, prop.procedural_scale,
+        return (*self.prefix, 'procedural', material_space.identity(prop), prop.procedural, prop.procedural_scale,
                 prop.procedural_seed, prop.projection, tuple(prop.scale), prop.rotation,
                 tuple(prop.offset), prop.triplanar_hardness,
-                self.geometry_stamp if prop.projection == 'TRIPLANAR' else None)
+                self.geometry_stamp if prop.projection == 'TRIPLANAR' or material_space.enabled(prop) else None)
 
     def _scalar_key(self, kind, scale, seed):
         from ..texture_engine.procedurals import ALIASES
@@ -101,7 +101,7 @@ class Builder:
 
     def _gpu_field_supported(self, prop):
         from .live_procedurals import supports
-        return (not getattr(prop, 'detail_image', None)
+        return (not material_space.enabled(prop) and not getattr(prop, 'detail_image', None)
                 and not getattr(prop, 'detail_image_name', '')
                 and not (self.n & (self.n - 1)) and prop.projection == 'UV'
                 and tuple(prop.scale) == (1., 1.) and prop.rotation == 0
@@ -135,7 +135,7 @@ class Builder:
                                          field=field, mesh_map=mesh_map)
 
     def _source_key(self, prop, kind):
-        return (*self.prefix, 'source', kind, prop.channel, image_key(prop.image),
+        return (*self.prefix, 'source', material_space.identity(prop), getattr(prop, 'material_height_m', 0), self.ts.height_distance, kind, prop.channel, image_key(prop.image),
                 prop.image_name if not prop.image else '', tuple(prop.color), prop.value,
                 image_key(getattr(prop, 'detail_image', None)),
                 getattr(prop, 'detail_image_name', '') if not getattr(prop, 'detail_image', None) else '',
@@ -145,7 +145,7 @@ class Builder:
                 tuple(prop.offset), prop.triplanar_hardness,
                 tuple(_effect_signature(effect) for effect in _effects(prop)),
                 # Surface-space effects pad each island from the set's seam map.
-                self.geometry_stamp if prop.projection == 'TRIPLANAR'
+                self.geometry_stamp if prop.projection == 'TRIPLANAR' or material_space.enabled(prop)
                 or any(surface(effect) for effect in _effects(prop)) else None,
                 getattr(prop, 'anchor', ''), self.ts.edit_serial if getattr(prop, 'anchor', '') else None)
 
@@ -242,8 +242,8 @@ class Builder:
             operation = (3 if prop.channel == 'HEIGHT' else
                          1 if prop.channel in {'BASE_COLOR', 'EMISSION'} else 2)
             result = dict(field=texture, color=color, procedural=operation,
-                          detail=prop.procedural_detail, height=prop.procedural_height)
-            return result, ('modulate', key, operation, color, prop.procedural_detail, prop.procedural_height)
+                          detail=prop.procedural_detail, height=material_space.height_amplitude(prop, self.ts))
+            return result, ('modulate', key, operation, color, prop.procedural_detail, material_space.height_amplitude(prop, self.ts))
         key = self._source_key(prop, layer.type)
         try:
             texture = yield from self._texture(key, 4, lambda low, high:

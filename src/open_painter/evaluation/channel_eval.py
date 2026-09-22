@@ -10,6 +10,7 @@ slices. No effect wraps across row-tile boundaries.
 import numpy as np
 
 from .blend_modes import sample_uv
+from .material_space import height_amplitude
 from .metrics import count, measured
 from ..texture_engine import filters, procedurals
 
@@ -236,13 +237,16 @@ def _coordinates(prop, n, y0, y1):
 
 def _procedural_block(prop, n, y0, y1, ts, geometry_cache):
     """Cache source scalar by coordinates, excluding the destination channel."""
-    key = ("procedural", getattr(ts, "id", ""),
-           getattr(geometry_cache, "geometry_stamp", None) if prop.projection == "TRIPLANAR" else None,
+    from . import material_space
+    key = ("procedural", material_space.identity(prop), getattr(ts, "id", ""),
+           getattr(geometry_cache, "geometry_stamp", None) if prop.projection == "TRIPLANAR" or material_space.enabled(prop) else None,
            n, y0, y1, prop.procedural, prop.procedural_scale, prop.procedural_seed,
            prop.projection, tuple(prop.scale), prop.rotation, tuple(prop.offset),
            prop.triplanar_hardness)
     if key not in geometry_cache:
-        if prop.projection == "TRIPLANAR":
+        if material_space.enabled(prop):
+            result = material_space.block(prop, n, y0, y1, ts, geometry_cache)
+        elif prop.projection == "TRIPLANAR":
             from ..painting.projection import geometry
             if "geometry" in geometry_cache:
                 positions, normals = geometry_cache["geometry"]
@@ -333,7 +337,8 @@ def _detail_tile(prop, n, y0, y1, ts, geometry_cache):
     if image is None:
         raise ValueError(f"Surface detail image is missing: {getattr(prop, 'detail_image_name', '')}. "
                          "Reload or clear the surface detail texture.")
-    identity = ("detail_scalar", getattr(ts, "id", ""), image_key(image), n,
+    from .material_space import identity as material_identity
+    identity = ("detail_scalar", material_identity(prop), getattr(ts, "id", ""), image_key(image), n,
                 prop.projection, prop.filtering, prop.tiling, tuple(prop.scale),
                 prop.rotation, tuple(prop.offset), prop.triplanar_hardness,
                 getattr(geometry_cache, "geometry_stamp", None)
@@ -362,14 +367,16 @@ def _raw_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
     rgba = _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache)
     # Mask fill properties also have a `procedural` field, but an image fill must
     # remain an image fill. Their dedicated PROCEDURAL source is evaluated by masks.
+    metric_height_image = (kind == "FILL" and getattr(prop, "channel", "") == "HEIGHT"
+                           and getattr(prop, "material_mapping_version", 0) == 1 and prop.image)
     if kind != "FILL" or not hasattr(prop, "channel") or not (
             getattr(prop, "procedural", "") or getattr(prop, "detail_image", None)
-            or getattr(prop, "detail_image_name", "")):
+            or getattr(prop, "detail_image_name", "") or metric_height_image):
         return rgba
-    scalar = _field_tile(prop, n, y0, y1, ts, geometry_cache)
+    scalar = rgba[..., 0] if metric_height_image else _field_tile(prop, n, y0, y1, ts, geometry_cache)
     out = np.broadcast_to(rgba, (y1 - y0, n, 4)).copy()
     if prop.channel == "HEIGHT":
-        out[..., :3] = (.5 + (scalar - .5) * prop.procedural_height)[..., None]
+        out[..., :3] = (.5 + (scalar - .5) * height_amplitude(prop, ts))[..., None]
     elif prop.channel in {"BASE_COLOR", "EMISSION"}:
         out[..., :3] *= (1 + (scalar - .5) * prop.procedural_detail)[..., None]
     elif prop.channel == "NORMAL":
@@ -519,6 +526,9 @@ def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
 
 def _sample_fill(texture, prop, n, y0, y1, ts, geometry_cache):
     """Identical texture projection for RGBA fills and single-plane detail."""
+    from . import material_space
+    if material_space.enabled(prop):
+        return material_space.sample_image(texture, prop, n, y0, y1, ts, geometry_cache)
     if prop.projection == "TRIPLANAR":
         from ..painting.projection import geometry, triplanar
         if "geometry" in geometry_cache:

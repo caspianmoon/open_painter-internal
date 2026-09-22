@@ -23,6 +23,7 @@ KINDS = [
     ('UV_ISLAND', 'UV Island', 'UV islands containing the selected faces, or one island by index'),
     ('NORMAL_DIRECTION', 'Normal Direction', 'Faces whose normal points along a direction, with a soft angle'),
     ('ATTRIBUTE', 'Geometry Attribute', 'A named point, face or corner attribute (float, int, bool or vector length)'),
+    ('REGION', 'Saved Face Region', 'Editable frozen face membership; topology changes require a new selection'),
 ]
 
 
@@ -108,6 +109,10 @@ class OP_MeshSelector(bpy.types.PropertyGroup):
     object_name: bpy.props.StringProperty()
     collection_name: bpy.props.StringProperty()
     material_name: bpy.props.StringProperty()
+    region_id: bpy.props.StringProperty(name='Region Identity')
+    region_faces: bpy.props.StringProperty(name='Saved Faces', default='[]', update=changed)
+    region_topology: bpy.props.StringProperty(name='Topology Signature', update=changed)
+    region_provenance: bpy.props.StringProperty(name='Region Origin')
     attribute: bpy.props.StringProperty(name='Name', update=changed,
         description='Vertex group or attribute name')
     face_set: bpy.props.IntProperty(name='Face Set', default=1, min=0, update=changed)

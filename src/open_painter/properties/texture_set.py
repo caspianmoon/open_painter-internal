@@ -16,7 +16,13 @@ def surface_changed(self, context):
 
 def height_changed(self, context):
     surface_changed(self, context)
-    # Exported normals incorporate this distance; authored HEIGHT/NORMAL do not.
+    # Metric surfaces divide encoded HEIGHT by this distance so a declared
+    # micron amplitude stays fixed. Legacy channels remain entirely unchanged.
+    if any(p.channel == 'HEIGHT' and getattr(p, 'material_mapping_version', 0) == 1
+           for layer in self.layers for p in layer.channels):
+        from .layer import numeric
+        numeric(self, context)
+    # Exported normals incorporate this distance; legacy HEIGHT/NORMAL do not.
     # Export computes their combination at request time, without caching it here.
 
 
@@ -54,6 +60,11 @@ class OP_Assignment(bpy.types.PropertyGroup):
 
 
 class OP_TextureSet(bpy.types.PropertyGroup):
+    physical_space_status: bpy.props.EnumProperty(name="Physical Size", default="UNKNOWN", update=changed,
+        items=[('UNKNOWN', 'Unknown', 'No verified size declaration'),
+               ('KNOWN', 'Declared', 'Artist or fixture author supplies explicit measurement provenance')])
+    meters_per_world_unit: bpy.props.FloatProperty(name="Meters per World Unit", default=1, min=1e-9, update=changed)
+    physical_space_provenance: bpy.props.StringProperty(name="Size Provenance", description="Measurement, documented source units or explicit artist scale declaration", update=changed)
     director_locks: bpy.props.StringProperty(default="[]", description="Protected authoring paths")
     director_history: bpy.props.StringProperty(default="[]", description="Bounded Material Director change receipts")
     material_state_data: bpy.props.StringProperty()

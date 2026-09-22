@@ -43,6 +43,27 @@ def physical_changed(self, context):
 
 
 class OP_Mask(bpy.types.PropertyGroup):
+    # Opt-in metric coordinates shared with surface channels. Legacy controls
+    # remain untouched; derived UI values are excluded from graph snapshots.
+    material_mapping_version: bpy.props.IntProperty(default=0, min=0, max=1, update=changed)
+    material_period_m: bpy.props.FloatProperty(name='Period (m)', default=.001, min=1e-9, precision=6, update=numeric)
+    material_meters_per_unit: bpy.props.FloatProperty(default=1, min=1e-12, update=numeric)
+    material_frame: bpy.props.EnumProperty(name='Material Frame', default='WORLD', update=changed,
+        items=[('WORLD', 'World', ''), ('OBJECT', 'Object', ''), ('COMPONENT', 'Connected Member', '')])
+    material_origin: bpy.props.FloatVectorProperty(size=3, update=numeric)
+    material_axis_u: bpy.props.FloatVectorProperty(size=3, default=(1, 0, 0), update=numeric)
+    material_axis_v: bpy.props.FloatVectorProperty(size=3, default=(0, 1, 0), update=numeric)
+    material_image_extent_m: bpy.props.FloatVectorProperty(size=2, default=(.01, .01), min=1e-9, update=numeric)
+    material_source_id: bpy.props.StringProperty(update=changed)
+    material_provenance: bpy.props.StringProperty(description='Source of the explicit metre conversion')
+    period_m: bpy.props.FloatProperty(name='Period (m)', precision=6, min=1e-9,
+        get=lambda self: self.material_period_m if self.material_mapping_version else 0,
+        set=lambda self, value: setattr(self, 'material_period_m', value))
+    chip_radius_m: bpy.props.FloatProperty(name='Circular Chip Radius (m)', precision=6, min=1e-9,
+        description='DOTS radius at 50% coverage before geometry clipping; not an irregular-chip size guarantee',
+        get=lambda self: .28 * self.material_period_m if self.material_mapping_version and self.procedural == 'DOTS' else 0,
+        set=lambda self, value: setattr(self, 'material_period_m', value / .28))
+    surface_role: bpy.props.StringProperty(description="Stable native surface-effect role", update=changed)
     reference_layer: bpy.props.StringProperty(name='Source Layer ID', update=changed)
     reference_mask: bpy.props.StringProperty(name='Through Mask Effect ID', update=changed)
     reference_channel: bpy.props.EnumProperty(name='Published Output', update=changed,

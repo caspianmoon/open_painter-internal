@@ -1,142 +1,76 @@
-# Material Director: five-model Eevee benchmark
+# Material Director benchmark
 
-This implements the user's [revised protocol](test_plan.md). The primary benchmark is **five live sessions**, one each for toolbox, chair, boots, vase and rocks. Native image generation is enabled (H mode). Each session uses the exact Create prompt and two exact Refine prompts from [test_cases.json](test_cases.json).
+The existing runner now supports `five_asset_eevee_v3`. Read [test_plan_v3.md](test_plan_v3.md) and the exact [cases](test_cases_v3.json). V2 fixtures/results stay unchanged; [v2/](v2/) supplies the explicit historical manifest/scoring adapter.
 
-The harness prepares clean geometry, fixes Eevee infrastructure and captures evidence. The tested Codex model only textures through Material Director. Humans judge blinded material results. No points are awarded for importing, rendering, fixing lights or preparing the scene.
+## Live diagnostic smoke
 
-## Primary workflow
-
-1. Download and sterilize assets using [ASSETS.md](ASSETS.md). Use the new fixed Eevee fixtures, with fresh 1024 maps and no original appearance data. Case IDs:
-
-   | Case | Asset | Fixture |
-   |---|---|---|
-   | T01 | Metal toolbox | `A01_toolbox_neutral.blend` |
-   | T02 | Chair | `A02_chair_neutral.blend` |
-   | T03 | Rubber boots | `A05_boots_neutral.blend` |
-   | T04 | Ceramic vase | `A04_vase_neutral.blend` |
-   | T05 | Rock set | `A06_rocks_neutral.blend` |
-
-2. Run a non-scored pilot with the actual Codex login:
-
-   ```sh
-   python3 scripts/benchmark_material_director.py pilot \
-     --fixtures .blender-test/material-director-benchmark/fixtures \
-     --output .blender-test/material-director-benchmark/pilot-t04 \
-     --case T04 --mode H --model YOUR_EXACT_MODEL_ID --use-codex-login
-   ```
-
-   Add `--blender PATH` and `--codex PATH` when needed. `--quick` is only a plumbing diagnostic and cannot qualify the full-evidence pilot. Default caps are 600 seconds for a single-set turn, 900 for a multi-set turn and 1,800 for a complete session. Freeze confirmed limits before scored runs.
-
-3. Generate and complete the configuration using observed pilot metadata:
-
-   ```sh
-   python3 scripts/benchmark_material_director.py config --output .blender-test/benchmark-config.json
-   ```
-
-   Pin the actual selected and returned model, runtime, Blender, hardware, evaluator, library bytes and executed source bytes. The renderer must be `BLENDER_EEVEE`; render size is 1024 × 1024 and material-map resolution is 1024. The default matrix is `modes: ["H"]`, `repeat_count: 1`. Declare pilot evidence as its actual `result.json`.
-
-4. Freeze a new comparison directory, then run the five sessions:
-
-   ```sh
-   python3 scripts/benchmark_material_director.py freeze \
-     --config .blender-test/benchmark-config.json \
-     --fixtures .blender-test/material-director-benchmark/fixtures \
-     --output .blender-test/material-director-benchmark/primary-01
-
-   python3 scripts/benchmark_material_director.py run \
-     --comparison .blender-test/material-director-benchmark/primary-01 \
-     --fixtures .blender-test/material-director-benchmark/fixtures \
-     --use-codex-login
-   ```
-
-   `--max-sessions N` permits bounded batches. Finished or unavailable attempts are retained rather than rerolled. A changed build, fixture, library, runtime or environment requires a new comparison. Login copies and Blender profiles are isolated; the user's normal provider cache is never removed or refreshed.
-
-5. Export blinded evidence for independent human review:
-
-   ```sh
-   python3 scripts/benchmark_material_director.py review-pack --comparison .blender-test/material-director-benchmark/primary-01
-   python3 scripts/benchmark_material_director.py review-import \
-     --comparison .blender-test/material-director-benchmark/primary-01 \
-     --review returned-review.json
-   python3 scripts/benchmark_material_director.py report --comparison .blender-test/material-director-benchmark/primary-01
-   ```
-
-   Share `review_packets/` without the manifest, traces or `review_key.private.json`. Review import merges independent ratings and retains their history. Missing review evidence remains `NOT_SCORED`; a passing Python test, generated PNG or applied layer stack is not an aesthetic judgment.
-
-## Fixed evidence
-
-Every primary session uses the same Eevee renderer, camera poses, lights, World, exposure and render settings. Model normalization happens during fixture preparation. The Director receives texturing-relevant context: actual model and isolated-target views, clean geometry/UV summaries, texture sets, dimensions and fresh AO, curvature, world-normal, position and thickness maps. No primary case includes a reference image.
-
-Actual outgoing image bytes and settings are audited, including viewport sanity, hashes, map families/provenance and native-generation mode. Sharing flags alone do not establish that images reached the provider. Scene-material inspection replies are audited too.
-
-The deterministic evaluator saves:
-
-```text
-00_before.png
-01_create_front.png
-02_create_back.png
-03_create_close.png
-04_refine1_front.png
-05_refine1_back.png
-06_refine1_close.png
-07_refine2_front.png
-08_refine2_back.png
-09_refine2_close.png
+```sh
+python3 scripts/benchmark_material_director.py smoke \
+  --fixtures .blender-test/material-director-benchmark/fixtures-eevee-v3 \
+  --output .blender-test/material-director-benchmark/remedy-v3-smoke-01 \
+  --model gpt-6-astra --codex /absolute/path/to/codex --use-codex-login
 ```
 
-Material checkpoints, generated-input ownership, input manifests, tool traces, receipts, channel buffers, screenshots and a final `.blend` accompany those images. Geometry, ordinary guard materials, protected artist layers and fixed Eevee infrastructure are checked for unauthorized changes.
+This freezes a private `_runtime` copy of the actual production and harness bytes, then runs five fresh H sessions through ordinary Director. It writes a diagnostic manifest and `smoke_index.json`. Inspect all real results, including failures; populate `inspection_notes` and change the index to `INSPECTED`. This is operational inspection, never an independent artistic grade. Optional `--limits caps.json` accepts the same wall limits later frozen for the campaign.
 
-## Scoring
+`smoke --jobs 2 --concurrency-evidence PROOF.json` uses bounded diagnostic waves after an actual two-process isolation proof. Source snapshots remain private; Blender profiles, temporary files, provider caches, and output directories are per process.
 
-Reviewers rate each dimension from 0–5. The median independent rating per dimension contributes `rating / 5 × weight` points. Keep Create, first revision and final ratings separate.
+Before each wave, the launcher checks the existing access token without changing credentials. Missing/expiring login pauses scheduling with `AUTH_REFRESH_REQUIRED` in `execution_control.json` and exit code 3. No attempt marker or AI failure is created for those sessions. Renew the normal managed Codex login outside the benchmark, then repeat the campaign `run` command. A partial diagnostic smoke resumes with the same arguments plus `--resume`, requiring the same immutable snapshot, fixtures and model; completed attempts are retained. A smoke stopped before its snapshot can repeat its original command. The harness never refreshes the real account or copies its refresh token.
 
-| Dimension | Weight |
-|---|---:|
-| Material appearance | 25 |
-| Semantic/spatial placement | 25 |
-| Prompt compliance | 20 |
-| Editability | 15 |
-| Revision fidelity | 15 |
+## Paired campaign
 
-The revised user protocol declares **no numerical pass threshold**. Weighted scores and evidenced requirement decisions remain separate; the old 80-point and 20/24 gates do not apply.
+Create an unmodified baseline checkout/archive at the reviewed commit, then:
 
-Each case has five acceptance checks covering its actual brief and revisions. Primary workflow checks are input integrity, evidence delivery, preservation and independent editability. Evidence delivery verifies the ten render hashes, evaluated channel files, native UI captures, apply receipts and saved/packed final blend. Missing evidence blocks the prerequisite without inventing an artistic score. Checks require `passed: true|false|null` and evidence paths. Captured controls/rendered images alone cannot prove that unrelated components remain unchanged. Human review may complete a pending check, but cannot overwrite a measured failure.
+```sh
+python3 scripts/benchmark_material_director.py config --baseline-checkout BASELINE --output config.json
+python3 scripts/benchmark_material_director.py freeze --config config.json --fixtures FIXTURES --output COMPARISON --correction-ablation
+python3 scripts/benchmark_material_director.py run --comparison COMPARISON --fixtures FIXTURES --baseline-checkout BASELINE --improved-checkout IMPROVED --codex CODEX --use-codex-login
+```
 
-Reviewer records identify `id`, `independent: true`, `is_generating_ai: false` and expertise, such as `material_artist` or `game_asset_usability`. Prefer three reviewers where practical; a single reviewer is disclosed rather than represented as consensus. The generating model cannot grade its own output.
+Resolve actual model/runtime/Blender/library/build pins and cite the inspected five-case smoke index before freezing. The default schedule has 60 sessions; `--correction-ablation` adds 30 in a separate randomized phase. Ablation never enters primary P/H means. Execute from the frozen runtime copy if development continues elsewhere. Source, fixture and model drift are rejected; finished attempts cannot be rerolled into the same ID. Account credentials are temporary access-only copies; the user's refresh token is never copied or changed.
 
-### Artist corrections
+For two-process execution, first run `tests/benchmarks/material_director/probe_concurrency.py` with two distinct `--fixture` files and a fresh `--output` directory. It captures native UI plus Eevee frames with zero provider calls and requires actual pixel inspection before a PASS proof. Freeze using `--jobs 2 --concurrency-evidence PROOF.json`, then run with `--jobs 2`. The first 60 sessions execute in adjacent baseline/improved pairs; the next 30 are correction-off diagnostics. RSS and preview wall time disclose shared-device contention; neither is a hardware GPU counter or uncontended smoke timing.
 
-Record every additional human correction beyond the three predefined test prompts:
+Human reference/reviewer may be unavailable by explicit user instruction. Keep reviewer PENDING, scores NOT_SCORED, deterministic calibration separately labeled, and report all planned/attempted runs plus the assessable-appearance subset.
 
-- **0:** autonomous success only if the actual texturing requirements pass.
-- **1:** minor assistance.
-- **2:** significant assistance.
-- **3 or more:** failed autonomous workflow.
+Actual five-case no-edit recapture is an engineering prerequisite for freezing. Put its path/file checksum and embedded report/canonical digest in `evidence.no_edit_calibration`; the freezer verifies all five source files were unchanged, exactly two recaptures occurred, deltas fit the frozen tolerances, and the tested product/evaluator bytes match. Human artistic review remains separate.
 
-`artist_intervention_count` and correction records are separate from active operator time. Missing counts remain unknown; automation does not establish zero human effort. A reviewer may record externally observed corrections with evidence. Failed requirements remain failures even when correction count is zero.
+The config-only helper derives final pins from the inspected smoke's immutable runtime and validates the authored calibration and technical repeatability proof:
 
-The report retains every scheduled attempt, including blocked/unavailable outcomes, and reports conditional visual quality only for delivered outputs. Unknown scores, operator time and monetary cost never become invented zeroes. Actual generated-image assignments are reported separately from the H toggle.
+```sh
+python3 scripts/prepare_material_director_campaign.py \
+  --smoke SMOKE --baseline-checkout BASELINE --fixtures FIXTURES \
+  --calibration-selection frozen_selection.json --no-edit repeatability.json \
+  --concurrency-proof concurrency_probe.json --imagegen-evidence PRIOR_RESULT_WITH_GENERATED_IMAGE \
+  --comparison-id remedy-v3-paired-01 --comparison-output COMPARISON --output final-config.json
+```
 
-## Optional extensions
+It prints the existing runner's freeze/run commands for 60 primary and 30 correction-off sessions. It cannot launch providers or mark the smoke inspected. The image-generation evidence option is optional when the smoke actually generated an image; a previously recorded successful generation is explicitly disclosed as historical availability evidence. A smoke against a different improved product, provider runtime, renderer or environment cannot authorize the final comparison.
 
-These are outside the five-session primary benchmark:
+Effect records distinguish whole layer masks from their declared controls. A sole native inverted paint-loss root exposes its pre-strength source and mask-strength opacity; a composite or zero-strength inverse is `NOT_MEASURED`. Generic baseline masks retain valid before-layer-opacity evidence without guessing their semantic role from names. Mask equality remains measurable for tiny effects even when an occupied-area ratio is undefined. Areas use four fixed interior samples per triangle in world units squared; thin-feature accuracy and a universal physical-height frame are not established.
 
-- `freeze --controlled-matrix`: five cases × P/H × three repeats, **30 sessions**. Cases are randomized within mode and mode order alternates across repeats.
-- `pilot --extended-checks` and `freeze --extended-checks`: offline reopen, undo, export/reconstruction and repeat-1 4K checks. They reuse the final stack and do not add generative samples.
-- `freeze --include-robustness`: the archived eight safety scenarios for each selected mode.
-- `freeze --evidence-config FILE`: evaluator-only region annotations and measurements prepared with [annotations.py](annotations.py). They never enter Director context.
-- `supplements.baselines: true`: manual preset/qualified-artist control templates. Missing controls are not invented or credited as executed baselines.
+## Recovery and portable delivery
 
-Missing optional handoff, 4K or robustness evidence does not fail a primary material result. Blender-only evidence makes no game-engine compatibility claim.
+```sh
+python3 scripts/benchmark_material_director.py recover-evidence --session SESSION --state final --output NEW_RECOVERY
+python3 scripts/benchmark_material_director_gallery.py COMPARISON --format portable --output review.html
+python3 scripts/benchmark_material_director_gallery.py COMPARISON --format portable-cases --output portable-cases
+python3 scripts/benchmark_material_director_gallery.py COMPARISON --format zip --output /outside/comparison/evidence.zip
+```
 
-## Versioning and verification
+Recovery is offline and uses the saved state's checksum; it never runs an instruction or changes the original record. Optional `--separate-blends` creates a declared companion ZIP. `--format html` produces relative links for the complete directory. `report` and `review-pack` retain the existing scoring and anonymous human-review workflow. The optional macOS `scripts/validate_material_review_offline.swift` opens the portable file in fresh WebKit and decodes every embedded image.
 
-The original eight-case specification, scoring and reader remain in [legacy/](legacy/README.md). Existing version-1 frozen comparisons stay readable and are never silently converted. New comparisons use protocol `five_asset_eevee_v2` and manifest version 2.
+Full-campaign embedded HTML can exceed 1 GiB. `portable-cases` writes five standalone files, each containing its own images, and a small linked index. Each case file can be copied alone into an empty directory; the index requires its five sibling files. `--case T01` filters an individual HTML export. The full-comparison HTML and full evidence ZIP remain available.
 
-Focused scheduling, scoring, review and CLI boundary tests use no provider:
+PNG validation always checks chunk checksums, dimensions, the complete decompressed stream, filter bytes and actual pixel decoding. An identifiable installed libpng 1.6 library accelerates full decoding; its version, resolved file and checksum are frozen in `environment.png_decoder` and verified again before execution. No package is installed. The dependency-free decoder remains available when that library is absent. Raw scanlines plus RGBA output have a 256 MiB per-image allocation bound, and the decoded-metadata cache holds at most 256 entries. Indexed images retain explicit palette-index validation.
+
+`environment.png_decoder` identifies the **host launcher's evidence-normalization decoder**, recorded after Blender exits. Blender's bundled Python may use the pure-Python fallback while the host uses libpng; those runtimes do not need the same decoder. The observer does not write this host pin. The freezer checks the completed smoke's normalized host record against the host used for the campaign.
+
+## Checks
 
 ```sh
 python3 -m unittest discover -s tests/unit -p 'test_material_director_benchmark*.py'
+python3 tests/unit/test_director_quality_gate_regressions.py --repo .
 ```
 
-Those tests validate the harness contract. Live five-model results and independent visual judgments remain separate evidence categories.
+`test_revision_measurements.py` uses Blender's bundled Python/NumPy. `test_v3_evidence_blender.py` opens the frozen vase in an ordinary visible Eevee process, confirms opacity/mask separation, captures added circumference views and verifies infrastructure restoration. These are deterministic controls, not live AI artistic evidence.

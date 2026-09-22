@@ -46,6 +46,7 @@ CHANNEL_FIELDS = dict(enabled=BOOL, opacity=UNIT, value=UNIT, color=array(4, UNI
                       scale=array(2, number(.001, 512)), offset=array(2, number(-100, 100)),
                       rotation=number(-100, 100), triplanar_hardness=number(1, 64))
 MASK_FIELDS = dict(name=NAME, enabled=BOOL, operation=COMBINE, invert=BOOL,
+                   period_m=number(.000001, 100), chip_radius_m=number(.000001, 10),
                    black=UNIT, white=UNIT, strength=UNIT, amount=UNIT,
                    contrast=number(.01, 20), edge_width=number(.05, 1),
                    edge_size=number(0, 3), noise_scale=number(1, 512),
@@ -68,6 +69,7 @@ FIELD_FIELDS = dict(kind=enum("UP", "DOWN", "HEIGHT", "WORLD_HEIGHT", "GROUND", 
                              "CONTACT", "DISTANCE", "EXPOSURE", "MOISTURE", "HEAT", "SOOT"),
                     mode=enum("LIVE"), resolution=enum("64", "128", "256", "512"),
                     distance=number(.00001, 10000), bounds=array(2, number(-100000, 100000)),
+                    distance_m=number(.000001, 10000), bounds_m=array(2, number(-100000, 100000)),
                     direction=array(3, number(-1, 1)),
                     attribute=dict(type="string", maxLength=120),
                     falloff=enum("LINEAR", "SMOOTH", "SQUARED", "ROOT"))
@@ -85,7 +87,29 @@ def command(op, fields, required):
     return object_schema(dict(op=enum(op), **fields), ("op", *required))
 
 
+SURFACE_VALUES = dict(color=array(4, UNIT), roughness_range=array(2, UNIT),
+    period_m=number(.000001, 100), height_m=number(0, .1), relative_period=number(.0001, 1),
+    color_variation=number(0, 2), frame=enum("WORLD", "OBJECT", "COMPONENT"),
+    origin=array(3, number(-1e6, 1e6)), axis_u=array(3, number(-1, 1)), axis_v=array(3, number(-1, 1)),
+    seed=SEED, opacity=UNIT, paint_loss_opacity=UNIT, wear_coverage=UNIT,
+    chip_radius_m=number(.000001, 10), effect_distance_m=number(.000001, 100))
+PATCH_VALUES = {key: SURFACE_VALUES[key] for key in
+                ("color", "roughness_range", "period_m", "height_m", "color_variation", "opacity", "paint_loss_opacity")}
+PATCH_VALUES.update(band_translation=number(-1, 1), coverage_ratio=number(.01, 1))
+
 COMMANDS = [
+    command("create_surface", dict(id=IDENTIFIER, name=NAME, parent_id=IDENTIFIER, region_id=IDENTIFIER,
+        family=enum("PAINTED_METAL", "BARE_METAL", "WOOD", "WOVEN_FABRIC", "RUBBER", "CERAMIC_GLAZE", "MUD", "STONE", "MOSS"),
+        values=object_schema(SURFACE_VALUES)), ("id", "name", "family")),
+    command("create_bands", dict(id=IDENTIFIER, name=NAME, parent_id=IDENTIFIER,
+        centers=dict(type="array", items=UNIT, minItems=1, maxItems=8), width=number(.001, .25),
+        color=array(4, UNIT), metallic=UNIT, roughness=UNIT, direction=array(3, number(-1, 1))),
+        ("id", "name", "centers", "width", "color")),
+    command("patch_surface", dict(surface_id=IDENTIFIER,
+        mode=enum("COLOR_ONLY", "PERIOD_ONLY", "APPEARANCE_ONLY", "OPACITY_ONLY", "PLACEMENT_ONLY", "COVERAGE_ONLY"),
+        values=object_schema(PATCH_VALUES)), ("surface_id", "mode", "values")),
+    command("add_region_mask", dict(id=IDENTIFIER, layer_id=IDENTIFIER, name=NAME, region_id=IDENTIFIER),
+        ("id", "layer_id", "name", "region_id")),
     command("add_layer", dict(id=IDENTIFIER, name=NAME, kind=enum("FILL", "FOLDER"),
                               parent_id=IDENTIFIER), ("id", "name", "kind")),
     command("set_layer", dict(layer_id=IDENTIFIER, values=object_schema(LAYER_FIELDS)),
@@ -93,8 +117,14 @@ COMMANDS = [
     command("set_channel", dict(layer_id=IDENTIFIER, channel=CHANNEL,
                                 values=object_schema(CHANNEL_FIELDS)),
             ("layer_id", "channel", "values")),
+    command("assign_bundle", dict(id=IDENTIFIER, layer_id=IDENTIFIER,
+        sources=object_schema({key: IDENTIFIER for key in CHANNEL["enum"]}),
+        projection=enum("UV", "TRIPLANAR"), scale=array(2, number(.001, 512)),
+        offset=array(2, number(-100, 100)), rotation=number(-100, 100),
+        physical_extent_m=array(2, number(.000001, 10000))), ("id", "layer_id", "sources")),
     command("assign_texture", dict(layer_id=IDENTIFIER, image_id=IDENTIFIER, channel=CHANNEL,
-                                    mask_id=IDENTIFIER, target=enum("CONTENT", "DETAIL")),
+                                    mask_id=IDENTIFIER, target=enum("CONTENT", "DETAIL"),
+                                    physical_extent_m=array(2, number(.000001, 10000))),
             ("layer_id", "image_id")),
     command("add_mask", dict(id=IDENTIFIER, layer_id=IDENTIFIER, name=NAME,
                              source=enum("GENERATOR", "PROCEDURAL", "SCENE", "BAKED", "NOISE", "ANCHOR", "REFERENCE", "FILTER", "FILL"),

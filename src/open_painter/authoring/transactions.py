@@ -108,6 +108,7 @@ def apply(ts, proposal, *, operation_id, expected_digest, scope="", objects=None
                 actual = document.snapshot(ts)
                 commands.validate_document(ts, before, actual)
                 commands.validate_scope(ts, before, actual, scope)
+                commands.surfaces.validate_patches(before, actual, compiled.get("patch_constraints", []))
                 receipt = dict(version=1, id=operation_id, hash=payload_hash, timestamp=time.time(),
                                summary=proposal["summary"], before=document.encode(before),
                                after=document.encode(actual), aliases=compiled["aliases"],

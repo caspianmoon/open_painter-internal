@@ -62,14 +62,14 @@ def _prop_signature(prop, count=None):
     if count is not None:
         effects = effects[:count]
     # enabled and blend_mode belong to the channel unit that consumes this content.
-    return (prop.channel, bool(prop.image), bool(prop.detail_image), prop.procedural,
+    return (getattr(prop, "material_mapping_version", 0), prop.channel, bool(prop.image), bool(prop.detail_image), prop.procedural,
             prop.projection, prop.filtering, prop.tiling, prop.anchor, getattr(prop, 'anchor_channel', ''),
             _effects_signature(effects))
 
 
 def _mask_signature(m):
     graph = getattr(m, 'node_group', None)
-    return (m.id, m.enabled, m.source, getattr(m, 'parent_id', ''),
+    return (m.id, m.enabled, m.source, getattr(m, 'parent_id', ''), getattr(m, 'material_mapping_version', 0),
             graph.name if graph is not None and m.source == 'GRAPH' else None,
             m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
             m.procedural, m.map_type, m.operation,
@@ -731,12 +731,13 @@ class Graph(Math):
     def _field(self, owner, kind=None, generator=False, rehydrate=None):
         """Preserve custom integer-hash noise as a separately cached scalar."""
         kind = kind or owner.procedural
+        from . import material_space
         if generator:
             identity = lambda: ('legacy-generator-field', kind, owner.source == 'NOISE', owner.noise_scale, owner.seed)
         else:
-            identity = lambda: ('legacy-channel-field', kind, owner.procedural_scale, owner.procedural_seed,
+            identity = lambda: ('legacy-channel-field', material_space.identity(owner), kind, owner.procedural_scale, owner.procedural_seed,
                 owner.projection, tuple(owner.scale), owner.rotation, tuple(owner.offset), owner.triplanar_hardness,
-                self._geometry_stamp(owner.projection == 'TRIPLANAR'))
+                self._geometry_stamp(owner.projection == 'TRIPLANAR' or material_space.enabled(owner)))
 
         def factory(signature):
             if generator:
@@ -799,7 +800,7 @@ class Graph(Math):
             return luminance(self, result.color)
         from ..texture_engine.procedurals import ALIASES
         kind = ALIASES.get(prop.procedural, prop.procedural)
-        if kind in self.ANALYTIC:
+        if kind in self.ANALYTIC and not getattr(prop, 'material_mapping_version', 0):
             scale = self.param(prop, 'procedural_scale')
             result = self.projected(prop, lambda uv: Signal(self.analytic(kind, uv, scale)))
             return self.separate(result.color)[0]
@@ -811,13 +812,15 @@ class Graph(Math):
         projected source, or a Surface-space filter padding across its seams)."""
         from .operation_contracts import surface
         stamp = ()
+        if prop.channel == 'HEIGHT' and getattr(prop, 'material_mapping_version', 0) == 1:
+            stamp += (('metric-height-distance', self.ts.height_distance),)
         if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
             from ..painting.strokes import stroke_identity
             stamp += (('strokes', stroke_identity(self.scene.open_painter, layer.stroke_key, self.ts)),)
         if layer.type == 'FILL' and prop.projection == 'DECAL':
             from ..painting import decals
             stamp += (('decal', decals.signature(layer)),)
-        geometry = (bool(stamp) or prop.projection == 'TRIPLANAR'
+        geometry = (bool(stamp) or prop.projection == 'TRIPLANAR' or getattr(prop, 'material_mapping_version', 0) == 1
                     or any(surface(e) for e in effects if e.enabled and e.strength > 0))
         return stamp + (self._geometry_stamp(geometry),)
 
@@ -1195,6 +1198,9 @@ class Graph(Math):
 
     def _channel_base(self, layer, prop, channel):
         with self.role(f'LayerSource:{layer.id}:{channel}'):
+            if (layer.type == 'FILL' and getattr(prop, 'material_mapping_version', 0) == 1
+                    and (prop.image or prop.detail_image)):
+                return self._channel_prefix(layer, prop, 0)
             if layer.type == 'PAINT' and getattr(layer, 'stroke_key', ''):
                 value = self._strokes_boundary(layer, prop)
             elif layer.type == 'FILL' and prop.projection == 'DECAL' and not prop.anchor:
@@ -1232,7 +1238,13 @@ class Graph(Math):
             elif field:
                 scalar = self.math('SUBTRACT', self.detail(prop), .5)
                 if channel == 'HEIGHT':
-                    color = self.math('ADD', .5, self.math('MULTIPLY', scalar, self.param(prop, 'procedural_height')))
+                    if getattr(prop, 'material_mapping_version', 0) == 1:
+                        amplitude = self.math('DIVIDE', self.param(prop, 'material_height_m'),
+                            self.math('MAXIMUM', self.math('MULTIPLY', self.param(prop, 'material_meters_per_unit'),
+                                self.param(self.ts, 'height_distance')), 1e-15))
+                    else:
+                        amplitude = self.param(prop, 'procedural_height')
+                    color = self.math('ADD', .5, self.math('MULTIPLY', scalar, amplitude))
                 elif channel in {'BASE_COLOR', 'EMISSION'}:
                     color = self.vec('SCALE', value.color, self.math('ADD', 1,
                         self.math('MULTIPLY', scalar, self.param(prop, 'procedural_detail'))))
@@ -1934,19 +1946,20 @@ class Graph(Math):
     def _mask_source_boundary(self, layer, mask, rehydrate=None):
         def identity():
             if mask.source == 'SCENE':
-                return ('scene-field', self._scene_identity(mask.influence))
+                return ('scene-field-gutters-v1', self._scene_identity(mask.influence))
             if mask.source == 'STROKES':
                 from ..painting.strokes import stroke_identity
                 return ('strokes-mask', mask.stroke_key, stroke_identity(self.scene.open_painter, mask.stroke_key, self.ts),
                         self._geometry_stamp(True))
             if mask.source == 'MESH':
-                from .mesh_masks import signature as mesh_signature
+                from .mesh_masks import sampling_signature as mesh_signature
                 return ('mesh-mask', mesh_signature(self.ts, mask), self._geometry_stamp(True))
             if mask.source == 'PROCEDURAL':
+                from .material_space import identity as metric_identity, enabled
                 return ('legacy-mask-field', mask.procedural, mask.noise_scale, mask.seed,
                         mask.projection, tuple(mask.scale), mask.rotation, tuple(mask.offset),
-                        mask.tiling, mask.triplanar_hardness,
-                        self._geometry_stamp(mask.projection == 'TRIPLANAR'))
+                        mask.tiling, mask.triplanar_hardness, metric_identity(mask),
+                        self._geometry_stamp(mask.projection == 'TRIPLANAR' or enabled(mask)))
             return ('mask-source', values(mask, excluded={'black', 'white', 'invert', 'strength', 'operation', 'enabled'}),
                     self._geometry_stamp(mask.projection == 'TRIPLANAR' or mask.source == 'SCENE'),
                     tuple((m.kind, image_key(m.image)) for m in self.ts.baked_maps))
@@ -1999,7 +2012,7 @@ class Graph(Math):
     def _scene_boundary(self, layer, mask, rehydrate=None):
         """Raw scene-field raster of a mask's influence (live edges), as a boundary."""
         def identity():
-            return ('scene-edge', self._scene_identity(mask.influence))
+            return ('scene-edge-gutters-v1', self._scene_identity(mask.influence))
         def factory(signature):
             from .snapshots import capture
             snapshot = capture(mask)
@@ -2041,7 +2054,7 @@ class Graph(Math):
             if mask.source == 'SCENE' or (mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE'):
                 stamp += (('scene', self._scene_identity(mask.influence)),)
             if mask.source == 'MESH':
-                from .mesh_masks import signature as mesh_signature
+                from .mesh_masks import sampling_signature as mesh_signature
                 stamp += (('mesh', mesh_signature(self.ts, mask)),)
             if mask.source == 'GRAPH':
                 # The CPU reference bakes the group over the assigned meshes (custom_graph.evaluate).
@@ -2246,8 +2259,9 @@ class Graph(Math):
             return self._custom_graph(mask)
         if mask.source == 'PROCEDURAL':
             from ..texture_engine.procedurals import ALIASES
+            from .material_space import enabled
             kind = ALIASES.get(mask.procedural, mask.procedural)
-            if kind in self.ANALYTIC:
+            if kind in self.ANALYTIC and not enabled(mask):
                 scale = self.param(mask, 'noise_scale')
                 sample = self.projected(mask, lambda uv: Signal(self.analytic(kind, uv, scale)))
                 value = self.separate(sample.color)[0]

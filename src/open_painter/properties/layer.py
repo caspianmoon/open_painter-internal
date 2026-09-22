@@ -115,6 +115,9 @@ def _set_master(layer, family, value):
 
 
 class OP_Layer(bpy.types.PropertyGroup):
+    surface_id: bpy.props.StringProperty(description="Stable surface identity; independent of layer name")
+    surface_family: bpy.props.StringProperty(description="Typed surface recipe family")
+    surface_role: bpy.props.StringProperty(description="Native surface component role")
     director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
     aging_role: bpy.props.StringProperty(description="The aging outcome this layer materialises; the Material Aging engine drives it",
                                          options={'HIDDEN'})

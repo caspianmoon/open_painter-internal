@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,6 +17,54 @@ import time
 ROOT = Path(__file__).resolve().parents[3]
 SECRET_KEYS = {"access_token", "refresh_token", "id_token", "token", "authorization", "api_key", "openai_api_key",
                "account_id", "email", "authurl"}
+MAX_AUTH_BYTES = 1024 * 1024
+MAX_TOKEN_BYTES = 128 * 1024
+
+
+class AuthRefreshRequired(RuntimeError):
+    """Safe control-plane outcome; it does not describe an attempted AI session."""
+
+
+def _read_access_login(source=None, *, minimum_seconds=1800):
+    """Bounded local read. Return only access-only fields, never a refresh token."""
+    if not isinstance(minimum_seconds, (int, float)) or isinstance(minimum_seconds, bool) or not math.isfinite(minimum_seconds) or minimum_seconds <= 0:
+        raise ValueError("minimum_seconds must be finite and positive")
+    source = Path(source) if source else Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
+    try:
+        with source.open("rb") as handle:
+            raw = handle.read(MAX_AUTH_BYTES + 1)
+        if len(raw) > MAX_AUTH_BYTES:
+            raise ValueError("oversized")
+        auth = json.loads(raw)
+        tokens = auth.get("tokens") or {}
+        access, identity = tokens["access_token"], tokens["id_token"]
+        if any(not isinstance(value, str) or not 0 < len(value) <= MAX_TOKEN_BYTES for value in (access, identity)):
+            raise ValueError("invalid token")
+        parts = access.split(".")
+        if len(parts) != 3:
+            raise ValueError("invalid access token")
+        part = parts[1]
+        claims = json.loads(base64.b64decode(part + "=" * (-len(part) % 4), altchars=b"-_", validate=True))
+        expiry = claims.get("exp")
+        if isinstance(expiry, bool) or not isinstance(expiry, (int, float)) or not math.isfinite(expiry):
+            raise ValueError("invalid expiry")
+        remaining = expiry - time.time()
+        if remaining < minimum_seconds:
+            raise ValueError("expiry")
+        account = tokens.get("account_id", "")
+        if not isinstance(account, str) or len(account) > MAX_TOKEN_BYTES:
+            raise ValueError("invalid account field")
+        return {"id_token": identity, "access_token": access, "account_id": account}, remaining
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
+        raise AuthRefreshRequired("Current Codex ChatGPT login is unavailable or expires before this session's cap; refresh the normal managed login outside the benchmark, then resume unattempted sessions") from None
+
+
+def preflight_login(source=None, *, minimum_seconds=1800):
+    """Read-only check. No credentials, paths or account identifiers leave this API."""
+    tokens, remaining = _read_access_login(source, minimum_seconds=minimum_seconds)
+    del tokens
+    return {"status": "READY", "minimum_validity_seconds": minimum_seconds,
+            "remaining_seconds": int(remaining), "refresh_performed": False}
 
 
 def sha256(path):
@@ -36,7 +85,7 @@ def write_json(path, value):
 
 def redact(value):
     if isinstance(value, dict):
-        return {k: "<REDACTED>" if k.lower() in SECRET_KEYS else redact(v) for k, v in value.items()}
+        return {str(k): "<REDACTED>" if str(k).lower() in SECRET_KEYS else redact(v) for k, v in value.items()}
     if isinstance(value, (tuple, list)):
         return [redact(item) for item in value]
     if isinstance(value, str):
@@ -71,17 +120,7 @@ def source_fingerprint():
 @contextmanager
 def isolated_login(source=None, *, minimum_seconds=1800):
     """Access-only opt-in account use. Never write or rotate the real refresh token."""
-    source = Path(source) if source else Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
-    try:
-        auth = json.loads(source.read_text())
-        tokens = auth.get("tokens") or {}
-        access = tokens["access_token"]
-        part = access.split(".")[1]
-        claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
-        if not tokens.get("id_token") or claims.get("exp", 0) - time.time() < minimum_seconds:
-            raise ValueError("expiry")
-    except (OSError, ValueError, KeyError, IndexError):
-        raise RuntimeError("Current Codex ChatGPT login is unavailable or expires before this session's cap; refresh the normal login and retry an unattempted session") from None
+    tokens, _ = _read_access_login(source, minimum_seconds=minimum_seconds)
     with tempfile.TemporaryDirectory(prefix="painter-benchmark-auth-") as directory:
         isolated = dict(auth_mode="chatgpt", OPENAI_API_KEY=None,
             tokens={key: tokens.get(key, "") for key in ("id_token", "access_token", "account_id")},
@@ -89,11 +128,11 @@ def isolated_login(source=None, *, minimum_seconds=1800):
         isolated["tokens"]["refresh_token"] = ""
         with os.fdopen(os.open(str(Path(directory) / "auth.json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as handle:
             json.dump(isolated, handle)
-        del auth, tokens, access, claims, isolated
+        del tokens, isolated
         yield Path(directory)
 
 
-def run_blender(command, *, env, timeout, log, heartbeat=None):
+def run_blender(command, *, env, timeout, log, heartbeat=None, cancel_event=None):
     """Bound a whole owned process group; never leave Blender running after timeout."""
     import signal
     started = time.monotonic()
@@ -102,6 +141,8 @@ def run_blender(command, *, env, timeout, log, heartbeat=None):
                                    start_new_session=os.name != "nt")
         try:
             while process.poll() is None:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise RuntimeError("Owned Blender run cancelled")
                 if time.monotonic() - started > timeout:
                     raise TimeoutError("Blender exceeded the predeclared process cap")
                 if heartbeat:

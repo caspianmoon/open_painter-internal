@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-"""Build a local, dependency-free gallery from an existing frozen comparison.
-
-Reads only manifest/result/checkpoint JSON and the existing PNG/.blend artifacts.
-Writes one gallery.html; never edits an image or invents scores/completed stages.
-"""
+"""Export faithful review HTML or a verified full-evidence archive; never call AI."""
 from __future__ import annotations
-
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import html
+from html.parser import HTMLParser
 import json
 import os
 from pathlib import Path
-from urllib.parse import quote
+import shutil
+import sys
+import tempfile
+from urllib.parse import quote, unquote, urlparse
+import zipfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests/benchmarks"))
+from material_director.outcomes import adapt_result
+from material_director.png_validation import decode_png
+from material_director.view_inventory import inventory as view_inventory
 
 VIEWS = {
     "before": {"front": "00_before.png"},
@@ -21,232 +26,301 @@ VIEWS = {
     "refine_1": {"front": "04_refine1_front.png", "back": "05_refine1_back.png", "close": "06_refine1_close.png"},
     "refine_2": {"front": "07_refine2_front.png", "back": "08_refine2_back.png", "close": "09_refine2_close.png"},
 }
-CHECKPOINT = {stage: "before" if stage == "before" else "after_" + stage for stage in VIEWS}
-
 
 def read_json(path, warnings):
-    if not path.is_file():
-        return None
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(value, dict):
-            raise ValueError("Expected a JSON object")
-        return value
+    if not path.is_file(): return None
+    try: return json.loads(path.read_text())
     except (ValueError, OSError) as exc:
-        warnings.append(f"{path.name}: {type(exc).__name__}: {exc}")
-        return None
-
+        warnings.append(f"{path.name}: {exc}"); return None
 
 def digest(path):
-    hasher = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
+    h=hashlib.sha256()
+    with Path(path).open("rb") as f:
+        for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
+    return h.hexdigest()
 
 def relative_link(path, output):
     return quote(Path(os.path.relpath(path, output.parent)).as_posix(), safe="/")
 
-
-def stage_rows(result):
-    stages = result.get("stages", {})
-    if isinstance(stages, list):
-        return {row.get("name"): row for row in stages if isinstance(row, dict)}
-    return stages if isinstance(stages, dict) else {}
-
-
-def describe_failure(value):
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        prefix = ": ".join(str(value[key]) for key in ("stage", "category") if value.get(key))
-        detail = value.get("message", value.get("reason", value.get("status", "")))
-        return (prefix + ": " if prefix else "") + str(detail or json.dumps(value, ensure_ascii=False))
-    return str(value)
-
-
-def collect_run(root, entry, output):
-    relative = Path(entry["relative_directory"])
-    if relative.is_absolute() or ".." in relative.parts:
-        raise ValueError("Scheduled run directory must be relative to the comparison")
-    directory = root / relative
-    warnings = []
-    result_path = directory / "result.json"
-    result = read_json(result_path, warnings) or {}
-    rows = stage_rows(result)
-    recorded_files = result.get("finalization", {}).get("primary_evidence", {}).get("files", {})
-    frames = {}
-    for stage, planned in VIEWS.items():
-        checkpoint_path = directory / (CHECKPOINT[stage] + "_state.json")
-        checkpoint = read_json(checkpoint_path, warnings) or {}
-        capture = checkpoint.get("views", {})
-        captures = {Path(row.get("path", "")).name: row for row in capture.get("views", []) if isinstance(row, dict)}
-        frames[stage] = {}
-        for view in ("front", "back", "close"):
-            filename = planned.get(view)
-            frame = {"status": "NOT_SCHEDULED", "message": "Before texturing, the protocol records the front view only.",
-                     "url": None, "capture_status": capture.get("status", "NO_CHECKPOINT")}
-            if filename:
-                path = directory / filename
-                frame.update(filename=filename, status="MISSING", message="No image file was recorded for this stage and view.")
+def collect_run(root, entry, output, *, portable=False, expected_size=(1024,1024), protocol_version=None):
+    relative=Path(entry["relative_directory"])
+    if relative.is_absolute() or ".." in relative.parts: raise ValueError("Unsafe scheduled directory")
+    directory=root/relative; warnings=[]
+    original=read_json(directory/"result.json",warnings) or {}
+    result=adapt_result(original)
+    rows={r["name"]:r for r in result["stages"]}
+    recorded=result.get("finalization",{}).get("primary_evidence",{}).get("files",{})
+    frames={}; stages={}
+    version = protocol_version or original.get('record_version',2)
+    plans = {label.removeprefix('after_'):dict(views) for label,views in view_inventory(
+        dict(protocol_version=version,case_id=entry.get('case_id'))).items()}
+    for stage,planned in plans.items():
+        row=rows.get(stage,{})
+        execution=row.get("execution",{"state":"NOT_RUN","cause_code":"NO_ATTEMPT"})
+        label="before" if stage=="before" else "after_"+stage
+        if row.get("evidence",{}).get("role") in {"FAILURE_STATE","UNCHANGED_AFTER_ATTEMPT"}:
+            label=Path(row["evidence"].get("checkpoint","failure_"+stage+"_state.json")).name.removesuffix("_state.json")
+        checkpoint=read_json(directory/(label+"_state.json"),warnings) or {}
+        capture=checkpoint.get("views",{})
+        captures={r.get("pose",Path(r.get("path","")).stem):r for r in capture.get("views",[])}
+        captures_by_name={Path(r.get("path","")).name:r for r in capture.get("views",[])}
+        frames[stage]={}
+        for view in dict.fromkeys(["front","back","close",*planned,*captures]):
+            filename=planned.get(view); actual=captures.get(view) or captures_by_name.get(filename,{})
+            declared=actual.get("path")
+            if declared:
+                raw=Path(declared)
+                if raw.is_absolute():
+                    # Records may come from the original machine. A same-name
+                    # capture under this run is relocatable; arbitrary external paths are not.
+                    candidates=[directory/raw.name,*directory.glob("supplemental_views/*/"+raw.name)]
+                    path=next((p for p in candidates if p.is_file()),directory/raw.name)
+                else: path=directory/raw
+            else: path=directory/filename if filename else None
+            if path is not None and not path.resolve().is_relative_to(directory.resolve()):
+                raise ValueError("Evidence path escapes its run directory")
+            frame={"status":"NOT_SCHEDULED","url":None,"message":"View not scheduled", "role":row.get("evidence",{}).get("role","NEUTRAL" if stage=="before" else "APPLIED_STATE")}
+            if execution["state"]=="SKIPPED_DEPENDENCY":
+                frame.update(status="NOT_APPLICABLE",message="SKIPPED_DEPENDENCY: "+execution.get("dependency_stage","create"))
+            elif stage!="before" and execution["state"] in {"NOT_RUN","RUNNING"}:
+                frame.update(status="NOT_SCHEDULED",message=execution["state"])
+            elif path is not None:
+                frame.update(filename=path.name,status="ARTIFACT_MISSING",message="Recorded artifact is absent" if checkpoint else "No checkpoint exists for this attempt")
+                if capture.get("status") in {"FAILED","PARTIAL","BLOCKED"}:
+                    frame.update(status="CAPTURE_FAILED",message="; ".join(map(str,capture.get("errors",[]))) or "Capture failed")
                 if path.is_file():
-                    expected = captures.get(filename, {}).get("sha256") or recorded_files.get(filename)
-                    actual = digest(path)
-                    with path.open("rb") as stream:
-                        png = stream.read(8) == b"\x89PNG\r\n\x1a\n"
-                    frame.update(url=relative_link(path, output), sha256=actual,
-                                 status="CAPTURED" if expected == actual and png else "UNVERIFIED",
-                                 message="Recorded image; checksum matches its evidence record." if expected == actual and png
-                                         else "Image exists, but its capture checksum is not available.")
-                    if expected and expected != actual:
-                        frame.update(status="HASH_MISMATCH", message="Image differs from its recorded checksum. Keep this output visible for investigation.")
-                    if not png:
-                        frame.update(status="INVALID_IMAGE", message="The recorded file does not have a PNG header.", url=None)
-                if capture.get("errors"):
-                    frame["capture_errors"] = [describe_failure(error) for error in capture["errors"]]
-            frames[stage][view] = frame
-    failures = [describe_failure(failure) for key in ("failures", "hard_failures") for failure in result.get(key, [])]
-    if result.get("reason"):
-        failures.append(str(result["reason"]))
-    elapsed = result.get("elapsed_seconds", result.get("metrics", {}).get("elapsed_seconds"))
-    stages = {}
-    for name in ("create", "refine_1", "refine_2"):
-        row = rows.get(name, {})
-        stages[name] = {
-            "status": row.get("status", "NOT_RUN"), "actual_prompt": row.get("prompt"),
-            "visible_complete": row.get("visible_complete"), "applied": row.get("applied"),
-            "no_op_review": row.get("no_op_review"),
-        }
-    available = [name for name in VIEWS if frames[name]["front"].get("url")]
-    return {
-        "run_id": result.get("run_id", entry.get("run_id", relative.name)),
-        "mode": entry.get("mode", result.get("mode", "")), "repeat": entry.get("repeat", result.get("repeat", 1)),
-        "status": result.get("status", "RESULT_MISSING"), "failures": failures, "warnings": warnings,
-        "elapsed_seconds": elapsed, "stages": stages, "frames": frames,
-        "default_stage": available[-1] if available else "before",
-        "result_url": relative_link(result_path, output) if result_path.is_file() else None,
-        "blend_url": relative_link(directory / "final.blend", output) if (directory / "final.blend").is_file() else None,
-        "directory": relative.as_posix(),
-        "captured_frames": sum(frame["status"] == "CAPTURED" for views in frames.values() for frame in views.values()),
-        "existing_frames": sum(bool(frame.get("url")) for views in frames.values() for frame in views.values()),
-    }
+                    expected=actual.get("sha256") or recorded.get(path.name)
+                    measured=digest(path); frame.update(sha256=measured,expected_sha256=expected)
+                    try:
+                        raw=path.read_bytes(); frame["decoding"]=decode_png(raw,expected_size)
+                        frame.update(status="CAPTURED_VERIFIED" if expected==measured else "HASH_MISMATCH",
+                                     message="Decoded PNG and recorded checksum verified" if expected==measured else "Missing or mismatched original checksum",
+                                     url="data:image/png;base64,"+base64.b64encode(raw).decode() if portable else relative_link(path,output))
+                    except (ValueError,zlib.error) as exc:
+                        frame.update(status="CAPTURE_FAILED",message="PNG decode failed: "+str(exc),cause_code="PNG_DECODE_FAILED")
+            frames[stage][view]=frame
+        attempts=row.get("proposal_attempts",[])
+        def targets(attempt):
+            return len(attempt.get("targets",[])) if isinstance(attempt,dict) and "targets" in attempt else 1
+        stages[stage]={"execution":execution,"quality":row.get("quality",{"state":"NOT_REVIEWED"}),
+            "response":row.get("response",""),"first_validation_error":next(iter(row.get("validation_errors",[])),None),
+            "proposed_target_count":sum(targets(a) for a in attempts),"committed_target_count":row.get("receipt_count",0),
+            "actual_prompt":row.get("prompt"),"failure_evidence":row.get("evidence",{})}
+    links={}
+    for key,name in (("result","result.json"),("trace","provider_and_tool_trace.jsonl"),("blend","final.blend"),("failure_blend","failure.blend")):
+        if (directory/name).is_file(): links[key] = None if portable else relative_link(directory/name,output)
+    execution_states=[stages[name]['execution']['state'] for name in ('create','refine_1','refine_2')]
+    execution_summary='APPLIED' if all(value=='APPLIED' for value in execution_states) else next(
+        (value for value in execution_states if value not in {'APPLIED','SKIPPED_DEPENDENCY'}),'NOT_RUN')
+    # H permits generation; only recorded generation events establish a request.
+    generation_requests=sum(row.get('generation_call_count',0) for row in rows.values())
+    return {"run_id":result.get("run_id",entry["run_id"]),"status":result.get("status","NOT_RUN"),
+        "execution_summary":execution_summary,
+        "build_id":entry.get("build_id"),"mode":entry.get("mode"),"repeat":entry.get("repeat"),
+        "quality":"NOT_REVIEWED", "stages":stages,"frames":frames,"warnings":warnings,
+        "failures":result.get("failures",[]),"links":links,"fixture_sha256":result.get("fixture",{}).get("sha256"),
+        "provider":result.get("provider",{}),"generated_inputs":result.get("generated_inputs",{}),
+        "actual_generated_images":len(result.get("actual_generated_inputs",[])),
+        "generation_allowed":entry.get("mode")=="H", "generation_requests":generation_requests,
+        "requested_generation":generation_requests>0, "directory":relative.as_posix()}
 
+# zlib errors are evidence failures, not fatal gallery construction errors.
+import zlib
 
-def collect(root, output):
-    warnings = []
-    manifest = read_json(root / "manifest.json", warnings)
-    if manifest is None:
-        raise ValueError("An existing frozen manifest.json is required: " + "; ".join(warnings))
-    specification = manifest.get("specification", {})
-    cases = specification.get("cases", [])
-    if len(cases) != 5 or {case.get("id") for case in cases} != {"T01", "T02", "T03", "T04", "T05"}:
-        raise ValueError("This gallery requires the five actual T01–T05 cases in the frozen manifest")
-    schedule = manifest.get("schedule", [])
-    cards = []
-    for case in cases:
-        runs = [collect_run(root, entry, output) for entry in schedule
-                if entry.get("kind") == "core" and entry.get("case_id") == case["id"]]
-        cards.append({"id": case["id"], "title": case["title"], "fixture": case.get("fixture"),
-                      "prompts": {"create": case.get("create", ""),
-                                  "refine_1": (case.get("refinements", []) + [""] * 2)[0],
-                                  "refine_2": (case.get("refinements", []) + [""] * 2)[1]},
-                      "runs": runs, "requirements": case.get("requirements", [])})
-    config = manifest.get("configuration", {})
-    return {"comparison": config.get("comparison_id", root.name),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "manifest_url": relative_link(root / "manifest.json", output),
-            "common_instruction": specification.get("common_instruction", ""),
-            "protocol": manifest.get("protocol", specification.get("protocol", "")),
-            "cards": cards}
+def collect(root, output, *, portable=False, case_ids=None):
+    root,output=Path(root),Path(output); warnings=[]
+    manifest=read_json(root/"manifest.json",warnings)
+    if not manifest: raise ValueError("Frozen manifest required")
+    cards=[]
+    report=read_json(root/'report.json',warnings) or {}
+    reviewed={row.get('run_id'):row for row in report.get('core_results',[])+report.get('ablation_results',[])}
+    if case_ids and not set(case_ids).issubset({case['id'] for case in manifest['specification']['cases']}):
+        raise ValueError('Unknown case requested for review export')
+    for case in manifest["specification"]["cases"]:
+        if case_ids and case['id'] not in case_ids: continue
+        runs=[collect_run(root,e,output,portable=portable,protocol_version=manifest.get('schema_version',2)) for e in manifest["schedule"] if e["kind"]=="core" and e["case_id"]==case["id"]]
+        for run in runs:
+            score=reviewed.get(run['run_id'],{})
+            run['quality']=score.get('quality_status','NOT_REVIEWED')
+            run['independent_review']=score
+            for stage,row in run['stages'].items():
+                rating=score.get('stages',{}).get(stage,{})
+                if rating:
+                    row['quality']={'state':rating.get('quality_status','NOT_REVIEWED'),
+                                    'review':rating.get('review',{}), 'failures':rating.get('quality_failures',[])}
+        cards.append(dict(id=case["id"],title=case["title"],runs=runs,prompts=[case["create"],*case["refinements"]]))
+    config=manifest["configuration"]
+    return dict(comparison=config["comparison_id"],protocol=manifest["protocol"],build=config.get("build"),builds=config.get("builds"),
+        model=config.get("provider",{}).get("model_id"),fixtures=manifest.get("fixtures"),cards=cards,portable=portable,
+        generated_at=datetime.now(timezone.utc).isoformat(),quality="NOT_REVIEWED",
+        review_summary=dict(reviewed_sessions=sum(r.get('quality_status') in {'PASS','FAIL'} for r in reviewed.values()),
+                            pending_sessions=sum(r.get('quality_status','NOT_REVIEWED')=='NOT_REVIEWED' for r in reviewed.values())))
 
+def render(data):
+    esc=lambda x:html.escape(str(x))
+    output=['<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Material Director evidence</title><style>body{font:16px system-ui;background:#12171c;color:#edf1f5;margin:24px}a{color:#b4dbff}article,section{border:1px solid #506070;padding:16px;margin:16px 0}figure{margin:0;min-width:0}img{width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}.pair,.views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.views{grid-template-columns:repeat(3,minmax(0,1fr))}.meta{color:#b7c5d1}summary{cursor:pointer}small{overflow-wrap:anywhere}@media(max-width:700px){.pair,.views{grid-template-columns:1fr}}</style><h1>Material Director evidence</h1>']
+    output += ['<p>'+esc(data['comparison'])+' · '+esc(data['protocol'])+' · Model '+esc(data['model'])+'</p>', '<p>Execution and artistic quality are independent. Missing human reviews remain NOT REVIEWED. Failure-state images never establish successful texturing.</p>', '<details><summary>Frozen build and fixture metadata</summary><pre>'+esc(json.dumps({k:data[k] for k in ('build','builds','fixtures')},indent=2))+'</pre></details>']
+    def frame(value):
+        title=esc(value.get('role',''))+' / '+esc(value['status'])
+        image='<img loading="lazy" src="'+esc(value['url'])+'" alt="Recorded material evidence">' if value.get('url') else '<p>'+esc(value.get('message',''))+'</p>'
+        return '<figure>'+image+'<figcaption>'+title+'<br><small>'+esc(value.get('sha256',''))+'</small></figcaption></figure>'
+    for card in data['cards']:
+        output.append('<article><h2>'+esc(card['id']+' '+card['title'])+'</h2>')
+        for run in card['runs']:
+            output += ['<section><h3>'+esc(run['run_id'])+'</h3><p>'+esc(run['execution_summary'])+' / '+esc(run['quality'])+'</p><p>Run delivery: '+esc(run['status'])+'</p>', '<p class="meta">Fixture '+esc(run['fixture_sha256'])+' · Generation allowed '+esc(run['generation_allowed'])+' · Observed generation requests '+str(run['generation_requests'])+' · Actual generated '+str(run['actual_generated_images'])+' · Source assignments '+esc(run['generated_inputs'])+'</p>']
+            output.append('<div class="pair"><div><h4>Create</h4>'+frame(run['frames']['create']['front'])+'</div><div><h4>Final revision</h4>'+frame(run['frames']['refine_2']['front'])+'</div></div>')
+            for name in VIEWS:
+                row=run['stages'][name]
+                output.append('<details><summary>'+esc(name)+' · '+esc(row['execution']['state'])+' / '+esc(row['quality']['state'])+'</summary><pre>'+esc(json.dumps(row,indent=2))+'</pre><div class="views">')
+                output.extend(frame(v) for v in run['frames'][name].values())
+                output.append('</div></details>')
+            output.append('<pre>'+esc(json.dumps(run['failures'],indent=2))+'</pre>')
+            for name,url in run['links'].items():
+                if url: output.append('<a href="'+esc(url)+'">'+esc(name)+'</a> · ')
+            output.append('</section>')
+        output.append('</article>')
+    # PNG bytes already live in the figures. Repeating the entire base64 image
+    # inventory inside inert metadata doubles full-campaign browser memory.
+    def metadata(value):
+        if isinstance(value,dict): return {k:metadata(v) for k,v in value.items()}
+        if isinstance(value,list): return [metadata(v) for v in value]
+        if isinstance(value,str) and value.startswith('data:image/png;base64,'): return 'EMBEDDED_IN_FIGURE'
+        return value
+    payload=json.dumps(metadata(data),ensure_ascii=False,allow_nan=False).replace('<',r'\u003c')
+    output.append('<script id="gallery-data" type="application/json">'+payload+'</script></html>')
+    return '\n'.join(output)
 
-TEMPLATE = r'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Material Director · Five-model evidence gallery</title>
-<style>
-:root{color-scheme:dark;--bg:#111418;--panel:#1a2026;--line:#35404a;--ink:#edf2f6;--muted:#abb8c3;--accent:#a6d7f9;--warn:#ffd68b;--bad:#ffb1ab}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:var(--accent)}button,select{font:inherit;color:inherit;background:#26313b;border:1px solid #536574;border-radius:7px;padding:7px 11px;cursor:pointer}button:hover{background:#354653}button[aria-pressed=true]{background:#c2e3fb;color:#132735;border-color:#c2e3fb}button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--warn);outline-offset:3px}h1,h2,h3,p{margin-top:0}h1{font-size:clamp(24px,4vw,38px);line-height:1.15;margin-bottom:12px}h2{font-size:21px;margin-bottom:4px}h3{font-size:15px}.wrap{max-width:1500px;margin:auto;padding:24px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}.notice{border:1px solid #947544;background:#352d20;color:#ffe4b5;border-radius:10px;padding:14px 18px;margin:20px 0}.notice strong{display:block;font-size:18px}.muted{color:var(--muted)}.tools{position:sticky;top:0;z-index:5;background:#111418f5;border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}.tools .wrap{padding-top:12px;padding-bottom:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}.buttons{display:flex;gap:6px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}.head,.body{padding:18px}.head{border-bottom:1px solid var(--line)}.status-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}.badge{display:inline-block;font-size:12px;letter-spacing:.04em;border:1px solid #607382;background:#233440;border-radius:5px;padding:3px 8px}.bad{color:var(--bad);border-color:#8d5957;background:#352526}.warn{color:var(--warn);border-color:#8c754e;background:#332f23}.stage-controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;margin-bottom:12px}.stage-controls button{font-size:13px;padding:5px 9px}.image-wrap{position:relative;aspect-ratio:1;background:#0c1014;border:1px solid var(--line);border-radius:8px;overflow:hidden}.image-wrap img{width:100%;height:100%;object-fit:contain;display:block}.empty{height:100%;display:grid;place-content:center;text-align:center;padding:32px;color:var(--muted)}.empty strong{font-size:19px;color:var(--ink);margin-bottom:10px}figure{margin:0}figcaption{font-size:13px;color:var(--muted);padding:9px 0 0;min-height:48px}.prompt{white-space:pre-wrap;background:#101820;padding:12px;border-left:3px solid var(--accent);margin:10px 0}.prompt-label{margin:16px 0 4px;font-weight:650}.links{display:flex;gap:14px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px;margin-top:18px}.unavailable{color:#84929c}details{margin-top:14px}summary{cursor:pointer;color:var(--accent)}details pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px}ul{padding-left:22px}.failures{color:var(--bad);font-size:13px}.run-choice{max-width:100%;margin-top:10px}.stage-meta{font-size:13px;color:var(--muted);min-height:22px}footer{font-size:13px;color:var(--muted);padding:24px 0}noscript{display:block;border:1px solid var(--warn);padding:18px;margin:24px}.stage-change{position:absolute;bottom:12px;left:12px;pointer-events:none;background:#101820d9;padding:4px 9px;border-radius:5px;font-size:12px}.hidden{display:none!important}@media(max-width:840px){.grid{grid-template-columns:1fr}.wrap{padding:16px}.tools .wrap{gap:10px}.head,.body{padding:14px}}
-</style></head><body>
-<header class="wrap"><p class="eyebrow">Open Painter · Material Director · Recorded benchmark outputs</p>
-<h1>Five models. Three material instructions each.</h1><p id="comparison" class="muted"></p>
-<div class="notice" role="note"><strong>Human scores pending</strong>Independent review of appearance, placement, prompt fulfillment, editability and revision quality is still required. Failed and incomplete runs remain visible. Run completion is an execution status.</div>
-<p id="summary" class="muted"></p></header>
-<nav class="tools" aria-label="Set every card's view"><div class="wrap"><strong>All cards</strong><div class="buttons" id="global-stages"></div><div class="buttons" id="global-views"></div></div></nav>
-<main class="wrap"><div class="grid" id="cards"></div>
-<details><summary>Common texturing instruction sent with each prompt</summary><pre id="common"></pre></details>
-<footer><a id="manifest">Frozen manifest</a> · <span id="generated"></span><br>Existing PNG files are displayed unchanged. No images are generated, retouched or graded by this gallery. Rerun the generator after more evidence arrives.</footer></main>
-<noscript>This local page uses inline JavaScript for stage/view switches. Enable JavaScript to display the five case cards. The frozen manifest and per-run result files remain available in this comparison directory.</noscript>
-<script id="gallery-data" type="application/json">__DATA__</script>
-<script>
-'use strict';
-const data=JSON.parse(document.getElementById('gallery-data').textContent);
-const stageNames={before:'Before',create:'Create',refine_1:'Refine 1',refine_2:'Refine 2'};
-const viewNames={front:'Front',back:'Back',close:'Close'};
-const controllers=[];
-const text=(tag,value,cls)=>{const el=document.createElement(tag);el.textContent=value;if(cls)el.className=cls;return el;};
-const button=(label,handler)=>{const el=text('button',label);el.type='button';el.addEventListener('click',handler);return el;};
-const badStatus=status=>/FAIL|ERROR|BLOCK|MISMATCH|INVALID/.test(status||'');
-function link(parent,url,label,missing){if(url){const a=text('a',label);a.href=url;parent.append(a);}else parent.append(text('span',missing||`${label} unavailable`,'unavailable'));}
-function details(parent,label,content){const d=document.createElement('details');d.append(text('summary',label),text('pre',content));parent.append(d);return d;}
-function card(spec){
- const node=document.createElement('article');node.className='card';node.setAttribute('aria-label',spec.title);
- const head=text('div','','head'),body=text('div','','body');head.append(text('p',spec.id,'eyebrow'),text('h2',spec.title));
- const statusRow=text('div','','status-row'),badge=text('span','','badge'),runtime=text('span','','muted');statusRow.append(badge,runtime);head.append(statusRow);
- let selected=0,stage=spec.runs[0]?.default_stage||'before',view='front';
- const selector=document.createElement('select');selector.className='run-choice';selector.setAttribute('aria-label',`${spec.title}: recorded run`);
- spec.runs.forEach((run,i)=>{const option=text('option',`${run.run_id} · ${run.status}`);option.value=String(i);selector.append(option);});
- if(spec.runs.length>1){head.append(selector);selector.addEventListener('change',()=>{selected=Number(selector.value);stage=spec.runs[selected].default_stage;render();});}
- const controls=text('div','','stage-controls'),stageButtons=text('div','','buttons'),viewButtons=text('div','','buttons');controls.append(stageButtons,viewButtons);body.append(controls);
- const sb={},vb={};Object.entries(stageNames).forEach(([key,name])=>{sb[key]=button(name,()=>{stage=key;render();});stageButtons.append(sb[key]);});Object.entries(viewNames).forEach(([key,name])=>{vb[key]=button(name,()=>{view=key;render();});viewButtons.append(vb[key]);});
- const figure=document.createElement('figure'),wrap=text('div','','image-wrap'),image=document.createElement('img'),empty=text('div','','empty'),stamp=text('span','','stage-change'),caption=document.createElement('figcaption');image.loading='lazy';wrap.append(image,empty,stamp);figure.append(wrap,caption);body.append(figure);
- const stageMeta=text('div','','stage-meta'),promptLabel=text('p','','prompt-label'),prompt=text('div','','prompt');body.append(stageMeta,promptLabel,prompt);
- const failureBox=text('div','','failures');body.append(failureBox);
- const allPrompts=document.createElement('details');allPrompts.append(text('summary','All three exact benchmark prompts'));Object.entries(spec.prompts).forEach(([key,value])=>{allPrompts.append(text('p',stageNames[key],'prompt-label'),text('div',value,'prompt'));});body.append(allPrompts);
- const sent=document.createElement('details'),sentText=document.createElement('pre');sent.append(text('summary','Exact archived outgoing prompt for selected stage'),sentText);body.append(sent);
- if(spec.requirements.length){const req=document.createElement('details'),list=document.createElement('ul');req.append(text('summary','Requirements awaiting independent review'));spec.requirements.forEach(value=>list.append(text('li',value)));req.append(list);body.append(req);}
- const links=text('div','','links');body.append(links);node.append(head,body);
- function render(){
-  const run=spec.runs[selected];Object.keys(sb).forEach(key=>sb[key].setAttribute('aria-pressed',String(stage===key)));Object.keys(vb).forEach(key=>vb[key].setAttribute('aria-pressed',String(view===key)));
-  badge.textContent=run?.status||'NOT_SCHEDULED';badge.className='badge'+(badStatus(run?.status)?' bad':run?.status==='COMPLETED'?'':' warn');
-  runtime.textContent=run?`${run.run_id}${Number.isFinite(run.elapsed_seconds)?' · '+Math.round(run.elapsed_seconds)+' s':''} · ${run.existing_frames}/10 images present`:'No core run exists in the frozen schedule.';
-  const frame=run?.frames[stage]?.[view];image.classList.toggle('hidden',!frame?.url);empty.classList.toggle('hidden',!!frame?.url);empty.replaceChildren();stamp.textContent=`${stageNames[stage]} · ${viewNames[view]}`;
-  if(frame?.url){image.src=frame.url;image.alt=`${spec.title}, ${stageNames[stage]}, ${viewNames[view]} — actual recorded output`;image.onerror=()=>{image.classList.add('hidden');empty.classList.remove('hidden');empty.replaceChildren(text('strong','Image could not be loaded'),text('p','The gallery links to the original evidence file; it may have moved after generation.'));};}
-  else{image.removeAttribute('src');empty.append(text('strong',frame?.status==='NOT_SCHEDULED'?'View not scheduled':'Evidence missing'),text('p',frame?.message||'No run evidence is available yet.'));}
-  caption.replaceChildren();caption.append(text('span',frame?`${frame.status} · ${frame.message}`:'No recorded checkpoint.'));if(frame?.url){caption.append(document.createTextNode(' '));link(caption,frame.url,'Open original PNG');}if(frame?.capture_errors?.length)caption.append(text('p',frame.capture_errors.join('\n'),'failures'));
-  const row=run?.stages[stage];stageMeta.textContent=stage==='before'?'Neutral fixture before texturing.':`Stage execution: ${row?.status||'NOT_RUN'}${row?.visible_complete===false?' · visible completion not established':''}`;
-  promptLabel.textContent=stage==='before'?'Starting condition':`${stageNames[stage]} · exact benchmark prompt`;prompt.textContent=stage==='before'?'Fresh neutral materials and geometry maps in the fixed Eevee fixture. No texturing prompt has been applied at this stage.':spec.prompts[stage];
-  sent.classList.toggle('hidden',!row?.actual_prompt);sentText.textContent=row?.actual_prompt||'';
-  failureBox.replaceChildren();const failures=[...(run?.failures||[]),...(run?.warnings||[])];if(failures.length){failureBox.append(text('strong','Recorded failures / evidence issues'));const ul=document.createElement('ul');failures.forEach(value=>ul.append(text('li',value)));failureBox.append(ul);}if(row?.no_op_review)failureBox.append(text('p','This stage requires an independent no-op review; an unchanged material is not automatically a successful revision.'));
-  links.replaceChildren();link(links,run?.blend_url,'Open final.blend','final.blend not recorded');link(links,run?.result_url,'Run result.json','result.json unavailable');
- }
- render();controllers.push({setStage(value){stage=value;render();},setView(value){view=value;render();}});return node;
-}
-data.cards.forEach(spec=>document.getElementById('cards').append(card(spec)));
-Object.entries(stageNames).forEach(([key,name])=>document.getElementById('global-stages').append(button(name,()=>controllers.forEach(c=>c.setStage(key)))));
-Object.entries(viewNames).forEach(([key,name])=>document.getElementById('global-views').append(button(name,()=>controllers.forEach(c=>c.setView(key)))));
-const runs=data.cards.flatMap(c=>c.runs);document.getElementById('comparison').textContent=`${data.comparison} · Fixed Eevee studio · Original 1024 × 1024 evidence`;
-document.getElementById('summary').textContent=`${data.cards.length} cases · ${runs.length} scheduled core runs · ${runs.filter(r=>r.status==='COMPLETED').length} completed executions · ${runs.filter(r=>badStatus(r.status)).length} failed/blocked executions · Quality unscored`;
-document.getElementById('common').textContent=data.common_instruction;document.getElementById('manifest').href=data.manifest_url;document.getElementById('generated').textContent=`Gallery snapshot generated ${data.generated_at}`;
-</script></body></html>'''
+class Resources(HTMLParser):
+    def __init__(self): super().__init__(); self.urls=[]; self.images=[]
+    def handle_starttag(self,tag,attrs):
+        a=dict(attrs)
+        for key in ('href','src'):
+            if key in a: self.urls.append(a[key])
+        if tag=='img': self.images.append(a.get('src',''))
 
+def validate_html(path, *, portable=False):
+    parser=Resources(); parser.feed(Path(path).read_text()); errors=[]; decoded={}
+    for url in parser.urls:
+        if url.startswith('data:image/png;base64,'):
+            if url not in decoded:
+                try: decoded[url]=decode_png(base64.b64decode(url.split(',',1)[1],validate=True),(1024,1024))
+                except Exception as exc: errors.append('Embedded image: '+str(exc))
+        elif url.startswith('#'): continue
+        elif portable: errors.append('Portable review depends on external/local resource: '+url)
+        elif urlparse(url).scheme: errors.append('Unexpected remote resource: '+url)
+        elif not (Path(path).parent/unquote(url)).is_file(): errors.append('Broken local resource: '+url)
+    return dict(status='COMPLETE' if not errors else 'INCOMPLETE',errors=errors,decoded_images=len(decoded),image_elements=len(parser.images))
+
+def export_html(root, output, *, portable=False, case_ids=None):
+    data=collect(root,output,portable=portable,case_ids=case_ids); output.parent.mkdir(parents=True,exist_ok=True); output.write_text(render(data))
+    checked=validate_html(output,portable=portable)
+    checked['html_status']=checked['status']
+    checked['evidence_errors']=[run['run_id']+': '+stage+'/'+view+': '+frame['status']
+        for card in data['cards'] for run in card['runs'] for stage,views in run['frames'].items()
+        for view,frame in views.items() if frame['status'] in {'ARTIFACT_MISSING','HASH_MISMATCH','CAPTURE_FAILED'}
+        and (stage=='before' and run['status'] not in {'NOT_RUN','UNAVAILABLE'} or run['stages'][stage]['execution']['state']=='APPLIED')]
+    checked['evidence_status']='INCOMPLETE' if checked['evidence_errors'] else 'COMPLETE'
+    if portable:
+        with tempfile.TemporaryDirectory(prefix='director-offline-review-') as empty:
+            copied=Path(empty)/'review.html';shutil.copyfile(output,copied)
+            checked['offline_empty_directory']=validate_html(copied,portable=True)
+    if checked['evidence_status']!='COMPLETE' or checked.get('offline_empty_directory',{}).get('status','COMPLETE')!='COMPLETE':
+        checked['status']='INCOMPLETE'
+    return checked
+
+def export_portable_cases(root, output):
+    """Bound browser memory; every case HTML remains independently portable."""
+    root,output=Path(root),Path(output)
+    if output.exists() and any(output.iterdir()): raise FileExistsError('Use an empty portable-case export directory')
+    output.mkdir(parents=True,exist_ok=True)
+    manifest=json.loads((root/'manifest.json').read_text());records=[]
+    for case in manifest['specification']['cases']:
+        path=output/(case['id']+'.html')
+        checked=export_html(root,path,portable=True,case_ids={case['id']})
+        records.append(dict(case_id=case['id'],file=path.name,sha256=digest(path),bytes=path.stat().st_size,validation=checked))
+    links=''.join('<li><a href="'+html.escape(r['file'])+'">'+html.escape(r['case_id'])+'</a> · '+str(r['bytes'])+' bytes</li>' for r in records)
+    (output/'index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Material Director review</title><h1>Material Director review</h1><p>Each case file contains its own images and can be copied and opened alone offline. This index links the five files. Human ratings remain pending until independently reviewed.</p><ul>'+links+'</ul></html>')
+    index_validation=validate_html(output/'index.html')
+    checked=dict(status='COMPLETE' if index_validation['status']=='COMPLETE' and all(
+        r['validation']['status']=='COMPLETE' and r['validation']['evidence_status']=='COMPLETE' for r in records) else 'INCOMPLETE',
+        format='portable_cases_v1',cases=records,index_validation=index_validation)
+    (output/'validation.json').write_text(json.dumps(checked,indent=2))
+    return checked
+
+def export_archive(root, output, *, separate_blends=False):
+    root,output=Path(root).resolve(),Path(output).resolve()
+    if output.exists(): raise FileExistsError('Never overwrite a published evidence archive')
+    if output.is_relative_to(root): raise ValueError('Evidence ZIP must be outside its source directory')
+    with tempfile.TemporaryDirectory(prefix='director-evidence-') as staging:
+        package=Path(staging)/'evidence';package.mkdir()
+        for path in root.rglob('*'):
+            if path.is_file() and path.suffix not in {'.zip'}:
+                target=package/path.relative_to(root);target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(path,target)
+        check=export_html(package,package/'gallery.html')
+        if check['status']!='COMPLETE' or check['evidence_status']!='COMPLETE':
+            raise ValueError('Incomplete advertised archive: '+repr(check['errors']+check['evidence_errors']))
+        companion={}
+        if separate_blends:
+            companion_path=output.with_name(output.stem+'-blends.zip')
+            if companion_path.exists():raise FileExistsError(companion_path)
+            with zipfile.ZipFile(companion_path,'x',compression=zipfile.ZIP_DEFLATED) as archive:
+                for path in package.rglob('*.blend'):
+                    companion[str(path.relative_to(package))]=digest(path)
+                    archive.write(path,str(path.relative_to(package)))
+            # The primary HTML keeps state links valid only in a complete archive.
+            # Companion export therefore includes a plaintext declaration and
+            # removes state anchors, never advertises silently broken links.
+            text=(package/'gallery.html').read_text()
+            import re
+            text=re.sub(r'<a href="[^"]+\.blend">([^<]+)</a>',r'<span>\1: see declared companion archive</span>',text)
+            (package/'gallery.html').write_text(text)
+            for path in package.rglob('*.blend'):path.unlink()
+        records={str(p.relative_to(package)):digest(p) for p in package.rglob('*') if p.is_file()}
+        inventory={'format':'director_evidence_zip_v1','files':records,'companion_blends':companion,
+                   'companion_archive':companion_path.name if separate_blends else None,'portable_review':False}
+        (package/'evidence_inventory.json').write_text(json.dumps(inventory,indent=2))
+        output.parent.mkdir(parents=True,exist_ok=True)
+        with zipfile.ZipFile(output,'x',compression=zipfile.ZIP_DEFLATED) as archive:
+            for p in package.rglob('*'):
+                if p.is_file():archive.write(p,str(p.relative_to(package)))
+    checked=validate_archive(output)
+    if checked['status']!='COMPLETE': raise ValueError(checked)
+    return checked
+
+def validate_archive(path):
+    errors=[]
+    with zipfile.ZipFile(path) as archive:
+        if archive.testzip(): errors.append('ZIP CRC failure')
+        try: inventory=json.loads(archive.read('evidence_inventory.json'))
+        except (KeyError,ValueError):return {'status':'INCOMPLETE','errors':['Evidence inventory missing']}
+        for name,expected in inventory['files'].items():
+            try:data=archive.read(name)
+            except KeyError:errors.append('Missing '+name);continue
+            if hashlib.sha256(data).hexdigest()!=expected:errors.append('Hash mismatch '+name)
+            if name.endswith('.png'):
+                try:decode_png(data)
+                except Exception as exc:errors.append(name+': '+str(exc))
+        if inventory.get('companion_archive'):
+            companion=Path(path).with_name(inventory['companion_archive'])
+            if not companion.is_file():errors.append('Declared blend companion missing')
+            else:
+                with zipfile.ZipFile(companion) as extra:
+                    for name,expected in inventory['companion_blends'].items():
+                        try:data=extra.read(name)
+                        except KeyError:errors.append('Companion missing '+name);continue
+                        if hashlib.sha256(data).hexdigest()!=expected:errors.append('Companion hash mismatch '+name)
+    return {'status':'COMPLETE' if not errors else 'INCOMPLETE','errors':errors,'files':len(inventory['files'])}
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("comparison", type=Path, help="Existing frozen comparison directory")
-    parser.add_argument("--output", type=Path, help="Default: <comparison>/gallery.html")
-    args = parser.parse_args()
-    root = args.comparison.resolve()
-    output = (args.output or root / "gallery.html").resolve()
-    if output.suffix.lower() != ".html":
-        parser.error("Gallery output must be an .html file")
-    data = collect(root, output)
-    payload = json.dumps(data, ensure_ascii=False, allow_nan=False).replace("<", "\\u003c").replace("&", "\\u0026")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(TEMPLATE.replace("__DATA__", payload), encoding="utf-8")
-    print(output)
-    print(f"{len(data['cards'])} actual case cards; human scores pending; original image bytes unchanged")
-
-
-if __name__ == "__main__":
-    main()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('comparison',type=Path);parser.add_argument('--output',type=Path)
+    parser.add_argument('--format',choices=('html','portable','portable-cases','zip'),default='html');parser.add_argument('--separate-blends',action='store_true')
+    parser.add_argument('--case',action='append',dest='case_ids',help='Export only this case; may be repeated for HTML formats')
+    args=parser.parse_args()
+    if args.case_ids and args.format not in {'html','portable'}:parser.error('--case is available for html/portable exports')
+    root=args.comparison.resolve();output=(args.output or root/('portable_cases' if args.format=='portable-cases' else 'portable_review.html' if args.format=='portable' else 'gallery.html')).resolve()
+    if args.format=='zip':checked=export_archive(root,output,separate_blends=args.separate_blends)
+    elif args.format=='portable-cases':checked=export_portable_cases(root,output)
+    else:checked=export_html(root,output,portable=args.format=='portable',case_ids=args.case_ids)
+    print(json.dumps(dict(output=str(output),validation=checked),indent=2))
+    return 0 if checked['status']=='COMPLETE' else 1
+if __name__=='__main__':raise SystemExit(main())

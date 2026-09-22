@@ -114,6 +114,44 @@ def _draw_components(layout, ts, folder):
 
 def draw_folder(layout, context, target):
     ts, folder = target.ts, target.layer
+    if folder.surface_id:
+        box = layout.box()
+        box.label(text=folder.surface_family.replace("_", " ").title(), icon="MATERIAL")
+        for member in ts.layers:
+            if member.type != "FILL" or member.surface_id != folder.surface_id:
+                continue
+            body = box.column()
+            body.label(text=member.name)
+            color = channel_for(member, "BASE_COLOR")
+            rough = channel_for(member, "ROUGHNESS")
+            palette = next((e for e in color.effects if e.id == member.id + ".palette" and e.kind == "GRADIENT_MAP"), None)
+            if palette:
+                body.prop(palette, "color", text="Palette Dark")
+                body.prop(palette, "color2", text="Palette Light")
+            else:
+                body.prop(color, "color", text="Palette")
+            rough_transfer = next((e for e in rough.effects if e.id == member.id + ".roughness-range" and e.kind == "LEVELS"), None)
+            if rough_transfer:
+                body.prop(rough_transfer, "output_black", text="Roughness Low")
+                body.prop(rough_transfer, "output_white", text="Roughness High")
+            else:
+                body.prop(rough, "value", text="Mean Roughness")
+            if color.material_mapping_version == 1:
+                for channel in member.channels:
+                    if channel.enabled and channel.procedural:
+                        body.prop(channel, "material_period_m", text=CHANNEL_SHORT[channel.channel] + " Repeat (m)")
+                body.prop(channel_for(member, "HEIGHT"), "material_height_m")
+            for mask in member.masks:
+                if member.surface_role == "COATING" and mask.surface_role == "PAINT_LOSS":
+                    body.prop(mask, "strength", text="Paint-loss Opacity")
+                if mask.surface_role == "CHIP_PATTERN" and mask.material_mapping_version and mask.procedural == "DOTS":
+                    body.prop(mask, "chip_radius_m")
+                if mask.surface_role in {"WEAR_PLACEMENT", "PAINT_LOSS"} and mask.influence.physical_mapping_version:
+                    body.prop(mask.influence, "distance_m", text="Edge Reach (m)")
+                if member.surface_role == "BAND" and mask.source == "FILTER":
+                    body.prop(mask.effect, "black", text="Band Lower Edge")
+                    body.prop(mask.effect, "white", text="Band Upper Edge")
+        _draw_components(layout, ts, folder)
     draw_folder_settings(layout, context, ts, folder)
     draw_secondary(layout, context, ts, folder, module=True)
 
@@ -217,14 +255,33 @@ def draw_channel_content(layout, context, ts, layer, channel):
     if channel.procedural and not channel.detail_image:
         row.operator("open_painter.clear_procedural", text="", icon="X")
         from .physical_scale import draw_size
-        draw_size(body, ts, channel, "procedural_scale", "feature_size", "Feature Size")
+        if channel.material_mapping_version == 1:
+            body.prop(channel, "material_period_m")
+            body.prop(channel, "material_frame")
+            if channel.material_frame == "WORLD":
+                for field in ("material_origin", "material_axis_u", "material_axis_v"):
+                    body.prop(channel, field)
+            from ..authoring.physical_space import resolution_diagnostic
+            info = resolution_diagnostic(ts, channel.material_period_m)
+            if info["status"] == "UNDER_RESOLVED":
+                body.label(text="Detail is below reliable texture sampling", icon="ERROR")
+            body.label(text="Source: " + channel.material_source_id[:36], icon="LINKED")
+        else:
+            draw_size(body, ts, channel, "procedural_scale", "feature_size", "Feature Size")
         body.prop(channel, "procedural_seed")
+    if channel.material_mapping_version == 1 and (channel.image or channel.detail_image):
+        body.prop(channel, "material_image_extent_m")
+        body.prop(channel, "material_frame")
+        body.prop(channel, "material_directional")
+        if channel.material_frame == "WORLD":
+            for field in ("material_origin", "material_axis_u", "material_axis_v"):
+                body.prop(channel, field)
     if channel.detail_image or channel.procedural:
         if channel.channel not in {"HEIGHT", "NORMAL"}:
             body.prop(channel, "procedural_detail")
         if channel.channel in {"HEIGHT", "NORMAL"}:
-            body.prop(channel, "procedural_height")
-    if channel.image or channel.detail_image or channel.procedural:
+            body.prop(channel, "material_height_m" if channel.material_mapping_version == 1 else "procedural_height")
+    if (channel.image or channel.detail_image or channel.procedural) and channel.material_mapping_version != 1:
         head, panel = body.panel("painter_fill_projection", default_closed=False)
         head.label(text="Projection and Scale", icon="ORIENTATION_LOCAL")
         if panel is not None:

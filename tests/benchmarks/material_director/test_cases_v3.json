@@ -1,0 +1,412 @@
+{
+  "schema_version": 3,
+  "protocol": "five_asset_eevee_v3",
+  "benchmark": "Material Director AI Texturing Benchmark",
+  "created": "2026-09-22",
+  "status": "IMPLEMENTED_NOT_EXECUTED",
+  "source_protocol": "Open_Painter_Material_Director_Capability_Remedy.md",
+  "common_instruction": "Texturing only. Use the existing Open Painter texture sets. Keep geometry, UVs and benchmark infrastructure unchanged. Apply material changes through editable Open Painter controls.",
+  "repeat_count": 3,
+  "core_session_count": 60,
+  "maximum_core_user_turns": 180,
+  "lanes": [
+    {
+      "id": "P",
+      "name": "Native editable authoring",
+      "generate_surface_textures": false
+    },
+    {
+      "id": "H",
+      "name": "Hybrid allowed",
+      "generate_surface_textures": true
+    }
+  ],
+  "settings": {
+    "output_resolution": 1024,
+    "render_engine": "BLENDER_EEVEE",
+    "render_resolution": [
+      1024,
+      1024
+    ],
+    "camera_views": [
+      "front",
+      "back",
+      "close"
+    ],
+    "send_current_3d_view": true,
+    "send_mesh_maps": true,
+    "reference_images": false,
+    "model_id": "RECORD_EXACT_ACTUAL_ID",
+    "seed": "UNCONTROLLED_UNLESS_EXPOSED",
+    "fresh_fixture_each_repeat": true,
+    "required_maps": [
+      "AO",
+      "CURVATURE",
+      "WORLD_NORMAL",
+      "POSITION",
+      "THICKNESS"
+    ]
+  },
+  "assets": [
+    {
+      "id": "A01",
+      "name": "Metal Toolbox",
+      "url": "https://polyhaven.com/a/metal_toolbox",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "14K",
+      "purpose": "Coated metal, exposed metal, wood, small hardware, localized wear.",
+      "fixture": "A01_toolbox_neutral.blend"
+    },
+    {
+      "id": "A02",
+      "name": "Modern Arm Chair 01",
+      "url": "https://polyhaven.com/a/modern_arm_chair_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "9K",
+      "purpose": "Wood versus upholstery; multiple texture sets; directional grain; selective revisions.",
+      "fixture": "A02_chair_neutral.blend"
+    },
+    {
+      "id": "A04",
+      "name": "Antique Ceramic Vase 01",
+      "url": "https://polyhaven.com/a/antique_ceramic_vase_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "9K",
+      "purpose": "Clean surfaces, exact band count and placement, glaze, metallic trim, continuous wrap.",
+      "fixture": "A04_vase_neutral.blend"
+    },
+    {
+      "id": "A05",
+      "name": "Rubber Boots",
+      "url": "https://polyhaven.com/a/rubber_boots",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "35K",
+      "purpose": "Rubber versus mud; lower-region placement; wet-to-dry revisions without repainting.",
+      "fixture": "A05_boots_neutral.blend"
+    },
+    {
+      "id": "A06",
+      "name": "Rock Moss Set 01",
+      "url": "https://polyhaven.com/a/rock_moss_set_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "63K for set",
+      "purpose": "Irregular geometry, orientation-aware masks, stone scale and cross-object consistency.",
+      "fixture": "A06_rocks_neutral.blend"
+    }
+  ],
+  "cases": [
+    {
+      "id": "T01",
+      "title": "Toolbox: physical reasoning",
+      "assets": [
+        "A01"
+      ],
+      "scope": "SET",
+      "fixture": "A01_toolbox_neutral.blend",
+      "create": "Texture this toolbox as a used but maintained workshop prop: petrol-blue painted steel body, aged hardwood handle and brass latches. Add restrained paint loss at plausible exposed edges and contact areas, exposing steel beneath. Keep broad panels mostly clean and place subtle grime in recesses. Keep the physical materials and wear effects separately editable.",
+      "refinements": [
+        "Change only the body's blue paint to burgundy. Preserve the wood, brass, exposed steel, roughness, paint-loss pattern and dirt.",
+        "Halve the paint-loss effect's opacity relative to its current value. Preserve its source mask, location, pattern and scale. Change nothing else."
+      ],
+      "requirements": [
+        "Distinct petrol-blue painted steel, wood handle and brass latches occupy the correct regions.",
+        "Paint-loss mask exposes the substrate, with restrained contact wear and quiet broad panels.",
+        "Materials, paint loss and grime have independent native controls.",
+        "Only body paint becomes burgundy; all protected surfaces, roughness and masks remain equal.",
+        "Paint-loss opacity ratio is 0.5; source IDs, evaluated source mask, location, scale and seeds stay equal."
+      ],
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2"
+      ],
+      "status": "NOT_RUN",
+      "edit_proof": "Demonstrate the independent material controls and requested revisions; retain the three scored material checkpoints.",
+      "protocol": "five_asset_eevee_v3",
+      "views": [
+        "front",
+        "back",
+        "close"
+      ],
+      "acceptance_by_stage": {
+        "create": [
+          "Distinct petrol-blue painted steel, wood handle and brass latches occupy the correct regions.",
+          "Paint-loss mask exposes the substrate, with restrained contact wear and quiet broad panels.",
+          "Materials, paint loss and grime have independent native controls."
+        ],
+        "refine_1": [
+          "Only body paint becomes burgundy; all protected surfaces, roughness and masks remain equal."
+        ],
+        "refine_2": [
+          "Paint-loss opacity ratio is 0.5; source IDs, evaluated source mask, location, scale and seeds stay equal."
+        ]
+      }
+    },
+    {
+      "id": "T02",
+      "title": "Chair: resist grunge",
+      "assets": [
+        "A02"
+      ],
+      "scope": "SCENE",
+      "fixture": "A02_chair_neutral.blend",
+      "create": "Texture this nearly new premium chair with dark walnut framing and burnt-orange woven upholstery. Keep wood grain aligned with the length of each wooden member. Give the fabric a subtle approximately 1 mm repeat, consistent across the seat and back. Do not add dirt, damage, scratches or artificial aging.",
+      "refinements": [
+        "Change only the upholstery color to deep forest green. Preserve its weave, roughness and all wooden surfaces.",
+        "Make the upholstery weave twice as fine, changing the physical repeat from 1 mm to 0.5 mm. Preserve its color, roughness and the entire frame."
+      ],
+      "requirements": [
+        "Clean walnut frame and orange fabric occupy the correct chair regions without aging.",
+        "Grain follows each member and the fabric repeats at 1 mm in verified material space.",
+        "Materials and physical weave period remain independently editable.",
+        "Only upholstery palette becomes forest green; weave, roughness and all wood are unchanged.",
+        "Weave evaluates at 0.5 mm; color, roughness and frame remain unchanged."
+      ],
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2"
+      ],
+      "status": "NOT_RUN",
+      "edit_proof": "Demonstrate the independent material controls and requested revisions; retain the three scored material checkpoints.",
+      "protocol": "five_asset_eevee_v3",
+      "views": [
+        "front",
+        "back",
+        "close"
+      ],
+      "acceptance_by_stage": {
+        "create": [
+          "Clean walnut frame and orange fabric occupy the correct chair regions without aging.",
+          "Grain follows each member and the fabric repeats at 1 mm in verified material space.",
+          "Materials and physical weave period remain independently editable."
+        ],
+        "refine_1": [
+          "Only upholstery palette becomes forest green; weave, roughness and all wood are unchanged."
+        ],
+        "refine_2": [
+          "Weave evaluates at 0.5 mm; color, roughness and frame remain unchanged."
+        ]
+      }
+    },
+    {
+      "id": "T03",
+      "title": "Boots: geometry awareness",
+      "assets": [
+        "A05"
+      ],
+      "scope": "SET",
+      "fixture": "A05_boots_neutral.blend",
+      "create": "Texture these work boots as mustard-yellow rubber with matte black soles. Add dark wet mud mainly on the soles and lower quarter of each boot, with sparse upward splashes. Keep the upper shafts mostly clean. Make mud separately editable from the rubber.",
+      "refinements": [
+        "Dry the existing mud: make it lighter and rougher without changing the mud mask, any splash locations, or the rubber.",
+        "Halve only the mud effect's opacity. Preserve its source mask, spatial coverage and pattern. Do not generate replacement textures."
+      ],
+      "requirements": [
+        "Mustard rubber and black soles are correctly assigned with an actual Create receipt.",
+        "Wet mud is concentrated on soles and lower quarter, with sparse splashes and clean upper shafts.",
+        "Mud appearance, opacity and source mask are independently editable.",
+        "Drying changes only mud palette/roughness; evaluated source mask and rubber remain equal.",
+        "Only mud opacity becomes half; source mask, spatial support, seeds and textures remain equal."
+      ],
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2"
+      ],
+      "status": "NOT_RUN",
+      "edit_proof": "Demonstrate the independent material controls and requested revisions; retain the three scored material checkpoints.",
+      "protocol": "five_asset_eevee_v3",
+      "views": [
+        "front",
+        "back",
+        "close",
+        "underside"
+      ],
+      "acceptance_by_stage": {
+        "create": [
+          "Mustard rubber and black soles are correctly assigned with an actual Create receipt.",
+          "Wet mud is concentrated on soles and lower quarter, with sparse splashes and clean upper shafts.",
+          "Mud appearance, opacity and source mask are independently editable."
+        ],
+        "refine_1": [
+          "Drying changes only mud palette/roughness; evaluated source mask and rubber remain equal."
+        ],
+        "refine_2": [
+          "Only mud opacity becomes half; source mask, spatial support, seeds and textures remain equal."
+        ]
+      }
+    },
+    {
+      "id": "T04",
+      "title": "Vase: precision",
+      "assets": [
+        "A04"
+      ],
+      "scope": "SET",
+      "fixture": "A04_vase_neutral.blend",
+      "create": "Give this vase a warm ivory glazed ceramic surface. Add exactly two narrow cobalt-blue horizontal bands around the full body, centered at 70% and 78% of its height, each 1.5% of its height wide. Add a thin gold-colored metallic rim at the mouth. Keep glaze, bands and rim independently editable.",
+      "refinements": [
+        "Change only both blue bands to dark red. Preserve their geometry, the glaze and the rim.",
+        "Move both bands down by 5% of the vase's height. Preserve their width, spacing, color and the other materials."
+      ],
+      "requirements": [
+        "Quiet ivory ceramic glaze and narrow metallic gold rim read correctly.",
+        "Exactly two continuous bands have centers 0.70 and 0.78, each width 0.015 of upright height.",
+        "Glaze, bands and rim are independently editable and wrap the circumference.",
+        "Only both band colors become dark red; geometry, glaze and rim stay equal.",
+        "Band centers translate by -0.05 height; widths, spacing, palette and other components remain equal."
+      ],
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2"
+      ],
+      "status": "NOT_RUN",
+      "edit_proof": "Demonstrate the independent material controls and requested revisions; retain the three scored material checkpoints.",
+      "protocol": "five_asset_eevee_v3",
+      "views": [
+        "front",
+        "back",
+        "close",
+        "circumference_90",
+        "circumference_270"
+      ],
+      "acceptance_by_stage": {
+        "create": [
+          "Quiet ivory ceramic glaze and narrow metallic gold rim read correctly.",
+          "Exactly two continuous bands have centers 0.70 and 0.78, each width 0.015 of upright height.",
+          "Glaze, bands and rim are independently editable and wrap the circumference."
+        ],
+        "refine_1": [
+          "Only both band colors become dark red; geometry, glaze and rim stay equal."
+        ],
+        "refine_2": [
+          "Band centers translate by -0.05 height; widths, spacing, palette and other components remain equal."
+        ]
+      }
+    },
+    {
+      "id": "T05",
+      "title": "Rocks: environmental reasoning",
+      "assets": [
+        "A06"
+      ],
+      "scope": "SET",
+      "fixture": "A06_rocks_neutral.blend",
+      "create": "Texture these rocks as pale weathered sandstone with moss mostly on upward-facing sheltered regions and cracks. Leave steep exposed faces mostly clear and undersides almost completely clear. Add subtle damp darkening in deep recesses. Keep stone, moss and dampness independently editable, with consistent physical texture scale across the rocks.",
+      "refinements": [
+        "Make only the moss color warmer and more olive. Do not change where the moss grows, its roughness, or the stone.",
+        "Reduce the moss-covered surface area by approximately 40%, keeping the remaining moss inside its existing occupied regions. Preserve the moss color, physical detail scale and environmental placement logic. Do not merely reduce opacity."
+      ],
+      "requirements": [
+        "Pale sandstone has consistent physical detail scale across all rocks.",
+        "Moss occupies sheltered upward-facing regions/cracks; steep exposed faces and undersides stay clear.",
+        "Stone, moss and damp recess darkening remain independently editable.",
+        "Only moss palette changes; evaluated source mask, roughness and stone remain equal.",
+        "Area-weighted occupied moss ratio is 0.60 +/- 0.06; remaining support stays inside prior support and opacity is not substituted for area change."
+      ],
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2"
+      ],
+      "status": "NOT_RUN",
+      "edit_proof": "Demonstrate the independent material controls and requested revisions; retain the three scored material checkpoints.",
+      "protocol": "five_asset_eevee_v3",
+      "views": [
+        "front",
+        "back",
+        "close",
+        "underside"
+      ],
+      "acceptance_by_stage": {
+        "create": [
+          "Pale sandstone has consistent physical detail scale across all rocks.",
+          "Moss occupies sheltered upward-facing regions/cracks; steep exposed faces and undersides stay clear.",
+          "Stone, moss and damp recess darkening remain independently editable."
+        ],
+        "refine_1": [
+          "Only moss palette changes; evaluated source mask, roughness and stone remain equal."
+        ],
+        "refine_2": [
+          "Area-weighted occupied moss ratio is 0.60 +/- 0.06; remaining support stays inside prior support and opacity is not substituted for area change."
+        ]
+      }
+    }
+  ],
+  "evidence_files": [
+    "00_before.png",
+    "01_create_front.png",
+    "02_create_back.png",
+    "03_create_close.png",
+    "04_refine1_front.png",
+    "05_refine1_back.png",
+    "06_refine1_close.png",
+    "07_refine2_front.png",
+    "08_refine2_back.png",
+    "09_refine2_close.png"
+  ],
+  "scoring": {
+    "dimensions": {
+      "material_appearance": 25,
+      "spatial_placement": 25,
+      "prompt_compliance": 20,
+      "editability": 15,
+      "revision_fidelity": 15
+    },
+    "anchors": {
+      "0": "absent/unusable",
+      "1": "fundamentally wrong",
+      "2": "major rework",
+      "3": "noticeable cleanup",
+      "4": "useful with minor cleanup",
+      "5": "satisfies the brief"
+    },
+    "intervention_labels": {
+      "0": "autonomous success when actual requirements pass",
+      "1": "minor assistance",
+      "2": "significant assistance",
+      "3+": "failed autonomous workflow"
+    },
+    "numeric_pass_threshold": 80
+  },
+  "supplements": {
+    "robustness": false,
+    "extended_checks": false,
+    "baselines": false
+  },
+  "note": "Two pinned builds x P/H x three independent repeats x five cases. Diagnostic smoke is separately labeled; v2 records are not a numerical baseline.",
+  "modes": [
+    "P",
+    "H"
+  ],
+  "builds": [
+    "baseline",
+    "improved"
+  ],
+  "measurements": {
+    "mask_threshold": 0.5,
+    "moss_area_ratio": 0.6,
+    "moss_area_ratio_tolerance": 0.06,
+    "minimum_initial_moss_area_fraction": 0.01,
+    "new_moss_support_max_fraction": 0.001,
+    "band_height_tolerance": 0.005,
+    "invalid_uv_policy": "Include all triangle area in denominator; report invalid/seam samples separately; invalidate spatial claim if missing area exceeds frozen tolerance.",
+    "invalid_uv_area_max_fraction": 0.001,
+    "mask_absolute_tolerance": 1e-06,
+    "no_edit_calibration_status": "REQUIRED_DIAGNOSTIC",
+    "human_reference_status": "UNAVAILABLE",
+    "reviewer": "PENDING"
+  }
+}

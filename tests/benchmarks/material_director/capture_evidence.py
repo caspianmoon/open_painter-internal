@@ -284,13 +284,21 @@ def fixed_rig_check(scene, config):
 
 def render_primary_views(context, output_dir, label, config):
     import bpy
-    from mathutils import Matrix
+    from mathutils import Matrix, Vector
+    from view_inventory import inventory, EXTRA_POSES
     scene = context.scene
     validation = fixed_rig_check(scene, config)
     if validation["status"] != "PASS":
         return dict(status="FAILED", rig_validation=validation, views=[], errors=validation["errors"])
-    poses = config["camera_poses"]
-    capture_plan = PRIMARY_VIEWS.get(label)
+    poses = dict(config["camera_poses"])
+    if config.get("protocol_version", 2) >= 3:
+        for name, values in EXTRA_POSES.items():
+            location, center = Vector(values["location"]), Vector(values["center"])
+            matrix = (center-location).to_track_quat("-Z", "Y").to_matrix().to_4x4()
+            matrix.translation = location
+            poses[name] = dict(matrix_world=[list(row) for row in matrix], type="ORTHO", lens=50,
+                               ortho_scale=values["ortho_scale"])
+    capture_plan = inventory(config).get(label)
     output = Path(output_dir)
     if capture_plan is None:
         # Optional post-score probes remain outside the ten primary images.
@@ -348,7 +356,7 @@ def render_primary_views(context, output_dir, label, config):
     return dict(status="CAPTURED" if not errors else "FAILED", views=records, errors=errors,
                 seconds=time.monotonic() - started, engine=scene.render.engine, resolution=[1024, 1024],
                 rig_validation=validation, input_pose_restored=restored["status"] == "PASS",
-                protocol="primary_fixed_eevee_one_camera_three_poses")
+                protocol="five_asset_eevee_v3" if config.get("protocol_version", 2) >= 3 else "primary_fixed_eevee_one_camera_three_poses")
 
 
 def render_views(context, output_dir, label, config=None, *, relight=False):
@@ -459,6 +467,7 @@ def capture_channels(context, output_dir, label, config=None):
             validity_path = root / f"{safe_name(ts.id)}_valid.npy"
             np.save(validity_path, inside, allow_pickle=False)
             entry["valid_samples"] = dict(path=str(validity_path), count=int(inside.sum()),
+                                          sha256=sha256(validity_path),
                                           excluded_boundary_pixels=margin, decoded=_array_hash(inside))
             for channel in config.get("channels", CHANNELS):
                 image = image_manager.output(ts, channel).image
@@ -467,7 +476,7 @@ def capture_channels(context, output_dir, label, config=None):
                 raw_path, png_path = root / (basename + ".npy"), root / (basename + ".png")
                 np.save(raw_path, values, allow_pickle=False)
                 finite = bool(np.isfinite(values).all())
-                record = dict(path=str(raw_path), preview=None, decoded=_array_hash(values), finite=finite)
+                record = dict(path=str(raw_path), sha256=sha256(raw_path), preview=None, decoded=_array_hash(values), finite=finite)
                 entry["channels"][channel] = record
                 if not finite:
                     record.update(status="FAILED", error="Evaluator returned non-finite channel samples",
@@ -478,13 +487,62 @@ def capture_channels(context, output_dir, label, config=None):
                     errors.append(dict(texture_set_id=ts.id, channel=channel, error=record["error"]))
                     continue
                 write(png_path, values[::-1], "PNG", 16, channel in {"BASE_COLOR", "EMISSION"})
-                record.update(preview=str(png_path), status="CAPTURED")
+                record.update(preview=str(png_path), preview_sha256=sha256(png_path), status="CAPTURED")
+            if config.get("protocol_version", 2) >= 3:
+                # This is the evaluated layer mask before layer opacity. Keeping
+                # those separate makes "halve opacity" distinct from area edits.
+                from open_painter.evaluation.mask_eval import evaluate_masks
+                from open_painter.authoring import document
+                from revision_measurements import sample_geometry, coverage, effect_control, measurement_policy
+                policy = measurement_policy(config)
+                entry["measurement_policy"] = policy
+                authored = document.encode(document.snapshot(ts), digest=True)
+                authored_layers = {item["id"]: item for item in authored.get("layers", [])}
+                entry["effect_masks"] = {}
+                samples = sample_geometry(ts)
+                sample_path = root / f"{safe_name(ts.id)}_surface_samples.npz"
+                np.savez_compressed(sample_path, **samples)
+                entry["surface_samples"] = dict(path=str(sample_path), sha256=sha256(sample_path),
+                    method="Four fixed interior samples per assigned triangle; every triangle's surface area remains in denominator",
+                    area_units="WORLD_UNITS_SQUARED", convergence_status="NOT_ESTABLISHED",
+                    relative_height_frame="Each object's assigned triangle Z bounds; not a universal band-placement frame")
+                n = int(ts.resolution)
+                for layer in ts.layers:
+                    if not layer.masks:
+                        continue
+                    cache = {}
+                    values = np.concatenate([evaluate_masks(ts, layer, n, y, min(y+128, n), cache, evaluator.geometry_cache)
+                                             for y in range(0, n, 128)]).astype("<f4")
+                    path = root / f"{safe_name(ts.id)}_{safe_name(layer.id)}_effect_mask.npy"
+                    np.save(path, values, allow_pickle=False)
+                    finite = bool(np.isfinite(values).all())
+                    native = authored_layers.get(layer.id, {})
+                    entry["effect_masks"][layer.id] = dict(layer_name=layer.name, path=str(path),
+                        sha256=sha256(path), decoded=_array_hash(values), finite=finite,
+                        layer_opacity=float(layer.opacity), source_mask=native.get("masks", []),
+                        source_signature=stable_hash(native.get("masks", [])),
+                        surface_coverage=coverage(values, samples,threshold=policy["mask_threshold"],
+                            invalid_area_tolerance=policy["invalid_uv_area_max_fraction"]),
+                        meaning="Evaluated whole layer mask before layer opacity; may be inverse coating coverage, not semantic effect occupancy")
+                    control, source_field = effect_control(native,values)
+                    control["source_signature"] = stable_hash(control.pop("source_document"))
+                    if source_field is not None:
+                        source_path = path if control["representation"] == "GENERIC_LAYER_MASK" else root / f"{safe_name(ts.id)}_{safe_name(layer.id)}_effect_source.npy"
+                        if source_path != path:
+                            np.save(source_path,source_field,allow_pickle=False)
+                        control["source_field"] = dict(path=str(source_path),sha256=sha256(source_path),decoded=_array_hash(source_field),
+                            finite=bool(np.isfinite(source_field).all()),surface_coverage=coverage(source_field,samples,
+                                threshold=policy["mask_threshold"],invalid_area_tolerance=policy["invalid_uv_area_max_fraction"]))
+                    entry["effect_masks"][layer.id]["effect_control"] = control
+                    if not finite:
+                        errors.append(dict(texture_set_id=ts.id, layer_id=layer.id, error="Nonfinite effect mask"))
             entry["status"] = "FAILED" if any(item["finite"] is False for item in entry["channels"].values()) else "CAPTURED"
         except Exception as exc:
             entry["status"], entry["error"] = "FAILED", f"{type(exc).__name__}: {exc}"
             errors.append(dict(texture_set_id=ts.id, error=entry["error"]))
         entry["seconds"] = time.monotonic() - start
     return dict(status=("CAPTURED" if result else "BLOCKED") if not errors else "FAILED", evaluator="Open Painter LayerEvaluator CPU",
+                evaluator_implementation=type(evaluator).__module__ + "." + type(evaluator).__qualname__,
                 origin="bottom-left", precision="float32", sets=result, errors=errors)
 
 
@@ -496,10 +554,55 @@ def capture_checkpoint(context, output_dir, label, *, config=None):
     # Evaluate first so frozen renders cannot conceal a pending/failed material.
     result["channels"] = capture_channels(context, output, label, config)
     result["views"] = render_views(context, output, label, config)
+    from open_painter.evaluation import shader_preview
+    result["actual_preview_backends"] = {ts.id: dict(requested=getattr(ts, "preview_backend", "LIVE"),
+        observed=shader_preview.diagnostics(context.scene, ts)) for ts in context.scene.open_painter.texture_sets}
     result["ui_layer_mask_views"] = dict(status="NOT_TESTED", reason="Requires visible UI capture; structured layer/mask state is included")
     result["placement"] = dict(status="NOT_TESTED", reason="Requires frozen evaluator-only region annotations and measurements")
     result["state_path"] = str(output / f"{safe_name(label)}_state.json")
     effective = config_for(context.scene, config)
+    if effective.get("protocol_version", 2) >= 3 and label in {"after_refine_1", "after_refine_2"}:
+        import numpy as np
+        from revision_measurements import compare, measurement_policy
+        policy = measurement_policy(effective)
+        previous_label = "after_create" if label == "after_refine_1" else "after_refine_1"
+        previous_path = output / (previous_label + "_state.json")
+        comparisons = dict(previous_checkpoint=previous_path.name, texture_sets={}, independent_artistic_review="PENDING",
+            measurement_policy=policy, no_edit_calibration=effective.get("no_edit_calibration",{"status":"NOT_SUPPLIED"}),
+            area_estimator_limitation="Four fixed points per triangle; no convergence bound for fine chips or thin bands")
+        previous = json.loads(previous_path.read_text()) if previous_path.is_file() else {}
+        for ts_id, current_set in result["channels"].get("sets", {}).items():
+            previous_set = previous.get("channels", {}).get("sets", {}).get(ts_id, {})
+            old_masks, masks = previous_set.get("effect_masks", {}), current_set.get("effect_masks", {})
+            measured = dict(added_effect_ids=sorted(set(masks)-set(old_masks)), removed_effect_ids=sorted(set(old_masks)-set(masks)), effects={})
+            sample_path = current_set.get("surface_samples", {}).get("path")
+            if sample_path:
+                with np.load(sample_path, allow_pickle=False) as loaded:
+                    samples = {key: loaded[key] for key in loaded.files}
+                for layer_id in sorted(set(masks)&set(old_masks)):
+                    a,b = old_masks[layer_id],masks[layer_id]
+                    first,last = a.get("effect_control",{}),b.get("effect_control",{})
+                    if (first.get("status") != "MEASURED" or last.get("status") != "MEASURED"
+                            or first.get("representation") != last.get("representation")
+                            or first.get("opacity_control_path") != last.get("opacity_control_path")):
+                        measured["effects"][layer_id] = dict(status="NOT_MEASURED",
+                            reason="A stable typed source field and opacity control are required; composite or historical layer-mask evidence cannot substitute",
+                            before=first,after=last)
+                        continue
+                    semantic = last.get("semantic")
+                    minimum = policy["minimum_initial_moss_area_fraction"] if semantic == "MOSS" else 0
+                    observation = compare(np.load(first["source_field"]["path"],allow_pickle=False),
+                        np.load(last["source_field"]["path"],allow_pickle=False),samples,threshold=policy["mask_threshold"],
+                        minimum_initial_fraction=minimum,tolerance=policy["mask_absolute_tolerance"],
+                        invalid_area_tolerance=policy["invalid_uv_area_max_fraction"])
+                    observation.update(source_signature_equal=first["source_signature"]==last["source_signature"],
+                        before_opacity=first["opacity"],after_opacity=last["opacity"],
+                        opacity_ratio=last["opacity"]/first["opacity"] if first["opacity"]>0 else None,
+                        representation=last["representation"],semantic=semantic,opacity_control_path=last["opacity_control_path"],
+                        semantic_assessment=last.get("semantic_assessment"))
+                    measured["effects"][layer_id] = observation
+            comparisons["texture_sets"][ts_id] = measured
+        result["revision_measurements"] = comparisons
     if effective.get("annotations_manifest"):
         try:
             from annotations import evaluate_checkpoint

@@ -54,6 +54,15 @@ class OP_OT_physical_scale(SafeOperator, bpy.types.Operator):
 
 def draw_set_scale(layout, context, ts):
     from ..evaluation import physical
+    box = layout.box()
+    box.prop(ts, "physical_space_status")
+    if ts.physical_space_status == "KNOWN":
+        box.prop(ts, "meters_per_world_unit")
+        box.prop(ts, "physical_space_provenance")
+        if not ts.physical_space_provenance.strip():
+            box.label(text="Declare measurement or source provenance", icon="ERROR")
+    else:
+        box.label(text="Millimeter surface controls need a size declaration", icon="INFO")
     row = layout.row(align=True)
     row.label(text=physical.describe(ts), icon='DRIVER_DISTANCE')
     row.operator('open_painter.physical_scale', text='', icon='LOCKED' if not physical.uses(ts) else 'FILE_REFRESH').action = \

@@ -86,10 +86,11 @@ def _stack_signature(ts, layer, geometry_cache):
                       getattr(mask, "detail_normal_strength", 1.0), ts.edit_serial) if anchors else None,
                      _live_field_identity(ts, mask) if getattr(mask, "edge_source", "BAKED") == "LIVE" else None)
         elif mask.source == "PROCEDURAL":
+            from .material_space import identity, enabled
             extra = (mask.procedural, mask.noise_scale, mask.seed, mask.projection,
                      tuple(mask.scale), mask.rotation, tuple(mask.offset), mask.tiling,
-                     mask.triplanar_hardness,
-                     getattr(geometry_cache, "geometry_stamp", None) if mask.projection == "TRIPLANAR" else None)
+                     mask.triplanar_hardness, identity(mask),
+                     getattr(geometry_cache, "geometry_stamp", None) if mask.projection == "TRIPLANAR" or enabled(mask) else None)
         elif mask.source == "BAKED":
             extra = (mask.map_type, maps)
         elif mask.source == "FILTER":
@@ -109,7 +110,7 @@ def _stack_signature(ts, layer, geometry_cache):
             extra = (stroke_identity(ts.id_data.open_painter, mask.stroke_key, ts),
                      getattr(geometry_cache, "geometry_stamp", None))
         elif mask.source == 'MESH':
-            from .mesh_masks import signature as mesh_signature
+            from .mesh_masks import sampling_signature as mesh_signature
             extra = (mesh_signature(ts, mask), getattr(geometry_cache, "geometry_stamp", None))
         elif mask.source == 'GRAPH':
             from .custom_graph import signature as graph_signature
@@ -225,12 +226,16 @@ def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
     if mask.source == "PROCEDURAL":
         from types import SimpleNamespace
         from .channel_eval import _procedural_tile, _coordinates
+        from .material_space import FIELDS, enabled
         prop = SimpleNamespace(procedural=mask.procedural,
             procedural_scale=mask.noise_scale, procedural_seed=mask.seed,
             projection=mask.projection, scale=mask.scale, rotation=mask.rotation,
             offset=mask.offset, triplanar_hardness=mask.triplanar_hardness)
+        for name in FIELDS:
+            if hasattr(mask, name):
+                setattr(prop, name, getattr(mask, name))
         value = _procedural_tile(prop, n, y0, y1, ts, geometry_cache)
-        if mask.projection == "UV" and mask.tiling == "NONE":
+        if mask.projection == "UV" and mask.tiling == "NONE" and not enabled(mask):
             pu, pv = _coordinates(prop, n, y0, y1)
             value = value * ((pu >= 0) & (pu <= 1) & (pv >= 0) & (pv <= 1))
         return value

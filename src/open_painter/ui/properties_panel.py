@@ -12,7 +12,7 @@ def draw_mesh_selector(layout, ts, mask):
     selector = mask.mesh
     layout.prop(selector, 'kind')
     kind = selector.kind
-    if kind in {'OBJECT', 'UV_ISLAND'}:
+    if kind in {'OBJECT', 'UV_ISLAND', 'REGION'}:
         layout.prop(selector, 'object', text='Object' if kind == 'OBJECT' else 'On Object')
         if selector.object is None and selector.object_name:
             layout.label(text=f"'{selector.object_name}' is not in this file", icon='ERROR')
@@ -48,6 +48,31 @@ def draw_mesh_selector(layout, ts, mask):
         layout.prop(selector, 'softness')
     elif kind == 'FACE_SELECTION':
         layout.label(text='Follows the face selection of the assigned meshes', icon='RESTRICT_SELECT_OFF')
+    elif kind == 'REGION':
+        import json
+        try:
+            count = len(json.loads(selector.region_faces))
+        except (ValueError, TypeError):
+            count = 0
+        layout.label(text=f'{count} saved faces', icon='FACESEL')
+        prefix = 'Frozen spatial query: '
+        try:
+            query = json.loads(selector.region_provenance[len(prefix):]) if selector.region_provenance.startswith(prefix) else None
+        except (ValueError, TypeError):
+            query = None
+        if isinstance(query, dict):
+            layout.label(text=f"Frozen {query.get('space', '')} / {query.get('selection', '')} query", icon='INFO')
+            for key, label in (('bounds_min', 'Minimum'), ('bounds_max', 'Maximum')):
+                values = query.get(key, [])
+                if isinstance(values, list) and len(values) == 3 and all(type(value) in (int, float) for value in values):
+                    layout.label(text=label + ': ' + ', '.join(f'{value:.4g}' for value in values))
+            if 'normal_direction' in query:
+                layout.label(text='Surface-normal filter recorded in query provenance')
+            layout.label(text='Whole faces; bounds do not cut polygons', icon='INFO')
+        else:
+            layout.label(text=selector.region_provenance or 'Artist face region', icon='INFO')
+        layout.operator('open_painter.mask', text='Replace with Selected Faces', icon='FACESEL').action = 'REGION_SELECTION'
+        layout.label(text='View Mask to inspect coverage; replacement is undoable', icon='INFO')
     if kind in {'ATTRIBUTE', 'FACE_SELECTION'}:
         from .offline_analysis import draw_action
         box = layout.box()
@@ -56,7 +81,7 @@ def draw_mesh_selector(layout, ts, mask):
         box.label(text='Writes open_painter_cut_surface on the active mesh; read it as the attribute', icon='INFO')
         if kind == 'ATTRIBUTE':
             draw_action(box, 'STRAIN', text='Rest-State Strain…', icon='MOD_SIMPLEDEFORM')
-    layout.label(text='Exact through the render UVs; follows scene changes live', icon='INFO')
+    layout.label(text='Frozen membership through render UVs' if kind == 'REGION' else 'Exact through the render UVs; follows scene changes live', icon='INFO')
 
 
 class OP_OT_mask(SafeOperator, bpy.types.Operator):
@@ -65,7 +90,7 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
     action: bpy.props.EnumProperty(
         items=[(x, x.replace('_', ' ').title(), "") for x in ("ADD", "DELETE", "UP", "DOWN", "BAKE", 'ANALYZE', 'FREEZE',
-                                                              'INTO_GROUP', 'OUT_OF_GROUP', 'DISSOLVE', 'NEW_GRAPH')]
+                                                              'INTO_GROUP', 'OUT_OF_GROUP', 'DISSOLVE', 'NEW_GRAPH', 'REGION_SELECTION')]
     )
     black: bpy.props.BoolProperty(name="Black Mask", default=False)
     source: bpy.props.EnumProperty(
@@ -85,6 +110,27 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
         layer = active(ts)
         if layer is None:
             raise ValueError("Select a layer or folder first.")
+        if self.action == 'REGION_SELECTION':
+            import json
+            from ..authoring.regions import capture, selector
+            mask = layer.masks[layer.active_mask]
+            obj = mask.mesh.resolve('object')
+            if obj is None:
+                raise ValueError('Choose the assigned object whose selected faces replace this region.')
+            regions = capture(ts, {'object:selection': obj})
+            selected = [item for item in regions if item['kind'] == 'ARTIST_SELECTION']
+            if not selected:
+                raise ValueError('Select faces on the assigned mesh first.')
+            values = selector(ts, selected[0]['id'], {'object:selection': obj})
+            faces = set(json.loads(values['region_faces']))
+            for item in selected[1:]:
+                faces.update(json.loads(selector(ts, item['id'], {'object:selection': obj})['region_faces']))
+            values['region_faces'] = json.dumps(sorted(faces))
+            values['region_id'] = new_id()
+            for key, value in values.items():
+                setattr(mask.mesh, key, value)
+            invalidate(ts)
+            return
         if self.action in {'ANALYZE','FREEZE'}:
             mask = layer.masks[layer.active_mask]
             from ..generators.scene_fields import update
@@ -372,10 +418,12 @@ def draw_mask_settings(layout, context, ts, layer, mask):
         if kind in {'UP', 'DOWN', 'HEIGHT', 'WORLD_HEIGHT', 'GROUND', 'EXPOSURE', 'SOOT'}:
             layout.prop(field, 'direction')
         if kind in {'HEIGHT', 'WORLD_HEIGHT'}:
-            layout.prop(field, 'bounds')
+            layout.prop(field, 'bounds_m' if field.physical_mapping_version else 'bounds')
         if kind in {'DISTANCE', 'CONTACT', 'PROXIMITY', 'EXPOSURE', 'HEAT', 'MOISTURE', 'SOOT', 'GROUND',
                     'CONVEXITY', 'CONCAVITY', 'EDGE'}:
-            layout.prop(field, 'distance', text='Reach' if kind in {'CONVEXITY', 'CONCAVITY', 'EDGE'} else 'Distance / Radius')
+            layout.prop(field, 'distance_m' if field.physical_mapping_version else 'distance',
+                        text=('Reach' if kind in {'CONVEXITY', 'CONCAVITY', 'EDGE'} else 'Distance / Radius') +
+                             (' (m)' if field.physical_mapping_version else ''))
         if kind in {'ATTRIBUTE', 'VERTEX_GROUP'}:
             layout.prop(field, 'attribute')
         layout.prop(field, 'falloff')
@@ -433,11 +481,25 @@ def draw_mask_settings(layout, context, ts, layer, mask):
         op = layout.operator("open_painter.choose_procedural", text=mask.procedural.replace("_", " ").title(), icon="TEXTURE")
         op.target, op.create = "MASK", False
         from .physical_scale import draw_size
-        for name in ("projection", "tiling"):
-            layout.prop(mask, name)
-        draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
-        for name in ("seed", "scale", "rotation", "offset"):
-            layout.prop(mask, name)
+        if mask.material_mapping_version:
+            layout.prop(mask, 'chip_radius_m' if mask.procedural == 'DOTS' else 'material_period_m')
+            layout.prop(mask, 'material_frame')
+            if mask.material_frame == 'WORLD':
+                for name in ('material_origin', 'material_axis_u', 'material_axis_v'):
+                    layout.prop(mask, name)
+            from ..authoring.physical_space import resolution_diagnostic
+            diagnostic = resolution_diagnostic(ts, mask.material_period_m)
+            if diagnostic['status'] == 'UNDER_RESOLVED':
+                layout.label(text='Pattern is under-resolved by these UVs', icon='ERROR')
+            if mask.procedural == 'DOTS':
+                layout.label(text='Circular radius before geometry clipping')
+            layout.prop(mask, 'seed')
+        else:
+            for name in ("projection", "tiling"):
+                layout.prop(mask, name)
+            draw_size(layout, ts, mask, "noise_scale", "feature_size", "Feature Size")
+            for name in ("seed", "scale", "rotation", "offset"):
+                layout.prop(mask, name)
         if mask.projection == "TRIPLANAR":
             layout.prop(mask,"triplanar_hardness")
     elif mask.source == "FILTER":
@@ -457,6 +519,10 @@ def draw_mask_settings(layout, context, ts, layer, mask):
             row.operator("open_painter.choose_baked_id", text="", icon="VIEWZOOM")
         if mask.generator in {"EDGE_WEAR", "CHIPS"}:
             from ..constants import OWNER
+
+            if mask.edge_source == 'LIVE':
+                layout.prop(mask.influence, 'distance_m' if mask.influence.physical_mapping_version else 'distance',
+                            text='Live Reach (m)' if mask.influence.physical_mapping_version else 'Live Reach')
 
             image = next(
                 (m.image for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None

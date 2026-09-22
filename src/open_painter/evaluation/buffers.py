@@ -51,7 +51,8 @@ def scalar_source(prop, kind, n, y0, y1, ts, geometry_cache):
     if has_field:
         noise = _field_tile(prop, n, low, high, ts, geometry_cache)
         if prop.channel == 'HEIGHT':
-            value = .5 + (noise - .5) * prop.procedural_height
+            from .material_space import height_amplitude
+            value = .5 + (noise - .5) * height_amplitude(prop, ts)
         else:
             value = value + (noise - .5) * prop.procedural_detail * .35
         value = np.clip(value, 0, 1)

@@ -4,7 +4,7 @@ import hashlib
 import json
 from types import SimpleNamespace
 
-from . import assets, document, schema
+from . import assets, document, schema, surfaces, physical_space
 from .schema import AuthoringError
 
 
@@ -137,6 +137,16 @@ def validate_document(ts, before, after):
         if layer["id"] in old and document.canonical(layer) == document.canonical(old[layer["id"]]):
             continue
         for prop in layer["channels"]:
+            if prop.get("material_mapping_version") == 1:
+                from ..evaluation.material_space import frame_axes
+                try:
+                    frame_axes(prop["material_axis_u"], prop["material_axis_v"])
+                except ValueError as exc:
+                    raise AuthoringError(str(exc)) from exc
+                if prop["material_period_m"] <= 0 or prop["material_meters_per_unit"] <= 0:
+                    raise AuthoringError("Physical material scale must be positive")
+                if prop["channel"] == "HEIGHT" and prop["material_height_m"] > prop["material_meters_per_unit"] * after["surface"]["height_distance"]:
+                    raise AuthoringError("Relief exceeds the texture set's encodable height distance")
             if prop["procedural"] and prop["procedural"] not in PROCEDURALS:
                 raise AuthoringError(f"Unknown procedural: {prop['procedural']}")
             for effect in prop["effects"]:
@@ -193,6 +203,7 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
     aliases = {}
     objects = objects or {}
     count = 0
+    patches = []
 
     def allocate(alias):
         return "md." + hashlib.sha256(f"{operation_id}:{alias}".encode()).hexdigest()[:32]
@@ -221,11 +232,36 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         op = cmd["op"]
         if "id" in cmd:
             aliases[cmd["id"]] = allocate(cmd["id"])
-        if op in {"add_layer", "insert_asset"}:
+        if op == "patch_surface":
+            patches.append(surfaces.patch(ts, after, cmd, resolve(cmd["surface_id"])))
+            continue
+        if op in {"add_layer", "insert_asset", "create_surface", "create_bands"}:
             parent = resolve(cmd.get("parent_id", scope))
             if parent and find(after["layers"], parent)["type"] != "FOLDER":
                 raise AuthoringError("New layers need a folder or texture-set scope")
-            if op == "add_layer":
+            if op in {"create_surface", "create_bands"}:
+                expand = surfaces.expand if op == "create_surface" else surfaces.expand_bands
+                items = expand(ts, cmd, aliases[cmd["id"]], parent,
+                               lambda key: allocate(cmd["id"] + key), objects)
+                # Reserved colon suffixes cannot collide with declared new:name
+                # aliases, and are usable later in the same complete proposal.
+                for index, item in enumerate(items):
+                    role = item.get("surface_role", "")
+                    if role in {"FINISH", "COATING", "SUBSTRATE"}:
+                        suffix = "finish" if role in {"FINISH", "COATING"} else "substrate"
+                        aliases[cmd["id"] + ":" + suffix] = item["id"]
+                    if role == "BAND":
+                        aliases[cmd["id"] + ":band" + str(index)] = item["id"]
+                    for mask in item["masks"]:
+                        if mask["source"] == "MESH":
+                            aliases[cmd["id"] + ":region"] = mask["id"]
+                        if role == "COATING" and mask.get("surface_role") == "PAINT_LOSS":
+                            aliases[cmd["id"] + ":paint_loss"] = mask["id"]
+                        if mask.get("surface_role") == "CHIP_PATTERN":
+                            aliases[cmd["id"] + ":chips"] = mask["id"]
+                        if mask.get("surface_role") == "WEAR_PLACEMENT":
+                            aliases[cmd["id"] + ":wear_placement"] = mask["id"]
+            elif op == "add_layer":
                 items = [assets.new_layer(aliases[cmd["id"]], cmd["name"], cmd["kind"], parent)]
             else:
                 length = max((max(ref.object.dimensions) for ref in ts.assignments if ref.object), default=1)
@@ -238,12 +274,21 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
             continue
         layer = find(after["layers"], resolve(cmd["layer_id"]))
         values = document.clone(cmd.get("values", {}))
-        if op == "set_layer":
+        if op == "add_region_mask":
+            from . import regions
+            mask = document.defaults("OP_Mask")
+            mask.update(id=aliases[cmd["id"]], name=cmd["name"], source="MESH")
+            mask["mesh"].update(regions.selector(ts, cmd["region_id"], objects))
+            layer["masks"].append(mask)
+        elif op == "set_layer":
             layer.update(values)
         elif op == "set_channel":
             if layer["type"] == "FOLDER" and set(values) - {"enabled", "opacity"}:
                 raise AuthoringError("Edit a fill layer inside this folder to change channel content")
             find(layer["channels"], cmd["channel"], "channel").update(values)
+        elif op == "assign_bundle":
+            from . import sources
+            sources.assign(ts, layer, cmd, aliases[cmd["id"]], images)
         elif op == "assign_texture":
             from .generated_textures import placeholder
             if bool(cmd.get("channel")) == bool(cmd.get("mask_id")):
@@ -252,6 +297,8 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
                 mask = find(layer["masks"], resolve(cmd["mask_id"]))
                 if mask["source"] != "FILL" or "target" in cmd:
                     raise AuthoringError("Generated mask images require a FILL mask without a channel target")
+                if "physical_extent_m" in cmd:
+                    raise AuthoringError("Generated fill-mask images currently use native UV/world projection controls; physical_extent_m is supported for channel images only")
                 mask["image"] = placeholder(cmd["image_id"], "Non-Color", images)
             else:
                 if layer["type"] != "FILL":
@@ -270,10 +317,28 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
                     prop["anchor"] = ""
                 prop["procedural"] = ""
                 prop["enabled"] = True
+                if "physical_extent_m" in cmd:
+                    if cmd["channel"] == "NORMAL":
+                        raise AuthoringError("Tangent normal images need UV mapping; use a metric height source for projected relief")
+                    from .physical_space import require as metric_scale
+                    prop["material_mapping_version"] = 1
+                    prop["material_meters_per_unit"] = metric_scale(ts)
+                    prop["material_image_extent_m"] = cmd["physical_extent_m"]
+                elif prop.get("material_mapping_version") == 1:
+                    prop["material_image_extent_m"] = [prop["material_period_m"]] * 2
+                prop["material_source_id"] = cmd["image_id"]
+                record = (images or {}).get(cmd["image_id"], {})
+                prop["source_metadata"] = json.dumps(dict(version=1, source_id=cmd["image_id"],
+                    purpose="Generated scalar detail" if detail else "Generated channel content",
+                    channels=[cmd["channel"]], mapping_frame=prop["projection"],
+                    physical_extent_m=prop["material_image_extent_m"] if prop.get("material_mapping_version") == 1 else None, provenance="GENERATED", calibrated_bundle=False,
+                    revision_identity=record.get("sha256", cmd["image_id"]),
+                    dimensions=record.get("size") or record.get("dimensions") or [record.get("width"), record.get("height")],
+                    note="Approximate generated source; independent images are not a calibrated PBR bundle"), sort_keys=True)
         elif op == "add_mask":
             mask = document.defaults("OP_Mask")
             mask.update(id=aliases[cmd["id"]], source=cmd["source"], name=cmd["name"])
-            mask.update(values)
+            mask.update(physical_space.mask_values(ts, mask, values))
             if mask["source"] == "SCENE":
                 mask["influence"].update(mode="LIVE", resolution="256")
             if mask["edge_source"] == "LIVE":
@@ -282,13 +347,13 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         elif op in {"set_mask", "set_field"}:
             mask = find(layer["masks"], resolve(cmd["mask_id"]))
             if op == "set_mask":
-                mask.update(values)
+                mask.update(physical_space.mask_values(ts, mask, values))
                 if mask["edge_source"] == "LIVE":
                     mask["influence"].update(kind="EDGE", mode="LIVE", resolution="256")
             else:
                 if mask["source"] != "SCENE" and mask["edge_source"] != "LIVE":
                     raise AuthoringError("Select a scene or live-edge mask")
-                mask["influence"].update(values)
+                mask["influence"].update(physical_space.field_values(ts, mask["influence"], values))
                 mask["influence"]["mode"] = "LIVE"
                 if "object_id" in cmd:
                     obj = objects.get(cmd["object_id"])
@@ -339,9 +404,10 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
     added_items = sum(len(layer["masks"]) + sum(len(c["effects"]) for c in layer["channels"]) for layer in after["layers"]) - sum(len(layer["masks"]) + sum(len(c["effects"]) for c in layer["channels"]) for layer in before["layers"])
     if count > schema.MAX_LAYERS or added_items > schema.MAX_ITEMS or len(after["layers"]) > 256:
         raise AuthoringError("This proposal exceeds the layer/mask budget; split it into smaller edits")
+    surfaces.validate_patches(before, after, patches)
     validate_scope(ts, before, after, scope)
     validate_document(ts, before, after)
     from .resource_budget import validate as validate_resources
     validate_resources(before, after)
     return dict(before=before, after=after, aliases=aliases, summary=proposal["summary"],
-                changes=document.report(before, after), operation_id=operation_id)
+                changes=document.report(before, after), operation_id=operation_id, patch_constraints=patches)

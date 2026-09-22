@@ -314,5 +314,9 @@ def evaluate(ts, mask, u, v, cache):
         image = field.image
     key = ('scene_image',image.as_pointer(),image.get('open_painter_pixel_revision',0))
     if key not in cache:
-        cache[key] = read(cache,image)
+        from ..evaluation.uv_gutters import padded
+        # Extend only the disposable sampling buffer. Source pixels/provenance
+        # stay unchanged, and CPU evaluation and shader boundaries read the
+        # same occupied values with no false inverted coverage at UV seams.
+        cache[key] = padded(ts, read(cache,image))
     return falloff(sample_uv(cache[key],u,v)[...,0], getattr(field, 'falloff', 'LINEAR'))

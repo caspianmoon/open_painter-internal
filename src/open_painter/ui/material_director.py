@@ -19,6 +19,8 @@ class DirectorOperator:
             session.redraw()
             return {"FINISHED"}
         except Exception as exc:
+            if self.bl_idname == "open_painter.director_apply" and session.request:
+                session.terminal("VALIDATION_FAILED", "COMMIT_REJECTED", reason=str(exc)[:2000])
             session.state["status"] = str(exc)[:500]
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
@@ -45,6 +47,8 @@ class OP_DirectorSettings(bpy.types.PropertyGroup):
         options={"SKIP_SAVE"}, description="Optional PNG, JPEG or WebP appearance reference sent to Codex and available to native image generation")
     generate_textures: bpy.props.BoolProperty(name="Generate Surface Textures", default=True, options={"SKIP_SAVE"},
         description="Let Codex generate image textures for editable layers and masks using your connected account; generation can take several minutes")
+    correction_enabled: bpy.props.BoolProperty(name="Review Candidate Appearance", default=True, options={"SKIP_SAVE"},
+        description="Inspect an Eevee candidate and its material channels before committing; allow at most two visual corrections")
 
 
 class OP_OT_director_connection(DirectorOperator, bpy.types.Operator):
@@ -269,6 +273,7 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
             sub = body.row()
             sub.enabled = settings.mode != "EXPLAIN"
             sub.prop(settings, "generate_textures")
+            sub.prop(settings, "correction_enabled")
             for line in sharing_lines(context, settings):
                 body.label(text=line, icon="BLANK1")
             if status.get("sharing"):

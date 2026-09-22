@@ -166,6 +166,19 @@ class CancellationTests(unittest.TestCase):
         self.assertEqual(c.emitted[-1], dict(event="completed", request_id="one", status="completed"))
         self.assertEqual(c.image_items, {"one", "two", "three", "four"})
 
+    def test_provider_terminal_error_survives_request_cleanup(self):
+        c = self.client
+        c.run(self.message)
+        c.thread_id = "current"
+        c.events.put(dict(method="turn/completed", params=dict(threadId="current", turn=dict(status="failed",
+            error=dict(message="Image service unavailable", codexErrorInfo="upstreamError", additionalDetails="retry later", unrelated="discard")))))
+        c.poll()
+        event = c.emitted[-1]
+        self.assertEqual(event["request_id"], "one")
+        self.assertEqual(event["status"], "failed")
+        self.assertEqual(event["error"], dict(message="Image service unavailable", codexErrorInfo="upstreamError", additionalDetails="retry later"))
+        self.assertIsNone(c.request_id)
+
     def test_multiple_labeled_images_reach_the_codex_turn(self):
         c = self.client
         items = [dict(id="viewport", label="Model", url="data:image/png;base64,model"),

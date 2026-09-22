@@ -136,6 +136,24 @@ class OP_Channel(bpy.types.PropertyGroup):
         ('PHYSICAL', 'Physical', 'Sizes in world distance; the texture values follow the assigned mesh')])
     feature_size: bpy.props.FloatProperty(name='Feature Size', default=.05, min=1e-5, soft_max=10, subtype='DISTANCE',
         unit='LENGTH', update=physical_changed, description='World size of one procedural cell (noise period)')
+    # Version 0 preserves every legacy saved material. Version 1 is an
+    # explicitly declared metric frame; texture scale is not rescaled behind it.
+    material_mapping_version: bpy.props.IntProperty(default=0, min=0, max=1, update=changed)
+    material_period_m: bpy.props.FloatProperty(name="Physical Repeat (m)", default=.001, min=.000001, soft_max=.1, precision=6, update=numeric)
+    material_meters_per_unit: bpy.props.FloatProperty(name="Meters per World Unit", default=1, min=1e-9, update=numeric)
+    material_frame: bpy.props.EnumProperty(name="Material Frame", default="WORLD", update=changed,
+        items=[('WORLD', 'Declared World Frame', 'Explicit orthonormal directions'),
+               ('OBJECT', 'Object Frame', 'Object rotation with physical world distances'),
+               ('COMPONENT', 'Connected Member Frame', 'Geometric principal long axis per connected member')])
+    material_origin: bpy.props.FloatVectorProperty(name="Frame Origin", size=3, update=numeric)
+    material_axis_u: bpy.props.FloatVectorProperty(name="Across", size=3, default=(1, 0, 0), update=numeric)
+    material_axis_v: bpy.props.FloatVectorProperty(name="Along", size=3, default=(0, 1, 0), update=numeric)
+    material_directional: bpy.props.BoolProperty(name="Follow Along Axis", default=False, update=numeric,
+        description="Project image detail around the declared Along axis, preserving member grain on every side")
+    material_height_m: bpy.props.FloatProperty(name="Relief Amplitude (m)", default=.00002, min=0, soft_max=.001, precision=6, update=numeric)
+    material_image_extent_m: bpy.props.FloatVectorProperty(name="Image Tile Extent (m)", size=2, default=(.01, .01), min=.000001, precision=6, update=numeric)
+    material_source_id: bpy.props.StringProperty(description="Persistent coherent structural source identity")
+    source_metadata: bpy.props.StringProperty(description="Source purpose, interpretation and import/generation provenance")
     procedural_seed: bpy.props.IntProperty(name='Seed',default=1,min=0,update=numeric)
     procedural_detail: bpy.props.FloatProperty(name='Variation',default=.15,min=0,max=2,update=numeric)
     procedural_height: bpy.props.FloatProperty(name='Height Amplitude',default=.02,min=-1,max=1,update=numeric)

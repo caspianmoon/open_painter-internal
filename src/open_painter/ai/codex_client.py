@@ -318,7 +318,16 @@ class CodexClient:
                 if item.get("type") == "agentMessage" and not self.text_received:
                     self.emit(dict(event="text", request_id=self.request_id, text=item.get("text", "")[:16000]))
             elif method == "turn/completed" and params.get("threadId") == self.thread_id:
-                self.emit(dict(event="completed", request_id=self.request_id, status=params.get("turn", {}).get("status", "failed")))
+                turn = params.get("turn", {})
+                error = turn.get("error")
+                # Keep the provider's terminal cause; previously it was lost
+                # before the host could archive a failed material attempt.
+                safe_error = None
+                if isinstance(error, dict):
+                    safe_error = {key: str(error[key])[:2000] for key in ("message", "codexErrorInfo", "additionalDetails")
+                                  if error.get(key) is not None}
+                self.emit(dict(event="completed", request_id=self.request_id, status=turn.get("status", "failed"),
+                               **({"error": safe_error} if safe_error else {})))
                 self.request_id = self.turn_id = None
             elif method == "item/started":
                 item = params.get("item", {})

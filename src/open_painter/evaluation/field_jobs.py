@@ -202,6 +202,15 @@ def cancel_all():
     _rebakes.clear()
 
 
+def discard_scene(scene):
+    """Cancel only disposable scene work before its RNA is removed."""
+    pointer = scene.as_pointer()
+    for table in (_requests, _jobs, _rebakes):
+        for key in tuple(table):
+            if key[0] == pointer:
+                table.pop(key, None)
+
+
 def cancel_rebakes():
     """Drop scheduled edge rebakes only (a render is about to own the scene)."""
     _rebakes.clear()

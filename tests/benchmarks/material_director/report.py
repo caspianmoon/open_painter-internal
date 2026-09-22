@@ -48,6 +48,7 @@ def markdown(summary, manifest):
     lines = ["# Material Director: five-asset Eevee benchmark", "",
         f"Comparison: **{summary['comparison_id']}**. Protocol: `{summary['protocol']}`.", "",
         f"**{summary['core_scheduled']} scheduled texturing sessions**, with "
+        f"{summary.get('ablation_scheduled', 0)} correction-off ablation sessions and "
         f"{summary['robustness_scheduled']} optional robustness scenarios. Every attempt is retained.", "",
         "Only material appearance, spatial placement, prompt compliance, editability and revision fidelity receive points. "
         "Eevee setup, importing, lighting and camera configuration are prerequisites.", "",
@@ -57,6 +58,11 @@ def markdown(summary, manifest):
         f"- Runtime: `{config['provider']['runtime_version']}`; Blender: {_text(config['environment']['blender_version'])}.",
         f"- Source SHA-256: `{config['build']['source_sha256']}`; library: `{config['environment']['material_library_sha256']}`.",
         f"- Hardware: {_text(config['environment']['hardware'])}.", "",
+        f"- Execution policy: {config.get('execution', {}).get('policy', 'SERIAL')}, "
+        f"at most {config.get('execution', {}).get('jobs', 1)} simultaneous sessions. Shared-device timings include contention.", "",
+        f"- Harness caps: {_text(config.get('limits'))}; ordinary product deadlines: {_text(config.get('product_deadlines', 'Historical policy'))}.",
+        "Native/hybrid SET requests do not have equal effective budgets: the ordinary native deadline is 180 seconds, "
+        "while hybrid's 900-second deadline is bounded by the frozen harness cap. Baseline/improved budgets match within each mode and scope.", "",
         "## Results by mode", "",
         "| Mode | Confirmed autonomous successes / scheduled | Reviewed final mean | Generated-input sessions | Intervention classes |",
         "|---|---:|---:|---:|---|"]
@@ -64,6 +70,15 @@ def markdown(summary, manifest):
         lines.append(f"| {mode} | {data['autonomous_successes']} / {data['scheduled']} | "
                      f"{_score(data['conditional_final_quality']['mean'])} | "
                      f"{data['actual_generated_input_subset']['count']} | {_text(data['interventions'])} |")
+    if summary.get("comparison_groups"):
+        lines.extend(["", "## Paired product builds and correction ablation", "",
+            "Human ratings remain pending until supplied by an identified independent reviewer. "
+            "Deterministic calibration is a separate engineering track, not a human-authored aesthetic reference.", "",
+            "| Build / mode / correction | Planned | Attempted | Assessable appearance | Workflow passes | Initial quality | Final quality |",
+            "|---|---:|---:|---:|---:|---:|---:|"])
+        for name, group in summary["comparison_groups"].items():
+            lines.append(f"| {name} | {group['planned']} | {group['attempted']} | {group['assessable_appearance']} | "
+                         f"{group['workflow_passes']} | {_score(group['initial_quality']['mean'])} | {_score(group['final_quality']['mean'])} |")
     lines.extend(["", "Zero corrections is a success only when the actual material requirements pass. "
                   "One correction means minor assistance; two significant assistance; three or more a failed autonomous workflow. "
                   "Unknown counts remain unknown. Predefined Create/Refine prompts are test instructions, not extra artist corrections.", "",
@@ -82,7 +97,7 @@ def markdown(summary, manifest):
     lines.extend(["", "## Every texturing session", "",
                   "| Order | Session / evidence | Execution | Create | Refine 1 | Final | Corrections | Decision |",
                   "|---:|---|---|---:|---:|---:|---:|---|"])
-    for record in summary["core_results"]:
+    for record in summary["core_results"] + summary.get("ablation_results", []):
         path = entries[record["run_id"]]["relative_directory"] + "/result.json"
         stages = record["stages"]
         count = record["artist_intervention_count"]
@@ -104,7 +119,7 @@ def markdown(summary, manifest):
     lines.extend(["", "## Limits of the evidence", ""])
     lines.extend("- " + item for item in summary["limitations"])
     limitations = {f"{record['run_id']} / {name}: {item}"
-                   for record in summary["core_results"] for name, stage in record["stages"].items()
+                   for record in summary["core_results"] + summary.get("ablation_results", []) for name, stage in record["stages"].items()
                    for item in stage["review"].get("limitations", [])}
     lines.extend("- " + item + "." for item in sorted(limitations))
     lines.extend(["", "The JSON report retains all stage scores, checks, generated-input counts and measured timing/cost fields. "
@@ -143,12 +158,17 @@ def export_review_packets(directory):
     packets = []
     for entry in entries:
         result = results.get(entry["run_id"], {})
+        from .outcomes import adapt_result
+        result = adapt_result(result)
         run_directory = directory / entry["relative_directory"]
-        copied, missing = [], []
+        copied, missing, stage_outcomes = [], [], {}
         for name, stage in stage_map(result).items():
             if name not in {"create", "refine_1", "refine_2"}:
                 continue
-            checkpoint = stage.get("checkpoint")
+            stage_outcomes[name] = {key: stage.get(key) for key in ("execution", "evidence", "quality")}
+            if stage.get("execution", {}).get("state") == "SKIPPED_DEPENDENCY":
+                continue
+            checkpoint = stage.get("checkpoint") or stage.get("evidence", {}).get("checkpoint")
             if not checkpoint:
                 missing.append(name)
                 continue
@@ -182,7 +202,7 @@ def export_review_packets(directory):
         if not form_path.exists():
             form = review_template(entry, cases[entry["case_id"]], manifest["specification"])
             form_path.write_text(json.dumps(form, indent=2, ensure_ascii=False) + "\n")
-        packet = {"review_id": entry["review_id"], "views": copied, "missing_stages": missing,
+        packet = {"review_id": entry["review_id"], "views": copied, "missing_stages": missing, "stage_outcomes": stage_outcomes,
                   "review_form": f"{entry['review_id']}/review.json"}
         packets.append(packet)
     (destination / "index.json").write_text(json.dumps({"packets": packets}, indent=2) + "\n")

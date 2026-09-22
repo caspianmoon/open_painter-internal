@@ -1,0 +1,396 @@
+{
+  "schema_version": 1,
+  "benchmark": "Open Painter Material Director use-case benchmark",
+  "created": "2026-09-22",
+  "status": "PLAN_ONLY_NOT_EXECUTED",
+  "repository": "caspianmoon/open_painter",
+  "inspected_branch": "main",
+  "inspected_commit": "8a62636f5ae58512ba3fb43a2a2581b9d1cbb9fa",
+  "disclaimer": "Declarative specification, not an executable Blender runner. Asset pages and code were inspected. Model files were not imported or UV-validated and live AI sessions were not run.",
+  "common_instruction": "Use native editable Open Painter layers, masks, generators and channel controls. Do not replace the model with an image or change geometry, UVs, lighting or cameras. Apply the material changes; a written description alone is not a result.",
+  "repeat_count": 3,
+  "core_session_count": 48,
+  "maximum_core_user_turns": 144,
+  "lanes": [
+    {
+      "id": "P",
+      "name": "Native editable authoring",
+      "generate_surface_textures": false
+    },
+    {
+      "id": "H",
+      "name": "Hybrid allowed",
+      "generate_surface_textures": true
+    }
+  ],
+  "settings": {
+    "output_resolution": 2048,
+    "send_current_3d_view": true,
+    "send_mesh_maps": true,
+    "model_id": "RECORD_EXACT_ACTUAL_ID",
+    "seed": "RECORD_WHEN_EXPOSED_OTHERWISE_UNCONTROLLED",
+    "fresh_fixture_each_repeat": true,
+    "manual_artistic_rescue": false
+  },
+  "assets": [
+    {
+      "id": "A01",
+      "name": "Metal Toolbox",
+      "url": "https://polyhaven.com/a/metal_toolbox",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "14K",
+      "purpose": "Coated metal, exposed metal, wood, small hardware, localized wear.",
+      "fixture": "A01_toolbox_neutral.blend"
+    },
+    {
+      "id": "A02",
+      "name": "Modern Arm Chair 01",
+      "url": "https://polyhaven.com/a/modern_arm_chair_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "9K",
+      "purpose": "Wood versus upholstery; multiple texture sets; directional grain; selective revisions.",
+      "fixture": "A02_chair_neutral.blend"
+    },
+    {
+      "id": "A03",
+      "name": "Wine Barrel 01",
+      "url": "https://polyhaven.com/a/wine_barrel_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "11K",
+      "purpose": "Stylized art direction, wood grain versus hoops, end grain and UV seams.",
+      "fixture": "A03_barrel_neutral.blend"
+    },
+    {
+      "id": "A04",
+      "name": "Antique Ceramic Vase 01",
+      "url": "https://polyhaven.com/a/antique_ceramic_vase_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "9K",
+      "purpose": "Clean surfaces, exact band count and placement, glaze, metallic trim, continuous wrap.",
+      "fixture": "A04_vase_neutral.blend"
+    },
+    {
+      "id": "A05",
+      "name": "Rubber Boots",
+      "url": "https://polyhaven.com/a/rubber_boots",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "35K",
+      "purpose": "Rubber versus mud; lower-region placement; wet-to-dry revisions without repainting.",
+      "fixture": "A05_boots_neutral.blend"
+    },
+    {
+      "id": "A06",
+      "name": "Rock Moss Set 01",
+      "url": "https://polyhaven.com/a/rock_moss_set_01",
+      "license": "CC0",
+      "format": "Blend",
+      "download_resolution": "2K",
+      "site_triangles_approx": "63K for set",
+      "purpose": "Irregular geometry, orientation-aware masks, stone scale and cross-object consistency.",
+      "fixture": "A06_rocks_neutral.blend"
+    }
+  ],
+  "reference": {
+    "id": "R01",
+    "asset": "Fabric Pattern 05",
+    "url": "https://polyhaven.com/a/fabric_pattern_05",
+    "license": "CC0",
+    "file": "Download Col 01 color texture at 1K, convert losslessly to PNG when necessary, rename R01_fabric_reference.png",
+    "usage": "Reference attachment only; do not assign as final content"
+  },
+  "cases": [
+    {
+      "id": "MD-01",
+      "title": "A convincing, editable hero prop",
+      "assets": [
+        "A01"
+      ],
+      "scope": "SET, or asset-only SCENE when the source has multiple registered sets",
+      "fixture": "A01_toolbox_neutral.blend",
+      "intent": "An artist needs a close-up workshop prop, not a generic grunge material.",
+      "create": "Texture this toolbox as a used but well-maintained workshop prop. Give the body satin petrol-blue painted steel, the handle warm oak, and the latches brass. Put small paint chips on exposed body edges and around the latch contact points, exposing steel beneath. Keep most broad panels clean. Add restrained dirt in recesses. Keep paint, exposed steel, wood, brass, dirt and wear independently editable. Do not change the mesh, UVs, camera or lighting.",
+      "refinements": [
+        "Change only the painted body from petrol blue to burgundy. Preserve the wood, brass, exposed steel, roughness, and the exact locations of chips and dirt.",
+        "Reduce the visible rust or oxidation amount by half without moving the existing wear pattern or changing the paint, wood, brass or chip shapes. Do not add rust to satisfy this request when none was created."
+      ],
+      "requirements": [
+        "The body, handle and latches have distinct materials in the correct places.",
+        "Intact paint does not inherit the exposed metal response; exposed steel and brass remain visually distinct.",
+        "Wear is concentrated on requested edges/contact regions, not uniformly distributed over every surface.",
+        "The burgundy revision changes only paint color; protected material buffers and chip placement remain unchanged.",
+        "Turning off the wear/dirt components reveals a coherent clean material, not missing color or geometry."
+      ],
+      "red_flags": "One noisy material everywhere; metal-looking wood; a recolor that regenerates the complete surface; convincing prose but no applied material.",
+      "edit_proof": "Toggle dirt and wear separately, change paint color, then restore the saved final state.",
+      "diagnostics": "After recording an unassisted targeting failure, repeat separately with evaluator-authored region groups. Label that repeat ASSISTED; it cannot replace the original score.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-02",
+      "title": "Furniture with clearly different wood and textile surfaces",
+      "assets": [
+        "A02"
+      ],
+      "scope": "SCENE in an asset-only scene",
+      "fixture": "A02_chair_neutral.blend",
+      "intent": "An interior/game artist needs coordinated frame and cushion materials plus safe client revisions.",
+      "create": "Create a premium contemporary chair with a dark walnut frame and burnt-orange woven upholstery on the cushions. Align the wood grain with the length of each frame member. Make the upholstery soft and matte, with a restrained woven structure that does not sparkle or turn into stone-like bumps. Keep it clean and almost new. Treat every editable part of this chair. Do not change its geometry, UVs, camera or lighting.",
+      "refinements": [
+        "Change only the upholstery to deep forest green. Keep its weave, scale and roughness exactly as they are. Leave every frame material unchanged.",
+        "Make the upholstery weave twice as fine without changing its color, overall roughness or the walnut frame. Keep the result free of visible aliasing at the normal viewing distance."
+      ],
+      "requirements": [
+        "Every chair texture set is treated, without silently leaving one neutral.",
+        "Fabric and wood are distinguishable without relying only on hue.",
+        "Wood direction is appropriate for individual structural members.",
+        "The color-only revision preserves the frame and the textile pattern.",
+        "The scale revision changes repetition/detail scale rather than replacing the fabric with a different material; subpixel fibers are not required to be visibly resolved."
+      ],
+      "red_flags": "Leather/plastic instead of woven cloth; wood grain covering cushions; one frame member left gray; dramatic new lighting used to sell the result.",
+      "edit_proof": "Independently change upholstery color and scale, and confirm all frame channels are untouched.",
+      "diagnostics": "Preserve source material-slot boundaries. Do not add new cushion masks before the primary run.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-03",
+      "title": "Stylized PBR rather than automatic photorealistic grunge",
+      "assets": [
+        "A03"
+      ],
+      "scope": "SET, or asset-only SCENE when required",
+      "fixture": "A03_barrel_neutral.blend",
+      "intent": "A game artist needs a stylized coastal-adventure prop with deliberately restrained detail.",
+      "create": "Texture this barrel for a stylized coastal adventure game. Use warm pale wood with broad, readable grain and muted dark-blue painted metal hoops. Keep the surface clean, with sparse, broad hand-painted-looking color variation rather than photorealistic dirt or fine noise. Run the side grain along the staves and use a different end-grain treatment on visible end faces. Keep the wood and hoops separate. Do not bake a directional light or cast shadow into the base color. Keep the mesh and UVs unchanged.",
+      "refinements": [
+        "Make the wood color variation about half as strong and keep the broad grain readable. Preserve the hoops, material boundaries and grain direction.",
+        "Change only the painted hoops to muted terracotta. Keep the wood, roughness structure and all existing pattern locations unchanged."
+      ],
+      "requirements": [
+        "The result reads as the requested stylized art direction rather than the original scanned appearance.",
+        "Wood and hoops remain separated on the front, rear and end views.",
+        "Side grain and end-face treatment differ appropriately.",
+        "The first revision reduces visual noise/contrast without flattening everything to a solid color.",
+        "The hoop recolor leaves all wood buffers unchanged."
+      ],
+      "red_flags": "Default rust/grunge despite the clean brief; giant mismatched triplanar patches; directionally baked highlights; wood grain on metal.",
+      "edit_proof": "Expose or locate the parameters for wood variation and hoop color; modify each independently.",
+      "diagnostics": "Use this case to separate useful library composition from a single default preset. Do not demand novelty for its own sake.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-04",
+      "title": "A precise design that must wrap around a curved object",
+      "assets": [
+        "A04"
+      ],
+      "scope": "SET, or asset-only SCENE when required",
+      "fixture": "A04_vase_neutral.blend",
+      "intent": "A product artist needs a clean ceramic finish and an exact, revisable decorative layout.",
+      "create": "Give this vase warm ivory ceramic glaze. Add exactly two thin cobalt-blue horizontal bands around the upper third of the body, with a clear gap between them. Add a narrow metallic gold rim at the mouth. Keep the interior ivory and the bottom contact ring unglazed terracotta. The bands must continue around the entire vase, including the back, without a visible seam. Keep the glaze, bands, gold and unglazed foot independently editable. Do not change geometry or UVs.",
+      "refinements": [
+        "Change only the two blue bands to deep brick red. Preserve their widths, spacing, positions, the gold rim, and the ivory glaze.",
+        "Move both decorative bands downward by five percent of the vase height, maintaining their exact widths and spacing. Do not move the gold rim or change any other surface."
+      ],
+      "requirements": [
+        "Exactly two continuous bands are present at the requested initial height.",
+        "The bands wrap correctly on the rear and across UV boundaries.",
+        "Gold is confined to the narrow rim; the interior and contact ring follow the brief.",
+        "The recolor does not redraw or move the bands.",
+        "The placement revision moves the band centers by 5% of measured vase height, with a proposed tolerance of 1% of height; band widths and gap remain stable."
+      ],
+      "red_flags": "Three bands; front-only decoration; mirrored or drifting pattern; entire vase metallic; band edits flattening the glaze stack.",
+      "edit_proof": "Independently adjust band color/position and rim appearance, then restore the final checkpoint.",
+      "diagnostics": "The source asset supplies mask textures. None of those masks may be present in the primary test fixture.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-05",
+      "title": "Mud is a material, not just a brown stain",
+      "assets": [
+        "A05"
+      ],
+      "scope": "SET, or asset-only SCENE when required",
+      "fixture": "A05_boots_neutral.blend",
+      "intent": "A game artist needs localized environmental wear and a wet/dry variant without losing placement.",
+      "create": "Make these boots mustard-yellow rubber with matte black soles and black top rims. Add dark wet mud on the soles and irregular splashes restricted mainly to the lower third of each boot. Keep the upper shafts clean. The rubber must remain recognizably rubber and the mud must have its own color, roughness and subtle surface relief. Do not add leather grain, rust or metallic effects. Keep the material regions and mud independently editable. Do not change geometry or UVs.",
+      "refinements": [
+        "Make only the mud look dry: lighter, less glossy and slightly chalky. Preserve its current coverage and splash shapes exactly. Leave the rubber and black parts untouched.",
+        "Reduce the mud layer opacity to half its current value without changing the mud mask, color, roughness or the boot materials."
+      ],
+      "requirements": [
+        "Yellow rubber, black components and mud remain visibly distinct.",
+        "Mud coverage is concentrated in the lower region and does not spread across the clean shafts.",
+        "Wet-to-dry changes surface response as well as color, while preserving the mask.",
+        "The opacity revision halves the relevant layer opacity or equivalent compositing control without rebuilding the mask.",
+        "Both boots are treated, with plausible variation rather than accidental identical mirrored stains."
+      ],
+      "red_flags": "The original downloaded dirt mask reappears; mud exists only in base color; dry-mud instruction changes the whole boot; glossy upper shafts become metallic.",
+      "edit_proof": "Toggle mud off and inspect the intact rubber; adjust mud roughness without changing coverage.",
+      "diagnostics": "The source includes dirty textures and masks. Remove dirty_diff, dirty_mask, dirty_arm, dirty normal/roughness, and all other original images before testing.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-06",
+      "title": "Natural surfaces with geometry-aware distribution",
+      "assets": [
+        "A06"
+      ],
+      "scope": "SET, or asset-only SCENE when required",
+      "fixture": "A06_rocks_neutral.blend",
+      "intent": "An environment artist needs a coherent rock set that is not covered by one tiled image.",
+      "create": "Texture these rocks as pale weathered sandstone with restrained mineral variation. Put dark green moss mainly on upward-facing ledges and in sheltered cracks. Keep most steep vertical faces bare and the undersides free of moss. Make recessed damp areas subtly darker and less rough than the dry stone. Use a consistent real-world scale across the rocks but avoid identical repeated patches. Preserve geometry and UVs. Keep stone, moss and dampness independently editable.",
+      "refinements": [
+        "Change only the moss to a warmer olive green. Preserve its exact coverage and the stone and dampness materials.",
+        "Reduce only the moss opacity by half. Preserve its mask and the underlying stone, dampness and detail scales."
+      ],
+      "requirements": [
+        "Stone, moss and damp regions are independently represented.",
+        "Distribution follows the specified surfaces in top, side and underside inspections.",
+        "The collection has coherent material scale without conspicuous cloned patterns.",
+        "The recolor preserves the moss mask and all non-moss components.",
+        "The opacity edit does not regenerate moss coverage or damage the underlying rock material."
+      ],
+      "red_flags": "Green sprayed evenly everywhere; moss on the underside; giant noise unrelated to object size; seams hidden only from the input camera.",
+      "edit_proof": "Toggle moss and dampness independently; check that their masks and parameters remain separate.",
+      "diagnostics": "Use all six rocks for the standard set test. Verify the source orientation and ground convention during fixture preparation; do not rotate rocks between repeats.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-07",
+      "title": "Coordinated scene art direction without making everything the same",
+      "assets": [
+        "A01",
+        "A02",
+        "A04"
+      ],
+      "scope": "SCENE",
+      "fixture": "A07_workshop_scene_neutral.blend",
+      "intent": "An artist needs several props to belong to one environment while retaining their individual materials.",
+      "create": "Texture all editable props in this scene as a coordinated, realistically aged coastal workshop. The toolbox has faded teal painted steel, a wood handle and brass latches. The chair has dark brown wood and faded tan fabric cushions. The vase has dirty ivory ceramic glaze. Use restrained dust and wear appropriate to each material, with a coherent age and saturation level across the scene. Do not make them share one universal grunge material. Preserve the floor, background, camera, lighting, geometry and UVs.",
+      "refinements": [
+        "Make the entire editable prop collection feel better maintained by reducing dust and dirt opacity by half. Preserve all base colors, material identities, wear masks and noneditable scene objects.",
+        "Change only the toolbox paint to muted burgundy. Preserve the chair, vase, wood handle, brass, all wear patterns, and the floor and lighting."
+      ],
+      "requirements": [
+        "Every registered target material receives an appropriate result, including all chair parts.",
+        "The objects look coordinated without losing distinct metal, wood, cloth and ceramic identities.",
+        "The scene-wide dirt edit is consistent but does not recolor base materials.",
+        "The toolbox-only revision leaves every chair and vase material buffer unchanged.",
+        "No partial scene application is accepted as success; errors and stale targets must be reported without corrupting the previously committed state."
+      ],
+      "red_flags": "Only active object textured; all objects share identical noise; hidden set left gray; incorrect props changed by the second revision.",
+      "edit_proof": "Inspect each set and independently toggle its dirt controls; check scope-limited recolor preservation.",
+      "diagnostics": "The floor and background use ordinary Blender materials and are not registered as editable Open Painter texture sets. All captured editable sets are intended targets for Scene Create.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    },
+    {
+      "id": "MD-08",
+      "title": "Reference-driven reconstruction with editable color and pattern",
+      "assets": [
+        "A02"
+      ],
+      "scope": "SCENE in an asset-only scene",
+      "fixture": "A08_chair_reference_neutral.blend",
+      "reference": "R01_fabric_reference.png",
+      "intent": "An artist provides an appearance reference and later changes its pattern without repainting.",
+      "create": "Use the attached fabric image as an appearance reference for this chair upholstery. Recreate its main palette, windowpane grid and woven character as an editable material; do not paste or import the reference as the final texture. Make the large grid cells approximately 30 millimeters wide on the seat, with consistent scale on the back cushion. Give the frame dark walnut. Keep pattern color, background color and grid scale independently editable. Do not change geometry, UVs, lighting or the camera.",
+      "refinements": [
+        "Change only the grid-line color to cream. Keep the fabric background, weave, grid spacing, walnut frame and all roughness unchanged.",
+        "Double the grid-cell width to approximately 60 millimeters without changing either fabric color, the weave or the frame."
+      ],
+      "requirements": [
+        "The result follows the actual supplied reference, not merely the word fabric.",
+        "The initial large grid cells are about 30 mm and become about 60 mm; proposed size tolerance is 20% at fixed physical scale.",
+        "Grid lines, background and weave can be controlled separately.",
+        "The reference bitmap is not silently assigned or copied as final surface content.",
+        "The color and scale revisions preserve the other components and all frame materials."
+      ],
+      "red_flags": "A plausible but unrelated textile; direct reference reuse; meaningless color knobs on a flattened bitmap; changing line color changes the entire cushion.",
+      "edit_proof": "Change grid-line color, background color and pattern scale independently with normal Open Painter controls.",
+      "diagnostics": "Use a downloaded CC0 color texture as the reference, not a copyrighted website example render. Keep that reference outside the local asset library.",
+      "status": "NOT_RUN",
+      "required_stages": [
+        "create",
+        "refine_1",
+        "refine_2",
+        "editability_probe",
+        "save_reopen_offline",
+        "export_reimport"
+      ],
+      "base_state": "Neutral prepared fixture, except R01 reference attached only for MD-08"
+    }
+  ]
+}

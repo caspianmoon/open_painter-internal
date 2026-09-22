@@ -212,8 +212,40 @@ class CancellationTests(unittest.TestCase):
         c.interrupt()
         c.run(dict(self.message, request_id="two"))
         self.assertEqual(c.sent[2]["method"], "turn/interrupt")
+        before = list(c.emitted)
         self.respond(2, error=dict(code=-1))
         self.assertEqual(c.request_id, "two")
+        self.assertEqual(c.emitted, before)
+
+    def test_returned_model_metadata_excludes_thread_and_account_details(self):
+        c = self.client
+        c.run(dict(self.message, model="pinned-model"))
+        self.assertEqual(c.sent[0]["params"]["model"], "pinned-model")
+        self.respond(0, dict(thread=dict(id="thread-one", cwd="/private/project", preview="secret"),
+            model="actual-model", modelProvider="openai", reasoningEffort="high", serviceTier="default",
+            account=dict(email="private@example.com")))
+        self.assertEqual(c.emitted, [dict(event="turn_metadata", request_id="one", model="actual-model",
+            provider="openai", reasoning_effort="high", service_tier="default")])
+
+    def test_reroute_and_usage_are_bound_to_the_active_thread(self):
+        c = self.client
+        c.run(self.message)
+        self.respond(0, dict(thread=dict(id="thread-one")))
+        c.emitted.clear()
+        for thread in ("thread-old", "thread-one"):
+            c.events.put(dict(method="model/rerouted", params=dict(threadId=thread,
+                fromModel="pinned", toModel="fallback", reason="capacity")))
+            c.events.put(dict(method="thread/tokenUsage/updated", params=dict(threadId=thread,
+                tokenUsage=dict(last=dict(inputTokens=12, outputTokens=5, wrong=-1, invalid=True,
+                    path="/private/project"), total=dict(totalTokens=17)))))
+        c.poll()
+        self.assertEqual(c.emitted, [dict(event="model_rerouted", request_id="one", from_model="pinned",
+            to_model="fallback", reason="capacity"), dict(event="usage", request_id="one",
+                usage=dict(last=dict(inputTokens=12, outputTokens=5), total=dict(totalTokens=17)))])
+        c.interrupt()
+        c.emitted.clear()
+        c.events.put(dict(method="model/rerouted", params=dict(threadId="thread-one", toModel="late")))
+        c.poll()
         self.assertFalse(c.emitted)
 
     def test_account_request_failure_keeps_the_running_turn(self):

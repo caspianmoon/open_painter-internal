@@ -320,6 +320,24 @@ on a test mesh. Check cancellation, unavailable models, account limits, reconnec
 
 ### Real model use cases
 
+The revised five-model Eevee texturing benchmark is implemented in
+[`tests/benchmarks/material_director/`](tests/benchmarks/material_director/README.md), with
+[`scripts/benchmark_material_director.py`](scripts/benchmark_material_director.py) as its launcher.
+It prepares clean public CC0 meshes in one fixed Eevee rig, with fresh CPU geometry maps,
+1024-square output, and no imported scene infrastructure. The default is five real Codex sessions,
+each with the exact Create and two Refine prompts, image generation enabled, the ten prescribed
+renders, ordinary editor views, evaluated channels and an artist-intervention count. A non-scored
+pilot is required before freezing the run. Repeated P/H comparisons, robustness, offline reopening,
+Undo, export/reimport and 4K are optional supplements. Real account calls require
+`--use-codex-login` and are excluded from routine CI. Independent human review supplies the five
+weighted texturing scores; import/render success earns no artistic points. Missing evidence
+never becomes a passing score. The old protocol is retained under the benchmark's `legacy/` directory.
+
+The [2026-09-22 live benchmark report](docs/material-director-eevee-benchmark-validation.md)
+links the actual five-case gallery, retained failures, separate boots diagnostic and pending
+human reviews. `scripts/benchmark_material_director_gallery.py COMPARISON_DIRECTORY`
+rebuilds the local gallery from unchanged evidence images.
+
 `python3 scripts/test_director_live.py --use-codex-login` runs real Create/Refine/Explain/Plan turns
 with the current Codex ChatGPT login, native operators, shader evaluation, viewport PNGs and AI Undo.
 This consumes account allowance and requires an existing Codex file credential cache. The opt-in

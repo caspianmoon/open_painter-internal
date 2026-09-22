@@ -203,6 +203,13 @@ class CodexClient:
                 return
             # Never carry an unattended thread across file loads or reconnects.
             self.thread_id = result["thread"]["id"]
+            # Public runtime metadata lets acceptance runs distinguish the
+            # requested model from the model actually selected by the server.
+            # Deliberately omit paths, instructions and account information.
+            self.emit(dict(event="turn_metadata", request_id=request_id,
+                           model=result.get("model"), provider=result.get("modelProvider"),
+                           reasoning_effort=result.get("reasoningEffort"),
+                           service_tier=result.get("serviceTier")))
             inputs = [dict(type="text", text=message["input"])]
             if message.get("image"):
                 inputs.append(dict(type="image", url=message["image"]))
@@ -286,6 +293,16 @@ class CodexClient:
                 self.request("account/read", dict(refreshToken=False), self._account)
             elif method == "account/rateLimits/updated":
                 self.emit(dict(event="limits", limits=params.get("rateLimits", {})))
+            elif method == "model/rerouted" and self.request_id and params.get("threadId") == self.thread_id:
+                self.emit(dict(event="model_rerouted", request_id=self.request_id,
+                               from_model=params.get("fromModel"), to_model=params.get("toModel"),
+                               reason=params.get("reason")))
+            elif method == "thread/tokenUsage/updated" and self.request_id and params.get("threadId") == self.thread_id:
+                usage = params.get("tokenUsage", {})
+                counts = {group: {key: value for key, value in usage.get(group, {}).items()
+                                  if isinstance(value, int) and not isinstance(value, bool) and value >= 0}
+                          for group in ("last", "total") if isinstance(usage.get(group), dict)}
+                self.emit(dict(event="usage", request_id=self.request_id, usage=counts))
             elif method == "item/agentMessage/delta" and self.request_id and params.get("threadId") == self.thread_id:
                 self.text_received = True
                 self.emit(dict(event="text", request_id=self.request_id, text=params.get("delta", "")[:16000]))

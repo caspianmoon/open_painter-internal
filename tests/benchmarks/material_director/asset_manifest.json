@@ -1,0 +1,575 @@
+{
+  "schema_version": 1,
+  "benchmark": "Material Director",
+  "source_pages_checked": "2026-09-22",
+  "assets": [
+    {
+      "id": "A01",
+      "name": "Metal Toolbox",
+      "slug": "metal_toolbox",
+      "source_url": "https://polyhaven.com/a/metal_toolbox",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A01_toolbox_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A01/metal_toolbox_2k.blend",
+          "size": 451321,
+          "sha256": "bb434d051e065db446118e3a02ac1d5204208ab545db8bff0f7b1967a9965af6",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/metal_toolbox/metal_toolbox_2k.blend",
+          "provider_md5": "a2a6bc6410e02d60a8ab4ca0727c16ee"
+        },
+        {
+          "path": "A01/textures/metal_toolbox_diff_2k.jpg",
+          "size": 2884619,
+          "sha256": "ff84f51ac4c88c13407a591abd2111ed6210566b3528232c655806429e4e0b44",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/metal_toolbox/metal_toolbox_diff_2k.jpg",
+          "provider_md5": "870d4d3804daadd9c4df40f746d56fa7"
+        },
+        {
+          "path": "A01/textures/metal_toolbox_metal_2k.exr",
+          "size": 696204,
+          "sha256": "ae42be3ca893fae6f07c6fc7b751f7e1c583fa19937027f3fc2b465435c5902a",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/metal_toolbox/metal_toolbox_metal_2k.exr",
+          "provider_md5": "4548612752a7049f5fc58eb265efe37d"
+        },
+        {
+          "path": "A01/textures/metal_toolbox_nor_gl_2k.exr",
+          "size": 5478531,
+          "sha256": "2edfeef2332848a9f660712a1def88d195c4769c8cc1a09cf1508e87dc2c1257",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/metal_toolbox/metal_toolbox_nor_gl_2k.exr",
+          "provider_md5": "06daa8bef4f812b0efc14d2ce619cb52"
+        },
+        {
+          "path": "A01/textures/metal_toolbox_rough_2k.exr",
+          "size": 3689009,
+          "sha256": "cc19c8c9a320ae62eb78b142e540320a8d9fe61915e94ec66a960973b763c1b5",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/metal_toolbox/metal_toolbox_rough_2k.exr",
+          "provider_md5": "15505b8443af1f92672561ed5793d1f5"
+        }
+      ],
+      "creators": {
+        "Mateusz Sadek": "All"
+      },
+      "source_metadata": {
+        "name": "Metal Toolbox",
+        "polycount": 14228,
+        "dimensions": [
+          400.0099003314972,
+          292.32875257730484,
+          347.10586071014404
+        ],
+        "texel_density": 3692.8859841447725,
+        "files_hash": "df0982cb97ade9651921bf5d76047a33a388118a"
+      },
+      "downloaded_at": "2026-09-21T23:32:04.976101+00:00",
+      "entrypoint": "A01/metal_toolbox_2k.blend",
+      "metadata_files": [
+        {
+          "path": "A01/metal_toolbox.files.json",
+          "size": 22373,
+          "sha256": "76ee9990ecc3b58cd892848933db552ce0b79b68f0f9006e91f2e29e7ed8aaa1",
+          "url": "https://api.polyhaven.com/files/metal_toolbox"
+        },
+        {
+          "path": "A01/metal_toolbox.info.json",
+          "size": 1098,
+          "sha256": "6a301b1b1efefd69b6852a5d39a9ab441bce0c5ba9209f5d1348feffbe9bcae9",
+          "url": "https://api.polyhaven.com/info/metal_toolbox"
+        }
+      ]
+    },
+    {
+      "id": "A02",
+      "name": "Modern Arm Chair 01",
+      "slug": "modern_arm_chair_01",
+      "source_url": "https://polyhaven.com/a/modern_arm_chair_01",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A02_chair_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A02/modern_arm_chair_01_2k.blend",
+          "size": 355136,
+          "sha256": "c6c92b5a07be4ab37e48fbf43c7ff233b90b1e364987e2bae790aed501fe97f6",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/modern_arm_chair_01/modern_arm_chair_01_2k.blend",
+          "provider_md5": "54a733acd861cfae01d09877c6ad4b8f"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_legs_rough_2k.png",
+          "size": 3497673,
+          "sha256": "fa49217cd4908d6c403fe37e0ee0b7f74d15168ac3b585ed8d22277c07f4e59b",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_legs_rough_2k.png",
+          "provider_md5": "18c94c599e209be684a572581efaa534"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_pillow_metal_2k.png",
+          "size": 8264,
+          "sha256": "e280cde7e0775c960c448ea75e95e4023e3c47f6f5a825ee08d07b397ebbe98e",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_pillow_metal_2k.png",
+          "provider_md5": "d1b4236811cde253fe1d58c79386c101"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_pillow_nor_gl_2k.png",
+          "size": 7433277,
+          "sha256": "7b3c44c34ecfa8cf07a8930592364c52a7c543eecd9434b34df1ee46884a7680",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_pillow_nor_gl_2k.png",
+          "provider_md5": "158e18aeb04dae4dc3f9cbb1fa149512"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_legs_diff_2k.png",
+          "size": 10153780,
+          "sha256": "86cd587fe94c561695df91fc23cc48935be9bc2d98e811ac2be084bcb9ee2bdc",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_legs_diff_2k.png",
+          "provider_md5": "9e31c85b0d6f0ead7d6db4e99e41f3a3"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_legs_nor_gl_2k.png",
+          "size": 10611050,
+          "sha256": "6364741a59f40e84f43c06f6e2b40b165613d0bb048ec8729a64b423de0d17d6",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_legs_nor_gl_2k.png",
+          "provider_md5": "eccc4bcdcf0e8dacd87369b29ec4db17"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_pillow_rough_2k.png",
+          "size": 2512880,
+          "sha256": "cc00fe679b9be02e68c3d65980c99fa2b75251fad0649f025b281fe8881086d1",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_pillow_rough_2k.png",
+          "provider_md5": "c254dfbdead5e52eb744b6600bc05922"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_pillow_diff_2k.png",
+          "size": 6961371,
+          "sha256": "b339fcdde4c1fc1c863b607d3eb878aca495c2edf452d1b9b45ef96641a13ac2",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_pillow_diff_2k.png",
+          "provider_md5": "934bd83b139fb59a799f077c7f89509f"
+        },
+        {
+          "path": "A02/textures/modern_arm_chair_01_legs_metal_2k.png",
+          "size": 8264,
+          "sha256": "e280cde7e0775c960c448ea75e95e4023e3c47f6f5a825ee08d07b397ebbe98e",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/modern_arm_chair_01/modern_arm_chair_01_legs_metal_2k.png",
+          "provider_md5": "d1b4236811cde253fe1d58c79386c101"
+        }
+      ],
+      "creators": {
+        "Vibrant Nordic": "All"
+      },
+      "source_metadata": {
+        "name": "Modern Arm Chair 01",
+        "polycount": 8916,
+        "dimensions": [
+          820.3444182872772,
+          986.5616858005524,
+          1022.8520567470696
+        ],
+        "texel_density": 2929.070490134976,
+        "files_hash": "6893f36e58dddba95bd0ae1f1ef38537c1852a0b"
+      },
+      "downloaded_at": "2026-09-21T23:32:11.814117+00:00",
+      "entrypoint": "A02/modern_arm_chair_01_2k.blend",
+      "metadata_files": [
+        {
+          "path": "A02/modern_arm_chair_01.files.json",
+          "size": 62889,
+          "sha256": "13a1c5f53d18afd5213cd40949dec6d20d5c896dd17a86c87f4ec5f93a6de53b",
+          "url": "https://api.polyhaven.com/files/modern_arm_chair_01"
+        },
+        {
+          "path": "A02/modern_arm_chair_01.info.json",
+          "size": 999,
+          "sha256": "a2688c48b7c47ab6e6b742245110b21a9ec35686e43a6724dec2eaae0c89a737",
+          "url": "https://api.polyhaven.com/info/modern_arm_chair_01"
+        }
+      ]
+    },
+    {
+      "id": "A03",
+      "name": "Wine Barrel 01",
+      "slug": "wine_barrel_01",
+      "source_url": "https://polyhaven.com/a/wine_barrel_01",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A03_barrel_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A03/wine_barrel_01_2k.blend",
+          "size": 451182,
+          "sha256": "8e7949c28dd992607ff3b220d055f4bbb288bbaff1c20cd7e55548619f83dc20",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/wine_barrel_01/wine_barrel_01_2k.blend",
+          "provider_md5": "66a8a5eacd30ea082ccc6a3a6e18ed34"
+        },
+        {
+          "path": "A03/textures/wine_barrel_01_metal_2k.exr",
+          "size": 33062,
+          "sha256": "4ae3424bf378dd650ddc98b1dfc97025d737b9945f687daa9f76133c19ca05cb",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/wine_barrel_01/wine_barrel_01_metal_2k.exr",
+          "provider_md5": "002b69ba3d7054eff6735bafd793c1db"
+        },
+        {
+          "path": "A03/textures/wine_barrel_01_rough_2k.jpg",
+          "size": 583263,
+          "sha256": "79b9c1c36563db8957d269faf04efb61cda32dfdbdc3536fe12635f5aedba78e",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/wine_barrel_01/wine_barrel_01_rough_2k.jpg",
+          "provider_md5": "ef60a198b9f6ab3b245ed228783b3bd6"
+        },
+        {
+          "path": "A03/textures/wine_barrel_01_diff_2k.jpg",
+          "size": 728748,
+          "sha256": "6a76da96d9bbe957fcab8021fc2710bf153eb98d22ff1439fa5093c7c90a7fdb",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/wine_barrel_01/wine_barrel_01_diff_2k.jpg",
+          "provider_md5": "dbc89b97cee96eae289c8786c7d99351"
+        },
+        {
+          "path": "A03/textures/wine_barrel_01_nor_gl_2k.exr",
+          "size": 4339243,
+          "sha256": "af92ea77161ed3af7f73f91adf56360b7bec5a529c9d410f7f8e5f1791d04fbe",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/wine_barrel_01/wine_barrel_01_nor_gl_2k.exr",
+          "provider_md5": "2ae0b30cd240c0485b0bfbb06f817fae"
+        }
+      ],
+      "creators": {
+        "James Ray Cock": "All"
+      },
+      "source_metadata": {
+        "name": "Wine Barrel 01",
+        "polycount": 10820,
+        "dimensions": [
+          741.9015169143677,
+          756.035715341568,
+          871.2633550167084
+        ],
+        "texel_density": 2580.2600580932635,
+        "files_hash": "943d486d1d003b1f56157522fd5382e24ab4bf07"
+      },
+      "downloaded_at": "2026-09-21T23:32:16.865758+00:00",
+      "entrypoint": "A03/wine_barrel_01_2k.blend",
+      "metadata_files": [
+        {
+          "path": "A03/wine_barrel_01.files.json",
+          "size": 30140,
+          "sha256": "48883a1fc9a477e4e1223da1b4306c132529ded8af1cdf47baf004d21a2df7b6",
+          "url": "https://api.polyhaven.com/files/wine_barrel_01"
+        },
+        {
+          "path": "A03/wine_barrel_01.info.json",
+          "size": 953,
+          "sha256": "0b6e5e84823ba0d01fd1e99adf2c267530b049f470e6a99b9056665276fe89b6",
+          "url": "https://api.polyhaven.com/info/wine_barrel_01"
+        }
+      ]
+    },
+    {
+      "id": "A04",
+      "name": "Antique Ceramic Vase 01",
+      "slug": "antique_ceramic_vase_01",
+      "source_url": "https://polyhaven.com/a/antique_ceramic_vase_01",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A04_vase_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A04/antique_ceramic_vase_01_2k.blend",
+          "size": 331377,
+          "sha256": "69b79afc3d32a2e1e400172c0aa96147e3b448555ee66feac602430161b3cf7b",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/antique_ceramic_vase_01/antique_ceramic_vase_01_2k.blend",
+          "provider_md5": "d21def5a26c5110ee1a6a04f8e13b3db"
+        },
+        {
+          "path": "A04/textures/antique_ceramic_vase_01_rough_2k.jpg",
+          "size": 221400,
+          "sha256": "bb3bb2c03d999838237a22448e9477f908f9240324acf069fe431c01175786ce",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/antique_ceramic_vase_01/antique_ceramic_vase_01_rough_2k.jpg",
+          "provider_md5": "1cce5a30fe63c955156c670883409ee1"
+        },
+        {
+          "path": "A04/textures/antique_ceramic_vase_01_nor_gl_2k.exr",
+          "size": 1016974,
+          "sha256": "3f7473704b094117b1e1c2aada6708e3e20c63a2c16125267ecbaac49099d875",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/antique_ceramic_vase_01/antique_ceramic_vase_01_nor_gl_2k.exr",
+          "provider_md5": "b45772368b7a246b7a3e3dc649124434"
+        },
+        {
+          "path": "A04/textures/antique_ceramic_vase_01_metal_2k.exr",
+          "size": 43577,
+          "sha256": "85a62e0538e9862ebe0427e8b2a975185de66e17bd7b757864de1a34fd758497",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/antique_ceramic_vase_01/antique_ceramic_vase_01_metal_2k.exr",
+          "provider_md5": "2be4493874b711b8c618601e2fbe5196"
+        },
+        {
+          "path": "A04/textures/antique_ceramic_vase_01_diff_2k.jpg",
+          "size": 590090,
+          "sha256": "e93f8729d3d7271c85ef11833f5027aff3757af876638a2ac4248519a8211517",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/antique_ceramic_vase_01/antique_ceramic_vase_01_diff_2k.jpg",
+          "provider_md5": "f6de0d6c8568277054197d8239c3a6e5"
+        }
+      ],
+      "creators": {
+        "James Ray Cock": "All"
+      },
+      "source_metadata": {
+        "name": "Antique Ceramic Vase 01",
+        "polycount": 9408,
+        "dimensions": [
+          255.02996146678925,
+          255.02994656562805,
+          439.553053722193
+        ],
+        "texel_density": 8522.485524139776,
+        "files_hash": "14acbdecea40d7a8992d0d78a740a56bbe23ed9f"
+      },
+      "downloaded_at": "2026-09-21T23:32:23.454774+00:00",
+      "entrypoint": "A04/antique_ceramic_vase_01_2k.blend",
+      "metadata_files": [
+        {
+          "path": "A04/antique_ceramic_vase_01.files.json",
+          "size": 40445,
+          "sha256": "eebaf8b99ee77966253d0fb9d979ac5b57c3f7de90c67d94fbf46c6fc720adf7",
+          "url": "https://api.polyhaven.com/files/antique_ceramic_vase_01"
+        },
+        {
+          "path": "A04/antique_ceramic_vase_01.info.json",
+          "size": 927,
+          "sha256": "965d27889d3f2ffe9488fa87805b8ee5a0f4d900d5fe104007d816fb3b88efa0",
+          "url": "https://api.polyhaven.com/info/antique_ceramic_vase_01"
+        }
+      ]
+    },
+    {
+      "id": "A05",
+      "name": "Rubber Boots",
+      "slug": "rubber_boots",
+      "source_url": "https://polyhaven.com/a/rubber_boots",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A05_boots_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A05/rubber_boots_2k.blend",
+          "size": 830016,
+          "sha256": "290183d253cd343819fb801caa40a1c96eff4e13d41bff47274d247e2e162570",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/rubber_boots/rubber_boots_2k.blend",
+          "provider_md5": "acc9514ed88447662b6846a5555d9561"
+        },
+        {
+          "path": "A05/textures/rubber_boots_diff_2k.jpg",
+          "size": 475228,
+          "sha256": "edfa6972a7596c601a27398ad3fdaf66d294230cc145ed3b4fe7cb04e20535c5",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/rubber_boots/rubber_boots_diff_2k.jpg",
+          "provider_md5": "8d1be526df43dbd50b462fa6f6bae1a2"
+        },
+        {
+          "path": "A05/textures/rubber_boots_dirty_diff_2k.png",
+          "size": 11663023,
+          "sha256": "709fd9259854550c195aea7e7f48dfd65d641fea32a2a208eece51dca3cbe0ae",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/rubber_boots/rubber_boots_dirty_diff_2k.png",
+          "provider_md5": "c23d50f78120ebd26699b7fd079226c9"
+        },
+        {
+          "path": "A05/textures/rubber_boots_dirty_nor_gl_2k.png",
+          "size": 11869811,
+          "sha256": "aa50c435c856efbf7d0054b2b8defbd069dbba3e88a5acce5b82ffcc2ef4532f",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/rubber_boots/rubber_boots_dirty_nor_gl_2k.png",
+          "provider_md5": "6eed182a0cbe6e61908afa1d868a3281"
+        },
+        {
+          "path": "A05/textures/rubber_boots_dirty_rough_2k.png",
+          "size": 4189823,
+          "sha256": "0533d38243aa1801476b6db366c662389c0274b62fb8b37fbe02916f81e0d54b",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/rubber_boots/rubber_boots_dirty_rough_2k.png",
+          "provider_md5": "1cf8713d39c447067628232a2dd78016"
+        },
+        {
+          "path": "A05/textures/rubber_boots_nor_gl_2k.exr",
+          "size": 1481436,
+          "sha256": "179312945b9bb4b71f002226f5cea66c4999426028f3472f5b02a722654c7757",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/rubber_boots/rubber_boots_nor_gl_2k.exr",
+          "provider_md5": "e165f85d839e7f813bb36a4514558f98"
+        },
+        {
+          "path": "A05/textures/rubber_boots_rough_2k.exr",
+          "size": 1093271,
+          "sha256": "2b5cf6ac55a63fb66218adaf93b36e5d3e886cb202b2d24e1e144dd811e6d3bb",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/rubber_boots/rubber_boots_rough_2k.exr",
+          "provider_md5": "2a318cb2abb70975ef99d251eeb2acdf"
+        }
+      ],
+      "creators": {
+        "L": "All"
+      },
+      "source_metadata": {
+        "name": "Rubber Boots",
+        "polycount": 35004,
+        "dimensions": [
+          891.4438188076019,
+          269.26907896995544,
+          373.04434180259705
+        ],
+        "texel_density": 8564.023843283223,
+        "files_hash": "42cc529377cae934a22cdfb5f3cbf4db14a2a6bc"
+      },
+      "downloaded_at": "2026-09-21T23:32:36.396094+00:00",
+      "entrypoint": "A05/rubber_boots_2k.blend",
+      "mesh_objects": [
+        "rubber_boots_l_LOD0",
+        "rubber_boots_r_LOD0"
+      ],
+      "geometry_selection_reason": "The package contains alternate dirty-material duplicates and LOD1 copies. Select exactly the clean left/right LOD0 pair; strip all appearance from these too. No extra semantic segmentation.",
+      "metadata_files": [
+        {
+          "path": "A05/rubber_boots.files.json",
+          "size": 47449,
+          "sha256": "34d1c2972283cbe650b7ce98a36439acd7139dbd7bafd2b6860b96b003f703a7",
+          "url": "https://api.polyhaven.com/files/rubber_boots"
+        },
+        {
+          "path": "A05/rubber_boots.info.json",
+          "size": 1061,
+          "sha256": "d32315d122082966140c6b31f29e76092124edd80ab93fdd62deb46a003e8c64",
+          "url": "https://api.polyhaven.com/info/rubber_boots"
+        }
+      ]
+    },
+    {
+      "id": "A06",
+      "name": "Rock Moss Set 01",
+      "slug": "rock_moss_set_01",
+      "source_url": "https://polyhaven.com/a/rock_moss_set_01",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "Blend",
+      "download_resolution": "2K",
+      "fixture": "A06_rocks_neutral.blend",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "A06/rock_moss_set_01_2k.blend",
+          "size": 2698020,
+          "sha256": "43c0d123aa154d999a1a3117137f5a6282f50d9410d7e73decc409fd330d216f",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/rock_moss_set_01/rock_moss_set_01_2k.blend",
+          "provider_md5": "321f414ebeef8d204fed21f72e451c89"
+        },
+        {
+          "path": "A06/textures/rock_moss_set_01_nor_gl_2k.exr",
+          "size": 6882427,
+          "sha256": "2cb4ccc16e8099c925c849128e5b3d4e2487f8cb4404f753963859e965f2031f",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/rock_moss_set_01/rock_moss_set_01_nor_gl_2k.exr",
+          "provider_md5": "88164f1feb37e45c41d37b3983c06ff2"
+        },
+        {
+          "path": "A06/textures/rock_moss_set_01_diff_2k.jpg",
+          "size": 649415,
+          "sha256": "bdee6da8baba67bd7e85e414e669cd46aab9afaf755114fb5163f0e68775c3d6",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/rock_moss_set_01/rock_moss_set_01_diff_2k.jpg",
+          "provider_md5": "d3e1292c9e34bd6b4a236698a1b41290"
+        },
+        {
+          "path": "A06/textures/rock_moss_set_01_rough_2k.jpg",
+          "size": 293827,
+          "sha256": "a05a8bd9f2563cf55b738484b894671df7b2391aa02d66451366c5ad38077cd2",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/rock_moss_set_01/rock_moss_set_01_rough_2k.jpg",
+          "provider_md5": "f7b3045b503fbde038598f8586ac25ef"
+        }
+      ],
+      "creators": {
+        "Kless Gyzen": "All"
+      },
+      "source_metadata": {
+        "name": "Rock Moss Set 01",
+        "polycount": 63127,
+        "dimensions": [
+          8004.603862762451,
+          6948.764801025391,
+          1768.319845199585
+        ],
+        "texel_density": 606.028316455845,
+        "files_hash": "3d61828e10ef81512a639c8064c9a51a75165b5a"
+      },
+      "downloaded_at": "2026-09-21T23:32:39.255095+00:00",
+      "entrypoint": "A06/rock_moss_set_01_2k.blend",
+      "metadata_files": [
+        {
+          "path": "A06/rock_moss_set_01.files.json",
+          "size": 26375,
+          "sha256": "07302bec237ba887a93ae977bdfd33d464553cbba75ef8393512cc3766d39506",
+          "url": "https://api.polyhaven.com/files/rock_moss_set_01"
+        },
+        {
+          "path": "A06/rock_moss_set_01.info.json",
+          "size": 986,
+          "sha256": "4ecd933ebc547c57a753ea7efca9263fe6637465cb4475a156a3e70d74cac4cf",
+          "url": "https://api.polyhaven.com/info/rock_moss_set_01"
+        }
+      ]
+    },
+    {
+      "id": "R01",
+      "name": "Fabric Pattern 05",
+      "slug": "fabric_pattern_05",
+      "source_url": "https://polyhaven.com/a/fabric_pattern_05",
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license",
+      "download_format": "PNG col_01",
+      "download_resolution": "1K",
+      "usage": "Reference attachment only for MD-08; never final content",
+      "status": "DOWNLOADED_VERIFIED",
+      "files": [
+        {
+          "path": "R01/R01_fabric_reference.png",
+          "size": 2616655,
+          "sha256": "b690c75daf6c105aa51b1d7c8e73814be7b289a7ddb033ecba080f516f5320eb",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/png/1k/fabric_pattern_05/fabric_pattern_05_col_01_1k.png",
+          "provider_md5": "f162aed5bcb9aa160f58a66a6311da25"
+        }
+      ],
+      "creators": {
+        "Rob Tuytel": "All"
+      },
+      "source_metadata": {
+        "name": "Fabric Pattern 05",
+        "polycount": null,
+        "dimensions": [
+          500,
+          499.9999403953552
+        ],
+        "texel_density": null,
+        "files_hash": "be7f619f251a6ba2f829e658c6a20948cdc18a4f"
+      },
+      "downloaded_at": "2026-09-21T23:32:40.248780+00:00",
+      "entrypoint": "R01/R01_fabric_reference.png",
+      "metadata_files": [
+        {
+          "path": "R01/fabric_pattern_05.files.json",
+          "size": 28138,
+          "sha256": "a4735c2bf596e6808b81bf61ed57a661088a4b2b7b9bb966b362e68126313068",
+          "url": "https://api.polyhaven.com/files/fabric_pattern_05"
+        },
+        {
+          "path": "R01/fabric_pattern_05.info.json",
+          "size": 922,
+          "sha256": "ae57da1f1590f2c2c8deb367680b41ff546b67a8cbc67fa5730010bb7342f25f",
+          "url": "https://api.polyhaven.com/info/fabric_pattern_05"
+        }
+      ],
+      "dimensions": [
+        1024,
+        1024
+      ]
+    }
+  ]
+}

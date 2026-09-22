@@ -11,11 +11,17 @@ COMPONENT = schema.object_schema(dict(
 PLAN_SCHEMA = schema.object_schema(dict(object_interpretation=TEXT, art_direction=TEXT,
     components=dict(type="array", items=COMPONENT, minItems=1, maxItems=12)),
     ("object_interpretation", "art_direction", "components"))
+CORRESPONDENCE_ISSUES = ('UV_SEAM', 'PATTERN_CONTINUITY', 'FEATURE_TERMINATION', 'DETAIL_SCALE',
+    'DIRECTION', 'MIRRORING', 'STRETCHING', 'VIEW_DEPENDENT', 'ROUGHNESS_SEAM', 'RELIEF_SEAM', 'MATERIAL_LEAKAGE')
 WEAKNESS = schema.object_schema(dict(component=schema.NAME, observation=TEXT, correction=TEXT,
-    evidence_image_id=schema.IDENTIFIER), ("component", "observation", "correction", "evidence_image_id"))
+    evidence_image_id=schema.IDENTIFIER, category=schema.enum('APPEARANCE', *CORRESPONDENCE_ISSUES),
+    scope=schema.enum('LOCAL', 'GLOBAL'), correspondence_id=schema.IDENTIFIER),
+    ("component", "observation", "correction", "evidence_image_id"))
 CRITIQUE_SCHEMA = schema.object_schema(dict(candidate_digest=dict(type="string", minLength=64, maxLength=64),
     weaknesses=dict(type="array", items=WEAKNESS, minItems=0, maxItems=12),
-    generated_contribution=TEXT, preserved_decisions=TEXT),
+    generated_contribution=TEXT, preserved_decisions=TEXT,
+    reviewed_views=dict(type='array', items=schema.enum('front', 'back', 'left', 'right', 'top', 'bottom', 'close'),
+                        minItems=7, maxItems=7)),
     ("candidate_digest", "weaknesses", "generated_contribution", "preserved_decisions"))
 
 
@@ -40,11 +46,25 @@ def critique(captured, arguments):
     if not candidate or arguments["candidate_digest"] != candidate["digest"]:
         raise schema.AuthoringError("Critique the current candidate digest; earlier images cannot approve a new material")
     image_ids = {image["id"] for image in candidate["result"]["images"]}
+    packets = [p for p in captured.get('correspondences', {}).values() if p['candidate_digest'] == candidate['digest']]
+    image_ids.update(image['id'] for p in packets for image in p['images'])
+    if candidate['result'].get('correspondence_available'):
+        if set(arguments.get('reviewed_views', [])) != set(candidate['result']['review_views']):
+            raise schema.AuthoringError('Inspect and acknowledge front, back, left, right, top, bottom and close before critique')
+        for weakness in arguments['weaknesses']:
+            if not weakness.get('category') or not weakness.get('scope'):
+                raise schema.AuthoringError('Classify each weakness by category and LOCAL/GLOBAL scope')
+            if weakness['category'] in CORRESPONDENCE_ISSUES and not any(
+                    p['correspondence_id'] == weakness.get('correspondence_id') for p in packets):
+                raise schema.AuthoringError('Inspect the problematic pixel with inspect_texture_correspondence before recording a geometry/texture correction')
     if any(item["evidence_image_id"] not in image_ids for item in arguments["weaknesses"]):
         raise schema.AuthoringError("Each weakness must cite an image returned for this candidate")
     if enabled(captured) and captured["preview_count"] == 1 and not arguments["weaknesses"]:
         raise schema.AuthoringError("The initial generated-surface review needs a concrete visual improvement; inspect closeups, channels and generated-source bypass before correcting")
     candidate["critique"] = arguments
+    for packet in packets:
+        packet['review_scopes'] = sorted({item['scope'] for item in arguments['weaknesses']
+            if item.get('correspondence_id') == packet['correspondence_id'] and item.get('scope')})
     captured.setdefault("visual_critiques", []).append(arguments)
     remaining = candidate["result"]["remaining_corrections"]
     return dict(recorded=True, remaining_corrections=remaining,

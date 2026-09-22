@@ -18,8 +18,8 @@ class OP_Preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
     developer_mode: bpy.props.BoolProperty(name="Developer Mode", update=update_debug)
     library_directory: bpy.props.StringProperty(name="Smart Material Library", subtype="DIR_PATH")
-    director_codex_binary: bpy.props.StringProperty(name="Codex Executable", subtype="FILE_PATH",
-        description="Supported Codex CLI executable; empty finds codex on PATH")
+    director_codex_binary: bpy.props.StringProperty(name="Custom Runtime (Optional)", subtype="FILE_PATH",
+        description="Advanced override for a supported Codex executable; leave empty for automatic setup")
     director_credentials: bpy.props.EnumProperty(name="Account Storage", default="keyring", items=[
         ("keyring", "OS Keyring", "Keep Codex credentials in the operating system credential store"),
         ("ephemeral", "This Connection Only", "Sign in again after disconnecting; keep credentials in memory")])

@@ -16,13 +16,13 @@ from .protocol import Decoder, MAX_BUFFER, VERSION, encode
 class Connection:
     def __init__(self, binary, state_directory, *, credentials="keyring"):
         self.state_directory = Path(state_directory).resolve()
-        binary = shutil.which(binary or "codex") or binary
-        if not binary or not Path(binary).is_file():
-            raise ValueError("Install Codex CLI or select its executable in Material Director settings")
+        binary = (shutil.which(binary) or binary) if binary else ""
+        if binary and not Path(binary).is_file():
+            raise ValueError("The custom Material Director runtime is unavailable; clear its Advanced override to use automatic setup")
         # Only the chosen path knows where its launcher's interpreter lives
         # (nvm keeps node beside the codex symlink, not beside the resolved
         # shim); the companion prepends these to its PATH.
-        self.binary_dirs = list(dict.fromkeys(str(d) for d in (Path(binary).absolute().parent, Path(binary).resolve().parent)))
+        self.binary_dirs = list(dict.fromkeys(str(d) for d in (Path(binary).absolute().parent, Path(binary).resolve().parent))) if binary else []
         self.token = secrets.token_hex(32)
         self.socket = None
         self.authenticated = False
@@ -42,7 +42,7 @@ class Connection:
                 kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
             self.process = subprocess.Popen([sys.executable, str(Path(__file__).with_name("companion.py"))], **kwargs)
             self.process.stdin.write(encode(dict(port=self.listener.getsockname()[1], token=self.token,
-                                                binary=str(Path(binary).resolve()), binary_dirs=self.binary_dirs,
+                                                binary=str(Path(binary).resolve()) if binary else "", binary_dirs=self.binary_dirs,
                                                 state_directory=str(state_directory), credentials=credentials)))
             self.process.stdin.close()
         except Exception:

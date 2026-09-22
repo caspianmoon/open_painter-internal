@@ -196,7 +196,7 @@ def validate_document(ts, before, after):
                         raise AuthoringError(f"Missing named attribute: {field['attribute']}")
 
 
-def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, images=None):
+def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, images=None, correspondences=None):
     proposal = schema.validate(proposal)
     before = document.snapshot(ts)
     after = document.clone(before)
@@ -301,6 +301,9 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         elif op == "assign_surface_maps":
             from . import surface_maps
             surface_maps.assign(layer, cmd, images)
+        elif op == 'replace_surface_source':
+            from . import surface_replacement
+            surface_replacement.assign(ts, layer, cmd, images, correspondences)
         elif op == 'assign_projected_surface':
             from . import surface_projection
             surface_projection.assign(ts, layer, cmd, images, objects)

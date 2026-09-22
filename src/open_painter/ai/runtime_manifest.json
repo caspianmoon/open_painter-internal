@@ -1,0 +1,35 @@
+{
+  "version": "0.154.0",
+  "artifacts": {
+    "darwin-arm64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-darwin-arm64.tgz",
+      "integrity": "sha512-HP/vJCH/t2hB9Kg6hotN9UglClJ6/z584fal5lEP14C9gNAgAQS4/kTQC7l5V+BA3TqwDPwINSjul28cX8AYXg==",
+      "unpackedSize": 290230067
+    },
+    "darwin-x64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-darwin-x64.tgz",
+      "integrity": "sha512-2aqz+72Hop8PF2RYglQ4JnGjm3OlRIrTykJIT0hyLeUgM6NCFy09RgTmqRCoWliKQZjEn9jjZqUEp7QujAj77g==",
+      "unpackedSize": 310769502
+    },
+    "linux-x64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-linux-x64.tgz",
+      "integrity": "sha512-a4FI3A8sGtwGrOqltrPbrS2hajrHQG591EwmRfiRoLMb10VxdBtUGW4gu6IJVYENiYGA7k3P4jlRHEoCZU/s9Q==",
+      "unpackedSize": 339130586
+    },
+    "linux-arm64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-linux-arm64.tgz",
+      "integrity": "sha512-KmTCB6ST484zeYlPpKP/K5P/gRaYmt6TihVD+zotoe6O9q0JSBP+FYvCz4A/zZXR7xDOHURTSjHp0sD8wWS0YQ==",
+      "unpackedSize": 296782767
+    },
+    "win32-x64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-win32-x64.tgz",
+      "integrity": "sha512-Stg2KEJPIKVqPPR1wCverGOR4ey3RR3cvakR07w7FNKQUMzmHaOZomRsP2bR1qOT/67yHsks9rB+MCMfIWXcRA==",
+      "unpackedSize": 398574236
+    },
+    "win32-arm64": {
+      "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.154.0-win32-arm64.tgz",
+      "integrity": "sha512-CRUmZnE0Y/a8aLMrrA681EytOGaPaF659wJAiI4I3hsbQjaeYBSPV7PkCjy4Qn5LR/fmwIUORVH+6JaBNQL+tw==",
+      "unpackedSize": 344641185
+    }
+  }
+}

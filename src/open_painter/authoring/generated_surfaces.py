@@ -80,9 +80,9 @@ def assign(ts, layer, cmd, images):
 def load_detail(value, images):
     import bpy
     import numpy as np
-    from .generated_textures import load
+    from .assets import prepare
     from ..core.image_manager import pack_image
-    source = load({k: value[k] for k in ("$generated", "color_space")}, images)
+    source = prepare({k: v for k, v in value.items() if k != '$surface_detail'}, images=images)
     rgba = np.empty(len(source.pixels), np.float32)
     source.pixels.foreach_get(rgba)
     rgba = rgba.reshape(source.size[1], source.size[0], 4)
@@ -92,6 +92,23 @@ def load_detail(value, images):
         if image.get("director_surface_derivation") == key and not image.is_dirty and image.packed_file:
             return image
     field = rgba[..., 3] if value["$surface_detail"] == "ALPHA" else scalar_detail(rgba)
+    if value.get('$surface_replacement') == 'LOCAL':
+        # Percentile normalization is global; don't let a local edit shift relief
+        # on the rest of the source. Retain the prior derived signal outside it.
+        from .surface_replacement import window_mask
+        previous = prepare(dict(value['reference'], **{'$surface_detail': value['$surface_detail']}), images=images) \
+            if isinstance(value['reference'], dict) else None
+        if previous is not None:
+            old = np.empty(len(previous.pixels), np.float32)
+            previous.pixels.foreach_get(old)
+            old = old.reshape(previous.size[1], previous.size[0], 4)[..., 0]
+        else:
+            original = np.empty(len(value['reference'].pixels), np.float32)
+            value['reference'].pixels.foreach_get(original)
+            original = original.reshape(value['reference'].size[1], value['reference'].size[0], 4)
+            old = original[..., 3] if value['$surface_detail'] == 'ALPHA' else scalar_detail(original)
+        mask = window_mask(field.shape, value['windows'])
+        field = old*(1-mask) + field*mask
     output = np.ones_like(rgba)
     output[..., :3] = field[..., None]
     image = bpy.data.images.new("Director aligned detail " + digest[:12], width=source.size[0], height=source.size[1], float_buffer=True)

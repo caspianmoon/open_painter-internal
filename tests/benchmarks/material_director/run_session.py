@@ -185,7 +185,7 @@ class LiveRun:
                      "list_generated_images", "propose_changes", "propose_scene_changes",
                      "preview_proposal", "inspect_candidate", "list_regions", "inspect_region", "inspect_surface", "inspect_surface_source", "query_region",
                      "inspect_material_channels", "inspect_mask_coverage", "compare_candidates", "report_inability",
-                     "plan_surface", "critique_candidate"}
+                     "plan_surface", "critique_candidate", "inspect_texture_correspondence"}
         if tools is not None and any(tool.get("name") not in supported for tool in tools):
             raise RuntimeError("Benchmark provider was offered a tool outside material authoring")
 

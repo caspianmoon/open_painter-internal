@@ -17,7 +17,7 @@ from .generated_images import MAX_IMAGES
 connection = None
 request = None
 state = dict(status="Not connected", connected=False, signed_in=False, response="", changes=[],
-             models=[], plan="", runtime="", login=False, limits={}, visual_inputs=[], sharing=[], outcome=None)
+             models=[], plan="", runtime="", login=False, auto_login=False, limits={}, visual_inputs=[], sharing=[], outcome=None)
 _model_items = [("DEFAULT", "Account default", "", 0)]
 _conversation = []
 _conversation_target = None
@@ -77,14 +77,16 @@ def release(captured):
         generated_images.discard(captured["images"].values())
         captured.pop("candidate", None)
         captured.pop("candidate_records", None)
+        captured.pop("correspondences", None)
+        captured.pop("correspondence_packets", None)
 
 
-def ensure_online():
+def ensure_online(*, share_context=False):
     if not bpy.app.online_access:
         raise schema.AuthoringError("Enable Allow Online Access in Blender Preferences > System to connect Codex")
     prefs = preferences()
-    if prefs is None or not prefs.director_share_context:
-        raise schema.AuthoringError("Enable Share Material Context in Material Director connection settings first")
+    if share_context and (prefs is None or not prefs.director_share_context):
+        raise schema.AuthoringError("Enable Share Material Context in the Material Assistant panel before sending a material")
 
 
 def connect(context):
@@ -99,9 +101,9 @@ def connect(context):
         directory = bpy.utils.user_resource("CONFIG", path="open_painter/material_director", create=True)
     from . import generated_images
     generated_images.prune(directory)
-    connection = Connection(bpy.path.abspath(prefs.director_codex_binary) if prefs.director_codex_binary else "codex",
+    connection = Connection(bpy.path.abspath(prefs.director_codex_binary) if prefs.director_codex_binary else "",
                             Path(directory), credentials=prefs.director_credentials)
-    state.update(status="Connecting Codex…", response="", changes=[])
+    state.update(status="Preparing Material Director…", response="", changes=[], auto_login=True)
     if not bpy.app.timers.is_registered(tick):
         bpy.app.timers.register(tick, first_interval=.05)
     redraw()
@@ -115,7 +117,7 @@ def disconnect():
     if connection:
         connection.close()
         connection = None
-    state.update(status="Not connected", connected=False, signed_in=False, login=False,
+    state.update(status="Not connected", connected=False, signed_in=False, login=False, auto_login=False,
                  models=[], plan="", runtime="", limits={}, visual_inputs=[], sharing=[])
     _model_items = [("DEFAULT", "Account default", "", 0)]
     for wm in bpy.data.window_managers:
@@ -301,7 +303,11 @@ def compose(context, settings, captured, attachments, missing_maps, *, recent=()
     captured["context"]["candidate_review"] = dict(enabled=captured["correction_enabled"],
         max_previews=candidates.MAX_PREVIEWS, max_corrections=candidates.MAX_PREVIEWS - 1,
         max_preview_seconds=candidates.MAX_SECONDS, total_generated_image_limit=MAX_IMAGES,
-        commit_requires_matching_reviewed_candidate=captured["correction_enabled"])
+        commit_requires_matching_reviewed_candidate=captured["correction_enabled"],
+        required_views=['front', 'back', 'left', 'right', 'top', 'bottom', 'close'],
+        correspondence_tool='inspect_texture_correspondence',
+        correspondence_coordinates='Normalized x/y with top-left origin in the selected candidate view',
+        correction_flow='Inspect visible defect → classify LOCAL or GLOBAL → edit existing source with native image generation → replace_surface_source in complete proposal → preview all views → critique → submit')
     captured["context"]["visual_inputs"] = visual_context.manifest(attachments)
     captured["context"]["visual_context"] = dict(view_sent=settings.send_view, maps_sent=settings.send_maps,
         missing_maps=missing_maps, reference_sent=bool(settings.reference_path.strip()),
@@ -358,7 +364,7 @@ def dry_payload(context):
 
 def run(context):
     global request
-    ensure_online()
+    ensure_online(share_context=True)
     if not connection or not state["signed_in"]:
         raise schema.AuthoringError("Sign in with ChatGPT first")
     if request and request["running"]:
@@ -473,6 +479,16 @@ def tool_call(event):
     if name == "list_generated_images":
         return dict(images=[{k: v for k, v in item.items() if k != "state_directory"}
                             for item in request["images"].values()])
+    if name == 'inspect_texture_correspondence':
+        if arguments['texture_set_id'] not in request['target_digests']:
+            raise schema.AuthoringError('Material is outside this instruction scope')
+        area = painter_area(request, window)
+        if area is None:
+            raise schema.AuthoringError('Open the candidate\'s 3D View')
+        from . import correspondence
+        region = next(r for r in area.regions if r.type == 'WINDOW')
+        with bpy.context.temp_override(window=window, scene=scene, area=area, region=region):
+            return correspondence.inspect(bpy.context, ts, request, arguments)
     if name in {"list_regions", "inspect_region", "inspect_surface", "inspect_surface_source", "query_region", "inspect_material_channels", "inspect_mask_coverage"}:
         identifier = arguments["texture_set_id"]
         if identifier not in request["target_digests"]:
@@ -597,14 +613,14 @@ def tool_call(event):
         if request["mode"] == "CREATE" and ids != set(request["target_digests"]):
             raise schema.AuthoringError("Scene Create must cover every captured material; include all scene_materials in the coordinated proposal")
         compiled = scene_authoring.compile(scene, proposal, request["id"], request["target_digests"],
-            objects=objects_for(request), images=request["images"])
+            objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
         request["draft"] = proposal
         state["changes"] = [part.name + ": " + change for part, _, c in compiled for change in c["changes"]]
         return dict(valid=True, applied=False, changes=state["changes"],
                     targets=[dict(texture_set_id=part.id, aliases=c["aliases"]) for part, _, c in compiled])
     arguments = schema.validate(arguments["proposal_json"])
     compiled = commands.compile_proposal(ts, arguments, request["id"], scope=request["scope"],
-                                        objects=objects_for(request), images=request["images"])
+                                        objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
     request["draft"] = arguments
     state["changes"] = compiled["changes"]
     return dict(valid=True, applied=False, changes=compiled["changes"], aliases=compiled["aliases"])
@@ -622,11 +638,11 @@ def apply_draft(identifier):
         candidates.reviewed(bpy.context, ts, request, request["draft"], request.get("reviewed_digest"))
     if request.get("scene_scope"):
         receipt = scene_authoring.apply(scene, request["draft"], operation_id=request["id"],
-            digests=request["target_digests"], objects=objects_for(request), images=request["images"])
+            digests=request["target_digests"], objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
     else:
         receipt = transactions.apply(ts, request["draft"], operation_id=request["id"],
                                      expected_digest=request["digest"], scope=request["scope"],
-                                     objects=objects_for(request), images=request["images"])
+                                     objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
     state.update(status="Applied: " + receipt["summary"], changes=receipt["changes"])
     terminal("APPLIED", "MATERIAL_COMMITTED", receipt_ids=[r["id"] for r in receipt.get("receipts", [receipt])])
     remember(request, "applied")
@@ -709,6 +725,13 @@ def handle(event):
     elif kind == "account":
         state.update(signed_in=event["connected"], plan=event.get("plan", ""), login=False,
                      status="Ready" if event["connected"] else "Connected — sign in with ChatGPT")
+        if state.get("auto_login"):
+            state["auto_login"] = False
+            if not event["connected"] and connection:
+                connection.send(dict(action="login"))
+                state.update(status="Opening ChatGPT sign-in…", login=True)
+    elif kind == "runtime_status":
+        state["status"] = event.get("message", "Preparing Material Director…")
     elif kind == "models":
         state["models"] = event["models"]
         _model_items = [("DEFAULT", "Account default", "", 0)] + [(m["id"], m["name"], "", i + 1) for i, m in enumerate(event["models"]) if m["id"]]
@@ -772,7 +795,7 @@ def tick():
     if connection is None:
         return None
     try:
-        ensure_online()
+        ensure_online(share_context=bool(request and request["running"]))
         events = connection.poll()
         for event in events:
             if connection is None:

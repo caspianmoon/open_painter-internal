@@ -7,26 +7,33 @@ to editable layers. The complete material remains a normal Open Painter stack.
 
 ## Set up
 
-1. Install Open Painter **0.8.0** and open its editor. Select an existing texture set with an assigned,
+1. Install Open Painter and open its editor. Select an existing texture set with an assigned,
    UV-unwrapped mesh. Use **Scene Materials** scope to coordinate all assigned texture sets in the scene.
 2. Open the sidebar with **N**, then choose the **Assistant** tab (the *Material Assistant* panel).
-3. In the add-on preferences (Edit › Preferences › Add-ons › Open Painter › Material Director),
-   select a supported **Codex Executable**, or leave it empty to find `codex` on `PATH`. Blender launched from a desktop shortcut may have a different `PATH`
-   from your terminal, so choosing the executable explicitly is often useful.
-4. Enable Blender's **Preferences → System → Allow Online Access** and **Share Material Context
-   with Codex**. Choose **OS Keyring** to retain login, or **This Connection Only** to keep
-   credentials in memory. Open Painter never imports another editor's credential files.
-5. Click **Connect Codex**, then **Sign in with ChatGPT**. Complete the browser sign-in. The panel
+3. Enable Blender's **Preferences → System → Allow Online Access** if it is disabled.
+4. Click **Sign in with ChatGPT**. Open Painter automatically downloads and verifies its private
+   native runtime on first use, then opens browser OAuth. No CLI, Node.js, terminal setup or PATH
+   configuration is required. Setup progress appears in the panel and can be cancelled with Disconnect.
+   Complete the browser sign-in. The panel
    shows the account's available models and reported allowance usage. Account eligibility and
    service limits are controlled by Codex; the add-on does not grant subscription access.
 
-Disconnect and reconnect after changing the executable or account-storage setting.
+5. Enable **Share Material Context with Codex** directly in the Material Assistant panel before
+   sending an instruction. Signing in does not require material sharing.
 
-The adapter currently accepts Codex **0.154.x**. Its protocol and tool inventory were tested with
-**`codex-cli 0.154.0-alpha.6.2`**. Other minors fail with a version message. It uses the app-server's
+The add-on preferences offer **OS Keyring** to retain login or **This Connection Only** for
+credentials in memory. Open Painter never imports another editor's credential files.
+Disconnect and reconnect after changing account storage or the optional Advanced runtime override.
+
+The managed native runtime is pinned to **0.154.0**, with platform packages and SHA-512 digests
+recorded in `ai/runtime_manifest.json`. Verified downloads are installed atomically in the extension's
+private state directory and reused on subsequent connections. The adapter accepts **0.154.x**;
+its protocol and restricted tool inventory were tested with **0.154.0** and **0.154.0-alpha.6.2**.
+Other minors fail with a version message. It uses the app-server's
 experimental dynamic-tool API, so extending this range requires rerunning the capability probe,
-not just loosening the version check. The add-on does not silently use a binary from VS Code or
-another editor's private installation, and it does not bundle or download Codex.
+not just loosening the version check. The add-on does not use a binary from VS Code or
+another editor's private installation. Automatic setup downloads the official native platform
+package directly; it never runs npm or package installation scripts.
 
 The integration follows the documented [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server)
 and [Codex authentication flow](https://learn.chatgpt.com/docs/auth). It delegates authentication to
@@ -94,11 +101,40 @@ world mapping. Member-specific frames require a physical-size declaration. Detai
 the available texel spacing is reported as under-resolved.
 
 With candidate review enabled, Director validates a proposal, renders it in disposable Eevee
-scene copies, and receives front, back, assigned-face views and composed channel diagnostics.
-It can make up to two corrections after the initial preview. All previews share a three-minute
+scene copies, and receives front, back, left, right, top, bottom, close-up, assigned-face views
+and composed channel diagnostics. Generated-surface critiques must acknowledge all seven main views.
+It can make up to two corrections after the initial preview. Previews and targeted correspondence
+inspections share a six-minute
 rendering budget and the instruction's existing time and generated-image limits. A final proposal
 must match the reviewed candidate and unchanged artist state before it can commit. Plan can
 review candidates without applying them; Explain remains read-only.
+
+For visible seams, stretching, broken pattern flow, inconsistent scale, mirrored features,
+channel discontinuities or component leakage, Director calls `inspect_texture_correspondence`
+with a candidate digest, material ID, view and normalized top-left image coordinates. Candidate
+matrices and evaluated mesh snapshots resolve that pixel to object, triangle, barycentric weights,
+position, normal, UV and island. Topological UV seams retain both edges in the same physical
+endpoint order, including their rotation and density relationship. Unassigned occluders prevent
+accidentally inspecting a surface hidden behind another object. Nonmanifold edges are not paired.
+
+Only the requested area is sent: an annotated Eevee close-up, paired UV channel sheets, seam
+orientation, the current generated sources, source-canvas edit windows, local geometry-map crops
+and geometric along/around-component arrows. Missing maps are reported, not fabricated. Initial
+generated-texture runs still require the existing geometry-map preflight. There are at most eight
+targeted inspections per instruction; duplicate requests reuse their packet.
+
+`replace_surface_source` replaces the inspected layer's source inside the complete proposal.
+`LOCAL` preserves source pixels outside the inspected windows, including derived roughness/height;
+optional corrected scalar maps use the same windows. `GLOBAL` replaces the source canvas when its
+overall concept is wrong. Both preserve placement and other layers. The next candidate rebuilds
+and renders every view before commit. All of this stays inside the original instruction.
+
+Correspondence is geometric evidence, not an automatic seam-quality verdict. Lookup describes
+the evaluated mesh rather than shader bump/transparency. UV pairing covers manifold shared edges
+inside a texture-set assignment; disconnected coincident vertices are not assumed welded. Local
+windows on a reused/tiled/triplanar source can influence its other occurrences, so the all-view
+recheck remains essential. Wrong placement or missing back coverage can require a mapping change
+or another regional source; editing pixels alone cannot repair those errors.
 
 The tool can inspect material assignments, connected components, artist selections and bounded
 geometric regions. Region queries create editable masks over existing faces. They do not alter

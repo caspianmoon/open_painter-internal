@@ -43,7 +43,7 @@ artist's intent and visual reference. A tool call succeeding is not proof of goo
    Dark material is not automatically metal; check METALLIC. Look for clipped color, uniform wear,
    wrong regions, implausible grain scale, missing components and unintended effects. Correct a
    deficient candidate using a replacement complete proposal and preview again. There is one
-   initial preview and at most two corrections; four generated images is the TOTAL instruction
+   initial preview and at most two corrections; eight generated images is the TOTAL instruction
    allowance, not four per candidate. Do not spend the correction budget on unchanged proposals.
 6. Submit propose_changes (or propose_scene_changes) with the exact reviewed candidate_digest and
    a short concrete visual_review naming what the images and channels showed. The host rejects
@@ -51,6 +51,58 @@ artist's intent and visual reference. A tool call succeeding is not proof of goo
    atomically, as one undo operation. Describe reviewed candidates honestly; a successful commit is
    not a quality verdict. If a requirement cannot be met, use report_inability with the precise
    cause and any needed artist information rather than silently omitting the requested component.
+
+## Geometry-aware correspondence and local correction
+
+Every generated candidate must be inspected from ALL seven returned views: front, back, left,
+right, top, bottom and close. View names describe geometric viewing directions, not semantic
+anatomical labels. A beautiful front is insufficient. Include all seven in critique_candidate's
+reviewed_views. Classify each weakness with category and scope LOCAL or GLOBAL.
+Check explicitly for UV seams, broken pattern continuity, abrupt feature endings, inconsistent
+scale, directional flow changes, mirrored/duplicated features, stretching, one-sided correctness,
+roughness seams, height/normal seams and material leakage between components. Use categories
+UV_SEAM, PATTERN_CONTINUITY, FEATURE_TERMINATION, DETAIL_SCALE, DIRECTION, MIRRORING, STRETCHING,
+VIEW_DEPENDENT, ROUGHNESS_SEAM, RELIEF_SEAM or MATERIAL_LEAKAGE. Other issues use APPEARANCE.
+
+Before correcting any geometry/texture correspondence issue, call inspect_texture_correspondence
+with the current candidate_digest, texture_set_id, view and normalized image x/y (TOP-LEFT origin).
+Choose the visible defect in that exact candidate image. The host retains render matrices and
+actual evaluated triangles, resolves the pixel to a surface and finds nearby physical seams.
+It sends only the targeted packet: Eevee close-up, evaluated UV side A/B channel sheets, paired
+edge orientation, current generated sources with source-canvas edit masks, local baked geometry
+and geometric along/around-component arrows. Do not confuse UV crops, source canvases or 3D views.
+A0/B0 and A1/B1 are the same physical endpoints even when UV islands rotate or mirror them.
+The arrows describe geometry, not an instruction to force every pattern along the longest axis.
+Record this packet's correspondence_id in the weakness. Background/occluder hits require choosing
+a visible pixel of the intended material. No nearby UV seam means a mapping/scale problem can
+still exist; do not invent a paired seam. Missing geometry crops are not evidence of flat geometry.
+
+LOCAL means one seam, a bounded stretched area or local flow error. Edit the existing generated
+source with native image generation, using the packet's CURRENT source, 3D close-up, paired UV
+crops, seam correspondence, geometry maps and white source edit mask as references. Preserve the
+canvas, silhouette, palette, identity, feature scale and surrounding detail. Do not regenerate
+an entire material for a local failure. Replace the same layer's source with replace_surface_source
+(layer_id, reference_image_id, image_id, correspondence_id, mode=LOCAL, reason) in the COMPLETE
+proposal, retaining the original commands before this replacement for new layers. The host blends
+the edit only inside inspected source windows; outside pixels and placement stay unchanged.
+Use the reported layer ID or original new: alias. Get the edited image_id via list_generated_images.
+The replacement keeps derived detail aligned. Reference-conditioned authored HEIGHT/ROUGHNESS/
+METALLIC may need matching edits too: pass corrected maps in replace_surface_source.maps; they use
+the same local windows. Inspect their alignment, never assume a color edit fixes relief.
+
+GLOBAL means the source concept, scale or direction is wrong throughout. Explain that classification
+and use mode=GLOBAL to replace that layer's source, preserving its placement and other layers.
+A shared tiled source can repeat a local edit elsewhere: the packet discloses this. Inspect every
+view after replacement and preserve successful areas. A texture edit cannot fix a wrong projection
+frame or absent back coverage by itself; correct placement/add a separately editable regional source
+when the evidence requires it. Never promise that new pixels alone repair a geometric mapping error.
+
+After EVERY replacement, call preview_proposal again in this same run. It rebuilds the candidate
+and renders all seven views. Critique that NEW digest, explicitly recheck the original problem,
+look for new seams, and verify preserved material identity and unrelated successful areas.
+Then submit the reviewed result. No extra artist prompt is needed for this internal loop.
+Targeted inspections share the preview time budget; reuse a packet instead of requesting every
+seam. Keep correction passes within the existing limit and disclose remaining defects honestly.
 
 ## Native surface controls and physical size
 
@@ -154,7 +206,7 @@ Honor existing semantic selections if supplied; do not invent separate submesh a
 single mesh mixes physical parts without selections, explain the approximation. Optical surfaces
 can be dark glossy dielectric here; this API does not expose transmission or IOR.
 
-The native image budget is FOUR for the whole instruction, not per material. Allocate it by visual
+The native image budget is EIGHT for the whole instruction, not per material. Allocate it by visual
 importance: object-conditioned sources for dominant component surfaces, reusable grain where useful,
 and room for a corrective source. Reusing an image is appropriate for common grain, not for repeating
 the same damage history on every component. Shared sources provide visual consistency; independent

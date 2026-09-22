@@ -197,10 +197,14 @@ def text_lines(layout, text, width=38, limit=20):
 
 
 def connection_settings(layout, prefs):
-    layout.prop(prefs, "director_codex_binary")
+    layout.label(text="Sign in from the Material Assistant panel")
+    text_lines(layout, "Open Painter prepares its Codex runtime automatically on first connection. No terminal or separate CLI installation is needed.")
     layout.prop(prefs, "director_credentials")
     text_lines(layout, "Codex receives your instruction and selected material/mesh summaries. Model views and mesh-map previews are enabled by default; their checkboxes control sharing. A chosen reference image is also sent. Your .blend stays local.")
     layout.prop(prefs, "director_share_context")
+    advanced = layout.box()
+    advanced.label(text="Advanced")
+    advanced.prop(prefs, "director_codex_binary")
 
 
 def sharing_lines(context, settings):
@@ -261,6 +265,9 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         # Instruction ------------------------------------------------------------
         box = layout.box()
         box.label(text="Instruction", icon="TEXT")
+        prefs = session.preferences(context)
+        if prefs:
+            box.prop(prefs, "director_share_context", text="Share Material Context with Codex")
         box.prop(settings, "prompt", text="")
         row = box.row(align=True)
         row.prop(settings, "mode", text="Mode")
@@ -284,7 +291,7 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         box = layout.box()
         row = box.row(align=True)
         if session.connection is None:
-            row.operator("open_painter.director_connection", text="Connect Codex", icon="LINKED").action = "CONNECT"
+            row.operator("open_painter.director_connection", text="Sign in with ChatGPT", icon="LINKED").action = "CONNECT"
         else:
             if status["connected"] and not status["signed_in"]:
                 if status["login"]:
@@ -302,12 +309,14 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         if running:
             row.operator("open_painter.director_stop", icon="CANCEL")
         else:
-            row.enabled = status["signed_in"] and target.ts is not None
+            row.enabled = status["signed_in"] and target.ts is not None and bool(prefs and prefs.director_share_context)
             row.operator("open_painter.director_run",
                          text={"PLAN": "Prepare Draft", "EXPLAIN": "Explain Material", "CREATE": "Create Material"}.get(settings.mode, "Run"),
                          icon="PLAY")
             if not status["signed_in"]:
-                box.label(text="Connect and sign in first; connection settings are in the add-on preferences", icon="INFO")
+                box.label(text="Sign in with ChatGPT to start", icon="INFO")
+            elif not prefs or not prefs.director_share_context:
+                box.label(text="Enable material sharing above before sending an instruction", icon="INFO")
         # Changes -----------------------------------------------------------------
         box = layout.box()
         box.label(text="Changes", icon="TEXT")

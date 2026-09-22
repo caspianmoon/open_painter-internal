@@ -54,8 +54,8 @@ def launch_failure(stderr):
     lines = [line.strip() for line in (stderr or "").splitlines() if line.strip()]
     hint = " ".join(w for w in lines[-1].split() if "/" not in w and "\\" not in w)[:120] if lines else ""
     if hint:
-        return f"The Codex executable did not run ({hint}). Start Blender from a terminal or choose the codex binary in Material Director preferences"
-    return "Choose a Codex CLI executable in Material Director preferences"
+        return f"Material Director could not start its runtime ({hint}). Reconnect to retry; clear any custom runtime override to use automatic setup"
+    return "Material Director could not start its runtime; reconnect or clear the custom runtime override to use automatic setup"
 
 
 def runtime_version(binary, *, env=None, cwd=None):
@@ -64,7 +64,7 @@ def runtime_version(binary, *, env=None, cwd=None):
     if result.returncode:
         raise ValueError(launch_failure(result.stderr))
     if not match:
-        raise ValueError("Choose a Codex CLI executable in Material Director preferences")
+        raise ValueError("The custom runtime is not compatible with Material Director; clear the Advanced override to use automatic setup")
     if (int(match[1]), int(match[2])) != (0, RUNTIME_MINOR):
         raise ValueError(f"This Material Director build supports Codex 0.{RUNTIME_MINOR}.x; found {match[0]}")
     return match[0]

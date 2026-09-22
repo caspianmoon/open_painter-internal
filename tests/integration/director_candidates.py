@@ -70,7 +70,8 @@ def run():
 
         wrong = tool('preview_proposal', proposal_json=json.dumps(proposal(.95)))
         assert wrong['channels'][ts.id]['channels']['METALLIC']['mean'][0] > .94
-        assert len(wrong['_images']) == 11
+        assert len(wrong['_images']) == 13
+        assert {'candidate:top', 'candidate:bottom'} <= {image['id'] for image in wrong['_images']}
         out = ROOT / '.blender-test' / 'director-candidate-acceptance'
         out.mkdir(parents=True, exist_ok=True)
         for image in wrong['_images'][:2]:
@@ -402,6 +403,7 @@ def generated_review_recovery():
         assert fresh['material_digest'] == first['material_digest']
         tool('inspect_candidate', candidate_digest=fresh['candidate_digest'])
         tool('critique_candidate', candidate_digest=fresh['candidate_digest'], weaknesses=[],
+             reviewed_views=fresh['review_views'],
              generated_contribution='Generated color bands are visible in the fresh render.',
              preserved_decisions='Preserve both color bands and the rough dielectric response.')
         tool('propose_changes', proposal_json=json.dumps(change), candidate_digest=fresh['candidate_digest'],

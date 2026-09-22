@@ -28,7 +28,14 @@ def main():
             raise ValueError("Material Director companion output queue exceeded")
 
     try:
-        client = CodexClient(config["binary"], config["state_directory"], emit,
+        binary = config.get("binary", "")
+        if not binary:
+            import runtime
+            # Setup runs before the client loop. Publish progress immediately so
+            # Blender stays responsive and can cancel the owned process group.
+            binary = runtime.ensure(config["state_directory"], lambda text: connection.sendall(
+                encode(dict(event="runtime_status", message=text))))
+        client = CodexClient(binary, config["state_directory"], emit,
                              credentials=config.get("credentials", "keyring"),
                              binary_dirs=config.get("binary_dirs", []))
         while True:

@@ -57,7 +57,7 @@ def validate(proposal):
     return proposal
 
 
-def compile(scene, proposal, operation_id, digests, *, objects=None, images=None):
+def compile(scene, proposal, operation_id, digests, *, objects=None, images=None, correspondences=None):
     proposal = validate(proposal)
     targets = {ts.id: ts for ts in materials(scene)}
     result = []
@@ -70,7 +70,7 @@ def compile(scene, proposal, operation_id, digests, *, objects=None, images=None
         if document.digest(ts) != digests[identifier]:
             raise schema.AuthoringError(f"{ts.name} changed; run the scene instruction again")
         compiled = commands.compile_proposal(ts, item["proposal"], operation_id + ":" + identifier,
-                                             objects=objects, images=images)
+                                             objects=objects, images=images, correspondences=correspondences)
         result.append((ts, item["proposal"], compiled))
     return result
 
@@ -97,15 +97,15 @@ def atomic(targets):
             raise
 
 
-def apply(scene, proposal, *, operation_id, digests, objects=None, images=None, fault=None):
-    compiled = compile(scene, proposal, operation_id, digests, objects=objects, images=images)
+def apply(scene, proposal, *, operation_id, digests, objects=None, images=None, correspondences=None, fault=None):
+    compiled = compile(scene, proposal, operation_id, digests, objects=objects, images=images, correspondences=correspondences)
     proposal = validate(proposal)
     ids = [ts.id for ts, _, _ in compiled]
     receipts = []
     with atomic([ts for ts, _, _ in compiled]):
         for ts, part, _ in compiled:
             receipt = transactions.apply(ts, part, operation_id=operation_id + ":" + ts.id,
-                expected_digest=digests[ts.id], objects=objects, images=images)
+                expected_digest=digests[ts.id], objects=objects, images=images, correspondences=correspondences)
             records = transactions.history(ts)
             record = next(r for r in records if r["id"] == receipt["id"])
             record.update(scene_operation=operation_id, scene_targets=ids, scene_summary=proposal["summary"])

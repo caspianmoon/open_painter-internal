@@ -79,11 +79,11 @@ def compile_proposal(scene, ts, captured, proposal):
         if captured["mode"] == "CREATE" and ids != set(captured["target_digests"]):
             raise schema.AuthoringError("Scene Create must include every captured material")
         compiled = scene_authoring.compile(scene, proposal, captured["id"], captured["target_digests"],
-                                          objects=objects, images=captured["images"])
+                                          objects=objects, images=captured["images"], correspondences=captured.get("correspondences"))
     else:
         proposal = schema.validate(proposal)
         compiled = [(ts, proposal, commands.compile_proposal(ts, proposal, captured["id"],
-            scope=captured["scope"], objects=objects, images=captured["images"]))]
+            scope=captured["scope"], objects=objects, images=captured["images"], correspondences=captured.get("correspondences")))]
     return proposal, compiled
 
 
@@ -222,6 +222,7 @@ def scratch(context, compiled, images):
         objects, materials, collections = {}, {}, {}
         for obj in source.objects:
             duplicate = obj.copy()
+            duplicate['open_painter_candidate_source'] = obj.name_full
             if obj.data:
                 duplicate.data = obj.data.copy()
             objects[obj] = duplicate
@@ -435,7 +436,7 @@ def channel_diagnostics(scene, ids, deadline, *, buffers=None):
     return result, pictures
 
 
-def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False):
+def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False, correspondence_out=None):
     import gpu
     import numpy as np
     from mathutils import Matrix, Vector
@@ -447,12 +448,21 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False):
         raise schema.AuthoringError("Candidate review needs a visible 3D viewport")
     points = [ref.object.matrix_world @ Vector(corner) for ts in scene.open_painter.texture_sets
               for ref in ts.assignments if ref.object for corner in ref.object.bound_box]
-    center = sum(points, Vector()) / len(points)
     review_view = framing_view(context)
-    view, projection = framing_matrices(review_view, points, 1.)
-    matrices = [("front", view, projection, 512),
-                *[(label, view @ Matrix.Translation(center) @ Matrix.Rotation(angle, 4, 'Z') @ Matrix.Translation(-center), projection, 512)
-                  for label, angle in (("back", 3.141592653589793), ("left", 1.5707963267948966), ("right", -1.5707963267948966))]]
+    from types import SimpleNamespace
+    # Six independent directions even when the user's viewport looks down from above.
+    outward = review_view.view_matrix.to_3x3().inverted() @ Vector((0, 0, 1))
+    outward.z = 0
+    outward = outward.normalized() if outward.length > .001 else Vector((0, -1, 0))
+    sideward = Vector((-outward.y, outward.x, 0))
+    matrices = []
+    for label, direction in (('front', outward), ('back', -outward), ('left', -sideward),
+                             ('right', sideward), ('top', Vector((0, 0, 1))), ('bottom', Vector((0, 0, -1)))):
+        orientation = direction.to_track_quat('Z', 'Y').inverted().to_matrix().to_4x4()
+        matrix, project = framing_matrices(SimpleNamespace(view_matrix=orientation,
+            window_matrix=review_view.window_matrix), points, 1.)
+        matrices.append((label, matrix, project, 512))
+    view, projection = matrices[0][1:3]
     close = projection.copy()
     close[0][0] *= 1.8
     close[1][1] *= 1.8
@@ -479,6 +489,15 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False):
                 with offscreen.bind():
                     pixels = gpu.state.active_framebuffer_get().read_color(0, 0, render_side, render_side, 4, 0, "UBYTE")
                     rgba = np.asarray(pixels, dtype=np.uint8).reshape(render_side, render_side, 4)[::-1]
+                    depth = None
+                    if correspondence_out is not None and not bypass:
+                        depth = np.asarray(gpu.state.active_framebuffer_get().read_depth(
+                            0, 0, render_side, render_side), dtype=np.float32).reshape(render_side, render_side)[::-1].copy()
+                        # Eevee can composite a color-only quad into the offscreen
+                        # target, leaving uniform quad depth (0.5 on Metal). That
+                        # buffer is not surface evidence; retain geometric rays.
+                        if not np.isfinite(depth).all() or np.ptp(depth) < 1e-7:
+                            depth = None
                 if pixels_out is not None:
                     pixels_out[label] = rgba.copy()
                 side = render_side
@@ -492,6 +511,10 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False):
                 frames.append(dict(id=("candidate:bypass:" if bypass else "candidate:") + label,
                     label=("Generated sources replaced by their means — " if bypass else "Candidate Eevee ") + label + " — uncommitted materials on actual geometry",
                     url=url))
+                if correspondence_out is not None and not bypass:
+                    correspondence_out[label] = dict(matrix=[list(row) for row in matrix],
+                        projection=[list(row) for row in project], render_size=[render_side, render_side],
+                        image_size=[side, side], origin='TOP_LEFT', depth=depth)
             finally:
                 offscreen.free()
     finally:
@@ -592,7 +615,11 @@ def preview(context, ts, captured, proposal):
                                                          buffers=normal_buffers if generated_workflow else None)
             if time.monotonic() >= started + MAX_SECONDS - elapsed:
                 raise schema.AuthoringError("Instruction preview time budget exhausted before Eevee capture")
-            frames = views(context, scene, compiled, focus=focus, pixels_out=normal_pixels)
+            view_records = {}
+            frames = views(context, scene, compiled, focus=focus, pixels_out=normal_pixels,
+                           correspondence_out=view_records)
+            from ..geometry import texture_correspondence
+            geometry_records = texture_correspondence.capture(context, scene, captured['bindings'])
             generated_evidence = dict(status="NOT_REQUESTED")
             if generated_workflow:
                 sources = bypass_generated(scene)
@@ -631,13 +658,19 @@ def preview(context, ts, captured, proposal):
         result = dict(candidate_digest=fingerprint, applied=False, preview_number=captured["preview_count"],
             remaining_corrections=MAX_PREVIEWS - captured["preview_count"], renderer=context.scene.render.engine,
             material_digest=material_digest, generated_contribution=generated_evidence,
+            correspondence_available=True, review_views=['front', 'back', 'left', 'right', 'top', 'bottom', 'close'],
+            correspondence_coordinates='Normalized x/y, top-left origin in the named candidate image. Inspect visible seams, stretching or direction errors with inspect_texture_correspondence before correcting.',
             channels=channel_info, changes=[change for _, _, c in compiled for change in c["changes"]],
             aliases=[dict(texture_set_id=part.id, aliases=c["aliases"]) for part, _, c in compiled],
-            review_required="Evaluate the material against the user's request. Do not praise it. Identify flat, repetitive, procedural, incorrectly scaled, physically implausible or insufficiently detailed surfaces. Call critique_candidate with evidence image IDs and only changes that materially improve it; correct and preview again before committing.",
+            review_required="Inspect all seven review_views against the request. Check seams, pattern continuity, feature endings, scale, direction, mirrored detail, stretching, side-dependent appearance, roughness/relief discontinuities and material leakage, as well as flat/procedural surfaces. Call inspect_texture_correspondence on visible correspondence defects before correction. Critique with reviewed_views, evidence IDs, category, LOCAL/GLOBAL scope and correspondence_id for those defects. Do not praise. Edit the existing source for local failures; rebuild and review all views before committing.",
             images=[dict(id=frame["id"], label=frame["label"], sha256=hashlib.sha256(frame["url"].encode()).hexdigest()) for frame in frames + pictures])
         result.update(fingerprint_state["components"])
         captured["candidate"] = dict(digest=fingerprint, identity_fields=fingerprint_state["fields"],
-                                     proposal=proposal, result=result, images=frames + pictures)
+                                     proposal=proposal, result=result, images=frames + pictures,
+                                     correspondence=dict(views=view_records, geometry=geometry_records))
+        # Historic images remain comparable; only the current candidate needs a BVH/mesh snapshot.
+        for previous in captured.get('candidate_records', {}).values():
+            previous.pop('correspondence', None)
         captured.setdefault("candidate_records", {})[fingerprint] = captured["candidate"]
         captured.setdefault("candidate_history", []).append(result)
         return dict(result, _images=frames + pictures)

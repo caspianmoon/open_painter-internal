@@ -50,6 +50,26 @@ class WorkflowTests(unittest.TestCase):
         workflow.store_plan(captured, plan)
         self.assertNotIn('critique', captured['candidate'])
 
+    def test_all_views_and_current_correspondence_required_for_seam_correction(self):
+        captured = self.request()
+        views = ['front', 'back', 'left', 'right', 'top', 'bottom', 'close']
+        captured['candidate']['result'].update(correspondence_available=True, review_views=views)
+        critique = self.critique()
+        with self.assertRaisesRegex(schema.AuthoringError, 'front'):
+            workflow.critique(captured, critique)
+        critique['reviewed_views'] = views
+        critique['weaknesses'][0].update(category='UV_SEAM', scope='LOCAL', correspondence_id='paired-edge')
+        with self.assertRaisesRegex(schema.AuthoringError, 'inspect_texture_correspondence'):
+            workflow.critique(captured, critique)
+        captured['correspondences'] = {'paired-edge': dict(correspondence_id='paired-edge',
+            candidate_digest='b'*64, images=[])}
+        with self.assertRaises(schema.AuthoringError):
+            workflow.critique(captured, critique)
+        captured['correspondences']['paired-edge']['candidate_digest'] = 'a'*64
+        workflow.critique(captured, critique)
+        with self.assertRaises(schema.AuthoringError):
+            workflow.require_review(captured)  # Inspection alone does not address the weakness.
+
 
 if __name__ == '__main__':
     unittest.main()

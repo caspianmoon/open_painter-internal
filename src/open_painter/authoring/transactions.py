@@ -74,7 +74,7 @@ def available(ts):
                     raise AuthoringError("Finish the active stroke, drag or bake before applying")
 
 
-def apply(ts, proposal, *, operation_id, expected_digest, scope="", objects=None, images=None, fault=None):
+def apply(ts, proposal, *, operation_id, expected_digest, scope="", objects=None, images=None, correspondences=None, fault=None):
     proposal = schema.validate(proposal)
     payload_hash = hashlib.sha256(json.dumps(proposal, sort_keys=True).encode()).hexdigest()
     for receipt in history(ts):
@@ -88,7 +88,7 @@ def apply(ts, proposal, *, operation_id, expected_digest, scope="", objects=None
     key = (ts.id_data.as_pointer(), ts.id)
     if key in _writers:
         raise AuthoringError("Another material change is being applied")
-    compiled = commands.compile_proposal(ts, proposal, operation_id, scope=scope, objects=objects, images=images)
+    compiled = commands.compile_proposal(ts, proposal, operation_id, scope=scope, objects=objects, images=images, correspondences=correspondences)
     before = compiled["before"]
     old_active = ts.layers[ts.active_layer].id if 0 <= ts.active_layer < len(ts.layers) else ""
     old_history = ts.director_history

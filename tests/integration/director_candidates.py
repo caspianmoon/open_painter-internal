@@ -70,7 +70,7 @@ def run():
 
         wrong = tool('preview_proposal', proposal_json=json.dumps(proposal(.95)))
         assert wrong['channels'][ts.id]['channels']['METALLIC']['mean'][0] > .94
-        assert len(wrong['_images']) == 8
+        assert len(wrong['_images']) == 11
         out = ROOT / '.blender-test' / 'director-candidate-acceptance'
         out.mkdir(parents=True, exist_ok=True)
         for image in wrong['_images'][:2]:
@@ -305,6 +305,113 @@ def scratch_scene_inputs():
         print('DIRECTOR_CANDIDATE_SCENE_INPUTS_OK', flush=True)
 
 
+def generated_review_recovery():
+    """A stale generated preview must be replaceable without approving stale images."""
+    import numpy as np
+    from open_painter.ai import generated_images
+    from open_painter.ai.viewport import png
+    scene = bpy.data.scenes.new('Generated review recovery')
+    bpy.context.window.scene = scene
+    scene.render.engine = 'BLENDER_EEVEE'
+    bpy.ops.mesh.primitive_cube_add()
+    ts = sets.create(scene, 'Recovery material', 512)
+    sets.assign(scene, ts, bpy.context.object, 0)
+    area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
+    region = next(r for r in area.regions if r.type == 'WINDOW')
+    area.spaces.active.shading.type = 'MATERIAL'
+    with tempfile.TemporaryDirectory() as directory, bpy.context.temp_override(area=area, region=region):
+        camera = bpy.data.objects.new('Review camera', bpy.data.cameras.new('Review camera'))
+        scene.collection.objects.link(camera)
+        camera.location = (4, -6, 3)
+        camera.rotation_euler = (-camera.location).to_track_quat('-Z', 'Y').to_euler()
+        scene.camera = camera
+        view = area.spaces.active.region_3d
+        view.view_perspective = 'CAMERA'
+        bpy.context.view_layer.update()
+        view.update()
+        shader_preview.flush(scene, ts)
+        captured = session.capture(bpy.context, mode='CREATE', scope='SET', prompt='Generated review regression')
+        session.request = captured
+        captured['context']['image_generation'] = dict(enabled=True)
+        captured['surface_plan'] = dict(components=[])
+        pixels = np.ones((32, 32, 4), np.uint8) * 255
+        pixels[:, :16, :3] = (30, 120, 60)
+        pixels[:, 16:, :3] = (80, 20, 100)
+        entry = generated_images.store(directory, dict(result=base64.b64encode(png(32, 32, pixels.tobytes())).decode()))
+        entry['state_directory'] = directory
+        captured['images'][entry['image_id']] = entry
+        change = dict(version=1, summary='Generated review recovery', commands=[
+            dict(op='add_layer', id='new:skin', name='Skin', kind='FILL'),
+            dict(op='assign_generated_surface', layer_id='new:skin', image_id=entry['image_id'],
+                 name='Skin detail', purpose='Synthetic generated surface regression',
+                 roughness_range=[.4, .6], height_amplitude=0, projection='UV')])
+
+        def tool(name, **arguments):
+            return session.tool_call(dict(request_id=captured['id'], tool=name, arguments=arguments))
+
+        first = tool('preview_proposal', proposal_json=json.dumps(change))
+        # Camera-border zoom updates Blender's display projection cache, but
+        # not the independently framed evidence camera. The old identity hashed
+        # this cache and could reject the dragon after its final allowed preview.
+        old_projection = view.window_matrix.copy()
+        view.view_camera_zoom += 17
+        view.update()
+        assert view.window_matrix != old_projection
+        tool('inspect_candidate', candidate_digest=first['candidate_digest'])
+        # A real camera lens edit still invalidates the reviewed projection.
+        old_lens = camera.data.lens
+        camera.data.lens = old_lens * 1.1
+        try:
+            tool('inspect_candidate', candidate_digest=first['candidate_digest'])
+            raise AssertionError('Changed evidence lens accepted')
+        except schema.AuthoringError as exc:
+            assert 'projection' in str(exc)
+        camera.data.lens = old_lens
+        tool('inspect_candidate', candidate_digest=first['candidate_digest'])
+        # Wrong IDs and edited proposals must not invalidate a good candidate.
+        for name, arguments in (
+            ('inspect_candidate', dict(candidate_digest='0' * 64)),
+        ):
+            try:
+                tool(name, **arguments)
+                raise AssertionError('Wrong candidate accepted')
+            except schema.AuthoringError as exc:
+                assert 'current candidate_digest' in str(exc)
+        assert not captured['candidate'].get('invalidated')
+        renamed = dict(change, summary='Equivalent material with a revised description')
+        candidates.reviewed(bpy.context, ts, captured, renamed, first['candidate_digest'])
+        edited = dict(change, commands=[*change['commands'], dict(op='set_channel',
+            layer_id='new:skin', channel='METALLIC', values=dict(value=.8))])
+        try:
+            candidates.reviewed(bpy.context, ts, captured, edited, first['candidate_digest'])
+            raise AssertionError('Changed material accepted')
+        except schema.AuthoringError as exc:
+            assert 'Proposal differs' in str(exc)
+        assert not captured['candidate'].get('invalidated')
+        # Change a real visual input, without changing the authoring document.
+        scene.view_settings.exposure += .25
+        try:
+            tool('inspect_candidate', candidate_digest=first['candidate_digest'])
+            raise AssertionError('Changed lighting accepted')
+        except schema.AuthoringError as exc:
+            assert 'color' in str(exc) and 'preview_proposal' in str(exc)
+        assert captured['candidate']['invalidated'] == ['color']
+        # No critique of stale images; the identical material can be re-rendered.
+        fresh = tool('preview_proposal', proposal_json=json.dumps(change))
+        assert fresh['candidate_digest'] != first['candidate_digest']
+        assert fresh['material_digest'] == first['material_digest']
+        tool('inspect_candidate', candidate_digest=fresh['candidate_digest'])
+        tool('critique_candidate', candidate_digest=fresh['candidate_digest'], weaknesses=[],
+             generated_contribution='Generated color bands are visible in the fresh render.',
+             preserved_decisions='Preserve both color bands and the rough dielectric response.')
+        tool('propose_changes', proposal_json=json.dumps(change), candidate_digest=fresh['candidate_digest'],
+             visual_review='Fresh Eevee evidence includes the changed exposure and generated color bands.')
+        captured['running'] = False
+        result = bpy.ops.open_painter.director_apply('EXEC_DEFAULT', True, request_id=captured['id'])
+        assert 'FINISHED' in result and len(transactions.history(ts)) == 1
+        print('DIRECTOR_GENERATED_REVIEW_RECOVERY_OK', flush=True)
+
+
 open_painter.register()
 if bpy.app.timers.is_registered(cache.tick):
     bpy.app.timers.unregister(cache.tick)
@@ -316,6 +423,8 @@ def main():
         lifecycle()
         shared_slots()
         scratch_scene_inputs()
+        with bpy.context.temp_override(window=bpy.context.window_manager.windows[0]):
+            generated_review_recovery()
     except BaseException:
         traceback.print_exc()
         os._exit(1)

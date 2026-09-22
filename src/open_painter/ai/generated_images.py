@@ -7,7 +7,7 @@ import struct
 import time
 from pathlib import Path
 
-MAX_IMAGES = 4
+MAX_IMAGES = 8
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_SERVER_MESSAGE = 32 * 1024 * 1024
 # Longer than the longest turn, so another Blender sharing the state

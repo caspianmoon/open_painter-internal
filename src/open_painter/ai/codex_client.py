@@ -341,7 +341,7 @@ class CodexClient:
                         # textures, and interrupt() would strand the draft by
                         # clearing request_id before turn/completed arrives.
                         self.emit(dict(event="image_status", request_id=self.request_id,
-                                       message="Ignored an extra generated texture (four per instruction)"))
+                                       message=f"Ignored an extra generated texture ({generated_images.MAX_IMAGES} per instruction)"))
                         continue
                     self.image_items.add(item["id"])
                     self.emit(dict(event="image_status", request_id=self.request_id,

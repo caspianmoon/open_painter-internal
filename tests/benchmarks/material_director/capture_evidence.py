@@ -243,8 +243,9 @@ def fixed_rig_check(scene, config):
     if compositor is not None or scene.render.use_compositing or scene.render.use_sequencer:
         errors.append("Primary fixture must disable compositor and sequencer post-processing")
     poses = config.get("camera_poses", {})
-    if set(poses) != {"front", "back", "close"}:
-        errors.append("Exactly front, back and close camera poses must be frozen")
+    expected_poses = {"left", "right", "front", "rear", "close"} if config.get("protocol") == "two_weapon_v1" else {"front", "back", "close"}
+    if set(poses) != expected_poses:
+        errors.append("Exactly these camera poses must be frozen: " + ", ".join(sorted(expected_poses)))
     for name, pose in poses.items():
         matrix = np.asarray(pose.get("matrix_world", []), dtype=np.float64)
         if matrix.shape != (4, 4) or not np.isfinite(matrix).all():
@@ -356,7 +357,8 @@ def render_primary_views(context, output_dir, label, config):
     return dict(status="CAPTURED" if not errors else "FAILED", views=records, errors=errors,
                 seconds=time.monotonic() - started, engine=scene.render.engine, resolution=[1024, 1024],
                 rig_validation=validation, input_pose_restored=restored["status"] == "PASS",
-                protocol="five_asset_eevee_v3" if config.get("protocol_version", 2) >= 3 else "primary_fixed_eevee_one_camera_three_poses")
+                protocol="two_weapon_v1" if config.get("protocol") == "two_weapon_v1" else
+                "five_asset_eevee_v3" if config.get("protocol_version", 2) >= 3 else "primary_fixed_eevee_one_camera_three_poses")
 
 
 def render_views(context, output_dir, label, config=None, *, relight=False):

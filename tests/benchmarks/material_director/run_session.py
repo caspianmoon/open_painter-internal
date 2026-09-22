@@ -183,8 +183,9 @@ class LiveRun:
                 raise RuntimeError("Non-model object appeared in Material Director context")
         supported = {"get_context", "get_material_context", "search_library", "describe_asset",
                      "list_generated_images", "propose_changes", "propose_scene_changes",
-                     "preview_proposal", "inspect_candidate", "list_regions", "inspect_region", "query_region",
-                     "inspect_material_channels", "inspect_mask_coverage", "compare_candidates", "report_inability"}
+                     "preview_proposal", "inspect_candidate", "list_regions", "inspect_region", "inspect_surface", "inspect_surface_source", "query_region",
+                     "inspect_material_channels", "inspect_mask_coverage", "compare_candidates", "report_inability",
+                     "plan_surface", "critique_candidate"}
         if tools is not None and any(tool.get("name") not in supported for tool in tools):
             raise RuntimeError("Benchmark provider was offered a tool outside material authoring")
 
@@ -306,6 +307,7 @@ class LiveRun:
         space.region_3d.update()
 
     def settle(self):
+        from open_painter.evaluation import layer_cache
         ready = True
         for ts in self.targets():
             shader_preview.tick(bpy.context.scene, ts)
@@ -322,6 +324,8 @@ class LiveRun:
                             raise RuntimeError(field.error)
                         if field.mode == "LIVE" and (not field.image or field.provenance != repr(scene_fields.signature(ts, field))):
                             ready = False
+        layer_cache.tick(bpy.context.scene, budget=.02)
+        ready = ready and not layer_cache.pending(bpy.context.scene)
         self.ready_frames = self.ready_frames + 1 if ready else 0
         return self.ready_frames >= 5
 

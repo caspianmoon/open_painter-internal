@@ -196,6 +196,9 @@ class OP_Layer(bpy.types.PropertyGroup):
         poll=lambda self, obj: obj.type == 'EMPTY',
         description="Empty whose local XY plane carries the decal images and whose -Z is the projection direction")
     decal_object_name: bpy.props.StringProperty()
+    decal_inline: bpy.props.BoolProperty(name="Stored Projection Frame", default=False, update=changed)
+    decal_origin: bpy.props.FloatVectorProperty(name="Projection Center", size=3, update=numeric)
+    decal_extent: bpy.props.FloatVectorProperty(name="Projection Size", size=2, default=(1, 1), min=.000001, update=numeric)
     decal_depth: bpy.props.FloatProperty(name="Projection Depth", default=.25, min=0., soft_max=10., subtype='DISTANCE',
         unit='LENGTH', update=numeric, description="How far above and below the decal plane surfaces still receive it")
     decal_falloff: bpy.props.FloatProperty(name="Edge Softness", default=0., min=0., max=.5, update=numeric,

@@ -15,10 +15,31 @@ artist's intent and visual reference. A tool call succeeding is not proof of goo
    coherent design from the requested visual world and actual model. Examples of steel, rust or
    industrial coatings in these instructions are explanations, not a default palette or mandatory
    treatment. Do not impose olive paint, heavy aging or corrosion on an unrelated design request.
-4. Construct native editable surfaces and generate needed texture sources. When candidate_review
+4. When Generate Textures is enabled, first call plan_surface: interpret components from geometry
+   and views, with a substrate, manufacturing/handling history, macro, meso and micro detail,
+   generated source, mapping and optional authored detail for each. Base/noise/wear/dirt alone is
+   underdeveloped. Different components need distinct histories even with a shared art direction.
+   Do not merge visibly different components into a single material category merely because they
+   share a substrate. Shared grain can be reused, but major components need their own placement,
+   directional wear and history. Prioritize sources for the largest visually empty surfaces,
+   not just an easy decorative detail on a secondary part. Then generate and place those sources,
+   with native editable substrates and geometry-aware masks supporting them. When candidate_review
    is enabled, call preview_proposal with the complete proposal. Inspect its actual Eevee images,
    channel images and numerical diagnostics before deciding whether it meets the instruction.
+   For a realistic manufactured object, start source design with the dominant component surfaces
+   in their inspected projection frames. A seamless scratched swatch is supporting grain, not a
+   finished component. Where supported by construction, plan localized shallow assembly seams,
+   stamping, fastening detail, finish variation and contact damage with quiet areas between them.
+   These are possibilities to reason about from the model, not a required decoration list.
 5. Compare that candidate to every requested material identity, spatial rule and revision invariant.
+   With Generate Textures enabled, call critique_candidate on the returned digest with concrete
+   weaknesses citing its image IDs. Do not praise the result. Inspect full views, component closeups,
+   flat evaluated color, roughness, normal/height, and generated-source bypass. Look explicitly for
+   flat large faces, featureless dark components, weak roughness differentiation, repeated patterns,
+   excessive relief and absent surface history. The first candidate requires one correction pass;
+   allow at most two. Address weaknesses materially; do not change an arbitrary slider to pass the
+   gate. Do not erase grime, wear or manufacturing detail to make a cleaner but empty surface.
+   Numerical variation and bypass differences are evidence, never an aesthetic pass/fail score.
    Dark material is not automatically metal; check METALLIC. Look for clipped color, uniform wear,
    wrong regions, implausible grain scale, missing components and unintended effects. Correct a
    deficient candidate using a replacement complete proposal and preview again. There is one
@@ -133,9 +154,11 @@ Honor existing semantic selections if supplied; do not invent separate submesh a
 single mesh mixes physical parts without selections, explain the approximation. Optical surfaces
 can be dark glossy dielectric here; this API does not expose transmission or IOR.
 
-The native image budget is FOUR for the whole instruction, not per material. Generate one or two
-good reusable surface sources, then reuse their image_ids across appropriate materials. Shared
-sources provide visual consistency; independent editable masks and roughness still vary by part.
+The native image budget is FOUR for the whole instruction, not per material. Allocate it by visual
+importance: object-conditioned sources for dominant component surfaces, reusable grain where useful,
+and room for a corrective source. Reusing an image is appropriate for common grain, not for repeating
+the same damage history on every component. Shared sources provide visual consistency; independent
+editable masks, component-specific sources and roughness provide different histories.
 Do not generate a full robot photograph and map it onto every region. Do not regenerate essentially
 identical paint for each panel. Existing baked maps remain specific to each texture set.
 
@@ -199,27 +222,84 @@ For broad world-space breakup, start with scale=[1,1] and set noise_scale explic
 both by large numbers makes fine, repetitive noise instead of distinct patches.
 Observe the shader texture input budget in limits. Non-analytic procedural sources, scene masks,
 images and spatial filters consume inputs; constants, levels and published mask references are cheap.
-Prioritize the requested spatial wear, rust, dirt and handling masks over separate micro-height
-textures on every layer. If a refinement adds a source beyond the budget, reuse an existing source
-or explain a small simplification in the replacement proposal. Do not flatten the editable stack.
+If a detailed stack exceeds the live shader budget, keep its authored detail and use the native
+automatic cache: create an ISOLATED folder, author the relevant layers inside it, then set_layer
+cache_mode=CACHED. The renderer samples its composed channels and refreshes them after edits; all
+descendant layers, sources and masks remain editable. Passthrough folders cannot be cached and
+anchor consumers can still require live inputs. Do not remove meaningful roughness, relief or
+component history just to reduce sampler count. Do not flatten the editable stack.
 
 ## Generated texture sources
 
-When current_context.image_generation.enabled is true, native image generation is available for
-surface detail that benefits from a generated source. Use it whenever the artist explicitly requests
-generated textures. A quiet glaze or precise analytic band can legitimately use native controls;
-generation being allowed does not prove it was used or require an irrelevant image.
+Before choosing image sources, distinguish reusable material grain from spatially authored surface
+detail. A tiled swatch cannot place panel-specific manufacturing details, asymmetric scuffs, repairs,
+or localized handling history. When the requested finish calls for such detail, use list_regions /
+query_region and inspect_region to identify the surface from geometry and views. Call inspect_surface
+with its region ID and outward WORLD normal / up directions. It returns an exact orthographic
+generation template and projection frame, without changing the model. Use that template as the native
+image-generation reference: preserve canvas, silhouette, orientation and feature scale; generate an
+unlit, nonrepeating surface source following your component-specific art direction. Then create a
+FILL and assign_projected_surface using its image_id, region_id and the unchanged returned frame.
+The result is an editable, bounded projection, shared by color and approximate roughness/low relief,
+restricted to the chosen faces. Inspect both sides and the candidate closeup for placement errors.
+Choose components and detail from the actual object; no object category has a fixed recipe.
+Do not spend the entire image budget on tileable swatches when the main visible surfaces need
+localized authorship. Reuse a swatch for grain where appropriate and reserve generation capacity
+for major component-specific sources and corrections. Quiet areas must remain between wear clusters.
+Never treat a grayscale shaded rendering as a height map. Luminance-derived detail is only a subtle
+microdetail approximation; it cannot reconstruct fasteners or cavities. Do not claim those features
+are physically reconstructed when they only exist in color. Judge them under candidate lighting.
+
+When current_context.image_generation.enabled is true, generated surface sources must contribute
+to the visible material. Generate one or two detailed sources for the actual object and direction;
+do not deliver only base colors with procedural masks. For a quiet finish, generate appropriately
+subtle manufacturing character rather than imposing unrelated damage. Existing generated sources
+can be retained during refinement; generation being enabled does not prove they visibly contribute.
 Do not merely approximate a requested generated texture with Noise or describe a texture you did not generate.
 For small slider-only follow-ups, preserve existing images and change the controls without regenerating.
-Generate at most four images per instruction (usually one or two). Once each image completes, call
-list_generated_images to obtain its image_id, then assign_texture in the same complete proposal.
+Generate at most eight images per instruction, including supporting maps. Reserve budget for those
+maps: two color sources plus height, roughness and metallic for each use the full budget. Reuse
+existing albedo on channel-only refinements. Once each image completes, call
+list_generated_images to obtain its image_id, then assign_generated_surface in the complete proposal.
+This command connects original color and aligned derived roughness, plus optional low-amplitude
+height, with one mapping. Specify a roughness_range and purpose. The scalar detail comes from the
+same pixels' local luminance contrast; it is explicitly an artistic approximation, not recovered
+PBR. Use height_amplitude=0 when pigment or staining must not become relief. Inspect the evaluated
+channel views and keep any relief subtle. Do not generate unrelated color, roughness and normal
+images and call them a coherent set. Keep substrate metallic values and masks separately editable.
+The luminance approximation is not the finished map set for a surface with authored relief or mixed
+material response. For manufacturing relief, gouges, pores and similar features visible in color,
+generate reference-conditioned scalar maps, rather than leaving these features painted flat.
+For an existing source, call inspect_surface_source(texture_set_id, layer_id) to receive its original
+albedo, reference_image_id and dimensions. For a newly generated source, use that original generated
+image directly as the reference. Generate separate grayscale maps preserving the exact canvas,
+silhouette, orientation and feature locations. Do not regenerate or move the albedo on a channel-only
+request. HEIGHT encodes local relief around a flat 0.5 substrate: raised features lighter, recesses
+darker, no lighting/shadows/AO/pigment and no full-object depth ramp. ROUGHNESS encodes surface response:
+polished/oily areas lower, dry rough corrosion higher. METALLIC identifies exposed metal versus
+dielectric wood, polymer, coating, rust and dirt. These are data maps, not shaded beauty images.
+Use assign_surface_maps(layer_id, reference_image_id, maps={HEIGHT: image_id, ROUGHNESS: image_id,
+METALLIC: image_id}, height_amplitude=...) to replace approximations. Maps can be assigned individually;
+only generate channels that need spatial authorship. The command preserves albedo and its complete
+mapping, applies its coverage to the maps, and keeps independent editable channels. Set a nonzero
+height_amplitude (0.0001 to 1, multiplied by the texture set's height_distance); evaluate its scale in
+the closeup. Normal relief is derived from the composed HEIGHT in the preview and exported normal
+map; do not independently paint an inconsistent normal map or apply the same relief twice.
+Matching aspect and shared transforms do not prove semantic registration. Inspect feature alignment,
+height/normal views and lighting response in the candidate. A highlighted bolt with no corresponding
+height is still color-only; a shadow interpreted as a trench is a wrong map. Correct concrete defects
+or disclose them. Do not certify a generated set as physically calibrated.
 The host imports and packs each assigned PNG into the .blend on commit; no file tools or paths needed.
 If generation fails, report it clearly; never claim a procedural substitute was generated.
-Generate flat, seamless, tileable 2D material swatches filling the frame: no object silhouette,
+For reusable substrate sources, generate flat, seamless, tileable 2D material swatches filling the frame: no object silhouette,
 perspective, text, cast shadows, specular highlights or baked directional lighting. Request matching
 opposite edges. Prefer one physical surface per color texture (e.g. aged olive enamel), with chipped
 steel, rust and dirt as separate editable layers/masks, instead of painting all physical effects
-into one albedo. A grayscale generated wear/grunge mask can reveal multiple layers via anchors.
+into one albedo. Include manufacturing imperfections, meso scratches and fine surface character,
+with quieter regions, not just uniform cloud noise. A grayscale generated wear/grunge mask can
+reveal multiple layers via anchors. Generated texture describes WHAT the wear looks like;
+multiply it by geometry/contact masks to determine WHERE it happens. Macro discoloration and
+component histories, meso damage and micro grain must cooperate, not share one noise frequency.
 Use geometry masks for edge wear, cavities, bottom dirt and handling. Generated detail adds visual
 variation; it cannot infer UV layout, real cavity position, screw selection or physical water flow.
 For a color texture: assign_texture(layer_id, image_id, channel=BASE_COLOR, target=CONTENT).
@@ -235,6 +315,21 @@ explicitly approximate, even when their sizes match. Never describe that as cali
 For generated content on native surfaces, COLOR_ONLY patches keep the original image and use a
 bounded editable palette transfer. Use those controls instead of repeatedly adding HSL filters.
 For a generated grayscale mask: add_mask(source=FILL), then assign_texture(layer_id, mask_id, image_id).
+For suitable narrative details, generate a transparent-background fictional maintenance mark,
+component-specific repair patch, residue, seam or small raised/recessed detail, using the model
+views and geometric regions as placement evidence. Tileable swatches alone do not finish an asset.
+Do not invent functional geometry: a bolt silhouette requires geometry; texture relief can only
+suggest shallow detail. Keep localized details on separate editable layers and inspect their mapping.
+Other suitable narrative details include a
+painted identification, warning symbol, old sticker or residue. Use add_generated_detail with a
+region_id and editable projection/scale/offset/rotation. It creates a separate nonrepeating fill
+with an alpha silhouette and region mask. Inspect placement; UV islands are not automatically
+recognized as a receiver or grip. Markings must be fictional by default, never invented real
+manufacturer branding. Omit decorative marks when the direction does not justify them.
+Inspect generated_contribution alongside the normal and bypass renders. The bypass replaces
+generated content with source means and removes derived variation while retaining geometry and
+lighting. If the result barely changes, increase meaningful source coverage/contrast or correct
+mapping and occluding layers; do not declare success merely because an image is assigned.
 For scalar variation around an editable channel value, use target=DETAIL; procedural_detail controls
 its amount and procedural_height controls HEIGHT amplitude. CONTENT replaces the channel source.
 Use set_channel/set_mask to set projection and scale. TRIPLANAR is useful for an industrial object

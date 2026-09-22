@@ -14,6 +14,11 @@ EXTRA_POSES = {
 
 def inventory(config=None):
     config = config or {}
+    if config.get("protocol") == "two_weapon_v1":
+        return {label: [(view, f"{label}_{view}.png")
+                        for view in ("left", "right", "front", "rear", "close")]
+                for label in ("before", "after_create", "after_refine_1", "after_refine_2",
+                              "failure_create", "failure_refine_1", "failure_refine_2")}
     result = {name: list(views) for name, views in PRIMARY.items()}
     if config.get("protocol_version", 2) < 3:
         return result

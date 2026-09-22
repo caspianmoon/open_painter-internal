@@ -91,6 +91,36 @@ def isolated(context, targets, assignments=None, region_faces=None, region_topol
             context.view_layer.update()
 
 
+def framing_view(context):
+    """Stable inputs for automatically framed evidence, independent of UI redraws.
+
+    RegionView3D.window_matrix is a cached display matrix: resizing a viewport,
+    camera-border zoom and offscreen drawing can replace it after a tool returns.
+    Framed evidence owns its aspect, fit and clip planes, so use authored camera
+    orientation/lens or viewport rotation/lens instead of that transient cache.
+    """
+    from mathutils import Matrix
+    from types import SimpleNamespace
+    space = context.space_data
+    view = space.region_3d
+    camera = space.camera if space.use_local_camera else context.scene.camera
+    if view.view_perspective == 'CAMERA' and camera is not None:
+        camera = camera.evaluated_get(context.evaluated_depsgraph_get())
+        rotation = camera.matrix_world.to_quaternion().inverted().to_matrix()
+        perspective = camera.data.type != 'ORTHO'
+        sensor = camera.data.sensor_height if camera.data.sensor_fit == 'VERTICAL' else camera.data.sensor_width
+        focal_y = 2. * camera.data.lens / max(.001, sensor)
+    else:
+        rotation = view.view_rotation.inverted().to_matrix()
+        perspective = view.view_perspective != 'ORTHO'
+        focal_y = 2. * space.lens / 32.
+    projection = Matrix.Identity(4)
+    if perspective:
+        projection[0][0] = projection[1][1] = focal_y
+        projection[3][3] = 0.
+    return SimpleNamespace(view_matrix=rotation.to_4x4(), window_matrix=projection)
+
+
 def framing_matrices(view, points, aspect):
     """Explicit offscreen matrices work even when the viewport is in CAMERA mode.
 
@@ -129,7 +159,8 @@ def framing_matrices(view, points, aspect):
     return matrix, projection
 
 
-def capture(context, ts, *, max_side=512, isolate=False, frame_target=False, region_faces=None, region_topologies=None):
+def capture(context, ts, *, max_side=512, isolate=False, frame_target=False, region_faces=None, region_topologies=None,
+            orbit=0., closeup=False):
     import bpy
     import gpu
     import numpy as np
@@ -167,7 +198,15 @@ def capture(context, ts, *, max_side=512, isolate=False, frame_target=False, reg
             if isolate and frame_target:
                 from mathutils import Vector
                 points = [obj.matrix_world @ Vector(corner) for obj in shown for corner in obj.bound_box]
-                view_matrix, projection_matrix = framing_matrices(view, points, width / height)
+                view_matrix, projection_matrix = framing_matrices(framing_view(context), points, width / height)
+            if orbit:
+                from mathutils import Matrix, Vector
+                points = [obj.matrix_world @ Vector(corner) for obj in shown for corner in obj.bound_box]
+                center = sum(points, Vector()) / len(points)
+                view_matrix = view_matrix @ Matrix.Translation(center) @ Matrix.Rotation(orbit, 4, 'Z') @ Matrix.Translation(-center)
+            if closeup:
+                projection_matrix[0][0] *= 1.8
+                projection_matrix[1][1] *= 1.8
             space.overlay.show_overlays = False
             with context.temp_override(area=context.area, region=region):
                 offscreen.draw_view3d(context.scene, context.view_layer, space, region,

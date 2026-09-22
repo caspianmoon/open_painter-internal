@@ -88,6 +88,9 @@ def extent(obj):
 def signature(layer):
     """Repr-stable transform identity of a decal layer (world matrix, image empty size and
     the aspect of the picture it draws)."""
+    if getattr(layer, 'decal_inline', False):
+        return ('inline', tuple(layer.decal_origin), tuple(layer.decal_extent), tuple(layer.decal_axes),
+                float(layer.decal_depth), float(layer.decal_falloff), bool(layer.decal_facing))
     obj = resolve(layer)
     if obj is None:
         return None
@@ -100,6 +103,9 @@ def signature(layer):
 
 def local_coordinates(layer, positions):
     """Decal-local coordinates of world positions; the image spans -0.5..0.5 in local XY."""
+    if getattr(layer, 'decal_inline', False):
+        local = (np.asarray(positions) - np.asarray(layer.decal_origin)) @ np.asarray(layer.decal_axes).reshape(3, 3).T
+        return local[..., 0] / layer.decal_extent[0] + .5, local[..., 1] / layer.decal_extent[1] + .5, local[..., 2]
     obj = resolve(layer)
     inverse = np.asarray(obj.matrix_world.inverted_safe(), np.float64)
     flat = positions.reshape(-1, 3).astype(np.float64)
@@ -116,7 +122,7 @@ def coverage(layer, positions, normals):
     """(u, v, coverage 0..1) of the decal on texels with these world positions and normals."""
     u, v, z = local_coordinates(layer, positions)
     obj = resolve(layer)
-    world_axes, lengths = axes(obj)
+    world_axes, lengths = (np.asarray(layer.decal_axes).reshape(3, 3), np.ones(3)) if getattr(layer, 'decal_inline', False) else axes(obj)
     inside = ((u >= 0) & (u <= 1) & (v >= 0) & (v <= 1)).astype(np.float32)
     depth = float(layer.decal_depth)
     if depth > 0:
@@ -134,7 +140,7 @@ def coverage(layer, positions, normals):
     return u, v, inside
 
 
-def sample(prop, layer, n, y0, y1, ts, geometry_cache, cache):
+def sample(prop, layer, n, y0, y1, ts, geometry_cache, cache, image=None):
     """RGBA rows of a DECAL channel: the image sampled through the decal, alpha = coverage × image alpha."""
     from ..painting.projection import geometry
     from .projection import tangents
@@ -146,18 +152,19 @@ def sample(prop, layer, n, y0, y1, ts, geometry_cache, cache):
         positions, normals = geometry(ts, n)
         geometry_cache['geometry'] = (positions, normals)
     obj = resolve(layer)
-    if obj is None or not prop.image:
+    image = image if image is not None else prop.image
+    if (obj is None and not getattr(layer, 'decal_inline', False)) or not image:
         return np.array([0, 0, 0, 0], np.float32)
     u, v, cover = coverage(layer, positions[y0:y1], normals[y0:y1])
-    key = (prop.image.as_pointer(), 'linear')
+    key = (image.as_pointer(), 'linear')
     if key not in cache:
-        cache[key] = read(cache, prop.image, linear=True)
+        cache[key] = read(cache, image, linear=True)
     rgba = sample_uv(cache[key], u.astype(np.float32), v.astype(np.float32), prop.filtering, 'NONE')
     rgba = np.array(rgba, np.float32, copy=True)
     if prop.channel == 'NORMAL':
         # Decal normals live in the decal frame (X, Y, out along +Z); express them in the
         # target's tangent frame so they combine like any authored tangent normal.
-        world_axes, _ = axes(obj)
+        world_axes = np.asarray(layer.decal_axes).reshape(3, 3) if getattr(layer, 'decal_inline', False) else axes(obj)[0]
         n_local = rgba[..., :3] * 2 - 1
         n_world = n_local @ world_axes            # rows: decal X, Y, Z axes in world
         frame = tangents(ts, n, geometry_cache)

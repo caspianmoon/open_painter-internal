@@ -315,6 +315,13 @@ def _detail_pixels(image, resources):
 @measured("source_generation")
 def _sample_detail(image, prop, n, low, high, ts, geometry_cache):
     """One actual scalar sampling operation; cache hits never enter this phase."""
+    if prop.projection == 'DECAL':
+        from ..painting import decals
+        layer = next((item for item in ts.layers if item.id == getattr(prop, 'layer_id', '')), None)
+        if layer is None:
+            return np.full((high-low, n), .5, np.float32)
+        rgba = decals.sample(prop, layer, n, low, high, ts, geometry_cache, {}, image=image)
+        return np.broadcast_to(rgba, (high-low, n, 4))[..., :3] @ np.array([.2126, .7152, .0722], np.float32)
     scalar = _detail_pixels(image, geometry_cache)
     value = np.asarray(_sample_fill(scalar, prop, n, low, high, ts, geometry_cache)[..., 0],
                        dtype=np.float32)
@@ -342,7 +349,11 @@ def _detail_tile(prop, n, y0, y1, ts, geometry_cache):
                 prop.projection, prop.filtering, prop.tiling, tuple(prop.scale),
                 prop.rotation, tuple(prop.offset), prop.triplanar_hardness,
                 getattr(geometry_cache, "geometry_stamp", None)
-                if prop.projection == "TRIPLANAR" else None)
+                if prop.projection in {"TRIPLANAR", "DECAL"} else None)
+    if prop.projection == 'DECAL':
+        from ..painting import decals
+        layer = next((item for item in ts.layers if item.id == getattr(prop, 'layer_id', '')), None)
+        identity += (decals.signature(layer) if layer is not None else None,)
     parts = []
     for low in range(y0 // TILE_ROWS * TILE_ROWS, y1, TILE_ROWS):
         high = min(low + TILE_ROWS, n)
@@ -476,8 +487,12 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
         # Decal objects (0.9.6): the layer's Empty is the projection frame.
         from ..painting import decals
         layer = next((item for item in ts.layers if item.id == getattr(prop, "layer_id", "")), None)
-        if layer is None or decals.resolve(layer) is None or not prop.image:
+        if layer is None or (decals.resolve(layer) is None and not getattr(layer, 'decal_inline', False)) or not (prop.image or prop.detail_image):
             return np.array([0, 0, 0, 0], dtype=np.float32)
+        if not prop.image:
+            rgba = decals.sample(prop, layer, n, y0, y1, ts, geometry_cache if geometry_cache is not None else {}, cache, image=prop.detail_image)
+            rgba[..., :3] = prop.color[:3] if prop.channel in {'BASE_COLOR', 'NORMAL', 'EMISSION'} else prop.value
+            return rgba
         return decals.sample(prop, layer, n, y0, y1, ts, geometry_cache if geometry_cache is not None else {}, cache)
     if prop.image:
         return _image_source(prop.image, prop, kind, n, y0, y1, cache, ts, geometry_cache)
@@ -490,6 +505,11 @@ def _base_source(prop, kind, n, y0, y1, cache, ts, geometry_cache):
 
 def _image_source(image, prop, kind, n, y0, y1, cache, ts, geometry_cache):
     """Shared image sampling for regular fills, paint and scalar detail inputs."""
+    if kind == 'FILL' and getattr(prop, 'projection', 'UV') == 'DECAL':
+        from ..painting import decals
+        layer = next((item for item in ts.layers if item.id == getattr(prop, 'layer_id', '')), None)
+        if layer is not None:
+            return decals.sample(prop, layer, n, y0, y1, ts, geometry_cache if geometry_cache is not None else {}, cache, image=image)
     if image:
         from .image_snapshots import associated, read
         key = (image.as_pointer(), "linear")

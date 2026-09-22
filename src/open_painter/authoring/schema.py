@@ -37,7 +37,7 @@ CHANNEL = enum("BASE_COLOR", "ROUGHNESS", "METALLIC", "NORMAL", "HEIGHT", "AO", 
 SEMANTIC = enum("NONE", "DIRT", "DUST", "FADE", "SCRATCHES", "OXIDATION", "COATING_LOSS")
 COMBINE = enum("NORMAL", "MULTIPLY", "ADD", "MAX", "MIN")
 LAYER_FIELDS = dict(name=NAME, visible=BOOL, opacity=UNIT, effect_semantic=SEMANTIC,
-                    group_mode=enum("ISOLATED", "PASSTHROUGH"))
+                    group_mode=enum("ISOLATED", "PASSTHROUGH"), cache_mode=enum('LIVE', 'CACHED'))
 CHANNEL_FIELDS = dict(enabled=BOOL, opacity=UNIT, value=UNIT, color=array(4, UNIT),
                       procedural=dict(type="string", maxLength=80),
                       procedural_scale=number(.01, 512), procedural_seed=SEED,
@@ -122,10 +122,25 @@ COMMANDS = [
         projection=enum("UV", "TRIPLANAR"), scale=array(2, number(.001, 512)),
         offset=array(2, number(-100, 100)), rotation=number(-100, 100),
         physical_extent_m=array(2, number(.000001, 10000))), ("id", "layer_id", "sources")),
+    command("add_generated_detail", dict(id=IDENTIFIER, name=NAME, image_id=IDENTIFIER,
+        region_id=IDENTIFIER, parent_id=IDENTIFIER, purpose=dict(type="string", minLength=1, maxLength=600),
+        roughness=UNIT, projection=enum("UV", "TRIPLANAR"), scale=array(2, number(.001, 512)),
+        offset=array(2, number(-100, 100)), rotation=number(-100, 100)),
+        ("id", "name", "image_id", "region_id", "purpose")),
+    command("assign_generated_surface", dict(layer_id=IDENTIFIER, image_id=IDENTIFIER,
+        name=NAME, purpose=dict(type="string", minLength=1, maxLength=600),
+        roughness_range=array(2, UNIT), height_amplitude=number(0, .15),
+        projection=enum("UV", "TRIPLANAR"), scale=array(2, number(.001, 512)),
+        offset=array(2, number(-100, 100)), rotation=number(-100, 100),
+        physical_extent_m=array(2, number(.000001, 10000))),
+        ("layer_id", "image_id", "name", "purpose", "roughness_range")),
     command("assign_texture", dict(layer_id=IDENTIFIER, image_id=IDENTIFIER, channel=CHANNEL,
                                     mask_id=IDENTIFIER, target=enum("CONTENT", "DETAIL"),
                                     physical_extent_m=array(2, number(.000001, 10000))),
             ("layer_id", "image_id")),
+    command("assign_surface_maps", dict(layer_id=IDENTIFIER, reference_image_id=IDENTIFIER,
+        maps=object_schema({key: IDENTIFIER for key in ("HEIGHT", "ROUGHNESS", "METALLIC")}),
+        height_amplitude=number(.0001, 1)), ("layer_id", "reference_image_id", "maps")),
     command("add_mask", dict(id=IDENTIFIER, layer_id=IDENTIFIER, name=NAME,
                              source=enum("GENERATOR", "PROCEDURAL", "SCENE", "BAKED", "NOISE", "ANCHOR", "REFERENCE", "FILTER", "FILL"),
                              values=object_schema(MASK_FIELDS)),
@@ -147,6 +162,16 @@ COMMANDS = [
                                  parent_id=IDENTIFIER, seed=SEED,
                                  map_mode=enum("BAKED", "LIVE")), ("id", "asset_id")),
 ]
+# A reusable geometric frame, with no object-specific or semantic defaults.
+PROJECTION_FRAME = object_schema(dict(
+    origin=array(3, number(-1e6, 1e6)), axis_u=array(3, number(-1, 1)),
+    axis_v=array(3, number(-1, 1)), extent=array(2, number(.000001, 1e6)),
+    depth=number(.000001, 1e6)), ('origin', 'axis_u', 'axis_v', 'extent', 'depth'))
+COMMANDS.append(command('assign_projected_surface', dict(layer_id=IDENTIFIER, image_id=IDENTIFIER,
+    region_id=IDENTIFIER, frame=PROJECTION_FRAME, name=NAME,
+    purpose=dict(type='string', minLength=1, maxLength=600), roughness_range=array(2, UNIT),
+    height_amplitude=number(0, .15)),
+    ('layer_id', 'image_id', 'region_id', 'frame', 'name', 'purpose', 'roughness_range')))
 SCHEMA = object_schema(dict(version=dict(type="integer", const=VERSION),
                             summary=dict(type="string", minLength=1, maxLength=500),
                             commands=dict(type="array", items=dict(anyOf=COMMANDS),

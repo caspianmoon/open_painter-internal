@@ -235,7 +235,7 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         if op == "patch_surface":
             patches.append(surfaces.patch(ts, after, cmd, resolve(cmd["surface_id"])))
             continue
-        if op in {"add_layer", "insert_asset", "create_surface", "create_bands"}:
+        if op in {"add_layer", "insert_asset", "create_surface", "create_bands", "add_generated_detail"}:
             parent = resolve(cmd.get("parent_id", scope))
             if parent and find(after["layers"], parent)["type"] != "FOLDER":
                 raise AuthoringError("New layers need a folder or texture-set scope")
@@ -261,6 +261,9 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
                             aliases[cmd["id"] + ":chips"] = mask["id"]
                         if mask.get("surface_role") == "WEAR_PLACEMENT":
                             aliases[cmd["id"] + ":wear_placement"] = mask["id"]
+            elif op == "add_generated_detail":
+                from . import generated_surfaces
+                items = [generated_surfaces.detail_layer(ts, cmd, aliases[cmd["id"]], parent, objects, images)]
             elif op == "add_layer":
                 items = [assets.new_layer(aliases[cmd["id"]], cmd["name"], cmd["kind"], parent)]
             else:
@@ -282,6 +285,9 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
             layer["masks"].append(mask)
         elif op == "set_layer":
             layer.update(values)
+            if values.get('cache_mode') == 'CACHED' and not layer['cache']:
+                from ..constants import CHANNELS
+                layer['cache'] = [dict(document.defaults('OP_LayerCache'), channel=channel) for channel in CHANNELS]
         elif op == "set_channel":
             if layer["type"] == "FOLDER" and set(values) - {"enabled", "opacity"}:
                 raise AuthoringError("Edit a fill layer inside this folder to change channel content")
@@ -289,6 +295,15 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         elif op == "assign_bundle":
             from . import sources
             sources.assign(ts, layer, cmd, aliases[cmd["id"]], images)
+        elif op == "assign_generated_surface":
+            from . import generated_surfaces
+            generated_surfaces.assign(ts, layer, cmd, images)
+        elif op == "assign_surface_maps":
+            from . import surface_maps
+            surface_maps.assign(layer, cmd, images)
+        elif op == 'assign_projected_surface':
+            from . import surface_projection
+            surface_projection.assign(ts, layer, cmd, images, objects)
         elif op == "assign_texture":
             from .generated_textures import placeholder
             if bool(cmd.get("channel")) == bool(cmd.get("mask_id")):
@@ -342,14 +357,17 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
             if mask["source"] == "SCENE":
                 mask["influence"].update(mode="LIVE", resolution="256")
             if mask["edge_source"] == "LIVE":
-                mask["influence"].update(kind="EDGE", mode="LIVE", resolution="256")
+                mask["influence"].update(kind="EDGE", mode="LIVE", resolution="512")
             layer["masks"].append(mask)
         elif op in {"set_mask", "set_field"}:
             mask = find(layer["masks"], resolve(cmd["mask_id"]))
             if op == "set_mask":
+                was_live = mask["edge_source"] == "LIVE"
                 mask.update(physical_space.mask_values(ts, mask, values))
                 if mask["edge_source"] == "LIVE":
-                    mask["influence"].update(kind="EDGE", mode="LIVE", resolution="256")
+                    mask["influence"].update(kind="EDGE", mode="LIVE")
+                    if not was_live and mask["influence"]["resolution"] == "64":
+                        mask["influence"]["resolution"] = "512"
             else:
                 if mask["source"] != "SCENE" and mask["edge_source"] != "LIVE":
                     raise AuthoringError("Select a scene or live-edge mask")
@@ -373,8 +391,10 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
                     raise AuthoringError("A filter requires a channel or mask target")
                 prop = find(layer["channels"], cmd["channel"], "channel")
                 if op == "add_filter":
+                    from ..texture_engine.filter_defaults import initial_amount
                     effect = document.defaults("OP_TextureEffect")
-                    effect.update(id=aliases[cmd["id"]], kind=cmd["kind"], name=cmd["kind"].title())
+                    effect.update(id=aliases[cmd["id"]], kind=cmd["kind"], name=cmd["kind"].title(),
+                                  amount=initial_amount(cmd["kind"]))
                     prop["effects"].append(effect)
                 else:
                     # An empty id would otherwise match the first id-less artist effect.
@@ -382,6 +402,9 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
                         raise AuthoringError("set_filter on a channel needs the effect_id from the context")
                     effect = find(prop["effects"], resolve(cmd["effect_id"]))
             if "kind" in cmd:
+                if effect["kind"] != cmd["kind"]:
+                    from ..texture_engine.filter_defaults import initial_amount
+                    effect["amount"] = initial_amount(cmd["kind"])
                 effect["kind"] = cmd["kind"]
             effect.update(values)
         elif op == "connect_anchor":

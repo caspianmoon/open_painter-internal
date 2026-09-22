@@ -204,12 +204,8 @@ class OP_OT_choose_filter(SearchPicker, SafeOperator, bpy.types.Operator):
         effect.kind, effect.name = self.choice, self.choice.replace("_", " ").title()
         # Neutral defaults depend on the filter: .5 is a useful threshold, but
         # would immediately brighten colors or weaken normal details.
-        if self.choice in {"BRIGHTNESS_CONTRAST", "TEMPERATURE"}:
-            effect.amount = 0
-        elif self.choice in {"NORMAL_STRENGTH", "NORMAL_COMBINE", "HEIGHT_TO_NORMAL", "AO_STRENGTH"}:
-            effect.amount = 1
-        else:
-            effect.amount = .5
+        from ..texture_engine.filter_defaults import initial_amount
+        effect.amount = initial_amount(self.choice)
         _redraw(context, ts, mask=self.target == "MASK")
 
 

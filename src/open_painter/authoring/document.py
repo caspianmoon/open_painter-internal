@@ -28,6 +28,10 @@ def encode(value, *, digest=False, path=()):
     """JSON-safe local receipts. No pixels, executable text, or material node trees."""
     if isinstance(value, dict):
         skip = TRANSIENT if digest else {"opacity_percent", "master_factor", "master_scale"}
+        if digest and value.get('cache_mode') == 'CACHED':
+            # Auto-refreshed images are evaluated state, not artist edits or
+            # undo conflicts. Frozen cache content remains authored state.
+            skip = skip | {'cache'}
         if digest and path and path[-1] == "influence":
             skip = skip | {"image", "provenance", "error", "update_serial"}
         return {k: encode(v, digest=digest, path=(*path, k)) for k, v in value.items() if k not in skip}

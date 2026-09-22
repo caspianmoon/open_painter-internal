@@ -606,7 +606,7 @@ def retry(scene, ts):
 
 
 def flush(scene, ts):
-    """Finish isolated resource jobs before save/render; never bake the stack."""
+    """Finish isolated inputs and requested automatic caches before save/render."""
     _resume_set(scene, ts, key_for(scene, ts))
     tick(scene, ts, force_repair=False, ignore_gate=True)
     entry = _sessions.get(key_for(scene, ts))
@@ -626,6 +626,13 @@ def flush(scene, ts):
         if isinstance(result, dict):
             profile.record_boundary(scene, ts, result.pop('owner_timings', None) or {})
             entry['diagnostics'] = {**entry.get('diagnostics', {}), **result}
+    from . import layer_cache
+    layer_cache.flush(scene, ts)
+    # Cache publication swaps image pointers after the graph was prepared.
+    # Bind those images before a render can sample the neutral placeholder.
+    tick(scene, ts, force_repair=False, ignore_gate=True)
+    if entry.get('error'):
+        raise RuntimeError(entry['error'])
     return entry['graph']
 
 

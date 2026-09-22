@@ -69,7 +69,7 @@ def _prop_signature(prop, count=None):
 
 def _mask_signature(m):
     graph = getattr(m, 'node_group', None)
-    return (m.id, m.enabled, m.source, getattr(m, 'parent_id', ''), getattr(m, 'material_mapping_version', 0),
+    return ('baked-edge-leaf-v1', m.id, m.enabled, m.source, getattr(m, 'parent_id', ''), getattr(m, 'material_mapping_version', 0),
             graph.name if graph is not None and m.source == 'GRAPH' else None,
             m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
             m.procedural, m.map_type, m.operation,
@@ -1150,12 +1150,20 @@ class Graph(Math):
         """
         from ..painting import decals
         obj = decals.resolve(layer)
-        coordinates = self.node('ShaderNodeTexCoord')
-        coordinates.object = obj
-        coordinates['op_decal'] = layer.id
-        width, height = decals.extent(obj)   # the drawn picture keeps the image's aspect
-        offset = tuple(getattr(obj, 'empty_image_offset', (-.5, -.5)))
-        local = self.separate(coordinates.outputs['Object'])
+        if getattr(layer, 'decal_inline', False):
+            coordinates = self.node('ShaderNodeNewGeometry')
+            origin = self.combine(*(self.param(layer, 'decal_origin', i) for i in range(3)))
+            delta = self.vec('SUBTRACT', coordinates.outputs['Position'], origin)
+            local = [self.vec('DOT_PRODUCT', delta, self.combine(*(self.param(layer, 'decal_axes', axis * 3 + i) for i in range(3)))) for axis in range(3)]
+            width, height = (self.param(layer, 'decal_extent', i) for i in range(2))
+            offset = (-.5, -.5)
+        else:
+            coordinates = self.node('ShaderNodeTexCoord')
+            coordinates.object = obj
+            coordinates['op_decal'] = layer.id
+            width, height = decals.extent(obj)
+            offset = tuple(getattr(obj, 'empty_image_offset', (-.5, -.5)))
+            local = self.separate(coordinates.outputs['Object'])
         u = self.math('SUBTRACT', self.math('DIVIDE', local[0], width), offset[0])
         v = self.math('SUBTRACT', self.math('DIVIDE', local[1], height), offset[1])
         sample = self.image(prop.image, self.combine(u, v, 0.0), prop.filtering, 'NONE',
@@ -1205,7 +1213,9 @@ class Graph(Math):
                 value = self._strokes_boundary(layer, prop)
             elif layer.type == 'FILL' and prop.projection == 'DECAL' and not prop.anchor:
                 from ..painting import decals
-                if prop.image is None or decals.resolve(layer) is None:
+                if prop.detail_image:
+                    return self._channel_prefix(layer, prop, 0)
+                if prop.image is None or (decals.resolve(layer) is None and not getattr(layer, 'decal_inline', False)):
                     # Nothing to project (channel_eval._base_source): the flat
                     # colour must not cover the whole mesh.
                     value = Signal((0., 0., 0.), 0.0)
@@ -1590,6 +1600,8 @@ class Graph(Math):
                 decal = (obj.name, round(float(getattr(obj, 'empty_display_size', 1.0)), 6),
                          tuple(round(float(x), 6) for x in getattr(obj, 'empty_image_offset', (0, 0))),
                          tuple(round(x, 6) for x in decals.aspect(obj))) if obj else None
+                if getattr(layer, 'decal_inline', False):
+                    decal = ('inline-frame-v1',)
             return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
                     self._continuation(key), decal)
         masks = list(layer.masks)
@@ -1832,6 +1844,13 @@ class Graph(Math):
 
     def generator(self, mask, layer=None):
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
+        if (kind in {'EDGE_WEAR', 'CHIPS'} and mask.edge_source == 'BAKED' and layer is not None
+                and not mask.detail_height_anchor and not mask.detail_normal_anchor):
+            # Four curvature reaches + optional AO + breakup/chip fields exceed
+            # Metal's sampler allowance in otherwise modest materials. Resolve
+            # only this editable generator through the existing versioned raster
+            # boundary; levels, opacity and downstream composition remain live.
+            return self._mask_source_boundary(layer, mask)
         amount, contrast = self.param(mask, 'amount'), self.param(mask, 'contrast')
         strength = self.param(mask, 'noise_strength')
         micro = self._micro(mask) if kind in {'EDGE_WEAR', 'CHIPS', 'DIRT', 'CAVITY_DIRT', 'RUST', 'DRIPS'} else None
@@ -2986,6 +3005,12 @@ class Graph(Math):
     def unique_images(self):
         return {node.image.as_pointer() for node in self.nodes()
                 if node.bl_idname == 'ShaderNodeTexImage' and node.image}
+
+    def bound_sampler_count(self):
+        # The same image with different sampling state is not one binding.
+        # Read the settled nodes, not build-time placeholder diagnostics.
+        return len({(node.image.as_pointer(), node.interpolation, node.extension)
+                    for node in self.nodes() if node.bl_idname == 'ShaderNodeTexImage' and node.image})
 
     def structural_signature(self):
         plan = self.plan()

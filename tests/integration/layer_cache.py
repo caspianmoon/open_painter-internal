@@ -347,8 +347,8 @@ def run():
     layer_cache.flush(scene)
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
 
-    # Saving keeps a queued refresh (0.9.7): nothing re-requests it in the
-    # running session, so the layer would stay STALE with the old image bound.
+    # Saving/rendering completes an automatic refresh and binds its result.
+    # A pending placeholder must not be packed/rendered as the final material.
     from open_painter.evaluation import field_jobs
     pointer = scene.as_pointer()
     next(m for m in layer_by_id(ts, blue_id).masks if m.id == checker_id).strength = .3
@@ -356,12 +356,14 @@ def run():
     field_jobs._rebakes[(pointer, ts.id)] = monotonic()
     with metrics.Metrics() as observed:
         cache.on_save(None)
-    assert layer_cache.pending(scene, ts, blue_id), 'save dropped the queued cache refresh'
+    assert not layer_cache.pending(scene, ts, blue_id), 'save left a queued cache refresh unfinished'
     assert (pointer, ts.id) in field_jobs._rebakes, 'save dropped the scheduled edge rebake'
-    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'STALE'
+    assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'
+    next(m for m in layer_by_id(ts, blue_id).masks if m.id == checker_id).strength = .4
+    assert layer_cache.pending(scene, ts, blue_id)
     cache.on_render(None)
-    assert layer_cache.pending(scene, ts, blue_id) and (pointer, ts.id) not in field_jobs._rebakes, \
-        'a render drops only the timer-driven bake'
+    assert not layer_cache.pending(scene, ts, blue_id) and (pointer, ts.id) not in field_jobs._rebakes, \
+        'a render completes caches and cancels only the timer-driven bake'
     layer_cache.flush(scene)
     ready(scene, ts)
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT'

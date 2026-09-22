@@ -163,6 +163,12 @@ def expand(identifier, root_id, parent_id, seed, map_mode, allocate, available, 
 
 def prepare(value, *, images=None):
     """Resolve trusted source IDs and request-owned textures during commit."""
+    if isinstance(value, dict) and "$surface_map" in value:
+        from .surface_maps import load
+        return load(value, images)
+    if isinstance(value, dict) and set(value) == {"$generated", "color_space", "$surface_detail"}:
+        from .generated_surfaces import load_detail
+        return load_detail(value, images)
     if isinstance(value, dict) and set(value) == {"$bundle_image", "color_space"}:
         from .sources import prepare as prepare_bundle
         return prepare_bundle(value)

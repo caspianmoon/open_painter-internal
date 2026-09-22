@@ -116,6 +116,14 @@ def draw_decal_controls(layout, context, ts, layer):
     box = layout.box()
     row = box.row(align=True)
     row.label(text='Decal', icon='OUTLINER_OB_IMAGE')
+    if getattr(layer, 'decal_inline', False):
+        box.prop(layer, 'decal_origin')
+        box.prop(layer, 'decal_extent')
+        box.prop(layer, 'decal_axes', text='Frame Axes')
+        box.prop(layer, 'decal_depth')
+        box.prop(layer, 'decal_falloff', slider=True)
+        box.prop(layer, 'decal_facing')
+        return
     row.operator('open_painter.decal', text='', icon='RESTRICT_SELECT_OFF').action = 'SELECT'
     row.operator('open_painter.decal', text='', icon='DUPLICATE').action = 'DUPLICATE'
     box.prop(layer, 'decal_object')

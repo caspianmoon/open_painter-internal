@@ -217,7 +217,7 @@ def sharing_lines(context, settings):
                                                        dry=True)
     except Exception as exc:   # a view that cannot be described must not take the panel down
         return lines + [f"Views unavailable: {exc}"]
-    views = [item["id"] for item in attachments if item["id"] in {"viewport", "target_view"}]
+    views = [item["id"] for item in attachments if item.get("role") in {"viewport", "target_view"}]
     maps = [item["kind"] for item in attachments if item.get("role") == "mesh_map"]
     lines.append("Model views: " + (", ".join(views) if views else "none"))
     lines.append("Mesh maps: " + (", ".join(maps) if maps else "none") + (f" (unbaked: {', '.join(missing)})" if missing and settings.send_maps else ""))

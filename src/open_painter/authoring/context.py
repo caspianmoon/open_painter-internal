@@ -204,6 +204,7 @@ def capture(ts, saved_objects, scope="", *, region_registry=None):
 
 
 def tools(scene_scope=False):
+    from .surface_workflow import PLAN_SCHEMA, CRITIQUE_SCHEMA
     empty = schema.object_schema({})
     result = [dict(type="function", name=name, description=description, inputSchema=spec) for name, description, spec in (
         ("get_context", "Read the current, explicitly selected Open Painter material and allowed geometry bindings.", empty),
@@ -233,6 +234,8 @@ def tools(scene_scope=False):
             tool["description"] += " When candidate review is enabled, supply the exact candidate_digest and a concrete visual_review of the returned Eevee views and channel diagnostics."
     target = dict(texture_set_id=schema.IDENTIFIER)
     result.extend(dict(type="function", name=name, description=description, inputSchema=spec) for name, description, spec in (
+        ("plan_surface", "Record the object's visual art direction and independent component histories, macro/meso/micro detail, generated-source roles, mapping, and optional fictional details. Required before preview when Generate Textures is enabled. This does not author or approve anything.", PLAN_SCHEMA),
+        ("critique_candidate", "Evaluate the current actual Eevee full views, closeups, channels and generated-source bypass against the request. Do not praise it: identify only concrete weaknesses and materially useful corrections, with evidence image IDs. Required after each generated-surface preview. At most two correction passes; this is not an aesthetic pass/fail score.", CRITIQUE_SCHEMA),
         ("list_regions", "List exact assigned faces, connected components and explicit artist selections with bounds, UV coverage and uncertainty. Region names are not semantic proof.",
          schema.object_schema(target, ("texture_set_id",))),
         ("query_region", "Propose an editable face region inside one existing material assignment using geometric bounds and optional surface-normal limits. Useful when connected geometry contains differently oriented members. Returns membership, uncertainty and an opaque region ID; no artist geometry or materials change. Preview the region before using its ID in add_region_mask or create_surface.",
@@ -242,6 +245,12 @@ def tools(scene_scope=False):
             selection=dict(type="string", enum=["CENTROID", "INTERSECTION"]),
             normal_direction=schema.array(3, schema.number(-1, 1)), min_dot=schema.number(-1, 1), max_dot=schema.number(-1, 1)),
             ("texture_set_id", "object_id", "slot_index", "space", "bounds_min", "bounds_max", "selection"))),
+        ("inspect_surface", "Get an exact surface-aligned generation template and matching projection frame for any selected region. Choose outward viewing and up directions in WORLD coordinates. Generate a localized nonrepeating source from this template, then use assign_projected_surface with the returned frame and region ID. Does not alter geometry, UVs, material slots or artist state.",
+         schema.object_schema(dict(**target, region_id=schema.IDENTIFIER,
+             normal_direction=schema.array(3, schema.number(-1, 1)), up_direction=schema.array(3, schema.number(-1, 1))),
+             ('texture_set_id', 'region_id', 'normal_direction', 'up_direction'))),
+        ("inspect_surface_source", "Read an existing surface layer's original albedo image as the exact reference for matching grayscale height, roughness and metallic generation. Use assign_surface_maps to attach maps without changing its color or projection. Height drives preview and exported normal relief.",
+         schema.object_schema(dict(**target, layer_id=schema.IDENTIFIER), ("texture_set_id", "layer_id"))),
         ("inspect_region", "Read one allowed region's membership and spatial metadata before authoring an editable region mask.",
          schema.object_schema(dict(**target, region_id=schema.IDENTIFIER), ("texture_set_id", "region_id"))),
         ("inspect_material_channels", "Read actual composed channel statistics and UV images for an allowed material. Does not commit or alter the artist material.",

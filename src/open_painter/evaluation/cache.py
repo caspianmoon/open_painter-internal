@@ -684,8 +684,9 @@ def _pack_images(source_images):
 def on_save(_):
     # Save native recipes and their authored inputs. Only explicit CPU preview
     # mode flushes full channel outputs; native mode completes source boundaries.
-    # Queued cache refreshes, field analyses and scheduled edge rebakes are not
-    # cancelled: nothing re-requests them in the running session (0.9.7).
+    # Requested automatic layer caches are completed before packing. Field
+    # analyses and scheduled edge rebakes are not cancelled: nothing
+    # re-requests them in the running session (0.9.7).
     for key in list(_jobs):
         discard(key)
     _evaluators.clear()

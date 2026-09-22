@@ -149,11 +149,11 @@ class CancellationTests(unittest.TestCase):
         with self.assertRaises(ValueError): c.poll()
         self.assertIsNone(c.request_id)
 
-    def test_fifth_generated_texture_is_ignored_without_ending_the_turn(self):
+    def test_excess_generated_texture_is_ignored_without_ending_the_turn(self):
         c = self.client
         c.run(self.message)
         c.thread_id = "current"
-        c.image_items = {"one", "two", "three", "four"}
+        c.image_items = {str(i) for i in range(generated_images.MAX_IMAGES)}
         c.events.put(dict(method="item/started", params=dict(threadId="current",
             item=dict(type="imageGeneration", id="fifth"))))
         c.events.put(dict(method="item/completed", params=dict(threadId="current",
@@ -164,7 +164,7 @@ class CancellationTests(unittest.TestCase):
         self.assertEqual([e["event"] for e in c.emitted], ["image_status", "completed"])
         self.assertIn("Ignored an extra generated texture", c.emitted[0]["message"])
         self.assertEqual(c.emitted[-1], dict(event="completed", request_id="one", status="completed"))
-        self.assertEqual(c.image_items, {"one", "two", "three", "four"})
+        self.assertEqual(c.image_items, {str(i) for i in range(generated_images.MAX_IMAGES)})
 
     def test_provider_terminal_error_survives_request_cleanup(self):
         c = self.client

@@ -12,6 +12,7 @@ from bpy.app.handlers import persistent
 from ..authoring import assets, commands, context as authoring, document, schema, transactions, scene as scene_authoring
 from ..core.project_manager import require_set
 from .transport import Connection
+from .generated_images import MAX_IMAGES
 
 connection = None
 request = None
@@ -256,6 +257,18 @@ def attachments_for(context, ts, *, send_view, send_maps, reference=None, whole_
             attachments.append(dict(id="target_view" if isolated else "viewport", role="target_view" if isolated else "viewport",
                 label=(ts.name + " — only its editable mesh parts") if isolated else "Whole model viewport — current material and lighting",
                 meaning="Only this texture set's assigned geometry is shown" if isolated else "Full 3D view including neighboring parts; use target_view to identify editable geometry.", url=view))
+        if whole_view:
+            for label, angle, close in (("opposite", 3.141592653589793, False),
+                                        ("side", 1.5707963267948966, False), ("closeup", 0., True)):
+                view = None
+                if not dry:
+                    for side in (768, 512, 384, 256):
+                        view = capture_view(context, ts, max_side=side, isolate=True, frame_target=True,
+                                            orbit=angle, closeup=close)
+                        if len(view) <= 200000:
+                            break
+                attachments.append(dict(id="target_view:" + label, role="target_view",
+                    label=ts.name + " — " + label, meaning="Additional framed view of assigned geometry; closeup crops the center, not a semantic component selection", url=view))
     missing_maps = []
     if send_maps:
         if dry:
@@ -275,13 +288,19 @@ def compose(context, settings, captured, attachments, missing_maps, *, recent=()
     from . import visual_context
     selected_model = "" if settings.model == "DEFAULT" else settings.model
     generate_textures = settings.generate_textures and settings.mode != "EXPLAIN"
+    if generate_textures:
+        captured["correction_enabled"] = True
     if captured["correction_enabled"] and settings.mode != "EXPLAIN" and not settings.send_view:
         raise schema.AuthoringError("Candidate review sends model images. Enable Send Current 3D View or disable Review Candidate Appearance")
-    captured["context"]["image_generation"] = dict(enabled=generate_textures, max_images=4)
+    captured["context"]["image_generation"] = dict(enabled=generate_textures, max_images=MAX_IMAGES)
+    captured["context"]["generated_surface_workflow"] = dict(enabled=generate_textures,
+        requires_surface_plan=generate_textures, requires_assigned_generated_source=generate_textures,
+        requires_visual_critique=generate_textures, initial_correction_required=generate_textures,
+        max_corrections=2, diagnostics_are_artistic_scores=False)
     from . import candidates
     captured["context"]["candidate_review"] = dict(enabled=captured["correction_enabled"],
         max_previews=candidates.MAX_PREVIEWS, max_corrections=candidates.MAX_PREVIEWS - 1,
-        max_preview_seconds=candidates.MAX_SECONDS, total_generated_image_limit=4,
+        max_preview_seconds=candidates.MAX_SECONDS, total_generated_image_limit=MAX_IMAGES,
         commit_requires_matching_reviewed_candidate=captured["correction_enabled"])
     captured["context"]["visual_inputs"] = visual_context.manifest(attachments)
     captured["context"]["visual_context"] = dict(view_sent=settings.send_view, maps_sent=settings.send_maps,
@@ -345,6 +364,10 @@ def run(context):
     if request and request["running"]:
         raise schema.AuthoringError("Stop the current instruction before starting another")
     settings = context.window_manager.open_painter_director
+    if settings.mode != "EXPLAIN":
+        from .visual_context import require_geometry_maps
+        targets = scene_authoring.materials(context.scene) if settings.scope == "SCENE" else [require_set(context)]
+        require_geometry_maps(targets, send_maps=settings.send_maps, send_view=settings.send_view)
     captured = capture(context, mode=settings.mode, scope=settings.scope, prompt=settings.prompt)
     recent = [dict(summary=r["summary"], changes=r["changes"][:30], reverted=r.get("reverted", False))
               for r in transactions.history(require_set(context))[-3:]]
@@ -390,11 +413,39 @@ def tool_call(event):
         request["draft"] = None
         state["changes"] = []
     schema.check(arguments, spec, name)
+    if name in {"plan_surface", "critique_candidate"}:
+        from ..authoring import surface_workflow
+        if request["mode"] == "EXPLAIN":
+            raise schema.AuthoringError("Explain mode cannot plan an authoring workflow")
+        if name == "plan_surface":
+            from ..authoring import regions
+            for component in arguments["components"]:
+                if component.get("region_id"):
+                    part = next((item for item in scene.open_painter.texture_sets
+                                 if item.id == component["texture_set_id"]), None)
+                    if part is None:
+                        raise schema.AuthoringError("Surface-plan material is unavailable")
+                    regions.selector(part, component["region_id"], objects_for(request))
+            return surface_workflow.store_plan(request, arguments)
+        from . import candidates
+        candidate = request.get("candidate")
+        if not candidate:
+            raise schema.AuthoringError("Preview a candidate before critiquing it")
+        area = painter_area(request, window)
+        if area is None:
+            raise schema.AuthoringError("Open the candidate's 3D View")
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        with bpy.context.temp_override(window=window, scene=scene, area=area, region=region):
+            candidates.reviewed(bpy.context, ts, request, candidate["proposal"], arguments["candidate_digest"])
+        return surface_workflow.critique(request, arguments)
     if name == "get_context":
         if request.get("scene_scope"):
             return request["context"]
         return dict(authoring.capture(ts, request["bindings"], request["scope"], region_registry=request["region_registry"]), command_schema=schema.SCHEMA,
-                    image_generation=request["context"].get("image_generation", dict(enabled=False, max_images=4)),
+                    image_generation=request["context"].get("image_generation", dict(enabled=False, max_images=MAX_IMAGES)),
+                    generated_surface_workflow=request["context"].get("generated_surface_workflow", {}),
+                    candidate_review=request["context"].get("candidate_review", {}),
+                    surface_plan=request.get("surface_plan"),
                     visual_inputs=request["context"].get("visual_inputs", []),
                     visual_context=request["context"].get("visual_context", {}))
     if name == "get_material_context":
@@ -422,12 +473,26 @@ def tool_call(event):
     if name == "list_generated_images":
         return dict(images=[{k: v for k, v in item.items() if k != "state_directory"}
                             for item in request["images"].values()])
-    if name in {"list_regions", "inspect_region", "query_region", "inspect_material_channels", "inspect_mask_coverage"}:
+    if name in {"list_regions", "inspect_region", "inspect_surface", "inspect_surface_source", "query_region", "inspect_material_channels", "inspect_mask_coverage"}:
         identifier = arguments["texture_set_id"]
         if identifier not in request["target_digests"]:
             raise schema.AuthoringError("Material is outside this instruction's scope")
         part = next(item for item in scene.open_painter.texture_sets if item.id == identifier)
         from ..authoring import regions
+        if name == 'inspect_surface_source':
+            from ..authoring import surface_maps
+            allowed = commands.scope_ids(document.snapshot(part), request.get('scope', ''))
+            if arguments['layer_id'] not in allowed:
+                raise schema.AuthoringError('Surface layer is outside this instruction scope')
+            return surface_maps.inspect(part, arguments['layer_id'])
+        if name == 'inspect_surface':
+            from ..authoring import surface_projection
+            if request.get('surface_inspections', 0) >= 8:
+                raise schema.AuthoringError('Surface template limit reached; reuse an inspected frame')
+            result = surface_projection.inspect(part, arguments['region_id'], objects_for(request),
+                arguments['normal_direction'], arguments['up_direction'])
+            request['surface_inspections'] = request.get('surface_inspections', 0) + 1
+            return result
         if name == "query_region":
             spec = {key: value for key, value in arguments.items() if key != "texture_set_id"}
             return regions.query(part, objects_for(request), spec, request["region_registry"])
@@ -511,6 +576,8 @@ def tool_call(event):
         return result
     if request.get("correction_enabled", True):
         from . import candidates
+        from ..authoring.surface_workflow import require_review
+        require_review(request)
         if not arguments.get("visual_review", "").strip():
             raise schema.AuthoringError("Inspect the candidate Eevee images and report concrete visual findings before submitting")
         area = painter_area(request, window)
@@ -548,6 +615,8 @@ def apply_draft(identifier):
     if not request or request["id"] != identifier or request["running"] or not request["draft"]:
         raise schema.AuthoringError("There is no completed draft to apply")
     _, scene, ts = target(request)
+    from ..authoring.surface_workflow import require_review
+    require_review(request)
     if request.get("correction_enabled", True):
         from . import candidates
         candidates.reviewed(bpy.context, ts, request, request["draft"], request.get("reviewed_digest"))
@@ -574,6 +643,9 @@ def terminal(execution, cause_code, **details):
         candidate_history=list(request.get("candidate_history", [])) if request else [],
         validation_errors=list(request.get("validation_errors", [])) if request else [],
         visual_review=request.get("visual_review") if request else None, **details)
+    if request:
+        state["outcome"].update(surface_plan=request.get("surface_plan"),
+                                visual_critiques=request.get("visual_critiques", []))
 
 
 def completed(event):
@@ -665,8 +737,8 @@ def handle(event):
     elif kind == "generated_image" and request and request["running"] and event.get("request_id") == request["id"]:
         from . import generated_images
         if len(request["images"]) >= generated_images.MAX_IMAGES:
-            # The companion already stops a fifth generation; never drop the session over it.
-            state["status"] = "Ignored an extra generated texture (four per instruction)"
+            # The companion already enforces the generation limit; never drop the session over it.
+            state["status"] = f"Ignored an extra generated texture ({MAX_IMAGES} per instruction)"
             return
         metadata = {k: event[k] for k in ("image_id", "width", "height", "prompt")}
         generated_images.read(connection.state_directory, metadata)

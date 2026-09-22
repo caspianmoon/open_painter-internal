@@ -206,8 +206,8 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
                 effect.id, effect.name, effect.kind = new_id(), _next_name(ts), 'ANCHOR'
             else:
                 effect.kind, effect.name = self.choice, title
-                effect.amount = 0 if self.choice in {'BRIGHTNESS_CONTRAST', 'TEMPERATURE'} else \
-                    1 if self.choice in {'NORMAL_STRENGTH', 'NORMAL_COMBINE', 'HEIGHT_TO_NORMAL', 'AO_STRENGTH'} else .5
+                from ..texture_engine.filter_defaults import initial_amount
+                effect.amount = initial_amount(self.choice)
             prop.active_effect = len(prop.effects) - 1
             if layer.type != 'PAINT':
                 context.scene.open_painter.properties_channel = prop.channel

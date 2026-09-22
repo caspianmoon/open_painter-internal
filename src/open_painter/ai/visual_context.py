@@ -17,8 +17,29 @@ MAPS = (
 MAX_REFERENCE_BYTES = 32 * 1024 * 1024
 MAX_SOURCE_PIXELS = 64 * 1024 * 1024
 MAX_ATTACHMENT_BYTES = 120000
+
+
+def require_geometry_maps(texture_sets, *, send_maps, send_view):
+    """Authoring must not silently proceed with absent or stale geometry evidence."""
+    from ..authoring.schema import AuthoringError
+    from ..geometry.provenance import status
+    if not send_maps or not send_view:
+        raise AuthoringError("Enable Send Mesh Maps and Send Current 3D View before texturing with Material Director.")
+    problems = []
+    for ts in texture_sets:
+        missing = []
+        for kind, _ in MAPS:
+            entry = next((m for m in ts.baked_maps if m.kind == kind and m.image), None)
+            state = status(ts, entry) if entry else "Missing"
+            if state != "Ready" or not entry.image.has_data or min(entry.image.size) < 1:
+                missing.append(kind + " (" + state + ")")
+        if missing:
+            problems.append(ts.name + ": " + ", ".join(missing))
+    if problems:
+        raise AuthoringError("Create current geometry maps before texturing. Open Bake Mesh Maps and bake/rebake AO, Curvature, Normal, World Normal, Position and Thickness. "
+                             + "; ".join(problems) + ". No instruction was sent.")
 MAX_REFERENCE_ENCODED = 1600000
-MAX_ATTACHMENTS = 9  # Reference, whole viewport, isolated target, six relevant maps.
+MAX_ATTACHMENTS = 12  # Reference, whole/isolated views, three extra views, six maps.
 
 
 def thumbnail(image, *, side=384, budget=MAX_ATTACHMENT_BYTES):

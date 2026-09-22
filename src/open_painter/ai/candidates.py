@@ -15,7 +15,7 @@ import bpy
 from ..authoring import assets, commands, context as authoring, document, schema, scene as scene_authoring
 
 MAX_PREVIEWS = 3
-MAX_SECONDS = 180
+MAX_SECONDS = 360
 MAX_SIDE = 512
 CHANNELS = ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT", "NORMAL")
 _STORES = tuple(name for name in ("scenes", "objects", "collections", "materials", "node_groups", "images",
@@ -87,12 +87,14 @@ def compile_proposal(scene, ts, captured, proposal):
     return proposal, compiled
 
 
-def identity(context, captured, compiled, *, components=False):
+def identity(context, captured, compiled, *, components=False, details=False):
     """Bind review to documents, actual source pixels, geometry and viewing conditions."""
     import numpy as np
     from ..core.layer_stack import snapshot
     from ..geometry.provenance import record
+    from .viewport import framing_view
     scene, space = context.scene, context.space_data
+    review_view = framing_view(context)
     images = {}
 
     def collect(value):
@@ -153,8 +155,8 @@ def identity(context, captured, compiled, *, components=False):
         scene_geometry=_scene_geometry(context),
         images=list(images.values()), generated=[(key, value.get("width"), value.get("height"))
                                                  for key, value in sorted(captured["images"].items())],
-        view=[list(row) for row in space.region_3d.view_matrix],
-        projection=[list(row) for row in space.region_3d.window_matrix], shading=shading,
+        view=[list(row) for row in review_view.view_matrix],
+        projection=[list(row) for row in review_view.window_matrix], shading=shading,
         renderer=scene.render.engine, render=snapshot(scene.render), color=snapshot(scene.view_settings),
         world=(world.color[:] if world else None, world.use_nodes if world else None, world_graph),
         other_materials=visible_materials, collections=collections,
@@ -162,11 +164,15 @@ def identity(context, captured, compiled, *, components=False):
         frame=(scene.frame_current, scene.frame_subframe),
         lighting=[(o.name, [list(row) for row in o.matrix_world], snapshot(o.data), o.hide_render)
                   for o in scene.objects if o.type == "LIGHT"] )
-    if components:
-        return dict(geometry_digest=hash_value((value["geometry"], value["scene_geometry"], value["frame"])),
+    if components or details:
+        summary = dict(geometry_digest=hash_value((value["geometry"], value["scene_geometry"], value["frame"])),
                     source_digest=hash_value((value["images"], value["generated"])),
                     renderer_digest=hash_value({k: value[k] for k in ("renderer", "render", "color", "world", "lighting", "shading", "view_layer_visibility")}),
                     view_digest=hash_value((value["view"], value["projection"])))
+        if details:
+            return dict(digest=hash_value(value), fields={key: hash_value(item) for key, item in value.items()},
+                        components=summary)
+        return summary
     return hash_value(value)
 
 
@@ -338,8 +344,15 @@ def _ready(scene, deadline):
             info = shader_preview.diagnostics(scene, ts)
             if info.get("error"):
                 raise schema.AuthoringError("Candidate shader failed: " + info["error"])
+            # The detached proposal estimate cannot see every derived binding.
+            # Check the constructed graph as well, before any Eevee draw/commit.
+            from ..authoring.resource_budget import LIMIT
+            graph = shader_preview.session_graph(scene, ts)
+            actual = graph.bound_sampler_count() if graph else None
+            if actual is not None and actual > LIMIT:
+                raise schema.AuthoringError(f"Candidate shader binds {actual} image inputs; safe material budget is {LIMIT}. Reduce independent inputs before rendering.")
             ready = ready and shader_preview.current(scene, ts)
-        if ready and not field_jobs.pending(scene):
+        if ready and not field_jobs.pending(scene) and not layer_cache.pending(scene):
             return
         field_jobs.tick(scene, budget=.02)
         layer_cache.tick(scene, budget=.02)
@@ -347,12 +360,13 @@ def _ready(scene, deadline):
             raise schema.AuthoringError("Candidate preview exceeded the instruction's preview time budget")
 
 
-def channel_diagnostics(scene, ids, deadline):
+def channel_diagnostics(scene, ids, deadline, *, buffers=None):
     import numpy as np
     from ..core import image_manager
     from ..evaluation.evaluator import LayerEvaluator
     from ..export.padding import ownership
     from .visual_context import thumbnail
+    from .surface_diagnostics import variation
     result, pictures = {}, []
     evaluator = LayerEvaluator(scene)
     for ts in scene.open_painter.texture_sets:
@@ -363,27 +377,69 @@ def channel_diagnostics(scene, ids, deadline):
         result[ts.id] = entry
         if not valid.any():
             raise schema.AuthoringError("Candidate has no valid UV samples")
+        stride = max(1, int(np.ceil(int(ts.resolution) / 512)))
+        if buffers is not None:
+            buffers[ts.id] = dict(valid=valid[::stride, ::stride].copy(), channels={}, regions={})
+        height_pixels = None
         for channel in CHANNELS:
             for _ in evaluator.channel_steps(ts.id, channel):
                 if time.monotonic() > deadline:
                     raise schema.AuthoringError("Candidate channel inspection exceeded the preview time budget")
             image = image_manager.output(ts, channel).image
-            values = np.asarray(image_manager.pixels(image), dtype=np.float32)[valid, :3]
+            pixels = np.asarray(image_manager.pixels(image), dtype=np.float32)
+            if channel == 'HEIGHT':
+                height_pixels = pixels.copy()
+            if channel == 'NORMAL':
+                from ..export.surface_normal import combined
+                pixels = combined(ts, pixels, height_pixels)
+            values = pixels[valid, :3]
             if not np.isfinite(values).all():
                 raise schema.AuthoringError("Candidate produced non-finite " + channel + " values")
             entry["channels"][channel] = dict(min=float(values.min()), max=float(values.max()),
                 mean=values.mean(axis=0).tolist(), dark_fraction=float((values.max(axis=1) < .01).mean()),
                 sha256=hashlib.sha256(values.tobytes()).hexdigest())
-            preview = thumbnail(image, side=128, budget=20000)
-            pictures.append(dict(id=ts.id + ":" + channel, label=ts.name + " — " + channel + " (UV channel)", url=preview["url"]))
+            entry["channels"][channel]["surface_variation"] = variation(pixels, valid)
+            if buffers is not None:
+                buffers[ts.id]["channels"][channel] = pixels[::stride, ::stride].copy()
+            preview_image = image
+            if channel == 'NORMAL':
+                # Inspect the relief that Eevee actually uses, not the flat authored
+                # NORMAL input before Height Bump. Never overwrite that input.
+                preview_image = bpy.data.images.new('Candidate combined normal', width=pixels.shape[1],
+                                                     height=pixels.shape[0], float_buffer=True)
+                preview_image.colorspace_settings.name = 'Non-Color'
+                preview_image.pixels.foreach_set(pixels.ravel())
+            try:
+                preview = thumbnail(preview_image, side=512, budget=max(1024, min(90000, 600000 // (len(ids) * len(CHANNELS)))))
+            finally:
+                if preview_image != image:
+                    bpy.data.images.remove(preview_image)
+            label = 'NORMAL including height relief' if channel == 'NORMAL' else channel
+            pictures.append(dict(id=ts.id + ":" + channel, label=ts.name + " — " + label + " (UV channel)", url=preview["url"]))
+        if buffers is not None:
+            from ..authoring.coverage import _buffer
+            entry["regions"] = {}
+            for layer in ts.layers:
+                if not any(mask.enabled and mask.source == "MESH" for mask in layer.masks):
+                    continue
+                if len(entry["regions"]) >= 8:
+                    break
+                region = (_buffer(ts, layer)[::stride, ::stride] > .5) & buffers[ts.id]["valid"]
+                if not region.any():
+                    continue
+                buffers[ts.id]["regions"][layer.id] = region
+                entry["regions"][layer.id] = dict(name=layer.name,
+                    covered_texel_fraction=float(region.sum() / max(1, buffers[ts.id]["valid"].sum())),
+                    meaning="Authored mesh-region mask; names do not prove semantic recognition; UV-weighted coverage",
+                    channels={key: variation(value, region) for key, value in buffers[ts.id]["channels"].items()})
     return result, pictures
 
 
-def views(context, scene, compiled):
+def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False):
     import gpu
     import numpy as np
     from mathutils import Matrix, Vector
-    from .viewport import png, framing_matrices, capture
+    from .viewport import png, framing_matrices, framing_view, capture
     space, region = context.space_data, context.region
     if space.type != "VIEW_3D" or space.shading.type not in {"MATERIAL", "RENDERED"}:
         raise schema.AuthoringError("Open a Material Preview or Eevee rendered 3D view for candidate inspection")
@@ -392,35 +448,56 @@ def views(context, scene, compiled):
     points = [ref.object.matrix_world @ Vector(corner) for ts in scene.open_painter.texture_sets
               for ref in ts.assignments if ref.object for corner in ref.object.bound_box]
     center = sum(points, Vector()) / len(points)
-    view, projection = framing_matrices(space.region_3d, points, 1.)
-    matrices = [("front", view), ("back", view @ Matrix.Translation(center) @ Matrix.Rotation(3.141592653589793, 4, 'Z') @ Matrix.Translation(-center))]
+    review_view = framing_view(context)
+    view, projection = framing_matrices(review_view, points, 1.)
+    matrices = [("front", view, projection, 512),
+                *[(label, view @ Matrix.Translation(center) @ Matrix.Rotation(angle, 4, 'Z') @ Matrix.Translation(-center), projection, 512)
+                  for label, angle in (("back", 3.141592653589793), ("left", 1.5707963267948966), ("right", -1.5707963267948966))]]
+    close = projection.copy()
+    close[0][0] *= 1.8
+    close[1][1] *= 1.8
+    matrices.append(("close", view, close, 1024))
+    if bypass:
+        matrices = [item for item in matrices if item[0] in {"front", "close"}]
+    else:
+        for index, item in enumerate(focus[:3]):
+            bounds = item["bounds_world"]
+            corners = [Vector((x, y, z)) for x in (bounds["minimum"][0], bounds["maximum"][0])
+                       for y in (bounds["minimum"][1], bounds["maximum"][1])
+                       for z in (bounds["minimum"][2], bounds["maximum"][2])]
+            region_view, region_projection = framing_matrices(review_view, corners, 1.)
+            matrices.append(("component_" + str(index + 1), region_view, region_projection, 768))
     frames = []
     old_overlays = space.overlay.show_overlays
     try:
         space.overlay.show_overlays = False
-        for label, matrix in matrices:
-            offscreen = gpu.types.GPUOffScreen(MAX_SIDE, MAX_SIDE, format="RGBA8")
+        for label, matrix, project, render_side in matrices:
+            offscreen = gpu.types.GPUOffScreen(render_side, render_side, format="RGBA8")
             try:
-                offscreen.draw_view3d(scene, scene.view_layers[0], space, region, matrix, projection,
+                offscreen.draw_view3d(scene, scene.view_layers[0], space, region, matrix, project,
                                      do_color_management=True, draw_background=True)
                 with offscreen.bind():
-                    pixels = gpu.state.active_framebuffer_get().read_color(0, 0, MAX_SIDE, MAX_SIDE, 4, 0, "UBYTE")
-                    rgba = np.asarray(pixels, dtype=np.uint8).reshape(MAX_SIDE, MAX_SIDE, 4)[::-1]
-                side = MAX_SIDE
+                    pixels = gpu.state.active_framebuffer_get().read_color(0, 0, render_side, render_side, 4, 0, "UBYTE")
+                    rgba = np.asarray(pixels, dtype=np.uint8).reshape(render_side, render_side, 4)[::-1]
+                if pixels_out is not None:
+                    pixels_out[label] = rgba.copy()
+                side = render_side
                 while True:
-                    indices = np.minimum(MAX_SIDE - 1, ((np.arange(side) + .5) * MAX_SIDE / side).astype(int))
+                    indices = np.minimum(render_side - 1, ((np.arange(side) + .5) * render_side / side).astype(int))
                     data = rgba[indices[:, None], indices].tobytes()
                     url = "data:image/png;base64," + base64.b64encode(png(side, side, data)).decode()
-                    if len(url) <= 150000 or side <= 128:
+                    if len(url) <= (250000 if label == "close" else 150000) or side <= 128:
                         break
                     side = max(128, int(side * .75))
-                frames.append(dict(id="candidate:" + label, label="Candidate Eevee " + label + " — uncommitted materials on actual geometry",
+                frames.append(dict(id=("candidate:bypass:" if bypass else "candidate:") + label,
+                    label=("Generated sources replaced by their means — " if bypass else "Candidate Eevee ") + label + " — uncommitted materials on actual geometry",
                     url=url))
             finally:
                 offscreen.free()
     finally:
         space.overlay.show_overlays = old_overlays
-    for ts in scene.open_painter.texture_sets:
+    targets = [ts for ts in scene.open_painter.texture_sets if ts.id in {part.id for part, _, _ in compiled}]
+    for ts in ([] if bypass else targets[:8]):
         if ts.id not in {part.id for part, _, _ in compiled}:
             continue
         # A whole-object view cannot expose a small material slot. Use the same
@@ -431,36 +508,136 @@ def views(context, scene, compiled):
     return frames
 
 
+def bypass_generated(scene):
+    """Remove generated spatial signals on the disposable copy, preserving means."""
+    import numpy as np
+    from ..evaluation.image_snapshots import read
+    from ..evaluation.shader_preview import authoring_batch
+    records = []
+    for ts in scene.open_painter.texture_sets:
+        with authoring_batch(ts):
+            for layer in ts.layers:
+                for prop in layer.channels:
+                    for field in ("image", "detail_image"):
+                        image = getattr(prop, field)
+                        if image is None or not image.get("director_image_id"):
+                            continue
+                        mean = np.asarray(read({}, image, linear=True), np.float32).reshape(-1, 4).mean(axis=0)
+                        records.append(dict(texture_set_id=ts.id, layer=layer.name, channel=prop.channel,
+                                            source_id=image["director_image_id"], field=field))
+                        setattr(prop, field, None)
+                        if field == "image":
+                            prop.color = tuple(float(v) for v in mean)
+                            prop.value = float(mean[:3].mean())
+                        prop.procedural = ""
+                for mask in layer.masks:
+                    image = mask.image
+                    if image is None or not image.get("director_image_id"):
+                        continue
+                    mean = float(np.asarray(read({}, image, linear=True), np.float32)[..., 0].mean())
+                    replacement = bpy.data.images.new("Candidate generated mask mean", width=1, height=1, float_buffer=True)
+                    replacement.colorspace_settings.name = "Non-Color"
+                    replacement.pixels[:] = [mean, mean, mean, 1]
+                    mask.image = replacement
+                    records.append(dict(texture_set_id=ts.id, layer=layer.name, mask=mask.name,
+                                        source_id=image["director_image_id"], field="mask"))
+    return records
+
+
 def preview(context, ts, captured, proposal):
+    from ..authoring import surface_workflow
+    from .surface_diagnostics import contribution
+    generated_workflow = surface_workflow.enabled(captured)
+    if generated_workflow and not captured.get("surface_plan"):
+        raise schema.AuthoringError("Call plan_surface before previewing generated materials: include component histories and macro/meso/micro surface detail")
     if captured.get("preview_count", 0) >= MAX_PREVIEWS:
         raise schema.AuthoringError("Preview budget exhausted: one initial candidate and two corrections per instruction")
     elapsed = captured.get("preview_seconds", 0.)
     if elapsed >= MAX_SECONDS:
         raise schema.AuthoringError("Instruction preview time budget exhausted")
     proposal, compiled = compile_proposal(context.scene, ts, captured, proposal)
-    fingerprint = identity(context, captured, compiled)
+    if generated_workflow:
+        if (captured.get("candidate") and not captured["candidate"].get("invalidated")
+                and not captured["candidate"].get("critique")):
+            raise schema.AuthoringError("Call critique_candidate on the current images before authoring a correction")
+        def generated(value):
+            return (isinstance(value, dict) and "$generated" in value) or (
+                isinstance(value, bpy.types.Image) and bool(value.get("director_image_id")))
+        if not any(generated(prop.get(field)) for _, _, c in compiled for layer in c["after"]["layers"]
+                   for prop in [*layer["channels"], *layer["masks"]] for field in ("image", "detail_image")):
+            raise schema.AuthoringError("Generate and assign actual surface sources before preview. Generate Textures cannot be satisfied by procedural layers alone")
+    material_digest = hash_value([document.encode(c["after"], digest=True) for _, _, c in compiled])
+    if (generated_workflow and not (captured.get("candidate") or {}).get("invalidated")
+            and (captured.get("candidate") or {}).get("result", {}).get("material_digest") == material_digest):
+        raise schema.AuthoringError("The correction did not change the material; address the visual critique before spending another preview")
+    fingerprint_state = identity(context, captured, compiled, details=True)
+    fingerprint = fingerprint_state["digest"]
+    from ..authoring import regions
+    bound = regions.bindings(authoring.resolve_bindings(captured["bindings"]), captured.get("region_registry", {}))
+    planned = captured.get("surface_plan", {}).get("components", [])
+    focus = []
+    for part, _, _ in compiled:
+        wanted = {component.get("region_id") for component in planned if component["texture_set_id"] == part.id}
+        if wanted - {None}:
+            focus.extend(item for item in regions.capture(part, bound) if item["id"] in wanted)
     captured["preview_count"] = captured.get("preview_count", 0) + 1
     captured["candidate"] = None
     started = time.monotonic()
     try:
         with scratch(context, compiled, captured["images"]) as scene:
-            _ready(scene, started + MAX_SECONDS - elapsed)
-            channel_info, pictures = channel_diagnostics(scene, {part.id for part, _, _ in compiled}, started + MAX_SECONDS - elapsed)
+            deadline = started + MAX_SECONDS - elapsed
+            _ready(scene, deadline)
+            normal_buffers, normal_pixels = {}, {}
+            channel_info, pictures = channel_diagnostics(scene, {part.id for part, _, _ in compiled}, deadline,
+                                                         buffers=normal_buffers if generated_workflow else None)
             if time.monotonic() >= started + MAX_SECONDS - elapsed:
                 raise schema.AuthoringError("Instruction preview time budget exhausted before Eevee capture")
-            frames = views(context, scene, compiled)
+            frames = views(context, scene, compiled, focus=focus, pixels_out=normal_pixels)
+            generated_evidence = dict(status="NOT_REQUESTED")
+            if generated_workflow:
+                sources = bypass_generated(scene)
+                if not sources:
+                    raise schema.AuthoringError("Generate Textures requires an assigned generated surface source. Generate and assign real surface imagery; procedural layers alone cannot satisfy this setting")
+                _ready(scene, deadline)
+                bypass_buffers, bypass_pixels = {}, {}
+                channel_diagnostics(scene, {part.id for part, _, _ in compiled}, deadline, buffers=bypass_buffers)
+                frames += views(context, scene, compiled, bypass=True, pixels_out=bypass_pixels)
+                generated_evidence = dict(status="MEASURED", sources=sources,
+                    unique_source_count=len({item["source_id"] for item in sources}), materials={}, renders={},
+                    bypass_method="Replace generated color/mask content with its source mean; remove generated detail variation. Preserve geometry, lights, mapping and remaining layers.",
+                    artistic_score=None, limitations="UV-texel weighting and display-space render differences are evidence, not surface-area or aesthetic scores. Derived relief is approximate.")
+                for identifier, original in normal_buffers.items():
+                    other = bypass_buffers[identifier]
+                    generated_evidence["materials"][identifier] = dict(
+                        channels={key: contribution(value, other["channels"][key], original["valid"])
+                                  for key, value in original["channels"].items()},
+                        regions={region_id: dict(name=channel_info[identifier]["regions"][region_id]["name"],
+                            channels={key: contribution(value, other["channels"][key], valid)
+                                      for key, value in original["channels"].items()})
+                            for region_id, valid in original["regions"].items()})
+                import numpy as np
+                for label, values in bypass_pixels.items():
+                    original = normal_pixels[label]
+                    # Includes background by design, disclosed to avoid treating
+                    # empty viewport area as weak surface texture contribution.
+                    measured = contribution(original.astype(np.float32)/255, values.astype(np.float32)/255,
+                                            np.ones(values.shape[:2], bool))
+                    measured["denominator"] = "Whole rendered frame including unchanged background"
+                    generated_evidence["renders"][label] = measured
             if time.monotonic() >= started + MAX_SECONDS - elapsed:
                 raise schema.AuthoringError("Eevee capture exceeded the instruction preview time budget")
         if identity(context, captured, compiled) != fingerprint:
             raise schema.AuthoringError("Artist state or visual inputs changed during candidate inspection; request a fresh candidate")
         result = dict(candidate_digest=fingerprint, applied=False, preview_number=captured["preview_count"],
             remaining_corrections=MAX_PREVIEWS - captured["preview_count"], renderer=context.scene.render.engine,
+            material_digest=material_digest, generated_contribution=generated_evidence,
             channels=channel_info, changes=[change for _, _, c in compiled for change in c["changes"]],
             aliases=[dict(texture_set_id=part.id, aliases=c["aliases"]) for part, _, c in compiled],
-            review_required="Inspect the returned Eevee images AND channels against the instruction; correct failures with another complete proposal, then submit this exact candidate digest.",
+            review_required="Evaluate the material against the user's request. Do not praise it. Identify flat, repetitive, procedural, incorrectly scaled, physically implausible or insufficiently detailed surfaces. Call critique_candidate with evidence image IDs and only changes that materially improve it; correct and preview again before committing.",
             images=[dict(id=frame["id"], label=frame["label"], sha256=hashlib.sha256(frame["url"].encode()).hexdigest()) for frame in frames + pictures])
-        result.update(identity(context, captured, compiled, components=True))
-        captured["candidate"] = dict(digest=fingerprint, proposal=proposal, result=result, images=frames + pictures)
+        result.update(fingerprint_state["components"])
+        captured["candidate"] = dict(digest=fingerprint, identity_fields=fingerprint_state["fields"],
+                                     proposal=proposal, result=result, images=frames + pictures)
         captured.setdefault("candidate_records", {})[fingerprint] = captured["candidate"]
         captured.setdefault("candidate_history", []).append(result)
         return dict(result, _images=frames + pictures)
@@ -469,8 +646,21 @@ def preview(context, ts, captured, proposal):
 
 
 def reviewed(context, ts, captured, proposal, digest):
-    proposal, compiled = compile_proposal(context.scene, ts, captured, proposal)
     candidate = captured.get("candidate")
-    if not candidate or digest != candidate["digest"] or digest != identity(context, captured, compiled):
-        raise schema.AuthoringError("This proposal has no matching current candidate preview; preview and inspect it before committing")
+    if not candidate:
+        raise schema.AuthoringError("No current candidate exists; call preview_proposal before reviewing or committing")
+    if digest != candidate["digest"]:
+        raise schema.AuthoringError("Candidate ID is superseded or incorrect; use the current candidate_digest: " + candidate["digest"])
+    proposal, compiled = compile_proposal(context.scene, ts, captured, proposal)
+    current = identity(context, captured, compiled, details=True)
+    if digest != current["digest"]:
+        fields = candidate.get("identity_fields", {})
+        changed = [key for key, value in current["fields"].items() if fields.get(key) != value]
+        if "documents" in changed and proposal != candidate["proposal"]:
+            raise schema.AuthoringError("Proposal differs from the rendered material; call preview_proposal on the changed proposal before committing")
+        candidate["invalidated"] = changed
+        raise schema.AuthoringError("Candidate inputs changed: " + ", ".join(changed) +
+            ". Call preview_proposal to render fresh evidence; the stale candidate does not require a critique. "
+            "The existing preview budget still applies.")
+    candidate.pop("invalidated", None)
     return proposal, compiled

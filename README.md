@@ -3,7 +3,13 @@
 
 A Blender extension for non-destructive PBR texturing: texture sets, paint and fill layers,
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
-Python and Blender's bundled NumPy are the core runtime requirements. GPL-3.0-or-later.
+Python and Blender's bundled NumPy are the core runtime requirements.
+
+**License: Source-Available**
+
+Open Painter is free for individuals and qualifying small creators. Commercial organizations
+at or above the revenue threshold require a paid license for commercial production.
+See [LICENSE](LICENSE) for details.
 
 **0.10.1 makes geometry effects follow the material:** rust flakes where the aging shows
 corrosion, paint chips along the edge of the coating loss, moss where growth is, bolts on painted

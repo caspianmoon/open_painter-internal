@@ -31,6 +31,8 @@ def _attribute(ts, field, n):
     with targets(ts) as meshes:
         for target in meshes:
             mesh, obj = target['mesh'], target['object']
+            if getattr(field, 'object', None) is not None and obj != field.object:
+                continue
             if field.kind == 'VERTEX_GROUP':
                 group = obj.vertex_groups.get(field.attribute)
                 if group is None:

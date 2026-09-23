@@ -121,6 +121,42 @@ def framing_view(context):
     return SimpleNamespace(view_matrix=rotation.to_4x4(), window_matrix=projection)
 
 
+@contextmanager
+def preserve_view(space):
+    """Offscreen inspection borrows the editor, never its authored view state.
+
+    Blender can update RegionView3D while drawing with explicit matrices. Restore
+    its input properties, not the derived/cached window or perspective matrices.
+    """
+    view = space.region_3d
+    saved = {key: getattr(view, key) for key in (
+        'view_rotation', 'view_location', 'view_distance', 'view_perspective',
+        'view_camera_offset', 'view_camera_zoom')}
+    saved = {key: (value.copy() if hasattr(value, 'copy') else
+                   tuple(value) if not isinstance(value, str) and hasattr(value, '__len__') else value)
+             for key, value in saved.items()}
+    try:
+        yield
+    finally:
+        for key, value in saved.items():
+            current = getattr(view, key)
+            # Avoid setter-induced quaternion normalization on unchanged views.
+            if current != value:
+                setattr(view, key, value)
+
+
+def draw_view(offscreen, scene, view_layer, space, region, matrix, projection):
+    with preserve_view(space):
+        offscreen.draw_view3d(scene, view_layer, space, region, matrix, projection,
+                             do_color_management=True, draw_background=True)
+
+
+def view_identity(view):
+    """Ignore float32 evaluation noise, while retaining authored view changes."""
+    return {name: [[round(float(value), 5) for value in row] for row in matrix]
+            for name, matrix in (('view', view.view_matrix), ('projection', view.window_matrix))}
+
+
 def framing_matrices(view, points, aspect):
     """Explicit offscreen matrices work even when the viewport is in CAMERA mode.
 
@@ -209,9 +245,8 @@ def capture(context, ts, *, max_side=512, isolate=False, frame_target=False, reg
                 projection_matrix[1][1] *= 1.8
             space.overlay.show_overlays = False
             with context.temp_override(area=context.area, region=region):
-                offscreen.draw_view3d(context.scene, context.view_layer, space, region,
-                                     view_matrix, projection_matrix,
-                                     do_color_management=True, draw_background=True)
+                draw_view(offscreen, context.scene, context.view_layer, space, region,
+                          view_matrix, projection_matrix)
             with offscreen.bind():
                 pixels = gpu.state.active_framebuffer_get().read_color(0, 0, width, height, 4, 0, "UBYTE")
                 data = np.asarray(pixels, dtype=np.uint8).reshape(height, width, 4)[::-1].tobytes()

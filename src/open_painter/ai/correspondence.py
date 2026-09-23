@@ -117,7 +117,7 @@ def uv_sheet(channels, bounds, seam_side=None):
 def closeup(context, scene, hit, radius, view, seam, flow):
     import gpu
     from mathutils import Matrix, Vector
-    from .viewport import framing_matrices
+    from .viewport import framing_matrices, draw_view
     center = Vector(hit['position'])
     points = [center + Vector((x*radius, y*radius, z*radius))
               for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
@@ -130,8 +130,7 @@ def closeup(context, scene, hit, radius, view, seam, flow):
     offscreen = gpu.types.GPUOffScreen(size, size, format='RGBA8')
     try:
         space.overlay.show_overlays = False
-        offscreen.draw_view3d(scene, scene.view_layers[0], space, context.region, matrix, projection,
-                             do_color_management=True, draw_background=True)
+        draw_view(offscreen, scene, scene.view_layers[0], space, context.region, matrix, projection)
         with offscreen.bind():
             data = gpu.state.active_framebuffer_get().read_color(0, 0, size, size, 4, 0, 'UBYTE')
             rgba = np.asarray(data, np.uint8).reshape(size, size, 4)[::-1].copy()
@@ -264,7 +263,7 @@ def inspect(context, ts, captured, arguments):
     original_part = next(item for item in context.scene.open_painter.texture_sets if item.id == arguments['texture_set_id'])
     map_status = {item.kind: status(original_part, item) for item in original_part.baked_maps if item.image}
     try:
-        with candidates.scratch(context, compiled, captured['images']) as scene:
+        with candidates.scratch(context, compiled, captured['images'], preview_resolution=candidates.PREVIEW_RESOLUTION) as scene:
             candidates._ready(scene, deadline)
             part = next(item for item in scene.open_painter.texture_sets if item.id == arguments['texture_set_id'])
             add('closeup', 'Current Eevee 3D close-up; orange=paired physical seam, green=along component, blue=around component; annotation overlays only',

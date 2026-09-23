@@ -190,10 +190,15 @@ def validate_document(ts, before, after):
                         raise AuthoringError("This scene field needs an external mesh as its reference object")
                 for ref in ts.assignments:
                     obj = ref.object
+                    if field["kind"] in {"VERTEX_GROUP", "ATTRIBUTE"} and field["object"] and obj != field["object"]:
+                        continue
                     if field["kind"] == "VERTEX_GROUP" and field["attribute"] not in obj.vertex_groups:
                         raise AuthoringError(f"Missing vertex group: {field['attribute']}")
                     if field["kind"] == "ATTRIBUTE" and field["attribute"] not in obj.data.attributes:
                         raise AuthoringError(f"Missing named attribute: {field['attribute']}")
+                if field["kind"] in {"VERTEX_GROUP", "ATTRIBUTE"} and field["object"] and not any(
+                        ref.object == field["object"] for ref in ts.assignments):
+                    raise AuthoringError("Attribute reference object must belong to this texture set")
 
 
 def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, images=None, correspondences=None):

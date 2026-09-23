@@ -19,12 +19,9 @@ MAX_SOURCE_PIXELS = 64 * 1024 * 1024
 MAX_ATTACHMENT_BYTES = 120000
 
 
-def require_geometry_maps(texture_sets, *, send_maps, send_view):
-    """Authoring must not silently proceed with absent or stale geometry evidence."""
-    from ..authoring.schema import AuthoringError
+def geometry_map_problems(texture_sets):
+    """Shared by the native preparation panel and the sending boundary."""
     from ..geometry.provenance import status
-    if not send_maps or not send_view:
-        raise AuthoringError("Enable Send Mesh Maps and Send Current 3D View before texturing with Material Director.")
     problems = []
     for ts in texture_sets:
         missing = []
@@ -35,6 +32,15 @@ def require_geometry_maps(texture_sets, *, send_maps, send_view):
                 missing.append(kind + " (" + state + ")")
         if missing:
             problems.append(ts.name + ": " + ", ".join(missing))
+    return problems
+
+
+def require_geometry_maps(texture_sets, *, send_maps, send_view):
+    """Authoring must not silently proceed with absent or stale geometry evidence."""
+    from ..authoring.schema import AuthoringError
+    if not send_maps or not send_view:
+        raise AuthoringError("Enable Send Mesh Maps and Send Current 3D View before texturing with Material Director.")
+    problems = geometry_map_problems(texture_sets)
     if problems:
         raise AuthoringError("Create current geometry maps before texturing. Open Bake Mesh Maps and bake/rebake AO, Curvature, Normal, World Normal, Position and Thickness. "
                              + "; ".join(problems) + ". No instruction was sent.")

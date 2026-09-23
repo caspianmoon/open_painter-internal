@@ -75,6 +75,30 @@ class OP_OT_director_run(DirectorOperator, bpy.types.Operator):
         session.run(context)
 
 
+class OP_OT_director_bake_maps(bpy.types.Operator):
+    bl_idname = "open_painter.director_bake_maps"
+    bl_label = "Bake Director Geometry Maps"
+    bl_description = "Bake Director's six required maps; use the assigned mesh when no high-poly sources are configured, keeping your instruction"
+
+    def invoke(self, context, event):
+        try:
+            if session.request and session.request.get('running'):
+                raise ValueError("Stop the current instruction before rebaking its inputs")
+            ts = require_set(context)
+            if not any(ref.object for ref in ts.bake.high_objects):
+                ts.bake.selected_to_active = False
+            for name in ('normal', 'ao', 'curvature', 'world_normal', 'position', 'thickness'):
+                setattr(ts.bake, name, True)
+            result = bpy.ops.open_painter.bake_queue('INVOKE_DEFAULT')
+            if 'RUNNING_MODAL' in result:
+                session.state['status'] = 'Baking required geometry maps. Run your instruction when baking finishes.'
+                return {'FINISHED'}
+            return result
+        except Exception as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+
+
 class OP_OT_director_stop(DirectorOperator, bpy.types.Operator):
     bl_idname = "open_painter.director_stop"
     bl_label = "Stop"
@@ -248,6 +272,7 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         box.label(text="Target", icon="RESTRICT_SELECT_OFF")
         if target.ts is None:
             box.label(text="Select a texture set in the Painter", icon="ERROR")
+            box.operator("open_painter.texture_set", text="Create Texture Set for Selected Mesh", icon="ADD").action = "ADD"
         else:
             scope = {"SET": target.ts.name, "SCENE": "every managed material in the scene",
                      "LAYER": selection.breadcrumb_text(target)}[settings.scope]
@@ -262,6 +287,17 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
                 box.label(text=f"Protected: {count} item(s); paint layers always", icon="LOCKED")
             except Exception as exc:
                 box.label(text=str(exc), icon="ERROR")
+            if settings.mode != 'EXPLAIN' and not running:
+                from ..ai.visual_context import geometry_map_problems
+                from ..authoring import scene as scene_authoring
+                targets = scene_authoring.materials(context.scene) if settings.scope == 'SCENE' else [target.ts]
+                problems = geometry_map_problems(targets)
+                if problems:
+                    preparation = layout.box()
+                    preparation.label(text="Geometry maps required before Run", icon="ERROR")
+                    for problem in problems:
+                        text_lines(preparation, problem, limit=8)
+                    preparation.operator("open_painter.director_bake_maps", text="Bake Required Maps (Active Set)", icon="RENDER_STILL")
         # Instruction ------------------------------------------------------------
         box = layout.box()
         box.label(text="Instruction", icon="TEXT")
@@ -363,7 +399,7 @@ class OP_PT_director_protection(PainterPanel, bpy.types.Panel):
                          icon="LOCKED" if locked else "UNLOCKED").kind = kind
 
 
-CLASSES = (OP_DirectorSettings, OP_OT_director_connection, OP_OT_director_run, OP_OT_director_stop,
+CLASSES = (OP_DirectorSettings, OP_OT_director_connection, OP_OT_director_run, OP_OT_director_bake_maps, OP_OT_director_stop,
            OP_OT_director_apply, OP_OT_director_undo, OP_OT_director_protect, OP_OT_director_report,
            OP_OT_director_clear_history,
            OP_PT_material_director, OP_PT_director_protection)

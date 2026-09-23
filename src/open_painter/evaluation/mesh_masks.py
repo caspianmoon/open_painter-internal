@@ -181,6 +181,8 @@ def clear():
     for other values."""
     _digests.clear()
     _weights.clear()
+    from ..geometry import raster_cache
+    raster_cache.clear()
 
 
 def prune(meshes):
@@ -433,14 +435,14 @@ def _triangle_coverage(ts, mask, target):
 def raster(ts, mask, n):
     """Full (n, n) coverage of a mesh mask at the set's UV space."""
     from ..geometry.snapshots import targets
-    from ..geometry.uv_rasterizer import rasterize
+    from ..geometry.raster_cache import sample
     result = np.zeros((n, n), np.float32)
     with targets(ts) as meshes:
         for target in meshes:
             values = _triangle_coverage(ts, mask, target)
             if not np.any(values):
                 continue
-            rows, cols, tri, weights = rasterize(target['uv'][target['tri_loops']], n)
+            rows, cols, tri, weights = sample(target['uv'][target['tri_loops']], n)
             if not len(rows):
                 continue
             if values.ndim == 2:

@@ -17,6 +17,7 @@ from ..authoring import assets, commands, context as authoring, document, schema
 MAX_PREVIEWS = 3
 MAX_SECONDS = 360
 MAX_SIDE = 512
+PREVIEW_RESOLUTION = 1024
 CHANNELS = ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT", "NORMAL")
 _STORES = tuple(name for name in ("scenes", "objects", "collections", "materials", "node_groups", "images",
            "meshes", "curves", "lights", "cameras", "worlds", "armatures", "metaballs", "lattices",
@@ -92,10 +93,26 @@ def identity(context, captured, compiled, *, components=False, details=False):
     import numpy as np
     from ..core.layer_stack import snapshot
     from ..geometry.provenance import record
-    from .viewport import framing_view
+    from .viewport import framing_view, view_identity
     scene, space = context.scene, context.space_data
     review_view = framing_view(context)
     images = {}
+    used_generated = set()
+
+    def generated_references(value):
+        if isinstance(value, str) and value.startswith('generated:'):
+            used_generated.add(value)
+        elif isinstance(value, bpy.types.Image):
+            generated_references(value.get('director_image_id', ''))
+        elif isinstance(value, dict):
+            for child in value.values():
+                generated_references(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                generated_references(child)
+
+    for _, _, change in compiled:
+        generated_references(change['after'])
 
     def collect(value):
         if isinstance(value, bpy.types.Image):
@@ -154,9 +171,9 @@ def identity(context, captured, compiled, *, components=False, details=False):
         geometry=[(item.id, record(item, "SCENE_FIELD")) for item in scene.open_painter.texture_sets],
         scene_geometry=_scene_geometry(context),
         images=list(images.values()), generated=[(key, value.get("width"), value.get("height"))
-                                                 for key, value in sorted(captured["images"].items())],
-        view=[list(row) for row in review_view.view_matrix],
-        projection=[list(row) for row in review_view.window_matrix], shading=shading,
+                                                 for key, value in sorted(captured["images"].items())
+                                                 if key in used_generated],
+        **view_identity(review_view), shading=shading,
         renderer=scene.render.engine, render=snapshot(scene.render), color=snapshot(scene.view_settings),
         world=(world.color[:] if world else None, world.use_nodes if world else None, world_graph),
         other_materials=visible_materials, collections=collections,
@@ -197,7 +214,7 @@ def _settings(source, target):
 
 
 @contextmanager
-def scratch(context, compiled, images):
+def scratch(context, compiled, images, *, preview_resolution=None):
     """Copy scene geometry and authoring data, and always remove every owned ID."""
     from ..core.layer_stack import snapshot
     from ..core import material_manager
@@ -308,6 +325,8 @@ def scratch(context, compiled, images):
             with shader_preview.authoring_batch(ts):
                 if ts.id in desired:
                     document.apply(ts, remap(desired[ts.id]))
+                if preview_resolution is not None:
+                    ts.resolution = str(min(int(ts.resolution), preview_resolution))
                 ts.director_history = "[]"
                 ts.preview_backend = "LIVE"
                 material_manager.relink_slots(ts)
@@ -440,7 +459,7 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False, 
     import gpu
     import numpy as np
     from mathutils import Matrix, Vector
-    from .viewport import png, framing_matrices, framing_view, capture
+    from .viewport import png, framing_matrices, framing_view, capture, draw_view
     space, region = context.space_data, context.region
     if space.type != "VIEW_3D" or space.shading.type not in {"MATERIAL", "RENDERED"}:
         raise schema.AuthoringError("Open a Material Preview or Eevee rendered 3D view for candidate inspection")
@@ -484,8 +503,7 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False, 
         for label, matrix, project, render_side in matrices:
             offscreen = gpu.types.GPUOffScreen(render_side, render_side, format="RGBA8")
             try:
-                offscreen.draw_view3d(scene, scene.view_layers[0], space, region, matrix, project,
-                                     do_color_management=True, draw_background=True)
+                draw_view(offscreen, scene, scene.view_layers[0], space, region, matrix, project)
                 with offscreen.bind():
                     pixels = gpu.state.active_framebuffer_get().read_color(0, 0, render_side, render_side, 4, 0, "UBYTE")
                     rgba = np.asarray(pixels, dtype=np.uint8).reshape(render_side, render_side, 4)[::-1]
@@ -603,11 +621,12 @@ def preview(context, ts, captured, proposal):
         wanted = {component.get("region_id") for component in planned if component["texture_set_id"] == part.id}
         if wanted - {None}:
             focus.extend(item for item in regions.capture(part, bound) if item["id"] in wanted)
-    captured["preview_count"] = captured.get("preview_count", 0) + 1
-    captured["candidate"] = None
+    # Failed rendering must not discard the last reviewable candidate or spend
+    # a correction slot. Elapsed work still counts against the bounded budget.
+    preview_number = captured.get("preview_count", 0) + 1
     started = time.monotonic()
     try:
-        with scratch(context, compiled, captured["images"]) as scene:
+        with scratch(context, compiled, captured["images"], preview_resolution=PREVIEW_RESOLUTION) as scene:
             deadline = started + MAX_SECONDS - elapsed
             _ready(scene, deadline)
             normal_buffers, normal_pixels = {}, {}
@@ -655,8 +674,11 @@ def preview(context, ts, captured, proposal):
                 raise schema.AuthoringError("Eevee capture exceeded the instruction preview time budget")
         if identity(context, captured, compiled) != fingerprint:
             raise schema.AuthoringError("Artist state or visual inputs changed during candidate inspection; request a fresh candidate")
-        result = dict(candidate_digest=fingerprint, applied=False, preview_number=captured["preview_count"],
-            remaining_corrections=MAX_PREVIEWS - captured["preview_count"], renderer=context.scene.render.engine,
+        captured["preview_count"] = preview_number
+        result = dict(candidate_digest=fingerprint, applied=False, preview_number=preview_number,
+            remaining_corrections=MAX_PREVIEWS - preview_number, renderer=context.scene.render.engine,
+            preview_resolution_limit=PREVIEW_RESOLUTION,
+            resolution_note="Disposable material evaluation capped at 1024 pixels for review. Authored texture-set resolution and source images are unchanged; inspect closeups before accepting fine detail.",
             material_digest=material_digest, generated_contribution=generated_evidence,
             correspondence_available=True, review_views=['front', 'back', 'left', 'right', 'top', 'bottom', 'close'],
             correspondence_coordinates='Normalized x/y, top-left origin in the named candidate image. Inspect visible seams, stretching or direction errors with inspect_texture_correspondence before correcting.',

@@ -178,6 +178,13 @@ COMMANDS.append(command('assign_projected_surface', dict(layer_id=IDENTIFIER, im
     purpose=dict(type='string', minLength=1, maxLength=600), roughness_range=array(2, UNIT),
     height_amplitude=number(0, .15)),
     ('layer_id', 'image_id', 'region_id', 'frame', 'name', 'purpose', 'roughness_range')))
+SURFACE_OBSERVATION = object_schema(dict(observation_id=IDENTIFIER, base_color=IDENTIFIER,
+    roughness=IDENTIFIER, height=IDENTIFIER, metallic=IDENTIFIER), ('observation_id', 'base_color'))
+COMMANDS.append(command('generate_surface_field', dict(layer_id=IDENTIFIER, name=NAME,
+    purpose=dict(type='string', minLength=1, maxLength=600), region_id=IDENTIFIER,
+    observations=dict(type='array', items=SURFACE_OBSERVATION, minItems=1, maxItems=8),
+    roughness_range=array(2, UNIT), height_amplitude=number(0, .15)),
+    ('layer_id', 'name', 'purpose', 'observations')))
 SCHEMA = object_schema(dict(version=dict(type="integer", const=VERSION),
                             summary=dict(type="string", minLength=1, maxLength=500),
                             commands=dict(type="array", items=dict(anyOf=COMMANDS),

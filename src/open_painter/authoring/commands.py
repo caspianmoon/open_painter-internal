@@ -201,7 +201,8 @@ def validate_document(ts, before, after):
                     raise AuthoringError("Attribute reference object must belong to this texture set")
 
 
-def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, images=None, correspondences=None):
+def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, images=None, correspondences=None,
+                     observations=None):
     proposal = schema.validate(proposal)
     before = document.snapshot(ts)
     after = document.clone(before)
@@ -309,6 +310,9 @@ def compile_proposal(ts, proposal, operation_id, *, scope="", objects=None, imag
         elif op == 'replace_surface_source':
             from . import surface_replacement
             surface_replacement.assign(ts, layer, cmd, images, correspondences)
+        elif op == 'generate_surface_field':
+            from . import surface_field
+            surface_field.assign(ts, layer, cmd, images, observations, objects)
         elif op == 'assign_projected_surface':
             from . import surface_projection
             surface_projection.assign(ts, layer, cmd, images, objects)

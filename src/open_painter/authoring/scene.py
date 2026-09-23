@@ -57,7 +57,8 @@ def validate(proposal):
     return proposal
 
 
-def compile(scene, proposal, operation_id, digests, *, objects=None, images=None, correspondences=None):
+def compile(scene, proposal, operation_id, digests, *, objects=None, images=None, correspondences=None,
+            observations=None):
     proposal = validate(proposal)
     targets = {ts.id: ts for ts in materials(scene)}
     result = []
@@ -70,7 +71,8 @@ def compile(scene, proposal, operation_id, digests, *, objects=None, images=None
         if document.digest(ts) != digests[identifier]:
             raise schema.AuthoringError(f"{ts.name} changed; run the scene instruction again")
         compiled = commands.compile_proposal(ts, item["proposal"], operation_id + ":" + identifier,
-                                             objects=objects, images=images, correspondences=correspondences)
+                                             objects=objects, images=images, correspondences=correspondences,
+                                             observations=observations)
         result.append((ts, item["proposal"], compiled))
     return result
 

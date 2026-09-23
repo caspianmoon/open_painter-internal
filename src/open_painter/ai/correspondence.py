@@ -324,6 +324,22 @@ def inspect(context, ts, captured, arguments):
                 coverage = float(mask[int(v*rowside), int(u*rowside)])
                 if coverage <= .001:
                     continue
+                if prop.image.get('director_surface_field'):
+                    # A fused field has no flat canvas to edit: its pixels came from
+                    # observations of this exact surface, so corrections are made by
+                    # observing the surface again, not by repainting a texture source.
+                    sources.append(dict(layer_id=layer.id, layer_name=layer.name,
+                        source_kind='GENERATED_SURFACE_FIELD',
+                        reference_image_id=prop.image.get('director_image_id', ''),
+                        observations=json.loads(prop.image.get('director_surface_field_observations', '[]')),
+                        fused_coverage=json.loads(prop.image.get('director_surface_field_coverage', '{}')),
+                        surface_position=hit['position'], surface_normal=hit['normal'],
+                        mapping_signature=mapping_signature(document.snapshot(part)['layers'][list(part.layers).index(layer)]),
+                        repeated_mapping=False,
+                        local_edit_limit='Fused surface fields are corrected by observation, not by editing a '
+                            'source canvas. Use inspect_surface_area at this surface position for a corrective '
+                            'observation, or change which observations the field fuses, then regenerate it.'))
+                    continue
                 windows = source_windows(part, layer, prop, hit, radius, record, mask)
                 if not windows:
                     continue

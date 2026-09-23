@@ -72,9 +72,12 @@ def redraw():
 
 def release(captured):
     """The request is over: its textures are packed in the .blend or unwanted."""
-    from . import generated_images
+    from . import generated_images, surface_observations
+    from ..authoring import surface_field
     if captured:
         generated_images.discard(captured["images"].values())
+        surface_observations.release(captured["id"])
+        surface_field.forget()
         captured.pop("candidate", None)
         captured.pop("candidate_records", None)
         captured.pop("correspondences", None)
@@ -157,6 +160,12 @@ def binding_digest(saved):
     from ..geometry.provenance import object_record
     value = [object_record(obj) for obj in authoring.resolve_bindings(saved).values()]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def candidates_observations(captured):
+    """Surface observations a proposal may fuse, keyed by observation ID."""
+    from .candidates import observations
+    return observations(captured)
 
 
 def objects_for(captured):
@@ -295,10 +304,33 @@ def compose(context, settings, captured, attachments, missing_maps, *, recent=()
     if captured["correction_enabled"] and settings.mode != "EXPLAIN" and not settings.send_view:
         raise schema.AuthoringError("Candidate review sends model images. Enable Send Current 3D View or disable Review Candidate Appearance")
     captured["context"]["image_generation"] = dict(enabled=generate_textures, max_images=MAX_IMAGES)
+    from . import surface_observations
+    from ..authoring import surface_field
     captured["context"]["generated_surface_workflow"] = dict(enabled=generate_textures,
         requires_surface_plan=generate_textures, requires_assigned_generated_source=generate_textures,
         requires_visual_critique=generate_textures, initial_correction_required=generate_textures,
-        max_corrections=2, diagnostics_are_artistic_scores=False)
+        max_corrections=2, diagnostics_are_artistic_scores=False,
+        primary_path='SURFACE_OBSERVATION_REPROJECTION',
+        surface_space=dict(
+            flow='plan_surface -> capture_surface_observations -> generate one image per observation '
+                 '-> generate_surface_field -> preview_proposal -> inspect_surface_coverage / '
+                 'inspect_texture_correspondence -> corrective observation or source correction '
+                 '-> critique_candidate -> propose_changes',
+            capture_tool='capture_surface_observations', packet_tool='inspect_surface_observation',
+            coverage_tool='inspect_surface_coverage', correction_tool='inspect_surface_area',
+            command='generate_surface_field',
+            max_observations=surface_observations.MAX_OBSERVATIONS,
+            max_observations_per_field=surface_field.MAX_OBSERVATIONS,
+            projection='ORTHOGRAPHIC', image_origin='TOP_LEFT',
+            correspondence='generated pixel -> observation pixel -> visible triangle -> barycentric point -> UV',
+            fusion='facing quality, visibility confidence, projected resolution and silhouette confidence; '
+                   'occluded observations contribute zero',
+            rejected='pixels with no valid mesh hit, hits belonging to another texture set, occluded '
+                     'surface, and anything outside the valid surface mask',
+            derived_channel_fallback='Roughness and Height fall back to a luminance approximation only '
+                                     'when no generated map is supplied for the observation',
+            correction_types=['TEXTURE_SOURCE', 'SURFACE_OBSERVATION', 'MAPPING_FUSION'],
+            projected_path='assign_projected_surface remains for intentionally decal-like or planar content'))
     from . import candidates
     captured["context"]["candidate_review"] = dict(enabled=captured["correction_enabled"],
         max_previews=candidates.MAX_PREVIEWS, max_corrections=candidates.MAX_PREVIEWS - 1,
@@ -307,7 +339,11 @@ def compose(context, settings, captured, attachments, missing_maps, *, recent=()
         required_views=['front', 'back', 'left', 'right', 'top', 'bottom', 'close'],
         correspondence_tool='inspect_texture_correspondence',
         correspondence_coordinates='Normalized x/y with top-left origin in the selected candidate view',
-        correction_flow='Inspect visible defect → classify LOCAL or GLOBAL → edit existing source with native image generation → replace_surface_source in complete proposal → preview all views → critique → submit')
+        correction_flow='Inspect visible defect → classify its correction_type and LOCAL/GLOBAL scope → '
+                        'for TEXTURE_SOURCE edit the existing source and use replace_surface_source; for '
+                        'SURFACE_OBSERVATION capture a corrective observation with inspect_surface_area and '
+                        'refuse the field; for MAPPING_FUSION change which observations the field fuses → '
+                        'preview all views → critique → submit')
     captured["context"]["visual_inputs"] = visual_context.manifest(attachments)
     captured["context"]["visual_context"] = dict(view_sent=settings.send_view, maps_sent=settings.send_maps,
         missing_maps=missing_maps, reference_sent=bool(settings.reference_path.strip()),
@@ -489,6 +525,23 @@ def tool_call(event):
         region = next(r for r in area.regions if r.type == 'WINDOW')
         with bpy.context.temp_override(window=window, scene=scene, area=area, region=region):
             return correspondence.inspect(bpy.context, ts, request, arguments)
+    if name == "inspect_surface_observation":
+        from . import surface_observations
+        return surface_observations.packet(request, arguments)
+    if name in {"capture_surface_observations", "inspect_surface_coverage", "inspect_surface_area"}:
+        if arguments["texture_set_id"] not in request["target_digests"]:
+            raise schema.AuthoringError("Material is outside this instruction's scope")
+        part = next(item for item in scene.open_painter.texture_sets if item.id == arguments["texture_set_id"])
+        area = painter_area(request, window)
+        if area is None:
+            raise schema.AuthoringError("Open a 3D View to observe the surface")
+        region = next(r for r in area.regions if r.type == "WINDOW")
+        from . import surface_observations
+        handler = dict(capture_surface_observations=surface_observations.capture,
+                       inspect_surface_coverage=surface_observations.surface_coverage,
+                       inspect_surface_area=surface_observations.corrective)[name]
+        with bpy.context.temp_override(window=window, scene=scene, area=area, region=region):
+            return handler(bpy.context, part, request, arguments, objects_for(request))
     if name in {"list_regions", "inspect_region", "inspect_surface", "inspect_surface_source", "query_region", "inspect_material_channels", "inspect_mask_coverage"}:
         identifier = arguments["texture_set_id"]
         if identifier not in request["target_digests"]:
@@ -613,14 +666,17 @@ def tool_call(event):
         if request["mode"] == "CREATE" and ids != set(request["target_digests"]):
             raise schema.AuthoringError("Scene Create must cover every captured material; include all scene_materials in the coordinated proposal")
         compiled = scene_authoring.compile(scene, proposal, request["id"], request["target_digests"],
-            objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
+            objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"),
+            observations=candidates_observations(request))
         request["draft"] = proposal
         state["changes"] = [part.name + ": " + change for part, _, c in compiled for change in c["changes"]]
         return dict(valid=True, applied=False, changes=state["changes"],
                     targets=[dict(texture_set_id=part.id, aliases=c["aliases"]) for part, _, c in compiled])
     arguments = schema.validate(arguments["proposal_json"])
     compiled = commands.compile_proposal(ts, arguments, request["id"], scope=request["scope"],
-                                        objects=objects_for(request), images=request["images"], correspondences=request.get("correspondences"))
+                                        objects=objects_for(request), images=request["images"],
+                                        correspondences=request.get("correspondences"),
+                                        observations=candidates_observations(request))
     request["draft"] = arguments
     state["changes"] = compiled["changes"]
     return dict(valid=True, applied=False, changes=compiled["changes"], aliases=compiled["aliases"])

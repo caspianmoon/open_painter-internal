@@ -59,6 +59,9 @@ class WorkflowTests(unittest.TestCase):
             workflow.critique(captured, critique)
         critique['reviewed_views'] = views
         critique['weaknesses'][0].update(category='UV_SEAM', scope='LOCAL', correspondence_id='paired-edge')
+        with self.assertRaisesRegex(schema.AuthoringError, 'TEXTURE_SOURCE'):
+            workflow.critique(captured, critique)
+        critique['weaknesses'][0]['correction_type'] = 'TEXTURE_SOURCE'
         with self.assertRaisesRegex(schema.AuthoringError, 'inspect_texture_correspondence'):
             workflow.critique(captured, critique)
         captured['correspondences'] = {'paired-edge': dict(correspondence_id='paired-edge',
@@ -67,6 +70,7 @@ class WorkflowTests(unittest.TestCase):
             workflow.critique(captured, critique)
         captured['correspondences']['paired-edge']['candidate_digest'] = 'a'*64
         workflow.critique(captured, critique)
+        self.assertEqual(captured['correspondences']['paired-edge']['review_corrections'], ['TEXTURE_SOURCE'])
         with self.assertRaises(schema.AuthoringError):
             workflow.require_review(captured)  # Inspection alone does not address the weakness.
 

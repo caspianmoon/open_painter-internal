@@ -163,6 +163,9 @@ def expand(identifier, root_id, parent_id, seed, map_mode, allocate, available, 
 
 def prepare(value, *, images=None):
     """Resolve trusted source IDs and request-owned textures during commit."""
+    if isinstance(value, dict) and '$surface_field' in value:
+        from .surface_field import load as load_field
+        return load_field(value, images)
     if isinstance(value, dict) and '$surface_detail' in value:
         from .generated_surfaces import load_detail
         return load_detail(value, images)

@@ -69,6 +69,12 @@ def _scene_geometry(context):
     return result
 
 
+def observations(captured):
+    """Surface observations registered for this instruction, keyed by observation ID."""
+    from .surface_observations import registry
+    return {key: dict(value, observation_id=key) for key, value in registry(captured["id"]).items()}
+
+
 def compile_proposal(scene, ts, captured, proposal):
     from ..authoring import regions
     objects = regions.bindings(authoring.resolve_bindings(captured["bindings"]), captured.setdefault("region_registry", {}))
@@ -80,11 +86,13 @@ def compile_proposal(scene, ts, captured, proposal):
         if captured["mode"] == "CREATE" and ids != set(captured["target_digests"]):
             raise schema.AuthoringError("Scene Create must include every captured material")
         compiled = scene_authoring.compile(scene, proposal, captured["id"], captured["target_digests"],
-                                          objects=objects, images=captured["images"], correspondences=captured.get("correspondences"))
+                                          objects=objects, images=captured["images"], correspondences=captured.get("correspondences"),
+                                          observations=observations(captured))
     else:
         proposal = schema.validate(proposal)
         compiled = [(ts, proposal, commands.compile_proposal(ts, proposal, captured["id"],
-            scope=captured["scope"], objects=objects, images=captured["images"], correspondences=captured.get("correspondences")))]
+            scope=captured["scope"], objects=objects, images=captured["images"], correspondences=captured.get("correspondences"),
+            observations=observations(captured)))]
     return proposal, compiled
 
 
@@ -459,7 +467,7 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False, 
     import gpu
     import numpy as np
     from mathutils import Matrix, Vector
-    from .viewport import png, framing_matrices, framing_view, capture, draw_view
+    from .viewport import png, framing_matrices, framing_view, capture, draw_view, principal_directions
     space, region = context.space_data, context.region
     if space.type != "VIEW_3D" or space.shading.type not in {"MATERIAL", "RENDERED"}:
         raise schema.AuthoringError("Open a Material Preview or Eevee rendered 3D view for candidate inspection")
@@ -470,13 +478,9 @@ def views(context, scene, compiled, *, focus=(), pixels_out=None, bypass=False, 
     review_view = framing_view(context)
     from types import SimpleNamespace
     # Six independent directions even when the user's viewport looks down from above.
-    outward = review_view.view_matrix.to_3x3().inverted() @ Vector((0, 0, 1))
-    outward.z = 0
-    outward = outward.normalized() if outward.length > .001 else Vector((0, -1, 0))
-    sideward = Vector((-outward.y, outward.x, 0))
+    # Surface observations label their cameras from the same frame.
     matrices = []
-    for label, direction in (('front', outward), ('back', -outward), ('left', -sideward),
-                             ('right', sideward), ('top', Vector((0, 0, 1))), ('bottom', Vector((0, 0, -1)))):
+    for label, direction in principal_directions(context):
         orientation = direction.to_track_quat('Z', 'Y').inverted().to_matrix().to_4x4()
         matrix, project = framing_matrices(SimpleNamespace(view_matrix=orientation,
             window_matrix=review_view.window_matrix), points, 1.)
@@ -575,6 +579,11 @@ def bypass_generated(scene):
                     image = mask.image
                     if image is None or not image.get("director_image_id"):
                         continue
+                    if image.get("director_surface_field_channel") == "COVERAGE":
+                        # Where a fused field has valid surface is geometry, not generated
+                        # appearance. Averaging it would leak the layer onto unobserved
+                        # surface and overstate the measured contribution.
+                        continue
                     mean = float(np.asarray(read({}, image, linear=True), np.float32)[..., 0].mean())
                     replacement = bpy.data.images.new("Candidate generated mask mean", width=1, height=1, float_buffer=True)
                     replacement.colorspace_settings.name = "Non-Color"
@@ -602,7 +611,7 @@ def preview(context, ts, captured, proposal):
                 and not captured["candidate"].get("critique")):
             raise schema.AuthoringError("Call critique_candidate on the current images before authoring a correction")
         def generated(value):
-            return (isinstance(value, dict) and "$generated" in value) or (
+            return (isinstance(value, dict) and ("$generated" in value or "$surface_field" in value)) or (
                 isinstance(value, bpy.types.Image) and bool(value.get("director_image_id")))
         if not any(generated(prop.get(field)) for _, _, c in compiled for layer in c["after"]["layers"]
                    for prop in [*layer["channels"], *layer["masks"]] for field in ("image", "detail_image")):

@@ -42,9 +42,17 @@ def assign(ts, layer, cmd, images, correspondences):
         raise schema.AuthoringError('Inspect this candidate surface before replacing its source; use its correspondence_id and reference_image_id')
     if packet.get('review_scopes') and cmd['mode'] not in packet['review_scopes']:
         raise schema.AuthoringError('Source replacement scope differs from the visual critique; classify the defect before correcting it')
+    corrections = packet.get('review_corrections') or []
+    if corrections and 'TEXTURE_SOURCE' not in corrections:
+        raise schema.AuthoringError('The critique classified this defect as ' + ', '.join(corrections) +
+                                    ', not a texture-source error. Correct the observation or the fusion instead.')
     if layer['type'] != 'FILL' or mapping_signature(layer) != source['mapping_signature']:
         raise schema.AuthoringError('Surface placement changed since inspection; inspect a fresh candidate before replacing the source')
     base = next(p for p in layer['channels'] if p['channel'] == 'BASE_COLOR')
+    if source.get('source_kind') == 'GENERATED_SURFACE_FIELD':
+        raise schema.AuthoringError('This layer is a fused surface field, not a flat generated source. '
+                                    'Correct it with a new or corrective surface observation and regenerate '
+                                    'the field, or change which observations it fuses.')
     old_id, dimensions = source_info(base['image'], images)
     if old_id != cmd['reference_image_id']:
         raise schema.AuthoringError('Replacement reference differs from the inspected source')

@@ -13,8 +13,15 @@ PLAN_SCHEMA = schema.object_schema(dict(object_interpretation=TEXT, art_directio
     ("object_interpretation", "art_direction", "components"))
 CORRESPONDENCE_ISSUES = ('UV_SEAM', 'PATTERN_CONTINUITY', 'FEATURE_TERMINATION', 'DETAIL_SCALE',
     'DIRECTION', 'MIRRORING', 'STRETCHING', 'VIEW_DEPENDENT', 'ROUGHNESS_SEAM', 'RELIEF_SEAM', 'MATERIAL_LEAKAGE')
+# Surface-space defects are not texture-source defects; they are corrected by observing
+# the surface again or by changing which observations a field fuses.
+SURFACE_ISSUES = ('WEAK_COVERAGE', 'MISSING_COVERAGE', 'VIEW_SYNTHESIS', 'SURFACE_REPRESENTATION',
+                  'SURFACE_DIRECTION', 'OBSERVATION_DISAGREEMENT', 'FUSION_SEAM')
+CORRECTIONS = ('TEXTURE_SOURCE', 'SURFACE_OBSERVATION', 'MAPPING_FUSION')
 WEAKNESS = schema.object_schema(dict(component=schema.NAME, observation=TEXT, correction=TEXT,
-    evidence_image_id=schema.IDENTIFIER, category=schema.enum('APPEARANCE', *CORRESPONDENCE_ISSUES),
+    evidence_image_id=schema.IDENTIFIER,
+    category=schema.enum('APPEARANCE', *CORRESPONDENCE_ISSUES, *SURFACE_ISSUES),
+    correction_type=schema.enum(*CORRECTIONS),
     scope=schema.enum('LOCAL', 'GLOBAL'), correspondence_id=schema.IDENTIFIER),
     ("component", "observation", "correction", "evidence_image_id"))
 CRITIQUE_SCHEMA = schema.object_schema(dict(candidate_digest=dict(type="string", minLength=64, maxLength=64),
@@ -54,6 +61,14 @@ def critique(captured, arguments):
         for weakness in arguments['weaknesses']:
             if not weakness.get('category') or not weakness.get('scope'):
                 raise schema.AuthoringError('Classify each weakness by category and LOCAL/GLOBAL scope')
+            if not weakness.get('correction_type'):
+                raise schema.AuthoringError('Classify each weakness as TEXTURE_SOURCE, SURFACE_OBSERVATION or '
+                                            'MAPPING_FUSION: wrong appearance is corrected in the source, weak '
+                                            'coverage or a badly represented surface by observing it again, and '
+                                            'disagreeing observations by changing the fusion')
+            if weakness['category'] in SURFACE_ISSUES and weakness['correction_type'] == 'TEXTURE_SOURCE':
+                raise schema.AuthoringError('A surface-observation defect cannot be corrected by editing a flat '
+                                            'texture source; capture a corrective observation instead')
             if weakness['category'] in CORRESPONDENCE_ISSUES and not any(
                     p['correspondence_id'] == weakness.get('correspondence_id') for p in packets):
                 raise schema.AuthoringError('Inspect the problematic pixel with inspect_texture_correspondence before recording a geometry/texture correction')
@@ -63,8 +78,11 @@ def critique(captured, arguments):
         raise schema.AuthoringError("The initial generated-surface review needs a concrete visual improvement; inspect closeups, channels and generated-source bypass before correcting")
     candidate["critique"] = arguments
     for packet in packets:
-        packet['review_scopes'] = sorted({item['scope'] for item in arguments['weaknesses']
-            if item.get('correspondence_id') == packet['correspondence_id'] and item.get('scope')})
+        related = [item for item in arguments['weaknesses']
+                   if item.get('correspondence_id') == packet['correspondence_id']]
+        packet['review_scopes'] = sorted({item['scope'] for item in related if item.get('scope')})
+        packet['review_corrections'] = sorted({item['correction_type'] for item in related
+                                               if item.get('correction_type')})
     captured.setdefault("visual_critiques", []).append(arguments)
     remaining = candidate["result"]["remaining_corrections"]
     return dict(recorded=True, remaining_corrections=remaining,

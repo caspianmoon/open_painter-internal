@@ -51,6 +51,17 @@ See the [historical latency report](docs/live-preview-latency.md) for those
 run results, exact commands, raw evidence and limits. GPU tests require an actual
 window and do not pass by skipping. All tests use isolated Blender resources.
 
+Surface-space generated texturing is covered by the pure
+`tests/unit/test_surface_space_generation.py` (observation identity and occlusion, exact
+reprojection, fusion weighting and disagreement, hole reporting, bounded regions, camera
+ranking, seam continuation across mirrored/rotated islands, the tangent field, and the
+command/critique gates) and the background
+`tests/integration/director_surface_field.py`, which runs the real tool flow on a real
+UV-unwrapped mesh and checks the fused atlas against an independently rebuilt
+pixel→triangle→barycentric→UV correspondence. Only the shaded Eevee draw is substituted;
+the geometry, UVs, seams, fusion and packed result are real. See
+[surface-space generation](docs/surface-space-generation.md).
+
 ## Automated acceptance
 
 `python3 scripts/run_tests.py` runs phase tests and the current integration suites in fresh background

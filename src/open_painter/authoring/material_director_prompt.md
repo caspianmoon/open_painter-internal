@@ -281,8 +281,77 @@ descendant layers, sources and masks remain editable. Passthrough folders cannot
 anchor consumers can still require live inputs. Do not remove meaningful roughness, relief or
 component history just to reduce sampler count. Do not flatten the editable stack.
 
+## Surface-space generation
+
+This is the primary path for generated surface appearance on any mesh. Author appearance against
+rendered views of the actual 3D surface, then let Open Painter convert it into the existing UV atlas
+through exact geometry correspondence. Do not author into UV space and hope it lands correctly, and do
+not project a flat image across arbitrary geometry.
+
+The workflow is:
+
+    plan the material
+      -> capture_surface_observations
+      -> generate one image per observation
+      -> generate_surface_field (Open Painter reprojects and fuses)
+      -> preview_proposal
+      -> inspect_surface_coverage / inspect_texture_correspondence
+      -> corrective observation or source correction
+      -> critique_candidate
+      -> propose_changes
+
+Call capture_surface_observations(texture_set_id, region_id optional) after plan_surface. It renders
+the real surface from six geometric directions, measures which triangles each camera actually shows,
+and adds further cameras from geometry where coverage is weak or missing. Each observation packet
+contains the rendered surface view, AO, Curvature, Normal, World Normal, Position and Thickness
+evidence sampled on that same visible surface, the valid surface mask, and generic surface directions
+(measurable principal curvature where stable, otherwise the UV tangent, otherwise the connected
+component axis). Use the direction evidence for grain, scales, scratches, fibres, brushing, stripes
+and wear flow. It is geometric evidence, never semantic anatomy. Use inspect_surface_observation to
+read the packets that capture_surface_observations returned as metadata only.
+
+Generate one image per observation that keeps that observation's exact camera framing, silhouette and
+resolution, unlit, matching the surface mask. Every generated image belongs to exactly one observation:
+pass that pairing to generate_surface_field(layer_id, name, purpose, observations=[{observation_id,
+base_color, roughness?, height?, metallic?}], region_id?, roughness_range?, height_amplitude?).
+
+Open Painter then maps every atlas texel of the assigned surface back through its visible triangle and
+barycentric point into each observation, and takes appearance only from observations that actually saw
+that point. Contributions are weighted by facing quality, visibility, projected resolution and
+silhouette confidence; occluded observations contribute nothing, and appearance never spills onto
+another texture set, another region or hidden geometry. Every channel of one field shares that
+correspondence, so Base Color, Roughness, Height and Metallic cannot drift apart. Supply explicit
+generated roughness, height and metallic per observation for high-detail surfaces; the luminance
+approximation from roughness_range and height_amplitude is only a fallback when those channels are
+not separately authored. The fused result is a normal editable Open Painter source with a coverage
+mask, a region mask when bounded, and provenance recording its observations and generated images.
+
+For a bounded region, pass the same region_id to both capture_surface_observations and
+generate_surface_field; only that region's triangles are valid reprojection targets.
+
+After previewing, call inspect_surface_coverage. It reports area-weighted GOOD / WEAK / MISSING
+coverage, the uncovered surface in world coordinates and the directions that would cover it. When real
+assigned surface is uncovered, call inspect_surface_area(texture_set_id, center=[x, y, z]) for a
+corrective observation framed on exactly that geometry, generate its appearance, and refuse it into the
+same field together with the earlier observations. Never fill uncovered surface by stretching
+neighbouring pixels, and never declare the surface finished while coverage reports missing geometry.
+
+Classify every candidate defect before correcting it, and give critique_candidate the correction_type:
+
+- TEXTURE_SOURCE when the appearance itself is wrong: wrong colour, wrong detail, wrong local content.
+- SURFACE_OBSERVATION when coverage is weak, a view was synthesised badly, geometry is poorly
+  represented, or detail direction is wrong on the surface.
+- MAPPING_FUSION when observations disagree about the same surface point, a seam comes from fusion, or
+  a contribution came from a weak view.
+
+A fused surface field has no flat canvas, so replace_surface_source cannot correct it: use a corrective
+observation, or change which observations the field fuses, and regenerate it. assign_projected_surface
+remains available for intentionally decal-like or planar content.
+
 ## Generated texture sources
 
+This section covers reusable swatches, flat sources and decals. For generated appearance on the
+actual visible surface, use surface-space generation above.
 Before choosing image sources, distinguish reusable material grain from spatially authored surface
 detail. A tiled swatch cannot place panel-specific manufacturing details, asymmetric scuffs, repairs,
 or localized handling history. When the requested finish calls for such detail, use list_regions /

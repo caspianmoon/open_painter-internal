@@ -121,6 +121,21 @@ def framing_view(context):
     return SimpleNamespace(view_matrix=rotation.to_4x4(), window_matrix=projection)
 
 
+def principal_directions(context):
+    """The six labelled review directions, derived from the artist's own viewing frame.
+
+    Candidate review and surface observation must agree on what 'front' means, so
+    both read the outward direction of the current view, flattened to horizontal.
+    """
+    from mathutils import Vector
+    outward = framing_view(context).view_matrix.to_3x3().inverted() @ Vector((0, 0, 1))
+    outward.z = 0
+    outward = outward.normalized() if outward.length > .001 else Vector((0, -1, 0))
+    sideward = Vector((-outward.y, outward.x, 0))
+    return [('front', outward), ('back', -outward), ('left', -sideward), ('right', sideward),
+            ('top', Vector((0, 0, 1))), ('bottom', Vector((0, 0, -1)))]
+
+
 @contextmanager
 def preserve_view(space):
     """Offscreen inspection borrows the editor, never its authored view state.

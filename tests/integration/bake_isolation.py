@@ -30,6 +30,7 @@ def texture_set(name, low):
     for obj in low:
         sets.assign(bpy.context.scene, ts, obj)
     ts.bake.samples = 8
+    ts.bake.device = 'CPU'   # the pixel regressions here are CPU Cycles; the policy block below checks devices
     ts.bake.margin = 0
     ts.bake.ray_distance = 1.0
     ts.bake.cage_mode = 'AUTO'
@@ -214,11 +215,15 @@ bpy.ops.object.mode_set(mode='OBJECT')
 # Device policy belongs to the staging scene, never the artist's preferences.
 # Observe the configured device at the backend boundary without requiring a GPU
 # on the test machine; the earlier cases exercise actual CPU Cycles rendering.
+from open_painter.baking import devices
+has_gpu = devices.gpu_available()
 preferences = bpy.context.preferences.addons['cycles'].preferences
 device_preferences = (preferences.compute_device_type,
                       tuple((item.id, item.use) for item in preferences.devices))
 scene.cycles.device = 'GPU'
-for policy, expected in (('CPU', 'CPU'), ('SCENE', 'GPU')):
+for policy, expected, fell_back in (('CPU', 'CPU', False),
+                                    ('SCENE', 'GPU' if has_gpu else 'CPU', not has_gpu),
+                                    ('AUTO', 'GPU' if has_gpu else 'CPU', False)):
     ts.bake.device = policy
     before_device_state = state(scene, tracked)
     before_device_resources = resources()
@@ -237,9 +242,14 @@ for policy, expected in (('CPU', 'CPU'), ('SCENE', 'GPU')):
             raise AssertionError('Device observation did not reach the backend')
     assert state(scene, tracked) == before_device_state
     assert resources() == before_device_resources
+    assert bool(devices.resolve(scene, policy)[1]) == fell_back
+# A scene device that is already CPU is followed without a fallback note, while
+# Auto still prefers a GPU when one is enabled.
+scene.cycles.device = 'CPU'
+assert devices.resolve(scene, 'SCENE') == ('CPU', None)
+assert devices.resolve(scene, 'AUTO')[0] == ('GPU' if has_gpu else 'CPU')
 assert device_preferences == (preferences.compute_device_type,
                               tuple((item.id, item.use) for item in preferences.devices))
-scene.cycles.device = 'CPU'
 ts.bake.device = 'CPU'
 
 # Bake geometry follows render modifiers even when the viewport is coarse or a

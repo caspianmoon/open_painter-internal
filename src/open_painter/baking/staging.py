@@ -3,6 +3,8 @@ from contextlib import contextmanager
 import bpy
 import numpy as np
 from ..constants import OWNER
+from ..utils.logging import logger
+from . import devices
 
 
 class TopologyMismatch(ValueError):
@@ -31,7 +33,9 @@ class BakeStage:
         self.scene = bpy.data.scenes.new('Open Painter Bake Staging')
         self.scene[OWNER] = True
         self.scene.render.engine = 'CYCLES'
-        self.scene.cycles.device = self.context.scene.cycles.device if self.ts.bake.device == 'SCENE' else 'CPU'
+        device, _ = devices.resolve(self.context.scene, self.ts.bake.device)
+        self.scene.cycles.device = device
+        logger.info('Bake staging device: %s', device)
         self.scene.cycles.samples = self.ts.bake.samples
         self.scene.cycles.use_adaptive_sampling = False
         self.scene.cycles.seed = 0

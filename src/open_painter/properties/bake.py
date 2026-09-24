@@ -139,9 +139,12 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         description="World-space occlusion reach for the AO bake; 10 matches previous bakes made without an explicit world",
     )
     device: bpy.props.EnumProperty(name="Bake Device", items=[
-        ('CPU', 'CPU', 'Use CPU without changing scene settings or device preferences'),
-        ('SCENE', 'Scene Device', 'Use the current scene Cycles device and existing device preferences'),
-    ], default='CPU')
+        ('AUTO', 'Auto (GPU if available)',
+         'Bake on an enabled Cycles GPU device whenever one is available, otherwise CPU'),
+        ('CPU', 'CPU', 'Always bake on CPU, whatever devices are enabled'),
+        ('SCENE', 'Scene Device',
+         "Use the current scene's Cycles device; falls back to CPU when no Cycles GPU device is enabled"),
+    ], default='AUTO')
     separate_cage_distance: bpy.props.BoolProperty(name="Separate Cage Extrusion", default=False,
         description="Use a separate ray-origin extrusion; older projects retain Ray Distance for both values")
     cage_extrusion: bpy.props.FloatProperty(name="Cage Extrusion", default=.1, min=0, subtype='DISTANCE')

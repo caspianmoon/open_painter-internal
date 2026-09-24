@@ -16,7 +16,7 @@ not establish faster rendering or universally better pixels from the bake add-on
 | Per-low `_high(.NNN)` / `_cage` matching (`operators_baking.py:1803–1819`) | Explicit source→target pointers, optional strict name matching, multiple highs per target, scene-local discovery, ambiguity/missing-pair errors. Existing All Sources mode retained. |
 | Matrix separation for non-AO; assembly positions retained for AO (`operators_matrix_bake.py:432–468`) | Temporary evaluated bake scene. Individual normals/pair AO use only the relevant parts; assembly AO uses listed parts at their authored positions. Unrelated scene geometry is excluded. Originals are never moved or joined. |
 | Cage creation and independent ray controls (`operators_baking.py:1267–1450`, `ui.py:1139–1163`) | Editable cages from render-configured geometry, world-space normalized offsets, per-target cages, ordered evaluated topology checks and separate extrusion/ray-distance controls. |
-| CPU/GPU selection (`__init__.py:324`) | CPU or existing Scene Device selection, applied only to the bake scene. Artist device preferences remain unchanged. GPU hardware speed is not claimed. |
+| CPU/GPU selection (`__init__.py:324`) | Auto (an enabled GPU when available, CPU otherwise), explicit CPU, or the existing Scene Device selection, applied only to the bake scene. Artist device preferences remain unchanged. GPU hardware speed is not claimed. |
 | Explicit normal convention (`__init__.py:318`) | Internal normal maps always use +X/+Y/+Z, independent of the artist's scene bake settings. Existing export convention conversion remains authoritative. |
 
 Open Painter additionally keeps float32 mesh-map buffers, renders into owned
@@ -80,8 +80,10 @@ on source rows. **Separate Cage Extrusion** decouples the ray origin offset from
 maximum ray distance. Existing projects retain their old distance coupling until
 this option is enabled.
 
-**Bake Device → Scene Device** uses the existing Cycles device configuration.
-Open Painter does not enable or reconfigure hardware devices on the user's behalf.
+**Bake Device → Auto** bakes on an enabled Cycles GPU device when one is available
+and falls back to CPU otherwise; **Scene Device** follows the current scene, and
+**CPU** forces the processor. Open Painter reads the device preferences but does not
+enable or reconfigure hardware devices on the user's behalf.
 
 ## Validation commands and limits
 

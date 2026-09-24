@@ -2,6 +2,7 @@
 
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
+from ..utils.logging import logger
 from .cycles_baker import bake
 from .maps.curvature import EDGE_MAP_KINDS, bake_curvature_set, edge_map_set_complete
 from .maps.utility import UTILITY_KINDS, bake_utility
@@ -122,6 +123,13 @@ def bake_steps(context, ts):
     if issues:
         raise ValueError(" | ".join(issues))
     settings = ts.bake
+    # Device preflight: the bake device is resolved before any map allocates,
+    # and a GPU request Cycles cannot satisfy is reported here and staged as
+    # CPU rather than failing inside the first bake call.
+    from . import devices
+    _device, device_note = devices.resolve(context.scene, settings.device)
+    if device_note:
+        logger.warning(device_note)
     low = {ref.object for ref in ts.assignments}
     high = {ref.object for ref in settings.high_objects if ref.object}
     cycles_maps = settings.normal or settings.ao

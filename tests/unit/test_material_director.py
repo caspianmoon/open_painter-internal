@@ -353,6 +353,28 @@ class CancellationTests(unittest.TestCase):
         self.assertIn("--strict-config", args)
 
 
+class DigestTests(unittest.TestCase):
+    def test_fast_sha256_is_sha256_and_fingerprint_is_blake2b(self):
+        import hashlib
+        import numpy as np
+        from open_painter.utils import digest
+        pixels = np.linspace(0, 1, 1 << 16, dtype=np.float32).reshape(-1, 4)
+        expected = hashlib.sha256(pixels.tobytes()).hexdigest()
+        # Model-facing and persisted fields keep SHA-256 values; only the implementation changes.
+        self.assertEqual(digest.sha256(pixels).hexdigest(), expected)
+        self.assertEqual(digest.sha256(pixels.tobytes()).hexdigest(), expected)
+        try:
+            from _sha2 import sha256 as builtin
+        except ImportError:
+            builtin = hashlib.sha256
+        self.assertIn(digest._sha256, {hashlib.sha256, builtin})
+        incremental = digest.fingerprint()
+        incremental.update(b"co")
+        incremental.update(pixels)
+        self.assertEqual(incremental.hexdigest(), hashlib.blake2b(b"co" + pixels.tobytes(), digest_size=32).hexdigest())
+        self.assertNotEqual(digest.fingerprint(pixels).hexdigest(), expected)
+
+
 class ProgressTests(unittest.TestCase):
     """What the Material Assistant shows while an instruction runs, on a fake clock."""
 

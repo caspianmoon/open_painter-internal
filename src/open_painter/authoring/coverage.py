@@ -3,10 +3,10 @@
 Surface samples use deterministic triangle-area weights, not UV pixel counts.
 No hidden semantic annotations, generated replacement masks, or scene edits.
 """
-import hashlib
 import math
 
 from .schema import AuthoringError
+from ..utils.digest import sha256
 
 THRESHOLD = .5
 MAX_SAMPLES = 262144
@@ -117,7 +117,7 @@ def inspect(ts, layer_id):
     values = _sample(buffer, uv, valid)
     occupied = float(weights[values > THRESHOLD].sum())
     return dict(layer_id=layer_id, threshold=THRESHOLD, coverage=occupied / info['surface_area_world'],
-                occupied_surface_area_world=occupied, evaluated_mask_sha256=hashlib.sha256(buffer.tobytes()).hexdigest(),
+                occupied_surface_area_world=occupied, evaluated_mask_sha256=sha256(buffer.tobytes()).hexdigest(),
                 source_mask_ids=[mask.id for mask in layer.masks], opacity_excluded=True, **info)
 
 
@@ -184,7 +184,7 @@ def reduction(ts, layer_id, ratio=.6, tolerance=.06):
     return dict(mask=mask, measurements=dict(layer_id=layer_id, threshold=THRESHOLD,
         coverage_before=before, coverage_after=after, actual_ratio=after/before,
         requested_ratio=ratio, ratio_tolerance=tolerance, new_support_pixels=0,
-        source_mask_sha256=hashlib.sha256(base.tobytes()).hexdigest(),
-        before_mask_sha256=hashlib.sha256(current.tobytes()).hexdigest(),
-        after_mask_sha256=hashlib.sha256(output.tobytes()).hexdigest(),
+        source_mask_sha256=sha256(base.tobytes()).hexdigest(),
+        before_mask_sha256=sha256(current.tobytes()).hexdigest(),
+        after_mask_sha256=sha256(output.tobytes()).hexdigest(),
         opacity_unchanged=True, source_masks_unchanged=True, **info))

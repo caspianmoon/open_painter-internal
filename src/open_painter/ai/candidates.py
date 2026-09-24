@@ -13,6 +13,7 @@ import time
 import bpy
 
 from ..authoring import assets, commands, context as authoring, document, schema, scene as scene_authoring
+from ..utils.digest import fingerprint, sha256 as fast_sha256
 
 MAX_PREVIEWS = 3
 MAX_SECONDS = 360
@@ -22,6 +23,30 @@ CHANNELS = ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT", "NORMAL")
 _STORES = tuple(name for name in ("scenes", "objects", "collections", "materials", "node_groups", "images",
            "meshes", "curves", "lights", "cameras", "worlds", "armatures", "metaballs", "lattices",
            "volumes", "hair_curves", "grease_pencils", "pointclouds") if hasattr(bpy.data, name))
+
+
+def _pixel_digests(images, *, workers=4, in_flight=256 << 20):
+    """BLAKE2b of each image's float pixels, keyed by image pointer.
+
+    A fingerprint covers dozens of 2K float maps, so SHA-256 in Blender's Python took 20 s
+    per fingerprint. Pixels are read here, on Blender's thread; hashing releases the GIL
+    and runs on worker threads with at most ``in_flight`` bytes of copies alive."""
+    import numpy as np
+    from concurrent.futures import ThreadPoolExecutor
+    digests, pending, held = {}, [], 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for image in images:
+            pixels = np.empty(len(image.pixels), dtype=np.float32)
+            image.pixels.foreach_get(pixels)
+            pending.append((image.as_pointer(), pixels.nbytes, pool.submit(lambda data: fingerprint(data).hexdigest(), pixels)))
+            held += pixels.nbytes
+            while pending and held > in_flight:
+                pointer, size, future = pending.pop(0)
+                digests[pointer] = future.result()
+                held -= size
+        for pointer, _, future in pending:
+            digests[pointer] = future.result()
+    return digests
 
 
 def hash_value(value):
@@ -47,7 +72,7 @@ def _scene_geometry(context):
             try:
                 mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=graph)
                 if mesh is not None:
-                    digest = hashlib.sha256()
+                    digest = fingerprint()
                     for values, key, width, dtype in (
                         (mesh.vertices, "co", 3, np.float32),
                         (mesh.loops, "vertex_index", 1, np.int32),
@@ -98,7 +123,6 @@ def compile_proposal(scene, ts, captured, proposal):
 
 def identity(context, captured, compiled, *, components=False, details=False):
     """Bind review to documents, actual source pixels, geometry and viewing conditions."""
-    import numpy as np
     from ..core.layer_stack import snapshot
     from ..geometry.provenance import record
     from .viewport import framing_view, view_identity
@@ -124,12 +148,7 @@ def identity(context, captured, compiled, *, components=False, details=False):
 
     def collect(value):
         if isinstance(value, bpy.types.Image):
-            if value.as_pointer() in images:
-                return
-            pixels = np.empty(len(value.pixels), dtype=np.float32)
-            value.pixels.foreach_get(pixels)
-            images[value.as_pointer()] = dict(name=value.name_full, size=list(value.size),
-                color_space=value.colorspace_settings.name, pixels=hashlib.sha256(pixels.tobytes()).hexdigest())
+            images.setdefault(value.as_pointer(), value)
         elif isinstance(value, dict):
             for child in value.values():
                 collect(child)
@@ -173,12 +192,15 @@ def identity(context, captured, compiled, *, components=False, details=False):
     def visibility(layer):
         return (layer.collection.name_full, layer.exclude, layer.holdout, layer.indirect_only,
                 layer.hide_viewport, [visibility(child) for child in layer.children])
+    digests = _pixel_digests(images.values())
     value = dict(version=1, request_id=captured["id"],
         documents=[(item.id, document.encode(c["after"], digest=True)) for item, _, c in compiled],
         original_documents=[(item.id, document.digest(item)) for item in scene.open_painter.texture_sets],
         geometry=[(item.id, record(item, "SCENE_FIELD")) for item in scene.open_painter.texture_sets],
         scene_geometry=_scene_geometry(context),
-        images=list(images.values()), generated=[(key, value.get("width"), value.get("height"))
+        images=[dict(name=image.name_full, size=list(image.size), color_space=image.colorspace_settings.name,
+                     pixels=digests[pointer]) for pointer, image in images.items()],
+        generated=[(key, value.get("width"), value.get("height"))
                                                  for key, value in sorted(captured["images"].items())
                                                  if key in used_generated],
         **view_identity(review_view), shading=shading,
@@ -425,7 +447,7 @@ def channel_diagnostics(scene, ids, deadline, *, buffers=None):
                 raise schema.AuthoringError("Candidate produced non-finite " + channel + " values")
             entry["channels"][channel] = dict(min=float(values.min()), max=float(values.max()),
                 mean=values.mean(axis=0).tolist(), dark_fraction=float((values.max(axis=1) < .01).mean()),
-                sha256=hashlib.sha256(values.tobytes()).hexdigest())
+                sha256=fast_sha256(np.ascontiguousarray(values)).hexdigest())
             entry["channels"][channel]["surface_variation"] = variation(pixels, valid)
             if buffers is not None:
                 buffers[ts.id]["channels"][channel] = pixels[::stride, ::stride].copy()

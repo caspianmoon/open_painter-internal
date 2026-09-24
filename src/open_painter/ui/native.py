@@ -802,6 +802,7 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         ts = active_set(context)
         if not ts:
             return
+        row.operator("open_painter.texture_set", text="", icon="TRASH").action = "DELETE"
         row.prop(ts, "resolution", text="")
         # The active target at a glance: what it is assigned to, then the settings behind one click.
         objects = sorted({ref.object.name for ref in ts.assignments if ref.object})

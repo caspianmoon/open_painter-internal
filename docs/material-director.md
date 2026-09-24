@@ -93,7 +93,7 @@ generation and Blender's candidate renders. While it runs, a progress box opens 
 | Line | Shows |
 | --- | --- |
 | **Working · 1:23** | Time since the instruction was sent, with the turn's limit on the right (3 min without texture generation, 15 min with it, 30 min in Scene Materials scope). |
-| Current step | What runs now, such as *Rendering candidate 1/3 in Eevee* or *Generating texture 2…*, or *Codex is thinking* between steps. A greyed line gives the step's time so far and why a wait is expected. |
+| Current step | What runs now, such as *Rendering candidate 1/3 in Eevee* or *Generating texture 2…*, or *Codex is thinking* between steps. A greyed line gives the step's time so far and why a wait is expected, with how long the same step took last time. |
 | Latest reasoning | The heading and text of Codex's newest reasoning summary, or its newest progress note (“I'll capture three views of the handle first”). |
 | **Steps** | The last eight entries with their start time: tool calls, reasoning headings, notes, generated textures and the outcome. Long tool calls show how long they took; rejected calls show why, before Codex retries. |
 | **Show Full Log** / copy | Every step and every reasoning summary, in a dialog or on the clipboard. |

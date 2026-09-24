@@ -420,6 +420,23 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(p.activity()[1], "THINK")
         self.assertEqual(p.summary(), "Working · 1:25")
 
+    def test_a_repeated_blocking_step_says_how_long_it_took_last_time(self):
+        p = self.progress
+        plain = "Blender pauses while this runs; the panel catches up when it finishes"
+        p.begin("one")
+        render = p.step("Rendering candidate 1/3 in Eevee", "WAIT", busy=True, tool="preview_proposal")
+        self.assertEqual(p.hint(), plain)
+        self.advance(12)
+        p.end(render, 12.)
+        rejected = p.step("Rendering candidate 2/3 in Eevee", "WAIT", busy=True, tool="preview_proposal")
+        p.end(rejected, 1., "Preview budget exhausted")   # A rejection is not a typical duration.
+        p.finish("completed")
+        p.begin("two")   # Remembered across instructions.
+        p.step("Rendering candidate 1/3 in Eevee", "WAIT", busy=True, tool="preview_proposal")
+        self.assertEqual(p.hint(), "Blender pauses while this runs, about 0:12 last time; the panel catches up when it finishes")
+        p.step("Rendering the material channels", "WAIT", busy=True, tool="inspect_material_channels")
+        self.assertEqual(p.hint(), plain)
+
     def test_reasoning_headings_join_the_timeline_once(self):
         p = self.progress
         p.begin("one")

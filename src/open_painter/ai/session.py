@@ -816,7 +816,7 @@ def announce(event):
     if (event.get("event") != "tool" or event.get("tool") not in BLOCKING_TOOLS
             or event.get("call_id") in _announced or not progress.owns(event.get("request_id"))):
         return False
-    _announced[event.get("call_id")] = progress.step(step_label(event), "WAIT", busy=True)
+    _announced[event.get("call_id")] = progress.step(step_label(event), "WAIT", busy=True, tool=event.get("tool"))
     return True
 
 
@@ -855,7 +855,7 @@ def handle(event):
     elif kind == "tool":
         entry = _announced.pop(event.get("call_id"), None)
         if entry is None and progress.owns(event.get("request_id")):
-            entry = progress.step(step_label(event), "TOOL", busy=True)
+            entry = progress.step(step_label(event), "TOOL", busy=True, tool=event.get("tool"))
         began = time.monotonic()
         try:
             result = tool_call(event)

@@ -84,6 +84,7 @@ def tool_label(name):
 class Progress:
     def __init__(self, now=time.monotonic):
         self.now = now
+        self.last_seconds = {}   # tool -> how long it last held Blender, across instructions
         self.reset()
 
     def reset(self):
@@ -131,7 +132,7 @@ class Progress:
             self.updated = self.now()
 
     # Records -------------------------------------------------------------------------
-    def step(self, text, kind="STEP", *, busy=False):
+    def step(self, text, kind="STEP", *, busy=False, tool=None):
         """A timeline entry. Busy work lasts until the next entry, or for a tool until end()."""
         if not self.running:
             return None
@@ -139,7 +140,7 @@ class Progress:
         for entry in self.steps:
             if entry["kind"] not in {"TOOL", "WAIT"}:
                 entry["busy"] = False
-        entry = dict(at=self.elapsed(), text=one_line(text), kind=kind, busy=busy, seconds=None, error="")
+        entry = dict(at=self.elapsed(), text=one_line(text), kind=kind, busy=busy, seconds=None, error="", tool=tool)
         self.steps.append(entry)
         del self.steps[:-MAX_STEPS]
         return entry
@@ -149,6 +150,8 @@ class Progress:
         if entry is None or not self.running:
             return  # A call answered after Stop only reports that the instruction ended.
         entry.update(busy=False, seconds=seconds, error=one_line(error))
+        if entry.get("tool") and not error:
+            self.last_seconds[entry["tool"]] = seconds
         self.touch()
 
     def _grow(self, records, key, delta, limit):
@@ -200,7 +203,9 @@ class Progress:
             return ""
         kind = self.activity()[1]
         if kind == "WAIT":
-            return "Blender pauses while this runs; the panel catches up when it finishes"
+            last = self.last_seconds.get(self.steps[-1].get("tool"), 0)
+            expected = f", about {clock(last)} last time" if last >= 2 else ""
+            return f"Blender pauses while this runs{expected}; the panel catches up when it finishes"
         if kind == "IMAGE":
             return "Texture generation runs on OpenAI's servers and often takes a few minutes"
         if kind == "THINK" and self.quiet() >= 30:

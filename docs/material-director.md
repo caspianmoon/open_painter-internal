@@ -85,6 +85,32 @@ reversal keeps that layer. A new protection lock can prevent reversal; the mater
 All controls remain normal Open Painter controls in the **Painter** sidebar and Open Graph.
 There is no requirement to keep Codex connected to edit, save, reopen or export the result.
 
+## Follow an instruction
+
+An instruction can run for several minutes, most of it spent in Codex's reasoning, OpenAI's texture
+generation and Blender's candidate renders. While it runs, a progress box opens the *Assistant* tab:
+
+| Line | Shows |
+| --- | --- |
+| **Working · 1:23** | Time since the instruction was sent, with the turn's limit on the right (3 min without texture generation, 15 min with it, 30 min in Scene Materials scope). |
+| Current step | What runs now, such as *Rendering candidate 1/3 in Eevee* or *Generating texture 2…*, or *Codex is thinking* between steps. A greyed line gives the step's time so far and why a wait is expected. |
+| Latest reasoning | The heading and text of Codex's newest reasoning summary, or its newest progress note (“I'll capture three views of the handle first”). |
+| **Steps** | The last eight entries with their start time: tool calls, reasoning headings, notes, generated textures and the outcome. Long tool calls show how long they took; rejected calls show why, before Codex retries. |
+| **Show Full Log** / copy | Every step and every reasoning summary, in a dialog or on the clipboard. |
+
+Candidate renders, surface captures and channel inspection run on Blender's main thread, so the
+interface pauses while they work. The panel names each such step and redraws before it starts, so a
+pause reads as *Rendering candidate 1/3 in Eevee* rather than as a hang. The Painter header also shows
+**Assistant · 1:23 · current step** while an instruction runs, in any sidebar tab; clicking it opens
+the *Assistant* tab.
+
+Reasoning summaries are the short summaries Codex publishes of its reasoning, not the reasoning
+itself; some models or turns produce none, and the steps still update. Progress notes appear in the
+steps instead of the reply, so **Changes** holds Codex's final answer alone; a turn that only
+narrated still shows its notes there. When the instruction ends, the box moves below **Run** and
+keeps the record — *Finished in 3:05*, *Stopped after 0:42*, or *Ended after* with the error — until
+the next instruction. The record is not saved in the `.blend`; opening a file clears it.
+
 ## Physical materials and candidate review
 
 Director can build painted metal, bare metal, wood, woven fabric, rubber, ceramic glaze, mud,
@@ -210,7 +236,8 @@ list generated from the same attachment description the request is built from (m
 mesh maps, reference, texture generation), with the summary of the last request that actually
 went out; Run holds the connection state and the run/stop button; Changes holds the draft's
 Apply / Discard, the reply, the change report and the AI undo. Connection settings live in the
-add-on preferences.
+add-on preferences. While an instruction runs, its progress box (see *Follow an instruction*) opens
+the tab; afterwards it stays between Run and Changes as the record of the last instruction.
 
 ## What the first implementation can change
 
@@ -269,7 +296,9 @@ the estimate. This guard does not replace checking the rendered result.
 The Blender process gathers bounded summaries: object names/dimensions/counts, UV/attribute/group
 names, material structure, values, available anchors/maps and local recipe descriptions. The full mesh
 and `.blend` remain local. Model views and mesh-map previews are sent when their checkboxes are enabled
-(both default on), plus the chosen reference image. Pending prompts, provider replies and account display state are transient.
+(both default on), plus the chosen reference image. Pending prompts, provider replies, reasoning
+summaries, progress notes and account display state are transient. Codex runs with
+`model_reasoning_summary = "auto"` so that its reasoning summaries stream to the progress box.
 Receipts and protection paths are stored in the project; credentials and OAuth URLs are not.
 
 Blender starts a bundled companion script using its own Python executable. A randomly authenticated

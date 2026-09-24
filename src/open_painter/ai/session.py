@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -13,9 +14,13 @@ from ..authoring import assets, commands, context as authoring, document, schema
 from ..core.project_manager import require_set
 from .transport import Connection
 from .generated_images import MAX_IMAGES
+from .progress import BLOCKING_TOOLS, Progress, tool_label
 
 connection = None
 request = None
+progress = Progress()   # What the panels show of the running (or last) instruction.
+_pending = []           # Received events not handled yet; see announce().
+_drawn = 0.
 state = dict(status="Not connected", connected=False, signed_in=False, response="", changes=[],
              models=[], plan="", runtime="", login=False, auto_login=False, limits={}, visual_inputs=[], sharing=[], outcome=None)
 _model_items = [("DEFAULT", "Account default", "", 0)]
@@ -63,11 +68,17 @@ def model_items(_self, _context):
 
 
 def redraw():
+    global _drawn
+    _drawn = time.monotonic()
     for wm in bpy.data.window_managers:
         for window in wm.windows:
             for area in window.screen.areas:
                 if area.type == "VIEW_3D":
-                    area.tag_redraw()
+                    # Session state shows in the sidebar and the Painter header, never in
+                    # the 3D view itself: streaming text must not re-render the viewport.
+                    for region in area.regions:
+                        if region.type in {"UI", "HEADER", "TOOL_HEADER"}:
+                            region.tag_redraw()
 
 
 def release(captured):
@@ -116,6 +127,10 @@ def disconnect():
     global connection, request, _model_items
     release(request)
     request = None
+    _pending.clear()
+    _announced.clear()
+    # Keep the log: after a lost connection it is the only account of what happened.
+    progress.finish("failed", "Codex connection closed")
     clear_conversation()
     if connection:
         connection.close()
@@ -135,6 +150,8 @@ def stop():
     global request
     if request:
         terminal("CANCELLED", "ARTIST_CANCELLED")
+        if progress.owns(request["id"]):
+            progress.finish("stopped", "Stopped before Codex finished")
     if request and not request["running"] and request["draft"]:
         remember(request, "discarded")
     release(request)
@@ -436,6 +453,9 @@ def run(context):
     release(request)
     request = captured
     state.update(status="Directing material…", response="", changes=[], outcome=None)
+    progress.begin(captured["id"])
+    images = f" with {len(attachments)} image{'s' if len(attachments) != 1 else ''}" if attachments else ""
+    progress.step("Sent the instruction" + images, "SEND", busy=True)
     state["visual_inputs"] = visual_context.manifest(attachments)
     state["sharing"] = sharing_summary(payload)   # what actually went out, for the panel
     redraw()
@@ -725,6 +745,9 @@ def completed(event):
     if not request or event.get("request_id") != request["id"]:
         return
     request["running"] = False
+    if not state["response"].strip() and progress.owns(request["id"]) and progress.notes:
+        # Progress notes are kept out of the reply; a turn that only narrated still answers.
+        state["response"] = "\n\n".join(note["text"].strip() for note in progress.notes)[-16000:]
     if event.get("status") != "completed":
         cancelled = event.get("status") == "interrupted"
         terminal("CANCELLED" if cancelled else "PROVIDER_FAILED",
@@ -773,9 +796,35 @@ def completed(event):
         state["status"] = "Draft not applied: " + (state["status"] or "review the reported error")
 
 
+def step_label(event):
+    name = event.get("tool", "")
+    if name == "preview_proposal" and request:
+        from .candidates import MAX_PREVIEWS
+        return f"Rendering candidate {request.get('preview_count', 0) + 1}/{MAX_PREVIEWS} in Eevee"
+    return tool_label(name)
+
+
+_announced = {}   # call_id -> the progress step shown before a blocking tool ran
+
+
+def announce(event):
+    """Hold a blocking tool call for one tick so Blender draws its step first.
+
+    Renders and material evaluation keep Blender's main thread busy for up to a few
+    minutes; naming the step beforehand shows the artist why the interface paused.
+    True while the call waits; tick() handles it next time."""
+    if (event.get("event") != "tool" or event.get("tool") not in BLOCKING_TOOLS
+            or event.get("call_id") in _announced or not progress.owns(event.get("request_id"))):
+        return False
+    _announced[event.get("call_id")] = progress.step(step_label(event), "WAIT", busy=True)
+    return True
+
+
 def handle(event):
     global _model_items, request
     kind = event.get("event")
+    if progress.owns(event.get("request_id")):
+        progress.touch()   # Any sign of life, token usage included, counts as progress.
     if kind == "connected":
         state.update(connected=True, runtime=event["runtime"], status="Connected — sign in with ChatGPT")
     elif kind == "account":
@@ -804,6 +853,10 @@ def handle(event):
         bpy.ops.wm.url_open(url=url)
         state.update(status="Finish signing in in your browser", login=True)
     elif kind == "tool":
+        entry = _announced.pop(event.get("call_id"), None)
+        if entry is None and progress.owns(event.get("request_id")):
+            entry = progress.step(step_label(event), "TOOL", busy=True)
+        began = time.monotonic()
         try:
             result = tool_call(event)
             success = True
@@ -811,8 +864,21 @@ def handle(event):
             result, success = dict(error=str(exc)[:1000]), False
             if request:
                 request.setdefault("validation_errors", []).append(dict(tool=event.get("tool"), message=str(exc)[:1000]))
+        progress.end(entry, time.monotonic() - began, "" if success else result["error"])
         images = result.pop("_images", []) if isinstance(result, dict) else []
         connection.send(dict(action="tool_result", call_id=event["call_id"], result=result, success=success, images=images))
+    elif kind == "thinking" and progress.owns(event.get("request_id")):
+        progress.think(event.get("item_id", ""), event.get("part", 0), event.get("text", ""))
+    elif kind == "commentary" and progress.owns(event.get("request_id")):
+        progress.note(event.get("item_id", ""), event.get("text", ""))
+    elif kind == "turn_metadata" and progress.owns(event.get("request_id")):
+        progress.time_limit = event.get("time_limit") or 0
+        model = f" on {event['model']}" if event.get("model") else ""
+        effort = f" · {event['reasoning_effort']} reasoning" if event.get("reasoning_effort") else ""
+        progress.step("Codex started" + model + effort)
+    elif kind == "model_rerouted" and progress.owns(event.get("request_id")):
+        progress.step(f"Codex switched to {event.get('to_model') or 'another model'}"
+                      + (f" ({event['reason']})" if event.get("reason") else ""))
     elif kind == "generated_image" and request and request["running"] and event.get("request_id") == request["id"]:
         from . import generated_images
         if len(request["images"]) >= generated_images.MAX_IMAGES:
@@ -823,18 +889,28 @@ def handle(event):
         generated_images.read(connection.state_directory, metadata)
         request["images"][metadata["image_id"]] = dict(metadata, state_directory=connection.state_directory)
         state["status"] = f"Texture ready ({metadata['width']} × {metadata['height']}); building editable layers…"
+        prompt = " ".join(str(metadata.get("prompt") or "").split())
+        progress.step(f"Texture {len(request['images'])} ready ({metadata['width']} × {metadata['height']})"
+                      + (": " + (prompt[:90] + "…" if len(prompt) > 90 else prompt) if prompt else ""), "IMAGE")
     elif kind == "image_status" and request and event.get("request_id") == request["id"]:
         state["status"] = event["message"]
+        if progress.owns(event.get("request_id")):
+            progress.step(event["message"], "IMAGE", busy=event["message"].startswith("Generating"))
     elif kind == "text" and request and event.get("request_id") == request["id"]:
         state["response"] = (state["response"] + event.get("text", ""))[-16000:]
     elif kind == "completed":
         completed(event)
+        if progress.owns(event.get("request_id")):
+            ending = {"completed": "completed", "interrupted": "stopped"}.get(event.get("status"), "failed")
+            progress.finish(ending, state["status"])
     elif kind == "error":
         ends_request = bool(event.get("request_id"))
         if ends_request and (not request or event["request_id"] != request["id"]):
             return
         if ends_request:
             terminal("PROVIDER_FAILED", "PROVIDER_TRANSPORT_ERROR", reason=event.get("message", "Codex error"))
+        if ends_request or event.get("fatal"):
+            progress.finish("failed", event.get("message", "Codex error"))
         if event.get("fatal"):
             disconnect()
         elif ends_request:
@@ -850,20 +926,24 @@ def handle(event):
 def tick():
     if connection is None:
         return None
+    changed = False
     try:
         ensure_online(share_context=bool(request and request["running"]))
-        events = connection.poll()
-        for event in events:
-            if connection is None:
-                break  # A fatal event in this batch already disconnected.
-            handle(event)
+        _pending.extend(connection.poll())
+        while _pending and connection is not None:  # A fatal event in a batch disconnects.
+            changed = True
+            if announce(_pending[0]):
+                break  # Draw the step now; the blocking call runs on the next tick.
+            handle(_pending.pop(0))
     except Exception as exc:
+        progress.finish("failed", str(exc)[:300])
         disconnect()
         state["status"] = str(exc)[:500]
         return None
     # The panel only reflects session state, which changes inside handle();
-    # an idle connection must not keep every viewport redrawing.
-    if events:
+    # an idle connection must not keep every viewport redrawing. A running
+    # instruction still redraws once a second so its elapsed time moves.
+    if changed or (progress.running and time.monotonic() - _drawn >= 1):
         redraw()
     return .05 if request and request["running"] else .25
 
@@ -871,6 +951,7 @@ def tick():
 @persistent
 def on_load(_):
     disconnect()
+    progress.reset()
     state.update(response="", changes=[], limits={})
 
 

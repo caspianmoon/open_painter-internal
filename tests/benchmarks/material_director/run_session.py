@@ -133,6 +133,14 @@ class LiveRun:
                     self.turn.setdefault("proposal_attempts", []).append(event.get("arguments", {}))
             if kind == "text":
                 self.turn["response"] = (self.turn.get("response", "") + event.get("text", ""))[-32000:]
+            if kind in {"commentary", "thinking"}:
+                # Progress notes and reasoning summaries stream separately from the reply.
+                records = self.turn.setdefault("commentary" if kind == "commentary" else "reasoning_summaries", [])
+                key = [event.get("item_id"), event.get("part", 0)]
+                if not records or records[-1]["key"] != key:
+                    records.append(dict(key=key, text=""))
+                    del records[:-80]
+                records[-1]["text"] = (records[-1]["text"] + event.get("text", ""))[-8000:]
         if self.robust:
             self.robust.observe(event)
         self.save()

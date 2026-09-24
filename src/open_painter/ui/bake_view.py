@@ -304,20 +304,22 @@ def draw_compact(layout, context, ts):
 
 
 class OP_OT_show_task(bpy.types.Operator):
-    """Switch the Painter sidebar to a task tab (Bake, Export) or back to painting."""
+    """Switch the Painter sidebar to a task tab (Bake, Export, Assistant) or back to painting."""
     bl_idname = "open_painter.show_task"
     bl_label = "Show Task"
     bl_options = {"REGISTER"}
     task: bpy.props.EnumProperty(items=[("PAINTER", "Painting", "Layers and inspector"),
                                         ("BAKE", "Bake Mesh Maps", "Setup, maps and results"),
-                                        ("EXPORT", "Export", "Contents, scope, destination and output preview")],
+                                        ("EXPORT", "Export", "Contents, scope, destination and output preview"),
+                                        ("ASSISTANT", "Material Assistant", "The running instruction and its progress")],
                                  default="PAINTER")
 
     @classmethod
     def description(cls, context, properties):
         return {"PAINTER": "Back to painting: layers and the inspector",
                 "BAKE": "Open the bake view: setup, maps and results",
-                "EXPORT": "Open the export view"}[properties.task]
+                "EXPORT": "Open the export view",
+                "ASSISTANT": "Open the Material Assistant: what Codex is doing and every step so far"}[properties.task]
 
     def execute(self, context):
         from . import selection
@@ -329,7 +331,7 @@ class OP_OT_show_task(bpy.types.Operator):
         if hasattr(space, "show_region_ui"):
             space.show_region_ui = True
         region = next((r for r in area.regions if r.type == "UI"), None)
-        category = {"PAINTER": "Painter", "BAKE": CATEGORY, "EXPORT": "Export"}[self.task]
+        category = {"PAINTER": "Painter", "BAKE": CATEGORY, "EXPORT": "Export", "ASSISTANT": "Assistant"}[self.task]
         if region is not None:
             try:
                 with context.temp_override(area=area, region=region):

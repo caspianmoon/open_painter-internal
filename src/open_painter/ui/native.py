@@ -1336,7 +1336,17 @@ def toolbar(self, context):
     # The current operation, in the header the plan asks for: one state, not a notice.
     from . import status
     current = status.of(context)
-    self.layout.label(text=current.state if row_metrics(context)[1] else current.text[:60], icon=current.icon)
+    compact = row_metrics(context)[1]
+    self.layout.label(text=current.state if compact else current.text[:60], icon=current.icon)
+    # A running Material Assistant instruction stays in view whichever sidebar tab is open.
+    from ..ai import session as director
+    from ..ai.progress import clock
+    if director.progress.running:
+        doing = director.progress.activity()[0]
+        text = "Assistant · " + clock(director.progress.elapsed())
+        if not compact and doing:
+            text += " · " + (doing if len(doing) <= 36 else doing[:35] + "…")
+        self.layout.operator("open_painter.show_task", text=text, icon="SORTTIME").task = "ASSISTANT"
 
 
 class OP_PT_native_bake(PainterPanel, bpy.types.Panel):

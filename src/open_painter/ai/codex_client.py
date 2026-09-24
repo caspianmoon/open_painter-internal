@@ -26,6 +26,8 @@ DISABLED = ("shell_tool", "unified_exec", "shell_snapshot", "multi_agent", "goal
 CONFIG = {**{f"features.{name}": False for name in DISABLED},
           "features.code_mode.enabled": False, "features.skip_host_skill_discovery": True,
           "features.image_generation": True,
+          # Summaries (never raw reasoning) let the artist follow a long turn.
+          "model_reasoning_summary": "auto",
           "web_search": "disabled",
           "analytics.enabled": False,
           "cli_auth_credentials_store": "keyring", "approval_policy": "never",
@@ -100,8 +102,10 @@ class CodexClient:
         self.closed = False
         self.deadline = 0
         self.allowed_tools = set()
-        self.text_received = False
+        self.streamed_messages = set()
         self.image_items = set()
+        self.streamed_reasoning = set()
+        self.commentary = set()
         self.generate_textures = False
         safe_env = launch_environment(state, binary_dirs)
         self.version = runtime_version(binary, env=safe_env, cwd=workspace)
@@ -184,12 +188,15 @@ class CodexClient:
         if self.request_id:
             raise ValueError("A Material Director instruction is already running")
         self.request_id = message["request_id"]
-        self.text_received = False
+        self.streamed_messages = set()
         self.image_items = set()
+        self.streamed_reasoning = set()
+        self.commentary = set()
         self.generate_textures = message.get("generate_textures", True)
         request_id = self.request_id
         self.thread_id = self.turn_id = None
         self.deadline = time.monotonic() + (1800 if message.get("scene_scope") else 900 if self.generate_textures else 180)
+        time_limit = round(self.deadline - time.monotonic())
         self.allowed_tools = {tool["name"] for tool in message["tools"]}
         params = dict(cwd=self.workspace, approvalPolicy="never", sandbox="read-only",
                       environments=[], ephemeral=True, dynamicTools=message["tools"],
@@ -209,7 +216,7 @@ class CodexClient:
             self.emit(dict(event="turn_metadata", request_id=request_id,
                            model=result.get("model"), provider=result.get("modelProvider"),
                            reasoning_effort=result.get("reasoningEffort"),
-                           service_tier=result.get("serviceTier")))
+                           service_tier=result.get("serviceTier"), time_limit=time_limit))
             inputs = [dict(type="text", text=message["input"])]
             if message.get("image"):
                 inputs.append(dict(type="image", url=message["image"]))
@@ -304,10 +311,25 @@ class CodexClient:
                           for group in ("last", "total") if isinstance(usage.get(group), dict)}
                 self.emit(dict(event="usage", request_id=self.request_id, usage=counts))
             elif method == "item/agentMessage/delta" and self.request_id and params.get("threadId") == self.thread_id:
-                self.text_received = True
-                self.emit(dict(event="text", request_id=self.request_id, text=params.get("delta", "")[:16000]))
+                self.streamed_messages.add(params.get("itemId"))
+                # Mid-turn narration ("I'll inspect the regions first") is progress, not the reply.
+                if params.get("itemId") in self.commentary:
+                    self.emit(dict(event="commentary", request_id=self.request_id, item_id=str(params["itemId"]),
+                                   text=params.get("delta", "")[:16000]))
+                else:
+                    self.emit(dict(event="text", request_id=self.request_id, text=params.get("delta", "")[:16000]))
+            elif method == "item/reasoning/summaryTextDelta" and self.request_id and params.get("threadId") == self.thread_id:
+                self.streamed_reasoning.add(params.get("itemId"))
+                self.emit(dict(event="thinking", request_id=self.request_id, item_id=str(params.get("itemId", "")),
+                               part=int(params.get("summaryIndex", 0)), text=str(params.get("delta", ""))[:4000]))
             elif method == "item/completed" and self.request_id and params.get("threadId") == self.thread_id:
                 item = params.get("item", {})
+                if item.get("type") == "reasoning" and item.get("id") not in self.streamed_reasoning:
+                    # Some runtimes deliver the summary only with the finished item.
+                    for index, text in enumerate(item.get("summary") or []):
+                        if isinstance(text, str) and text.strip():
+                            self.emit(dict(event="thinking", request_id=self.request_id, item_id=str(item.get("id", "")),
+                                           part=index, text=text[:4000]))
                 if item.get("type") == "imageGeneration" and item.get("id") in self.image_items:
                     if item.get("status") == "completed" and not item.get("failure"):
                         metadata = generated_images.store(self.state_directory, item)
@@ -315,8 +337,13 @@ class CodexClient:
                     else:
                         self.emit(dict(event="image_status", request_id=self.request_id,
                                        message="Texture generation failed. Codex can retry or explain the failure."))
-                if item.get("type") == "agentMessage" and not self.text_received:
-                    self.emit(dict(event="text", request_id=self.request_id, text=item.get("text", "")[:16000]))
+                # Per message: a streamed note must not swallow an answer that arrives whole.
+                if item.get("type") == "agentMessage" and item.get("id") not in self.streamed_messages:
+                    if item.get("phase") == "commentary":
+                        self.emit(dict(event="commentary", request_id=self.request_id, item_id=str(item.get("id", "")),
+                                       text=item.get("text", "")[:16000]))
+                    else:
+                        self.emit(dict(event="text", request_id=self.request_id, text=item.get("text", "")[:16000]))
             elif method == "turn/completed" and params.get("threadId") == self.thread_id:
                 turn = params.get("turn", {})
                 error = turn.get("error")
@@ -331,6 +358,10 @@ class CodexClient:
                 self.request_id = self.turn_id = None
             elif method == "item/started":
                 item = params.get("item", {})
+                # The phase arrives with the started item, before any of its text.
+                if (item.get("type") == "agentMessage" and item.get("phase") == "commentary"
+                        and self.request_id and params.get("threadId") == self.thread_id):
+                    self.commentary.add(item.get("id"))
                 if item.get("type") == "imageGeneration" and self.request_id and params.get("threadId") == self.thread_id:
                     if not self.generate_textures:
                         self.interrupt()

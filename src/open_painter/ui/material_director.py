@@ -6,6 +6,7 @@ from textwrap import wrap
 import bpy
 
 from ..ai import session
+from ..ai.progress import clock
 from ..authoring import commands, transactions
 from ..core.layer_stack import active
 from ..core.project_manager import active_set, require_set
@@ -171,9 +172,20 @@ class OP_OT_director_report(bpy.types.Operator):
     bl_description = "Show actual parameter changes from the draft or latest committed transaction"
     copy: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
     response: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
+    log: bpy.props.BoolProperty(default=False, options={"SKIP_SAVE"})
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.log:
+            return ("Copy every step, its timing and Codex's reasoning summaries" if properties.copy else
+                    "Show every step of the instruction, its timing and Codex's reasoning summaries")
+        return cls.bl_description
 
     def invoke(self, context, event):
-        lines = session.state["response"].splitlines() if self.response else session.state["changes"]
+        if self.log:
+            lines = session.progress.transcript() or ["No instruction has run yet"]
+        else:
+            lines = session.state["response"].splitlines() if self.response else session.state["changes"]
         if not lines:
             ts = active_set(context)
             try:
@@ -185,10 +197,16 @@ class OP_OT_director_report(bpy.types.Operator):
         if self.copy:
             context.window_manager.clipboard = "\n".join(lines)
             return {"FINISHED"}
-        return context.window_manager.invoke_props_dialog(self, width=680)
+        return context.window_manager.invoke_props_dialog(self, width=680,
+            title="Material Director Log" if self.log else "Material Director Changes")
 
     def draw(self, context):
         lines = getattr(self, "_lines", [])
+        if self.log and len(lines) > 50:
+            # The newest steps matter most in a long log; the clipboard keeps all of it.
+            self.layout.label(text=f"{len(lines) - 50} earlier lines: the copy button beside Show Full Log copies all of them",
+                              icon="INFO")
+            lines = lines[-50:]
         for text in lines[:50]:
             for line in wrap(text, 100) or [""]:
                 self.layout.label(text=line)
@@ -212,12 +230,93 @@ class OP_OT_director_clear_history(DirectorOperator, bpy.types.Operator):
         session.state.update(status="AI change history cleared", changes=[])
 
 
-def text_lines(layout, text, width=38, limit=20):
+def text_lines(layout, text, width=38, limit=20, icon="NONE"):
     lines = [line for paragraph in text.splitlines() for line in (wrap(paragraph, width) or [""])]
     for line in lines[:limit]:
-        layout.label(text=line)
+        layout.label(text=line, icon=icon)
     if len(lines) > limit:
-        layout.label(text="…")
+        layout.label(text="…", icon=icon)
+
+
+KIND_ICONS = dict(SEND="EXPORT", STEP="DOT", TOOL="TOOL_SETTINGS", WAIT="RENDER_STILL", THOUGHT="LIGHT", NOTE="INFO",
+                  IMAGE="IMAGE_DATA", THINK="SORTTIME", DONE="CHECKMARK", STOPPED="CANCEL", FAILED="ERROR")
+ENDING_ICONS = dict(completed="CHECKMARK", stopped="CANCEL", failed="ERROR")
+SHOWN_STEPS = 8
+
+
+def wrap_width(context):
+    """Characters that fit one sidebar line, so wrapped text follows the panel's width."""
+    from .native import row_metrics
+    return max(24, int(row_metrics(context)[0] / 6))
+
+
+def fit(text, chars):
+    """Cut at the end: Blender elides the middle of a long label, which hides what a step did."""
+    return text if len(text) <= chars else text[:max(1, chars - 1)].rstrip() + "…"
+
+
+def draw_progress(layout, context):
+    """What Codex and Blender are doing now, why a pause is expected, and the steps so far."""
+    progress = session.progress
+    if not progress.started:
+        return
+    width = wrap_width(context)
+    box = layout.box()
+    row = box.row()
+    row.label(text=progress.summary(),
+              icon="SORTTIME" if progress.running else ENDING_ICONS.get(progress.outcome, "INFO"))
+    if progress.running:
+        if progress.time_limit:
+            right = row.row()
+            right.alignment = "RIGHT"
+            right.label(text="limit " + clock(progress.time_limit))
+        # The current step in full: a truncated "Rendering candidate 1/3 in E…" hides what runs.
+        text, kind, seconds = progress.activity()
+        col = box.column(align=True)
+        for index, line in enumerate((wrap(text, width) or [""])[:2]):
+            col.label(text=line, icon=KIND_ICONS.get(kind, "DOT") if index == 0 else "BLANK1")
+        hint = progress.hint()
+        detail = ([clock(seconds) + " so far"] if seconds >= 1 else []) + ([hint] if hint else [])
+        if detail:
+            col = box.column(align=True)
+            col.enabled = False   # Secondary text: greyed, like Blender's own hints.
+            text_lines(col, " · ".join(detail), width, limit=3, icon="BLANK1")
+        latest = progress.latest()
+        if latest:
+            said, title, words = latest
+            col = box.column(align=True)
+            words = "\n".join(line for line in words.splitlines() if line.strip())
+            if said == "THOUGHT":
+                col.label(text=title or "Thinking", icon="LIGHT")
+                text_lines(col, words, width - 3, limit=6, icon="BLANK1")
+            else:
+                lines = [line for paragraph in words.splitlines() for line in wrap(paragraph, width - 3)]
+                for index, line in enumerate(lines[:4]):
+                    col.label(text=line, icon="INFO" if index == 0 else "BLANK1")
+                if len(lines) > 4:
+                    col.label(text="…", icon="BLANK1")
+    steps = progress.steps
+    head, body = box.panel("painter_director_progress_steps", default_closed=False)
+    head.label(text=f"Steps ({len(steps)})")
+    if body is not None:
+        col = body.column(align=True)
+        if len(steps) > SHOWN_STEPS:
+            col.label(text=f"{len(steps) - SHOWN_STEPS} earlier steps in the full log", icon="BLANK1")
+        chars = max(12, int(width * .8))   # Beside the time column and the icon.
+        for entry in steps[-SHOWN_STEPS:]:
+            took = " · " + clock(entry["seconds"]) if (entry["seconds"] or 0) >= 1 else ""
+            split = col.split(factor=.17, align=True)
+            split.label(text=clock(entry["at"]))
+            split.label(text=fit(entry["text"], chars - len(took)) + took, icon=KIND_ICONS.get(entry["kind"], "DOT"))
+            if entry["error"]:
+                split = col.split(factor=.17, align=True)
+                split.label(text="")
+                split.label(text=fit("Rejected: " + entry["error"], chars), icon="ERROR")
+    row = box.row(align=True)
+    op = row.operator("open_painter.director_report", text="Show Full Log", icon="TEXT")
+    op.log = True
+    op = row.operator("open_painter.director_report", text="", icon="COPYDOWN")
+    op.log = op.copy = True
 
 
 def connection_settings(layout, prefs):
@@ -264,7 +363,11 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
         status = session.state
         settings = context.window_manager.open_painter_director
         running = bool(session.request and session.request["running"])
-        text_lines(layout, status["status"], limit=4)
+        if session.progress.running:
+            # While an instruction runs its progress replaces the status line, first in view.
+            draw_progress(layout, context)
+        else:
+            text_lines(layout, status["status"], limit=4)
         # Target -----------------------------------------------------------------
         from . import selection
         target = selection.resolve(context)
@@ -353,6 +456,9 @@ class OP_PT_material_director(PainterPanel, bpy.types.Panel):
                 box.label(text="Sign in with ChatGPT to start", icon="INFO")
             elif not prefs or not prefs.director_share_context:
                 box.label(text="Enable material sharing above before sending an instruction", icon="INFO")
+        # Progress of the last instruction, kept as its record ---------------------
+        if not session.progress.running:
+            draw_progress(layout, context)
         # Changes -----------------------------------------------------------------
         box = layout.box()
         box.label(text="Changes", icon="TEXT")

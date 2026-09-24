@@ -320,8 +320,9 @@ python3 scripts/probe_director_codex.py --codex /absolute/path/to/codex
 ```
 
 This starts a localhost fake Responses endpoint and the real Codex app-server, then checks the
-model-facing capability inventory, context/proposal tool round trips, the companion handshake and
-cleanup. It creates temporary isolated state and uses no real account credentials or paid inference.
+model-facing capability inventory, context/proposal tool round trips, the progress streams (a
+reasoning summary and a commentary note reach Blender apart from the final reply), the companion
+handshake and cleanup. It creates temporary isolated state and uses no real account credentials or paid inference.
 Local port binding must be permitted. Do not claim this verifies live authentication or model quality.
 
 Manual account acceptance: install the ZIP in an isolated Blender profile, enable online access and

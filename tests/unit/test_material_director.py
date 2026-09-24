@@ -18,6 +18,7 @@ from open_painter.authoring import schema
 from open_painter.ai import protocol
 from open_painter.ai import generated_images
 from open_painter.ai import codex_client, transport
+from open_painter.ai import progress as director_progress
 from open_painter.ai.codex_client import CodexClient, launch_arguments
 
 
@@ -238,7 +239,7 @@ class CancellationTests(unittest.TestCase):
             model="actual-model", modelProvider="openai", reasoningEffort="high", serviceTier="default",
             account=dict(email="private@example.com")))
         self.assertEqual(c.emitted, [dict(event="turn_metadata", request_id="one", model="actual-model",
-            provider="openai", reasoning_effort="high", service_tier="default")])
+            provider="openai", reasoning_effort="high", service_tier="default", time_limit=900)])
 
     def test_reroute_and_usage_are_bound_to_the_active_thread(self):
         c = self.client
@@ -260,6 +261,58 @@ class CancellationTests(unittest.TestCase):
         c.events.put(dict(method="model/rerouted", params=dict(threadId="thread-one", toModel="late")))
         c.poll()
         self.assertFalse(c.emitted)
+
+    def test_reasoning_summaries_reach_blender_once(self):
+        c = self.client
+        c.run(self.message)
+        self.respond(0, dict(thread=dict(id="thread-one")))
+        c.emitted.clear()
+        for thread in ("thread-old", "thread-one"):
+            c.events.put(dict(method="item/reasoning/summaryTextDelta", params=dict(threadId=thread,
+                itemId="rs_1", summaryIndex=0, delta="**Reading**")))
+        # Streamed summaries are not repeated by the finished item; unstreamed ones are.
+        for item_id, summary in (("rs_1", ["**Reading** the material"]), ("rs_2", ["", "**Only at the end**"])):
+            c.events.put(dict(method="item/completed", params=dict(threadId="thread-one",
+                item=dict(type="reasoning", id=item_id, summary=summary))))
+        c.poll()
+        self.assertEqual(c.emitted, [
+            dict(event="thinking", request_id="one", item_id="rs_1", part=0, text="**Reading**"),
+            dict(event="thinking", request_id="one", item_id="rs_2", part=1, text="**Only at the end**")])
+
+    def test_commentary_streams_as_progress_and_the_answer_as_the_reply(self):
+        c = self.client
+        c.run(self.message)
+        self.respond(0, dict(thread=dict(id="thread-one")))
+        c.emitted.clear()
+        for item_id, phase, text in (("note", "commentary", "I'll read the material first."),
+                                     ("answer", "final_answer", "Done."), ("legacy", None, " Also this.")):
+            c.events.put(dict(method="item/started", params=dict(threadId="thread-one",
+                item=dict(type="agentMessage", id=item_id, phase=phase, text=""))))
+            c.events.put(dict(method="item/agentMessage/delta", params=dict(threadId="thread-one", itemId=item_id, delta=text)))
+        c.poll()
+        self.assertEqual(c.emitted, [
+            dict(event="commentary", request_id="one", item_id="note", text="I'll read the material first."),
+            dict(event="text", request_id="one", text="Done."),
+            dict(event="text", request_id="one", text=" Also this.")])
+
+    def test_unstreamed_messages_keep_their_phase(self):
+        c = self.client
+        c.run(self.message)
+        self.respond(0, dict(thread=dict(id="thread-one")))
+        c.emitted.clear()
+        # A streamed note is not repeated by its finished item, and does not
+        # swallow later messages that arrive whole.
+        c.events.put(dict(method="item/started", params=dict(threadId="thread-one",
+            item=dict(type="agentMessage", id="streamed", phase="commentary", text=""))))
+        c.events.put(dict(method="item/agentMessage/delta", params=dict(threadId="thread-one", itemId="streamed", delta="Reading.")))
+        for item_id, phase, text in (("streamed", "commentary", "Reading."), ("note", "commentary", "Checking."),
+                                     ("answer", "final_answer", "Answer.")):
+            c.events.put(dict(method="item/completed", params=dict(threadId="thread-one",
+                item=dict(type="agentMessage", id=item_id, phase=phase, text=text))))
+        c.poll()
+        self.assertEqual(c.emitted, [dict(event="commentary", request_id="one", item_id="streamed", text="Reading."),
+                                     dict(event="commentary", request_id="one", item_id="note", text="Checking."),
+                                     dict(event="text", request_id="one", text="Answer.")])
 
     def test_account_request_failure_keeps_the_running_turn(self):
         c = self.client
@@ -293,10 +346,133 @@ class CancellationTests(unittest.TestCase):
         args = launch_arguments("codex")
         for setting in (
             'features.shell_tool=false', 'features.unified_exec=false',
-            'features.plugins=false', 'web_search="disabled"', 'mcp_servers={}'
+            'features.plugins=false', 'web_search="disabled"', 'mcp_servers={}',
+            'model_reasoning_summary="auto"'
         ):
             self.assertIn(setting, args)
         self.assertIn("--strict-config", args)
+
+
+class ProgressTests(unittest.TestCase):
+    """What the Material Assistant shows while an instruction runs, on a fake clock."""
+
+    def setUp(self):
+        self.time = 100.
+        self.progress = director_progress.Progress(now=lambda: self.time)
+
+    def advance(self, seconds):
+        self.time += seconds
+
+    def test_nothing_is_recorded_outside_an_instruction(self):
+        p = self.progress
+        self.assertIsNone(p.step("Stray"))
+        p.think("rs", 0, "**Stray**")
+        p.note("note", "Stray")
+        p.finish("completed", "Stray")
+        self.assertEqual((p.steps, p.thoughts, p.notes, p.summary(), p.transcript()), ([], [], [], "", []))
+        self.assertFalse(p.owns(None))
+
+    def test_busy_work_then_thinking_between_steps(self):
+        p = self.progress
+        p.begin("one")
+        p.step("Sent the instruction", "SEND", busy=True)
+        self.advance(4)
+        self.assertEqual(p.activity(), ("Sent the instruction", "SEND", 4.))
+        p.step("Codex started on gpt-5.5")
+        self.advance(3)
+        self.assertEqual(p.activity(), ("Codex is thinking", "THINK", 3.))
+        self.assertEqual(p.hint(), "")
+        render = p.step("Rendering candidate 1/3 in Eevee", "WAIT", busy=True)
+        self.advance(2)
+        self.assertEqual(p.activity(), ("Rendering candidate 1/3 in Eevee", "WAIT", 2.))
+        self.assertIn("Blender pauses", p.hint())
+        self.advance(40)
+        p.end(render, 42.)
+        self.advance(5)
+        self.assertEqual(p.activity(), ("Codex is thinking", "THINK", 5.))
+        self.advance(31)
+        self.assertEqual(p.hint(), "Still working: long reasoning can pass minutes without an update")
+        p.step("Generating texture 1… This can take a few minutes.", "IMAGE", busy=True)
+        self.assertIn("OpenAI's servers", p.hint())
+        p.step("Texture 1 ready (1024 × 1024)", "IMAGE")
+        self.assertEqual(p.activity()[1], "THINK")
+        self.assertEqual(p.summary(), "Working · 1:25")
+
+    def test_reasoning_headings_join_the_timeline_once(self):
+        p = self.progress
+        p.begin("one")
+        p.think("rs", 0, "**Plan")
+        self.assertEqual(p.steps, [])   # The heading is still streaming.
+        p.think("rs", 0, "ning rust**\n\nWater pools on the `lower` rim.")
+        p.think("rs", 0, " It runs down.")
+        self.advance(1)
+        p.think("rs", 1, "**Checking coverage**")
+        self.assertEqual([(s["text"], s["kind"]) for s in p.steps],
+                         [("Planning rust", "THOUGHT"), ("Checking coverage", "THOUGHT")])
+        self.assertEqual(p.latest(), ("THOUGHT", "Checking coverage", ""))
+        self.advance(1)
+        p.note("msg", "I'll capture ")
+        p.note("msg", "three **views**.")
+        self.assertEqual(p.latest(), ("NOTE", "", "I'll capture three views."))
+        self.assertEqual([(s["text"], s["kind"]) for s in p.steps[2:]], [("I'll capture three views.", "NOTE")])
+        self.assertEqual(p.thoughts[0]["text"], "**Planning rust**\n\nWater pools on the `lower` rim. It runs down.")
+
+    def test_records_stay_bounded(self):
+        p = self.progress
+        p.begin("one")
+        for index in range(director_progress.MAX_STEPS + 5):
+            p.step(f"step {index}")
+        self.assertEqual(len(p.steps), director_progress.MAX_STEPS)
+        self.assertEqual(p.steps[0]["text"], "step 5")
+        for index in range(director_progress.MAX_THOUGHTS + 3):
+            p.think(f"rs{index}", 0, "x")
+        self.assertEqual(len(p.thoughts), director_progress.MAX_THOUGHTS)
+        p.think("long", 0, "y" * (director_progress.MAX_TEXT + 10))
+        self.assertEqual(len(p.thoughts[-1]["text"]), director_progress.MAX_TEXT)
+        self.assertEqual(len(p.step("z" * 1000)["text"]), 300)
+
+    def test_finish_keeps_the_record_and_ignores_late_calls(self):
+        p = self.progress
+        p.begin("one")
+        render = p.step("Rendering the material channels", "WAIT", busy=True)
+        self.advance(65)
+        p.end(render, 65., "Open a 3D View for\nmaterial inspection")
+        p.think("rs", 0, "**Reviewing**\n\nThe edges\n\nare too clean.")
+        self.assertTrue(p.owns("one"))
+        self.assertFalse(p.owns("two"))
+        p.finish("stopped", "Stopped before Codex finished")
+        self.advance(100)
+        self.assertFalse(p.running)
+        self.assertFalse(p.owns("one"))
+        self.assertEqual(p.summary(), "Stopped after 1:05")
+        self.assertIsNone(p.step("late"))
+        p.end(render, 1., "late")
+        self.assertEqual(p.activity(), ("Stopped before Codex finished", "STOPPED", 0.))
+        self.assertEqual(p.transcript(), [
+            "Stopped after 1:05",
+            "0:00  Rendering the material channels (1:05)",
+            "      Rejected: Open a 3D View for material inspection",
+            "1:05  Reviewing",
+            "1:05  Stopped before Codex finished",
+            "",
+            "Reasoning summaries:",
+            "• Reviewing",
+            "  The edges",
+            "  are too clean."])
+        p.begin("two")
+        self.assertEqual((p.steps, p.thoughts, p.summary()), ([], [], "Working · 0:00"))
+
+    def test_formatting_and_tool_labels(self):
+        self.assertEqual([director_progress.clock(s) for s in (0, 7.9, 65, 3723, -3)],
+                         ["0:00", "0:07", "1:05", "1:02:03", "0:00"])
+        self.assertEqual(director_progress.heading("  **Plan**\nBody `x`"), ("Plan", "Body x"))
+        self.assertEqual(director_progress.heading("No heading **bold**"), ("", "No heading bold"))
+        self.assertEqual(director_progress.tool_label("some_new_tool"), "Running some new tool")
+        from open_painter.authoring.context import tools
+        names = {tool["name"] for scene_scope in (False, True) for tool in tools(scene_scope)}
+        # Every Painter tool reads as a sentence, and only real tools are held for a redraw.
+        self.assertEqual(names - set(director_progress.TOOL_LABELS), set())
+        self.assertLessEqual(director_progress.BLOCKING_TOOLS, names)
 
 
 @unittest.skipIf(os.name == "nt", "shebang launchers are a POSIX layout")

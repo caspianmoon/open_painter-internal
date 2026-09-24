@@ -23,6 +23,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--codex", required=True)
 args = parser.parse_args()
 requests = []
+SUMMARY = "**Reading the material**\n\nStart from the selected set's context."
+NOTE = "I'll read the material first."
+ANSWER = "The selected material is editable."
 
 
 class Model(BaseHTTPRequestHandler):
@@ -35,24 +38,41 @@ class Model(BaseHTTPRequestHandler):
         if self.headers.get("Content-Encoding") == "gzip":
             data = gzip.decompress(data)
         requests.append(json.loads(data))
+        before = []   # Progress the artist sees before the item: a reasoning summary and a note.
         if len(requests) == 1:
             item = dict(type="function_call", id="call_1", call_id="call_1", name="get_context", arguments="{}", status="completed")
+            reasoning = dict(type="reasoning", id="rs_1", summary=[dict(type="summary_text", text=SUMMARY)])
+            note = dict(type="message", id="msg_note", role="assistant", status="completed", phase="commentary",
+                        content=[dict(type="output_text", text=NOTE, annotations=[])])
+            before = [
+                ("response.output_item.added", dict(output_index=0, item=dict(reasoning, summary=[]))),
+                ("response.reasoning_summary_part.added", dict(item_id="rs_1", output_index=0, summary_index=0,
+                                                              part=dict(type="summary_text", text=""))),
+                ("response.reasoning_summary_text.delta", dict(item_id="rs_1", output_index=0, summary_index=0, delta=SUMMARY[:12])),
+                ("response.reasoning_summary_text.delta", dict(item_id="rs_1", output_index=0, summary_index=0, delta=SUMMARY[12:])),
+                ("response.output_item.done", dict(output_index=0, item=reasoning)),
+                ("response.output_item.added", dict(output_index=1, item=dict(note, status="in_progress", content=[]))),
+                ("response.output_text.delta", dict(item_id="msg_note", output_index=1, content_index=0, delta=NOTE)),
+                ("response.output_item.done", dict(output_index=1, item=note))]
         elif len(requests) == 2:
             proposal = dict(version=1, summary="Steel", commands=[dict(op="add_layer", id="new:steel", name="Steel", kind="FILL")])
             item = dict(type="function_call", id="call_2", call_id="call_2", name="propose_changes",
                         arguments=json.dumps(dict(proposal_json=json.dumps(proposal))), status="completed")
         else:
-            item = dict(type="message", id="msg_1", role="assistant", status="completed",
-                        content=[dict(type="output_text", text="The selected material is editable.", annotations=[])])
+            item = dict(type="message", id="msg_1", role="assistant", status="completed", phase="final_answer",
+                        content=[dict(type="output_text", text=ANSWER, annotations=[])])
+        output = [values["item"] for kind, values in before if kind == "response.output_item.done"] + [item]
+        index = len(output) - 1
         response = dict(id=f"resp_{len(requests)}", object="response", created_at=1, model="gpt-5.5",
-                        status="completed", output=[item], usage=dict(input_tokens=1, output_tokens=1, total_tokens=2))
+                        status="completed", output=output, usage=dict(input_tokens=1, output_tokens=1, total_tokens=2))
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         for kind, values in (
             ("response.created", dict(response=dict(response, status="in_progress", output=[]))),
-            ("response.output_item.added", dict(output_index=0, item=item)),
-            ("response.output_item.done", dict(output_index=0, item=item)),
+            *before,
+            ("response.output_item.added", dict(output_index=index, item=item)),
+            ("response.output_item.done", dict(output_index=index, item=item)),
             ("response.completed", dict(response=response)),
         ):
             self.wfile.write(("event: " + kind + "\ndata: " + json.dumps(dict(type=kind, **values)) + "\n\n").encode())
@@ -75,6 +95,7 @@ with tempfile.TemporaryDirectory(prefix="painter-capability-probe-") as director
         started = False
         completed = False
         calls = 0
+        seen = []
         while time.monotonic() < deadline and not completed:
             client.poll()
             if client.initialized and not client.pending and not started:
@@ -85,6 +106,7 @@ with tempfile.TemporaryDirectory(prefix="painter-capability-probe-") as director
                 started = True
             while events:
                 event = events.pop(0)
+                seen.append(event)
                 if event["event"] == "error":
                     raise AssertionError(event["message"])
                 if event["event"] == "tool":
@@ -102,6 +124,12 @@ with tempfile.TemporaryDirectory(prefix="painter-capability-probe-") as director
                     completed = True
             time.sleep(.01)
         assert completed and calls == 2 and len(requests) == 3, (completed, calls, len(requests))
+        # The artist follows the turn: reasoning summaries and progress notes reach
+        # Blender as they stream, apart from the reply.
+        assert requests[0].get("reasoning", {}).get("summary") == "auto", requests[0].get("reasoning")
+        streamed = {kind: "".join(e["text"] for e in seen if e["event"] == kind) for kind in ("thinking", "commentary", "text")}
+        assert streamed == dict(thinking=SUMMARY, commentary=NOTE, text=ANSWER), streamed
+        assert next(e for e in seen if e["event"] == "turn_metadata")["time_limit"] == 900
         expected = {t["name"] for t in tools()}
         for request in requests:
             inventory = request["tools"]
@@ -120,7 +148,7 @@ with tempfile.TemporaryDirectory(prefix="painter-capability-probe-") as director
         report = dict(result="PASS", runtime=client.version, painter_tools=sorted(expected),
                       builtin_read_only_tools=["skills.list", "skills.read", "request_user_input"],
                       native_image_generation_advertised="image_generation" in found,
-                      context_and_proposal_roundtrip=True)
+                      context_and_proposal_roundtrip=True, progress_streams=sorted(streamed))
     finally:
         client.close()
         server.shutdown()

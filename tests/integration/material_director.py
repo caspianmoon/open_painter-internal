@@ -43,6 +43,9 @@ class DirectorTests(unittest.TestCase):
 
     def tearDown(self):
         session.request = None
+        session.progress.reset()
+        session._pending.clear()
+        session._announced.clear()
         shader_preview.clear()
 
     def apply(self, proposal, **kwargs):
@@ -458,6 +461,70 @@ class DirectorTests(unittest.TestCase):
             session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Less wear")
             self.assertEqual(session.tick(), .05)
             self.assertIs(session.connection, fixture)
+
+    def test_blocking_tool_step_is_drawn_before_blender_runs_it(self):
+        from types import SimpleNamespace
+        sent, events, calls = [], [], []
+        fixture = SimpleNamespace(send=sent.append, close=lambda: None,
+                                  poll=lambda: [events.pop(0) for _ in range(len(events))])
+        session.request = session.capture(bpy.context, mode="PLAN", scope="SET", prompt="Less wear")
+        identifier = session.request["id"]
+        session.progress.begin(identifier)
+        events.extend([
+            dict(event="thinking", request_id=identifier, item_id="rs", part=0, text="**Checking the channels**\n\nRoughness"),
+            dict(event="tool", call_id=7, request_id=identifier, tool="inspect_material_channels",
+                 arguments=dict(texture_set_id=self.ts.id)),
+            dict(event="commentary", request_id=identifier, item_id="note", text="Next I'll propose less wear.")])
+
+        def tool_call(event):
+            calls.append(event["tool"])
+            return dict(channels={})
+        with patch.object(session, "connection", fixture), patch.object(session, "ensure_online"), \
+                patch.object(session, "tool_call", tool_call), patch.object(session, "redraw") as redraw:
+            session.tick()
+            # The step is recorded and drawn while Blender has not started the render.
+            self.assertEqual(calls, [])
+            self.assertEqual(sent, [])
+            redraw.assert_called_once()
+            self.assertEqual([s["kind"] for s in session.progress.steps], ["THOUGHT", "WAIT"])
+            self.assertEqual(session.progress.activity()[:2], ("Rendering the material channels", "WAIT"))
+            self.assertIn("Blender pauses", session.progress.hint())
+            session.tick()
+            self.assertEqual(calls, ["inspect_material_channels"])
+            self.assertEqual([(m["call_id"], m["success"]) for m in sent], [(7, True)])
+            wait = session.progress.steps[1]
+            self.assertFalse(wait["busy"])
+            self.assertIsNotNone(wait["seconds"])
+            self.assertEqual(session.progress.steps[-1]["text"], "Next I'll propose less wear.")
+            self.assertEqual(session.progress.activity()[1], "THINK")
+            # Quick tools answer in the same tick; a rejection stays visible in the log.
+            events.append(dict(event="tool", call_id=8, request_id=identifier, tool="propose_changes",
+                               arguments=dict(proposal_json="{}")))
+            with patch.object(session, "tool_call", side_effect=schema.AuthoringError("Proposal is invalid")):
+                session.tick()
+            self.assertEqual([(m["call_id"], m["success"]) for m in sent], [(7, True), (8, False)])
+            self.assertEqual(session.progress.steps[-1]["error"], "Proposal is invalid")
+        self.assertIsNone(session.request["draft"])
+
+    def test_progress_notes_stay_out_of_the_reply_and_close_the_log(self):
+        session.request = session.capture(bpy.context, mode="EXPLAIN", scope="SET", prompt="Why is the wear uniform?")
+        identifier = session.request["id"]
+        session.progress.begin(identifier)
+        session.state["response"] = ""
+        session.handle(dict(event="turn_metadata", request_id=identifier, model="gpt-5.5", reasoning_effort="high", time_limit=180))
+        session.handle(dict(event="commentary", request_id=identifier, item_id="note", text="I'll read the layers."))
+        session.handle(dict(event="thinking", request_id="stale", item_id="rs", part=0, text="**Elsewhere**"))
+        self.assertEqual(session.state["response"], "")
+        self.assertEqual(session.progress.time_limit, 180)
+        self.assertEqual([s["text"] for s in session.progress.steps],
+                         ["Codex started on gpt-5.5 · high reasoning", "I'll read the layers."])
+        session.handle(dict(event="completed", request_id=identifier, status="completed"))
+        # A turn that only narrated still answers in the reply, as before notes were split out.
+        self.assertEqual(session.state["response"], "I'll read the layers.")
+        self.assertFalse(session.progress.running)
+        self.assertEqual(session.progress.outcome, "completed")
+        self.assertEqual(session.progress.steps[-1]["kind"], "DONE")
+        self.assertTrue(session.progress.summary().startswith("Finished in"))
 
     def test_scene_inspection_captures_from_the_painter_area(self):
         other, _, _ = self.scene_fixture()

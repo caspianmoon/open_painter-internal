@@ -214,6 +214,28 @@ def session_graph(scene, ts):
     return None
 
 
+def live_instance_pointers():
+    """``as_pointer()`` of every live session's material instance node.
+
+    The material repair sweep uses these to skip instances another session
+    still drives (a material shared across sets). Pointer comparison never
+    touches a node's tree reference, so it is safe where reading
+    ``node.node_tree`` is not.
+    """
+    pointers = set()
+    for entry in _sessions.values():
+        graph = entry.get('graph')
+        if graph is None:
+            continue
+        try:
+            instance = graph.instance
+            if instance is not None:
+                pointers.add(instance.as_pointer())
+        except (ReferenceError, RuntimeError):
+            continue
+    return pointers
+
+
 def diagnostics(scene, ts):
     key = key_for(scene, ts)
     entry = _sessions.get(key, {})

@@ -161,14 +161,27 @@ def repair(ts, image_overrides=None):
     if image_overrides is None and shader_preview.requested(ts):
         # A saved/detached graph remains usable without the extension. Remove it
         # only after a successful replacement has been wired to the surface.
+        # Never read ``old.node_tree`` here: that getter refines a raw pointer
+        # and access-violates Blender when the referenced tree is gone instead
+        # of raising. Trees are swept by owner tags below instead.
+        live = shader_preview.live_instance_pointers()
         for old in list(nodes):
             if old.get(OWNER) and old.get('role') == 'Procedural Graph' and old != graph.instance:
-                tree = old.node_tree
-                nodes.remove(old)
-                if tree and not tree.users and tree.get(OWNER):
-                    bpy.data.node_groups.remove(tree)
-        from ..evaluation.shader_graph import remove_orphan_units
+                try:
+                    if old.as_pointer() in live:
+                        # Another live session drives this instance (a material
+                        # shared across sets): never delete a session's graph
+                        # from under it.
+                        continue
+                except (ReferenceError, RuntimeError):
+                    pass
+                try:
+                    nodes.remove(old)
+                except (ReferenceError, RuntimeError):
+                    continue
+        from ..evaluation.shader_graph import remove_orphan_tops, remove_orphan_units
         remove_orphan_units(ts.id)
+        remove_orphan_tops(ts.id)
         shader_preview.mark_attached(ts.id_data, ts, graph)
     else:
         shader_preview.mark_attached(ts.id_data, ts)

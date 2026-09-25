@@ -298,8 +298,30 @@ class OP_MT_graph_add_scene(_AddMenu, bpy.types.Menu):
     bl_label = 'Scene Field'
 
     def draw(self, context):
-        for item in bpy.types.OP_Influencer.bl_rna.properties['kind'].enum_items:
-            self.item('SCENE', item.identifier, item.name)
+        for identifier, name in _scene_kind_items():
+            self.item('SCENE', identifier, name)
+
+
+def _scene_kind_items():
+    """(identifier, name) pairs for scene influencer kinds, registration-proof.
+
+    Menu draws keep running across disable/enable (the reinstall script):
+    ``bpy.types.OP_Influencer`` vanishes in that window and every redraw
+    logged an AttributeError instead of drawing.
+    """
+    candidates = [getattr(bpy.types, 'OP_Influencer', None)]
+    try:
+        from ..properties.influencer import OP_Influencer
+        candidates.append(OP_Influencer)
+    except ImportError:
+        pass
+    for candidate in candidates:
+        try:
+            items = candidate.bl_rna.properties['kind'].enum_items
+        except (AttributeError, KeyError):
+            continue
+        return tuple((item.identifier, item.name) for item in items)
+    return ()
 
 
 class OP_MT_graph_add_mask_filter(_AddMenu, bpy.types.Menu):

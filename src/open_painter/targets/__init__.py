@@ -122,6 +122,8 @@ def manifest(target, ts, files):
     """What an importer needs to know about the exported files."""
     return {
         'target': target.key, 'label': target.label, 'texture_set': ts.name,
+        'udim_tile': getattr(ts, 'udim_tile', 0) or None,
+        'udim_group': getattr(ts, 'udim_group', '') or None,
         'normal_map': {'convention': target.normal, 'green': 'down (-Y)' if target.normal == 'DIRECTX' else 'up (+Y)',
                        'tangent_space': True},
         'gloss': target.gloss, 'ambient_occlusion': target.ao_usage.lower(),

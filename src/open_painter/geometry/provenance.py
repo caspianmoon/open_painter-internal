@@ -141,6 +141,8 @@ def record(ts, kind, legacy=False):
         corrections = corrections_signature(ts, kind)
         if corrections:
             extra['corrections'] = corrections
+    if getattr(ts, 'udim_tile', 0):
+        extra['udim'] = (ts.udim_tile, ts.udim_source_uv)
     return json.dumps(dict(version=ALGORITHM_VERSION, kind=kind,
         resolution=int(ts.resolution), frame=(scene.frame_current, scene.frame_subframe),
         targets=[(object_record(ref.object, transform), ref.slot_index) for ref in ts.assignments],

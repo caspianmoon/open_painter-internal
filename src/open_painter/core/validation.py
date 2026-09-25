@@ -3,6 +3,11 @@
 
 def validate(ts) -> list[str]:
     issues = hierarchy_issues(ts)
+    from .udim import validate as validate_udim
+    try:
+        validate_udim(ts)
+    except ValueError as exc:
+        issues.append(str(exc))
     if not ts.material:
         issues.append("Managed material is missing. Use Repair Material.")
     if not ts.assignments:

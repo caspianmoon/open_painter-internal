@@ -94,7 +94,11 @@ def mesh_signature(mesh):
         collection.foreach_get(prop, values)
         h.update(str((prop, len(collection))).encode()); h.update(values.tobytes())
     for uv in mesh.uv_layers:
-        h.update(str((uv.name, uv.active_render, uv == mesh.uv_layers.active)).encode())
+        if uv.name == mesh.get('open_painter_udim_paint_uv', ''):
+            continue   # derived native-paint coordinates, never authoring geometry
+        original_uv = mesh.get('open_painter_udim_original_uv')
+        active = uv.name == original_uv if original_uv is not None else uv == mesh.uv_layers.active
+        h.update(str((uv.name, uv.active_render, active)).encode())
         values = np.empty(len(uv.data)*2, np.float32)
         uv.data.foreach_get('uv', values); h.update(values.tobytes())
     signature = h.hexdigest()
@@ -387,6 +391,7 @@ def _key_token(scene, ts):
     # but a stroke reported through ``mesh_epoch`` alone (as the suites simulate) must not
     # be served the key of the mesh before it.
     return (_epoch, ts.edit_serial, scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
+            getattr(ts, 'udim_tile', 0), getattr(ts, 'udim_source_uv', ''),
             tuple((ref.object.as_pointer() if ref.object is not None else None, ref.slot_index,
                    _mesh_epochs.get(ref.object.data.as_pointer(), 0)
                    if ref.object is not None and ref.object.type == 'MESH' else None)
@@ -424,6 +429,8 @@ def geometry_key(scene, ts):
     frames = tuple(decals.signature(layer) for layer in decals.layers_of(ts))
     time = (scene.frame_current, scene.frame_subframe) if animated(ts) else None
     key = (int(ts.resolution), time, tuple(objects), fields, selectors, frames)
+    if getattr(ts, 'udim_tile', 0):
+        key += (ts.udim_tile, ts.udim_source_uv)
     _keys[slot] = (token, key)
     return key
 

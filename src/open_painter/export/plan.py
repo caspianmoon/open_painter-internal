@@ -210,12 +210,13 @@ def resolve(context, *, contents="TEXTURES", scope="ACTIVE", folder_source="PROJ
             plan.sets.append(item)
             continue
         extension = "png" if used["file_format"] == "PNG" else "tif"
+        from .exporter import set_filename
         for label, definition in definitions(used["preset"], settings):
             if naming == "TARGET":
-                name = target_registry.filename(target, ts.name, label, extension, settings.prefix, settings.suffix)
+                name = set_filename(ts, label, extension, naming=lambda set_name, channel, ext:
+                    target_registry.filename(target, set_name, channel, ext, settings.prefix, settings.suffix))
             else:
-                from .exporter import filename
-                name = filename(ts.name, label, extension, settings.prefix, settings.suffix)
+                name = set_filename(ts, label, extension, settings.prefix, settings.suffix)
             path = folder / name
             item.outputs.append(Output(label=label, definition=definition, path=path, size=size,
                                        file_format=used["file_format"], bit_depth=used["bit_depth"],

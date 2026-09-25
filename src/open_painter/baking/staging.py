@@ -57,6 +57,14 @@ class BakeStage:
                 raise ValueError(f'Evaluated target {group.low.name} has no UV map')
             if any(index < 0 or index >= len(target.material_slots) for index in assigned):
                 raise ValueError(f'Evaluated target {group.low.name} lost an assigned material slot')
+            if self.ts.udim_tile:
+                from ..core.udim import source_uv, local_uv
+                faces = [p.index for p in target.data.polygons if p.material_index in assigned]
+                values = local_uv(target.data, self.ts, faces)
+                uv = source_uv(target.data, self.ts)
+                uv.data.foreach_set('uv', values.ravel())
+                uv.active_render = True
+                target.data.uv_layers.active = uv
             for index in range(len(target.material_slots)):
                 material = bpy.data.materials.new('OP Bake Target')
                 self.materials.append(material)

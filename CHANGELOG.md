@@ -1,5 +1,16 @@
 # Changes
 
+## Unreleased — UDIM authoring
+
+- Create one texture set per occupied UDIM tile (1001–2000), with per-tile
+  resolution, layers, masks and bake maps. Source UVs and original materials survive.
+- Tile-aware CPU and native shader evaluation, native and multi-channel painting
+  across sets, bake staging, region correction, atlas mapping and height displacement.
+- Export numbered files such as `Robot_BaseColor.1002.png`; target and bundle
+  manifests identify the tile. Save/reopen retains tile metadata and paint-session UV restoration.
+- Validate face boundaries before creation and roll back failed assignment. Existing
+  painted sets are not automatically split. See [UDIM workflow](docs/udim-workflow.md).
+
 ## Unreleased — aging procedurals
 
 - Shared, growing coating-damage masks keep primer and conversion inside paint

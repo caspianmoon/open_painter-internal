@@ -58,7 +58,7 @@ def _face_selection(nodes, links, slots):
     return on_faces.outputs['Value']
 
 
-def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created):
+def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created, origin=None):
     group = bpy.data.node_groups.new('OP Displacement', 'GeometryNodeTree')
     created.append(group)
     group.interface.new_socket(name='Geometry', in_out='INPUT', socket_type='NodeSocketGeometry')
@@ -83,6 +83,12 @@ def _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, crea
     texture.extension = 'EXTEND'
     texture.inputs['Image'].default_value = image
     links.new(uv.outputs['Attribute'], texture.inputs['Vector'])
+    if origin is not None:
+        local = nodes.new('ShaderNodeVectorMath')
+        local.operation = 'SUBTRACT'
+        local.inputs[1].default_value = (*origin, 0)
+        links.new(uv.outputs['Attribute'], local.inputs[0])
+        links.new(local.outputs['Vector'], texture.inputs['Vector'])
     # Corner value → vertex value: the first corner of each vertex (no seam averaging).
     corners = nodes.new('GeometryNodeCornersOfVertex')
     index = nodes.new('GeometryNodeInputIndex')
@@ -154,7 +160,13 @@ def create(ts, obj, image, levels=2, amplitude=None, midlevel=.5, smooth=False, 
     if not np.isin(material_index, np.fromiter(slots, np.int32, len(slots))).any():
         raise ValueError(f'{obj.name} has no evaluated faces in its assigned slots')
     limits.check(scene, 0, faces * (4 ** levels) * 2, replacing=replacing)
-    uv_name = _uv_name(obj)
+    uv_name = ts.udim_source_uv if ts.udim_tile else _uv_name(obj)
+    origin = None
+    if ts.udim_tile:
+        from ..core.udim import validate
+        from ..geometry.udim import tile_origin
+        validate(ts)
+        origin = tile_origin(ts.udim_tile)
     identifier = new_id()
     created = []
     try:
@@ -166,7 +178,7 @@ def create(ts, obj, image, levels=2, amplitude=None, midlevel=.5, smooth=False, 
         helper.matrix_world = obj.matrix_world.copy()
         helper.parent = obj
         helper.matrix_parent_inverse = obj.matrix_world.inverted_safe()   # a flat source still gets its helper
-        group = _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created)
+        group = _node_group(image, uv_name, levels, amplitude, midlevel, smooth, slots, created, origin)
         modifier = helper.modifiers.new('Open Painter Displacement', 'NODES')
         modifier.node_group = group
         for item in created:

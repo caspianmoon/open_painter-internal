@@ -92,6 +92,14 @@ def capture(context, scene, bindings):
             nonmanifold = 0
             for identifier in set(sets.values()):
                 slots = {slot for slot, value in sets.items() if value == identifier}
+                ts = next(item for item in scene.open_painter.texture_sets if item.id == identifier)
+                if ts.udim_tile:
+                    from ..core.udim import local_uv
+                    faces = np.unique(polygons[np.isin(materials, list(slots))])
+                    coords = local_uv(mesh, ts, faces)
+                    for face in faces:
+                        indices = list(mesh.polygons[int(face)].loop_indices)
+                        uv[indices] = coords[indices]
                 target = dict(mesh=mesh, uv=uv, positions=positions, slots=slots,
                               tri_polygons=polygons[np.isin(materials, list(slots))])
                 if not layer:

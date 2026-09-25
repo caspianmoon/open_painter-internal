@@ -319,6 +319,8 @@ def begin_brush(context, ts, key):
         bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
         ensure_brush(context)
         paint_session.restrict_faces(project, obj, ts)
+        from ..core.udim import paint_uv
+        paint_uv(project, obj, [ts])
     except Exception:
         paint_session.finish(context, evaluate=False)
         raise
@@ -519,8 +521,8 @@ def face_map(context, ts, flush=False):
                 _, tri_loops, tri_material, tri_polygons = _triangle_arrays(mesh)
                 slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
                 chosen = np.isin(tri_material, np.fromiter(slots, np.int32, len(slots)))
-                uv = np.empty((len(mesh.loops), 2), np.float32)
-                uv_layer.data.foreach_get('uv', uv.ravel())
+                from ..core.udim import local_uv
+                uv = local_uv(mesh, ts, np.unique(tri_polygons[chosen]))
                 rows, cols, tris, _ = rasterize(uv[tri_loops[chosen]], n)
                 if len(rows):
                     ids[rows, cols] = tri_polygons[chosen][tris]

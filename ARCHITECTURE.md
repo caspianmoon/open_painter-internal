@@ -16,6 +16,17 @@ Blender user data directory or a user-chosen directory, never the installed exte
 
 ## Layer evaluation
 
+UDIM sets use ordinary managed images, one set per tile, rather than depending on
+Blender's ambiguous `Image.pixels` access for tiled images. `core/udim.py` validates
+UV faces and routes them through owned material slots while retaining original
+slots. Persistent set metadata records the tile, source UV name, group and export
+stem. Geometry snapshots subtract the tile origin; native and CPU display shaders
+read the named source map and apply the same translation. Cycles translates only
+staged mesh copies. Native paint uses an owned derived UV map and restores the
+previous active map with the existing face-selection backup. Derived paint UVs
+do not invalidate bake provenance. Export naming has one shared tile suffix rule.
+See [UDIM workflow](docs/udim-workflow.md).
+
 Default authoring uses a persistent internal Blender material shader graph in
 `evaluation/shader_graph.py`, managed by `shader_preview.py`. The graph is a small
 top-level node group that instances one node group per compilation unit: a layer

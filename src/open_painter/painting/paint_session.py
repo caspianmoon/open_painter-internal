@@ -19,6 +19,8 @@ _scratch = {}
 def restore_faces(project) -> None:
     """Restore the artist's face selection, including after a save/reload."""
     obj = project.paint_object
+    from ..core.udim import restore_paint_uv
+    restore_paint_uv(project, obj)
     if obj and obj.type == "MESH":
         mesh = obj.data
         saved = project.paint_face_selection
@@ -131,6 +133,8 @@ def begin(context: bpy.types.Context, ts, channel: str, mask: bool = False) -> b
         bpy.ops.object.mode_set(mode="TEXTURE_PAINT")
         ensure_brush(context)
         restrict_faces(project, obj, ts)
+        from ..core.udim import paint_uv
+        paint_uv(project, obj, [ts])
     except Exception:
         finish(context, evaluate=False)
         raise
@@ -310,6 +314,8 @@ def begin_multi(context, ts, channel):
         mesh.polygons.foreach_set("select", [p.material_index in slots for p in mesh.polygons])
         mesh.use_paint_mask = True
         mesh.update()
+        from ..core.udim import paint_uv
+        paint_uv(project, obj, [member for member, _ in members])
     except Exception:
         finish(context, evaluate=False)
         raise

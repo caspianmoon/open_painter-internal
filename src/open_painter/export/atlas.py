@@ -65,7 +65,7 @@ def build(context,sources,resolution=2048,gutter=8):
             x=(index%side)*cell+gutter; y=(index//side)*cell+gutter
             cells.append((x,y))
             for ref in source.assignments:
-                if ref.object: owners.setdefault(ref.object,{})[ref.slot_index]=(x,y)
+                if ref.object: owners.setdefault(ref.object,{})[ref.slot_index]=(x,y,source)
         for original,slots in owners.items():
             mesh=bpy.data.meshes.new_from_object(original.evaluated_get(graph),preserve_all_data_layers=True,depsgraph=graph)
             meshes.append(mesh)
@@ -76,11 +76,18 @@ def build(context,sources,resolution=2048,gutter=8):
             old=np.empty((len(mesh.loops),2),np.float32); render_uv.data.foreach_get('uv',old.ravel())
             new=mesh.uv_layers.new(name='Open Painter Atlas UV')
             transformed=old.copy()
+            from ..core.udim import local_uv
+            coordinates={}
+            for slot,(_,_,source) in slots.items():
+                faces=[p.index for p in mesh.polygons if p.material_index==slot]
+                coordinates[slot]=local_uv(mesh,source,faces)
             for polygon in mesh.polygons:
                 origin=slots.get(polygon.material_index)
                 if origin is not None:
                     indices=list(polygon.loop_indices)
-                    transformed[indices]=(old[indices]*inner+origin)/resolution
+                    x,y,source=origin
+                    local=coordinates[polygon.material_index][indices]
+                    transformed[indices]=(local*inner+(x,y))/resolution
             new.data.foreach_set('uv',transformed.ravel()); new.active_render=True
             mesh.uv_layers.active=new
             for slot in sorted(slots): sets.assign(scene,atlas,obj,slot)

@@ -37,6 +37,17 @@ def filename(ts_name, channel, extension, prefix="", suffix=""):
     return f"{safe_name(prefix + ts_name)}_{safe_name(channel + suffix)}.{extension}"
 
 
+def set_filename(ts, channel, extension, prefix='', suffix='', naming=None):
+    """All export entry points share exactly the same UDIM naming contract."""
+    number = getattr(ts, 'udim_tile', 0)
+    name = ts.udim_name if number else ts.name
+    result = naming(name, channel, extension) if naming else filename(name, channel, extension, prefix, suffix)
+    if number:
+        stem, dot, ext = result.rpartition('.')
+        result = f'{stem}.{number}.{ext}' if dot else f'{result}.{number}'
+    return result
+
+
 def definitions_for(settings):
     return (custom.outputs(settings) if settings.preset == "CUSTOM"
             else {"BLENDER": blender, "UNREAL": unreal, "UNITY": unity, 'GODOT': godot,
@@ -64,8 +75,7 @@ def destinations_for(ts, settings, naming=None, directory=None):
         directory = Path(bpy.path.abspath(settings.directory))
     directory = Path(directory)
     extension = "png" if settings.file_format == "PNG" else "tif"
-    return [directory / (naming(ts.name, key, extension) if naming is not None
-                         else filename(ts.name, key, extension, settings.prefix, settings.suffix))
+    return [directory / set_filename(ts, key, extension, settings.prefix, settings.suffix, naming)
             for key, _ in definitions_for(settings)]
 
 

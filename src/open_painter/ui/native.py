@@ -799,10 +799,13 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         row = layout.row(align=True)
         for action, icon in [("ADD", "ADD"), ("ASSIGN", "LINKED"), ("DUPLICATE", "DUPLICATE")]:
             row.operator("open_painter.texture_set", text="", icon=icon).action = action
+        layout.operator("open_painter.texture_set", text="Create UDIM Sets", icon="UV").action = "ADD_UDIM"
         ts = active_set(context)
         if not ts:
             return
         row.prop(ts, "resolution", text="")
+        if ts.udim_tile:
+            layout.label(text=f"UDIM {ts.udim_tile} · {ts.udim_name}", icon="UV")
         # The active target at a glance: what it is assigned to, then the settings behind one click.
         objects = sorted({ref.object.name for ref in ts.assignments if ref.object})
         compact = row_metrics(context)[1]
@@ -824,6 +827,9 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         body.use_property_split = True
         body.use_property_decorate = False
         body.prop(ts, "name", text="Name")
+        if ts.udim_tile:
+            body.prop(ts, 'udim_name', text='Export Name')
+            body.label(text=f'Source UV: {ts.udim_source_uv}')
         body.prop(ts, 'preview_backend', text="Evaluation")
         if ts.preview_backend == 'CPU':
             body.prop(ts, 'preview_quality')

@@ -64,6 +64,14 @@ the geometry, UVs, seams, fusion and packed result are real. See
 
 ## Automated acceptance
 
+UDIM acceptance uses `udim_workflow.py` (bakes, export pixels, persistence,
+validation and rollback), `udim_material.py` (shader readback, material strokes,
+regional rebaking, displacement and atlas UVs), and `udim_paint_ui.py` (real native
+brush strokes on tile 1002 and across the tile boundary). Run the first two with
+`--background --factory-startup --python-exit-code 1 --python`; run the UI script
+without `--background`, with `--enable-event-simulate`. Reports are written under
+`.blender-test/udim-*.json`.
+
 `python3 scripts/run_tests.py` runs phase tests and the current integration suites in fresh background
 Blender processes, then runs the unit suite with Blender's bundled Python and NumPy. Test resources
 are isolated under `.blender-test/user`. Current suites include utility maps, the 50-material catalog,

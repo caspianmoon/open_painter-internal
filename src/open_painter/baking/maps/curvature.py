@@ -67,7 +67,7 @@ def crease_edges(mesh, world, minimum_angle, concave=False):
     return set(zip((edge_keys // vertices).tolist(), (edge_keys % vertices).tolist()))
 
 
-def prepare_creases(mesh, world, slots, n, minimum_angle, width, concave=False):
+def prepare_creases(mesh, world, slots, n, minimum_angle, width, concave=False, uv_coords=None):
     """Read crease-carrying triangles into arrays (inside the evaluated-mesh scope)."""
     from types import SimpleNamespace
     uv_layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
@@ -80,8 +80,10 @@ def prepare_creases(mesh, world, slots, n, minimum_angle, width, concave=False):
     mesh.calc_loop_triangles()
     from ...geometry.snapshots import _triangle_arrays
     tri_vertices, tri_loops, tri_material, _ = _triangle_arrays(mesh)
-    uv = np.empty((len(mesh.loops), 2), np.float32)
-    uv_layer.data.foreach_get("uv", uv.ravel())
+    uv = uv_coords
+    if uv is None:
+        uv = np.empty((len(mesh.loops), 2), np.float32)
+        uv_layer.data.foreach_get("uv", uv.ravel())
     vertices = len(mesh.vertices)
     crease_keys = np.fromiter((a * vertices + b for a, b in creases), np.int64, len(creases))
     flags = np.zeros((len(tri_vertices), 3), bool)
@@ -186,7 +188,8 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
     with targets(ts) as meshes:
         # No yields while evaluated meshes are alive: the depsgraph may change between steps.
         creases = [prepare_creases(target["mesh"], target["object"].matrix_world, target["slots"], n,
-                                   ts.bake.curvature_angle, ts.bake.curvature_width) for target in meshes]
+                                   ts.bake.curvature_angle, ts.bake.curvature_width,
+                                   uv_coords=target['uv']) for target in meshes]
         # Face turning and the raster are radius-independent: one copy serves
         # every reach (four 4k rasters would hold gigabytes for the whole job).
         rasters = [prepare_raster(target, n, radians(ts.bake.curvature_angle)) for target in meshes]

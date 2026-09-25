@@ -70,10 +70,16 @@
         180,
         181
       ],
-      "status": "missing",
+      "status": "implemented",
       "feature": "2018 UDIM workflow: one texture set per tile, material names ignored.",
-      "acceptance": "Import 1001+ tiles, validate island boundaries and coordinates, paint/export independently. The PDF explicitly does not support a brush crossing tiles; later UDIM behavior is outside this target.",
-      "evidence": []
+      "acceptance": "Create one set per occupied tile from selected unassigned meshes, regardless of material names. Validate face boundaries and coordinates; independently paint, bake, save and export numbered tiles. Native and material brushes can also cross tiles via Paint Across Sets. This is the per-tile set model, not a shared layer stack or automatic migration of existing painted sets.",
+      "evidence": [
+        "src/open_painter/core/udim.py",
+        "docs/udim-workflow.md",
+        "tests/integration/udim_workflow.py",
+        "tests/integration/udim_material.py",
+        "tests/integration/udim_paint_ui.py"
+      ]
     },
     {
       "id": "sets.management",

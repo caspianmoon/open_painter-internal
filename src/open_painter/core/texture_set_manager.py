@@ -55,6 +55,11 @@ def assign(
     index = obj.active_material_index if slot_index is None else slot_index
     if index < 0 or (obj.material_slots and index >= len(obj.material_slots)):
         raise ValueError("Material slot does not exist.")
+    if ts.udim_tile:
+        from .udim import local_uv
+        faces = [p.index for p in obj.data.polygons if p.material_index == index]
+        if faces:
+            local_uv(obj.data, ts, faces)
     for other in scene.open_painter.texture_sets:
         for ref in other.assignments:
             if ref.object == obj and ref.slot_index == index:
@@ -76,6 +81,9 @@ def assign(
 
 def unassign(ts, index: int) -> None:
     ref = ts.assignments[index]
+    if ref.udim_original_slot >= 0:
+        from .udim import restore_assignment
+        restore_assignment(ts, ref)
     obj = ref.object
     if obj and ref.slot_index < len(obj.material_slots):
         slot = obj.material_slots[ref.slot_index]
@@ -160,7 +168,8 @@ def duplicate(scene, index):
     maps = [(m.kind, m.image) for m in source.baked_maps]
     settings = snapshot(source.bake)
     surface = {key: getattr(source, key) for key in
-               ("anisotropy", "coat_weight", "coat_roughness", "height_distance")}
+               ("anisotropy", "coat_weight", "coat_roughness", "height_distance",
+                "udim_tile", "udim_group", "udim_name", "udim_source_uv")}
     # Read everything from ``source`` before ``create`` grows the collection: the reference is stale after that.
     from ..aging import engine as aging_engine
     aging_settings = aging_engine.export_settings(source.aging) if source.aging.folder_id else None
@@ -168,6 +177,10 @@ def duplicate(scene, index):
     ts = create(scene, name, resolution)
     for key, value in surface.items():
         setattr(ts, key, value)
+    if ts.udim_tile:
+        # An independent copy must not silently overwrite the source tile's export.
+        ts.udim_group = new_id()
+        ts.udim_name += ' Copy ' + ts.id[:8]
     ids, tokens = copy_ids(layers)
     mapping = {item["id"]: ids[item["id"]] for item in layers}
     from ..evaluation.anchors import derived_mapping

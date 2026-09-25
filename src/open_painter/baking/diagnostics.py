@@ -78,9 +78,9 @@ def inspect(ts, evaluated=False):
                 spread = ', '.join(str(t) for t in tiles if t != 1001)
                 message = 'UVs outside the single supported tile; wrapping may be intentional'
                 if spread:
-                    message += f'. Faces also cover UDIM tile(s) {spread}; only 1001 is painted, baked and exported'
+                    message += f'. Faces also cover UDIM tile(s) {spread}; create UDIM texture sets to author those tiles'
                 if invalid:
-                    message += '; some faces lie outside the 1001-1100 UDIM range'
+                    message += '; some faces lie outside the 1001-2000 UDIM range'
                 issues.append(Issue('WARNING', message, target['object'].name,
                                     tuple(int(f) for f in np.unique(polygon[outside]))))
             shared.append((uv[~degenerate], np.full(int((~degenerate).sum()), index, np.int64), polygon[~degenerate]))

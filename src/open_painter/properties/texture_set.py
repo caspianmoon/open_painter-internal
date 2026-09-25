@@ -57,9 +57,14 @@ class OP_Assignment(bpy.types.PropertyGroup):
     slot_index: bpy.props.IntProperty(min=0)
     original_material: bpy.props.PointerProperty(type=bpy.types.Material)
     created_slot: bpy.props.BoolProperty()
+    udim_original_slot: bpy.props.IntProperty(default=-1)
 
 
 class OP_TextureSet(bpy.types.PropertyGroup):
+    udim_tile: bpy.props.IntProperty(name="UDIM Tile", default=0, min=0, max=2000, update=changed)
+    udim_group: bpy.props.StringProperty()
+    udim_name: bpy.props.StringProperty(name="UDIM Export Name")
+    udim_source_uv: bpy.props.StringProperty()
     physical_space_status: bpy.props.EnumProperty(name="Physical Size", default="UNKNOWN", update=changed,
         items=[('UNKNOWN', 'Unknown', 'No verified size declaration'),
                ('KNOWN', 'Declared', 'Artist or fixture author supplies explicit measurement provenance')])

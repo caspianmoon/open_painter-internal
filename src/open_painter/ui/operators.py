@@ -4,6 +4,7 @@ from ..core import texture_set_manager as sets
 from ..core.project_manager import require_set
 from ..core.validation import validate
 from ..utils.logging import logger
+from ..constants import RESOLUTIONS
 
 
 class SafeOperator:
@@ -24,11 +25,14 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
     bl_label = "Texture Set"
     bl_description = "Manage texture sets and explicit active material-slot assignments"
     bl_options = {"REGISTER", "UNDO"}
+    udim_name: bpy.props.StringProperty(name='Name', default='UDIM')
+    udim_resolution: bpy.props.EnumProperty(name='Resolution per Tile', items=RESOLUTIONS, default='2048')
     action: bpy.props.EnumProperty(
         items=[
             (x, x.title(), "")
             for x in (
                 "ADD",
+                "ADD_UDIM",
                 "DELETE",
                 "ASSIGN",
                 "UNASSIGN",
@@ -40,7 +44,25 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
         ]
     )
 
+    def invoke(self, context, event):
+        if self.action != 'ADD_UDIM':
+            return self.execute(context)
+        obj = context.object
+        self.udim_name = obj.name if obj and obj.type == 'MESH' else 'UDIM'
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, 'udim_name')
+        self.layout.prop(self, 'udim_resolution')
+        self.layout.label(text='One texture set per occupied UV tile')
+
     def run(self, context):
+        if self.action == 'ADD_UDIM':
+            from ..core import udim
+            meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']
+            created = udim.create(context.scene, meshes, self.udim_name.strip() or 'UDIM', int(self.udim_resolution))
+            context.scene.open_painter.status = 'Created UDIM tiles ' + ', '.join(str(ts.udim_tile) for ts in created)
+            return
         if self.action == "ADD":
             obj = context.object
             if obj and obj.type == "MESH":

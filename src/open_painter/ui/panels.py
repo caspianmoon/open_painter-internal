@@ -5,7 +5,7 @@ from ..core.project_manager import active_set
 
 class OP_UL_texture_sets(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.prop(item, "name", text="", emboss=False, icon="MATERIAL")
+        layout.prop(item, "name", text="", emboss=False, icon="UV" if item.udim_tile else "MATERIAL")
 
 
 class OP_UL_assignments(bpy.types.UIList):
@@ -40,6 +40,7 @@ class OP_PT_main(bpy.types.Panel):
         row.operator("open_painter.texture_set", text="New", icon="ADD").action = "ADD"
         row.operator("open_painter.texture_set", text="Copy", icon="DUPLICATE").action = "DUPLICATE"
         row.operator("open_painter.texture_set", text="Remove", icon="REMOVE").action = "DELETE"
+        layout.operator("open_painter.texture_set", text="Create UDIM Sets", icon="UV").action = "ADD_UDIM"
         ts = active_set(context)
         if not ts:
             layout.label(text="Create a texture set to begin.")
@@ -90,6 +91,9 @@ class OP_PT_texture_set(bpy.types.Panel):
                 for row in rows:
                     box.label(text=f"{row['name'][:22]} · {row['cost_ms']:.1f} ms · {row['state'].lower()}"[:96])
         layout.prop(ts, "name", text="Name")
+        if ts.udim_tile:
+            layout.label(text=f"UDIM {ts.udim_tile} · {ts.udim_name}", icon="UV")
+            layout.prop(ts, 'udim_name', text='Export Name')
         layout.prop(ts, "resolution")
         from .strokes_panel import pending_resample
         pending = pending_resample(ts)

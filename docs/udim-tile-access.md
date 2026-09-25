@@ -1,5 +1,9 @@
 # UDIM tile access gate (M11), rerun on Blender 5.2.1 LTS
 
+Historical API research. The integrated [UDIM workflow](udim-workflow.md) now
+keeps authoritative per-tile managed images and does not rely on switching the
+active tile to read `Image.pixels`. The results below describe the earlier probe.
+
 The earlier gate ([milestones-udim-probe.json](performance/milestones-udim-probe.json))
 tried one path, `Image.pixels` after `tiles.active_index`, and failed. It said
 so explicitly: a failed path, not proof that every access method fails. This

@@ -154,7 +154,8 @@ def targets(ts):
             evaluated = obj.evaluated_get(depsgraph)
             mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
             temporary.append(evaluated)
-            uv = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
+            from ..core.udim import source_uv, local_uv
+            uv = source_uv(mesh, ts)
             if uv is None:
                 raise ValueError(f"{obj.name} requires a render UV map.")
             slots = {ref.slot_index for ref in ts.assignments if ref.object == obj}
@@ -182,8 +183,7 @@ def targets(ts):
                 evaluated.matrix_world.to_3x3().inverted_safe().transposed(), dtype=np.float64
             )
             world_normals = _unit(loop_normals @ normal_matrix.T).astype(np.float32)
-            uv_coords = np.empty((len(mesh.loops), 2), dtype=np.float32)
-            uv.data.foreach_get("uv", uv_coords.ravel())
+            uv_coords = local_uv(mesh, ts, np.unique(tri_polygons[chosen]))
             used = np.unique(tri_vertices[chosen])
             targets.append(Target({
                 "object": obj, "mesh": mesh, "slots": slots, "tri_indices": chosen,

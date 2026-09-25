@@ -5,6 +5,10 @@ A Blender extension for non-destructive PBR texturing: texture sets, paint and f
 folders, masks, mesh-map baking, procedural generators, reusable smart materials, and texture export.
 Python and Blender's bundled NumPy are the core runtime requirements.
 
+**UDIM authoring:** use **Create UDIM Sets** for one texture set per occupied tile,
+paint across tiles, bake mesh maps and export numbered textures while preserving
+the source UV layout. See the [UDIM workflow](docs/udim-workflow.md) for setup and scope.
+
 **License: Source-Available**
 
 Open Painter is free for individuals and qualifying small creators. Commercial organizations
@@ -254,9 +258,8 @@ unused managed datablocks. Undo covers project edits; exported and library files
 - Painting is one channel at a time. The native brush engine writes the layer image, which the material shader samples. A native 2D composite is an explicit snapshot and requires an explicit refresh after edits. Finishing native painting keeps the authored source canvas visible. Idle Open Painter sessions do not repeatedly hash the canvas. **Refresh** is available for externally changed textures.
 - Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.
 - Curvature is a convex-crease map of the evaluated target mesh, filtered by Minimum Edge Angle. Smooth continuous curvature and high-poly-only normal detail are not transferred.
-  Dust uses baked world-normal Z; moving or deforming geometry requires rebaking affected mesh maps. UDIM authoring remains unsupported.
-- Triplanar uses the base mesh's world positions and interpolated vertex normals through the render UV layer. Apply topology-changing modifiers first; after moving geometry, use Refresh. UVs outside the first tile and overlapping islands
-  are not a supported authoring workflow.
+  Dust uses baked world-normal Z; moving or deforming geometry requires rebaking affected mesh maps.
+- Triplanar uses the mesh's world positions and interpolated vertex normals through the render UV layer. After moving geometry, use Refresh. UVs outside 0–1 require **Create UDIM Sets**; overlapping islands within a tile share texture pixels. UDIM sets have independent layer stacks and do not automatically migrate existing painted sets.
 - Automatic cages use a manual distance. Custom cage support is limited to one low-poly mesh with matching topology.
   Baking is synchronous and uses Cycles CPU for predictable behavior.
 - Shared mesh datablocks require an explicit single-user copy. Material slot insertion/reordering after

@@ -81,7 +81,8 @@ def _mask_signature(m):
 
 def global_signature(ts):
     """Inputs every unit depends on: a change here rebuilds the whole graph."""
-    return (int(ts.resolution), tuple((m.kind, bool(m.image)) for m in ts.baked_maps))
+    return (int(ts.resolution), tuple((m.kind, bool(m.image)) for m in ts.baked_maps),
+            getattr(ts, 'udim_tile', 0), getattr(ts, 'udim_source_uv', ''))
 
 
 def structural_signature(ts):
@@ -2643,6 +2644,8 @@ class Graph(Math):
     def build(self, reuse=None):
         """Compile the graph; units of ``reuse`` with unchanged structure are adopted."""
         from ..core.validation import hierarchy_issues
+        from ..core.udim import validate as validate_udim
+        validate_udim(self.ts)
         problems = hierarchy_issues(self.ts)
         if problems:
             raise ValueError(' | '.join(problems))
@@ -2670,6 +2673,13 @@ class Graph(Math):
         self.tree['op_shader_graph'] = self.ts.id
         self.geometry = self.node('ShaderNodeNewGeometry')
         self.uv = self.node('ShaderNodeTexCoord').outputs['UV']
+        if self.ts.udim_tile:
+            from ..geometry.udim import tile_origin
+            source = self.node('ShaderNodeUVMap')
+            source.uv_map = self.ts.udim_source_uv
+            u, v = tile_origin(self.ts.udim_tile)
+            self.uv = self.vec('SUBTRACT', source.outputs['UV'], (u, v, 0.0))
+            self.uv.node['op_udim_uv'] = True
         for key in plan.order:
             self.compile_unit(key)
         # Boundaries a discarded unit requested (its compilation raised after the
@@ -2811,6 +2821,8 @@ class Graph(Math):
         self.tree, self.instance = top, instance
         self.geometry = next(n for n in top.nodes if n.bl_idname == 'ShaderNodeNewGeometry')
         self.uv = next(n for n in top.nodes if n.bl_idname == 'ShaderNodeTexCoord').outputs['UV']
+        if self.ts.udim_tile:
+            self.uv = next(n for n in top.nodes if n.get('op_udim_uv')).outputs['Vector']
         self.outputs = {channel: instance.outputs[channel] for channel in CHANNELS}
         for channel in CHANNELS:
             self.channels['Final:' + channel] = channel

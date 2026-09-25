@@ -37,6 +37,8 @@ class LayerEvaluator:
         if ts is None:
             raise ValueError("No active texture set.")
         from ..core.validation import hierarchy_issues
+        from ..core.udim import validate as validate_udim
+        validate_udim(ts)
 
         issues = hierarchy_issues(ts)
         if issues:
@@ -87,6 +89,8 @@ class LayerEvaluator:
     def _channel_steps(self, texture_set_id: str, channel: str, region=None, preview_resolution=None, resources=None):
         """Cooperative preview job; callers may yield to Blender between row tiles."""
         ts = next(s for s in self.scene.open_painter.texture_sets if s.id == texture_set_id)
+        from ..core.udim import validate as validate_udim
+        validate_udim(ts)
         self.geometry_cache = resources if resources is not None else for_texture_set(self.scene, ts)
         author = ts
         serial = author.edit_serial

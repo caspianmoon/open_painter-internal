@@ -115,6 +115,7 @@ class OP_Project(bpy.types.PropertyGroup):
     paint_object: bpy.props.PointerProperty(type=bpy.types.Object)
     paint_face_selection: bpy.props.StringProperty()
     paint_original_face_mask: bpy.props.BoolProperty()
+    paint_original_uv: bpy.props.StringProperty()
     paint_value: bpy.props.FloatProperty(
         name="Paint Value", min=0, max=1, get=get_value, set=set_value
     )

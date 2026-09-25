@@ -105,6 +105,16 @@ def repair(ts, image_overrides=None):
         graph = shader_preview.ensure(ts.id_data, ts)
         colors = graph.outputs
     else:
+        uv_socket = None
+        if ts.udim_tile:
+            from ..geometry.udim import tile_origin
+            uv = node('UDIM Source UV', 'ShaderNodeUVMap', (-1000, 400))
+            uv.uv_map = ts.udim_source_uv
+            translated = node('UDIM Local UV', 'ShaderNodeVectorMath', (-800, 400))
+            translated.operation = 'SUBTRACT'
+            translated.inputs[1].default_value = (*tile_origin(ts.udim_tile), 0)
+            connect(uv.outputs['UV'], translated.inputs[0])
+            uv_socket = translated.outputs['Vector']
         for i, channel in enumerate(CHANNELS):
             texture = node(channel, "ShaderNodeTexImage", (-600, 400 - i * 250))
             image = next((o.image for o in ts.outputs if o.channel == channel), None)
@@ -112,6 +122,8 @@ def repair(ts, image_overrides=None):
                 image = image_overrides[channel]
             if texture.image != image:
                 texture.image = image
+            if uv_socket is not None:
+                connect(uv_socket, texture.inputs['Vector'])
             colors[channel] = texture.outputs['Color']
     from ..targets import preview as engine_preview
     project = getattr(ts.id_data, 'open_painter', None)

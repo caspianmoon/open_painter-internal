@@ -120,8 +120,8 @@ def scene_geometry(context, ts, selected):
                 layer = next((uv for uv in mesh.uv_layers if uv.active_render), mesh.uv_layers.active)
                 if layer is None:
                     raise schema.AuthoringError('Surface observation needs render UVs on ' + obj.name_full)
-                uv = np.zeros((len(mesh.loops), 2), np.float32)
-                layer.data.foreach_get('uv', uv.ravel())
+                from ..core.udim import local_uv
+                uv = local_uv(mesh, ts, np.unique(polygons[mine]))
                 target_positions.append(positions)
                 target_triangles.append(vertices[mine])
                 target_uv.append(uv[loops[mine]])

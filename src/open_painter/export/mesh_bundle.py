@@ -72,6 +72,7 @@ def export_bundle(context,texture_sets,destination,geometry='ACTUAL'):
                 folder=root/f'textures_{index:03d}'
                 files=export(context,ts,ts.export,directory=folder)   # the set's own settings stay as saved
                 records.append(dict(id=ts.id,name=ts.name,resolution=int(ts.resolution),
+                    udim_tile=ts.udim_tile or None,udim_group=ts.udim_group or None,
                     revision=ts.edit_serial,preset=ts.export.preset,
                     files=[str(path.relative_to(root)) for path in files]))
             for ts in texture_sets:

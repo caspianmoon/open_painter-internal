@@ -7,6 +7,28 @@ from open_painter.geometry import udim
 
 
 class Tiles(unittest.TestCase):
+    def test_authoring_keeps_integer_border_faces_in_their_own_tile(self):
+        self.assertEqual(udim.face_tile([[0, 0], [1, 0], [1, 1], [0, 1]]), 1001)
+        self.assertEqual(udim.face_tile([[1, 0], [2, 0], [2, 1], [1, 1]]), 1002)
+        self.assertEqual(udim.face_tile([[0, 1], [1, 1], [1, 2], [0, 2]]), 1011)
+        self.assertEqual(udim.tile_origin(2000), (9, 99))
+        self.assertEqual(udim.face_tile([[9, 99], [10, 99], [10, 100], [9, 100]]), 2000)
+
+    def test_authoring_rejects_lossy_or_ambiguous_layouts(self):
+        for uv in (
+            [[.8, .1], [1.2, .1], [1.2, .8]],
+            [[-.5, .1], [-.1, .1], [-.1, .8]],
+            [[10, 0], [11, 0], [11, 1]],
+            [[0, 100], [1, 100], [1, 101]],
+            [[0, 0], [0, 0], [0, 0]],
+            [[0, 0], [1, 0], [float('nan'), 1]],
+        ):
+            with self.subTest(uv=uv), self.assertRaises(ValueError):
+                udim.face_tile(uv)
+        for number in (1000, 2001, 1001.5, True):
+            with self.assertRaises(ValueError):
+                udim.tile_origin(number)
+
     def test_numbering_and_bounds(self):
         self.assertEqual(udim.tile_number(0, 0), 1001)
         self.assertEqual(udim.tile_number(9, 0), 1010)

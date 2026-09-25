@@ -31,6 +31,9 @@ NOISES = {
     "WARPED": "Gradient noise with continuous domain distortion",
     "GRUNGE_FINE": "Small-scale uneven surface variation",
     "GRUNGE_MEDIUM": "Multiscale stained surface variation",
+    "WEATHERING_FRONT": "Irregular damage growth with coarse islands and fine broken boundaries",
+    "CORROSION_GRAIN": "Fine oxide granules and pits without broad surface swelling",
+    "RUNOFF_TRAILS": "Finite downward trails with varied length and taper",
     "GRUNGE_HEAVY": "High-contrast clustered surface variation",
     "GRUNGE_SPOTS": "Irregular spots with soft breakup",
     "GRUNGE_SCRATCHES": "Randomly oriented finite scratch segments",
@@ -528,6 +531,11 @@ def _evaluate(kind, u, v, seed, scale, **params):
                    y + strength * _perlin(x * 0.6, y * 0.6, seed + 73), seed, octaves)
     elif key in {"SCRATCHES", "DIRECTIONAL_SCRATCHES", "GRUNGE_SCRATCHES"}:
         out = _scratch(x, y, seed, width, density, key == "DIRECTIONAL_SCRATCHES")
+    elif key in {"WEATHERING_FRONT", "CORROSION_GRAIN", "RUNOFF_TRAILS"}:
+        from . import weathering
+        function = {"WEATHERING_FRONT": weathering.front, "CORROSION_GRAIN": weathering.grain,
+                    "RUNOFF_TRAILS": weathering.runoff}[key]
+        out = function(x, y, seed)
     elif key == "TAPERED_SCRATCHES":
         out = _tapered_scratches(x, y, seed, max(float(params.get("width", 0.024)), 1e-5),
                                 np.clip(float(params.get("density", 0.34)), 0, 1))

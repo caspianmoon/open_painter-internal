@@ -16,7 +16,7 @@ class ProceduralTests(unittest.TestCase):
         self.u, self.v = u / 73 - 0.35, v / 57 - 0.23
 
     def test_catalog_is_deterministic_bounded_and_partition_invariant(self):
-        self.assertEqual(len(procedurals.NOISES), 45)
+        self.assertEqual(len(procedurals.NOISES), 48)
         for name in procedurals.CATALOG:
             with self.subTest(name=name):
                 a = procedurals.evaluate(name, self.u, self.v, seed=17, scale=9.37)

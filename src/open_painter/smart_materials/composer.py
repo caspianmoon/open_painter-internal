@@ -38,6 +38,7 @@ MAP_REQUIREMENTS = {
     "WORLD_NORMAL": {"WORLD_NORMAL"},
     "POSITION": {"POSITION"},
     "DRIPS": {"POSITION", "AO"},
+    "RUNOFF": {"POSITION", "AO"},
     "SCRATCHES": set(),
     "NOISE": set(),
     # Baked-map mask sources and normal-map images name the map they read.
@@ -382,6 +383,13 @@ def _fill(ts, spec, parent_id, seed):
                     else:
                         prop.procedural_detail = (amplitude / .35 if prop.channel == "ROUGHNESS"
                                                   else amplitude)
+            # Pigment mottling and physical grain need different spatial bands.
+            # These remain ordinary editable channel procedural properties.
+            channel_field = spec.get("channel_procedurals", {}).get(prop.channel)
+            if channel_field:
+                prop.procedural = channel_field["id"]
+                prop.procedural_scale = channel_field.get("scale", spec["scale"])
+                prop.procedural_detail = channel_field.get("detail", spec["detail"])
             if prop.channel == "HEIGHT" and "height_range" in spec:
                 # Encode elevated coatings with an ordinary editable Levels
                 # effect, preserving the existing CPU/GPU source convention.

@@ -125,7 +125,7 @@ assert old_deviation > .1 and old_deviation > 4 * new_deviation, (old_deviation,
 assert engine.prediction(ts)["label"] == "DERELICT"
 old_roughness = cpu(ts, "ROUGHNESS")[..., 0]
 assert old_roughness.mean() > .5
-assert opacities(ts)["corrosion"] > .8 and opacities(ts)["salt"] > .3
+assert opacities(ts)["corrosion"] > .8 and opacities(ts)["salt"] > .2
 assert json.loads(aging.state_data)["years"] == 25
 # The same years indoors are a different object.
 aging.environment = "INDOOR"
@@ -369,7 +369,7 @@ scene.open_painter.active_texture_set = list(scene.open_painter.texture_sets).in
 bpy.ops.open_painter.aging(action="APPLY")
 two = next(s for s in scene.open_painter.texture_sets if s.name == "Two-map prop")
 kinds = lambda layer: [(m.source, m.generator if m.source == "GENERATOR" else "") for m in layer.masks]
-assert kinds(role(two, "dust")) == [("PROCEDURAL", "")] and role(two, "dust").masks[0].procedural == "GRUNGE_MEDIUM", kinds(role(two, "dust"))
+assert kinds(role(two, "dust")) == [("PROCEDURAL", "")] and role(two, "dust").masks[0].procedural == "WEATHERING_FRONT", kinds(role(two, "dust"))
 assert [k for k, _ in kinds(role(two, "water_staining"))] == ["PROCEDURAL"]
 assert [g for s_, g in kinds(role(two, "soil"))] == ["", "", "CAVITY_DIRT"] and len(role(two, "soil").masks) == 3, kinds(role(two, "soil"))
 assert engine.rebuild_pending(two) == []
@@ -380,15 +380,55 @@ assert engine.mask_pairs(role(two, "dust"), dict(zip(engine._document(two)["role
     [(0, engine._document(two)["layers"][engine._document(two)["roles"].index("dust")]["mask"])]
 two.aging.age_years = 20
 bake_synthetic(two)   # adds Position and World Normal (the AO / Curvature entries are duplicates, harmless)
-assert engine.optional_maps(two) == [] and set(engine.rebuild_pending(two)) == {"DUST", "DRIPS", "POSITION"}, engine.rebuild_pending(two)
+assert engine.optional_maps(two) == [] and set(engine.rebuild_pending(two)) == {"DUST", "RUNOFF", "POSITION"}, engine.rebuild_pending(two)
 bpy.ops.open_painter.aging(action="REBUILD")
 two = next(s for s in scene.open_painter.texture_sets if s.name == "Two-map prop")
 assert engine.rebuild_pending(two) == []
 assert [g for s_, g in kinds(role(two, "dust"))] == ["", "DUST"] and [g for s_, g in kinds(role(two, "soil"))] == ["", "", "CAVITY_DIRT", "POSITION"]
-assert [g for s_, g in kinds(role(two, "water_staining"))] == ["", "DRIPS"]
+assert [g for s_, g in kinds(role(two, "water_staining"))] == ["", "RUNOFF"]
 drips_amount = role(two, "water_staining").masks[1].amount
 two.aging.age_years = 5
 assert role(two, "water_staining").masks[1].amount < drips_amount, "the geometry mask is driven once it exists"
+
+# Pigment variation is independent of the fine relief and roughness field.
+assert stack.channel_for(role(two, 'corrosion'), 'BASE_COLOR').procedural == 'WEATHERING_FRONT'
+assert stack.channel_for(role(two, 'corrosion'), 'HEIGHT').procedural == 'CORROSION_GRAIN'
+assert stack.channel_for(role(two, 'corrosion'), 'ROUGHNESS').procedural == 'CORROSION_GRAIN'
+
+# New recipes keep paint/primer damage nested and corrosion off intact primer.
+from open_painter.evaluation.mask_eval import evaluate_masks
+for years in (10, 20, 30):
+    two.aging.age_years = years
+    values = {name: evaluate_masks(two, role(two, name), 64, 0, 64, {})
+              for name in ('paint', 'primer', 'corrosion')}
+    assert np.max(values['paint'] - values['primer']) < 1e-5
+    assert np.max(values['corrosion'] - (1 - values['primer'])) < 1e-5
+old_seed = role(two, 'paint').masks[1].seed
+two.aging.seed += 1
+assert role(two, 'paint').masks[1].seed != old_seed
+assert role(two, 'paint').masks[1].seed == role(two, 'primer').masks[1].seed
+
+# Saved v1 folders retain their original recipe and artist content until Rebuild.
+from open_painter.aging import document_v1
+legacy = sets.create(scene, 'Existing aging project', 512)
+bake_synthetic(legacy)
+result = engine.prediction(legacy)
+old_doc = document_v1.build(result['state'], result['construction'], seed=legacy.aging.seed)
+folder = engine._build(legacy, old_doc, legacy.aging.seed)
+legacy.aging.folder_id = folder.id
+legacy.aging.state_data = json.dumps({'version': 1})
+artist = stack.add(legacy, 'FILL', 'Preserved artist paint', folder.id)
+artist_id = artist.id
+engine.apply(legacy)
+assert engine.recipe_version(legacy) == 1
+legacy.aging.age_years = 12
+assert engine._document(legacy)['version'] == 1
+assert role(legacy, 'paint').masks[1].procedural == 'GRUNGE_HEAVY'
+assert any(l.id == artist_id for l in legacy.layers)
+engine.apply(legacy, rebuild=True)
+assert engine.recipe_version(legacy) == 2
+assert role(legacy, 'paint').masks[1].procedural == 'WEATHERING_FRONT'
+assert role(legacy, 'water_staining').masks[1].generator == 'RUNOFF'
 
 open_painter.unregister()
 print("MATERIAL_AGING_PASS", flush=True)

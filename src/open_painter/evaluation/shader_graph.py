@@ -1844,6 +1844,8 @@ class Graph(Math):
 
     def generator(self, mask, layer=None):
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
+        if kind == 'RUNOFF' and layer is not None:
+            return self._mask_source_boundary(layer, mask)
         if (kind in {'EDGE_WEAR', 'CHIPS'} and mask.edge_source == 'BAKED' and layer is not None
                 and not mask.detail_height_anchor and not mask.detail_normal_anchor):
             # Four curvature reaches + optional AO + breakup/chip fields exceed

@@ -83,7 +83,8 @@ class ProceduralOptimizationTests(unittest.TestCase):
 
     def test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles(self):
         self.assertEqual(set(procedurals.CATALOG) - set(reference.CATALOG),
-                         {"TAPERED_SCRATCHES", "FINE_FISSURES", "FRACTURED_PAINT"})
+                         {"TAPERED_SCRATCHES", "FINE_FISSURES", "FRACTURED_PAINT",
+                          "WEATHERING_FRONT", "CORROSION_GRAIN", "RUNOFF_TRAILS"})
         self.assertTrue(set(reference.CATALOG).issubset(procedurals.CATALOG))
         self.assertEqual(procedurals.ALIASES, reference.ALIASES)
         v, u = np.indices((9, 13), dtype=np.float32)

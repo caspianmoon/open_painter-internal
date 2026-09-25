@@ -21,7 +21,7 @@ The controls use Blender's native widgets, search popups, numeric fields, image 
 | Smart materials | All 50 requested named materials, 229 editable layers; original compositions and rendered previews |
 | Stackable effects | 16 editable effects, including Rust, Dirt, Dust, Edge Wear, Chipping, Scratches, Grease, Water Stains, fingerprints and wetness |
 | Smart masks | 18 original edge, cavity, dust, rust, scratch and drip presets |
-| Procedurals | 45 named noise families plus 20 pattern/detail sources; deterministic Perlin, Simplex, FBM, Value, Voronoi/Worley, grunge, scratches, cracks, fibers, grain, fingerprints and swirls |
+| Procedurals | 48 named noise families plus 20 pattern/detail sources; deterministic Perlin, Simplex, FBM, Value, Voronoi/Worley, grunge, scratches, cracks, fibers, grain, fingerprints and swirls |
 | Filters | 52 operations, including Levels, histogram controls, Gaussian/directional/slope blur, warps, morphology, gradient map, HSL/HSV, sharpening, remapping and normal conversion/blending |
 | Mesh maps | Normal, AO, convex crease Curvature, Position, World/Object Normal, Material/Object ID, UV Island/Border, Thickness |
 | Channels | Base Color, Roughness, Metallic, Normal, Height, AO, Emission, Opacity; independently enabled, with independent blend and opacity |

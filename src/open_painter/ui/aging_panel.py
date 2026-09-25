@@ -261,6 +261,11 @@ def draw_aging(layout, context, ts):
             row = layout.row(align=True)
             row.label(text="Bake " + ", ".join(m.replace("_", " ").title() for m in optional) + " to place dust and streaks", icon="INFO")
             row.operator("open_painter.show_task", text="", icon="RENDER_STILL").task = "BAKE"
+    if driven and engine.recipe_version(ts) < engine.document.VERSION:
+        box = layout.box()
+        box.label(text="Improved aging procedurals available", icon="INFO")
+        box.label(text="Rebuild replaces edits inside the aging folder.")
+        box.operator("open_painter.aging", text="Rebuild with New Procedurals", icon="FILE_REFRESH").action = "REBUILD"
     row = layout.row(align=True)
     if driven:
         row.operator("open_painter.aging", text="Re-age Material", icon="FILE_REFRESH").action = "APPLY"

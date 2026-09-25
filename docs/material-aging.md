@@ -118,29 +118,44 @@ in the desert yellows and chalks.
 
 ## From state to layers
 
-`aging/document.py` turns the state into a recipe using the smart-material
-catalog vocabulary: one fill layer per outcome, bottom to top in causal order —
-substrate (with the material's relief source and triplanar grain for wood and
-stone), its oxide (Rust / Cavity Dirt generators with rust detail), patina,
-greying, checking, erosion, then the protection stack (conversion, primer, paint,
-top coat, each carved by an inverted **Chips** mask whose coverage is the coat's
-loss; rust under the paint lifts it through a heavy grunge), then what happens
-to the film (cracks, micro scratches, handling polish on edges via Edge Wear,
-corrosion at damage, impact dents) and what settles on it (water streaks from
-Drips, salt, biological growth, soil and dust from Cavity Dirt and Dust). Where
-the aging lands is decided by the mesh — curvature, occlusion, the upward-facing
-normal, position — and how much by the history. Chips, Edge Wear, Rust and
-Cavity Dirt read baked maps, so the folder needs AO and Curvature; the panel says
-*Bake Mesh Maps first* with the bake popover until they exist. Position and
-World Normal are optional: with them, dust settles on upward faces, water
-streaks run from cavities down the height, growth and soil favour downward faces
-and the ground (a Position mask, inverted); without them those outcomes sit on
-their procedural bases (dust and streak grunges whose levels open with the
-state) and the panel suggests baking the two maps. A folder built before they
-existed keeps working; once they are baked the panel offers *Rebuild* to add the
-geometry masks (`engine.rebuild_pending`). Recipe masks that read mesh maps may
-now be declared `optional` in the smart-material vocabulary (previously only
-baked-map masks could be).
+`aging/document.py` builds recipe version 2. Layers remain editable and run from
+substrate through conversion, primer, paint and topcoat to corrosion and deposits.
+
+- **Coating failure:** a continuous Weathering Front field separates broad damage
+  islands from fine broken boundaries. Age moves the threshold over a fixed field,
+  so existing damage grows instead of changing position. Paint, primer and
+  conversion share the seed and coordinates, with deeper coats failing inside the
+  upper coat's damage. Under-film corrosion narrows the surviving primer transition.
+  Curvature adds localized edge chips. Paint has separate subtle pigment, roughness
+  and orange-peel microtexture; its broad weathering field does not drive height.
+- **Corrosion:** coverage is confined to exposed substrate. Pigment variation uses
+  a different spatial scale from Corrosion Grain's pits and granules. Roughness and
+  shallow height use the grain; broad color patches do not distort the surface.
+  Rust, copper oxide and other substrate-specific colors remain distinct.
+- **Cracks and scratches:** finite branched fissures and tapered abrasion replace
+  complete cellular crack networks and repeated image scratches. Paint scratches
+  are restricted to surviving paint. Handling polish changes coated surfaces'
+  roughness without exposing metallic color through intact paint.
+- **Deposits and runoff:** salt is sparse granular residue. Dirt and biological
+  coverage vary spatially with cavity bias. Runoff uses finite downward trails
+  with varied lengths and tapered ends, sampled from baked Position and biased
+  by AO. It is an art-directed procedural, not a water-flow simulation or a claim
+  that each trail starts at a particular geometric cavity.
+
+The folder still requires **AO and Curvature**. **Position and World Normal** are
+optional: runoff uses Position for vertical alignment, and dust uses upward-facing
+normals. Without these maps, projection-based procedural fallbacks remain editable;
+runoff direction then follows the chosen projection axes. Baking the optional maps
+after creating a folder enables **Rebuild Folder** to add the geometry masks.
+Projection and scale matter: inspect at the asset's intended size and adjust the
+individual channel and mask scales. These fields have no repeated image tiles,
+but very fine detail still needs adequate texture resolution.
+
+**Existing projects:** saved version-1 folders keep `aging/document_v1.py` for live
+updates and retain artist edits. The panel offers **Rebuild with New Procedurals**
+to opt in. Like the existing Rebuild command, this replaces the aging folder and
+its internal edits. New aging folders use version 2 automatically. This recipe
+revision is independent of the add-on's release version.
 
 ## Nondestructive
 
@@ -148,7 +163,7 @@ baked-map masks could be).
 *drives* it. Every layer carries `OP_Layer.aging_role`; on any settings change the
 engine re-simulates, rebuilds the recipe and writes only the driven fields —
 opacity, base colour, roughness and metallic values, mask amount / strength /
-levels — into the layers by role. A field the artist changed since the engine
+levels and explicit procedural seeds — into the layers by role. A field the artist changed since the engine
 last wrote it is an override: it is left alone from then on (the record lives in
 `ts.aging.state_data`), until **Reset Art**. Layers the artist adds inside the
 folder are theirs and survive re-drives. Changing the construction so the roster
@@ -202,3 +217,25 @@ layer inside the folder, art direction readout, usage and care, events, history
 periods, randomize, roster rebuild, Live off, a keyframed age through
 `dependencies.refresh`, document round trip with overrides, set duplicate, undo,
 remove.
+
+## Procedural regression checks
+
+`tests/unit/test_weathering_fields.py` checks deterministic strip evaluation,
+nonrepeating coordinates, monotonic damage growth, finite runoff support and
+nested coating settings. `tests/integration/material_aging.py` checks actual mask
+coverage, live seed updates and opt-in migration in addition to the history and
+serialization tests above. `tests/integration/weathering_shader.py` compares
+Blender emission-bake readbacks with CPU channel evaluation.
+
+For controlled visual comparisons, run:
+
+```sh
+blender -b --factory-startup --python-exit-code 1 \
+  --python scripts/render_aging_review.py -- --output /tmp/aging-review --case paint --years 12
+blender -b --factory-startup --python-exit-code 1 \
+  --python scripts/render_aging_review.py -- --output /tmp/aging-review --case copper --years 12
+```
+
+Each pair uses identical geometry, baked mesh maps, history, camera and lighting.
+It saves editable Blender scenes and the simulated outcomes beside the renders.
+Numerical checks verify consistency; they do not establish photorealism.

@@ -1,5 +1,17 @@
 # Changes
 
+## Unreleased — aging procedurals
+
+- Shared, growing coating-damage masks keep primer and conversion inside paint
+  failure and confine corrosion to exposed substrate.
+- Weathering Front, Corrosion Grain and Runoff Trails add continuous fields with
+  independent placement and relief scales. The Runoff generator follows baked
+  position and uses occlusion to bias deposition.
+- Finite cracks and scratches, restrained granular salt, and coating-aware polish
+  replace broad cloudy damage and silver highlights through intact paint.
+- Existing aging folders retain their original recipe until explicit Rebuild;
+  new folders use recipe version 2. Live edits continue to preserve artist overrides.
+
 ## 0.13.0
 
 Add-on quality remedy: continuous material painting with live feedback, geometry-derived

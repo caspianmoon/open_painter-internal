@@ -15,6 +15,7 @@ REQUIRED_MAPS = {
     'NOISE': (), 'EDGE_WEAR': ('CURVATURE',), 'DIRT': ('AO', 'CURVATURE'),
     'DUST': ('WORLD_NORMAL',), 'CAVITY_DIRT': ('AO',), 'RUST': ('AO',),
     'CHIPS': ('CURVATURE',), 'SCRATCHES': (), 'DRIPS': ('POSITION', 'AO'),
+    'RUNOFF': ('POSITION', 'AO'),
     'WORLD_NORMAL': ('WORLD_NORMAL',), 'POSITION': ('POSITION',),
     'THICKNESS': ('THICKNESS',), 'OBJECT_NORMAL': ('OBJECT_NORMAL',),
     'MATERIAL_ID': ('MATERIAL_ID',), 'OBJECT_ID': ('OBJECT_ID',),
@@ -123,6 +124,13 @@ class Generator:
         if self.id == 'SCRATCHES':
             scratches = procedural('SCRATCHES', u, v, seed=parameters.seed, scale=parameters.noise_scale)
             return np.clip(scratches * amount * 2 * contrast, 0, 1)
+        if self.id == 'RUNOFF':
+            pos = mesh_map('POSITION')
+            cavity = np.clip(1 - mesh_map('AO')[..., 0], 0, 1)
+            trails = procedural('RUNOFF_TRAILS', pos[..., 0] + pos[..., 1] * .731,
+                                pos[..., 2], seed=parameters.seed, scale=parameters.noise_scale)
+            # Geometry biases deposition without creating stripes on clean faces.
+            return np.clip(trails * (amount * 2) * contrast * (.3 + .7 * cavity), 0, 1)
         if self.id == 'DRIPS':
             pos = mesh_map('POSITION')
             cavity = 1 - mesh_map('AO')[..., 0]

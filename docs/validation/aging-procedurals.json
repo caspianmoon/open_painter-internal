@@ -1,0 +1,37 @@
+{
+  "scope": "Aging recipe v2 and continuous weathering fields",
+  "pure_tests": {
+    "run": 273,
+    "passed": 271,
+    "skipped": 2
+  },
+  "blender": "5.2.1 LTS",
+  "integration": {
+    "material_aging": "PASS",
+    "weathering_shader": "PASS"
+  },
+  "shader_readback": {
+    "WEATHERING_FRONT": {
+      "mean_error": 1.1656112292257603e-05,
+      "max_error": 0.00022539496421813965
+    },
+    "CORROSION_GRAIN": {
+      "mean_error": 2.175345980504062e-05,
+      "max_error": 0.000492781400680542
+    },
+    "RUNOFF_TRAILS": {
+      "mean_error": 1.2518664789240574e-06,
+      "max_error": 0.000763237476348877
+    },
+    "RUNOFF": {
+      "mean_error": 1.3795413451589411e-06,
+      "max_error": 0.0009524822235107422
+    }
+  },
+  "visual_review": "Painted steel and copper, identical before/after geometry, baked maps, history, camera and lights; scripts/render_aging_review.py",
+  "limitations": [
+    "Art-directed weathering, not a fluid or corrosion solver.",
+    "Position-less runoff follows projection axes.",
+    "Existing folders require explicit Rebuild to adopt recipe v2."
+  ]
+}

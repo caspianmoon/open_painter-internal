@@ -163,7 +163,7 @@ class OP_Mask(bpy.types.PropertyGroup):
             ("EDGE_WEAR", "Edge Wear", "Requires Curvature"),
             ("DIRT", "Dirt", "Requires AO and Curvature"),
             ("DUST", "Top Dust", "Requires baked World Normal"),
-        ] + [(x,x.replace("_"," ").title(),"Texture generator") for x in ("CAVITY_DIRT","RUST","CHIPS","SCRATCHES","DRIPS","NOISE","WORLD_NORMAL","POSITION","THICKNESS","OBJECT_NORMAL","MATERIAL_ID","OBJECT_ID","UV_ISLAND","UV_BORDER","CURVATURE","AO")
+        ] + [(x,x.replace("_"," ").title(),"Texture generator") for x in ("CAVITY_DIRT","RUST","CHIPS","SCRATCHES","DRIPS","RUNOFF","NOISE","WORLD_NORMAL","POSITION","THICKNESS","OBJECT_NORMAL","MATERIAL_ID","OBJECT_ID","UV_ISLAND","UV_BORDER","CURVATURE","AO")
         ],
         update=changed,
     )

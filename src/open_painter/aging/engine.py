@@ -125,9 +125,17 @@ def prediction(ts):
     return result
 
 
-def _document(ts):
+def recipe_version(ts):
+    stored = json.loads(ts.aging.state_data or "{}")
+    return int(stored.get("recipe_version", 1)) if folder_of(ts) else document.VERSION
+
+
+def _document(ts, latest=False):
     result = prediction(ts)
-    return document.build(result["state"], result["construction"], seed=int(ts.aging.seed))
+    builder = document
+    if not latest and recipe_version(ts) < document.VERSION:
+        from . import document_v1 as builder
+    return builder.build(result["state"], result["construction"], seed=int(ts.aging.seed))
 
 
 def _available(ts):
@@ -224,6 +232,8 @@ def _driven_values(layer, spec):
               "ROUGHNESS.value": float(spec["roughness"]), "METALLIC.value": float(spec["metallic"])}
     for index, settings in mask_pairs(layer, spec):
         values[f"mask{index}.amount"] = float(settings["amount"])
+        if "seed" in settings:
+            values[f"mask{index}.seed"] = int(settings["seed"])
         if "strength" in settings:
             values[f"mask{index}.strength"] = float(settings["strength"])
         if "black" in settings:
@@ -260,7 +270,7 @@ def _write(layer, field, value):
         index, name = field[4:].split(".", 1)
         masks = list(layer.masks)
         if int(index) < len(masks):
-            setattr(masks[int(index)], name, value)
+            setattr(masks[int(index)], name, int(value) if name == "seed" else value)
         return
     channel, name = field.split(".", 1)
     prop = channel_for(layer, channel)
@@ -286,8 +296,7 @@ def apply(ts, rebuild=False):
         return None
     aging = ts.aging
     result = prediction(ts)
-    state, construction = result["state"], result["construction"]
-    doc = document.build(state, construction, seed=int(aging.seed))
+    doc = _document(ts, latest=rebuild)
     folder = folder_of(ts)
     stored = json.loads(aging.state_data or "{}")
     resolved, overrides = stored.get("resolved", {}), set(stored.get("overrides", []))
@@ -317,7 +326,7 @@ def apply(ts, rebuild=False):
                 if not _same(current, value):
                     _write(layer, field, value)
                 resolved[key] = _encode(value)
-    aging.state_data = json.dumps({"version": 1, "resolved": resolved, "overrides": sorted(overrides),
+    aging.state_data = json.dumps({"version": 1, "recipe_version": doc["version"], "resolved": resolved, "overrides": sorted(overrides),
                                    "label": result["label"], "years": float(aging.age_years)}, sort_keys=True)
     from ..core.layer_stack import invalidate
     invalidate(ts)

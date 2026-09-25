@@ -30,6 +30,7 @@ co = co.reshape(-1, 3); co[(co[:, 0] > .75) & (co[:, 0] < .95), 2] = -.3
 panel.data.vertices.foreach_set('co', co.ravel()); panel.data.update()
 TRENCH = (slice(None), slice(456, 492))
 ts = sets.create(scene, 'Panel', 512); sets.assign(scene, ts, panel)
+assert ts.bake.selected_to_active is False, 'projection from high poly is opt-in'
 ts.preview_backend = 'CPU'
 layer = stack.add(ts, 'FILL', 'Bolts')
 mask = layer.masks.add(); mask.id, mask.source = new_id(), 'PAINT'
@@ -62,6 +63,7 @@ for i in range(2):
 ts.bake.high_objects[0].ignorable = True
 extra = [manager.create(ts, panel, published, 'BOLT', density=400, size=.05, seed=seed) for seed in (2, 3, 4, 5)]
 assert all(extra)
+ts.bake.selected_to_active = True   # the original must survive the staged block
 with bake_back.staged(ts, [helper, *extra]) as saved:   # 2 rows + 5 helpers crosses the 4-slot block
     assert len(ts.bake.high_objects) == 7 and ts.bake.selected_to_active, len(ts.bake.high_objects)
     assert ts.bake.ray_distance > .23 and saved['selected_to_active'] is True and saved['ray_distance'] < .11

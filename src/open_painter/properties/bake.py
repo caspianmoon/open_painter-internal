@@ -199,7 +199,7 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         max=64,
         description="Width of baked edge coverage in texture pixels",
     )
-    selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=True)
+    selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=False)
     margin: bpy.props.IntProperty(name="Margin", default=16, min=0, max=128)
     ray_distance: bpy.props.FloatProperty(
         name="Ray Distance", default=0.1, min=0, subtype="DISTANCE"

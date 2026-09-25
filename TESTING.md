@@ -72,6 +72,15 @@ brush strokes on tile 1002 and across the tile boundary). Run the first two with
 without `--background`, with `--enable-event-simulate`. Reports are written under
 `.blender-test/udim-*.json`.
 
+Graph authoring has targeted regressions in `graph_templates.py`: all nine
+templates compile through the shader engine; repeated instances use fresh IDs,
+anchors and shader groups; failed insertion rolls back; nested masks can be moved
+and dissolved safely; pinned graph ownership, undo and save/reopen preserve the
+document. It also exercises disable/re-enable with persistent graph datablocks.
+`graph_templates_ui.py` opens real menus and search, draws the new node controls,
+groups selected layers and opens a template's actual shader group. These run
+alongside `graph_mirror.py`, `graph_link_edits.py` and the graph layout unit tests.
+
 `python3 scripts/run_tests.py` runs phase tests and the current integration suites in fresh background
 Blender processes, then runs the unit suite with Blender's bundled Python and NumPy. Test resources
 are isolated under `.blender-test/user`. Current suites include utility maps, the 50-material catalog,

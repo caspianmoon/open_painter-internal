@@ -17,14 +17,14 @@ from ..core.layer_stack import channel_for
 from ..evaluation import anchors
 from ..evaluation.anchors import DETAIL_KINDS
 from . import layout
-from .tree import (NODE_TYPES, OUTPUT_NODE, SOCKET_COLOR, SOCKET_CONTENT, SOCKET_COVERAGE, SOCKET_DESCRIPTIONS,
+from .tree import (MASK_NODE_TYPES, NODE_TYPES, OUTPUT_NODE, SOCKET_COLOR, SOCKET_CONTENT, SOCKET_COVERAGE, SOCKET_DESCRIPTIONS,
                    SOCKET_NORMAL, SOCKET_SCALAR, TREE_ID, is_graph)
 
 SCALAR_CHANNELS = frozenset({'ROUGHNESS', 'METALLIC', 'HEIGHT', 'AO', 'OPACITY'})
 FRAME_PREFIX = 'frame:'
 # Bumped when the projection's sockets change: trees saved with the previous socket types
 # reconcile once on load (the signature otherwise depends on the stack alone).
-GRAPH_FORMAT = 2
+GRAPH_FORMAT = 3
 _syncing = False
 
 
@@ -72,6 +72,10 @@ def effect_node_id(layer, channel, index, effect):
 
 def layer_frame_id(layer):
     return FRAME_PREFIX + 'layer:' + layer.id
+
+
+def mask_frame_id(mask):
+    return FRAME_PREFIX + 'mask:' + mask.id
 
 
 def owner_of(ts, node_id):
@@ -133,11 +137,18 @@ def project(ts):
         nodes[layer.id] = {'kind': 'FOLDER' if layer.type == 'FOLDER' else 'LAYER', 'label': layer.name,
                            'inputs': inputs, 'outputs': outputs, 'frame': own_frame, 'owner': layer.id, 'channel': ''}
         # Mask chain: previous coverage in, coverage out, ending in the layer's Mask input.
-        previous = None
+        previous = {}
+        groups = {mask.id: mask for mask in layer.masks if mask.source == 'GROUP'}
         for index, mask in enumerate(layer.masks):
             identifier = mask_node_id(layer, index, mask)
             mask_inputs = [('prev', 'Previous', SOCKET_COVERAGE)]
-            if mask.source == 'REFERENCE':
+            parent = mask.parent_id if mask.parent_id in groups else ''
+            mask_frame = mask_frame_id(groups[parent]) if parent else own_frame
+            if mask.source == 'GROUP':
+                frames[mask_frame_id(mask)] = {'label': mask.name, 'frame': mask_frame}
+                mask_frame = mask_frame_id(mask)
+                mask_inputs.append(('members', 'Members', SOCKET_COVERAGE))
+            elif mask.source == 'REFERENCE':
                 mask_inputs.append(('ref', 'Published Input', SOCKET_COVERAGE))
             elif mask.source == 'GENERATOR' and mask.generator in DETAIL_KINDS:
                 mask_inputs.append(('detail#HEIGHT', 'Micro Height', SOCKET_SCALAR))
@@ -146,13 +157,14 @@ def project(ts):
             if mask.source == 'ANCHOR':
                 label = 'Anchor: ' + label
             nodes[identifier] = {'kind': 'MASK', 'label': label, 'inputs': mask_inputs,
+                                 'node_type': MASK_NODE_TYPES.get(mask.source, NODE_TYPES['MASK']),
                                  'outputs': [('out', 'Coverage', SOCKET_COVERAGE)],
-                                 'frame': own_frame, 'owner': layer.id, 'channel': ''}
-            if previous is not None:
-                links.append((previous, 'out', identifier, 'prev'))
-            previous = identifier
-        if previous is not None:
-            links.append((previous, 'out', layer.id, 'mask'))
+                                 'frame': mask_frame, 'owner': layer.id, 'channel': ''}
+            if parent in previous:
+                links.append((previous[parent], 'out', identifier, 'prev'))
+            previous[parent] = identifier
+        for parent, identifier in previous.items():
+            links.append((identifier, 'out', parent or layer.id, 'members' if parent else 'mask'))
         # Filter chains per channel: content in, content out, ending in the channel input.
         for prop in layer.channels:
             previous = None
@@ -235,7 +247,7 @@ def signature(ts):
     for layer in ts.layers:
         parts.append((layer.id, layer.type, layer.parent_id, layer.name, layer.visible, layer.blend_mode,
                       layer.group_mode, layer.publish_output, layer.publish_group,
-                      tuple((m.id, m.source, m.name, m.enabled, m.generator, m.reference_anchor, m.reference_layer,
+                      tuple((m.id, m.parent_id, m.source, m.name, m.enabled, m.generator, m.reference_anchor, m.reference_layer,
                              m.reference_channel, m.reference_mask, m.detail_height_anchor, m.detail_normal_anchor,
                              m.effect.kind if m.source == 'FILTER' else '')
                             for m in layer.masks),
@@ -330,10 +342,14 @@ def reconcile(tree, ts, force_layout=False):
                 tree.nodes.remove(node)
             seen.add(identifier)
         existing = nodes_by_id(tree)
+        replaced = {}
         for identifier, node in list(existing.items()):
-            wanted = (identifier in nodes and node.bl_idname == NODE_TYPES[nodes[identifier]['kind']]) or \
+            wanted = (identifier in nodes and node.bl_idname == nodes[identifier].get(
+                'node_type', NODE_TYPES[nodes[identifier]['kind']])) or \
                      (identifier in frames and node.bl_idname == 'NodeFrame')
             if not identifier or not wanted:
+                if identifier in nodes:
+                    replaced[identifier] = (tuple(node.location_absolute), node.width, node.hide)
                 tree.nodes.remove(node)
         existing = nodes_by_id(tree)
         created = []
@@ -348,12 +364,15 @@ def reconcile(tree, ts, force_layout=False):
         for identifier, spec in nodes.items():
             node = existing.get(identifier)
             if node is None:
-                node = tree.nodes.new(NODE_TYPES[spec['kind']])
+                node = tree.nodes.new(spec.get('node_type', NODE_TYPES[spec['kind']]))
                 node.op_id, node.op_kind = identifier, spec['kind']
                 node.name = identifier
                 node.width = 220 if spec['kind'] in {'LAYER', 'FOLDER', 'OUTPUT'} else 190
                 existing[identifier] = node
-                created.append(identifier)
+                if identifier in replaced:
+                    node.location_absolute, node.width, node.hide = replaced[identifier]
+                else:
+                    created.append(identifier)
             node.label = spec['label']
             node.op_owner, node.op_channel = spec.get('owner', ''), spec.get('channel', '')
             _sockets(node.inputs, spec['inputs'])
@@ -364,7 +383,9 @@ def reconcile(tree, ts, force_layout=False):
             node = existing[identifier]
             parent = existing.get(spec['frame']) if spec['frame'] else None
             if node.parent != parent:
+                position = tuple(node.location_absolute)
                 node.parent = parent
+                node.location_absolute = position
         tree.links.clear()
         for source, from_socket, target, to_socket in links:
             producer, consumer = existing.get(source), existing.get(target)
@@ -399,7 +420,7 @@ def place(tree, ts, existing, nodes, links, only=None):
     edges = [(source, target) for source, _, target, to_socket in links
              if target != OUTPUT_NODE and to_socket not in STRUCTURAL]
     # Mask and filter bodies draw their controls: count them as socket rows.
-    body = {'MASK': 13, 'EFFECT': 8}
+    body = {'MASK': 16, 'EFFECT': 8, 'LAYER': 14, 'FOLDER': 4}
     sockets = {identifier: len(spec['inputs']) + len(spec['outputs']) + body.get(spec['kind'], 0)
                for identifier, spec in nodes.items()}
     inline, subrows = {}, {}
@@ -411,6 +432,7 @@ def place(tree, ts, existing, nodes, links, only=None):
         if chains:
             subrows[layer.id] = chains
     coordinates = layout.positions(rows, edges, output=OUTPUT_NODE, sockets=sockets, subrows=subrows, inline=inline)
+    placements = {}
     for identifier, (x, y) in coordinates.items():
         if only is not None and identifier not in only:
             continue
@@ -424,7 +446,31 @@ def place(tree, ts, existing, nodes, links, only=None):
             ox, oy = coordinates.get(owner, (x, y))
             ax, ay = existing[owner].location_absolute
             x, y = ax + (x - ox), ay + (y - oy)
-        node.location_absolute = (x, y)
+        placements[identifier] = (x, y)
+    if only is not None and placements:
+        # Inserting a new top row would otherwise land on the old top row.
+        # Move only the new nodes; hand-placed existing nodes stay untouched.
+        occupied = [(tuple(node.location_absolute), node.width, layout.height(sockets.get(identifier, 0)))
+                    for identifier, node in existing.items() if identifier in nodes and identifier not in only]
+
+        def overlaps():
+            for identifier, (x, y) in placements.items():
+                width, height = existing[identifier].width, layout.height(sockets.get(identifier, 0))
+                for (ox, oy), ow, oh in occupied:
+                    if x < ox + ow + 30 and x + width + 30 > ox and y > oy - oh - 30 and y - height - 30 < oy:
+                        return True
+            return False
+
+        if occupied and overlaps():
+            if any(nodes[identifier]['kind'] in {'LAYER', 'FOLDER'} for identifier in placements):
+                shift = min(y - height for (_, y), _, height in occupied) - layout.ROW_GAP - max(
+                    y for _, y in placements.values())
+                placements = {identifier: (x, y + shift) for identifier, (x, y) in placements.items()}
+            else:
+                while overlaps():
+                    placements = {identifier: (x - layout.COLUMN_WIDTH, y) for identifier, (x, y) in placements.items()}
+    for identifier, position in placements.items():
+        existing[identifier].location_absolute = position
 
 
 # ---- lifecycle -----------------------------------------------------------------
@@ -555,9 +601,21 @@ def draw_mask(layout, ts, layer, mask):
                  'NORMAL_DIRECTION': 'direction'}.get(selector.kind)
         if field:
             layout.prop(selector, field, text='')
+        for name in {'NORMAL_DIRECTION': ('angle', 'softness'), 'UV_ISLAND': ('island',),
+                     'COLLECTION': ('include_children',)}.get(selector.kind, ()):
+            layout.prop(selector, name)
+        if selector.kind == 'REGION':
+            layout.label(text='Edit saved faces in the Inspector', icon='INFO')
+    elif mask.source == 'GROUP':
+        layout.label(text='Combine the Members input', icon='NODETREE')
+    elif mask.source == 'GRAPH':
+        layout.template_ID(mask, 'node_group')
+        if mask.node_group is not None:
+            op = layout.operator('open_painter.graph_edit_shader', text='Edit Shader Group', icon='NODETREE')
+            op.mask_id = mask.id
     elif mask.source == 'FILTER':
         layout.label(text=mask.effect.kind.replace('_', ' ').title(), icon='SHADERFX')
-        for name in EFFECT_CONTROLS.get(mask.effect.kind, ('amount',)):
+        for name in EFFECT_CONTROLS.get(mask.effect.kind, ('radius',) if mask.effect.kind in RADIUS_KINDS else ('amount',)):
             layout.prop(mask.effect, name)
     elif mask.source in {'FILL', 'PAINT'}:
         layout.template_ID(mask, 'image', open='image.open')
@@ -629,4 +687,23 @@ def draw_node(node, context, layout):
         box.prop(decal, 'rotation_euler', text='Rotation')
         box.prop(decal, 'scale', text='Scale')
         box.prop(layer, 'decal_depth', text='Depth')
+    if layer.type == 'FILL':
+        channel = context.scene.open_painter.properties_channel
+        prop = channel_for(layer, channel)
+        if prop is not None:
+            box = layout.box()
+            box.prop(prop, 'enabled', text=CHANNEL_LABELS.get(channel, channel))
+            controls = box.column()
+            controls.enabled = prop.enabled
+            if prop.anchor:
+                controls.label(text='Content from linked anchor', icon='LINKED')
+            else:
+                controls.prop(prop, 'color' if channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'} else 'value')
+                controls.template_ID(prop, 'image', open='image.open')
+                if prop.procedural:
+                    controls.label(text=prop.procedural.replace('_', ' ').title(), icon='TEXTURE')
+                    controls.prop(prop, 'procedural_scale')
+                    controls.prop(prop, 'procedural_seed')
+                    controls.prop(prop, 'procedural_height' if channel == 'HEIGHT' else 'procedural_detail')
+                controls.prop(prop, 'projection', text='')
     _edit_button(layout, layer)

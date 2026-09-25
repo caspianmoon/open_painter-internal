@@ -28,6 +28,11 @@ class OP_GraphTree(bpy.types.NodeTree):
     bl_icon = "NODETREE"
 
     def update(self):
+        # Blender updates surviving trees while socket/node RNA is only partly
+        # registered. Reading their sockets then can dereference retired RNA.
+        from ..registration import _registered
+        if not _registered:
+            return
         from . import edits
         edits.on_tree_update(self)
 
@@ -121,6 +126,30 @@ class OP_EffectNode(_GraphNode, bpy.types.Node):
     bl_icon = "SHADERFX"
 
 
+class OP_MeshMaskNode(_GraphNode, bpy.types.Node):
+    bl_idname = "OPMeshMaskNode"
+    bl_label = "Mesh Mask"
+    bl_icon = "MESH_DATA"
+
+
+class OP_MaskGroupNode(_GraphNode, bpy.types.Node):
+    bl_idname = "OPMaskGroupNode"
+    bl_label = "Mask Group"
+    bl_icon = "NODETREE"
+
+
+class OP_CustomGraphNode(_GraphNode, bpy.types.Node):
+    bl_idname = "OPCustomGraphNode"
+    bl_label = "Custom Graph"
+    bl_icon = "NODETREE"
+
+
+class OP_StrokeMaskNode(_GraphNode, bpy.types.Node):
+    bl_idname = "OPStrokeMaskNode"
+    bl_label = "Vector Strokes"
+    bl_icon = "CURVE_DATA"
+
+
 class OP_OutputNode(_GraphNode, bpy.types.Node):
     """The texture set's final channels (informational)."""
     bl_idname = "OPOutputNode"
@@ -130,5 +159,8 @@ class OP_OutputNode(_GraphNode, bpy.types.Node):
 
 NODE_TYPES = {"LAYER": OP_LayerNode.bl_idname, "FOLDER": OP_FolderNode.bl_idname, "OUTPUT": OP_OutputNode.bl_idname,
               "MASK": OP_MaskNode.bl_idname, "EFFECT": OP_EffectNode.bl_idname}
+MASK_NODE_TYPES = {'MESH': OP_MeshMaskNode.bl_idname, 'GROUP': OP_MaskGroupNode.bl_idname,
+                   'GRAPH': OP_CustomGraphNode.bl_idname, 'STROKES': OP_StrokeMaskNode.bl_idname}
 CLASSES = (OP_GraphTree, OP_SocketContent, OP_SocketScalar, OP_SocketCoverage, OP_SocketColor, OP_SocketNormal,
-           OP_LayerNode, OP_FolderNode, OP_MaskNode, OP_EffectNode, OP_OutputNode)
+           OP_LayerNode, OP_FolderNode, OP_MaskNode, OP_EffectNode, OP_OutputNode,
+           OP_MeshMaskNode, OP_MaskGroupNode, OP_CustomGraphNode, OP_StrokeMaskNode)

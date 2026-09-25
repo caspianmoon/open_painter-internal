@@ -8,6 +8,13 @@ from open_painter.graph.layout import COLUMN_WIDTH, INDENT, ROW_GAP, height, pos
 
 
 class GraphLayout(unittest.TestCase):
+    def test_nested_branches_with_equal_rank_do_not_overlap(self):
+        result = positions([('layer', 0)], [('a', 'group'), ('b', 'group'), ('group', 'layer')],
+                           inline={'layer': ['group', 'a', 'b']}, sockets={'a': 10, 'b': 5})
+        self.assertEqual(result['a'][0], result['b'][0])
+        self.assertGreaterEqual(result['a'][1] - result['b'][1], height(10) + ROW_GAP)
+        self.assertEqual(len(result), len(set(result.values())))
+
     def test_ranks_follow_dependencies(self):
         self.assertEqual(ranks({'a', 'b', 'c'}, [('a', 'b'), ('b', 'c')]), {'a': 0, 'b': 1, 'c': 2})
         self.assertIn(ranks({'a', 'b'}, [('a', 'b'), ('b', 'a')])['a'], {1, 2})   # cycle cut, no recursion error

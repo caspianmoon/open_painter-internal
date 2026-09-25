@@ -34,11 +34,28 @@ for painting, evaluation, smart materials and undo.
 
 ## Editing
 
+- **Search Nodes and Templates** (magnifying glass in the header, also in Shift+A)
+  searches layers, procedural fills, masks, mesh selectors, generators, scene fields,
+  filters, anchors and templates by name. The header's **Channel** selector chooses
+  the channel for new filters and for the fill controls shown on layer nodes.
 - **Add** (Shift+A) adds to the active layer: *Mask ▸* painted, fill image, baked
   map, noise, generators, procedurals, scene fields, filter masks, Published Input
   and Anchor Point; *Channel Filter ▸* the filter catalog and an Anchor Point for
   the channel selected in the Painter panel; plus Fill/Paint/Folder layers. New
   nodes are appended to their chain.
+- **Mesh Mask** adds Object, Collection, Material, Vertex Group, Face Set, Face
+  Selection, UV Island, Normal Direction, Geometry Attribute or Saved Face Region
+  coverage. The node exposes the selector and its main controls; saved face regions
+  are configured in the Inspector.
+- **Mask Group**, **Custom Graph** and **Vector Strokes** have their own node
+  types. A Custom Graph starts with a usable Noise → Ramp shader group; **Edit
+  Shader Group** opens it in a separate Shader Editor. Vector Strokes gets an
+  independent stroke key; author strokes through the Painter tools.
+- **Procedural Fill** creates a fill layer with coordinated color, roughness and
+  height detail using any source in the procedural catalog. Fill nodes expose the
+  selected channel's enable, color/value, image, projection and procedural controls.
+- **Group** in the header wraps selected, consecutive sibling layer nodes in a
+  passthrough folder. Select the layer nodes, then Group; their IDs and order survive.
 - **Anchor links**: drag an anchor output (a layer's *Output* / *Composite*, an
   Anchor Point mask or filter) into a consumer socket — a Published Input mask,
   a micro-detail slot, or a channel's content (its first filter when the channel
@@ -50,14 +67,52 @@ for painting, evaluation, smart materials and undo.
   directly under that layer (into its folder if needed), or into a folder's
   *Children* to make it the folder's top child. Composition links cannot be
   deleted: chains have no gaps, and the sync redraws them.
+- **Nested mask links**: each group has a *Members* input and its own frame.
+  Members chain together before entering their group, whose output joins the outer
+  chain. Adding while a group or member is selected appends inside that group.
+  Drag coverage into *Members* to move a mask into the group, into *Previous* to
+  place it before a sibling, or into the layer's *Mask* to move it to the outer
+  chain's end. Moving a group moves its descendants together; self-nesting is refused.
 - **Deleting a node** deletes that mask or filter from the stack; painted masks
   and layers are deleted in the Painter panel, and the mirror recreates their node.
+  Deleting a mask group dissolves it, preserving its members, including painted data.
 - A link that would create a cycle, chain masks across layers, or pair
   incompatible sockets is refused: the stack is unchanged, the status line
   explains why, and the link disappears on the next sync.
 - *Auto Layout* (header) re-places every node: rows follow the stack order, a
   layer's mask chain shares its row, filter chains sit under it, columns follow
   dependency rank. Nodes you moved keep their positions across syncs.
+  Newly inserted template groups are placed clear of existing nodes; equal-rank
+  nested branches use separate rows.
+
+## Templates
+
+Choose **Templates** in the graph header or Shift+A, or search for a template.
+Each insertion creates a named folder containing connected, ordinary editable
+layers, masks and filters. It inserts inside the selected folder, or alongside
+the selected layer. Existing content stays in place. Each insertion has fresh
+IDs and independent internal references, can be duplicated with the folder, and
+supports Blender undo and save/reopen. No template needs a mesh-map bake.
+
+| Template | Contents |
+| --- | --- |
+| Rough Plastic | Plastic grain across color, roughness and height, with roughness levels |
+| Brushed Metal | Directional brushed metal detail and editable roughness levels |
+| Chipped Paint | Metal substrate under a paint coat, procedural coverage and a threshold |
+| Layered Grunge | Nested mask group combining broad stains, fine breakup and levels |
+| Shared Surface Detail | Published grain mask linked to roughness and height filters |
+| Top Surface Dust | Upward-facing mesh coverage combined with particulate breakup |
+| Noise → Ramp | Custom Graph mask with a reusable UV → Noise → Color Ramp shader group |
+| Cells → Ramp | Custom Graph mask with a reusable UV → Voronoi → Color Ramp shader group |
+| Layered Noise → Ramp | Custom Graph mask multiplying two noise scales before a Color Ramp |
+
+The last three create actual Blender shader node groups as well as a Painter
+folder. Use **Edit Shader Group** on the Custom Graph node to change the shader
+network. Each inserted template owns its own shader group; choosing that group
+on another Custom Graph mask shares it deliberately. The first group output is
+coverage; named UV, Position and Normal inputs follow the existing Custom Graph
+mask conventions. Custom Graph CPU evaluation/export uses the existing mesh bake
+path and requires assigned UV-mapped geometry.
 
 ## How it stays in sync
 
@@ -74,4 +129,5 @@ anchors, `reorder` for chain and backdrop links, `delete` for removed nodes),
 validated with `references.issues`.
 
 Tests: `tests/integration/graph_mirror.py`, `graph_link_edits.py`,
-`graph_view_ui.py` (real window), `tests/unit/test_graph_layout.py`.
+`graph_templates.py`, `graph_view_ui.py` and `graph_templates_ui.py` (real windows),
+`tests/unit/test_graph_layout.py`.

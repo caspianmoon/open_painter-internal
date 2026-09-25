@@ -32,7 +32,7 @@ def target_node_id(context, ts):
     return target.layer_id
 
 
-def frame(area, tree, node_id=None):
+def frame(area, tree, node_id=None, selected=False):
     """Frame the graph editor on one node (selected) or on everything; the layout is untouched."""
     region = next((r for r in area.regions if r.type == 'WINDOW'), None)
     if region is None:
@@ -47,7 +47,7 @@ def frame(area, tree, node_id=None):
         tree['op_active_node'] = node_id
     try:
         with bpy.context.temp_override(area=area, region=region):
-            if node_id:
+            if node_id or selected:
                 bpy.ops.node.view_selected()
             else:
                 bpy.ops.node.view_all()
@@ -166,14 +166,19 @@ class OP_OT_graph_select(SafeOperator, bpy.types.Operator):
             tree['op_active'], tree['op_active_node'] = self.layer_id, node_id
 
 
-def _graph_target(context):
+def _graph_target(context, require_layer=True):
     """(texture set, active layer) of the graph in this editor, else of the active set."""
     tree = getattr(context.space_data, 'node_tree', None)
     ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
     ts = ts or require_set(context)
     from ..core.layer_stack import active
     layer = active(ts)
-    if layer is None:
+    node = tree.nodes.active if is_graph(tree) else None
+    if node is not None and node.select:
+        owner = mirror.owner_of(ts, getattr(node, 'op_id', ''))[0]
+        if owner is not None:
+            layer = owner
+    if layer is None and require_layer:
         raise ValueError('Select a layer node first: masks and filters are added to the active layer.')
     return ts, layer
 
@@ -185,65 +190,178 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     kind: bpy.props.EnumProperty(items=[(k, k.replace('_', ' ').title(), '') for k in (
         'MASK', 'GENERATOR', 'PROCEDURAL', 'SCENE', 'MASK_FILTER', 'REFERENCE', 'MASK_ANCHOR',
-        'FILTER', 'CHANNEL_ANCHOR')])
+        'FILTER', 'CHANNEL_ANCHOR', 'LAYER', 'PROCEDURAL_FILL', 'MESH')])
     choice: bpy.props.StringProperty()
     channel: bpy.props.StringProperty()
 
     def run(self, context):
-        from ..core.layer_stack import channel_for, invalidate
-        from ..utils.ids import new_id
-        ts, layer = _graph_target(context)
-        title = self.choice.replace('_', ' ').title()
-        if self.kind in {'FILTER', 'CHANNEL_ANCHOR'}:
-            if layer.type == 'FOLDER':
-                raise ValueError('Channel filters belong on fill and paint layers.')
-            prop = channel_for(layer, self.channel or context.scene.open_painter.properties_channel)
-            if prop is None:
-                raise ValueError('Choose a channel for the filter.')
-            effect = prop.effects.add()
-            if self.kind == 'CHANNEL_ANCHOR':
-                from ..ui.anchors import _next_name
-                effect.id, effect.name, effect.kind = new_id(), _next_name(ts), 'ANCHOR'
-            else:
-                effect.kind, effect.name = self.choice, title
-                from ..texture_engine.filter_defaults import initial_amount
-                effect.amount = initial_amount(self.choice)
-            prop.active_effect = len(prop.effects) - 1
-            if layer.type != 'PAINT':
-                context.scene.open_painter.properties_channel = prop.channel
-            selected_mask = False
-        else:
-            mask = layer.masks.add()
-            mask.id = new_id()
-            if self.kind == 'MASK':
-                mask.source = self.choice
-                mask.name = self.choice.title() + ' Mask'
-                if self.choice in {'PAINT', 'FILL'}:
-                    from ..core.image_manager import create
-                    mask.image = create(f'{ts.name}_{layer.name}_Mask',
-                                        int(ts.resolution) if self.choice == 'PAINT' else 32, (1, 1, 1, 1))
-                    mask.image.pack()
-            elif self.kind == 'GENERATOR':
-                mask.source, mask.generator, mask.name = 'GENERATOR', self.choice, title
-            elif self.kind == 'PROCEDURAL':
-                mask.source, mask.procedural, mask.name = 'PROCEDURAL', self.choice, title
-            elif self.kind == 'SCENE':
-                mask.source, mask.name = 'SCENE', title
-                mask.influence.kind, mask.influence.mode = self.choice, 'LIVE'
-            elif self.kind == 'MASK_FILTER':
-                mask.source, mask.name, mask.effect.kind = 'FILTER', title, self.choice
-            elif self.kind == 'REFERENCE':
-                mask.source, mask.name = 'REFERENCE', 'Published Input'
-            elif self.kind == 'MASK_ANCHOR':
-                from ..ui.anchors import _next_name
-                mask.source, mask.name = 'ANCHOR', _next_name(ts)
-            layer.active_mask = len(layer.masks) - 1
-            selected_mask = True
-        invalidate(ts)
-        from ..ui import selection
-        layer_id = layer.id
-        selection.select(context, layer_id, selection.MASK if selected_mask else selection.CONTENT,
-                         ts=ts, synchronize=False)
+        from . import authoring
+        ts, layer = _graph_target(context, require_layer=False)
+        tree = getattr(context.space_data, 'node_tree', None)
+        node = tree.nodes.active if is_graph(tree) else None
+        mask_index = None
+        if node is not None and node.select and layer is not None:
+            mask_index = next((i for i, mask in enumerate(layer.masks) if mask.id == getattr(node, 'op_id', '')), None)
+        identifier = authoring.add(ts, layer, self.kind, self.choice,
+                                   self.channel or context.scene.open_painter.properties_channel, mask_index)
+        _select_added(context, ts, identifier)
+
+
+def _select_added(context, ts, identifier):
+    from ..ui import selection
+    layer, mask, prop, effect = mirror.owner_of(ts, identifier)
+    selection.select(context, layer.id, selection.CONTENT, ts=ts, synchronize=False,
+                     mask_id=mask.id if mask is not None else None,
+                     channel=prop.channel if prop is not None else None,
+                     effect_id=effect.id if effect is not None else None)
+    tree = getattr(context.space_data, 'node_tree', None)
+    if is_graph(tree):
+        mirror.reconcile(tree, ts)
+        with mirror.syncing():
+            for node in tree.nodes:
+                node.select = getattr(node, 'op_id', '') == identifier
+            tree.nodes.active = mirror.nodes_by_id(tree)[identifier]
+        tree['op_active'], tree['op_active_node'] = layer.id, identifier
+    context.scene.open_painter.status = ''
+
+
+class OP_OT_graph_template(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.graph_template'
+    bl_label = 'Add Graph Template'
+    bl_description = 'Insert a connected, editable node group into this texture set'
+    bl_options = {'REGISTER', 'UNDO'}
+    from .templates import ITEMS
+    template: bpy.props.EnumProperty(name='Template', items=ITEMS)
+
+    @classmethod
+    def description(cls, context, properties):
+        from .templates import TEMPLATES
+        return TEMPLATES.get(properties.template, {}).get('description', cls.bl_description)
+
+    def run(self, context):
+        from .templates import apply
+        from ..core.layer_stack import index_of
+        ts, layer = _graph_target(context, require_layer=False)
+        parent = (layer.id if layer.type == 'FOLDER' else layer.parent_id) if layer is not None else ''
+        if layer is not None:
+            ts.active_layer = index_of(ts, layer.id)
+        folder = apply(ts, self.template, parent)
+        _select_added(context, ts, folder.id)
+        tree = getattr(context.space_data, 'node_tree', None)
+        if is_graph(tree):
+            from ..core.layer_stack import descendants
+            members = descendants(ts, folder.id) | {folder.id}
+            with mirror.syncing():
+                for node in tree.nodes:
+                    node.select = getattr(node, 'op_owner', '') in members
+            frame(context.area, tree, selected=True)
+
+
+_SEARCH_ITEMS = []
+
+
+def _search_items(self, context):
+    # Blender retains enum strings: keep the backing list alive between draws.
+    if not _SEARCH_ITEMS:
+        from ..texture_engine.procedurals import CATALOG as procedurals
+        from ..texture_engine.filters import CATALOG as filters
+        from ..properties.mesh_selector import KINDS
+        from ..properties.mask import OP_Mask
+        from ..properties.influencer import OP_Influencer
+        from .templates import ITEMS
+        def extend(kind, category, items):
+            for key, name, description in items:
+                _SEARCH_ITEMS.append((kind + ':' + key, category + ' / ' + name, description))
+        extend('LAYER', 'Layer', [(k, k.title(), '') for k in ('FILL', 'PAINT', 'FOLDER')])
+        extend('MASK', 'Mask', [(k, name, '') for k, name in (
+            ('PAINT', 'Painted'), ('FILL', 'Fill Image'), ('BAKED', 'Baked Map'), ('NOISE', 'Noise'),
+            ('GROUP', 'Mask Group'), ('GRAPH', 'Custom Graph'), ('STROKES', 'Vector Strokes'))])
+        extend('MESH', 'Mesh Mask', KINDS)
+        for kind, category, catalog in (('PROCEDURAL', 'Procedural Mask', procedurals),
+                                         ('PROCEDURAL_FILL', 'Procedural Fill', procedurals),
+                                         ('FILTER', 'Channel Filter', filters), ('MASK_FILTER', 'Mask Filter', filters)):
+            extend(kind, category, [(key, key.replace('_', ' ').title(), str(value)) for key, value in catalog.items()])
+        for kind, category, rna, field in (('GENERATOR', 'Generator', OP_Mask, 'generator'),
+                                          ('SCENE', 'Scene Field', OP_Influencer, 'kind')):
+            extend(kind, category, [(i.identifier, i.name, i.description) for i in rna.bl_rna.properties[field].enum_items])
+        for kind, name in (('REFERENCE', 'Published Input'), ('MASK_ANCHOR', 'Mask Anchor'),
+                           ('CHANNEL_ANCHOR', 'Channel Anchor')):
+            extend(kind, 'Anchor', [('', name, '')])
+        extend('TEMPLATE', 'Template', ITEMS)
+    return _SEARCH_ITEMS
+
+
+class OP_OT_graph_search(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.graph_search'
+    bl_label = 'Search Nodes and Templates'
+    bl_options = {'REGISTER', 'UNDO'}
+    bl_property = 'node'
+    node: bpy.props.EnumProperty(name='Node', items=_search_items)
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_search_popup(self)
+        return {'RUNNING_MODAL'}
+
+    def run(self, context):
+        kind, _, choice = self.node.partition(':')
+        if kind == 'TEMPLATE':
+            return bpy.ops.open_painter.graph_template(template=choice)
+        return bpy.ops.open_painter.graph_add(kind=kind, choice=choice)
+
+
+class OP_OT_graph_group(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.graph_group'
+    bl_label = 'Group Selected Layers'
+    bl_description = 'Put consecutive selected sibling layers into an editable folder'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def run(self, context):
+        from ..core import layer_stack as stack
+        ts, _ = _graph_target(context, require_layer=False)
+        tree = getattr(context.space_data, 'node_tree', None)
+        if not is_graph(tree):
+            raise ValueError('Select layer nodes in an Open Painter graph first.')
+        selected = {node.op_id for node in tree.nodes if node.select and getattr(node, 'op_kind', '') in {'LAYER', 'FOLDER'}}
+        roots = stack.selection_roots(ts, selected)
+        if not roots:
+            raise ValueError('Select the layer nodes to group.')
+        parents = {layer.parent_id for layer in ts.layers if layer.id in roots}
+        if len(parents) != 1:
+            raise ValueError('Group layers in the same folder to preserve their composition order.')
+        siblings = [layer.id for layer in ts.layers if layer.parent_id in parents]
+        positions = [siblings.index(identifier) for identifier in roots]
+        if max(positions) - min(positions) + 1 != len(positions):
+            raise ValueError('Select consecutive layers to preserve their composition order.')
+        with stack.replay(ts):
+            folder = stack.group(ts, roots, 'Node Group')
+        _select_added(context, ts, folder.id)
+
+
+class OP_OT_graph_edit_shader(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.graph_edit_shader'
+    bl_label = 'Edit Shader Group'
+    bl_description = 'Open this mask’s reusable shader group in a separate editor'
+    mask_id: bpy.props.StringProperty()
+
+    def run(self, context):
+        ts, _ = _graph_target(context, require_layer=False)
+        _, mask, _, _ = mirror.owner_of(ts, self.mask_id)
+        if mask is None or mask.source != 'GRAPH' or mask.node_group is None:
+            raise ValueError('Choose a Custom Graph mask with a shader group first.')
+        group = mask.node_group
+        existing = next((area for area in context.screen.areas if area.type == 'NODE_EDITOR'
+                         and area.spaces.active.tree_type == 'ShaderNodeTree'
+                         and area.spaces.active.edit_tree == group), None)
+        if existing is None:
+            before = {area.as_pointer() for area in context.screen.areas}
+            bpy.ops.screen.area_split(direction='VERTICAL', factor=.5)
+            existing = next((area for area in context.screen.areas if area.as_pointer() not in before), None)
+            if existing is None:
+                raise ValueError('Blender could not split this area. Try a larger editor area.')
+            existing.ui_type = 'ShaderNodeTree'
+            existing.spaces.active.pin = True
+            existing.spaces.active.path.start(group)
+        frame(existing, group)
 
 
 class _AddMenu:
@@ -262,11 +380,14 @@ class OP_MT_graph_add_mask(_AddMenu, bpy.types.Menu):
 
     def draw(self, context):
         for source, text, icon in (('PAINT', 'Painted', 'BRUSH_DATA'), ('FILL', 'Fill Image', 'IMAGE_DATA'),
-                                   ('BAKED', 'Baked Map', 'RENDER_STILL'), ('NOISE', 'Noise', 'FORCE_TURBULENCE')):
+                                   ('BAKED', 'Baked Map', 'RENDER_STILL'), ('NOISE', 'Noise', 'FORCE_TURBULENCE'),
+                                   ('GROUP', 'Mask Group', 'NODETREE'), ('GRAPH', 'Custom Graph', 'NODETREE'),
+                                   ('STROKES', 'Vector Strokes', 'CURVE_DATA')):
             self.item('MASK', source, text, icon)
         self.layout.menu('OP_MT_graph_add_generator', icon='MOD_MASK')
         self.layout.menu('OP_MT_graph_add_procedural', icon='TEXTURE')
         self.layout.menu('OP_MT_graph_add_scene', icon='ORIENTATION_GLOBAL')
+        self.layout.menu('OP_MT_graph_add_mesh', icon='MESH_DATA')
         self.layout.menu('OP_MT_graph_add_mask_filter', icon='SHADERFX')
         self.layout.separator()
         self.item('REFERENCE', '', 'Published Input', 'LINKED')
@@ -298,7 +419,8 @@ class OP_MT_graph_add_scene(_AddMenu, bpy.types.Menu):
     bl_label = 'Scene Field'
 
     def draw(self, context):
-        for item in bpy.types.OP_Influencer.bl_rna.properties['kind'].enum_items:
+        from ..properties.influencer import OP_Influencer
+        for item in OP_Influencer.bl_rna.properties['kind'].enum_items:
             self.item('SCENE', item.identifier, item.name)
 
 
@@ -319,11 +441,44 @@ class OP_MT_graph_add_filter(_AddMenu, bpy.types.Menu):
     def draw(self, context):
         from ..texture_engine.filters import CATALOG
         channel = context.scene.open_painter.properties_channel
-        self.layout.label(text=CHANNEL_LABELS.get(channel, channel) + ' channel (change it in the Painter panel)')
+        self.layout.label(text=CHANNEL_LABELS.get(channel, channel) + ' channel')
         self.item('CHANNEL_ANCHOR', '', 'Anchor Point', 'ANCHOR_CENTER', channel=channel)
         self.layout.separator()
         for kind in CATALOG:
             self.item('FILTER', kind, kind.replace('_', ' ').title(), channel=channel)
+
+
+class OP_MT_graph_add_mesh(_AddMenu, bpy.types.Menu):
+    bl_idname = 'OP_MT_graph_add_mesh'
+    bl_label = 'Mesh Mask'
+
+    def draw(self, context):
+        from ..properties.mesh_selector import KINDS
+        for kind, name, _ in KINDS:
+            self.item('MESH', kind, name, 'MESH_DATA')
+
+
+class OP_MT_graph_add_fill(_AddMenu, bpy.types.Menu):
+    bl_idname = 'OP_MT_graph_add_fill'
+    bl_label = 'Procedural Fill'
+
+    def draw(self, context):
+        from ..texture_engine.procedurals import CATALOG
+        for kind in CATALOG:
+            self.item('PROCEDURAL_FILL', kind, kind.replace('_', ' ').title(), 'TEXTURE')
+
+
+class OP_MT_graph_templates(_AddMenu, bpy.types.Menu):
+    bl_idname = 'OP_MT_graph_templates'
+    bl_label = 'Templates'
+
+    def draw(self, context):
+        from .templates import TEMPLATES
+        for key, recipe in TEMPLATES.items():
+            if key == 'NOISE_RAMP':
+                self.layout.separator()
+                self.layout.label(text='Shader Groups')
+            self.layout.operator('open_painter.graph_template', text=recipe['name'], icon='NODETREE').template = key
 
 
 def header(self, context):
@@ -340,6 +495,10 @@ def header(self, context):
     from ..ui import selection
     target = selection.resolve(context, ts)
     layout.label(text=selection.breadcrumb_text(target), icon='NODETREE')
+    layout.operator('open_painter.graph_search', text='', icon='VIEWZOOM')
+    layout.menu('OP_MT_graph_templates', icon='NODETREE')
+    layout.prop(context.scene.open_painter, 'properties_channel', text='Channel')
+    layout.operator('open_painter.graph_group', text='Group', icon='FILE_FOLDER')
     row = layout.row(align=True)
     row.operator('open_painter.graph_view', text='Frame Selected', icon='RESTRICT_SELECT_OFF').scope = 'SELECTED'
     row.operator('open_painter.graph_view', text='Full Graph', icon='VIEW_ORTHO').scope = 'ALL'
@@ -365,18 +524,25 @@ def add_menu(self, context):
     tree = context.space_data.node_tree
     ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
     layer = active(ts) if ts is not None else None
-    layout.label(text=('Add to ' + layer.name) if layer else 'Select a layer node first', icon='NODETREE')
+    layout.operator('open_painter.graph_search', icon='VIEWZOOM')
+    layout.menu('OP_MT_graph_templates', icon='NODETREE')
+    layout.separator()
+    layout.label(text=('Add to ' + layer.name) if layer else 'Add a layer to start', icon='NODETREE')
     layout.menu('OP_MT_graph_add_mask', icon='MOD_MASK')
     layout.menu('OP_MT_graph_add_filter', icon='SHADERFX')
     layout.separator()
     for action, label, icon in (('FILL', 'Fill Layer', 'MATERIAL'), ('PAINT', 'Paint Layer', 'BRUSH_DATA'),
                                 ('FOLDER', 'Folder', 'FILE_FOLDER')):
-        layout.operator('open_painter.layer', text=label, icon=icon).action = action
+        op = layout.operator('open_painter.graph_add', text=label, icon=icon)
+        op.kind, op.choice = 'LAYER', action
+    layout.menu('OP_MT_graph_add_fill', icon='TEXTURE')
 
 
 CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
            OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
-           OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter)
+           OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter,
+           OP_OT_graph_template, OP_OT_graph_search, OP_OT_graph_group, OP_OT_graph_edit_shader,
+           OP_MT_graph_templates, OP_MT_graph_add_mesh, OP_MT_graph_add_fill)
 
 
 def register():

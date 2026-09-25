@@ -9,6 +9,12 @@ Python and Blender's bundled NumPy are the core runtime requirements.
 paint across tiles, bake mesh maps and export numbered textures while preserving
 the source UV layout. See the [UDIM workflow](docs/udim-workflow.md) for setup and scope.
 
+**Open Graph now includes templates and more node sources:** searchable node
+creation, mesh masks, nested mask groups, vector strokes, procedural fills and
+editable custom shader groups. Nine templates insert connected, independent
+groups for materials, layered masks and reusable shaders.
+See [Open Graph](docs/open-graph.md#templates).
+
 **License: Source-Available**
 
 Open Painter is free for individuals and qualifying small creators. Commercial organizations

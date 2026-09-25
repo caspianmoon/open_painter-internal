@@ -199,6 +199,7 @@ def register():
 
 def unregister():
     global _registered
+    _registered = False   # suppress graph callbacks while their RNA types are removed
     errors=[]
     while _cleanups:
         try:

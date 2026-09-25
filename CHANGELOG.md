@@ -11,6 +11,24 @@
 - Validate face boundaries before creation and roll back failed assignment. Existing
   painted sets are not automatically split. See [UDIM workflow](docs/udim-workflow.md).
 
+## Unreleased — graph authoring and templates
+
+- Search nodes and templates from the graph header or Add menu; choose filter
+  channels in the header and edit fill channel content directly on layer nodes.
+- Add mesh masks, vector strokes, nested mask groups, custom shader graphs and
+  procedural fill layers. Custom Graph nodes open their reusable shader group
+  in a separate Shader Editor.
+- Nine templates create independent, connected editable folders: Rough Plastic,
+  Brushed Metal, Chipped Paint, Layered Grunge, Shared Surface Detail, Top Surface
+  Dust, Noise → Ramp, Cells → Ramp and Layered Noise → Ramp. Failed creation rolls
+  back the insertion; the last three also create actual Blender shader groups.
+- Nested mask frames and Members sockets reflect evaluation order. Group moves
+  preserve descendants, cycles are refused, and deleting a group preserves its
+  members. Consecutive sibling layer nodes can be grouped from the header.
+- Add operations honor the pinned graph and immediate node selection, assign
+  stable filter IDs and select newly created nodes. New groups avoid existing
+  node positions; mask filters now use kind-specific defaults and radius controls.
+
 ## Unreleased — aging procedurals
 
 - Shared, growing coating-damage masks keep primer and conversion inside paint

@@ -17,7 +17,7 @@ from ..evaluation import anchors
 from ..evaluation.references import issues
 from .tree import OUTPUT_NODE, is_graph
 
-STRUCTURAL = frozenset({'prev', 'mask', 'below', 'children'})
+STRUCTURAL = frozenset({'prev', 'mask', 'members', 'below', 'children'})
 
 
 class LinkError(ValueError):
@@ -150,10 +150,28 @@ def reorder(ts, from_node, from_socket, to_node, to_socket):
         raise LinkError('The output node shows the top layer; move a layer above the others instead.')
     target, target_mask, target_prop, target_effect = _owner(ts, to_node)
     if source_mask is not None or target_mask is not None:
+        from ..core import mask_stack
         if source_mask is None or source.id != target.id or (target_mask is None and to_socket != 'mask'):
             raise LinkError('Masks chain within one layer; share coverage with an Anchor Point and a Published Input.')
-        _move(source.masks, _index(source.masks, source_mask),
-              _index(target.masks, target_mask) if target_mask is not None else len(source.masks))
+        masks = source.masks
+        start, stop = mask_stack.block(masks, _index(masks, source_mask))
+        if target_mask is not None:
+            target_index = _index(masks, target_mask)
+            if start <= target_index < stop:
+                raise LinkError('A mask group cannot contain itself or its descendants.')
+            if to_socket == 'members' and target_mask.source == 'GROUP':
+                parent, before = target_mask.id, mask_stack.block(masks, target_index)[1]
+            elif to_socket == 'prev':
+                parent, before = target_mask.parent_id, target_index
+            else:
+                raise LinkError('Connect coverage to Previous or a mask group’s Members input.')
+        else:
+            parent, before = '', len(masks)
+        identifier = source_mask.id
+        source_mask.parent_id = parent
+        destination = before - (stop - start) if start < before else before
+        mask_stack._move_range(masks, start, stop, destination)
+        source.active_mask = next(i for i, item in enumerate(masks) if item.id == identifier)
     elif source_effect is not None or target_effect is not None:
         if source_effect is None or source.id != target.id:
             raise LinkError('Filters chain within one channel; share content with an Anchor Point.')
@@ -192,7 +210,13 @@ def delete(ts, node_id):
     if mask is not None:
         if mask.source in {'PAINT', 'STROKES'}:
             raise LinkError('Painted masks are deleted in the Painter panel, where their pixels are shown.')
-        layer.masks.remove(_index(layer.masks, mask))
+        from ..core import mask_stack
+        index = _index(layer.masks, mask)
+        if mask.source == 'GROUP':
+            # Removing a group must not silently destroy its painted members.
+            mask_stack.dissolve(layer, index)
+        else:
+            layer.masks.remove(index)
         layer.active_mask = max(0, min(layer.active_mask, len(layer.masks) - 1))
     elif effect is not None:
         prop.effects.remove(_index(prop.effects, effect))

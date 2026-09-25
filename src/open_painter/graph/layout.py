@@ -58,9 +58,13 @@ def positions(rows, links, output=None, sockets=None, subrows=None, inline=None)
     result, y = {}, 0
     for identifier, depth in rows:
         members = [identifier, *inline.get(identifier, ())]
+        occupied = {}
         for member in members:
-            result[member] = (by_rank.get(member, 0) * COLUMN_WIDTH + depth * INDENT, y)
-        y -= max(height(sockets.get(member, 0)) for member in members) + ROW_GAP
+            rank = by_rank.get(member, 0)
+            offset = occupied.get(rank, 0)
+            result[member] = (rank * COLUMN_WIDTH + depth * INDENT, y - offset)
+            occupied[rank] = offset + height(sockets.get(member, 0)) + ROW_GAP
+        y -= max(occupied.values())
         for chain in subrows.get(identifier, ()):
             for member in chain:
                 result[member] = (by_rank.get(member, 0) * COLUMN_WIDTH + (depth + 1) * INDENT, y)

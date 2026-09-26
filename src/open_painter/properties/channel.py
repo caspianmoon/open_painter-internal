@@ -13,6 +13,8 @@ def changed(self, context):
 def numeric(self, context):
     """A uniform or resource-identity edit; graph structure is unchanged."""
     _changed(self, context, False)
+    if not replaying():
+        _sync_fill_mapping(self)
     if hasattr(self, 'value') and hasattr(self, 'channel'):
         # The RNA bounds stay wide so Height can be typed past 1; every other
         # scalar channel is physical 0..1 and is clamped back here.
@@ -55,6 +57,50 @@ def _resolve_physical(owner):
         physical.sync_owner(owner, ts)
 
 
+# Fill layers carry one mapping for the whole layer: a mapping edit on any
+# channel fans out to its fill siblings, so the node shows a single block and
+# the engine never sees divergence. Folders, paint layers and masks keep their
+# own per-item mapping. Fan-out writes run quiet: siblings still dirty and
+# invalidate, but only the source edit notifies the preview.
+FILL_MAPPING_FIELDS = ('projection', 'scale', 'rotation', 'offset', 'triplanar_hardness')
+_quiet_fanout = False
+
+
+def _sync_fill_mapping(prop):
+    """Copy a fill channel's mapping to its sibling channels (change-guarded)."""
+    global _quiet_fanout
+    if replaying():
+        return
+    ts = owning_set(prop)
+    if ts is None:
+        return
+    pointer = prop.as_pointer()
+    for layer in ts.layers:
+        channels = layer.channels
+        if not any(item.as_pointer() == pointer for item in channels):
+            continue
+        if layer.type != 'FILL':
+            return
+        previous, _quiet_fanout = _quiet_fanout, True
+        try:
+            for other in channels:
+                if other.as_pointer() == pointer:
+                    continue
+                if other.projection != prop.projection:
+                    other.projection = prop.projection
+                if tuple(other.scale) != tuple(prop.scale):
+                    other.scale = tuple(prop.scale)
+                if other.rotation != prop.rotation:
+                    other.rotation = prop.rotation
+                if tuple(other.offset) != tuple(prop.offset):
+                    other.offset = tuple(prop.offset)
+                if other.triplanar_hardness != prop.triplanar_hardness:
+                    other.triplanar_hardness = prop.triplanar_hardness
+        finally:
+            _quiet_fanout = previous
+        return
+
+
 def _changed(self, context, structural):
     self.dirty = True
     if replaying():
@@ -76,7 +122,9 @@ def _changed(self, context, structural):
                     if output.channel in affected:
                         output.dirty = True
                 from ..evaluation.shader_preview import notify
-                notify(self, context, previous_dirty=previous_dirty, structural=structural)
+                if not _quiet_fanout:
+                    notify(self, context, previous_dirty=previous_dirty, structural=structural)
+                _sync_fill_mapping(self)
                 return
 
 

@@ -284,8 +284,9 @@ graph stays derived from the stack and is never the editing surface. Image Textu
 (`OPImageNode`, `image:` ids) are the one tree-only exception the mirror preserves: linking
 one into a fill channel copies its image and mapping onto that channel and records the feed
 in `op_image_feeds` for the redraw; cutting the wire takes the image back off, deleting the
-node keeps it as a panel value. Fill nodes also carry per-channel image pickers plus
-projection/scale/rotation/offset rows (hardness joins the projection row under Triplanar).
+node keeps it as a panel value. Fill nodes carry a channel switch grid with per-channel
+image pickers and a single layer-wide mapping block (a mapping edit fans out to every
+fill channel, so the engine never sees divergence).
 
 Composite anchors back the graph's *Output* and *Composite* sockets: `publish_output` /
 `publish_group` on `OP_Layer` own the derived anchor ids `<id>:out` / `<id>:group`;

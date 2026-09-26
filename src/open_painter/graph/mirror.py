@@ -475,15 +475,19 @@ def place(tree, ts, existing, nodes, links, only=None):
                for identifier, spec in nodes.items()}
     for layer in ts.layers:
         if layer.type == 'FILL':
-            # Channel switch grid, then value/image rows per enabled channel.
+            # Channel switch grid, value/image rows per enabled channel, and
+            # one mapping block while any channel is textured.
             sockets[layer.id] = sockets.get(layer.id, 0) + 2
+            textured = False
             for prop in layer.channels:
                 if not prop.enabled:
                     continue
                 sockets[layer.id] += 2
                 if prop.image or prop.detail_image or prop.procedural:
-                    # Projection row (hardness joins it) plus scale/rotation/offset.
-                    sockets[layer.id] += 4
+                    textured = True
+            if textured:
+                # Projection row (hardness joins it) plus scale/rotation/offset.
+                sockets[layer.id] += 4
         for index, mask in enumerate(layer.masks):
             if mask.source in {'FILL', 'PROCEDURAL'}:
                 identifier = mask_node_id(layer, index, mask)
@@ -796,18 +800,23 @@ def draw_node(node, context, layout):
             # Any image attaches to any channel here, exactly like the panel's
             # Texture picker: the shader reads channel.image, so no link is needed.
             layout.template_ID(prop, 'image', open='image.open')
-            if prop.image or prop.detail_image or prop.procedural:
-                # Coordinate selection lives on the node: UV or Triplanar plus
-                # the transform the compiled shader reads (scale/rotation/
-                # offset, and the hardness the manual triplanar blend weights
-                # by). Filtering and wrap stay in the panel.
-                row = layout.row(align=True)
-                row.prop(prop, 'projection', text='')
-                if prop.projection == 'TRIPLANAR':
-                    row.prop(prop, 'triplanar_hardness', text='')
-                layout.prop(prop, 'scale', text='Scale')
-                layout.prop(prop, 'rotation', text='Rotation')
-                layout.prop(prop, 'offset', text='Offset')
+        textured = [channel_for(layer, channel_id) for channel_id in CHANNELS]
+        textured = [prop for prop in textured
+                    if prop is not None and prop.enabled
+                    and (prop.image or prop.detail_image or prop.procedural)]
+        if textured:
+            # One mapping for the whole fill layer, shown once: a mapping edit
+            # on any channel fans out to its siblings (see channel._sync_fill_mapping),
+            # so binding the first textured channel is always correct.
+            # Filtering and wrap stay in the panel.
+            first = textured[0]
+            row = layout.row(align=True)
+            row.prop(first, 'projection', text='')
+            if first.projection == 'TRIPLANAR':
+                row.prop(first, 'triplanar_hardness', text='')
+            layout.prop(first, 'scale', text='Scale')
+            layout.prop(first, 'rotation', text='Rotation')
+            layout.prop(first, 'offset', text='Offset')
     row = layout.row(align=True)
     row.prop(layer, 'publish_output', text='Publish', toggle=True, icon='ANCHOR_CENTER')
     if layer.type == 'FOLDER':

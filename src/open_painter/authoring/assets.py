@@ -58,7 +58,7 @@ def new_layer(identifier, name, kind="FILL", parent_id=""):
     for key in CHANNELS:
         prop = defaults("OP_Channel")
         prop.update(channel=key, layer_id=identifier, color=list(DEFAULTS[key]), value=DEFAULTS[key][0],
-                    enabled=kind == "FOLDER" or key in {"BASE_COLOR", "ROUGHNESS", "METALLIC"})
+                    enabled=kind in {"FOLDER", "FILL"})
         layer["channels"].append(prop)
     return layer
 

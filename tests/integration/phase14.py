@@ -14,6 +14,7 @@ from open_painter.core import (
     layer_stack as stack,
     image_manager as images,
 )
+from open_painter.constants import CHANNELS
 from open_painter.evaluation import cache
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.painting.channel_paint import target
@@ -76,9 +77,9 @@ regional = images.pixels(out.image)
 np.testing.assert_array_equal(regional[:300], actual[:300])
 LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
 np.testing.assert_allclose(images.pixels(out.image), regional, atol=1e-6)
-# Fill creation only affects its three enabled channels.
+# Fill creation dirties every channel: all of them are enabled by default.
 stack.add(ts, "FILL")
-assert {o.channel for o in ts.outputs if o.dirty} == {"BASE_COLOR", "ROUGHNESS", "METALLIC"}
+assert {o.channel for o in ts.outputs if o.dirty} == set(CHANNELS)
 open_painter.unregister()
 print(
     "PHASE 14 PASS: empty layers preserve output revisions, fill dirties only enabled channels, stale jobs cancel, cooperative pixels match full evaluation and premultiplied reference"

@@ -58,9 +58,7 @@ def ensure_channels(layer):
         prop = layer.channels.add()
         prop.channel, prop.layer_id = channel, layer.id
         prop.color, prop.value = DEFAULTS[channel], DEFAULTS[channel][0]
-        prop.enabled = layer.type == "FOLDER" or (
-            layer.type == "FILL" and channel in {"BASE_COLOR", "ROUGHNESS", "METALLIC"}
-        )
+        prop.enabled = layer.type in {"FOLDER", "FILL"}
 
 
 def active(ts):

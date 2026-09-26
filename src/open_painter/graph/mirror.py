@@ -418,10 +418,14 @@ def place(tree, ts, existing, nodes, links, only=None):
     # every layer one column right of the one below it.
     edges = [(source, target) for source, _, target, to_socket in links
              if target != OUTPUT_NODE and to_socket not in STRUCTURAL]
-    # Mask and filter bodies draw their controls: count them as socket rows.
+    # Mask, filter and fill-channel bodies draw their controls: count them as socket rows.
     body = {'MASK': 13, 'EFFECT': 8}
     sockets = {identifier: len(spec['inputs']) + len(spec['outputs']) + body.get(spec['kind'], 0)
                for identifier, spec in nodes.items()}
+    for layer in ts.layers:
+        if layer.type == 'FILL':
+            sockets[layer.id] = sockets.get(layer.id, 0) + sum(
+                1 for prop in layer.channels if prop.enabled)
     inline, subrows = {}, {}
     for layer in ts.layers:
         if layer.masks:
@@ -641,6 +645,19 @@ def draw_node(node, context, layout):
         layout.prop(layer, 'group_mode', text='')
     else:
         layout.prop(layer, 'blend_mode', text='')
+    if layer.type == 'FILL':
+        # Fill content, editable like the panel: one row per enabled channel.
+        from ..constants import CHANNELS
+        from ..core.layer_stack import channel_for
+        for channel_id in CHANNELS:
+            prop = channel_for(layer, channel_id)
+            if prop is None or not prop.enabled:
+                continue
+            label = CHANNEL_LABELS.get(channel_id, channel_id)
+            if channel_id in {'BASE_COLOR', 'NORMAL', 'EMISSION'}:
+                layout.prop(prop, 'color', text=label)
+            else:
+                layout.prop(prop, 'value', text=label, slider=True)
     row = layout.row(align=True)
     row.prop(layer, 'publish_output', text='Publish', toggle=True, icon='ANCHOR_CENTER')
     if layer.type == 'FOLDER':

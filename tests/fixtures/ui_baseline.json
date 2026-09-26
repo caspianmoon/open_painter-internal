@@ -30,16 +30,16 @@
      ]
     },
     "BASE_COLOR": {
-     "hash": "de5055c1ecab7b15",
+     "hash": "5a225526402973b6",
      "mean": [
-      0.15677660703659058,
-      0.22383442521095276,
-      0.30174362659454346
+      0.08221685141324997,
+      0.1669260412454605,
+      0.2693377137184143
      ],
      "std": [
-      0.13099491596221924,
-      0.10796071588993073,
-      0.07919071614742279
+      0.043635278940200806,
+      0.03250362351536751,
+      0.019370075315237045
      ]
     },
     "EMISSION": {
@@ -56,29 +56,29 @@
      ]
     },
     "HEIGHT": {
-     "hash": "964caf379227a60c",
+     "hash": "fc7fa8bf78f8f015",
      "mean": [
-      0.5001580119132996,
-      0.5001580119132996,
-      0.5001580119132996
+      0.5141856074333191,
+      0.5141856074333191,
+      0.5141856074333191
      ],
      "std": [
-      0.0023914005141705275,
-      0.0023914005141705275,
-      0.0023914005141705275
+      0.0011600538855418563,
+      0.0011600538855418563,
+      0.0011600538855418563
      ]
     },
     "METALLIC": {
-     "hash": "0ad90479bfe7daf5",
+     "hash": "550c0666c8b57845",
      "mean": [
-      0.06286131590604782,
-      0.06286131590604782,
-      0.06286131590604782
+      0.0030018521938472986,
+      0.0030018521938472986,
+      0.0030018521938472986
      ],
      "std": [
-      0.193578839302063,
-      0.193578839302063,
-      0.193578839302063
+      0.04736054316163063,
+      0.04736054316163063,
+      0.04736054316163063
      ]
     },
     "NORMAL": {
@@ -108,26 +108,26 @@
      ]
     },
     "ROUGHNESS": {
-     "hash": "ea0e892b54057c03",
+     "hash": "746b072287aed5d5",
      "mean": [
-      0.5433268547058105,
-      0.5433268547058105,
-      0.5433268547058105
+      0.5087764263153076,
+      0.5087764263153076,
+      0.5087764263153076
      ],
      "std": [
-      0.037284597754478455,
-      0.037284597754478455,
-      0.037284597754478455
+      0.016081340610980988,
+      0.016081340610980988,
+      0.016081340610980988
      ]
     }
    },
-   "digest": "988e49618e6dc59288c2db10b7167947fb83308ec41f948d6131ea56dd1e5462",
+   "digest": "d712002717119cc25a07b6ae7d40a3c1d6511067a16bcccec0d6820922b227a5",
    "export": [
     {
      "mean": [
-      0.4091115891933441,
-      0.5001435279846191,
-      0.5818750858306885,
+      0.3141898810863495,
+      0.44405505061149597,
+      0.5557324290275574,
       1.0
      ],
      "name": "Body_BaseColor.png",
@@ -138,8 +138,8 @@
     },
     {
      "mean": [
-      0.5010955333709717,
-      0.5010987520217896,
+      0.5010634064674377,
+      0.5010619163513184,
       1.0,
       1.0
      ],
@@ -152,8 +152,8 @@
     {
      "mean": [
       1.0,
-      0.5437526702880859,
-      0.06249785050749779,
+      0.5087532997131348,
+      0.0030791889876127243,
       1.0
      ],
      "name": "Body_ORM.png",
@@ -229,7 +229,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.0e0a0f618c325134872d572be9d67602",
+     "id": "cede425d.0e0a0f618c325134872d572be9d67602",
      "masks": [],
      "name": "Worn Painted Metal",
      "opacity": 1.0,
@@ -289,7 +289,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "232346eaf48548c5b23836cce13e87fb",
+     "id": "65676853d37d4504920f73cf1dd0139e",
      "masks": [],
      "name": "Details",
      "opacity": 1.0,
@@ -349,7 +349,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "69998a37e61d4aeab360e0255dc47744",
+     "id": "8801025a3b8a4d74ae3b23e76939296d",
      "masks": [
       [
        "Cavity",
@@ -452,7 +452,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "e7aefd79646c4ad2a2e0ca43be2249a4",
+     "id": "d4f86ece193343648fce69559c586430",
      "masks": [],
      "name": "Material Aging",
      "opacity": 1.0,
@@ -512,7 +512,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "0b745c637d68412098f2897ceb6e564c",
+     "id": "0de0f00c762f4b40b352332fc217c87f",
      "masks": [],
      "name": "Carbon Steel substrate",
      "opacity": 1.0,
@@ -572,25 +572,25 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "3b4c8e49c1f340549bf39873857f5819",
+     "id": "53f2f72be5b345b48cc47a012ba434a8",
      "masks": [
       [
-       "Rust",
-       "GENERATOR",
+       "Weathering Front",
+       "PROCEDURAL",
        "NORMAL",
-       0.05782,
+       0.35,
        1.0
       ],
       [
-       "Rust Detail",
-       "FILL",
-       "MULTIPLY",
-       0.35,
-       1.0
+       "Cavity Dirt",
+       "GENERATOR",
+       "MAX",
+       0.18,
+       0.00565
       ]
      ],
      "name": "Surface rust",
-     "opacity": 0.00956,
+     "opacity": 0.03477,
      "parent": "Material Aging",
      "type": "FILL"
     },
@@ -623,7 +623,7 @@
       ],
       [
        "HEIGHT",
-       false,
+       true,
        "INHERIT",
        1.0
       ],
@@ -647,7 +647,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "53559cb8bf254b1f96b35f1e9d0a2235",
+     "id": "6270746b87da47cc94a6edb1e5e830be",
      "masks": [
       [
        "Chips",
@@ -657,7 +657,7 @@
        1.0
       ],
       [
-       "Grunge Heavy",
+       "Weathering Front",
        "PROCEDURAL",
        "MULTIPLY",
        0.35,
@@ -698,7 +698,7 @@
       ],
       [
        "HEIGHT",
-       false,
+       true,
        "INHERIT",
        1.0
       ],
@@ -722,7 +722,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "53f0efea28cf48ac84b777aa3bffbf6a",
+     "id": "9ccd59daae5e464f981f9485c85dcc41",
      "masks": [
       [
        "Chips",
@@ -732,7 +732,7 @@
        1.0
       ],
       [
-       "Grunge Heavy",
+       "Weathering Front",
        "PROCEDURAL",
        "MULTIPLY",
        0.35,
@@ -797,27 +797,34 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "ab86df12cf1a4b688953e4514a766d4f",
+     "id": "c8e78cf25cf6475e96f630056146cfc7",
      "masks": [
       [
-       "Cracks",
+       "Fine Fissures",
        "PROCEDURAL",
        "NORMAL",
        0.35,
        1.0
       ],
       [
-       "Grunge Heavy",
+       "Chips",
+       "GENERATOR",
+       "MULTIPLY",
+       0.08813,
+       1.0
+      ],
+      [
+       "Weathering Front",
        "PROCEDURAL",
        "MULTIPLY",
        0.35,
        1.0
       ],
       [
-       "Dust",
-       "GENERATOR",
+       "Weathering Front",
+       "PROCEDURAL",
        "MULTIPLY",
-       0.6,
+       0.35,
        1.0
       ]
      ],
@@ -879,12 +886,33 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "1a6fc309948b401ba123f323585bfd8b",
+     "id": "31488391f350482e906825686fcd23b4",
      "masks": [
       [
-       "Abrasion Mask V2",
-       "FILL",
+       "Tapered Scratches",
+       "PROCEDURAL",
        "NORMAL",
+       0.35,
+       1.0
+      ],
+      [
+       "Weathering Front",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.35,
+       1.0
+      ],
+      [
+       "Chips",
+       "GENERATOR",
+       "MULTIPLY",
+       0.08813,
+       1.0
+      ],
+      [
+       "Weathering Front",
+       "PROCEDURAL",
+       "MULTIPLY",
        0.35,
        1.0
       ]
@@ -899,7 +927,7 @@
      "channels": [
       [
        "BASE_COLOR",
-       true,
+       false,
        "INHERIT",
        1.0
       ],
@@ -911,7 +939,7 @@
       ],
       [
        "METALLIC",
-       true,
+       false,
        "INHERIT",
        1.0
       ],
@@ -947,7 +975,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "358ab88a712b458786ee631b38879011",
+     "id": "8bcf8630e8c548199f9fe8b3ae3e0d1c",
      "masks": [
       [
        "Edge Wear",
@@ -1015,32 +1043,25 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "47861f9d0c164d0480530bca4758f033",
+     "id": "cc511446d6a34f6c8e481d2d6334f471",
      "masks": [
       [
        "Chips",
        "GENERATOR",
        "NORMAL",
-       0.15142,
+       0.00016,
        1.0
       ],
       [
-       "Grunge Heavy",
+       "Weathering Front",
        "PROCEDURAL",
-       "ADD",
-       0.35,
-       1.0
-      ],
-      [
-       "Rust Detail",
-       "FILL",
-       "MULTIPLY",
+       "MAX",
        0.35,
        1.0
       ]
      ],
      "name": "Corrosion at damage",
-     "opacity": 0.0183,
+     "opacity": 0.0732,
      "parent": "Material Aging",
      "type": "FILL"
     },
@@ -1097,7 +1118,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "33ac91a122c54aeb97f59a9d660216bf",
+     "id": "8ba11906fd4b48a69c5764e83651c723",
      "masks": [
       [
        "Concrete Pores",
@@ -1165,20 +1186,20 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "b34a998c2d5b4a618509a366ebd7b9b9",
+     "id": "d2cfa92c733e418bb91a819ada9fef77",
      "masks": [
       [
-       "Grunge Streaks",
+       "Runoff Trails",
        "PROCEDURAL",
        "NORMAL",
        0.35,
        1.0
       ],
       [
-       "Drips",
+       "Runoff",
        "GENERATOR",
-       "MULTIPLY",
-       0.1143,
+       "NORMAL",
+       0.35894,
        1.0
       ]
      ],
@@ -1216,7 +1237,7 @@
       ],
       [
        "HEIGHT",
-       false,
+       true,
        "INHERIT",
        1.0
       ],
@@ -1240,25 +1261,25 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "dfa2b9c8c7a44c0ca075107aa9d5e973",
+     "id": "901024a0fb8244ceb804afe4281cb65e",
      "masks": [
       [
-       "Grunge Spots",
+       "Weathering Front",
        "PROCEDURAL",
        "NORMAL",
        0.35,
        1.0
       ],
       [
-       "Cavity Dirt",
-       "GENERATOR",
-       "ADD",
-       0.2,
+       "Corrosion Grain",
+       "PROCEDURAL",
+       "MULTIPLY",
+       0.35,
        1.0
       ]
      ],
      "name": "Salt deposits",
-     "opacity": 0.03833,
+     "opacity": 0.02464,
      "parent": "Material Aging",
      "type": "FILL"
     },
@@ -1315,10 +1336,10 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "ada3a63a9225412c84750fd36f9377b1",
+     "id": "d1003747824c417da0649bfbab94b1c0",
      "masks": [
       [
-       "Grunge Medium",
+       "Weathering Front",
        "PROCEDURAL",
        "NORMAL",
        0.35,
@@ -1327,9 +1348,9 @@
       [
        "Cavity Dirt",
        "GENERATOR",
-       "ADD",
+       "MAX",
        0.25,
-       1.0
+       0.0
       ]
      ],
      "name": "Biological growth",
@@ -1390,10 +1411,10 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "5baa4feab80e4baaab77437acbddf700",
+     "id": "c2e3eab7198d4939abe541b74bfea498",
      "masks": [
       [
-       "Grunge Medium",
+       "Weathering Front",
        "PROCEDURAL",
        "NORMAL",
        0.35,
@@ -1409,9 +1430,9 @@
       [
        "Cavity Dirt",
        "GENERATOR",
-       "ADD",
+       "MAX",
        0.2,
-       1.0
+       0.05231
       ],
       [
        "Position",
@@ -1479,10 +1500,10 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "3b87f9a041f84a13b7c81ccc57b47306",
+     "id": "c9e89e7894af4f0d95cfa07055468735",
      "masks": [
       [
-       "Grunge Medium",
+       "Weathering Front",
        "PROCEDURAL",
        "NORMAL",
        0.35,
@@ -1554,7 +1575,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "cf0a605363804b1e82f2f598dc1ea1b6",
+     "id": "9e802aba9cb14c4d8aa48683eaaea929",
      "masks": [],
      "name": "Stripes",
      "opacity": 0.8,
@@ -1614,7 +1635,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "3cd136ab746e4c92acef4001fb54361a",
+     "id": "b20f0968c8a04cd7b79e465c9ef00469",
      "masks": [
       [
        "Painted Mask",
@@ -1682,7 +1703,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.2adb8799c0ed5b70adb6674b3f72ddc9",
+     "id": "cede425d.2adb8799c0ed5b70adb6674b3f72ddc9",
      "masks": [],
      "name": "Steel substrate",
      "opacity": 1.0,
@@ -1742,7 +1763,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.24b67a4034b452338ea55814beb63dfc",
+     "id": "cede425d.24b67a4034b452338ea55814beb63dfc",
      "masks": [
       [
        "Rust",
@@ -1810,7 +1831,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.9d3c6686d4a85adf8b34788eb5888756",
+     "id": "cede425d.9d3c6686d4a85adf8b34788eb5888756",
      "masks": [
       [
        "Chips",
@@ -1878,7 +1899,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.ef1dbfde399251e48b6301ed98c82271",
+     "id": "cede425d.ef1dbfde399251e48b6301ed98c82271",
      "masks": [
       [
        "Abrasion Mask V2",
@@ -1946,7 +1967,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "7f37cf26.5739119c68125d73bdba8bb8f4c7c9ed",
+     "id": "cede425d.5739119c68125d73bdba8bb8f4c7c9ed",
      "masks": [
       [
        "Cavity Dirt",
@@ -2075,7 +2096,7 @@
      ]
     }
    },
-   "digest": "6def7e0f675205a88516107c2582f83bd4083ccbf3ed6d4b67580443dddbfad9",
+   "digest": "82c17b5bc78c2ca788446300c432887bb7704e8daa9943fb7aa56e4e25c1c8ca",
    "export": [
     {
      "mean": [
@@ -2196,7 +2217,7 @@
       ]
      ],
      "group": "ISOLATED",
-     "id": "b89f3b9050b6445da1f593411feca708",
+     "id": "9afba3d77d7a4ef8b9b7bfb5c216d769",
      "masks": [],
      "name": "Panel Base",
      "opacity": 1.0,

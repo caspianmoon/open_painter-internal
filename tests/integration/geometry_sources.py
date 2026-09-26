@@ -113,10 +113,16 @@ except RuntimeError as error:
 
 # ---- the operator: rust from the material, bolts on painted spots --------------------------------
 before = len([o for o in scene.objects if o.get(manager.TAG) == "INSTANCE_HELPER"])
+from open_painter.geometry_effects import limits
+budget = limits.headroom(scene)[1] // manager.KINDS["RUST"]["triangles"]
 assert bpy.ops.open_painter.geometry_effect(action="RUST", source="MATERIAL", density=200, size=.03, seed=2) == {"FINISHED"}
 placed = bpy.context.view_layer.objects.active
 assert placed.get(manager.TAG) == "INSTANCE_HELPER" and placed["source"] == "MATERIAL" and placed["kind"] == "RUST"
 assert "pieces on corrosion and surface rust" in scene.open_painter.status
+# The heavily aged set rusts all over and the first helper holds most of the budget: the dense
+# placement takes the pieces the project can still hold, spread over the area, and says so.
+assert placed["capped"] and placed["instance_count"] == budget, (placed["instance_count"], budget)
+assert "piece budget is reached" in scene.open_painter.status, scene.open_painter.status
 manager.remove(placed)
 
 spots_layer = stack.add(ts, "FILL", "Bolt spots")

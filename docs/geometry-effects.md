@@ -60,7 +60,10 @@ The dialog starts each kind at a sensible density and size (rust 1500/m² at 2 c
 moss 3000/m² at 8 cm clusters, snow 800/m² at 7 cm, splinters 800/m² at 4 cm,
 peel 600/m² at 3 cm, weld radius 1.5 cm). Card-based moss needs dense packing:
 use it on masked patches rather than whole objects; the 500 000-triangle project
-limit still applies. These are instanced textures and shapes, not simulation:
+limit still applies. A scattered effect that would exceed what the project can still hold
+places as many pieces as fit, chosen in random order so they spread over the whole area,
+and the status says the budget was reached. The effect is refused only when the budget is
+already used up. Painted spots are placed all or none. These are instanced textures and shapes, not simulation:
 snow does not accumulate by physics and rust flakes are not derived from the
 paint layers beneath them.
 

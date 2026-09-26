@@ -33,6 +33,12 @@
     publishes any held channels first.
 
   The engine report names the path.
+- A dense geometry effect on a large area (rust over a heavily aged surface) places as many
+  pieces as the project's triangle budget still allows, spread over the area, instead of
+  refusing. The status says when the budget was reached.
+- Fixed: an Attribute or Vertex Group scene field computed nothing when a Contact or Distance
+  field had been set on the same mask first. The object left over from that field kind hid
+  the set's own meshes.
 - Fixed: after a texture set's resolution changed, the engine could keep rendering some layers
   into textures of the previous size, so part of the result was missing until the file was
   reopened.

@@ -50,12 +50,13 @@ def _thin(positions, minimum, rng, limit=None):
     The pass is sequential by nature (each decision depends on the points kept
     before it), so the per-point work runs on plain Python numbers prepared in
     one vectorised step rather than on per-point numpy arrays. ``limit`` stops
-    the pass as soon as one more point than the project can take has been kept:
-    the caller's limit check then refuses without walking the remaining
-    candidates, which is where a large masked area used to freeze Blender.
+    the pass once the project's budget of points is kept, without walking the
+    remaining candidates (where a large masked area used to freeze Blender).
+    The candidates are visited in random order, so the points kept spread over
+    the whole area. Returns (keep, capped): capped when candidates were left.
     """
     if minimum <= 0 or len(positions) < 2:
-        return np.ones(len(positions), bool)
+        return np.ones(len(positions), bool), False
     order = rng.permutation(len(positions))
     keep = np.zeros(len(positions), bool)
     cells = np.floor(positions / minimum).astype(np.int64).tolist()
@@ -63,7 +64,11 @@ def _thin(positions, minimum, rng, limit=None):
     occupied = {}
     threshold = minimum * minimum
     kept = 0
+    capped = False
     for index in order.tolist():
+        if limit is not None and kept >= limit:
+            capped = True
+            break
         cx, cy, cz = cells[index]
         x, y, z = coords[index]
         near = False
@@ -78,9 +83,7 @@ def _thin(positions, minimum, rng, limit=None):
             keep[index] = True
             occupied.setdefault((cx, cy, cz), []).append((x, y, z))
             kept += 1
-            if limit is not None and kept > limit:
-                break
-    return keep
+    return keep, capped
 
 
 def field_of(mask):
@@ -151,17 +154,23 @@ def scatter_points(ts, obj, mask, density, seed, replacing=None, kind='RUST', si
             facing -= normal * np.sum(facing * normal, axis=1, keepdims=True)
             length = np.linalg.norm(facing, axis=1, keepdims=True)
             facing = np.where(length > 1e-8, facing / np.maximum(length, 1e-8), 0).astype(np.float32)
+        capped = False
         if size and settings['spacing']:
             instances_left, triangles_left = limits.headroom(ts.id_data, replacing)
             limit = max(0, min(instances_left, triangles_left // settings['triangles']))
-            thinned = _thin(positions, settings['spacing'] * size, rng, limit)
+            if limit == 0 and len(positions):
+                raise ValueError(f'The project\'s geometry effects already reach the {limits.MAX_TRIANGLES:,} '
+                                 'estimated triangle limit: remove an effect before adding another')
+            # A dense placement on a large area (a heavily aged surface) takes as many pieces as
+            # the project's budget allows, spread over the area, rather than refusing.
+            thinned, capped = _thin(positions, settings['spacing'] * size, rng, limit)
             positions, normal, uv_kept = positions[thinned], normal[thinned], uv_kept[thinned]
             if facing is not None:
                 facing = facing[thinned]
         # Limits apply to the instances that survive the mask and spacing, not
         # to the candidate points the mask rejected.
         limits.check(ts.id_data, len(positions), len(positions) * settings['triangles'], replacing=replacing)
-        return dict(positions=positions, normals=normal, uv=uv_kept.astype(np.float32), facing=facing)
+        return dict(positions=positions, normals=normal, uv=uv_kept.astype(np.float32), facing=facing, capped=capped)
 
 
 def _orientations(normals, rng, settings, grain=Vector((1, 0, 0)), facing=None):
@@ -290,11 +299,13 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
         instances_left, triangles_left = limits.headroom(ts.id_data, replacing)
         if len(positions) > min(instances_left, triangles_left // settings['triangles']):
             raise ValueError(f'{len(positions)} spots exceed the project instance limit')
+        capped = False   # painted spots are the artist's: all of them or an error, never a subset
     else:
         scattered = scatter_points(ts, obj, field, density, seed, replacing, kind, size,
                                    direction=placement.direction if placement is not None else None,
                                    slope=placement is None or placement.source != 'MATERIAL')
         positions, normals, uv, facing = scattered['positions'], scattered['normals'], scattered['uv'], scattered['facing']
+        capped = scattered.get('capped', False)
         diameters = None
     if not len(positions):
         return None
@@ -370,6 +381,7 @@ def create(ts, obj, mask, kind='RUST', density=30, size=.02, seed=1, lift=0, mat
             item['effect_owner'] = identifier
         helper['instance_count'] = count
         helper['estimated_triangles'] = triangles
+        helper['capped'] = bool(capped)   # the project's budget stopped the placement
         helper['source_texture_set'] = ts.id
         helper['kind'] = kind
         helper['density'] = density

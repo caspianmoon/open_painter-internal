@@ -186,7 +186,8 @@ class OP_OT_geometry_effect(SafeOperator,bpy.types.Operator):
                                       prototypes=prototypes,match=self.match,follow=self.follow,layer_id=placement.layer_id)
                 if helper is None:
                     raise ValueError(f'No instances survived the density and spacing on {placement.label}')
-                context.scene.open_painter.status=f"{helper['instance_count']:,} pieces on {placement.label}"
+                context.scene.open_painter.status=(f"{helper['instance_count']:,} pieces on {placement.label}"
+                                                   + (" · the project's piece budget is reached" if helper.get('capped') else ''))
         if helper:
             for selected in context.selected_objects: selected.select_set(False)
             helper.select_set(True); context.view_layer.objects.active=helper

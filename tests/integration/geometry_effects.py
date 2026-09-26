@@ -236,20 +236,27 @@ except ValueError as error:
     assert 'no longer exists' in str(error), error
 body_helper['source_texture_set'] = body.id
 manager.remove(body_helper)
-# Refusing an over-limit scatter must not walk every candidate first.
+# An over-limit scatter takes what the project can still hold, without walking every candidate;
+# once the budget is used up the next one is refused.
 import time
 bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 30, 0))   # 400 m² at the moss preset: 1.2M candidates
 slab = bpy.context.object
 slab_set = sets.create(scene, 'Slab', 512); sets.assign(scene, slab_set, slab)
 started = time.perf_counter()
+capped = manager.create(slab_set, slab, mask, 'MOSS', 3000, .08, 1)
+elapsed = time.perf_counter() - started
+assert capped is not None and capped['capped'], 'an over-limit scatter was not capped'
+instances_left, triangles_left = limits.headroom(scene)
+assert min(instances_left, triangles_left // manager.KINDS['MOSS']['triangles']) == 0, (instances_left, triangles_left)
+assert elapsed < 8, f'capping an over-limit scatter stalled for {elapsed:.1f} s'
 try:
-    manager.create(slab_set, slab, mask, 'MOSS', 3000, .08, 1)
-    raise AssertionError('project limits ignored on a slab')
+    manager.create(slab_set, slab, mask, 'MOSS', 3000, .08, 2)
+    raise AssertionError('project limits ignored once the budget is used up')
 except ValueError as error:
     assert 'limit' in str(error), error
-elapsed = time.perf_counter() - started
-assert elapsed < 8, f'refusing an over-limit scatter stalled for {elapsed:.1f} s'
-assert manager._thin(np.random.default_rng(0).random((5000, 3)), .01, np.random.default_rng(1), limit=20).sum() == 21
+manager.remove(capped)
+keep, was_capped = manager._thin(np.random.default_rng(0).random((5000, 3)), .01, np.random.default_rng(1), limit=20)
+assert keep.sum() == 20 and was_capped
 open_painter.unregister()
 assert obj.name in bpy.data.objects and curve.name in bpy.data.objects
 print('GEOMETRY_EFFECTS_PASS',flush=True)

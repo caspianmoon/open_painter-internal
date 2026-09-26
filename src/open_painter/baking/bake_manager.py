@@ -165,7 +165,7 @@ def bake_steps(context, ts):
         tasks.append(("AO", lambda: bake(context, ts, "AO", flush=True)))
     tasks.extend((kind, lambda kind=kind: bake(context, ts, kind, flush=True)) for kind in bevel_kinds)
     if settings.curvature:
-        tasks.append(("CURVATURE", lambda: bake_curvature_set(ts)))
+        tasks.append(("CURVATURE", lambda: bake_curvature_set(ts, context=context)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)
     from ..geometry.provenance import record
     from . import history
@@ -212,7 +212,7 @@ def owned_curvature(ts):
 def stale_curvature(ts):
     """The owned Curvature map an edge-driven recipe should replace, or None.
 
-    Stale means crease-only (baked before GEOMETRIC_CREASES_V2) or missing the
+    Stale means pre-Cycles (baked before CYCLES_BEVEL) or missing the
     thin/wide/extreme companions that Edge Size blends between.
     """
     prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
@@ -228,10 +228,10 @@ def stale_curvature(ts):
 
 
 def refresh_stale_curvature(ts, required, context=None):
-    """Rebake a crease-only Curvature map when an edge-driven recipe uses it.
+    """Rebake a pre-Cycles Curvature map when an edge-driven recipe uses it.
 
-    Maps baked before GEOMETRIC_CREASES_V2 are empty on smooth geometry, so an
-    effect that reads them appears to do nothing. Nothing happens when the map
+    Maps baked before CYCLES_BEVEL predate the Bevel-shader edge set, so an
+    effect that reads them sees stale edges. Nothing happens when the map
     is missing (the recipe preflight reports that) or already current. With a
     window context the bake runs as a cooperative modal job and 'QUEUED' is
     returned; the recipe is added right away and reads the new map when it

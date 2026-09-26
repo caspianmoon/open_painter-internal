@@ -218,7 +218,7 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
             self._set_id = ts.id
             self._scene_name = context.scene.name
             self._expected = record(ts, 'CURVATURE')
-            self._job = curvature_steps(ts)
+            self._job = curvature_steps(context, ts)
             next(self._job)  # reads the evaluated meshes now, while the depsgraph is current
             self._status(context, 'Rebaking edge maps… 2% · Esc stops')
             self._timer = context.window_manager.event_timer_add(.02, window=context.window)

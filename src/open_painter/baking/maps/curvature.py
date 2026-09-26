@@ -1,17 +1,18 @@
-"""Bake convex edges of the evaluated target into the assigned render UVs.
+"""Bake convex edges of the assigned render UVs with a transient Cycles shader.
 
-Two signals are combined by maximum: hard creases above the minimum angle as
-fixed-pixel-width lines (the original GEOMETRIC_CREASES_V1 behaviour), and the
-convex part of the physical-radius curvature in ``mean_curvature`` so smooth
-bevels and tessellated rims register too. This is an edge map of the target
-mesh, not a derivative of tangent normals; high-poly normal detail is not
-curvature.
+Each reach runs the exact Bevel-normal/cross-product/length/smooth-step graph
+(``cycles_baker.curvature_graph``) against the target's own surface at its own
+Bevel radius, always in Cycles like the other mesh-map bakes. The geometric
+crease helpers below stay: the LIVE edge field and the Mean Curvature crease
+overlay still rasterize them on the CPU.
 """
 
 from math import cos, radians
+from types import SimpleNamespace
 import bpy
 import numpy as np
-from ...core import image_manager as images
+
+from ..cycles_baker import CURVATURE_METHOD, bake_curvature_reach
 
 
 def crease_edges(mesh, world, minimum_angle, concave=False):
@@ -151,14 +152,13 @@ def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
             return done.value
 
 
-METHOD = "GEOMETRIC_CREASES_V2"
+METHOD = CURVATURE_METHOD
 
 
-# The edge map is baked as a set: the same crease lines with the smooth convex
-# curvature at four reaches, so Edge Size can blend between them live.
+# The edge map is baked as a set: the same Bevel shader at four radii, so Edge
+# Size can blend between the reaches live.
 EDGE_MAP_KINDS = ("CURVATURE_THIN", "CURVATURE", "CURVATURE_WIDE", "CURVATURE_XWIDE")
 EDGE_RADIUS_FACTORS = {"CURVATURE_THIN": .5, "CURVATURE": 1., "CURVATURE_WIDE": 2., "CURVATURE_XWIDE": 4.}
-EDGE_SUFFIXES = {"CURVATURE_THIN": "Thin", "CURVATURE": "", "CURVATURE_WIDE": "Wide", "CURVATURE_XWIDE": "XWide"}
 
 
 def edge_map_set_complete(ts):
@@ -166,62 +166,23 @@ def edge_map_set_complete(ts):
     return all(any(m.kind == kind and m.image for m in ts.baked_maps) for kind in EDGE_MAP_KINDS)
 
 
-def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
-    """Bake the edge map set cooperatively: yields progress (0..1), returns {kind: image}.
+def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
+    """Bake the edge set with the Cycles Bevel shader: one blocking bake per reach.
 
-    Mesh data is read into arrays in one evaluated-mesh scope up front; the
-    crease lines (shared by every reach) and the smooth convex curvature at
-    each reach then accumulate across steps, so a modal operator can keep the
-    interface responsive.
+    Yields progress (0..1) between reaches so the modal refresh keeps responding
+    and Esc stops between maps; returns {kind: image}. The settings are read
+    before the first yield: a modal caller may mutate the project between steps.
+    Closing the generator releases the reaches baked so far, mirroring the old
+    cooperative cleanup: only landed maps persist.
     """
-    from ...geometry.snapshots import targets
-    from .mean_curvature import convex_map_steps, prepare_raster, prepare_reach
-    n = int(ts.resolution)
-    base = ts.bake.mean_curvature_distance
-    # Everything the set provides is read before the first yield: a modal caller
-    # may add or remove texture sets (or undo) between steps, which reallocates
-    # the collection under this RNA reference.
-    name = ts.name
+    base = float(ts.bake.mean_curvature_distance)
     radii = {kind: base * EDGE_RADIUS_FACTORS[kind] for kind in kinds}
-    with targets(ts) as meshes:
-        # No yields while evaluated meshes are alive: the depsgraph may change between steps.
-        creases = [prepare_creases(target["mesh"], target["object"].matrix_world, target["slots"], n,
-                                   ts.bake.curvature_angle, ts.bake.curvature_width) for target in meshes]
-        # Face turning and the raster are radius-independent: one copy serves
-        # every reach (four 4k rasters would hold gigabytes for the whole job).
-        rasters = [prepare_raster(target, n, radians(ts.bake.curvature_angle)) for target in meshes]
-        fields = {kind: [prepare_reach(target, raster, radii[kind]) for target, raster in zip(meshes, rasters)]
-                  for kind in kinds}
     yield 0.02
-    lines = np.zeros((n, n), dtype=np.float32)
-    for index, prepared in enumerate(creases):
-        steps = rasterize_steps(prepared)
-        while True:
-            try:
-                yield 0.02 + 0.13 * (index + next(steps)) / len(creases)
-            except StopIteration as done:
-                np.maximum(lines, done.value, out=lines)
-                break
     result = {}
     try:
         for position, kind in enumerate(kinds):
-            # Smooth convex curvature within the physical radius: rims, bevels and
-            # dense edges that never exceed the crease angle still become edge wear.
-            values = lines.copy()
-            steps = convex_map_steps(fields.pop(kind), n, radii[kind])
-            while True:
-                try:
-                    yield 0.15 + 0.83 * (position + next(steps)) / len(kinds)
-                except StopIteration as done:
-                    np.maximum(values, done.value, out=values)
-                    break
-            rgba = np.ones((n, n, 4), dtype=np.float32)
-            rgba[..., :3] = values[..., None]
-            image = result[kind] = images.create(f"{name}_BakedCurvature{EDGE_SUFFIXES[kind]}", n)
-            image["open_painter_curvature_method"] = METHOD
-            image["mean_curvature_distance"] = float(radii[kind])
-            image["open_painter_edge_kind"] = kind
-            images.write(image, rgba)
+            result[kind] = bake_curvature_reach(context, ts, kind, radii[kind])
+            yield 0.15 + 0.83 * (position + 1) / len(kinds)
     except BaseException:
         # Stopped (GeneratorExit from the modal's Esc/cancel) or failed part-way:
         # the reaches already produced are packed fake-user images nobody
@@ -235,9 +196,9 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
     return result
 
 
-def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS):
+def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS, context=None):
     """Synchronous edge-map set bake: {kind: image}."""
-    steps = curvature_steps(ts, kinds)
+    steps = curvature_steps(context or bpy.context, ts, kinds)
     while True:
         try:
             next(steps)
@@ -245,6 +206,6 @@ def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS):
             return done.value
 
 
-def bake_curvature(ts):
+def bake_curvature(ts, context=None):
     """The CURVATURE map alone (scripts and tests); the queue bakes the whole set."""
-    return bake_curvature_set(ts, ("CURVATURE",))["CURVATURE"]
+    return bake_curvature_set(ts, ("CURVATURE",), context=context)["CURVATURE"]

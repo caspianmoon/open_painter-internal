@@ -1,4 +1,5 @@
-"""Crease baking rejects triangulation, UV seams and smooth tessellation."""
+"""The Cycles Bevel edge set: creases register, smooth surfaces stay black."""
+
 
 import sys
 from pathlib import Path
@@ -64,14 +65,14 @@ sets.assign(bpy.context.scene, ts, obj)
 image = bake_curvature(ts)
 pixels = images.pixels(image)[..., 0]
 assert pixels.max() > 0.5 and np.count_nonzero(pixels) < pixels.size * 0.15
-assert image.packed_file and image["open_painter_curvature_method"] == "GEOMETRIC_CREASES_V2"
+assert image.packed_file and image["open_painter_curvature_method"] == "CYCLES_BEVEL"
 assert not ts.baked_maps
 assert bpy.ops.open_painter.bake(action="CURVATURE") == {"FINISHED"}
-assert ts.baked_maps[0].image.get("open_painter_curvature_method") == "GEOMETRIC_CREASES_V2"
-# V2 adds physical-radius convex curvature: a bevel below the crease angle now
-# registers as an edge band, while a dense sphere and the flat faces stay black.
+assert ts.baked_maps[0].image.get("open_painter_curvature_method") == "CYCLES_BEVEL"
+# A smooth bevel still registers as an edge band, while a dense sphere and the
+# flat faces stay black.
 bevel = obj.modifiers.new("Bevel", "BEVEL")
-bevel.width, bevel.segments = .04, 6  # about 13 degrees per edge, under the 20 degree crease minimum; tighter than the 0.02 radius
+bevel.width, bevel.segments = .04, 6
 bpy.context.view_layer.update()
 ts.baked_maps.clear()
 assert not crease_edges(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data, obj.matrix_world, 20)
@@ -79,25 +80,25 @@ smooth = images.pixels(bake_curvature(ts))[..., 0]
 assert smooth.max() > 0.9, smooth.max()
 assert 0.02 < np.count_nonzero(smooth) / smooth.size < 0.3, np.count_nonzero(smooth) / smooth.size
 obj.modifiers.remove(bevel)
-# A crease-only map left from an older bake is replaced when an edge-driven
+# A pre-Cycles map left from an older bake is replaced when an edge-driven
 # recipe is added; a user-supplied curvature image is never touched.
 from open_painter.baking.bake_manager import refresh_stale_curvature, register_map
 legacy = images.create("Geometry edges_BakedCurvature", 512, (0, 0, 0, 1))
-legacy["open_painter_curvature_method"] = "GEOMETRIC_CREASES_V1"
+legacy["open_painter_curvature_method"] = "GEOMETRIC_CREASES_V2"
 register_map(ts, "CURVATURE", legacy)
 assert refresh_stale_curvature(ts, {"AO"}) is False
 assert refresh_stale_curvature(ts, {"CURVATURE"}) is True
 current = next(m.image for m in ts.baked_maps if m.kind == "CURVATURE")
-assert current.get("open_painter_curvature_method") == "GEOMETRIC_CREASES_V2", current.get("open_painter_curvature_method")
-assert images.pixels(current)[..., 0].max() > .8, (current.name, images.pixels(current)[..., 0].max())  # crease lines peak between texel centres
+assert current.get("open_painter_curvature_method") == "CYCLES_BEVEL", current.get("open_painter_curvature_method")
+assert images.pixels(current)[..., 0].max() > .8, (current.name, images.pixels(current)[..., 0].max())
 assert refresh_stale_curvature(ts, {"CURVATURE"}) is False
 custom = images.create("Artist curvature", 512, (.2, .2, .2, 1))
 register_map(ts, "CURVATURE", custom)
 assert refresh_stale_curvature(ts, {"CURVATURE"}) is False and next(m.image for m in ts.baked_maps if m.kind == "CURVATURE") == custom
 sphere_ts = sets.create(bpy.context.scene, "Dense sphere", 512)
 sets.assign(bpy.context.scene, sphere_ts, sphere)
-assert not images.pixels(bake_curvature(sphere_ts))[..., 0].any(), "Uniform curvature must stay flat"
+assert not (images.pixels(bake_curvature(sphere_ts))[..., 0] > 1e-3).any(), "Uniform curvature must stay flat"
 open_painter.unregister()
 print(
-    "GEOMETRIC_CURVATURE_PASS: 12 cube creases before/after triangulation; smooth sphere and flat triangulation stay black at maximum intensity; UV seams add no edges; packed texture bake; sub-threshold bevel registers; dense sphere stays black"
+    "GEOMETRIC_CURVATURE_PASS: 12 cube creases before/after triangulation; smooth sphere and flat triangulation stay black at maximum intensity; UV seams add no edges; packed texture bake; smooth bevel registers; dense sphere stays black"
 )

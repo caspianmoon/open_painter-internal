@@ -29,7 +29,7 @@ def parse():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--kinds", nargs="*", default=list(DEFAULT_KINDS))
-    parser.add_argument("--curvature", action="store_true", help="Also time bake_curvature (crease + mean curvature)")
+    parser.add_argument("--curvature", action="store_true", help="Also time bake_curvature (Cycles Bevel edge set)")
     parser.add_argument("--geometry", type=int, default=2048, help="Triplanar geometry raster size (0 to skip)")
     parser.add_argument("--report", type=Path, default=ROOT / ".blender-test" / "bake-maps.json")
     return parser.parse_args(argv)

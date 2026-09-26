@@ -48,7 +48,7 @@ assert bpy.ops.open_painter.edge_map_refresh.get_rna_type().properties['set_id']
 
 # Adding and removing sets while the job runs reallocates the collection under
 # the generator's reference; the images are still named after the right set.
-job = curvature_steps(ts)
+job = curvature_steps(bpy.context, ts)
 next(job)
 for index in range(24):
     sets.create(scene, f'Added {index}', 512)
@@ -71,32 +71,33 @@ print('EDGE_MAP_JOBS set add/remove mid-job: PASS', flush=True)
 
 # Stopping the job after some reaches landed releases the packed images.
 before = curvature_images()
-job = curvature_steps(ts)
+job = curvature_steps(bpy.context, ts)
 while len(curvature_images()) < len(before) + 2:
     next(job)
 job.close()
 assert curvature_images() == before, curvature_images() - before
 # A failure part-way releases them too.
-original_write = images.write
+from open_painter.baking import cycles_baker
+original_run = cycles_baker._run_bake
 calls = []
 
 
-def failing_write(image, values, pack=True):
-    calls.append(image.name)
+def failing_run(**kwargs):
+    calls.append(kwargs.get('type'))
     if len(calls) == 2:
         raise RuntimeError('out of memory')
-    return original_write(image, values, pack)
+    return original_run(**kwargs)
 
 
-images.write = failing_write
+cycles_baker._run_bake = failing_run
 try:
     bake_curvature_set(ts)
     raise AssertionError('the failing bake did not raise')
 except RuntimeError:
     pass
 finally:
-    images.write = original_write
-assert len(calls) == 2 and curvature_images() == before, curvature_images() - before
+    cycles_baker._run_bake = original_run
+assert len(calls) == 2 and curvature_images() == before, (calls, curvature_images() - before)
 print('EDGE_MAP_JOBS stop/failure releases partial reaches: PASS', flush=True)
 
 # Landing: the crease-only map is replaced on the recorded scene even while

@@ -24,10 +24,11 @@ rounded object is the flat baseline), and turning below a 0.1 rad dead zone coun
 flat. Faces are sampled at half the radius; candidates are gathered per radius-sized
 block, so cost scales with covered area, not face count.
 
-- `CURVATURE` (`GEOMETRIC_CREASES_V2`) = max(crease lines as before, convex part of the
-  new estimate with edges above the crease angle excluded). Every recipe that reads
-  Curvature gets edge wear on smooth geometry after a rebake. Maps baked with the old
-  method report "Stale · crease-only map, rebake for smooth edges".
+- `CURVATURE` (`CYCLES_BEVEL`) = the transient Bevel-normal/cross-product/length/
+  smooth-step shader baked in Cycles, one reach per Bevel radius multiple (thin,
+  normal, wide, extreme). Every recipe that reads Curvature gets edge wear from
+  the same shader the viewport could evaluate. Maps baked with older methods
+  report stale and rebake into the set.
 - `MEAN_CURVATURE` = signed estimate (0.5 flat, convex above, concave below), stretched so
   the strongest feature saturates, with convex/concave crease lines drawn on top so sharp
   lips on coarse meshes stay crisp. A `BAKED` mask source; use levels/invert to pick

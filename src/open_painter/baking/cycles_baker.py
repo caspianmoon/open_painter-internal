@@ -54,8 +54,17 @@ def _run_bake(**kwargs):
 # textures that EEVEE, Cycles and export all read; the shader Bevel node itself
 # only evaluates in Cycles.
 BEVEL_KINDS = {'BEVEL_NORMAL', 'BEVEL_MASK'}
+# The Curvature edge set bakes through the same own-surface Cycles path: the
+# exact transient shader below, one reach per radius multiple. Sharing the
+# Bevel constants keeps both sides agreeing without an import cycle (the edge
+# module imports this one, never the reverse).
+CURVATURE_METHOD = 'CYCLES_BEVEL'
+CURVATURE_REACHES = frozenset({'CURVATURE_THIN', 'CURVATURE', 'CURVATURE_WIDE', 'CURVATURE_XWIDE'})
+CURVATURE_SAMPLES = 4
 DEFAULT_COLORS = {'NORMAL': (.5, .5, 1, 1), 'BEVEL_NORMAL': (.5, .5, 1, 1),
-                  'AO': (1, 1, 1, 1), 'BEVEL_MASK': (0, 0, 0, 1)}
+                  'AO': (1, 1, 1, 1), 'BEVEL_MASK': (0, 0, 0, 1),
+                  'CURVATURE_THIN': (0, 0, 0, 1), 'CURVATURE': (0, 0, 0, 1),
+                  'CURVATURE_WIDE': (0, 0, 0, 1), 'CURVATURE_XWIDE': (0, 0, 0, 1)}
 
 
 def bevel_graph(material, kind, radius, samples):
@@ -92,6 +101,46 @@ def bevel_graph(material, kind, radius, samples):
     links.new(shader.outputs[0], output.inputs['Surface'])
 
 
+def curvature_graph(material, radius):
+    """Wire the transient bake material for one Curvature edge reach.
+
+    Texture Coordinate (Object) into the Bevel node, the bevel Normal crossed
+    with the object vector, its length smooth-stepped from 0..1 to 0..1, out
+    as the map. A bare float cannot drive the Material Output surface closure,
+    so an Emission node at strength 1 carries the exact value into the EMIT
+    bake; the pass reads only this material, never the scene's.
+    """
+    tree = material.node_tree
+    nodes, links = tree.nodes, tree.links
+    output = next((n for n in nodes if n.bl_idname == 'ShaderNodeOutputMaterial'), None)
+    if output is None:
+        output = nodes.new('ShaderNodeOutputMaterial')
+    coord = nodes.new('ShaderNodeTexCoord')
+    bevel = nodes.new('ShaderNodeBevel')
+    bevel.samples = CURVATURE_SAMPLES
+    bevel.inputs['Radius'].default_value = radius
+    links.new(coord.outputs['Object'], bevel.inputs['Normal'])
+    cross = nodes.new('ShaderNodeVectorMath')
+    cross.operation = 'CROSS_PRODUCT'
+    links.new(bevel.outputs['Normal'], cross.inputs[0])
+    links.new(coord.outputs['Object'], cross.inputs[1])
+    length = nodes.new('ShaderNodeVectorMath')
+    length.operation = 'LENGTH'
+    links.new(cross.outputs['Vector'], length.inputs[0])
+    remap = nodes.new('ShaderNodeMapRange')
+    remap.data_type = 'FLOAT'
+    remap.interpolation = 'SMOOTHSTEP'
+    remap.inputs['From Min'].default_value = 0.0
+    remap.inputs['From Max'].default_value = 1.0
+    remap.inputs['To Min'].default_value = 0.0
+    remap.inputs['To Max'].default_value = 1.0
+    links.new(length.outputs['Value'], remap.inputs['Value'])
+    shader = nodes.new('ShaderNodeEmission')
+    links.new(remap.outputs['Result'], shader.inputs['Color'])
+    shader.inputs['Strength'].default_value = 1.0
+    links.new(shader.outputs[0], output.inputs['Surface'])
+
+
 def bake(context: bpy.types.Context, ts, kind: str, flush=False) -> bpy.types.Image:
     """Bake one map for every part of the set; painted corrections shape the cage and passes.
 
@@ -116,15 +165,21 @@ def bake_faces(context, ts, kind, regions, polygons=None, flush=False):
     return _bake(context, ts, kind, regions=regions, polygons=polygons, flush=flush)
 
 
-def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
+def bake_curvature_reach(context, ts, kind, radius, flush=False):
+    """Bake one Curvature edge reach with an explicit Bevel radius (see ``curvature_graph``)."""
+    return _bake(context, ts, kind, flush=flush, radius=radius)
+
+
+def _bake(context, ts, kind, regions=None, polygons=None, flush=False, radius=None):
     from .pairing import groups
     from .staging import prepared
     from . import corrections
-    if kind not in {'NORMAL', 'AO', *BEVEL_KINDS}:
-        raise ValueError('Cycles mesh maps support Normal, AO, Bevel Normal and Bevel Mask')
+    if kind not in {'NORMAL', 'AO', *BEVEL_KINDS, *CURVATURE_REACHES}:
+        raise ValueError('Cycles mesh maps support Normal, AO, Bevel Normal, Bevel Mask and the Curvature edge set')
     settings = ts.bake
     bevel = kind in BEVEL_KINDS
-    if bevel:
+    edge = kind in CURVATURE_REACHES
+    if bevel or edge:
         # The target's own surface is baked; high-poly sources, cages and the
         # projection settings play no part.
         from .pairing import Group, _targets
@@ -142,7 +197,7 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
     factor = int(settings.supersample)
     resolution = int(ts.resolution)
     working = supersample_preflight(resolution, factor)
-    projecting = settings.selected_to_active and not bevel
+    projecting = settings.selected_to_active and not bevel and not edge
     geometric = corrections.world_rasters(ts) if projecting else {}
     ignore = corrections.raster(ts, 'IGNORE') if projecting and kind in {'NORMAL', 'AO'} else None
     ignorable = {ref.object for ref in settings.high_objects if ref.object and getattr(ref, 'ignorable', False)}
@@ -172,6 +227,11 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
             if bevel:
                 for material in stage.materials:
                     bevel_graph(material, kind, settings.bevel_radius, int(settings.bevel_samples))
+            elif edge:
+                if radius is None:
+                    raise ValueError('A Curvature reach needs an explicit Bevel radius')
+                for material in stage.materials:
+                    curvature_graph(material, radius)
             extrusion = settings.cage_extrusion if settings.separate_cage_distance else settings.ray_distance
             bake_settings.cage_extrusion = extrusion if settings.cage_mode == 'AUTO' else 0
             bake_settings.max_ray_distance = settings.ray_distance
@@ -221,7 +281,13 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
                                     node.image = target_image
                             uv = next((uv for uv in target.data.uv_layers if uv.active_render), target.data.uv_layers.active)
                             logger.info('Baking %s for %s from %d source(s)', kind, part.low.name, len(step_sources))
-                            _run_bake(type={'BEVEL_NORMAL': 'NORMAL', 'BEVEL_MASK': 'EMIT'}.get(kind, kind), uv_layer=uv.name)
+                            if kind == 'BEVEL_NORMAL':
+                                bake_type = 'NORMAL'
+                            elif kind == 'BEVEL_MASK' or edge:
+                                bake_type = 'EMIT'
+                            else:
+                                bake_type = kind
+                            _run_bake(type=bake_type, uv_layer=uv.name)
                             for material in target.data.materials:
                                 node = material.node_tree.nodes.active if material and material.use_nodes else None
                                 if node is not None and node.image is target_image:
@@ -250,6 +316,10 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False):
             image['open_painter_mesh_map'] = kind
             image['bevel_radius'] = float(settings.bevel_radius)
             image['bevel_samples'] = int(settings.bevel_samples)
+        elif edge:
+            image['open_painter_curvature_method'] = CURVATURE_METHOD
+            image['mean_curvature_distance'] = float(radius)
+            image['open_painter_edge_kind'] = kind
         if regions is None:
             pack_image(image)
         return image

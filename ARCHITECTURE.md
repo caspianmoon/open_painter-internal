@@ -90,8 +90,9 @@ geometry raster rasterize all UV triangles of a target in batches (`geometry/uv_
 same float32 barycentric sequence as the per-triangle path, later triangle wins);
 `geometry/snapshots.targets` exposes triangle index arrays and builds RNA triangle lists only on
 request. Temporary per-slot materials own active
-bake image nodes. Unassigned slots use a scratch target. Normal and AO are Cycles CPU bakes; curvature
-uses convex creases from the evaluated target mesh. Position, world/object normals, material/object
+bake image nodes. Unassigned slots use a scratch target. Normal, AO, the Bevel maps and the
+Curvature edge set are Cycles bakes (the edge set runs a transient Bevel-normal/cross-product
+shader, one reach per Bevel radius multiple). Position, world/object normals, material/object
 IDs, UV islands/borders and raycast thickness use evaluated-mesh utility baking. A `finally` block restores material slots, render engine,
 Cycles device/samples, bake properties, visibility, selection, active object and mode. Temporary
 materials and scratch images are removed. Successfully completed maps are registered independently.

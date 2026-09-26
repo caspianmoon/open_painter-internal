@@ -112,25 +112,9 @@ assert all(m.image.users == 2 and m.image.use_fake_user for m in ts.baked_maps i
 bpy.data.materials.remove(material)
 bpy.data.images.remove(picked)
 
-# The four reaches share one face-turning pass and one raster (0.9.7): they
-# were prepared four times over and all held for the whole job, which at 4k
-# blocked the invoke step for seconds and retained gigabytes.
-from open_painter.baking.maps import mean_curvature
-from open_painter.geometry import uv_rasterizer
-counted = {'rasterize': 0, 'face_turning': 0}
-original_rasterize, original_turning = uv_rasterizer.rasterize, mean_curvature.face_turning
-def counting_rasterize(*args, **kwargs):
-    counted['rasterize'] += 1
-    return original_rasterize(*args, **kwargs)
-def counting_turning(*args, **kwargs):
-    counted['face_turning'] += 1
-    return original_turning(*args, **kwargs)
-uv_rasterizer.rasterize, mean_curvature.face_turning = counting_rasterize, counting_turning
-try:
-    shared = bake_curvature_set(ts)
-finally:
-    uv_rasterizer.rasterize, mean_curvature.face_turning = original_rasterize, original_turning
-assert counted == {'rasterize': 1, 'face_turning': 1}, counted
+# Each reach is an independent Cycles pass now, but the fixed seed makes a
+# rebake reproduce every reach bit-for-bit.
+shared = bake_curvature_set(ts)
 for kind, image in shared.items():
     assert abs(float(images.pixels(image)[..., 0].mean()) - means[kind]) < 1e-4, kind
     bpy.data.images.remove(image)

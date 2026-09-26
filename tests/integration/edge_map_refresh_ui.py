@@ -123,7 +123,7 @@ def poll():
             ts = texture_set()
             prop = next(m for m in ts.baked_maps if m.kind == 'CURVATURE')
             assert prop.image is not None and prop.image.name != state['old_image']
-            assert prop.image.get('open_painter_curvature_method') == 'GEOMETRIC_CREASES_V2'
+            assert prop.image.get('open_painter_curvature_method') == 'CYCLES_BEVEL'
             assert stale_curvature(ts) is None
             from open_painter.baking.maps.curvature import EDGE_MAP_KINDS, edge_map_set_complete
             assert edge_map_set_complete(ts), [m.kind for m in ts.baked_maps]

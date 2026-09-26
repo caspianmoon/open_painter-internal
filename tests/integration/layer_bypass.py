@@ -214,12 +214,12 @@ def run():
     ready(scene, ts)
     after = shader_preview.diagnostics(scene, ts)
     assert after['graph_builds'] == builds + 1 and shader_preview.ensure(scene, ts) is not session
-    # Undo rehydration keeps the bypass structure.
-    from open_painter.evaluation.shader_graph import Graph as G
-    probe = G(scene, ts, ts.material)
-    assert probe.rehydrate(), probe._last
+    # The graph an undo compiles keeps the bypass structure.
+    from open_painter.evaluation.engine.compiler import EngineGraph
+    probe = EngineGraph(scene, ts)
+    probe.build()
     assert probe.units[('CHANNEL', blue_id, 'BASE_COLOR')].flags.get('bypass')
-    probe.detach()
+    probe.close()
     # Helpers used by the menu operator.
     from open_painter.ui.performance import set_bypass
     set_bypass(ts, {blue_id, green_id}, True)
@@ -239,6 +239,7 @@ def run():
     layer_by_id(ts, blue_id).bypass = True
     ready(scene, ts)
     stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').color = (.9, .2, .2, 1.)
+    shader_preview.tick(scene, ts)
     assert shader_preview.current(scene, ts)
     assert output.dirty, 'an edit to a bypassed layer was dropped from the export'
     LayerEvaluator(scene).evaluate_texture_set(ts.id)

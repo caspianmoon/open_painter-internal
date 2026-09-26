@@ -43,6 +43,10 @@ def downsample(values, factor, kind):
 
 def _run_bake(**kwargs):
     """Single synchronous Cycles call; explicit seam for failure regressions."""
+    # A scripted bake fires no bake handler: the engine's results reach the images' pixels
+    # (Cycles reads those, not the GPU textures) for any material that samples a set.
+    from ..evaluation.shader_preview import sync_pixels
+    sync_pixels()
     result = bpy.ops.object.bake(**kwargs)
     if 'FINISHED' not in result:
         raise RuntimeError('Cycles did not finish the bake')

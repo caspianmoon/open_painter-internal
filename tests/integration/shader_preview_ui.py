@@ -238,6 +238,7 @@ def calibration_check():
     # Calibrate Blender's actual numeric drag sensitivity, not an assumed scale.
     drag_step = max(4, min(30, int(.075 * 40 / abs(value - calibration_before))))
     controlled().black = .3
+    shader_preview.tick(bpy.context.scene, ts)   # the engine renders the edit
     assert shader_preview.current(bpy.context.scene, ts)
     phase = "BASELINE"
     baseline_history = []
@@ -258,6 +259,11 @@ def capture():
     if sampled_serial == draw_serial:
         area.tag_redraw()
         later(capture, .08)
+        return
+    if (phase == "DRAG" and pending is not None
+            and abs(float(controlled().black) - pending["before_value"]) >= .005
+            and not shader_preview.current(bpy.context.scene, ts)):
+        later(capture, .01)   # the engine renders the edit on its next tick: capture that frame
         return
     try:
         sampled_serial = draw_serial
@@ -295,7 +301,9 @@ def capture():
             later(capture, .08)
             return
         diagnostic = shader_preview.diagnostics(bpy.context.scene, ts)
-        assert shader_preview.current(bpy.context.scene, ts), diagnostic
+        if not shader_preview.current(bpy.context.scene, ts):
+            later(capture, .02)   # the engine renders the edit on its next tick: that frame counts
+            return
         assert diagnostic["serial"] == ts.edit_serial, diagnostic
         assert diagnostic["graph_builds"] == graph_builds, diagnostic
         assert not diagnostic.get("pending_resources") and not diagnostic.get("texture_bake_triggered"), diagnostic
@@ -397,6 +405,7 @@ def await_frame():
     phase = "RESTORE"
     # Restoration is an RNA edit; the six measured updates above used only mouse events.
     controlled().black = .3
+    shader_preview.tick(bpy.context.scene, ts)   # the engine renders the edit
     assert shader_preview.current(bpy.context.scene, ts)
     restoration_start = time.monotonic()
     later(await_restoration, .1)

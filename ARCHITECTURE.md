@@ -27,32 +27,52 @@ previous active map with the existing face-selection backup. Derived paint UVs
 do not invalidate bake provenance. Export naming has one shared tile suffix rule.
 See [UDIM workflow](docs/udim-workflow.md).
 
-Default authoring uses a persistent internal Blender material shader graph in
-`evaluation/shader_graph.py`, managed by `shader_preview.py`. The graph is a small
-top-level node group that instances one node group per compilation unit: a layer
-channel (coverage and blend), a channel source prefix (content after the first
-`count` effects) or a mask prefix (coverage through one mask). Published stages cross
-unit boundaries through group sockets, so anchor consumers and owning layers share
-one chain; Blender inlines groups in shader codegen, so GPU work is unchanged.
-Property changes bind to existing Value nodes and invalidate their downstream
-dependency chain. Layer visibility and pointwise effect enable flags are uniforms.
-Structural edits carry per-unit signatures: only units whose signature or RNA owner
-addresses changed are recompiled, the rest are adopted. Undo, redo and reload
-rehydrate the session from the persisted trees (nodes carry id-keyed descriptors)
-instead of rebuilding. Original images remain editable inputs. Numeric
-shader-compatible edits perform no raster composition, channel-image writes or
-post-drag bake. See the
-[full callback trace, operation boundaries and diagnostics](docs/shader-preview-architecture.md).
-This dependency closure describes add-on binding and resource work. Blender can
-shade the complete material for visible pixels after an edit; the add-on neither
-controls partial GPU execution nor reports per-node GPU execution counts.
+Default authoring uses the Open Painter engine (`evaluation/engine/`), managed per set by
+`shader_preview.py`. The stack compiler (`shader_graph.Graph`, running as
+`engine.compiler.EngineGraph` on in-memory `engine.headless` node trees) splits the stack into
+compilation units: a layer channel (coverage and blend), a channel source prefix (content
+after the first `count` effects) or a mask prefix (coverage through one mask). Each unit is
+translated to one GPU program (`engine.glsl`, catalog procedurals in `engine.procedural_glsl`)
+and rendered in texture space, one pass per unit, bottom to top per channel; the result is
+padded across UV seams with the exporter's donor map and written with its mip chain into the
+set's channel image (`engine.runtime`). Materials read those images through one **Open Painter
+Texture Set** node (`core/texture_set_node.py`): no edit changes a material. Parameters are
+uniform buffers and images are sampler bindings, so programs depend on structure only and are
+shared between units of the same shape; property changes bind values and mark the session,
+and the next scheduler tick re-renders the channels whose stamps (program, values, image
+identities, geometry, what the unit reads) changed, reusing retained results and the
+checkpoint below the lowest changed layer. Structural edits carry per-unit signatures: only
+units whose signature or RNA owner addresses changed are recompiled, the rest are adopted.
+Undo, redo and reload compile the restored stack again and adopt the CPU inputs it binds.
+Original images remain editable inputs. See [the engine](docs/open-painter-engine.md) and the
+[callback trace, operation boundaries and diagnostics](docs/shader-preview-architecture.md).
+`engine.stages` times every update by stage (build, update, CPU inputs, translate, compile,
+render, publish), and `Engine.profile` times each pass on the GPU for the engine report.
 
-Legacy integer-hash fields, neighborhood filters and scene analysis are isolated
-cached shader inputs. Only a changed boundary's input prefix is reevaluated;
-levels, mixing and supported downstream effects stay in the material shader.
-Structural edits compile a replacement group and reuse unchanged input resources.
-Save/render pack sources and complete pending boundaries without baking native
-channel outputs. Explicit export and CPU reference mode use `LayerEvaluator`.
+Custom Graph masks read a **Mask Graph** (`procedural_graph/`): a third NodeTree subtype,
+`OpenPainterMaskGraph`, with Open Painter's own node types.
+
+- `program.build` reads the tree into ordered steps, validating links itself, since
+  `NodeTree.update` runs before Blender validates a new link.
+- `gpu.emit` compiles the steps into the graph's own engine unit, `('GRAPH', layer, mask)`,
+  never inlined into its consumer. Every number is a uniform bound to the node that owns it.
+- `cpu.evaluate` runs the same formulas in NumPy for export.
+- `edits` routes property callbacks and `NodeTree.update` to the masks using the graph. A
+  numeric edit writes uniforms. A structural edit, detected by `program.unit_signature`
+  (structure plus the node addresses carrying it), rebuilds that unit alone.
+- Before reading a graph binding, `update()` checks that its node, socket or stop still
+  lives in the tree with the same RNA type. A removed node, reallocated stops or a deleted
+  graph rebuild the unit instead.
+
+Masks from earlier files that point at a shader group use the CPU reference. See
+[Mask Graphs](docs/mask-graphs.md).
+
+Scene analysis, neighbourhood filters, strokes, mesh masks, legacy value noise and metric
+material mapping are isolated cached CPU inputs (leaves). Only a changed input is evaluated
+again; levels, mixing and pointwise effects stay in the programs. Saves write the leaves the
+engine binds and pack the authored sources; the engine's channel images are re-rendered after
+the file opens (a CPU-mode set's outputs are packed). Explicit export and CPU reference mode
+use `LayerEvaluator`, which the engine matches (`tests/integration/engine_parity.py`).
 
 The older `live_preview.py`, `live_gpu.py` and `live_display.py` texture compositor
 remains available for reference regressions; it is no longer the default edit path.
@@ -87,12 +107,16 @@ Removal deliberately leaves owned datablocks recoverable for manual orphan clean
 
 ## Material ownership
 
-Each texture set gets a managed material with a fixed-size graph: eight output textures, Principled,
-Normal Map, Bump, AO multiply, UV Tangent and Material Output. Emission and Opacity connect to the
-corresponding surface inputs; scalar anisotropy and clearcoat settings control display response. Nodes carry ownership plus stable role tags.
-Repair adds/reconnects missing managed nodes and retains unrelated nodes. Assigning a mesh preserves
-its prior material per slot. Unassignment restores it only if the slot still references this texture
-set's material. Slots are retained to avoid silently reindexing other assignments.
+Each texture set gets a managed material with a fixed-size graph: the Open Painter Texture Set
+node (whose shared hidden group samples the set's eight channel images), Principled, Normal
+Map, Bump, AO multiply, UV Tangent and Material Output. Emission and Opacity connect to the
+corresponding surface inputs; scalar anisotropy and clearcoat settings control display
+response. The texture set node can also be added to any material (Add ▸ Input); its Normal
+output is the tangent normal map with the height as bump. Nodes carry ownership plus stable
+role tags. Repair adds/reconnects missing managed nodes, retains unrelated nodes and replaces
+the Procedural Graph group of files compiled by earlier versions. Assigning a mesh preserves
+its prior material per slot. Unassignment restores it only if the slot still references this
+texture set's material. Slots are retained to avoid silently reindexing other assignments.
 
 ## Baking
 

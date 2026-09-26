@@ -43,12 +43,21 @@ def resolution_changed(self, context):
 
 def backend_changed(self, context):
     # Work deferred by a stroke is applied (or dropped with the shader session) first.
-    from ..evaluation.shader_preview import resume, tick
+    from ..evaluation.shader_preview import requested, resume, tick
     resume(self.id_data)
     changed(self, context)
-    # A still-current cached shader can have been disconnected by explicit CPU
-    # preview. Switching back must reattach it, even if no recipe input changed.
-    tick(self.id_data, self, force_repair=True)
+    if requested(self):
+        # The engine adapter may have been replaced by the CPU reference's image nodes:
+        # switching back reattaches it, even if no recipe input changed.
+        tick(self.id_data, self, force_repair=True)
+        return
+    # The CPU reference reads one image node per channel, which its reduced previews swap.
+    from ..core.material_manager import repair
+    try:
+        repair(self)
+    except ValueError as exc:
+        from ..utils.logging import logger
+        logger.error('CPU reference material: %s', exc)
 
 
 class OP_Assignment(bpy.types.PropertyGroup):
@@ -77,7 +86,7 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(default="Texture Set")
     resolution: bpy.props.EnumProperty(items=RESOLUTIONS, default="2048", update=resolution_changed)
     preview_backend: bpy.props.EnumProperty(name="Evaluation", default="LIVE", update=backend_changed,
-        items=[('LIVE', 'Shader Native', 'Edit the material shader directly; bake texture outputs explicitly'),
+        items=[('LIVE', 'Open Painter Engine', 'Evaluate the stack on the GPU into the set\'s images; the material reads them through its Open Painter Texture Set node'),
                ('CPU', 'CPU Reference', 'Evaluate and publish complete texture outputs after edits')])
     preview_quality: bpy.props.EnumProperty(name="Preview", default="FULL", update=changed,
         items=[('FULL', 'Full', 'Evaluate at authored resolution'),

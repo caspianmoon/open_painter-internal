@@ -96,7 +96,9 @@ try:
     revised_pixels = original_pixels.copy()
     revised_pixels[..., :3] = .35
     images.write(source_image, revised_pixels, pack=False)
-    assert ts.edit_serial > before_serial and all(output.dirty for output in ts.outputs)
+    consuming = {prop.channel for prop in pores.channels if prop.enabled}
+    assert ts.edit_serial > before_serial and consuming and all(
+        output.dirty == (output.channel in consuming) for output in ts.outputs)
     with metrics.Metrics() as refreshed:
         changed = mask_eval.evaluate_masks(ts, pores, 64, 0, 64, {}, resources)
     assert refreshed.phases["masking"]["calls"] == 1

@@ -81,7 +81,7 @@ raster once as a boundary resource keyed by the anchor's transitive inputs.
   children (`group`) and returns straight RGBA rows. Consumers:
   `references.evaluate` (masks), `channel_eval._base_source` (fill content),
   `generators/micro_details.py` (generators).
-- Shader native (`evaluation/shader_graph.py`): `source(layer, channel, count)`
+- Engine (`evaluation/shader_graph.py`, compiled by `engine/compiler.py`): `source(layer, channel, count)`
   and `mask(layer, through)` memoize every prefix, so a consumer and the owning
   layer share one node chain; anchor items compile to nothing. A layer output is
   the producer's CHANNEL unit's existing `Out`/`Out:Alpha` exports (or, when that

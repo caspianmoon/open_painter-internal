@@ -18,6 +18,8 @@ _epoch = 0
 _mesh_fingerprints = {}
 _known = {}
 _candidates = set()
+_image_epochs = {}   # image pointer -> counter value of its last reported update
+_image_counter = [0]
 
 
 def live_fields(ts):
@@ -444,6 +446,16 @@ def epoch():
     return _epoch
 
 
+def image_epoch():
+    """Counts reported image updates (painting, reloads) of images the engine may sample."""
+    return _image_counter[0]
+
+
+def image_epochs():
+    """image pointer -> the counter value of its last reported update."""
+    return _image_epochs
+
+
 @persistent   # opening a file drops non-persistent handlers: the artist's session must keep tracking
 def on_depsgraph(scene, depsgraph):
     global _epoch
@@ -463,6 +475,11 @@ def on_depsgraph(scene, depsgraph):
         elif isinstance(item, (bpy.types.Collection, bpy.types.Material, bpy.types.Object)):
             # Collection membership, material slots and selection feed mesh masks (0.9.2).
             relevant = True
+        elif isinstance(item, bpy.types.Image) and not item.get('op_engine_output'):
+            # A painted or reloaded image the engine may sample: its stamp moves (the
+            # engine's own published images report updates too, and are not inputs).
+            _image_counter[0] += 1
+            _image_epochs[item.as_pointer()] = _image_counter[0]
     if relevant:
         _epoch += 1
         _candidates.add(scene.as_pointer())
@@ -636,6 +653,7 @@ def clear():
     from . import mesh_masks
     from ..painting import decals
     _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
+    _image_epochs.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
     decals.forget()      # which Empties this session's layers held: another file's layers start over

@@ -19,7 +19,7 @@ from open_painter.core import image_manager as images, layer_stack as stack, mat
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, layer_cache, shader_preview
 from open_painter.evaluation.evaluator import LayerEvaluator
-from open_painter.evaluation.shader_graph import Graph, _band_rows, remove_orphan_units
+from open_painter.evaluation.shader_graph import Graph, _band_rows
 from open_painter.evaluation.shader_resources import RESOURCE, alive
 from open_painter.painting import channel_paint
 from open_painter.utils.ids import new_id
@@ -114,12 +114,18 @@ def run():
     group = grouped.masks.add(); group.id, group.source, group.enabled = new_id(), 'GROUP', False
     member = grouped.masks.add()
     member.id, member.source, member.procedural, member.parent_id = new_id(), 'PROCEDURAL', 'CHECKER', group.id
-    # Noisy: a legacy procedural mask rastered on the CPU (a boundary that can be left pending).
+    # Noisy: a legacy value-noise mask, rastered on the CPU (a boundary that can be left pending;
+    # catalog procedurals run in the engine's programs).
     noisy = stack.add(ts, 'FILL', 'Noisy'); noisy_id = noisy.id
     stack.channel_for(noisy, 'BASE_COLOR').color = (.7, .7, .7, 1.)
     voronoi = noisy.masks.add()
-    voronoi.id, voronoi.source, voronoi.procedural, voronoi.noise_scale = new_id(), 'PROCEDURAL', 'VORONOI', 4.
+    voronoi.id, voronoi.source, voronoi.noise_scale = new_id(), 'NOISE', 4.
     voronoi_id = voronoi.id
+
+    def noise_binding(graph):
+        """The CPU input of the Noisy layer's value-noise mask."""
+        mask = next(m for m in layer_by_id(ts, noisy_id).masks if m.id == voronoi_id)
+        return next(b for b in graph.resource_bindings if mask.as_pointer() in b.owners)
     # Late: a layer that will receive an invalid mask while the session is live.
     late = stack.add(ts, 'FILL', 'Late'); late_id = late.id
     stack.channel_for(late, 'BASE_COLOR').color = (.5, .1, .5, 1.)
@@ -173,11 +179,9 @@ def run():
     assert ('SRC', reader_id, 'BASE_COLOR', 0) in graph.units
     print('ADOPTION_EXPORT_SHAPE_OK', flush=True)
 
-    # ---- A socket-less unit is instanced, so the orphan sweep leaves it alone.
+    # ---- A socket-less unit is adopted by a rebuild like any other.
     unit = graph.units[('MASK', grouped_id, '', False)]
-    assert unit.flags.get('empty') and not unit.outputs and unit.instance is not None
-    remove_orphan_units(ts.id)
-    assert unit.tree.users >= 1
+    assert unit.flags.get('empty') and not unit.outputs
     tree = unit.tree.as_pointer()
     stack.channel_for(layer_by_id(ts, grouped_id), 'BASE_COLOR').blend_mode = 'MULTIPLY'
     ready(scene, ts)
@@ -199,8 +203,8 @@ def run():
     retained = shader_preview.ensure(scene, ts)
     assert retained is previous, 'the failed candidate replaced its predecessor'
     noisy_key = ('MASK', noisy_id, '', False)
-    assert noisy_key in retained.units and retained.units[noisy_key].instance is not None
-    pending = binding_of(retained, 'MaskSource:' + noisy_id)
+    assert noisy_key in retained.units
+    pending = noise_binding(retained)
     image = pending.pending_image or pending.node.image
     image.users   # a removed image raises ReferenceError here
     while retained.pending_resources:
@@ -216,7 +220,7 @@ def run():
     print('ADOPTION_ROLLBACK_OK', flush=True)
 
     # ---- Adopted finished images are registered with the new graph's Resources.
-    voronoi_binding = binding_of(graph, 'MaskSource:' + noisy_id)
+    voronoi_binding = noise_binding(graph)
     key = voronoi_binding.node.image.get(RESOURCE)
     assert key in graph.resources.entries, 'an adopted image no table knows is never evicted'
 
@@ -267,7 +271,7 @@ def run():
     shader_preview.retry(scene, ts)
     info = ready(scene, ts)
     graph = shader_preview.ensure(scene, ts)
-    voronoi_binding = binding_of(graph, 'MaskSource:' + noisy_id)
+    voronoi_binding = noise_binding(graph)
     assert voronoi_binding.node.image.get('op_shader_resource_ready') and voronoi_binding.pending_image is None
     assert voronoi_binding.node.image != settled and voronoi_binding.signature == voronoi_binding.identity()
     # Released, not removed (0.13 hardening): a datablock a compiling material may still

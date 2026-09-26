@@ -184,10 +184,10 @@ class OP_Layer(bpy.types.PropertyGroup):
     # Layer performance (0.9.0): preview-only state. Export, bakes and 2D
     # snapshots evaluate the full stack regardless.
     bypass: bpy.props.BoolProperty(name="Bypass", default=False, update=preview_only,
-        description="Skip this layer (and its children) in the shader preview only; export, bakes and "
+        description="Skip this layer (and its children) in the live view only; export, bakes and "
                     "2D snapshots still include it")
     cache_mode: bpy.props.EnumProperty(name="Cache", default='LIVE', update=cache_changed, items=[
-        ('LIVE', 'Live', 'Compile the layer into the shader'),
+        ('LIVE', 'Live', 'Evaluate the layer live with the rest of the stack'),
         ('CACHED', 'Cached', 'Sample a cached image; refresh it once edits inside the layer settle'),
         ('FROZEN', 'Frozen', 'Sample the cached image until Refresh Cache')])
     cache: bpy.props.CollectionProperty(type=OP_LayerCache)

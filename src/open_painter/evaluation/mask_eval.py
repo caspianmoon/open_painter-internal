@@ -221,6 +221,10 @@ def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
         from .mesh_masks import evaluate as evaluate_mesh_mask
         return evaluate_mesh_mask(ts, mask, n, y0, y1, geometry_cache, cache)
     if mask.source == 'GRAPH':
+        from ..procedural_graph import is_native
+        if is_native(mask.node_group):
+            from ..procedural_graph.cpu import evaluate as evaluate_native
+            return evaluate_native(ts, mask, n, y0, y1, cache, geometry_cache, u, v)
         from .custom_graph import evaluate as evaluate_graph
         return evaluate_graph(ts, mask, n, y0, y1, geometry_cache, cache)
     if mask.source == "PROCEDURAL":

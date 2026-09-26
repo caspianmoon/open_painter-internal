@@ -10,6 +10,9 @@ from .ui.references import OP_OT_reference_source
 from .ui.anchors import (OP_OT_anchor, OP_OT_anchor_pick, OP_OT_anchor_locate, OP_OT_anchor_select_consumer,
                          OP_OT_anchor_channel)
 from .graph.tree import CLASSES as GRAPH_TREE_CLASSES
+from .core.texture_set_node import CLASSES as TEXTURE_SET_NODE_CLASSES
+from .procedural_graph.tree import CLASSES as MASK_GRAPH_CLASSES
+from .procedural_graph.edits import CLASSES as MASK_GRAPH_EDIT_CLASSES
 from .graph.operators import CLASSES as GRAPH_OPERATOR_CLASSES
 from .ui.modules import CLASSES as MODULE_CLASSES
 from .ui.scene_fields import CLASSES as SCENE_FIELD_CLASSES
@@ -130,7 +133,7 @@ CLASSES = (
     OP_OT_workspace,
     OP_OT_dock_popup,
     OP_OT_dock_events,
-) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + BAKE_VIEW_CLASSES + EXPORT_VIEW_CLASSES + CLEAN_VIEW_CLASSES + AGING_UI_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
+) + TEXTURE_UI_CLASSES + NATIVE_CLASSES + MASK_VIEW_CLASSES + COMPANION_CLASSES + BAKE_VIEW_CLASSES + EXPORT_VIEW_CLASSES + CLEAN_VIEW_CLASSES + AGING_UI_CLASSES + TEXTURE_SET_NODE_CLASSES + MASK_GRAPH_CLASSES + MASK_GRAPH_EDIT_CLASSES + GRAPH_TREE_CLASSES + GRAPH_OPERATOR_CLASSES + MODULE_CLASSES + SCENE_FIELD_CLASSES + TARGET_CLASSES + VECTOR_BRUSH_CLASSES + STROKE_PANEL_CLASSES + DIRECTOR_CLASSES + PERFORMANCE_CLASSES + BAKE_CORRECTION_CLASSES + PHYSICAL_SCALE_CLASSES + DECAL_CLASSES
 
 
 _registered = False
@@ -148,6 +151,8 @@ def register():
     from .ui.dock import lifecycle
     from .ui import editor, workspace
     from .graph import operators as graph_operators
+    from .core import texture_set_node
+    from .procedural_graph import tree as mask_graph_tree
     from .ui.native import toolbar, asset_type_buttons, layer_context_menu
     from .ai import session as director
     from .ui import vector_brush
@@ -169,6 +174,8 @@ def register():
                                     (lifecycle.register,lifecycle.unregister),
                                     (editor.register,editor.unregister),
                                     (graph_operators.register,graph_operators.unregister),
+                                    (texture_set_node.register,texture_set_node.unregister),
+                                    (mask_graph_tree.register,mask_graph_tree.unregister),
                                     (director.register,director.unregister),
                                     (vector_brush.register,vector_brush.unregister)):
             # Install rollback before initialization, including partial failures.

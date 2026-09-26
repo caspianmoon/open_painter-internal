@@ -291,10 +291,11 @@ assert observed.counts.get("stroke_rasterisations", 0) == 0, "a gesture must not
 publications = g.preview.publications
 stroke = g.end(commit=True)
 assert stroke is not None
-# The preview stays bound until the committed leaf publishes; then it is dropped.
+# Released: each node binds its persistent leaf again, and the committed stroke regenerates into
+# that leaf in place (0.13 stability S2); the preview images are reaped once nothing binds them.
 graph = shader_preview.ensure(scene, plate)
-still = [node for node in graph.nodes() if getattr(node, "image", None) is not None and node.image.get("op_gesture_preview")]
-assert still, "the preview must stay bound after release until the leaf publishes"
+assert not any(getattr(node, "image", None) is not None and node.image.get("op_gesture_preview")
+               for node in graph.nodes()), "a released preview is still bound"
 with Metrics() as observed:
     settle(plate)
 assert observed.counts.get("stroke_rasterisations", 0) <= 1, observed.report()   # the new stroke only, never the history

@@ -1,7 +1,18 @@
 # Shader-native authoring
 
+> **Superseded by the [Open Painter engine](open-painter-engine.md).** The `LIVE` backend no
+> longer compiles the stack into a Blender material. The same compiler (units, signatures,
+> adoption, bindings, CPU resource boundaries, callback narrowing) runs on in-memory node
+> trees; each unit becomes a GPU program the engine renders into the set's channel images,
+> and materials read them through the Open Painter Texture Set node. What this document
+> describes about Value-node uniforms, material instancing, persisted unit groups,
+> undo rehydration and the per-material sampler budget applies to the 0.4–0.13 material
+> graph only. A numeric edit now binds its value on the RNA callback and the scheduler's
+> next tick renders the channels it reaches; `shader_preview.current` is true once the
+> images show the edit.
+
 The persistent layer, channel, mask and filter properties remain the editable
-recipe. The default `LIVE` value now selects a Blender material shader graph.
+recipe. The default `LIVE` value selected a Blender material shader graph.
 Supported numeric edits update existing node input values synchronously. Texture
 resolution determines authored paint and explicit bake output sizes; it does not
 require a full-resolution raster evaluation for a supported shader slider edit.

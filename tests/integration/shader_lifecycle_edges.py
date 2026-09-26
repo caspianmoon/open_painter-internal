@@ -45,30 +45,29 @@ ts_id = ts.id
 layer = stack.add(ts, 'FILL', 'Noisy')
 layer_id = layer.id
 prop = stack.channel_for(layer, 'ROUGHNESS')
-prop.procedural, prop.procedural_scale = 'FBM', 9.0   # a legacy field: an isolated raster boundary
+prop.procedural, prop.procedural_scale = 'FBM', 9.0   # a catalog field: a uniform of its GPU program
 mask = layer.masks.add()
-mask.id, mask.source, mask.procedural = new_id(), 'PROCEDURAL', 'VORONOI'
+mask.id, mask.source, mask.seed = new_id(), 'NOISE', 1   # legacy value noise: an isolated CPU raster
 material_manager.repair(ts)
 ready(scene, ts)
 
 # --- Undo while a boundary job is still running -------------------------------
 bpy.ops.ed.undo_push(message='settled')
 ts = find(bpy.context.scene, ts_id)
-prop = stack.channel_for(next(l for l in ts.layers if l.id == layer_id), 'ROUGHNESS')
-prop.procedural_seed = 7   # new field identity: queues a raster job
+next(l for l in ts.layers if l.id == layer_id).masks[0].seed = 7   # new noise identity: queues a raster job
 info = shader_preview.diagnostics(bpy.context.scene, ts)
 assert info['pending_resources'], info
 bpy.ops.ed.undo_push(message='seed edit')
 graph = shader_preview.ensure(bpy.context.scene, ts)
-graph.step_resources(.01)      # advance the job partially, then undo underneath it
+graph.step_resources(0)        # advance the job one strip, then undo underneath it
 assert shader_preview.diagnostics(bpy.context.scene, ts)['pending_resources']
 with Metrics() as observed:
     bpy.ops.ed.undo()
 scene = bpy.context.scene
 ts = find(scene, ts_id)
 info = ready(scene, ts)
-prop = stack.channel_for(next(l for l in ts.layers if l.id == layer_id), 'ROUGHNESS')
-assert prop.procedural_seed == 1, prop.procedural_seed
+seed = next(l for l in ts.layers if l.id == layer_id).masks[0].seed
+assert seed == 1, seed
 assert not info['error'] and not info['pending_resources'], info
 boundaries = [b for b in shader_preview.ensure(scene, ts).resource_bindings]
 assert all(b.node.image and b.node.image.get('op_shader_resource_ready') for b in boundaries), 'a stale placeholder survived undo'
@@ -79,8 +78,7 @@ bpy.ops.ed.redo()
 scene = bpy.context.scene
 ts = find(scene, ts_id)
 info = ready(scene, ts)
-prop = stack.channel_for(next(l for l in ts.layers if l.id == layer_id), 'ROUGHNESS')
-assert prop.procedural_seed == 7
+assert next(l for l in ts.layers if l.id == layer_id).masks[0].seed == 7
 assert all(b.node.image.get('op_shader_resource_ready') for b in shader_preview.ensure(scene, ts).resource_bindings)
 print('LIFECYCLE_EDGE undo during pending job: PASS', flush=True)
 
@@ -123,9 +121,15 @@ assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
 assert shader_preview.ensure(scene, ts) is original_graph, (shader_preview.ensure(scene, ts), original_graph, shader_preview.diagnostics(scene, ts))
 copy_graph = shader_preview.ensure(copy, copy_ts)
 assert copy_graph is not original_graph and copy_graph.tree != original_graph.tree
-assert sum(node.get('role') == 'Procedural Graph' for node in original_material.node_tree.nodes) == 1
+# Each material reads its own set's images through its own texture set node tree.
+from open_painter.core.texture_set_node import NODE_ID
+node_of = lambda material: next(n for n in material.node_tree.nodes if n.bl_idname == NODE_ID)
+assert node_of(original_material).node_tree != node_of(copy_ts.material).node_tree
+images_of = lambda item: {out.image.as_pointer() for out in item.outputs if out.image}
+assert images_of(ts) and not images_of(ts) & images_of(copy_ts), 'the copy writes the original set\'s images'
 copy_layer = next(l for l in copy_ts.layers if l.id == layer_id)
 copy_layer.opacity = .37
+shader_preview.tick(copy, copy_ts)
 assert shader_preview.current(copy, copy_ts) and shader_preview.current(scene, ts)
 assert ts.edit_serial == serial, 'an edit in the copy invalidated the original scene'
 original_layer = next(l for l in ts.layers if l.id == layer_id)
@@ -155,8 +159,9 @@ for _ in range(3):
 info = shader_preview.diagnostics(linked, linked_ts)
 assert info['state'] == 'FAILED' and 'share an object material slot' in info['error'], info
 assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is original_graph
-assert sum(node.get('role') == 'Procedural Graph' for node in original_material.node_tree.nodes) == 1
+assert sum(node.bl_idname == NODE_ID for node in original_material.node_tree.nodes) == 1
 next(l for l in ts.layers if l.id == layer_id).opacity = .6
+shader_preview.tick(scene, ts)
 assert shader_preview.current(scene, ts)
 bpy.data.scenes.remove(linked)
 cache.tick()
@@ -173,15 +178,16 @@ for _ in range(3):
     shader_preview.tick(scene, ts)
 assert scene.open_painter.status == 'Layer cache failed: probe', scene.open_painter.status
 noisy = next(l for l in ts.layers if l.id == layer_id)
-noisy.opacity = .8   # a numeric edit changes nothing the shader would report
+noisy.opacity = .8   # a numeric edit changes nothing the engine would report
+shader_preview.tick(scene, ts)
 assert scene.open_painter.status == 'Layer cache failed: probe', scene.open_painter.status
-noisy.blend_mode = 'MULTIPLY'   # the shader's own text changes: it is written again
-assert scene.open_painter.status == 'Preparing shader graph…', scene.open_painter.status
+noisy.blend_mode = 'MULTIPLY'   # the engine's own text changes: it is written again
+assert scene.open_painter.status == 'Updating textures…', scene.open_painter.status
 ready(scene, ts)
-assert scene.open_painter.status == 'Shader native · textures bake on request', scene.open_painter.status
+assert scene.open_painter.status == 'Open Painter engine · live', scene.open_painter.status
 cache._set_progress(scene, 'Caching probe… 50%')   # a finished job's progress line is handed back
 cache.tick()
-assert scene.open_painter.status == 'Shader native · textures bake on request', scene.open_painter.status
+assert scene.open_painter.status == 'Open Painter engine · live', scene.open_painter.status
 print('LIFECYCLE_EDGE status line: PASS', flush=True)
 
 # --- A numeric-only batch must not service a rebuild queued before it (0.9.7).
@@ -230,7 +236,7 @@ base = stack.add(third, 'FILL', 'Base')
 base_id = base.id
 stack.channel_for(base, 'BASE_COLOR').color = (.4, .4, .1, 1.)
 info = ready(scene, third)
-rehydrations = info['graph_rehydrations']
+builds = info['graph_builds']
 scene.open_painter.texture_sets.remove(next(i for i, item in enumerate(scene.open_painter.texture_sets) if item.id == second_id))
 third = find(scene, third_id)
 assert shader_preview.session_graph(scene, third) is None, 'a moved graph was handed out'
@@ -238,7 +244,7 @@ assert not shader_preview.current(scene, third)
 info = ready(scene, third)
 graph = shader_preview.ensure(scene, third)
 assert graph.ts.as_pointer() == third.as_pointer() and graph.matches_structure()
-assert info['graph_rehydrations'] == rehydrations + 1, info   # its trees were still on the material
+assert info['graph_builds'] == builds + 1, info   # the relocated set compiles again
 print('LIFECYCLE_EDGE relocated texture sets: PASS', flush=True)
 
 # --- A failed replacement build keeps its rebuild requirement (0.9.7).

@@ -96,12 +96,21 @@ def run():
     yield .6
     mask = next(mask for layer in ts.layers for mask in layer.masks if mask.source == 'GRAPH')
     group = mask.node_group
+    from open_painter.procedural_graph.tree import TREE_ID as MASK_GRAPH
+    assert group.bl_idname == MASK_GRAPH, 'a template must create a Mask Graph, not a shader group'
     with bpy.context.temp_override(area=area, region=region):
-        assert bpy.ops.open_painter.graph_edit_shader(mask_id=mask.id) == {'FINISHED'}
+        assert bpy.ops.open_painter.mask_graph_edit(tree=group.name) == {'FINISHED'}
     yield .8
-    assert any(a.type == 'NODE_EDITOR' and a.spaces.active.edit_tree == group for a in window.screen.areas)
+    editors = [a for a in window.screen.areas if a.type == 'NODE_EDITOR' and a.spaces.active.edit_tree == group]
+    assert len(editors) == 1 and editors[0].spaces.active.tree_type == MASK_GRAPH, editors
     assert area.spaces.active.node_tree == tree
-    report['steps'].append('Edit Shader Group opens the actual reusable shader group')
+    count = len(window.screen.areas)
+    with bpy.context.temp_override(area=area, region=region):
+        # The older Edit Shader Group entry point reuses the Mask Graph editor (no Shader Editor).
+        assert bpy.ops.open_painter.graph_edit_shader(mask_id=mask.id) == {'FINISHED'}
+    yield .4
+    assert len(window.screen.areas) == count
+    report['steps'].append('Edit Mask Graph opens the mask\'s own graph in the Mask Graph editor')
 
 
 steps = run()

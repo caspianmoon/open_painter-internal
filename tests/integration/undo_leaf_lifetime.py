@@ -1,12 +1,14 @@
-"""Undo-consistent preview leaf lifetimes (0.13 stability S2, docs/quality-stability-0.13.md).
+"""Undo-consistent leaf lifetimes under the Open Painter engine (0.13 stability S2).
 
-The open memfile-undo crash: after an undo, the relearn tick reconstructed the live graph and
-allocated fresh leaf image datablocks bound into the persisted material tree *outside* any undo
-step; a later undo freed them while the tree still pointed at them, and the next rehydration walked
-a freed pointer (EEVEE `BKE_image_acquire_ibuf`, `Graph.unique_images`). The fix withholds new-leaf
-creation from the timer between undo steps (a freeze set by `cache.on_undo`, released by the next
-authored gesture): reconstruction may only regenerate content into the datablock a node already
-binds. This asserts that invariant on the real modules with real `bpy.ops.ed.undo`.
+The 0.13 crash: a leaf datablock created between undo steps was bound into the persisted
+material tree; a later undo freed it while the tree still pointed at it, and the next
+rehydration walked a freed pointer. Under the engine the material binds only the set's
+channel images (through the Open Painter Texture Set node): leaves are read by the engine's
+in-memory units, which are compiled again from the restored stack after every undo. This
+asserts on the real modules with real ``bpy.ops.ed.undo`` that the material never binds a
+leaf, that every leaf the rebuilt session binds is alive across undo, redo and repeated
+undo, and that a rebuild adopts the leaves the restored state needs instead of making them
+again.
 """
 import json
 import sys
@@ -18,9 +20,9 @@ import bpy
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
-from open_painter.constants import OWNER
 from open_painter.core import material_manager, texture_set_manager as sets
 from open_painter.evaluation import cache, shader_preview, shader_resources
+from open_painter.evaluation.metrics import Metrics
 from open_painter.evaluation.shader_resources import RESOURCE, alive
 from open_painter.smart_materials import composer
 import numpy as np
@@ -53,9 +55,26 @@ def resource_leaves():
     return {img.as_pointer() for img in bpy.data.images if img.get(RESOURCE)}
 
 
+def material_leaves(material):
+    """RESOURCE leaves any node of the material (or of a group it uses) binds: none may."""
+    found, seen = set(), set()
+
+    def visit(tree):
+        if tree is None or tree.as_pointer() in seen:
+            return
+        seen.add(tree.as_pointer())
+        for node in tree.nodes:
+            image = getattr(node, 'image', None)
+            if image is not None and image.get(RESOURCE):
+                found.add(image.name)
+            visit(getattr(node, 'node_tree', None))
+
+    visit(material.node_tree)
+    return found
+
+
 def bound_resource_images(graph):
-    """Every RESOURCE leaf the persisted trees' texture nodes bind — the pointers a rehydration
-    walks. Reading them must never dereference a freed datablock."""
+    """Every RESOURCE leaf the engine's units bind. Reading them must never dereference a freed datablock."""
     pointers = set()
     for node in graph.nodes():
         if node.bl_idname == 'ShaderNodeTexImage' and node.image is not None and node.image.get(RESOURCE):
@@ -84,17 +103,25 @@ for kind in ('CURVATURE', 'AO', 'POSITION', 'WORLD_NORMAL', 'THICKNESS', 'UV_BOR
     data[..., 0], data[..., 1], data[..., 2] = .1 + .8 * u, .1 + .8 * v, v
     images.write(entry.image, data, pack=False)
 composer.apply(ts, 'Worn Painted Metal')
+# Catalog procedurals and baked-edge wear run in the engine's programs: the leaves are the CPU
+# inputs, here a spatial filter and a legacy value-noise mask.
+from open_painter.utils.ids import new_id
+holder = next(item for item in ts.layers if item.type != 'FOLDER' and item.masks)
+blur = holder.masks.add()
+blur.id, blur.source = new_id(), 'FILTER'
+blur.effect.kind, blur.effect.radius = 'GAUSSIAN_BLUR', 2
+noise = holder.masks.add()
+noise.id, noise.source = new_id(), 'NOISE'
 material_manager.repair(ts)
 scene = bpy.context.scene
 ts = active_set()
-info = ready(scene, ts)
-graph = shader_preview.ensure(scene, ts)
-assert graph.pending_resources or graph.unique_images(), 'the fixture must exercise leaf resources'
+ready(scene, ts)
 # Let every isolated resource finish so leaves are published and bound.
 graph = shader_preview.flush(scene, ts)
 before_bound = bound_resource_images(graph)
-assert before_bound, 'the material must bind at least one leaf datablock'
-check('fixture binds leaf datablocks', bound=len(before_bound), leaves=len(resource_leaves()))
+assert before_bound, 'the fixture must exercise leaf resources'
+assert not material_leaves(ts.material), material_leaves(ts.material)
+check('the engine binds leaves, the material none', bound=len(before_bound), leaves=len(resource_leaves()))
 
 # Two authored undo steps so there is a state to undo to.
 bpy.ops.ed.undo_push(message='baseline')
@@ -104,48 +131,38 @@ layer.masks[0].amount = .5
 ready(scene, ts)
 bpy.ops.ed.undo_push(message='edit')
 
-# ---- the transition: a real undo, then the relearn ticks that used to allocate the crash leaves ----
-assert not shader_resources.new_leaves_frozen()
+# ---- the transition: a real undo, then the ticks that compile the restored stack ----
 leaves_before_undo = resource_leaves()
 bpy.ops.ed.undo()
 scene = bpy.context.scene
 ts = active_set()
-assert shader_resources.new_leaves_frozen(), 'on_undo must freeze new-leaf creation'
-# Reconstruction runs while frozen: it may regenerate content but must not create a new datablock
-# bound into the persisted tree, and must not crash walking node images.
-for _ in range(200):
-    shader_preview.tick(scene, ts)
-    if shader_preview.current(scene, ts):
-        break
+assert shader_resources.new_leaves_frozen(), 'on_undo must freeze new material datablocks'
+with Metrics() as observed:
+    ready(scene, ts)
 graph = shader_preview.ensure(scene, ts)
 bound_after = bound_resource_images(graph)         # reads every node.image: no freed pointer
-new_leaves = resource_leaves() - leaves_before_undo
-assert not (new_leaves & bound_after), \
-    f'a leaf created while frozen is bound into the persisted tree: {new_leaves & bound_after}'
+# A generated leaf comes back from the memfile without its pixels: the rebuild produces it
+# again, into the datablock the undone state had, never beside it.
+assert bound_after <= leaves_before_undo, 'the rebuild bound leaves the undone state did not have'
+assert observed.counts['shader_resource_requests'] == observed.counts['shader_resource_reused_datablocks'], observed.report()
+assert not material_leaves(ts.material)
 info = shader_preview.diagnostics(scene, ts)
-assert info['graph_rehydrations'] >= 1 and info['graph_builds'] == 0, info
-check('post-undo reconstruction created no new bound leaf', frozen=True,
-      new_resource_datablocks=len(new_leaves), bound=len(bound_after),
-      rehydrations=info['graph_rehydrations'], builds=info['graph_builds'])
+check('post-undo rebuild keeps its leaf datablocks', bound=len(bound_after), builds=info['graph_builds'],
+      regenerated=observed.counts['shader_resource_requests'])
 
-# ---- a second undo must not free a leaf the persisted tree still binds (the crash) ----
+# ---- a second undo after a redo leaves every bound leaf alive ----
 bpy.ops.ed.redo()
 scene = bpy.context.scene
 ts = active_set()
-for _ in range(200):
-    shader_preview.tick(scene, ts)
-    if shader_preview.current(scene, ts):
-        break
+ready(scene, ts)
 bpy.ops.ed.undo()
 scene = bpy.context.scene
 ts = active_set()
-for _ in range(200):
-    shader_preview.tick(scene, ts)
-    if shader_preview.current(scene, ts):
-        break
+ready(scene, ts)
 graph = shader_preview.ensure(scene, ts)
-bound = bound_resource_images(graph)               # would SIGSEGV on the baseline if any is dangling
+bound = bound_resource_images(graph)
 assert all(alive(img) for img in bpy.data.images if img.get(RESOURCE) and img.as_pointer() in bound)
+assert not material_leaves(ts.material)
 check('repeated undo/redo leaves every bound leaf alive', bound=len(bound))
 
 # ---- an authored gesture (its operator pushes) releases the freeze; building resumes ----

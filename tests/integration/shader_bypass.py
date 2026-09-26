@@ -53,6 +53,7 @@ def bypass_lifecycle():
         assert shader_preview.ensure(scene, ts) is rebuilt
         assert rebuilt.node_identities() == identities
         levels.white = .9
+        shader_preview.tick(scene, ts)   # the engine renders the edit
         assert shader_preview.current(scene, ts)
         assert shader_preview.ensure(scene, ts) is rebuilt
     assert observed.phases["image_write"]["calls"] == 0
@@ -103,8 +104,10 @@ def bypass_lifecycle():
     assert shader_preview.diagnostics(scene, ts)["state"] == "FAILED"
     assert shader_preview.ensure(scene, ts) is published
     hidden_levels.white = .9
+    shader_preview.tick(scene, ts)
     assert shader_preview.current(scene, ts)
     ignored.gamma = .7
+    shader_preview.tick(scene, ts)
     assert shader_preview.current(scene, ts)
     print("SHADER_BYPASS_LIFECYCLE_PASS", flush=True)
     open_painter.unregister()

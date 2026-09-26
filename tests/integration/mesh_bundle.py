@@ -1,5 +1,6 @@
 """Evaluated bundle staging: helpers on an extracted curve reach an ACTUAL bundle, and
-scene.blend carries the live material's unsaved paint."""
+scene.blend carries the live material's unsaved paint (in the set's packed channel images,
+which the material's texture set node samples)."""
 import json,sys,time
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -46,13 +47,14 @@ with TemporaryDirectory(prefix='op-bundle-test-') as directory:
     manifest=export_bundle(bpy.context,[ts],root/'actual',geometry='ACTUAL')
     record=json.loads(manifest.read_text())
     assert record['generated_geometry']=='ACTUAL' and record['triangles']>12,record
+    base_color=next(o.image for o in ts.outputs if o.channel=='BASE_COLOR')
     with bpy.data.libraries.load(str(manifest.parent/'scene.blend'),link=True) as (data_from,data_to):
-        names=list(data_from.objects); data_to.images=[canvas.name]
+        names=list(data_from.objects); data_to.images=[base_color.name]
     assert sum(name.startswith('OP Effect Instance') for name in names)>=stitches['instance_count'],names
     assert all(any(name.startswith(helper.name) for name in names) for helper in (stitches,bead)),names   # staged copies carry .001
     bundled=data_to.images[0]
     assert bundled.library and bundled.packed_file,bundled
-    np.testing.assert_allclose(images.pixels(bundled)[256,256],(1,0,0,1),atol=1e-6)
+    np.testing.assert_allclose(images.pixels(bundled)[256,256][:3],(1,0,0),atol=1e-3)
     assert [obj.name for obj in scene.objects if obj.name.startswith('OP Effect Instance')]==[]   # staging left nothing behind
 manager.remove(bead); manager.remove(stitches)
 open_painter.unregister()

@@ -1,8 +1,12 @@
-"""Shader-native authoring lifecycle, separate from explicit texture baking.
+"""Open Painter engine sessions: each texture set's compiled graph and GPU evaluator.
 
-RNA edits update existing shader bindings on the calling thread. The timer only
-constructs changed topology and advances isolated unsupported source boundaries;
-it never composites the material into channel images for a supported edit.
+RNA edits update the compiled graph's bindings on the calling thread (``notify``);
+the scheduler timer (``cache.tick`` → ``tick``) rebuilds changed topology, advances
+CPU boundary inputs and has the engine render the changed channels into the set's
+images. Materials read those images through the Open Painter Texture Set node,
+which does not change when layers, masks or filters do: no edit recompiles a
+material. (The module keeps its historical name; the API is the one the rest of
+the add-on has always called.)
 """
 from time import perf_counter
 import json
@@ -12,6 +16,7 @@ from contextlib import contextmanager
 import bpy
 
 from . import metrics
+from .engine import stages
 from .resource_keys import key_for
 from ..utils.logging import logger
 
@@ -20,6 +25,7 @@ _busy = set()
 _batches = {}
 _deferred = {}   # session key -> {owner pointer: owner} touched by a stroke while frozen (0.9.0)
 _holds = {}      # session key -> perf_counter of the last renewal by a gesture rewriting it (a layer drag) (0.9.7)
+_retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
 
@@ -54,13 +60,11 @@ def authoring_batch(ts):
 
 
 def hold(scene, ts):
-    """Keep the attached shader while a gesture rewrites the stack; returns the key for ``release_hold``.
+    """Keep the current result while a gesture rewrites the stack; returns the key for ``release_hold``.
 
     A layer drag places the layer at every row it crosses, and each placement
-    is a structural edit: without the hold the timer rebuilds the graph and
-    recompiles the material per row while the mouse is still down. A held
-    session skips callbacks and repairs; ``release_hold`` lets the next tick
-    rebuild once for the final arrangement (or none when nothing changed).
+    is a structural edit: without the hold every row would rebuild the graph.
+    ``release_hold`` lets the next tick rebuild once for the final arrangement.
     """
     key = key_for(scene, ts)
     _holds[key] = perf_counter()
@@ -68,13 +72,7 @@ def hold(scene, ts):
 
 
 def renew_hold(key):
-    """Keep a gesture's hold alive: a drag renews on every event it handles.
-
-    The bound in ``HOLD_SECONDS`` is measured from the last renewal, so a slow
-    drag never expires while its modal is still receiving events, and one
-    whose modal was cancelled underneath it (a closed window, a file load)
-    expires on its own.
-    """
+    """Keep a gesture's hold alive: a drag renews on every event it handles."""
     if key in _holds:
         _holds[key] = perf_counter()
 
@@ -82,25 +80,29 @@ def renew_hold(key):
 def release_hold(key):
     if key in _holds:
         del _holds[key]
+        _recheck(key)
         from . import cache
         cache.wake()
 
 
-def _held(key):
-    """Whether ``key`` is held, releasing a hold nobody renewed for ``HOLD_SECONDS``.
+def _recheck(key):
+    """Notifications were dropped while held (a first stroke links its layer and enables its
+    channels): the next update re-derives the structure, whatever edit arrives first."""
+    entry = _sessions.get(key)
+    if entry is not None:
+        entry['recheck'] = True
 
-    A modal the window manager cancels never reaches its own release; without
-    the bound the session would sit on its last attached shader forever
-    (``tick`` returns early) and a CPU set would stay QUEUED.
-    """
+
+def _held(key):
+    """Whether ``key`` is held, releasing a hold nobody renewed for ``HOLD_SECONDS``."""
     since = _holds.get(key)
     if since is None:
         return False
     if perf_counter() - since < HOLD_SECONDS:
         return True
-    logger.warning('Shader hold on %s outlived its gesture (%g s); releasing it',
-                   key, HOLD_SECONDS)
+    logger.warning('Engine hold on %s outlived its gesture (%g s); releasing it', key, HOLD_SECONDS)
     del _holds[key]
+    _recheck(key)
     return False
 
 
@@ -109,16 +111,8 @@ def held(scene, ts):
 
 
 def requested(ts):
-    # Preserve the stored enum identifier used by existing .blend projects.
+    """The set is evaluated by the Open Painter engine (the stored identifier is historical)."""
     return getattr(ts, 'preview_backend', 'LIVE') == 'LIVE'
-
-
-def _alive(entry, ts):
-    try:
-        return (entry['material'] == ts.material and ts.material.as_pointer() != 0
-                and not _moved(entry, ts))
-    except (ReferenceError, AttributeError):
-        return False
 
 
 def _moved(entry, ts):
@@ -133,32 +127,28 @@ def _moved(entry, ts):
         return True
 
 
+def _alive(entry, ts):
+    try:
+        return not _moved(entry, ts)
+    except (ReferenceError, AttributeError):
+        return False
+
+
 def _release(scene, ts, entry):
-    """Forget a moved graph without closing it: its trees stay on the material,
-    where ``ensure`` rehydrates them against the live set."""
+    """Forget a moved graph (its set struct was relocated); the next tick rebuilds."""
     from . import layer_cache
     graph = entry.pop('graph')
     for binding in graph.cache_bindings:
-        # Cache jobs check their identity through the graph's closures.
         layer_cache.discard(scene, ts, binding.layer_id, binding.channel)
     try:
         graph.detach()
     except ReferenceError:
         pass
-    entry['attached'] = False
+    entry['rebuild'] = True
 
 
 def texture_sets_changed(scene):
-    """``texture_sets.add()``/``remove()`` relocated the set structs (0.9.7).
-
-    Graphs and cooperative jobs compiled against the old addresses are dropped
-    now, not when a tick first dereferences them; sessions rehydrate from their
-    materials, and the rehydration re-requests the cache refreshes ``_release``
-    drops with a moved graph. Queued work keyed by id (cache refreshes of a
-    graph that stayed put, field requests, scheduled edge rebakes) survives:
-    the scheduler re-issues none of it. Sessions of a removed set are closed
-    by ``prune``.
-    """
+    """``texture_sets.add()``/``remove()`` relocated the set structs (0.9.7)."""
     from . import cache
     cache.discard_evaluators()
     pointer = scene.as_pointer()
@@ -170,41 +160,24 @@ def texture_sets_changed(scene):
             _release(scene, ts, entry)
 
 
-def _has_persisted_graph(ts):
-    """Whether the material carries a compiled Procedural Graph for this set (one rehydrate
-    could adopt). Used to tell a first build (safe) from replacing a persisted graph while
-    frozen after undo (unsafe)."""
-    from ..constants import OWNER
-    material = getattr(ts, 'material', None)
-    tree = getattr(material, 'node_tree', None)
-    if tree is None:
-        return False
-    try:
-        instance = next((node for node in tree.nodes
-                         if node.get(OWNER) and node.get('role') == 'Procedural Graph'), None)
-    except ReferenceError:
-        return False
-    top = instance.node_tree if instance is not None else None
-    return top is not None and top.get('op_shader_graph') == ts.id and bool(top.get('op_signature'))
-
-
 def _pending(graph):
     return bool(getattr(graph, 'pending_resources', False))
 
 
 def current(scene, ts):
+    """The set's images show its current stack: built, evaluated, no input pending."""
     if not requested(ts):
         return False
     entry = _sessions.get(key_for(scene, ts))
-    return bool(entry and _alive(entry, ts) and entry.get('graph')
+    return bool(entry and entry.get('graph') and _alive(entry, ts)
                 and entry.get('attached', False)
-                and not entry.get('rebuild') and not entry.get('error')
+                and not entry.get('rebuild') and not entry.get('recheck') and not entry.get('error')
                 and entry.get('serial') == ts.edit_serial
-                and not _pending(entry['graph']))
+                and not _pending(entry['graph']) and not entry.get('dirty'))
 
 
 def pending_work(scene, ts):
-    """True while the timer still has topology or isolated inputs to finish."""
+    """True while the timer still has topology, inputs or channels to finish."""
     if not requested(ts):
         return False
     entry = _sessions.get(key_for(scene, ts))
@@ -212,8 +185,8 @@ def pending_work(scene, ts):
         return True
     if entry.get('error') and entry.get('serial') == ts.edit_serial:
         return False
-    return bool(entry.get('rebuild') or not entry.get('attached', False)
-                or entry.get('serial') != ts.edit_serial
+    return bool(entry.get('rebuild') or entry.get('recheck') or not entry.get('attached', False)
+                or entry.get('serial') != ts.edit_serial or entry.get('dirty')
                 or (entry.get('graph') is not None and _pending(entry['graph']))
                 or bool(_deferred.get(key_for(scene, ts))))
 
@@ -232,6 +205,11 @@ def session_graph(scene, ts):
     return None
 
 
+def session_engine(scene, ts):
+    entry = _sessions.get(key_for(scene, ts))
+    return entry.get('engine') if entry else None
+
+
 def diagnostics(scene, ts):
     key = key_for(scene, ts)
     entry = _sessions.get(key, {})
@@ -239,6 +217,7 @@ def diagnostics(scene, ts):
     pending = _pending(graph) if graph is not None else False
     state = ('CPU' if not requested(ts) else 'FAILED' if entry.get('error') else
              'BOUNDARY' if pending else 'SHADER' if current(scene, ts) else 'QUEUED')
+    engine = entry.get('engine')
     return {**entry.get('diagnostics', {}), 'state': state,
             'serial': ts.edit_serial, 'bound_serial': entry.get('serial', -1),
             'pending_resources': pending, 'error': entry.get('error', ''),
@@ -246,10 +225,12 @@ def diagnostics(scene, ts):
             'rebuild_pending': bool(entry.get('rebuild')),
             'rebuild_scope': entry.get('rebuild_scope'),
             'graph_builds': entry.get('graph_builds', 0),
-            'graph_rehydrations': entry.get('graph_rehydrations', 0),
+            'graph_rehydrations': 0,
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
             'resource_steps': entry.get('resource_steps', 0),
+            'evaluations': entry.get('evaluations', 0),
+            'engine': dict(engine.report) if engine is not None else {},
             'frozen': frozen(scene, ts),
             'held': key in _holds,
             'deferred_owners': len(_deferred.get(key, ())),
@@ -257,32 +238,29 @@ def diagnostics(scene, ts):
                              and not _moved(entry, ts) else {})}
 
 
-def mark_attached(scene, ts, graph=None):
-    """Record the graph actually connected by the material surface adapter.
-
-    Compilation alone does not make a graph visible. Passing no graph records
-    that an explicit raster adapter temporarily owns the surface connections.
-    """
-    entry = _sessions.get(key_for(scene, ts))
-    if entry and _alive(entry, ts):
-        entry['attached'] = graph is not None and entry.get('graph') is graph
+def mark_attached(scene, ts, attached=True):
+    """Record whether the set's material reads the engine's images (the texture set node)."""
+    entry = _sessions.setdefault(key_for(scene, ts), {})
+    entry['attached'] = bool(attached)
 
 
 def status(scene, ts):
     info = diagnostics(scene, ts)
     if info['error']:
-        return 'Shader preview: ' + info['error']
+        return 'Open Painter engine: ' + info['error']
     if info['frozen']:
         return 'Frozen while painting · catches up after the stroke'
-    return {'CPU': 'CPU texture reference', 'SHADER': 'Shader native · textures bake on request',
+    state = info['state']
+    if (state == 'QUEUED' and info['attached'] and not info['rebuild_pending']
+            and info['bound_serial'] == info['serial']):
+        state = 'SHADER'   # an edit the next tick renders: still live (a slider drag must not flicker)
+    return {'CPU': 'CPU texture reference', 'SHADER': 'Open Painter engine · live',
             'BOUNDARY': 'Preparing isolated texture input…',
-            'QUEUED': 'Preparing shader graph…'}[info['state']]
+            'QUEUED': 'Updating textures…'}[state]
 
 
 def _publish_status(scene, ts, entry):
-    """Write the status line when the shader's text changes, never on every tick:
-    messages other subsystems leave there (a failed cache job, a rebake, an
-    export) must outlive the timer interval."""
+    """Write the status line when the engine's text changes, never on every tick."""
     text = status(scene, ts)
     if entry.get('status_text') != text:
         entry['status_text'] = text
@@ -299,8 +277,6 @@ def restate(scene):
 def _record(entry, ts, result):
     if isinstance(result, dict):
         entry['diagnostics'] = result
-    # An isolated input whose raster raised keeps its placeholder bound: a later
-    # unrelated edit must not report the graph current over it.
     graph = entry.get('graph')
     error = graph.resource_error() if graph is not None else ''
     entry.update(serial=ts.edit_serial, error=error, rebuild=False)
@@ -308,13 +284,11 @@ def _record(entry, ts, result):
 
 def _log(ts, event, report):
     if logger.isEnabledFor(logging.DEBUG):
-        fields = ('parameter_changes', 'invalidated_nodes', 'affected_channels',
-                  'updated_bindings', 'raster_boundaries_queued', 'pending_resources',
-                  'resource_publications', 'submission_ms', 'texture_bake_triggered',
-                  'gpu_execution_scope', 'error')
+        fields = ('parameter_changes', 'affected_channels', 'updated_bindings', 'raster_boundaries_queued',
+                  'pending_resources', 'resource_publications', 'submission_ms', 'evaluate_ms', 'channels',
+                  'passes', 'error')
         detail = {name: report[name] for name in fields if name in report}
-        logger.debug('Shader %s %s revision=%d %s', event, ts.name, ts.edit_serial,
-                     json.dumps(detail, sort_keys=True))
+        logger.debug('Engine %s %s revision=%d %s', event, ts.name, ts.edit_serial, json.dumps(detail, sort_keys=True))
 
 
 def _redraw(scene):
@@ -325,8 +299,22 @@ def _redraw(scene):
                     area.tag_redraw()
 
 
+@contextmanager
+def _inputs(entry):
+    """CPU inputs stepped between evaluations count toward the next one's stages."""
+    started = perf_counter()
+    try:
+        yield
+    finally:
+        stage = entry.setdefault('stage', stages.begin())
+        stage['inputs_ms'] += (perf_counter() - started) * 1000
+
+
 def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
     from .shader_graph import RebuildRequired
+    if resources and entry.pop('recheck', False):
+        check_structure, owner = True, None   # edits were dropped while held: re-read everything
+    started = perf_counter()
     try:
         result = entry['graph'].update(owner, check_structure=check_structure, resources=resources)
     except RebuildRequired as exc:
@@ -336,26 +324,31 @@ def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
         cache.wake()
         return False
     except Exception as exc:
-        # Keep the last valid shader attached, and expose a recoverable error.
+        # Keep the last result on screen and expose a recoverable error.
         entry.update(error=str(exc), serial=ts.edit_serial)
         metrics.count('shader_update_failures')
-        _log(ts, 'update failed', {'error': str(exc), 'texture_bake_triggered': False})
+        _log(ts, 'update failed', {'error': str(exc)})
         return False
+    finally:
+        stage = entry.setdefault('stage', stages.begin())
+        stage['update_ms'] += (perf_counter() - started) * 1000
+        stage['updates'] += 1
     _record(entry, ts, result)
     entry['binding_updates'] = (entry.get('binding_updates', 0)
                                 + (result.get('updated_bindings', 0) if isinstance(result, dict) else 0))
     entry['update_calls'] = entry.get('update_calls', 0) + 1
+    entry['dirty'] = True
     metrics.count('shader_update_calls')
     _log(ts, 'update', result if isinstance(result, dict) else {})
-    _redraw(scene)
+    from . import cache
+    cache.wake()
     return True
 
 
 def ensure(scene, ts):
-    """Return the current graph; building is reserved for material repair.
+    """Return the set's compiled graph, (re)building it when the structure changed.
 
-    A failed replacement retains its predecessor. It does not silently enter
-    whole-material CPU composition or delete unrelated material nodes.
+    A failed replacement keeps its predecessor (and the images it produced) on screen.
     """
     if not requested(ts):
         return None
@@ -365,70 +358,26 @@ def ensure(scene, ts):
         return entry.get('graph') if entry else None
     _busy.add(key)
     try:
-        if entry and _moved(entry, ts):
+        if entry and entry.get('graph') and _moved(entry, ts):
             _release(scene, ts, entry)
-        if entry and _alive(entry, ts) and entry.get('graph'):
-            if entry.get('serial') != ts.edit_serial and not entry.get('rebuild'):
+        if entry and entry.get('graph') and _alive(entry, ts):
+            if (entry.get('serial') != ts.edit_serial or entry.get('recheck')) and not entry.get('rebuild'):
                 _update(scene, ts, entry)
             if not entry.get('rebuild'):
                 return entry['graph']
-        from .shader_graph import Graph, RebuildRequired
-        from .shader_resources import new_leaves_frozen
+        from .engine.compiler import EngineGraph
+        from .engine.runtime import Engine
         previous = entry.get('graph') if entry else None
-        candidate = None
-        rehydrated = False
-        failure, scope = None, None
+        candidate = EngineGraph(scene, ts)
         try:
-            if previous is None:
-                # After undo/redo or reload the material still carries the last
-                # compiled graph: adopt it instead of rebuilding and recompiling.
-                candidate = Graph(scene, ts, ts.material)
-                rehydrated = candidate.rehydrate()
-                if rehydrated:
-                    report = dict(candidate._last)
-                    # Any uniform that drifted from the authored value is corrected here.
-                    try:
-                        corrections = candidate.update()
-                    except RebuildRequired as exc:
-                        corrections, scope = {}, exc.scope
-                    except Exception as exc:
-                        # The adopted trees are the last valid shader: they stay
-                        # attached with a recoverable error, as on a live session,
-                        # instead of being deleted for an invalid slider range.
-                        corrections, failure = {}, exc
-                    if scope is not None and new_leaves_frozen():
-                        # Post-undo window: a spurious/precautionary structural mismatch on the
-                        # freshly adopted trees must not force a rebuild that recreates leaves
-                        # outside an undo step (the open crash). Keep the adopted graph; the next
-                        # authored gesture releases the freeze and rebuilds if still needed.
-                        scope = None
-                    candidate._last = {**report, **corrections,
-                                       'rehydration_corrections': corrections.get('updated_bindings', 0)}
-            if not rehydrated:
-                if new_leaves_frozen() and _has_persisted_graph(ts):
-                    # A persisted graph exists but did not rehydrate, and we are between undo
-                    # steps: building a replacement now would create node trees and leaf
-                    # datablocks the next undo frees while the material still points at them.
-                    # Keep the current material; rebuild on the next authored gesture.
-                    if candidate is not None:
-                        try:
-                            candidate.close()
-                        except Exception:
-                            pass
-                    entry = _sessions.setdefault(key, {'material': ts.material})
-                    entry.update(serial=ts.edit_serial, rebuild=True, error='')
-                    _publish_status(scene, ts, entry)
-                    return entry.get('graph') or previous
-                candidate = Graph(scene, ts, ts.material)
-                # Units whose structure and owners are unchanged move over intact.
-                candidate.build(reuse=previous)
+            # Units whose structure and owners are unchanged move over intact.
+            candidate.build(reuse=previous)
         except Exception as exc:
-            if candidate is not None:
-                try:
-                    candidate.close()
-                except Exception:
-                    pass
-            entry = _sessions.setdefault(key, {'material': ts.material})
+            try:
+                candidate.close()
+            except Exception:
+                pass
+            entry = _sessions.setdefault(key, {})
             # The retained predecessor no longer matches the stack: the next
             # revision must retry the build, not bind numeric edits onto it.
             entry.update(error=str(exc), serial=ts.edit_serial, rebuild=previous is not None)
@@ -436,23 +385,24 @@ def ensure(scene, ts):
             if previous is not None:
                 return previous
             raise
-        entry = {'material': ts.material, 'graph': candidate, 'diagnostics': {}, 'attached': False,
-                 'status_text': (entry or {}).get('status_text'),
-                 'graph_builds': (entry or {}).get('graph_builds', 0) + (0 if rehydrated else 1),
-                 'graph_rehydrations': (entry or {}).get('graph_rehydrations', 0) + (1 if rehydrated else 0),
-                 'binding_updates': (entry or {}).get('binding_updates', 0),
-                 'update_calls': (entry or {}).get('update_calls', 0),
-                 'resource_steps': (entry or {}).get('resource_steps', 0)}
+        entry = _sessions.setdefault(key, {})
+        engine = entry.get('engine')
+        if engine is None or engine.set_id != ts.id:
+            engine = Engine(scene, ts)
+        engine.adopt(candidate)
+        entry.update(graph=candidate, engine=engine, dirty=True,
+                     graph_builds=entry.get('graph_builds', 0) + 1, rebuild_scope=None)
+        built = getattr(candidate, '_last', {})
+        stage = entry.setdefault('stage', stages.begin())
+        stage['build_ms'] += float(built.get('build_ms', 0.0))
+        stage['builds'] += 1
+        stage['rebuilt'] += int(built.get('rebuilt_units', 0))
+        stage['reused'] += int(built.get('reused_units', 0))
         _record(entry, ts, dict(getattr(candidate, '_last', {})))
-        if failure is not None:
-            entry['error'] = str(failure)
-            metrics.count('shader_update_failures')
-            _log(ts, 'update failed', {'error': str(failure), 'texture_bake_triggered': False})
-        elif scope is not None:
-            entry.update(rebuild=True, rebuild_scope=scope)
-        _sessions[key] = entry
         if previous is not None:
             previous.close()
+        for retired in _retiring.pop(key, ()):
+            retired.unbind()   # the leaves the rebuilt graph still needs are bound by it now
         metrics.count('shader_runtime_builds')
         from . import profile
         profile.record_graph(scene, ts, candidate)
@@ -491,19 +441,19 @@ def _owners(owner):
 
 
 def _pass_through(graph, ts, layer):
-    """The shader holds no bindings of a bypassed layer, a cached layer or a cached
+    """The graph holds no bindings of a bypassed layer, a cached layer or a cached
     folder's child, so it cannot narrow what the CPU reference (export) must redo."""
     layers = ts.layers if layer is None else (layer,)
     return any(graph._skipped(item) or graph._cache_effective(item) != 'LIVE' for item in layers)
 
 
 def notify(owner, context=None, *, previous_dirty=None, structural=True):
-    """Apply a property edit immediately if a shader has already been built.
+    """Apply a property edit to the compiled graph; the engine renders it on the next tick.
 
     Initializing RNA collections may fire many callbacks. Those callbacks never
-    create partial graphs; their completed operation is picked up by tick/repair.
-    ``structural=False`` marks a numeric edit: the graph writes its bindings
-    without re-deriving the structural signature.
+    create partial graphs; their completed operation is picked up by tick.
+    ``structural=False`` marks a numeric edit: bindings are written without
+    re-deriving the structural signature.
     """
     started = perf_counter()
     result = None
@@ -515,16 +465,10 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
             _batches[key]['structural'] |= structural
             continue
         if key in _holds:
-            # The repair after release re-reads structure and values (ensure).
-            continue
+            continue   # the rebuild after release re-reads structure and values
         entry = _sessions.get(key)
         if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts):
             continue
-        # An authored edit reaching a live session ends the post-undo window (its operator pushes
-        # an undo step): new leaves may be created and bound again. Reached only for a rehydrated
-        # session, so the relearn that runs during undo — with sessions cleared — cannot trip it.
-        from .shader_resources import freeze_new_leaves
-        freeze_new_leaves(False)
         _busy.add(key)
         try:
             if not entry.get('rebuild'):
@@ -532,9 +476,9 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
                 affected = entry.get('diagnostics', {}).get('affected_channels')
                 if (updated and previous_dirty is not None and affected is not None
                         and not _pass_through(entry['graph'], ts, layer)):
-                    # Compiler dependencies may prove that a generic RNA
-                    # callback touched fewer channels (or no active input).
-                    # Never clear a bake invalidation from an earlier edit.
+                    # The compiler's dependencies may prove that a generic RNA
+                    # callback touched fewer channels. Never clear a bake
+                    # invalidation from an earlier edit.
                     for output in ts.outputs:
                         output.dirty = bool(previous_dirty.get(output.channel, False)
                                             or output.channel in affected)
@@ -546,8 +490,101 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
     return result
 
 
+def _evaluate(scene, ts, entry):
+    """Render the set's changed channels into its images; returns the channels written."""
+    engine = entry.get('engine')
+    if engine is None or entry.get('graph') is None:
+        return set()
+    from . import dependencies
+    from .engine.runtime import EngineUnavailable
+    n = int(ts.resolution)
+    if any(out.image is not None and tuple(out.image.size) != (n, n) for out in ts.outputs):
+        # A resolution switch: the channel images follow the set before the engine writes them.
+        from ..core import image_manager
+        for out in list(ts.outputs):
+            image_manager.output(ts, out.channel)
+    from ..core import texture_set_node
+    texture_set_node.sync(ts)   # the node samples the images the engine writes (a replaced one too)
+    try:
+        written = engine.evaluate(epochs=dependencies.image_epochs())
+    except EngineUnavailable as exc:
+        entry.update(error=str(exc), serial=ts.edit_serial)
+        return set()
+    except Exception as exc:
+        logger.exception('Open Painter engine evaluation')
+        entry.update(error=f'Evaluation failed: {exc}', serial=ts.edit_serial)
+        return set()
+    entry['dirty'] = False
+    entry['evaluations'] = entry.get('evaluations', 0) + 1
+    if written:
+        publishing = perf_counter()
+        _published(scene, ts, written)
+        engine.stages['publish_ms'] += (perf_counter() - publishing) * 1000
+        if _cpu_viewport(scene):
+            engine.stages['publish_path'] += ' + pixels for Cycles'
+        _log(ts, 'evaluate', engine.report)
+    if written or entry.get('stage', {}).get('builds'):
+        stages.record(entry, engine.stages)
+    return written
+
+
+def profile_engine(scene, ts):
+    """Evaluate the set once more with every pass timed on the GPU (``Engine.profile``); the
+    images end up as they were. Returns the recorded row (its units in ``entry['profile']``)."""
+    tick(scene, ts, force_repair=False, ignore_gate=True)
+    entry = _sessions.get(key_for(scene, ts))
+    if not entry or entry.get('engine') is None or entry.get('graph') is None:
+        raise RuntimeError('The Open Painter engine has not built this texture set')
+    if entry.get('error'):
+        raise RuntimeError(entry['error'])
+    from . import dependencies, profile
+    engine = entry['engine']
+    written = engine.profile(epochs=dependencies.image_epochs())
+    if written:
+        _published(scene, ts, written)
+    row = stages.record(entry, engine.stages)
+    profile.record_gpu(scene, ts, entry['profile']['units'])
+    return row
+
+
+def _published(scene, ts, channels):
+    """The images changed on the GPU only: have the viewport redraw and restart accumulation."""
+    if _cpu_viewport(scene):
+        # Cycles reads image pixels on the CPU, never the GPU texture the engine wrote.
+        engine = session_engine(scene, ts)
+        if engine is not None:
+            engine.sync_pixels(channels)
+    for output in ts.outputs:
+        if output.channel in channels and output.image is not None:
+            output.image.update_tag()
+    _redraw(scene)
+
+
+def _cpu_viewport(scene):
+    """A 3D view renders the scene with an engine that samples images on the CPU (Cycles)."""
+    if scene.render.engine in {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}:
+        return False
+    for window in bpy.context.window_manager.windows:
+        if window.scene == scene and any(area.type == 'VIEW_3D' and area.spaces.active.shading.type == 'RENDERED'
+                                         for area in window.screen.areas):
+            return True
+    return False
+
+
+def sync_pixels():
+    """Copy every published result into its image's pixels (a bake samples them on the CPU)."""
+    for key, entry in _sessions.items():
+        engine = entry.get('engine')
+        if engine is None or not engine.dirty_cpu:
+            continue
+        try:
+            engine.sync_pixels()
+        except (ReferenceError, StopIteration):
+            pass   # the set is gone; prune forgets the session
+
+
 def tick(scene, ts, *, force_repair=False, ignore_gate=False):
-    """Advance topology/source preparation only, never full channel rasters."""
+    """Rebuild changed topology, advance isolated inputs, render changed channels."""
     if not requested(ts):
         return False
     key = key_for(scene, ts)
@@ -555,44 +592,65 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
     if not force_repair and entry and entry.get('error') and entry.get('serial') == ts.edit_serial:
         return False
     from . import cache
-    if (not force_repair and not ignore_gate and cache.painting_active(scene) and entry and entry.get('graph')
-            and _alive(entry, ts) and entry.get('attached', False) and not entry.get('rebuild')
-            and not entry.get('error') and entry.get('serial') == ts.edit_serial):
-        # Frozen while painting: no repair, no isolated-input steps until release.
-        _publish_status(scene, ts, entry)
-        return current(scene, ts)
     if not force_repair and not ignore_gate and _held(key):
-        # Held by a gesture (see ``hold``): the last attached shader stays as is.
+        # Held by a gesture (see ``hold``): the last result stays on screen.
         return current(scene, ts)
+    painting = (not force_repair and not ignore_gate and cache.painting_active(scene))
     if (force_repair or not entry or not entry.get('graph') or not _alive(entry, ts)
-            or not entry.get('attached', False)
-            or entry.get('rebuild') or entry.get('serial') != ts.edit_serial):
-        from ..core import material_manager
+            or entry.get('rebuild') or entry.get('recheck') or entry.get('serial') != ts.edit_serial):
         try:
-            material_manager.repair(ts)
+            ensure(scene, ts)
         except Exception as exc:
-            entry = _sessions.setdefault(key, {'material': ts.material})
+            entry = _sessions.setdefault(key, {})
             entry.update(error=str(exc), serial=ts.edit_serial, rebuild=False)
             _publish_status(scene, ts, entry)
             return False
         entry = _sessions.get(key)
-    if entry and entry.get('graph') and _pending(entry['graph']):
+    if entry is None or entry.get('graph') is None:
+        return False
+    if not entry.get('attached', False):
+        from ..core import material_manager
         try:
-            result = entry['graph'].step_resources(budget=.006)
+            material_manager.repair(ts)
+        except Exception as exc:
+            entry.update(error=str(exc), serial=ts.edit_serial)
+            _publish_status(scene, ts, entry)
+            return False
+    graph = entry['graph']
+    if _pending(graph) and not painting:
+        # Frozen while painting: no isolated-input steps until release.
+        try:
+            with _inputs(entry):
+                result = graph.step_resources(budget=.006)
             entry['resource_steps'] = entry.get('resource_steps', 0) + 1
             if isinstance(result, dict):
                 from . import profile
                 profile.record_boundary(scene, ts, result.pop('owner_timings', None) or {})
                 entry['diagnostics'] = {**entry.get('diagnostics', {}), **result}
+                if result.get('resource_publications'):
+                    entry['dirty'] = True
                 _log(ts, 'resource step', result)
             metrics.count('shader_resource_steps')
         except Exception as exc:
             entry.update(error=str(exc), serial=ts.edit_serial)
             metrics.count('shader_resource_failures')
-        _redraw(scene)
-    if entry is not None:
-        _publish_status(scene, ts, entry)
+    from . import dependencies
+    if entry.get('dirty') or entry.get('image_epoch') != dependencies.image_epoch():
+        entry['image_epoch'] = dependencies.image_epoch()
+        _evaluate(scene, ts, entry)
+    _publish_status(scene, ts, entry)
     return current(scene, ts)
+
+
+def inputs_changed(scene, ts):
+    """Images the set's units bind were swapped or rewritten outside RNA (a gesture preview):
+    the next tick re-renders the channels reading them (their stamps see the new identity
+    or pixel revision)."""
+    entry = _sessions.get(key_for(scene, ts))
+    if entry and entry.get('graph') is not None:
+        entry['dirty'] = True
+        from . import cache
+        cache.wake()
 
 
 def retry(scene, ts):
@@ -605,34 +663,41 @@ def retry(scene, ts):
         entry.update(error='', rebuild=True)
 
 
-def flush(scene, ts):
-    """Finish isolated inputs and requested automatic caches before save/render."""
+def flush(scene, ts, pixels=True):
+    """Finish isolated inputs, caches and channels; with ``pixels``, copy the result into the
+    images' pixel buffers (render and export read pixels on the CPU; the results live on the GPU).
+    """
     _resume_set(scene, ts, key_for(scene, ts))
     tick(scene, ts, force_repair=False, ignore_gate=True)
     entry = _sessions.get(key_for(scene, ts))
-    if not entry:
-        raise RuntimeError('Shader graph was not prepared')
+    if not entry or not entry.get('graph'):
+        raise RuntimeError('The Open Painter engine has not built this texture set')
     if entry.get('error'):
         raise RuntimeError(entry['error'])
     from . import profile
     while _pending(entry['graph']):
         try:
-            result = entry['graph'].step_resources(budget=.006)
+            with _inputs(entry):
+                result = entry['graph'].step_resources(budget=.006)
         except Exception as exc:
             entry.update(error=str(exc), serial=ts.edit_serial)
             metrics.count('shader_resource_failures')
             raise
         entry['resource_steps'] = entry.get('resource_steps', 0) + 1
+        entry['dirty'] = True
         if isinstance(result, dict):
             profile.record_boundary(scene, ts, result.pop('owner_timings', None) or {})
             entry['diagnostics'] = {**entry.get('diagnostics', {}), **result}
     from . import layer_cache
     layer_cache.flush(scene, ts)
     # Cache publication swaps image pointers after the graph was prepared.
-    # Bind those images before a render can sample the neutral placeholder.
     tick(scene, ts, force_repair=False, ignore_gate=True)
     if entry.get('error'):
         raise RuntimeError(entry['error'])
+    _evaluate(scene, ts, entry)
+    engine = entry.get('engine')
+    if engine is not None and pixels:
+        engine.sync_pixels()
     return entry['graph']
 
 
@@ -695,13 +760,13 @@ def resume(scene):
 
 
 def native_paint_input(scene):
-    """Native image painting updates shader Image nodes without canvas readback."""
+    """Native image painting: the engine re-renders the channels the painted canvas feeds."""
     project = scene.open_painter
     image = project.paint_image
     if image is None:
         return False
     if project.paint_correction:
-        return True   # bake corrections are read at bake time, not by the shader
+        return True   # bake corrections are read at bake time, not by the engine
     ts = next((item for item in project.texture_sets if item.id == project.paint_set_id), None)
     if ts is None or not requested(ts):
         return False
@@ -741,31 +806,50 @@ def native_paint_input(scene):
 def prune(live):
     for key in set(_deferred) - set(live):
         _deferred.pop(key, None)
+    for key in set(_retiring) - set(live):
+        for retired in _retiring.pop(key):
+            retired.unbind()
     for key in set(_sessions) - set(live):
         entry = _sessions.pop(key)
         if entry.get('graph'):
             try:
                 entry['graph'].close()
             except ReferenceError:
-                # Loading a file can invalidate the previous scene's RNA before
-                # Blender invokes our persistent load handler.
                 pass
+        if entry.get('engine'):
+            entry['engine'].close()
 
 
-def clear():
-    """Forget runtime bindings while retaining the last material in Blender.
+def clear(undo=False):
+    """Forget runtime sessions; the set images keep their last result.
 
-    Disabling the extension must not disconnect an otherwise usable material.
-    The next successful graph build replaces detached owned groups. Deleted
-    texture-set owners still use prune/close for ordinary resource cleanup.
+    After an ``undo`` the dropped graphs keep counting the leaves they bind until the
+    rebuilt session has adopted them (``ensure``), so no orphan sweep — another set's
+    publication included — removes a leaf the rebuild is about to reuse. A file load
+    or unregistration forgets them.
     """
-    for entry in _sessions.values():
+    for key, entry in _sessions.items():
         graph = entry.get('graph')
         if graph is not None:
             try:
                 graph.detach()
             except ReferenceError:
                 pass
+            if undo:
+                _retiring.setdefault(key, []).append(graph)
+            else:
+                graph.unbind()
+        engine = entry.get('engine')
+        if engine is not None:
+            try:
+                engine.close()
+            except Exception:
+                pass
+    if not undo:
+        for graphs in _retiring.values():
+            for retired in graphs:
+                retired.unbind()
+        _retiring.clear()
     _sessions.clear()
     _busy.clear()
     _batches.clear()

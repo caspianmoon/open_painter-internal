@@ -1,6 +1,6 @@
 """Small editable graph recipes built from the same layers, masks and filters as Painter.
 
-Each insertion owns fresh IDs and (for shader recipes) a fresh ShaderNodeTree.
+Each insertion owns fresh IDs and (for graph recipes) a fresh Mask Graph.
 No recipe replaces the current material or requires a mesh-map bake.
 """
 
@@ -81,9 +81,9 @@ TEMPLATES = {
 }
 
 for _key, _name, _description in (
-    ('NOISE_RAMP', 'Noise → Ramp', 'A reusable shader group: UV coordinates into Noise and an editable Color Ramp'),
-    ('CELLULAR_RAMP', 'Cells → Ramp', 'A reusable shader group: Voronoi distance remapped with a Color Ramp'),
-    ('LAYERED_NOISE', 'Layered Noise → Ramp', 'A reusable shader group: two noise scales multiplied and remapped'),
+    ('NOISE_RAMP', 'Noise → Ramp', 'A reusable Mask Graph: coordinates into Noise and an editable Ramp'),
+    ('CELLULAR_RAMP', 'Cells → Ramp', 'A reusable Mask Graph: cell distances remapped with a Ramp'),
+    ('LAYERED_NOISE', 'Layered Noise → Ramp', 'A reusable Mask Graph: two noise scales multiplied and remapped'),
 ):
     TEMPLATES[_key] = {
         'name': _name, 'description': _description, 'shader': _key,
@@ -95,44 +95,9 @@ ITEMS = [(key, value['name'], value['description']) for key, value in TEMPLATES.
 
 
 def shader_group(kind, name):
-    """Create a standalone shader group whose first output is mask coverage."""
-    import bpy
-    from ..constants import OWNER
-    tree = bpy.data.node_groups.new(name, 'ShaderNodeTree')
-    try:
-        tree[OWNER] = True
-        tree.interface.new_socket(name='UV', in_out='INPUT', socket_type='NodeSocketVector')
-        tree.interface.new_socket(name='Coverage', in_out='OUTPUT', socket_type='NodeSocketFloat')
-        inputs = tree.nodes.new('NodeGroupInput')
-        inputs.location = (-650, 40)
-        output = tree.nodes.new('NodeGroupOutput')
-        output.location = (280, 40)
-        source = tree.nodes.new('ShaderNodeTexVoronoi' if kind == 'CELLULAR_RAMP' else 'ShaderNodeTexNoise')
-        source.location = (-420, 40)
-        source.inputs['Scale'].default_value = 8
-        tree.links.new(inputs.outputs['UV'], source.inputs['Vector'])
-        signal = source.outputs['Distance' if kind == 'CELLULAR_RAMP' else 'Fac']
-        if kind == 'LAYERED_NOISE':
-            detail = tree.nodes.new('ShaderNodeTexNoise')
-            detail.location = (-420, -300)
-            detail.inputs['Scale'].default_value = 36
-            tree.links.new(inputs.outputs['UV'], detail.inputs['Vector'])
-            multiply = tree.nodes.new('ShaderNodeMath')
-            multiply.operation = 'MULTIPLY'
-            multiply.location = (-180, 40)
-            tree.links.new(signal, multiply.inputs[0])
-            tree.links.new(detail.outputs['Fac'], multiply.inputs[1])
-            signal = multiply.outputs[0]
-        ramp = tree.nodes.new('ShaderNodeValToRGB')
-        ramp.location = (0, 40)
-        ramp.color_ramp.elements[0].position = .1 if kind == 'LAYERED_NOISE' else .25
-        ramp.color_ramp.elements[1].position = .45 if kind == 'LAYERED_NOISE' else .75
-        tree.links.new(signal, ramp.inputs['Fac'])
-        tree.links.new(ramp.outputs['Color'], output.inputs['Coverage'])
-        return tree
-    except Exception:
-        bpy.data.node_groups.remove(tree)
-        raise
+    """A new Mask Graph whose Mask Output is the coverage (the historical name is kept for callers)."""
+    from ..procedural_graph.templates import build
+    return build(kind, name)
 
 
 def _properties(target, values):

@@ -22,6 +22,7 @@ from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, layer_cache, metrics, shader_preview
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph
+from open_painter.evaluation import shader_resources
 from open_painter.utils.ids import new_id
 
 N = 32
@@ -297,6 +298,7 @@ def run():
     # Channel opacity is applied after the cache sample: the slider (through its
     # opacity_percent mirror) must not turn the frozen row stale.
     stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').opacity_percent = 60
+    shader_preview.tick(scene, ts)   # the engine renders the edit
     assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, blue_id)
     assert not layer_cache.pending(scene, ts, blue_id)
@@ -330,6 +332,7 @@ def run():
     output = images.output(ts, 'BASE_COLOR')
     output.dirty = False
     stack.channel_for(layer_by_id(ts, yellow_id), 'BASE_COLOR').color = (.2, .9, .9, .8)
+    shader_preview.tick(scene, ts)
     assert shader_preview.current(scene, ts)
     assert output.dirty, 'an edit to a cached folder child was dropped from the export'
     layer_cache.flush(scene)
@@ -429,7 +432,7 @@ def run():
     row = next(r for r in layer_by_id(ts, blue_id).cache if r.channel == 'BASE_COLOR')
     assert row.image is not previous_image and row.provenance
     assert bpy.data.images.get(previous_name) is previous_image
-    assert not previous_image.use_fake_user and previous_image.users == 1, \
+    assert not previous_image.use_fake_user and shader_resources.bound(previous_image), \
         'a superseded cache image the sampler still reads must not be persisted'
     ready(scene, ts)   # the rebuild binds the published image
     layer_cache.tick(scene)
@@ -476,7 +479,7 @@ def run():
     assert all(r.image is None and not r.provenance for r in layer_by_id(ts, blue_id).cache), \
         'the switch to Live kept the cache images bound to the rows'
     for image, name in retired.values():
-        assert bpy.data.images.get(name) is image and not image.use_fake_user and image.users == 1, \
+        assert bpy.data.images.get(name) is image and not image.use_fake_user and shader_resources.bound(image), \
             'a retired cache image the sampler still reads must not be persisted'
         assert image not in layer_cache._retired, 'the switch to Live queued a cache image for removal'
     # A job the switch did not see (a layer removed around the engine) is dropped
@@ -491,7 +494,7 @@ def run():
     # Never removed, only orphaned: the datablock (and its unpacked pixels) must
     # outlive the switch for an undo, so the sweep is not allowed to take it.
     for image, name in retired.values():
-        assert bpy.data.images.get(name) is image and image.users == 0 and not image.use_fake_user, \
+        assert bpy.data.images.get(name) is image and not shader_resources.bound(image) and not image.use_fake_user, \
             f'the released cache image {name} was removed or is still bound'
     # Cached again rebuilds from scratch: nothing trusts the provenance of an image that is gone.
     layer_by_id(ts, blue_id).cache_mode = 'CACHED'
@@ -550,15 +553,16 @@ def run():
     ready(scene, ts)
     print('LAYER_CACHE_PRIORITY_OK', flush=True)
 
-    # Undo rehydration keeps the image bound without a request.
+    # The graph an undo compiles binds the current cache image without a request.
     graph = shader_preview.ensure(scene, ts)
-    probe = Graph(scene, ts, ts.material)
+    from open_painter.evaluation.engine.compiler import EngineGraph
+    probe = EngineGraph(scene, ts)
     with metrics.Metrics() as observed:
-        assert probe.rehydrate(), probe._last
+        probe.build()
     assert observed.report()['counters'].get('layer_cache_requests', 0) == 0
     assert all(v == 'CURRENT' for v in probe.cache_states().values()), probe.cache_states()
     assert any(n.image == row.image for n in cache_nodes(probe))
-    probe.detach()
+    probe.close()
     # Undoing the switch to Live brings the cache images back with their pixels:
     # unpacked generated pixels do not survive a memfile undo of a removed
     # datablock, so a removal here (immediate or by the sweep) would have bound
@@ -571,7 +575,7 @@ def run():
     layer_by_id(ts, blue_id).cache_mode = 'LIVE'
     assert not layer_cache._retired
     for name, _ in cached.values():
-        assert not bpy.data.images[name].use_fake_user and bpy.data.images[name].users == 1
+        assert not bpy.data.images[name].use_fake_user and shader_resources.bound(bpy.data.images[name])
     layer_cache.tick(scene)
     for name, _ in cached.values():
         assert bpy.data.images.get(name) is not None, f'the released cache image {name} was removed'

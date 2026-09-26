@@ -192,7 +192,8 @@ primary.pixels.foreach_set(data.ravel()); primary.update()
 assert shader_preview.native_paint_input(scene)
 info = shader_preview.diagnostics(scene, lower)
 assert not info['pending_resources'] and not info.get('raster_boundaries_queued'), info
-assert shader_preview.current(scene, lower), info
+shader_preview.tick(scene, lower)   # the engine renders the painted canvas
+assert shader_preview.current(scene, lower), shader_preview.diagnostics(scene, lower)
 paint_session.finish(bpy.context, evaluate=False)
 assert not paint.stroke_key and not linked.stroke_key
 print('MULTI_SET_PAINT live: PASS', flush=True)

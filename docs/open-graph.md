@@ -48,8 +48,8 @@ for painting, evaluation, smart materials and undo.
   coverage. The node exposes the selector and its main controls; saved face regions
   are configured in the Inspector.
 - **Mask Group**, **Custom Graph** and **Vector Strokes** have their own node
-  types. A Custom Graph starts with a usable Noise → Ramp shader group; **Edit
-  Shader Group** opens it in a separate Shader Editor. Vector Strokes gets an
+  types. A Custom Graph starts with a usable Noise → Ramp [Mask Graph](mask-graphs.md);
+  **Edit Mask Graph** opens it in a node editor beside this one. Vector Strokes gets an
   independent stroke key; author strokes through the Painter tools.
 - **Procedural Fill** creates a fill layer with coordinated color, roughness and
   height detail using any source in the procedural catalog. Fill nodes expose the
@@ -102,17 +102,28 @@ supports Blender undo and save/reopen. No template needs a mesh-map bake.
 | Layered Grunge | Nested mask group combining broad stains, fine breakup and levels |
 | Shared Surface Detail | Published grain mask linked to roughness and height filters |
 | Top Surface Dust | Upward-facing mesh coverage combined with particulate breakup |
-| Noise → Ramp | Custom Graph mask with a reusable UV → Noise → Color Ramp shader group |
-| Cells → Ramp | Custom Graph mask with a reusable UV → Voronoi → Color Ramp shader group |
-| Layered Noise → Ramp | Custom Graph mask multiplying two noise scales before a Color Ramp |
+| Noise → Ramp | Custom Graph mask with a reusable Coordinates → Noise → Ramp Mask Graph |
+| Cells → Ramp | Custom Graph mask with a reusable Coordinates → Cells (Worley) → Ramp Mask Graph |
+| Layered Noise → Ramp | Custom Graph mask multiplying two noise scales before a Ramp |
 
-The last three create actual Blender shader node groups as well as a Painter
-folder. Use **Edit Shader Group** on the Custom Graph node to change the shader
-network. Each inserted template owns its own shader group; choosing that group
-on another Custom Graph mask shares it deliberately. The first group output is
-coverage; named UV, Position and Normal inputs follow the existing Custom Graph
-mask conventions. Custom Graph CPU evaluation/export uses the existing mesh bake
-path and requires assigned UV-mapped geometry.
+The last three create [Mask Graphs](mask-graphs.md), Open Painter's own node trees, as
+well as a Painter folder. Use **Edit Mask Graph** on the Custom Graph node to change the
+graph. Each inserted template owns its own graph; choosing that graph on another Custom
+Graph mask shares it deliberately. The engine renders a Mask Graph as a GPU pass of its
+own, and export evaluates it with the same formulas on the CPU.
+
+## How it is evaluated
+
+The Open Graph is Open Painter's own node tree type, never a Blender shader tree, and
+editing it changes no material. The stack it projects is evaluated by the
+[Open Painter engine](open-painter-engine.md): one small GPU program per layer channel,
+content prefix or mask prefix, rendered into the texture set's channel images. A material
+reads those images through the single **Open Painter Texture Set** node (Shader Editor ▸
+Add ▸ Input), so adding a mask, relinking an anchor or dragging a slider re-renders only
+the channels it reaches and never recompiles a material. A Custom Graph mask's Mask Graph
+is a GPU pass of its own: a slider in it is a uniform, and a structural edit recompiles that
+pass alone. Only masks from earlier files that still point at a Blender shader group are
+evaluated by the CPU reference (a Cycles bake).
 
 ## How it stays in sync
 

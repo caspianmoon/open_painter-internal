@@ -349,6 +349,10 @@ class OP_OT_graph_edit_shader(SafeOperator, bpy.types.Operator):
         if mask is None or mask.source != 'GRAPH' or mask.node_group is None:
             raise ValueError('Choose a Custom Graph mask with a shader group first.')
         group = mask.node_group
+        from ..procedural_graph import edits, is_native
+        if is_native(group):
+            edits.show(context, group)   # a Mask Graph opens in its own editor, not the Shader Editor
+            return
         existing = next((area for area in context.screen.areas if area.type == 'NODE_EDITOR'
                          and area.spaces.active.tree_type == 'ShaderNodeTree'
                          and area.spaces.active.edit_tree == group), None)
@@ -481,6 +485,27 @@ class OP_MT_graph_templates(_AddMenu, bpy.types.Menu):
             self.layout.operator('open_painter.graph_template', text=recipe['name'], icon='NODETREE').template = key
 
 
+_reports = {}   # graph tree address -> (structural signature, errors, warnings)
+
+
+def _reference_report(tree, ts):
+    """Reference errors and warnings of the set, once per structure the graph showed.
+
+    The header draws on every redraw of the editor (each slider step of an edit);
+    references change only with the structure, which ``tree['op_signature']`` tracks.
+    """
+    from ..evaluation.references import graph as reference_graph
+    token = tree.get('op_signature')
+    key = tree.as_pointer()
+    cached = _reports.get(key)
+    if cached is None or cached[0] != token or token is None:
+        _, problems, notes = reference_graph(ts)
+        if len(_reports) > 32:
+            _reports.clear()
+        cached = _reports[key] = (token, list(problems), list(notes))
+    return cached[1], cached[2]
+
+
 def header(self, context):
     space = context.space_data
     if getattr(space, 'tree_type', '') != TREE_ID:
@@ -503,14 +528,11 @@ def header(self, context):
     row.operator('open_painter.graph_view', text='Frame Selected', icon='RESTRICT_SELECT_OFF').scope = 'SELECTED'
     row.operator('open_painter.graph_view', text='Full Graph', icon='VIEW_ORTHO').scope = 'ALL'
     layout.operator('open_painter.graph_auto_layout', text='Auto Layout', icon='SNAP_GRID')
-    from ..evaluation.references import issues, warnings
-    problems = issues(ts)
+    problems, notes = _reference_report(tree, ts)
     if problems:
         layout.label(text=problems[0], icon='ERROR')
-    else:
-        notes = warnings(ts)
-        if notes:
-            layout.label(text=notes[0], icon='INFO')
+    elif notes:
+        layout.label(text=notes[0], icon='INFO')
     status = context.scene.open_painter.status
     if status:
         layout.label(text=status)

@@ -11,8 +11,9 @@ the source UV layout. See the [UDIM workflow](docs/udim-workflow.md) for setup a
 
 **Open Graph now includes templates and more node sources:** searchable node
 creation, mesh masks, nested mask groups, vector strokes, procedural fills and
-editable custom shader groups. Nine templates insert connected, independent
-groups for materials, layered masks and reusable shaders.
+editable [Mask Graphs](docs/mask-graphs.md), built from Open Painter's own procedural
+nodes. Nine templates insert connected, independent groups for materials, layered masks
+and reusable Mask Graphs.
 See [Open Graph](docs/open-graph.md#templates).
 
 **License: Source-Available**
@@ -46,7 +47,7 @@ space by default — they follow the mesh across UV seams and take world directi
 
 **0.9.3 reworks masks:** every entry is a source with its own blend, strength and levels — painted
 data, strokes, fills, generators, mesh masks — and **Mask Groups** nest so masks feed masks
-(Curvature × Noise → Levels → group → stack); **Custom Graph** masks run your own shader node group.
+(Curvature × Noise → Levels → group → stack); **Custom Graph** masks run your own [Mask Graph](docs/mask-graphs.md).
 [Details](docs/mask-architecture.md).
 
 **0.9.2 adds mesh masks:** a mask can be a Blender object, collection, material, vertex group,
@@ -74,11 +75,12 @@ existing material regions in one operation. Model views and mesh-map previews ar
 an optional reference image guides generation. This feature requires a separately installed, supported Codex runtime and account.
 See [setup, controls and current limits](docs/material-director.md).
 
-Version **0.2.9** evaluates editable layers and masks through an internal Blender
-material shader graph. Supported sliders update shader values immediately;
-texture baking is reserved for export, explicit snapshots and isolated operations
-that need pixels. Existing `LIVE` projects adopt this path without reapplying presets.
-See the [architecture and diagnostics](docs/shader-preview-architecture.md).
+Editable layers and masks are evaluated by the **Open Painter engine**: each layer channel
+and mask compiles to a small GPU program that renders into the texture set's images, and a
+material reads them through one **Open Painter Texture Set** node (Shader Editor ▸ Add ▸
+Input). Edits never recompile a material; only the channels an edit reaches are rendered
+again. Existing projects switch to the engine on their first repair. See
+[the engine](docs/open-painter-engine.md).
 The supplied 2048 project's authoring, save/reopen/export, and held Cavity Dirt
 slider checks have passed. The visual check used an isolated native RNA sidebar;
 it does not cover navigation through the product panels. See the linked report

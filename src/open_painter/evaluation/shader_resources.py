@@ -40,15 +40,39 @@ def alive(image):
     return True
 
 
+def bound(image):
+    """A node still samples the image: a Blender node (a user) or an engine unit's node."""
+    from .engine.headless import bound_count
+    try:
+        return bool(image.users) or bound_count(image) > 0
+    except ReferenceError:
+        return False
+
+
 _leaf_index = {}   # RESOURCE key -> image, rebuilt from bpy.data when a key is missing
 _serial = [0]      # publication order of leaves (their ``op_resource_serial``), for the sweep
 
 
 def _usable(image, key, size):
     """A published leaf that still holds its pixels: an undo or Blender's image cache can
-    leave a leaf flagged ready but regenerated blank, which must never be bound again."""
+    leave a leaf flagged ready but regenerated blank, which must never be bound again. A
+    leaf saved with the file holds them packed (loaded on first use)."""
     return (alive(image) and image.get(RESOURCE) == key and image.get('op_shader_resource_ready')
-            and tuple(image.size) == (size, size) and image.has_data)
+            and tuple(image.size) == (size, size) and (image.has_data or image.packed_file is not None))
+
+
+def persist_bound_leaves():
+    """Before a save: the leaves the engine binds get a fake user, so they are written (and
+    packed with the other owned images) and a reopened file adopts them; any other leaf loses
+    it and is not written. Only saves change the flag, so a saved leaf counts as bound until
+    the next save (``bound``)."""
+    from .engine.headless import bound_count
+    for image in bpy.data.images:
+        if not image.get(RESOURCE):
+            continue
+        keep = bool(image.get('op_shader_resource_ready')) and bound_count(image) > 0
+        if image.use_fake_user != keep:
+            image.use_fake_user = keep
 
 
 _released = []   # accounting only
@@ -81,7 +105,7 @@ def release_image(image):
     binds is never released: after an undo or reload its pixels are regenerated into the
     same datablock (``Resources.request(..., reuse=)``)."""
     try:
-        if not alive(image) or image.users:
+        if not alive(image) or bound(image):
             return
         bpy.data.images.remove(image)
     except (ReferenceError, RuntimeError):
@@ -168,7 +192,7 @@ def sweep_orphans(keep_bytes=64 * 1024 * 1024):
     listed = {entry.image.as_pointer() for table in _tables for entry in table.entries.values() if alive(entry.image)}
     orphans = []
     for image in bpy.data.images:
-        if not image.get(RESOURCE) or image.users:
+        if not image.get(RESOURCE) or bound(image):
             continue
         if image.get('op_resource_retired') is not None:
             continue   # bufferless since an undo or reload: left alone (a datablock header) until reopen
@@ -268,7 +292,7 @@ class Resources:
                     dropped.job.close()
                 if other in self.queue:
                     self.queue.remove(other)
-                if dropped.image is not stable and alive(dropped.image) and not dropped.image.users:
+                if dropped.image is not stable and alive(dropped.image) and not bound(dropped.image):
                     release_image(dropped.image)   # a cached datablock for this content is superseded
             entry = Entry(stable, owner=owner, interactive=interactive)
             # factory() reads the incremental base (the still-ready ``stable``) as it is built.
@@ -293,22 +317,29 @@ class Resources:
             _touch(image)
             metrics.count('shader_resource_cache_hits')
             return image
+        if reuse is None:
+            # A leaf of this source that lost its pixels to an undo or reload: produced again
+            # into the same datablock rather than beside it.
+            reuse = next((item for item in bpy.data.images if item.get(RESOURCE) == key
+                          and item.get('op_resource_retired') is not None), None)
         if (reuse is not None and alive(reuse) and tuple(reuse.size) == (self.size, self.size)
                 and not reuse.get('op_shader_resource_ready')
                 and not any(entry.image == reuse for table in _tables for entry in table.entries.values())):
             image = reuse
             metrics.count('shader_resource_reused_datablocks')
-        elif _frozen_new_leaves[0]:
-            # Post-undo reconstruction: do not create a new datablock to bind into the persisted
-            # tree (the open memfile-undo crash). The caller keeps its current binding; the next
-            # authored gesture releases the freeze and the source is requested again then.
-            metrics.count('shader_resource_creation_frozen')
-            return None
         else:
+            # Leaves are read by the Open Painter engine only, never bound into a material,
+            # so one created between undo steps cannot leave a material pointing at freed data.
             image = bpy.data.images.new('OP Shader Source · ' + key[:12],
                                         width=self.size, height=self.size, alpha=True, float_buffer=True)
         image[OWNER] = True
         image[RESOURCE] = key
+        if 'op_resource_retired' in image:
+            del image['op_resource_retired']
+        if image.use_half_precision:
+            # Leaves feed levels and thresholds that can steepen them tenfold: half floats on
+            # the GPU (Blender's default for float images) would round 0.5 to a 5e-4 step.
+            image.use_half_precision = False
         image['op_shader_resource_ready'] = False
         if 'op_resource_state' in image:
             del image['op_resource_state']
@@ -340,7 +371,7 @@ class Resources:
             self.entries[key] = Entry(image)
         elif image.get('op_resource_retired') is not None:
             return   # the orphan sweep removes it after its grace period
-        elif not image.users:
+        elif not bound(image):
             release_image(image)
         elif not any(held == image for held in self.superseded):
             self.superseded.append(image)
@@ -381,7 +412,7 @@ class Resources:
         failed = {key for key, entry in self.entries.items() if entry.error}
         for key in failed:
             entry = self.entries.pop(key)
-            if alive(entry.image) and not entry.image.users:
+            if alive(entry.image) and not bound(entry.image):
                 release_image(entry.image)
         return failed
 
@@ -390,7 +421,7 @@ class Resources:
         for image in self.superseded:
             if not alive(image):
                 continue
-            if image.users:
+            if bound(image):
                 kept.append(image)
             else:
                 release_image(image)
@@ -478,7 +509,7 @@ class Resources:
                 # Never cache an unfinished neutral placeholder. Returning to
                 # this parameter value must schedule its source again.
                 self.entries.pop(key)
-                if not entry.image.users:
+                if not bound(entry.image):
                     release_image(entry.image)
                 continue
             job_started = perf_counter()
@@ -500,7 +531,7 @@ class Resources:
         # Retain at most 64 MiB of unused completed leaves for undo/slider
         # revisits. Active shader inputs are never evicted.
         unused = [key for key, entry in self.entries.items()
-                  if key not in self.used and not entry.job and not entry.image.users and key not in self.pins]
+                  if key not in self.used and not entry.job and not bound(entry.image) and key not in self.pins]
         keep = (64 * 1024 * 1024) // (self.size * self.size * 16)
         for key in unused[:max(0, len(unused) - keep)]:
             entry = self.entries.pop(key)
@@ -519,7 +550,7 @@ class Resources:
             if entry.job:
                 entry.job.close()
             try:
-                if not entry.image.users:
+                if not bound(entry.image):
                     release_image(entry.image)
             except ReferenceError:
                 pass

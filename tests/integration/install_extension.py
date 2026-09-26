@@ -49,16 +49,44 @@ shader_preview = importlib.import_module(module + '.evaluation.shader_preview')
 material_manager = importlib.import_module(module + '.core.material_manager')
 stack = importlib.import_module(module + '.core.layer_stack')
 Metrics = importlib.import_module(module + '.evaluation.metrics').Metrics
-assert ts.preview_backend == 'LIVE' and not ts.outputs
+assert ts.preview_backend == 'LIVE'
+
+
+def rendered(ts):
+    """The engine renders an edit on its next ticks; True once the channel images are current."""
+    for _ in range(300):
+        shader_preview.tick(bpy.context.scene, ts)
+        if shader_preview.current(bpy.context.scene, ts):
+            return True
+    return False
+
+
 material_manager.repair(ts)
 graph = shader_preview.ensure(bpy.context.scene, ts)
+assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
 with Metrics() as observed:
     stack.channel_for(ts.layers[0], 'ROUGHNESS').value = .37
-    assert shader_preview.current(bpy.context.scene, ts)
-    assert shader_preview.ensure(bpy.context.scene, ts) is graph
-    assert observed.phases['image_write']['calls'] == 0
+    assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
+    assert shader_preview.ensure(bpy.context.scene, ts) is graph   # a numeric edit rebuilds nothing
     assert observed.counts['shader_resource_requests'] == 0
-assert not ts.outputs
+    import gpu
+    if gpu.platform.backend_type_get() != 'VULKAN':
+        assert observed.phases['image_write']['calls'] == 0   # published on the GPU, not through pixels
+# The engine renders into the set's channel images, which the material reads through one node.
+texture_set_node = importlib.import_module(module + '.core.texture_set_node')
+assert ts.outputs and all(output.image is not None for output in ts.outputs)
+assert [n.bl_idname for n in ts.material.node_tree.nodes].count(texture_set_node.NODE_ID) == 1
+# A Custom Graph mask gets a Mask Graph (Open Painter's own nodes) and renders on the GPU.
+procedural_graph = importlib.import_module(module + '.procedural_graph')
+properties_panel = importlib.import_module(module + '.ui.properties_panel')
+new_id = importlib.import_module(module + '.utils.ids').new_id
+mask = ts.layers[0].masks.add()
+mask.id, mask.source = new_id(), 'GRAPH'
+mask.node_group = properties_panel.starter_graph('Installed Mask Graph')
+assert procedural_graph.is_native(mask.node_group)
+assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
+units = shader_preview.session_graph(bpy.context.scene, ts).units
+assert any(key[0] == 'GRAPH' for key in units), sorted(units)
 print('INSTALLED_NATIVE_SHADER_PASS', shader_preview.diagnostics(bpy.context.scene, ts))
 director = importlib.import_module(module + '.ai.session')
 document = importlib.import_module(module + '.authoring.document')
@@ -79,7 +107,7 @@ receipt = transactions.apply(ts, dict(version=1, summary='Installed Director', c
     dict(op='set_channel', layer_id=ts.layers[0].id, channel='ROUGHNESS', values=dict(value=.62))]),
     operation_id='installed-director', expected_digest=document.digest(ts))
 assert receipt['changes'] and abs(stack.channel_for(ts.layers[0], 'ROUGHNESS').value - .62) < 1e-6
-assert shader_preview.current(bpy.context.scene, ts)
+assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
 print('INSTALLED_MATERIAL_DIRECTOR_PASS')
 assert bpy.ops.open_painter.texture_set(action="REFRESH") == {"FINISHED"}
 addon_utils.disable(module, default_set=True)

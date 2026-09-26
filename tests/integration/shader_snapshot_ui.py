@@ -72,12 +72,13 @@ def setup():
 
 def open_snapshot():
     global snapshot
-    assert not ts.outputs
+    # The engine's channel images exist from the start; no CPU evaluation has written one.
+    assert not any(out.revision for out in ts.outputs)
     with Metrics() as observed:
         assert bpy.ops.open_painter.native_view(view='IMAGE_EDITOR') == {'FINISHED'}
     snapshot = area.spaces.active.image
     assert snapshot and snapshot.get(composite_snapshot.MARKER)
-    assert len(ts.outputs) == 1 and ts.outputs[0].channel == 'BASE_COLOR'
+    assert [out.channel for out in ts.outputs if out.revision] == ['BASE_COLOR']
     assert observed.counts['composite_snapshot_evaluations'] == 1
     assert observed.phases['image_write']['calls'] == 1
     assert not composite_snapshot.stale(ts, snapshot)
@@ -88,7 +89,7 @@ def open_snapshot():
 
 def edit_native():
     previous = pixels_hash(snapshot)
-    revision = ts.outputs[0].revision
+    revision = next(out.revision for out in ts.outputs if out.channel == 'BASE_COLOR')
     with Metrics() as observed:
         stack.channel_for(base, 'BASE_COLOR').color = (.7, .15, .08, 1)
         for _ in range(3):
@@ -96,7 +97,8 @@ def edit_native():
         no_bake(observed)
     assert shader_preview.current(bpy.context.scene, ts)
     assert composite_snapshot.stale(ts, snapshot)
-    assert pixels_hash(snapshot) == previous and ts.outputs[0].revision == revision
+    assert pixels_hash(snapshot) == previous and next(out.revision for out in ts.outputs
+                                                        if out.channel == 'BASE_COLOR') == revision
     assert area.spaces.active.image == snapshot
     checks.append('shader-edit-leaves-visible-snapshot-explicitly-stale')
     later(refresh_snapshot)

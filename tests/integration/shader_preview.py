@@ -1,4 +1,4 @@
-"""Native shader authoring: visible edits, no automatic composite, portable recipe.
+"""Engine authoring: visible edits, no CPU composite, portable recipe.
 
 Run in Blender background mode. Render timings are deliberately not presented as
 interactive latency; shader_preview_ui.py measures completed viewport frames.
@@ -76,8 +76,8 @@ def image_hash(image):
 
 
 def output_state(ts):
-    return {out.channel: (out.revision, tuple(out.image.size), image_hash(out.image))
-            for out in ts.outputs}
+    """The CPU reference's publications: the engine writes the images, never a revision."""
+    return {out.channel: (out.revision, tuple(out.image.size)) for out in ts.outputs}
 
 
 def graph_state(material):
@@ -233,7 +233,7 @@ def main():
     source_hashes = {image.name: image_hash(image) for image in sources}
     outputs = output_state(ts)
     baseline = rendered(scene)
-    assert output_state(ts) == outputs, "Native rendering baked CPU outputs"
+    assert output_state(ts) == outputs, "Rendering ran the CPU evaluator"
     assert ts.dirty
     checks = []
 
@@ -247,14 +247,15 @@ def main():
         with RasterObservation() as observed:
             setattr(owner, key, value)
             # Do not call ensure/notify here: the RNA callback must do the work.
-            assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
             diagnostic = shader_preview.diagnostics(scene, ts)
-            assert diagnostic["serial"] == ts.edit_serial, diagnostic
+            assert diagnostic["serial"] == ts.edit_serial and not diagnostic["rebuild_pending"], diagnostic
             assert not diagnostic.get("texture_bake_triggered"), diagnostic
             assert diagnostic.get("graph_builds") == before_builds, diagnostic
+            cache.tick()   # the engine renders the edit into the set's images
+            assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
+            assert shader_preview.diagnostics(scene, ts)["engine"]["channels"], name + " re-rendered nothing"
             after_graph, after_sockets = graph_state(ts.material)
-            assert after_graph == before_graph, name + " rebuilt native nodes"
-            assert after_sockets != before_sockets, name + " changed no shader socket"
+            assert after_graph == before_graph and after_sockets == before_sockets, name + " changed the material"
             for _ in range(4):
                 cache.tick()
             changed = rendered(scene)
@@ -263,6 +264,7 @@ def main():
         assert difference > minimum, (name, difference, diagnostic)
         assert output_state(ts) == outputs and ts.dirty
         setattr(owner, key, original)
+        cache.tick()
         assert shader_preview.current(scene, ts)
         restored_graph, restored_sockets = graph_state(ts.material)
         assert restored_graph == before_graph and restored_sockets == before_sockets, (
@@ -284,20 +286,20 @@ def main():
     check_edit("height-levels", stack.channel_for(layer("coat"), "HEIGHT").effects[0],
                "output_white", .75, minimum=1e-5)
 
-    # Changing the authentic legacy noise domain is an isolated resource job,
-    # unlike changing its native wear amount/strength. Report this work honestly.
+    # The wear breakup's noise domain is a uniform of its GPU program (the material graph
+    # rastered it on the CPU as an isolated input): no source job, the frame still changes.
     wear_mask = layer("wear").masks[0]
     old_scale = wear_mask.noise_scale
     with RasterObservation() as boundary_observation:
         wear_mask.noise_scale = old_scale * 1.7
         queued = shader_preview.diagnostics(scene, ts)
-        assert queued["pending_resources"] and queued["raster_boundaries_queued"] > 0, queued
+        assert not queued["pending_resources"] and not queued["raster_boundaries_queued"], queued
         ready(scene, ts)
         boundary_frame = rendered(scene)
         assert boundary_observation.calls["cpu_channel_steps"] == 0
         assert boundary_observation.calls["legacy_gpu_composite"] == 0
         assert boundary_observation.calls["image_write"] == 0
-        assert boundary_observation.metrics.counts["shader_resource_publications"] == 1
+        assert boundary_observation.metrics.counts["shader_resource_publications"] == 0
     assert np.mean(abs(boundary_frame - baseline)) > .001
     assert output_state(ts) == outputs and ts.dirty
     wear_mask.noise_scale = old_scale
@@ -326,7 +328,7 @@ def main():
         with RasterObservation() as save_observation:
             bpy.ops.wm.save_as_mainfile(filepath=str(Path(directory) / "authoring.blend"))
             save_observation.assert_no_raster()
-        assert output_state(ts) == outputs and ts.dirty, "Native save baked final outputs"
+        assert output_state(ts) == outputs and ts.dirty, "Saving ran the CPU evaluator"
         bpy.ops.wm.open_mainfile(filepath=str(Path(directory) / "authoring.blend"))
         scene = bpy.context.scene
         ts = next(item for item in scene.open_painter.texture_sets if item.id == identifier)
@@ -345,10 +347,10 @@ def main():
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(dict(result="PASS", blender=bpy.app.version_string,
         initial=initial, checks=checks, source_hashes=source_hashes,
-        legacy_noise_scale=dict(classification="one isolated scalar resource refresh",
+        legacy_noise_scale=dict(classification="a uniform of the wear program",
                                 diagnostic=queued, instrumentation=boundary_observation.report()),
-        structure="visibility and reorder change actual material; restoration matches",
-        persistence="native save/reload preserves dirty outputs and packed sources",
+        structure="visibility and reorder change the rendered frame; restoration matches",
+        persistence="save/reload preserves the CPU state and packed sources; the engine re-renders",
         timing_scope="No UI/frame latency is inferred from these correctness renders"), indent=2) + "\n")
     open_painter.unregister()
     print("SHADER_PREVIEW_PASS", str(REPORT), flush=True)

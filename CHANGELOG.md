@@ -1,5 +1,53 @@
 # Changes
 
+## Unreleased — Open Painter engine
+
+- The layer stack is evaluated by Open Painter's own GPU engine instead of being compiled
+  into the Blender material. Each layer channel, content prefix and mask prefix is one
+  small GPU program rendered into the texture set's channel images; materials read them
+  through one **Open Painter Texture Set** node (Shader Editor ▸ Add ▸ Input), which also
+  offers a ready-to-use Normal (normal map with height bump) for any material. No edit —
+  a slider, a new mask, a relinked anchor, a reordered layer — changes or recompiles a
+  material any more. See [the engine](docs/open-painter-engine.md).
+- Adding a mask from the Open Graph rebuilds in 25–50 ms instead of 440–510 ms plus a full
+  material recompile; the first build of a 2K set with Worn Painted Metal takes 2.1 s
+  instead of 41.7 s. Catalog procedurals (all 71) and weathering fields run on the GPU
+  with bit-exact hashing, so their scale and seed are uniforms rather than CPU rasters.
+- Only the channels an edit reaches are re-rendered, from the layer that changed upward;
+  unchanged content and mask results are reused. Results match the CPU reference used by
+  export (`tests/integration/engine_parity.py`).
+- Files from earlier versions are converted on the first repair: the Procedural Graph
+  group is replaced by the texture set node. Saved files keep the CPU inputs the engine
+  uses (blurs, strokes, mesh masks) and re-render the channel images when opened.
+- **Noise** masks added from the Open Graph use the catalog's value noise, evaluated on the
+  GPU like every other procedural; masks using the legacy Noise source keep their noise.
+- Cycles viewports and bakes read the engine's results (copied into the images' pixels);
+  a scene copy gets its own channel images; the Evaluation setting reads *Open Painter
+  Engine* (*CPU Reference* is unchanged and keeps its per-channel image nodes).
+- Fixed: a structural edit made while a paint gesture held the session (a first stroke
+  linking its layer) could leave the live result without that layer until another
+  structural edit; a Paint Material preview now reaches the engine's inputs.
+- **Mask Graphs**: Custom Graph masks are authored with Open Painter's own nodes, in a node
+  tree of their own:
+  - Nodes: Coordinates, Value, Noise, Cells, Pattern, Surface, Mesh Map, Math, Mix, Ramp,
+    Levels, Mapping and Mask Output.
+  - No Blender shader group is involved. The engine renders each graph as a GPU pass of its
+    own, and export runs the same formulas on the CPU.
+  - A slider in a graph is a uniform. A structural edit recompiles that graph's pass alone.
+  - New masks and the Noise/Cells/Layered Noise templates create Mask Graphs. **Edit Mask
+    Graph** opens one beside the current editor.
+  - Masks from earlier files that point at a shader group keep working through the CPU
+    reference.
+
+  See [Mask Graphs](docs/mask-graphs.md).
+- **Engine report**: every update is timed by stage (build, update, CPU inputs, translate,
+  compile, render, publish). *Performance ▸ Profile Engine* times every pass on the GPU,
+  each Mask Graph on its own. *Copy Engine Report* puts the machine, the stages and the
+  heaviest passes on the clipboard. Profile Layers adds each layer's GPU time.
+- Fixed: changing a mask's or a content's structure alone (a procedural mask's kind, for
+  example) left a single-channel layer showing the previous result. The layer's program
+  compiled the old mask in and was reused unchanged.
+
 ## Unreleased — UDIM authoring
 
 - Create one texture set per occupied UDIM tile (1001–2000), with per-tile

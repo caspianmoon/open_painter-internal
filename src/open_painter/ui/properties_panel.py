@@ -283,19 +283,9 @@ MASK_ICONS = {'GROUP': 'FILE_FOLDER', 'GRAPH': 'NODETREE', 'MESH': 'OUTLINER_COL
 
 
 def starter_graph(name):
-    """A shader node group whose first output is coverage: UV in, a checker out, ready to edit."""
-    tree = bpy.data.node_groups.new(name, 'ShaderNodeTree')
-    tree.interface.new_socket(name='UV', in_out='INPUT', socket_type='NodeSocketVector')
-    tree.interface.new_socket(name='Coverage', in_out='OUTPUT', socket_type='NodeSocketFloat')
-    group_in = tree.nodes.new('NodeGroupInput')
-    group_out = tree.nodes.new('NodeGroupOutput')
-    checker = tree.nodes.new('ShaderNodeTexChecker')
-    checker.inputs['Scale'].default_value = 8.0
-    group_in.location, checker.location, group_out.location = (-400, 0), (-150, 0), (150, 0)
-    tree.links.new(group_in.outputs['UV'], checker.inputs['Vector'])
-    tree.links.new(checker.outputs['Fac'], group_out.inputs['Coverage'])
-    tree.use_fake_user = True
-    return tree
+    """A new Mask Graph (Noise → Ramp → Mask Output), ready to edit."""
+    from ..procedural_graph.templates import build
+    return build('NOISE_RAMP', name)
 
 
 class OP_UL_masks(bpy.types.UIList):
@@ -367,8 +357,11 @@ def draw_mask_settings(layout, context, ts, layer, mask):
         row = layout.row(align=True)
         row.template_ID(mask, 'node_group')
         row.operator('open_painter.mask', text='', icon='ADD').action = 'NEW_GRAPH'
-        layout.label(text='First output drives the mask; UV, Position, Normal inputs wire by name', icon='INFO')
-        layout.label(text='Native in the viewport; export bakes the group with Cycles', icon='INFO')
+        from ..procedural_graph import is_native
+        if is_native(mask.node_group):
+            layout.operator('open_painter.mask_graph_edit', icon='NODETREE').tree = mask.node_group.name
+        elif mask.node_group is not None:
+            layout.label(text='A Blender shader group from an earlier version: baked on the CPU', icon='INFO')
         for name in ('operation', 'strength', 'black', 'white', 'invert'):
             layout.prop(mask, name)
         return

@@ -247,7 +247,19 @@ class Preview:
             self.premultiplied[channel] = premultiplied
             node.image = preview
         self.active = bool(self.images)
+        if self.active:
+            self._inputs_changed()
         self.profile['init_ms'] = (perf_counter() - opened) * 1000
+
+    def _inputs_changed(self):
+        """The engine samples the nodes' images: have it re-render what reads them."""
+        from ..evaluation import shader_preview
+        try:
+            ts = next((item for item in self.scene.open_painter.texture_sets if item.id == self.ts_id), None)
+        except ReferenceError:
+            return
+        if ts is not None:
+            shader_preview.inputs_changed(self.scene, ts)
 
     @staticmethod
     def _channel_of(node, layer):
@@ -354,6 +366,8 @@ class Preview:
             buffer[low:high] = rows
             image.pixels.foreach_set(buffer.ravel())
             image.update()
+            image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
+        self._inputs_changed()
         self.publications += 1
         self.last_publish = perf_counter()
         self.profile['publish_ms'].append((self.last_publish - now) * 1000)
@@ -376,6 +390,8 @@ class Preview:
                     node.image = source
             except ReferenceError:
                 pass
+        if self.nodes:
+            self._inputs_changed()
         self._remove()
 
     def retire(self):
@@ -399,6 +415,7 @@ class Preview:
                     stranded = True               # nothing safe to bind: keep the preview a while
             except ReferenceError:
                 continue
+        self._inputs_changed()
         self.active = False
         self.retired_at = perf_counter()
         _retired.append(self)                     # reaped once nothing binds the preview images
@@ -769,7 +786,7 @@ def _reap():
     a preview still bound is restored to the layer's own input), then remove unbound preview
     images that have been idle for ``ORPHAN_GRACE``."""
     import bpy
-    from ..evaluation.shader_resources import alive
+    from ..evaluation.shader_resources import alive, bound
     sweep()
     keep = []
     for preview in _retired:
@@ -785,8 +802,8 @@ def _reap():
     for image, since in _orphans:
         if not alive(image):
             continue
-        if image.users or perf_counter() - since < ORPHAN_GRACE:
-            waiting.append((image, since if not image.users else perf_counter()))
+        if bound(image) or perf_counter() - since < ORPHAN_GRACE:
+            waiting.append((image, perf_counter() if bound(image) else since))
             continue
         # Released, not removed: the material that sampled the preview may still be compiling
         # its replacement and sampling the old one (see shader_resources.release_image).
@@ -802,12 +819,12 @@ def sweep():
     """Adopt preview images nothing tracks any more (left behind by an undo that restored a
     step captured while a preview was bound) so the reaper removes them once unbound."""
     import bpy
-    from ..evaluation.shader_resources import alive
+    from ..evaluation.shader_resources import alive, bound
     known = {image.as_pointer() for image, _ in _orphans if alive(image)}
     known |= {image.as_pointer() for preview in _retired for image in preview.images.values() if alive(image)}
     found = False
     for image in bpy.data.images:
-        if image.get('op_gesture_preview') and image.as_pointer() not in known and not image.users:
+        if image.get('op_gesture_preview') and image.as_pointer() not in known and not bound(image):
             _orphans.append((image, perf_counter()))
             found = True
     if found:

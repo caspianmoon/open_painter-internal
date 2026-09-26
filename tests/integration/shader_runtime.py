@@ -1,4 +1,4 @@
-"""Native callback dependencies, resource errors, detach, and explicit CPU mode."""
+"""Engine callback dependencies, resource errors, detach, and explicit CPU mode."""
 import json
 import os
 from pathlib import Path
@@ -15,6 +15,7 @@ import open_painter
 from open_painter.constants import CHANNELS, OWNER
 from open_painter.core import image_manager, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
+from open_painter.core.texture_set_node import NODE_ID
 from open_painter.evaluation import cache, shader_preview
 from open_painter.evaluation.metrics import Metrics
 
@@ -23,6 +24,12 @@ def links(material):
     return tuple(sorted((link.from_node.as_pointer(), link.from_socket.identifier,
                          link.to_node.as_pointer(), link.to_socket.identifier)
                         for link in material.node_tree.links))
+
+
+def texture_set_node(material):
+    nodes = [node for node in material.node_tree.nodes if node.bl_idname == NODE_ID]
+    assert len(nodes) == 1, [node.name for node in material.node_tree.nodes]
+    return nodes[0]
 
 
 def ready(scene, ts):
@@ -39,7 +46,11 @@ def ready(scene, ts):
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, 'Shader runtime dependencies', 512)
-assert not ts.outputs, 'Creating a native recipe allocated baked outputs'
+# The set's channel images are the engine's targets, read by the material's texture set node;
+# creating the set evaluates nothing on the CPU.
+assert {out.channel for out in ts.outputs} == set(CHANNELS)
+assert all(out.image.get('op_engine_output') and not out.revision for out in ts.outputs)
+assert texture_set_node(ts.material).texture_set_id == ts.id
 source = stack.add(ts, 'FILL', 'Published roughness')
 source_id = source.id
 rough = stack.channel_for(source, 'ROUGHNESS')
@@ -71,13 +82,15 @@ revisions = {out.channel: out.revision for out in ts.outputs}
 with Metrics() as observed:
     effect.gamma = 1.6
     info = shader_preview.diagnostics(scene, ts)
-    assert shader_preview.current(scene, ts), info
+    assert not info['rebuild_pending'], info
     assert info['affected_channels'] == ['HEIGHT', 'ROUGHNESS'], info
     assert info['updated_bindings'] == 1, info
     assert {out.channel for out in ts.outputs if out.dirty} == {'BASE_COLOR', 'ROUGHNESS', 'HEIGHT'}
     assert info['graph_builds'] == before_builds
-    assert cache.job_state(scene, ts)['state'] == 'SHADER'
     cache.tick()
+    assert shader_preview.current(scene, ts)
+    assert shader_preview.diagnostics(scene, ts)['engine']['channels'] == ['HEIGHT', 'ROUGHNESS']
+    assert cache.job_state(scene, ts)['state'] == 'SHADER'
     cache.on_save(None)
     assert {out.channel: out.revision for out in ts.outputs} == revisions
     for phase in ('source_generation', 'masking', 'filters', 'blending', 'image_write'):
@@ -96,6 +109,8 @@ assert abs(roles['Height'].inputs['Distance'].default_value - .15) < 1e-6
 assert abs(roles['Surface'].inputs['Coat Weight'].default_value - .6) < 1e-6
 assert ts.edit_serial == before_serial and shader_preview.current(scene, ts)
 assert {out.channel: out.dirty for out in ts.outputs} == before_dirty
+tree = texture_set_node(ts.material).node_tree
+assert abs(next(n for n in tree.nodes if n.get('role') == 'Height').inputs['Distance'].default_value - .15) < 1e-6
 
 # Unexpected update failures retain the valid graph and cannot be reported as
 # current. A subsequent valid property edit recovers through the same graph.
@@ -108,6 +123,7 @@ assert cache.job_state(scene, ts)['state'] == 'FAILED'
 assert 'Injected binding failure' in shader_preview.status(scene, ts)
 assert links(ts.material) == attached
 rough.value = .5
+shader_preview.tick(scene, ts)
 assert shader_preview.current(scene, ts)
 assert shader_preview.diagnostics(scene, ts)['graph_builds'] == before_builds
 
@@ -126,33 +142,36 @@ assert shader_preview.diagnostics(scene, ts)['state'] == 'FAILED'
 shader_preview.retry(scene, ts)
 ready(scene, ts)
 
-# Detaching the Python runtime preserves a useful material without the add-on.
-# Reattachment replaces the old owned graph instead of growing duplicate groups.
+# Dropping the runtime leaves the material as it is: it reads the set's images, which keep
+# their last result. The rebuilt session publishes into the same images.
 attached = links(ts.material)
 shader_preview.clear()
 assert not shader_preview.current(scene, ts)
 assert links(ts.material) == attached
 ready(scene, ts)
-assert sum(node.get('role') == 'Procedural Graph' for node in ts.material.node_tree.nodes) == 1
+assert links(ts.material) == attached
+assert not any(node.get('role') == 'Procedural Graph' for node in ts.material.node_tree.nodes)
 
-# External callers may compile before the timer gets a chance to wire the
-# replacement. Ready status must describe the visible adapter, not compilation.
+# External callers may compile before the timer renders. Ready status must describe the
+# published images, not compilation; a rebuild never touches the material.
 source = next(layer for layer in ts.layers if layer.id == source_id)
-# Visibility is a shader uniform: hiding a layer keeps the compiled graph.
+# Visibility is a uniform: hiding a layer keeps the compiled graph.
 graph = shader_preview.ensure(scene, ts)
 identities = graph.node_identities()
 source.visible = False
+shader_preview.tick(scene, ts)
 assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is graph
 assert graph.node_identities() == identities
 source.visible = True
+shader_preview.tick(scene, ts)
 assert shader_preview.current(scene, ts)
 source.blend_mode = 'MULTIPLY'
 replacement = shader_preview.ensure(scene, ts)
-assert not shader_preview.current(scene, ts)
-assert not shader_preview.diagnostics(scene, ts)['attached']
+assert replacement is not graph and not shader_preview.current(scene, ts)
+assert shader_preview.diagnostics(scene, ts)['attached'] and links(ts.material) == attached
 ready(scene, ts)
 surface = next(node for node in ts.material.node_tree.nodes if node.get('role') == 'Surface')
-assert surface.inputs['Roughness'].links[0].from_node == replacement.instance
+assert surface.inputs['Roughness'].links[0].from_node == texture_set_node(ts.material)
 source.blend_mode = 'NORMAL'
 ready(scene, ts)
 
@@ -180,9 +199,8 @@ revisions = {out.channel: out.revision for out in ts.outputs}
 ts.preview_backend = 'LIVE'
 ready(scene, ts)
 assert {out.channel: out.revision for out in ts.outputs} == revisions
-graph = shader_preview.ensure(scene, ts)
 surface = next(node for node in ts.material.node_tree.nodes if node.get('role') == 'Surface')
-assert surface.inputs['Roughness'].links[0].from_node == graph.instance, 'CPU images remained attached'
+assert surface.inputs['Roughness'].links[0].from_node == texture_set_node(ts.material), 'the material lost its texture set node'
 
 # Managed image writes must invalidate a native mask boundary even before the
 # texture set has ever allocated a baked output. Inspect the actual refreshed
@@ -204,7 +222,7 @@ filtered.id, filtered.source = 'runtime-mask-blur', 'FILTER'
 filtered.effect.kind, filtered.effect.radius = 'GAUSSIAN_BLUR', 1
 material_manager.repair(masked)
 ready(scene, masked)
-assert not masked.outputs
+assert not any(out.revision for out in masked.outputs)
 graph = shader_preview.ensure(scene, masked)
 boundary = graph.resource_bindings[0]
 old = image_manager.pixels(boundary.node.image)[..., 0].copy()
@@ -216,7 +234,7 @@ assert shader_preview.diagnostics(scene, masked)['pending_resources']
 ready(scene, masked)
 new = image_manager.pixels(boundary.node.image)[..., 0]
 assert float(np.mean(new - old)) > .5, 'Mask prefix retained stale source pixels'
-assert not masked.outputs
+assert not any(out.revision for out in masked.outputs), 'the engine path ran the CPU evaluator'
 
 # A raster that raises keeps its identity bound, so the failure must outlive the
 # edit that reported it: an unrelated uniform edit cannot report the graph
@@ -253,7 +271,7 @@ ready(scene, masked)
 boundary = shader_preview.ensure(scene, masked).resource_bindings[0]
 assert boundary.node.image.get('op_shader_resource_ready') and boundary.pending_image is None
 assert abs(float(np.mean(image_manager.pixels(boundary.node.image)[..., 0])) - .4) < .05
-assert not masked.outputs
+assert not any(out.revision for out in masked.outputs)
 assert not source_image.get(OWNER) and not source_image.packed_file
 cache.on_save(None)
 assert source_image.packed_file, 'Saving did not pack a directly assigned source image'
@@ -264,8 +282,8 @@ report.write_text(json.dumps({'result': 'PASS', 'blender': bpy.app.version_strin
     'published_dependency_edit': dependency_report, 'hot_edit_metrics': observed.report(),
     'checks': ['native-create-no-bake', 'transitive-filter-dependencies', 'retain-previous-dirty',
                'surface-uniforms', 'update-failure-recovery', 'boundary-flush-failure',
-               'detach-material-preservation', 'reattach-no-duplicate-groups',
-               'external-build-requires-surface-attachment', 'raster-override-native-restoration',
+               'detach-material-preservation', 'rebuild-keeps-material',
+               'external-build-renders-before-ready', 'raster-override-native-restoration',
                'explicit-cpu-reference',
                'native-reattachment', 'image-write-without-baked-outputs',
                'raster-failure-persists-until-retry', 'unmanaged-source-save-packing']},

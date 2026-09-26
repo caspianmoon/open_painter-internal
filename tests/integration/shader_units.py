@@ -41,6 +41,12 @@ def ready(scene, ts):
     raise AssertionError(shader_preview.diagnostics(scene, ts))
 
 
+def settled(scene, ts):
+    """One tick renders what the RNA callback bound: the images show the edit."""
+    shader_preview.tick(scene, ts)
+    return shader_preview.current(scene, ts)
+
+
 def layer_by_id(ts, identifier):
     return next(layer for layer in ts.layers if layer.id == identifier)
 
@@ -171,18 +177,18 @@ def run():
     inner = layer_by_id(ts, inner_id)
     inner.visible = False
     info = shader_preview.diagnostics(scene, ts)
-    assert shader_preview.current(scene, ts), info
+    assert not info['rebuild_pending'] and settled(scene, ts), info
     assert shader_preview.ensure(scene, ts) is graph and graph.node_identities() == identities
     assert info['updated_bindings'] == 1 and info['graph_builds'] == builds, info
     assert 'BASE_COLOR' in info['affected_channels'] and 'ROUGHNESS' in info['affected_channels'], info
     inner.visible = True
-    assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is graph
+    assert settled(scene, ts) and shader_preview.ensure(scene, ts) is graph
     rough = stack.channel_for(layer_by_id(ts, base_id), 'ROUGHNESS')
     rough.effects[0].enabled = False
-    assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is graph
+    assert settled(scene, ts) and shader_preview.ensure(scene, ts) is graph
     assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds
     rough.effects[0].enabled = True
-    assert shader_preview.current(scene, ts)
+    assert settled(scene, ts)
 
     # A channel blend-mode change rebuilds one unit; every other unit is adopted.
     stack.channel_for(layer_by_id(ts, multiply_id), 'ROUGHNESS').blend_mode = 'SCREEN'
@@ -202,8 +208,9 @@ def run():
     # Adopted units keep working bindings and dependency closure.
     stack.channel_for(layer_by_id(ts, inner_id), 'ROUGHNESS').value = .55
     info = shader_preview.diagnostics(scene, ts)
-    assert shader_preview.current(scene, ts) and info['updated_bindings'] == 1, info
+    assert info['updated_bindings'] == 1 and settled(scene, ts), info
     assert info['affected_channels'] == ['ROUGHNESS'], info
+    assert shader_preview.diagnostics(scene, ts)['engine']['channels'] == ['ROUGHNESS'], 'the edit re-rendered other channels'
 
     # Adding a mask reallocates that layer's mask collection: only the units that
     # captured those masks (its mask chain) rebuild; everything else moves over.

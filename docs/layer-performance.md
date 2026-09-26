@@ -36,14 +36,26 @@ table per layer:
 | Compile ms, nodes, samplers | every shader build/rehydration | the sum of the layer's units' build time, node count, unique images sampled. Adopted units keep the figure of the build that compiled them. |
 | CPU inputs ms | every resource step | CPU boundary work attributed to the owning layer, cumulative until *Clear Profile*. A layer with a figure here re-renders after every edit inside it. |
 | CPU reference ms | the profile pass | exclusive per-layer composite time; folders also record an inclusive figure. |
+| GPU ms | the profile pass, engine sets | the layer's passes timed on the GPU at the set's resolution (`shader_preview.profile_engine`): what one full update of the live preview costs for that layer. |
 | State | live | Live · Cached · Frozen · Stale · Pending · Bypassed |
 
 `cost = compile + CPU inputs + CPU reference`. A layer gets a **badge** in its
 row when its cost is at least 2 ms and 5 % of the set's total; the badge turns
 to the error icon at 25 % or whenever the layer has CPU-input work. The
-*Performance* section of the layer properties shows the breakdown and marks the
-CPU figures *out of date* after any edit. None of the figures is a GPU frame
-time: Blender does not expose per-node shader execution.
+*Performance* section of the layer properties shows the breakdown, including the GPU
+figure, and marks figures *out of date* after any edit.
+
+## Engine Report
+
+*Performance* menu → *Profile Engine* or *Copy Engine Report*
+(`open_painter.engine_report`). The engine records every update by stage: build,
+update, CPU inputs, translate, compile, render and publish. Profile Engine renders
+every pass once more timed on the GPU, and each Mask Graph is a pass of its own. Both
+entries copy a plain-text report to the clipboard and print it to the console. It covers
+the machine (Blender, OS, GPU backend, renderer and driver), the last update, statistics
+over the recent ones, the heaviest passes and the cost per layer. It is the report to
+send when the preview is slow on a particular computer. The stages are described in
+[the engine's documentation](open-painter-engine.md#measuring-it).
 
 ## Bypass in Preview
 

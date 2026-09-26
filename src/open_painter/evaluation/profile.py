@@ -12,6 +12,10 @@ execution):
   layer as the shader runtime steps them; cumulative until ``clear``.
 - ``record_cpu``: the explicit Profile Layers pass — the CPU reference
   composer run once at a bounded resolution with a per-layer timer.
+- ``record_gpu``: the engine's profiled evaluation (``shader_preview.profile_engine``,
+  also run by Profile Layers): each layer's passes timed on the GPU at the set's
+  resolution. For the live preview this is the figure that matters; the CPU
+  reference is what export costs.
 
 Cache refreshes (``record_refresh``) are attributed separately.
 """
@@ -22,15 +26,18 @@ from .resource_keys import key_for
 _tables = {}
 
 
+def _empty():
+    return {'serial': -1, 'sampled_at': 0.0, 'resolution': 0, 'compile': {}, 'boundary': {}, 'refresh': {},
+            'cpu': {}, 'gpu': {}, 'gpu_serial': -1}
+
+
 def _table(scene, ts):
-    return _tables.setdefault(key_for(scene, ts), {'serial': -1, 'sampled_at': 0.0, 'resolution': 0,
-                                                    'compile': {}, 'boundary': {}, 'refresh': {}, 'cpu': {}})
+    return _tables.setdefault(key_for(scene, ts), _empty())
 
 
 def table(scene, ts):
     """The raw table of a set (empty when nothing was recorded)."""
-    return _tables.get(key_for(scene, ts), {'serial': -1, 'sampled_at': 0.0, 'resolution': 0,
-                                            'compile': {}, 'boundary': {}, 'refresh': {}, 'cpu': {}})
+    return _tables.get(key_for(scene, ts), _empty())
 
 
 def profiled(scene, ts):
@@ -77,6 +84,16 @@ def record_cpu(scene, ts, profiler_results, resolution, serial):
     entry['serial'] = serial
     entry['resolution'] = resolution
     entry['sampled_at'] = monotonic()
+
+
+def record_gpu(scene, ts, units):
+    """``units``: {unit key: GPU milliseconds} of one profiled engine evaluation."""
+    entry = _table(scene, ts)
+    per_layer = {}
+    for key, ms in units.items():
+        per_layer[key[1]] = per_layer.get(key[1], 0.0) + float(ms)
+    entry['gpu'] = per_layer
+    entry['gpu_serial'] = ts.edit_serial
 
 
 def clear(scene, ts):
@@ -138,6 +155,7 @@ def rows(scene, ts):
                'boundary_ms': entry['boundary'].get(layer.id, 0.0),
                'refresh_ms': entry['refresh'].get(layer.id, 0.0),
                'cpu_ms': cpu.get('cpu_ms', 0.0), 'inclusive_ms': cpu.get('inclusive_ms', 0.0),
+               'gpu_ms': entry['gpu'].get(layer.id, 0.0), 'gpu_current': entry['gpu_serial'] == ts.edit_serial,
                'profiled': bool(cpu), 'current': entry['serial'] == ts.edit_serial}
         row['cost_ms'] = row['compile_ms'] + row['boundary_ms'] + row['cpu_ms']
         result.append(row)
@@ -175,4 +193,13 @@ def run(scene, ts, resolution=512):
     results = {layer.id: (profiler.exclusive.get(layer.id, 0.0) * 1000, profiler.inclusive.get(layer.id, 0.0) * 1000)
                for layer in ts.layers}
     record_cpu(scene, ts, results, n, ts.edit_serial)
+    from . import shader_preview
+    if shader_preview.requested(ts):
+        # The live preview's own cost: every pass of the engine timed on the GPU.
+        try:
+            shader_preview.profile_engine(scene, ts)
+        except Exception:
+            # The CPU figures stand; the set's engine status says why the GPU could not be profiled.
+            from ..utils.logging import logger
+            logger.debug('Engine profile skipped', exc_info=True)
     return rows(scene, ts)

@@ -24,7 +24,7 @@ MASK
  ├── Filter         (Levels, blur, … applied to the coverage so far)
  ├── Published Input / Anchor (masks feeding other layers)
  ├── Mask Group     (a nested stack)
- └── Custom Graph   (your own shader node group)
+ └── Custom Graph   (your own Mask Graph: Open Painter nodes)
 ```
 
 Painted data stays a separate entry with its own image, so it can be re-painted,
@@ -58,15 +58,20 @@ Both evaluators walk the same structure: the CPU reference recursively
 
 ## Custom Graph
 
-`source = GRAPH` instances a **shader node group** you author (a starter group with
-`UV` in and `Coverage` out is created for you). Inputs named UV / Vector, Position
-and Normal are wired; the first output socket is the coverage (colour or vector
-outputs use their first component). In the viewport the group runs natively inside
-the compiled material, so editing it is live. The CPU reference — export, 2D
-snapshots, the CPU backend — cannot execute shader nodes and bakes the group's output
-with Cycles over the assigned meshes, cached by a content signature of the tree, so a
-group edit re-bakes on the next export. Custom graphs are not portable: saving a
-smart material with one is refused (bake the mask stack first).
+`source = GRAPH` reads a **[Mask Graph](mask-graphs.md)** you author with Open
+Painter's own nodes; a starter graph (Coordinates → Noise → Ramp → Mask Output) is
+created for you. The engine renders the graph as a GPU pass of its own, and the CPU
+reference (export, 2D snapshots, the CPU backend) runs the same steps in NumPy, so
+the two agree to the last bits. A mask saved by an earlier version that points at a
+Blender **shader node group** keeps its behaviour:
+
+- Inputs named UV / Vector, Position and Normal are wired, and the first output is the
+  coverage.
+- It is evaluated by the CPU reference, a Cycles bake over the assigned meshes cached by
+  a content signature of the tree.
+
+Custom graphs are not portable: saving a smart material with one is refused (bake the
+mask stack first).
 
 ## Tests
 

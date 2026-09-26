@@ -235,8 +235,11 @@ def run():
     # A numeric edit below the producer reaches every consumer channel.
     stack.channel_for(layer_by_id(ts, base_id), 'BASE_COLOR').color = (.25, .5, .7, 1.)
     info = shader_preview.diagnostics(scene, ts)
-    assert shader_preview.current(scene, ts) and info['graph_builds'] == builds, info
+    assert not info['rebuild_pending'] and info['graph_builds'] == builds, info
     assert {'BASE_COLOR', 'ROUGHNESS'} <= set(info['affected_channels']), info
+    shader_preview.tick(scene, ts)   # the engine renders every channel the edit reaches
+    assert shader_preview.current(scene, ts)
+    assert {'BASE_COLOR', 'ROUGHNESS'} <= set(shader_preview.diagnostics(scene, ts)['engine']['channels'])
     # Publishing a second folder composite rebuilds only that folder's channel units.
     extra = stack.add(ts, 'FOLDER', 'Extra'); extra_id = extra.id
     layer_by_id(ts, extra_id).opacity = .99
@@ -257,20 +260,20 @@ def run():
     graph = rebuilt
     builds = info['graph_builds']
 
-    # Undo/redo rehydrates a graph that imports composite exports.
+    # Undo/redo rebuild a graph that imports composite exports.
     bpy.ops.ed.undo_push(message='before edit')
     stack.channel_for(layer_by_id(ts, masked_id), 'ROUGHNESS').value = .2
-    assert shader_preview.current(scene, ts)
+    ready(scene, ts)
     bpy.ops.ed.undo_push(message='edit')
     bpy.ops.ed.undo()
     scene = bpy.context.scene
     ts = next(item for item in scene.open_painter.texture_sets if item.name == 'Shader output anchors')
     info = ready(scene, ts)
-    assert info['graph_rehydrations'] == 1 and info['graph_builds'] == 0, info
-    rehydrated = shader_preview.ensure(scene, ts)
+    assert info['graph_builds'] == 1, info
+    rebuilt = shader_preview.ensure(scene, ts)
     assert any(producer[0] == 'CHANNEL' and export in {'Out', 'Group'}
-               for unit in rehydrated.units.values() for producer, export, _ in unit.imports), \
-        'rehydration lost the composite imports'
+               for unit in rebuilt.units.values() for producer, export, _ in unit.imports), \
+        'the rebuilt graph lost the composite imports'
     bpy.ops.ed.redo()
     scene = bpy.context.scene
     ts = next(item for item in scene.open_painter.texture_sets if item.name == 'Shader output anchors')

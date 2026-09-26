@@ -538,7 +538,7 @@ def _reset_runtime(*, forget_corrections):
     from .live_preview import clear as clear_live
     clear_live()
     from .shader_preview import clear as clear_shaders
-    clear_shaders()
+    clear_shaders(undo=not forget_corrections)   # an undo keeps the leaves its rebuild adopts
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -668,8 +668,16 @@ def _pack_images(source_images):
     texture whose file vanished raises from ``pack()``, and the managed
     canvases after it (generated, saved blank unless packed) must still land."""
     from ..core.image_manager import pack_image
+    from . import shader_preview
+    # The channel images of engine-evaluated sets are derived: re-rendered after the file
+    # opens. A CPU-mode set's outputs are its authoritative result and are packed.
+    derived = {out.image.as_pointer() for scene in bpy.data.scenes if hasattr(scene, 'open_painter')
+               for ts in scene.open_painter.texture_sets if shader_preview.requested(ts)
+               for out in ts.outputs if out.image is not None}
     for image in bpy.data.images:
         if not ((image.get(OWNER) or image.as_pointer() in source_images) and image.has_data and image.users):
+            continue
+        if image.as_pointer() in derived:
             continue
         try:
             pack_image(image)
@@ -682,6 +690,10 @@ def _pack_images(source_images):
 
 @persistent
 def on_save(_):
+    _save(pixels=False, leaves=True)
+
+
+def _save(pixels, leaves=False):
     # Save native recipes and their authored inputs. Only explicit CPU preview
     # mode flushes full channel outputs; native mode completes source boundaries.
     # Requested automatic layer caches are completed before packing. Field
@@ -732,7 +744,7 @@ def on_save(_):
                 from . import shader_preview
                 if shader_preview.requested(ts):
                     try:
-                        shader_preview.flush(scene, ts)
+                        shader_preview.flush(scene, ts, pixels=pixels)
                         info = shader_preview.diagnostics(scene, ts)
                         set_state(scene, ts, 'SHADER' if shader_preview.current(scene, ts)
                                   else 'FAILED', info['error'])
@@ -756,14 +768,26 @@ def on_save(_):
             sweep_released()
         except Exception as exc:
             logger.error('Sweep superseded maps: %s', exc)
+        if leaves:
+            # The CPU inputs the engine samples are written with the file (and packed below),
+            # so a reopened file adopts them instead of regenerating every one.
+            from .shader_resources import persist_bound_leaves
+            persist_bound_leaves()
         # Whatever failed above, the strokes are packed: an unpacked managed
         # canvas reloads blank.
         _pack_images(source_images)
 
 
 @persistent
+def on_bake(*_):
+    """A bake samples the sets' images on the CPU: copy the engine's results into their pixels."""
+    from .shader_preview import sync_pixels
+    sync_pixels()
+
+
+@persistent
 def on_render(_):
-    on_save(_)
+    _save(pixels=True)   # render engines read the set's images on the CPU
     # A scheduled edge rebake would run a Cycles bake from the timer while the
     # render job owns the scene; cache and field jobs may keep their requests.
     field_jobs.cancel_rebakes()
@@ -781,6 +805,7 @@ def register():
     bpy.app.handlers.redo_post.append(on_undo)
     bpy.app.handlers.save_pre.append(on_save)
     bpy.app.handlers.render_pre.append(on_render)
+    bpy.app.handlers.object_bake_pre.append(on_bake)
     field_jobs.paused = painting_active
     layer_cache.paused = painting_active
     if not bpy.app.background:
@@ -796,6 +821,8 @@ def unregister():
     clear_live()
     from .shader_preview import clear as clear_shaders
     clear_shaders()
+    from .engine.runtime import forget_device
+    forget_device()   # the engine's compiled programs and pooled textures go with the add-on
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -822,6 +849,7 @@ def unregister():
         (bpy.app.handlers.redo_post, on_undo),
         (bpy.app.handlers.save_pre, on_save),
         (bpy.app.handlers.render_pre, on_render),
+        (bpy.app.handlers.object_bake_pre, on_bake),
     ):
         if fn in handlers:
             handlers.remove(fn)

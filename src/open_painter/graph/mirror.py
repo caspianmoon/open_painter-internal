@@ -78,19 +78,69 @@ def mask_frame_id(mask):
     return FRAME_PREFIX + 'mask:' + mask.id
 
 
+_owner_indexes = {}   # set struct address -> {node id: (layer, mask, channel, effect) positions}
+
+
+def _owner_index(ts):
+    index = {}
+    for li, layer in enumerate(ts.layers):
+        index[layer.id] = (li, None, None, None)
+        for mi, mask in enumerate(layer.masks):
+            index[mask_node_id(layer, mi, mask)] = (li, mi, None, None)
+        for ci, prop in enumerate(layer.channels):
+            for ei, effect in enumerate(prop.effects):
+                index[effect_node_id(layer, prop.channel, ei, effect)] = (li, None, ci, ei)
+    return index
+
+
+def _at(ts, node_id, position):
+    """The items at ``position`` when they still carry ``node_id``, else None."""
+    li, mi, ci, ei = position
+    layers = ts.layers
+    if li >= len(layers):
+        return None
+    layer = layers[li]
+    if mi is None and ci is None:
+        return (layer, None, None, None) if layer.id == node_id else None
+    if mi is not None:
+        masks = layer.masks
+        if mi >= len(masks):
+            return None
+        mask = masks[mi]
+        return (layer, mask, None, None) if mask_node_id(layer, mi, mask) == node_id else None
+    channels = layer.channels
+    if ci >= len(channels):
+        return None
+    prop = channels[ci]
+    effects = prop.effects
+    if ei >= len(effects):
+        return None
+    effect = effects[ei]
+    return (layer, None, prop, effect) if effect_node_id(layer, prop.channel, ei, effect) == node_id else None
+
+
 def owner_of(ts, node_id):
-    """(layer, mask, channel prop, effect) behind a node id; unknown parts are None."""
-    for layer in ts.layers:
-        if layer.id == node_id:
-            return layer, None, None, None
-        for index, mask in enumerate(layer.masks):
-            if mask_node_id(layer, index, mask) == node_id:
-                return layer, mask, None, None
-        for prop in layer.channels:
-            for index, effect in enumerate(prop.effects):
-                if effect_node_id(layer, prop.channel, index, effect) == node_id:
-                    return layer, None, prop, effect
-    return None, None, None, None
+    """(layer, mask, channel prop, effect) behind a node id; unknown parts are None.
+
+    Every drawn graph node asks this, so positions are indexed per set and each hit
+    is verified against the id it was stored for: a stale index (any stack edit)
+    re-indexes once instead of returning another item.
+    """
+    if not node_id:
+        return None, None, None, None
+    key = ts.as_pointer()
+    index = _owner_indexes.get(key)
+    if index is not None:
+        position = index.get(node_id)
+        found = _at(ts, node_id, position) if position is not None else None
+        if found is not None:
+            return found
+    if len(_owner_indexes) > 64:
+        _owner_indexes.clear()
+    index = _owner_indexes[key] = _owner_index(ts)
+    position = index.get(node_id)
+    found = _at(ts, node_id, position) if position is not None else None
+    return found if found is not None else (None, None, None, None)
 
 
 def project(ts):
@@ -386,8 +436,21 @@ def reconcile(tree, ts, force_layout=False):
                 position = tuple(node.location_absolute)
                 node.parent = parent
                 node.location_absolute = position
-        tree.links.clear()
+        # Relink incrementally: every link Blender inserts revalidates the tree, and the
+        # projection usually differs from what the tree shows by a few links at most.
+        wanted = set(links)
+        present = {}
+        for link in list(tree.links):
+            source, target = link.from_node, link.to_node
+            key = (getattr(source, 'op_id', source.get('op_id', '')), link.from_socket.identifier,
+                   getattr(target, 'op_id', target.get('op_id', '')), link.to_socket.identifier)
+            if key in wanted and key not in present:
+                present[key] = link
+            else:
+                tree.links.remove(link)
         for source, from_socket, target, to_socket in links:
+            if (source, from_socket, target, to_socket) in present:
+                continue
             producer, consumer = existing.get(source), existing.get(target)
             if producer is None or consumer is None:
                 continue
@@ -609,10 +672,14 @@ def draw_mask(layout, ts, layer, mask):
     elif mask.source == 'GROUP':
         layout.label(text='Combine the Members input', icon='NODETREE')
     elif mask.source == 'GRAPH':
+        from ..procedural_graph import is_native
         layout.template_ID(mask, 'node_group')
-        if mask.node_group is not None:
+        if is_native(mask.node_group):
+            layout.operator('open_painter.mask_graph_edit', icon='NODETREE').tree = mask.node_group.name
+        elif mask.node_group is not None:
             op = layout.operator('open_painter.graph_edit_shader', text='Edit Shader Group', icon='NODETREE')
             op.mask_id = mask.id
+            layout.label(text='Earlier-version shader group · CPU', icon='INFO')
     elif mask.source == 'FILTER':
         layout.label(text=mask.effect.kind.replace('_', ' ').title(), icon='SHADERFX')
         for name in EFFECT_CONTROLS.get(mask.effect.kind, ('radius',) if mask.effect.kind in RADIUS_KINDS else ('amount',)):

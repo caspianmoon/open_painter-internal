@@ -259,17 +259,19 @@ def _retire(image):
     so it loses its fake user now (an orphan is not written into the file) and
     is removed by the sweep when its last user is gone.
     """
+    from .shader_resources import bound
     image.use_fake_user = False
-    if image.users:
+    if bound(image):
         _retired.append(image)
         return
     bpy.data.images.remove(image)
 
 
 def _sweep_retired():
+    from .shader_resources import bound
     for image in list(_retired):
         try:
-            if image.users:
+            if bound(image):
                 continue
             bpy.data.images.remove(image)
         except (ReferenceError, RuntimeError):

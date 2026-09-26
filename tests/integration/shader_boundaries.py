@@ -14,6 +14,7 @@ from open_painter.core import texture_set_manager as sets, layer_stack as stack,
 from open_painter.evaluation import shader_preview
 from open_painter.evaluation.metrics import Metrics
 from open_painter.evaluation.shader_resources import RESOURCE, Resources, alive
+from open_painter.utils.ids import new_id
 
 
 def ready(ts):
@@ -58,6 +59,7 @@ with Metrics() as observed:
     blur.effect.strength = .3
     blur.black = .1
     blur.strength = .7
+    shader_preview.tick(scene, ts)   # the engine renders the edits
     assert shader_preview.current(scene, ts)
     assert observed.counts['shader_resource_requests'] == 0, observed.report()
     assert binding.node.image == old_image
@@ -71,7 +73,7 @@ ready(ts)
 assert binding.node.image != old_image and not binding.pending_image
 new = image_manager.pixels(binding.node.image)[..., 0]
 assert float(np.mean(new - old)) > .59
-assert not ts.outputs, 'An isolated prefix allocated final channel textures'
+assert not any(out.revision for out in ts.outputs), 'An isolated prefix ran the CPU evaluator'
 # Returning to a superseded compatibility input must regenerate it, not accept
 # a cancelled placeholder as a completed cache entry.
 resources = Resources(16)
@@ -139,8 +141,8 @@ assert not resources.superseded
 bpy.data.node_groups.remove(tree)
 other.close()
 resources.close()
-# Evaluated-geometry changes reach cached triplanar inputs through the normal
-# depsgraph observer; native mask Levels never repeat initial scene analysis.
+# Evaluated-geometry changes reach the engine's surface rasters (a triplanar procedural is
+# evaluated on the GPU from world position and normal) through the normal depsgraph observer.
 from open_painter.evaluation import cache, dependencies
 geometry_ts = sets.create(scene, 'Geometry source dependencies', 512)
 sets.assign(scene, geometry_ts, bpy.context.object)
@@ -148,20 +150,27 @@ geometry_layer = stack.add(geometry_ts, 'FILL')
 geometry_prop = stack.channel_for(geometry_layer, 'ROUGHNESS')
 geometry_prop.procedural, geometry_prop.projection = 'FBM', 'TRIPLANAR'
 material_manager.repair(geometry_ts)
-geometry_graph = ready(geometry_ts)
-old_geometry_image = geometry_graph.resource_bindings[0].node.image
+ready(geometry_ts)
+
+
+def roughness(ts):
+    shader_preview.flush(scene, ts)
+    return image_manager.pixels(next(o.image for o in ts.outputs if o.channel == 'ROUGHNESS'))[..., 0].copy()
+
+
+before_move = roughness(geometry_ts)
 bpy.context.object.location.x += .123
 bpy.context.view_layer.update()
 dependencies.refresh(scene)
 cache.tick()
-assert shader_preview.diagnostics(scene, geometry_ts)['pending_resources']
 ready(geometry_ts)
-assert geometry_graph.resource_bindings[0].node.image != old_geometry_image
+assert np.abs(roughness(geometry_ts) - before_move).max() > 1e-3, 'moving the object did not re-render its triplanar field'
 # The frame is no part of a static prop's identities: a scrub of the timeline keeps the
-# geometry key, the session and every cached source (no raster is requested).
+# geometry key, the session and every published channel.
 assert not dependencies.animated(geometry_ts)
 frame_key = dependencies.geometry_key(scene, geometry_ts)
-settled_image = geometry_graph.resource_bindings[0].node.image
+evaluations = shader_preview.diagnostics(scene, geometry_ts)['engine']
+settled = roughness(geometry_ts)
 scene.frame_set(scene.frame_current + 1)
 bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer())
@@ -171,9 +180,9 @@ with Metrics() as frame_observed:
     assert shader_preview.current(scene, geometry_ts), 'a frame change invalidated a static prop'
     assert not shader_preview.diagnostics(scene, geometry_ts)['pending_resources']
     assert frame_observed.counts['shader_resource_requests'] == 0, frame_observed.report()
+    assert frame_observed.counts.get('engine_channel_publications', 0) == 0, frame_observed.report()
 assert dependencies.geometry_key(scene, geometry_ts) == frame_key, 'a frame change re-keyed a static prop'
-assert geometry_graph.resource_bindings[0].node.image == settled_image
-# An armature-deformed prop follows the pose: the same scrub re-rasters its triplanar source.
+# An armature-deformed prop follows the pose: the same scrub re-renders its triplanar field.
 rig = bpy.data.objects.new('Boundary rig', bpy.data.armatures.new('Boundary rig'))
 scene.collection.objects.link(rig)
 deform = bpy.context.object.modifiers.new('Boundary armature', 'ARMATURE')
@@ -186,16 +195,15 @@ ready(geometry_ts)
 assert dependencies.animated(geometry_ts)
 deformed_key = dependencies.geometry_key(scene, geometry_ts)
 assert deformed_key[1] == (scene.frame_current, scene.frame_subframe)
-settled_image = geometry_graph.resource_bindings[0].node.image
 scene.frame_set(scene.frame_current + 1)
 bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer())
-dependencies.refresh(scene)
-cache.tick()
+with Metrics() as deformed_observed:
+    dependencies.refresh(scene)
+    cache.tick()
+    ready(geometry_ts)
 assert dependencies.geometry_key(scene, geometry_ts) != deformed_key, 'a frame change left a deformed prop keyed'
-assert shader_preview.diagnostics(scene, geometry_ts)['pending_resources'], 'a frame change of a deformed prop requested no raster'
-ready(geometry_ts)
-assert geometry_graph.resource_bindings[0].node.image != settled_image
+assert deformed_observed.counts.get('engine_channel_publications', 0) >= 1, 'a frame change of a deformed prop re-rendered nothing'
 bpy.context.object.modifiers.remove(deform)
 bpy.data.objects.remove(rig)
 bpy.context.view_layer.update()
@@ -207,9 +215,15 @@ assert not dependencies.animated(geometry_ts)
 # Purge Unused Data removes an in-flight placeholder (nothing samples it yet)
 # and the unused leaf of a previous slider value: the session rasters the
 # source again instead of failing on the removed image.
+spatial = geometry_layer.masks.add()
+spatial.id, spatial.source = new_id(), 'FILTER'
+spatial.effect.kind, spatial.effect.radius = 'GAUSSIAN_BLUR', 2
+material_manager.repair(geometry_ts)
+geometry_graph = ready(geometry_ts)
 boundary = geometry_graph.resource_bindings[0]
 settled = boundary.node.image
-geometry_prop.scale = (3., 3.)
+spatial = next(m for m in geometry_layer.masks if m.id == spatial.id)
+spatial.effect.radius = 5
 placeholder = boundary.pending_image
 assert placeholder is not None and not placeholder.get('op_shader_resource_ready')
 bpy.data.images.remove(placeholder)
@@ -217,7 +231,7 @@ ready(geometry_ts)
 assert boundary.node.image != settled and boundary.node.image.get('op_shader_resource_ready')
 assert boundary.pending_image is None
 bpy.data.images.remove(settled)
-geometry_prop.scale = (1., 1.)
+spatial.effect.radius = 2
 ready(geometry_ts)
 assert boundary.node.image.get('op_shader_resource_ready') and boundary.node.image.has_data
 assert not shader_preview.diagnostics(scene, geometry_ts)['error']
@@ -229,6 +243,7 @@ ready(geometry_ts)
 assert scene_mask.influence.image
 with Metrics() as scene_observed:
     scene_mask.black = .2
+    shader_preview.tick(scene, geometry_ts)
     assert shader_preview.current(scene, geometry_ts)
     assert scene_observed.counts['shader_resource_requests'] == 0, scene_observed.report()
     assert scene_observed.phases.get('scene_analysis', {}).get('calls', 0) == 0
@@ -236,7 +251,7 @@ report = ROOT / '.blender-test/shader-native/boundaries.json'
 report.parent.mkdir(parents=True, exist_ok=True)
 report.write_text(json.dumps({'result': 'PASS', 'checks': ['published-prefix-invalidation',
     'unrelated-channel-no-raster', 'filter-strength-and-levels-native', 'atomic-input-swap',
-    'no-output-allocation', 'superseded-value-recovery', 'removed-image-recovery',
+    'no-cpu-evaluation', 'superseded-value-recovery', 'removed-image-recovery',
     'purged-placeholder-recovery', 'superseded-leaf-release', 'geometry-input-invalidation', 'static-frame-no-raster',
     'deformed-frame-raster', 'scene-levels-no-analysis'], 'dependency_edit': info}, indent=2) + '\n')
 open_painter.unregister()

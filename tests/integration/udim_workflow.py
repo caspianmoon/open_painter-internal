@@ -136,8 +136,14 @@ with tempfile.TemporaryDirectory(prefix='op-udim-acceptance-') as directory:
     assert [ts.udim_tile for ts in created] == [1001, 1002]
     assert created[0].udim_group == created[1].udim_group
     for index, ts in enumerate(created):
-        from open_painter.evaluation import shader_preview
-        assert shader_preview.ensure(scene, ts).uv.node.get('op_udim_uv')
+        # The engine renders in the tile's own texture space; the material's texture set
+        # node reads the named source map translated by the tile origin.
+        from open_painter.core.texture_set_node import TREE_PREFIX
+        from open_painter.geometry.udim import tile_origin
+        tree = bpy.data.node_groups[TREE_PREFIX + ts.id]
+        roles = {node.get('role'): node for node in tree.nodes}
+        assert roles['UDIM Source UV'].uv_map == ts.udim_source_uv
+        assert tuple(roles['UDIM Local UV'].inputs[1].default_value)[:2] == tuple(tile_origin(ts.udim_tile))
         LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
         pixel = images.pixels(images.output(ts, 'BASE_COLOR').image)[256, 256, :3]
         assert np.argmax(pixel) == (0 if index == 0 else 2)

@@ -55,6 +55,9 @@ def roles():
 
 
 def bake(socket):
+    # A scripted bake fires no bake handler: copy the engine's results into the images' pixels
+    # (Cycles reads those), as the add-on's own bakes do.
+    shader_preview.sync_pixels()
     scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = 1
     scene.render.bake.margin = 0; scene.render.bake.use_clear = True
     tree = ts.material.node_tree
@@ -137,8 +140,10 @@ project.engine_preview = False
 ready()
 final = roles()
 assert not any(str(role).startswith(preview.PREFIX) for role in final), [r for r in final if str(r).startswith(preview.PREFIX)]
-assert final['Surface'].inputs['Roughness'].links[0].from_socket == graph.outputs['ROUGHNESS']
-assert final['Normal'].inputs['Color'].links[0].from_socket == graph.outputs['NORMAL']
+from open_painter.core.texture_set_node import NODE_ID
+source = next(node for node in ts.material.node_tree.nodes if node.bl_idname == NODE_ID)
+assert final['Surface'].inputs['Roughness'].links[0].from_socket == source.outputs['Roughness']
+assert final['Normal'].inputs['Color'].links[0].from_socket == source.outputs['Normal Map']
 assert final['AO Preview'].inputs[0].default_value == 1
 assert scene.view_settings.view_transform == 'AgX' and not project.saved_view_transform
 scene.view_settings.view_transform = saved_view

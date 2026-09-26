@@ -18,6 +18,8 @@ def update_surface(ts):
                 bsdf.inputs[socket].default_value = value
     if roles.get('Height'):
         roles['Height'].inputs['Distance'].default_value = ts.height_distance
+    from .texture_set_node import sync
+    sync(ts)   # the texture set node's own Normal output bumps by the same distance
     if roles.get('AO Preview'):
         project = getattr(ts.id_data, 'open_painter', None)
         indirect = False
@@ -25,6 +27,24 @@ def update_surface(ts):
             from ..targets import get
             indirect = get(project.target).ao_usage == 'INDIRECT'
         roles['AO Preview'].inputs[0].default_value = 0 if indirect else (1 if ts.preview_ao else 0)
+
+
+def _ensure_output(ts, channel):
+    """The set's channel image the engine writes into: half float on the GPU, full float for
+    Height (bump detail is finer than a half-float step)."""
+    from . import image_manager
+    from ..evaluation.shader_resources import new_leaves_frozen
+    prop = next((o for o in ts.outputs if o.channel == channel), None)
+    if (prop is None or prop.image is None) and new_leaves_frozen():
+        # Between undo steps no datablock may be created for the material to reference.
+        return None
+    image = image_manager.output(ts, channel).image
+    half = channel != 'HEIGHT'
+    if image.use_half_precision != half:
+        image.use_half_precision = half
+    if not image.get('op_engine_output'):
+        image['op_engine_output'] = True
+    return image
 
 
 def relink_slots(ts):
@@ -63,6 +83,14 @@ def repair(ts, image_overrides=None):
         material = material.copy()
         material['texture_set_id'] = ts.id
         ts.material = material
+        # A scene copy shares the set id: its channel images and its texture set node's tree
+        # are separated too, or two engines would write one image and one tree would show both.
+        from .texture_set_node import TREE_PREFIX
+        shared = {out.image.as_pointer() for other in others for out in other.outputs if out.image}
+        for out in ts.outputs:
+            if out.image is not None and out.image.as_pointer() in shared:
+                out.image = None
+        ts['op_node_tree'] = f'{TREE_PREFIX}{ts.id} · {ts.id_data.name}'
         for ref in ts.assignments:
             if ref.object and ref.slot_index < len(ref.object.material_slots):
                 slot = ref.object.material_slots[ref.slot_index]
@@ -101,10 +129,30 @@ def repair(ts, image_overrides=None):
     connect(bsdf.outputs["BSDF"], output.inputs["Surface"])
     from ..evaluation import shader_preview
     colors = {}
-    if image_overrides is None and shader_preview.requested(ts):
-        graph = shader_preview.ensure(ts.id_data, ts)
-        colors = graph.outputs
+    engine = image_overrides is None and shader_preview.requested(ts)
+    if engine:
+        # The set's channels come from one Open Painter Texture Set node: the engine evaluates
+        # the stack into the set's images, the node samples them.
+        from . import texture_set_node
+        for channel in CHANNELS:
+            _ensure_output(ts, channel)
+        with texture_set_node.creating():
+            source = node("Texture Set", texture_set_node.NODE_ID, (-300, 150))
+        texture_set_node.bind(source, ts)
+        colors = {channel: source.outputs[texture_set_node.CHANNEL_SOCKETS[channel]] for channel in CHANNELS}
+        for old in list(nodes):
+            # Per-channel image nodes of the previous adapter; the node reads the same images.
+            if old.get(OWNER) and old.get("role") in CHANNELS and old.bl_idname == "ShaderNodeTexImage":
+                nodes.remove(old)
     else:
+        # The explicit CPU reference (and a raster consumer's overrides) binds the images to
+        # one node per channel, which its reduced-resolution previews swap.
+        for old in list(nodes):
+            if old.get(OWNER) and old.get("role") == "Texture Set":
+                tree = old.node_tree
+                nodes.remove(old)
+                if tree is not None and tree.get('op_texture_set_node') is not None and not tree.users:
+                    bpy.data.node_groups.remove(tree)   # rebuilt when the engine adapter returns
         uv_socket = None
         if ts.udim_tile:
             from ..geometry.udim import tile_origin
@@ -170,18 +218,15 @@ def repair(ts, image_overrides=None):
             slot = ref.object.material_slots[ref.slot_index]
             if slot.material is None:
                 slot.material = material
-    if image_overrides is None and shader_preview.requested(ts):
-        # A saved/detached graph remains usable without the extension. Remove it
-        # only after a successful replacement has been wired to the surface.
-        for old in list(nodes):
-            if old.get(OWNER) and old.get('role') == 'Procedural Graph' and old != graph.instance:
-                tree = old.node_tree
-                nodes.remove(old)
-                if tree and not tree.users and tree.get(OWNER):
-                    bpy.data.node_groups.remove(tree)
-        from ..evaluation.shader_graph import remove_orphan_units
-        remove_orphan_units(ts.id)
-        shader_preview.mark_attached(ts.id_data, ts, graph)
-    else:
-        shader_preview.mark_attached(ts.id_data, ts)
+    # Materials compiled by earlier versions held the whole stack as a "Procedural Graph"
+    # group of node groups: the node above replaces it.
+    for old in list(nodes):
+        if old.get(OWNER) and old.get('role') == 'Procedural Graph':
+            tree = old.node_tree
+            nodes.remove(old)
+            if tree and not tree.users and tree.get(OWNER):
+                bpy.data.node_groups.remove(tree)
+    from ..evaluation.shader_graph import remove_orphan_units
+    remove_orphan_units(ts.id)
+    shader_preview.mark_attached(ts.id_data, ts, engine)
     return material

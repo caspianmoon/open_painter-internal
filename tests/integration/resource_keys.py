@@ -113,7 +113,8 @@ del replacement[UID]
 assert image_key(replacement)[0] == token and replacement[UID] == token
 assert boundary.identity() == boundary.signature
 
-# ---- Reopening the file adopts every persisted raster: nothing is rastered again.
+# ---- Reopening the file adopts every persisted raster: nothing is rastered again (the save
+# wrote the leaves the engine bound, packed; the reopened session compiles and finds them).
 with TemporaryDirectory(prefix='op-resource-keys-') as directory:
     path = str(Path(directory) / 'keys.blend')
     identifier = ts.id
@@ -126,7 +127,7 @@ with TemporaryDirectory(prefix='op-resource-keys-') as directory:
     assert persisted.packed_file is not None and not persisted.has_data   # packed pixels load on first use
     with Metrics() as observed:
         info = ready(scene, ts)
-    assert info['graph_rehydrations'] == 1 and info['graph_builds'] == 0, info
+    assert info['graph_builds'] == 1, info
     assert observed.counts['shader_resource_requests'] == 0, observed.report()
     assert observed.counts['shader_resource_cache_hits'] >= 1, observed.report()
     graph = shader_preview.ensure(scene, ts)
@@ -137,7 +138,7 @@ with TemporaryDirectory(prefix='op-resource-keys-') as directory:
     print('RESOURCE_KEYS_REOPEN_OK', flush=True)
 
     # ---- An identity edited before the first tick after a reload: the persisted
-    # leaf it no longer names is handed to the table instead of left at 0 users.
+    # leaf it no longer names is no longer bound, and the next save does not write it again.
     shader_preview.clear()
     bpy.ops.wm.open_mainfile(filepath=path)
     scene = bpy.context.scene
@@ -149,7 +150,12 @@ with TemporaryDirectory(prefix='op-resource-keys-') as directory:
     boundary = next(b for b in graph.resource_bindings if b.identifier.startswith('RasterChannelPrefix:' + blurred_id))
     assert boundary.node.image.get(RESOURCE) != saved and boundary.pending_image is None
     orphan = next(image for image in resource_images() if image.get(RESOURCE) == saved)
-    assert not orphan.users and saved in graph.resources.entries, 'the superseded persisted leaf is unmanaged'
+    from open_painter.evaluation.engine.headless import bound_count
+    from open_painter.evaluation.shader_resources import persist_bound_leaves
+    assert not bound_count(orphan), 'the superseded persisted leaf is still bound'
+    persist_bound_leaves()   # what the next save does before packing
+    assert not orphan.use_fake_user and not orphan.users, 'the superseded persisted leaf would be saved again'
+    assert boundary.node.image.use_fake_user, 'the bound leaf would not be saved'
     print('RESOURCE_KEYS_SUPERSEDED_OK', flush=True)
 open_painter.unregister()
 print('RESOURCE_KEYS_PASS', flush=True)

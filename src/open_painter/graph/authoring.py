@@ -66,7 +66,12 @@ def add(ts, layer, kind, choice='', channel='ROUGHNESS', mask_index=None):
         group = None
         try:
             if kind == 'MASK':
-                mask.source = choice
+                if choice == 'NOISE':
+                    # The catalog's value noise, evaluated in the engine's programs: the legacy
+                    # Noise source rasters its sine-hash noise on the CPU (kept for existing files).
+                    mask.source, mask.procedural = 'PROCEDURAL', 'VALUE'
+                else:
+                    mask.source = choice
                 mask.name = {'GROUP': 'Mask Group', 'GRAPH': 'Custom Graph', 'STROKES': 'Vector Strokes'}.get(
                     choice, title + ' Mask')
                 if choice in {'PAINT', 'FILL'}:

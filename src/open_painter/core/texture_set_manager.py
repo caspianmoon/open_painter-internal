@@ -144,6 +144,8 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
         for node in material.node_tree.nodes:
             if node.bl_idname == "ShaderNodeTexImage" and node.image is not None and node.image.get(OWNER):
                 node.image = None
+        from .texture_set_node import release as release_node_tree
+        release_node_tree(ts, material)
     from ..baking.corrections import clear as clear_corrections
     clear_corrections(ts)
     project.texture_sets.remove(index)

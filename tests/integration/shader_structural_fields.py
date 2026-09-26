@@ -138,7 +138,9 @@ field(effect_of, 'kind', 'GAUSSIAN_BLUR', True)
 with Metrics() as observed:
     prop_of().opacity_percent = 60
     info = shader_preview.diagnostics(scene, ts)
-    assert shader_preview.current(scene, ts) and not info['pending_resources'], info
+    assert not info['rebuild_pending'] and not info['pending_resources'], info
+    shader_preview.tick(scene, ts)   # the engine renders the edit
+    assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
     assert observed.counts['shader_resource_requests'] == 0, observed.report()
     assert abs(prop_of().opacity - .6) < 1e-6
 print('STRUCTURAL_FIELD channel.opacity_percent=60 numeric (boundary kept)', flush=True)

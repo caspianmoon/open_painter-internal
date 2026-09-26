@@ -1,10 +1,12 @@
-"""Custom Graph mask source (0.9.3): an artist's shader node group as coverage.
+"""Custom Graph mask source (0.9.3): the legacy path for a Blender shader group as coverage.
 
-The shader preview instances the group natively (``Graph._custom_graph``).
-The CPU reference — export, snapshots, the CPU backend — cannot run shader
-nodes, so it bakes the group's first output with Cycles (emission, at the set
-resolution, over the assigned meshes) and caches the raster under a content
-signature of the tree. Editing the group re-bakes on the next CPU evaluation.
+A Custom Graph mask reads a Mask Graph (``procedural_graph``): Open Painter's own
+nodes, compiled by the engine and evaluated on the CPU for export. Masks saved
+with a Blender shader group keep working here: the CPU reference cannot run
+shader nodes, so it bakes the group's first output with Cycles (emission, at the
+set resolution, over the assigned meshes) and caches the raster under a content
+signature of the tree; the engine samples that raster. Editing the group
+re-bakes it.
 """
 import bpy
 import numpy as np
@@ -15,7 +17,11 @@ PLACEMENT_INPUTS = {'position', 'normal'}   # wired from Geometry: world space i
 
 
 def reads_placement(tree):
-    """Whether the group exposes a Position or Normal input: its coverage then moves with the object."""
+    """Whether the graph reads the world position or normal: its coverage then moves with the object."""
+    from ..procedural_graph import is_native
+    if is_native(tree):
+        from ..procedural_graph.program import reads_placement as native_placement
+        return native_placement(tree)
     return tree is not None and any(item.item_type == 'SOCKET' and item.in_out == 'INPUT'
                                     and item.name.lower() in PLACEMENT_INPUTS for item in tree.interface.items_tree)
 
@@ -61,9 +67,13 @@ def _node_data(node):
 
 
 def signature(tree, seen=None):
-    """Repr-stable content identity of a shader node group (nested groups included)."""
+    """Repr-stable content identity of a Mask Graph or a shader node group (nested groups included)."""
     if tree is None:
         return None
+    from ..procedural_graph import is_native
+    if is_native(tree):
+        from ..procedural_graph.program import values
+        return ('mask-graph', tree.name, values(tree))
     seen = seen or set()
     if tree.name in seen:
         return ('recursive', tree.name)

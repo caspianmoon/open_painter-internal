@@ -80,6 +80,39 @@ class OP_OT_profile_layers(SafeOperator, bpy.types.Operator):
             context.area.tag_redraw()
 
 
+class OP_OT_engine_report(SafeOperator, bpy.types.Operator):
+    bl_idname = 'open_painter.engine_report'
+    bl_label = 'Engine Report'
+    bl_description = ('Copy where the Open Painter engine spends its time on this computer: each stage '
+                      '(build, update, CPU inputs, translate, compile, render, publish) of the recent updates, '
+                      'and with Profile, every pass measured on the GPU')
+    bl_options = {'REGISTER'}
+    action: bpy.props.EnumProperty(items=[
+        ('COPY', 'Copy Engine Report', 'Copy the report of the recent updates'),
+        ('PROFILE', 'Profile Engine', 'Render every pass once more, timed on the GPU, then copy the report')],
+        default='COPY')
+
+    @classmethod
+    def description(cls, context, properties):
+        if properties.action == 'PROFILE':
+            return ('Render the active set once more with every pass timed on the GPU (each layer, mask and '
+                    'Mask Graph on its own), then copy the report to the clipboard')
+        return cls.bl_description
+
+    def run(self, context):
+        from ..evaluation import shader_preview
+        from ..evaluation.engine import stages
+        ts = require_set(context)
+        if not shader_preview.requested(ts):
+            raise ValueError(f'"{ts.name}" uses the CPU texture reference, not the Open Painter engine')
+        if self.action == 'PROFILE':
+            shader_preview.profile_engine(context.scene, ts)
+        text = stages.report(context.scene, ts)
+        context.window_manager.clipboard = text
+        print(text, flush=True)
+        self.report({'INFO'}, 'Engine report copied to the clipboard' + (' (profiled)' if self.action == 'PROFILE' else ''))
+
+
 class OP_OT_layer_bypass(SafeOperator, bpy.types.Operator):
     bl_idname = 'open_painter.layer_bypass'
     bl_label = 'Bypass Layers'
@@ -167,6 +200,8 @@ class OP_MT_native_performance(bpy.types.Menu):
         layout = self.layout
         layout.operator('open_painter.profile_layers', icon='SORTTIME').action = 'PROFILE'
         layout.operator('open_painter.profile_layers', text='Clear Profile').action = 'CLEAR'
+        layout.operator('open_painter.engine_report', text='Profile Engine', icon='SORTTIME').action = 'PROFILE'
+        layout.operator('open_painter.engine_report', text='Copy Engine Report', icon='COPYDOWN').action = 'COPY'
         layout.operator('open_painter.offline_analysis', text='Performance Inventory', icon='INFO').action = 'REPORT'
         layout.separator()
         layout.operator('open_painter.layer_bypass', text='Bypass Selected', icon='RESTRICT_VIEW_ON').action = 'SELECTED'
@@ -206,7 +241,7 @@ def draw_performance_section(layout, context, ts, layer):
     state_name = profile.state(scene, ts, layer)
     panel.prop(layer, 'bypass', text='Bypass in Preview')
     if layer.bypass:
-        panel.label(text='Skipped in the shader preview; export and bakes still include it', icon='INFO')
+        panel.label(text='Skipped in the live view; export and bakes still include it', icon='INFO')
     if layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
         panel.prop(layer, 'cache_mode', text='Cache')
         panel.label(text='A passthrough folder cannot be cached: set it to Isolated or cache its children', icon='ERROR')
@@ -236,13 +271,15 @@ def draw_performance_section(layout, context, ts, layer):
             size = sum(img.size[0] * img.size[1] * 16 for img in images) / (1024 * 1024)
             panel.label(text=f'Cached at {ts.resolution} · {len(images)} channels · {size:.0f} MiB', icon='CHECKMARK')
     row = rows.get(layer.id)
-    if row is not None and (row['profiled'] or row['compile_ms'] or row['boundary_ms']):
+    if row is not None and (row['profiled'] or row['compile_ms'] or row['boundary_ms'] or row['gpu_ms']):
         col = panel.column(align=True)
         col.label(text=f"Compile {row['compile_ms']:.1f} ms · {row['nodes']} nodes · {row['samplers']} samplers")
         if row['boundary_ms'] > 0:
             col.label(text=f"CPU inputs {row['boundary_ms']:.0f} ms (re-render after edits)")
         if row['refresh_ms'] > 0:
             col.label(text=f"Cache refresh {row['refresh_ms']:.0f} ms")
+        if row['gpu_ms'] > 0:
+            col.label(text=f"GPU {row['gpu_ms']:.1f} ms per full update" + ('' if row['gpu_current'] else ' · out of date'))
         if row['profiled']:
             share = 100 * row['cost_ms'] / total if total else 0
             col.label(text=f"CPU reference {row['cpu_ms']:.0f} ms · {share:.0f}% of {total:.0f} ms"
@@ -252,4 +289,5 @@ def draw_performance_section(layout, context, ts, layer):
         panel.operator('open_painter.profile_layers', icon='SORTTIME').action = 'PROFILE'
 
 
-CLASSES = (OP_OT_profile_layers, OP_OT_layer_bypass, OP_OT_layer_cache, OP_MT_native_performance)
+CLASSES = (OP_OT_profile_layers, OP_OT_engine_report, OP_OT_layer_bypass, OP_OT_layer_cache,
+           OP_MT_native_performance)

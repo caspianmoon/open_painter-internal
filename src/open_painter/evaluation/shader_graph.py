@@ -29,7 +29,7 @@ from ..constants import CHANNELS, DEFAULTS, OWNER
 from ..core.layer_stack import channel_for
 from .shader_math import Math, Signal, blend, is_socket, luminance, normal_combine, srgb_encode
 from .shader_effects import apply_effect, is_pointwise, UnsupportedEffect
-from .shader_resources import Resources, RESOURCE, alive, values
+from .shader_resources import Resources, RESOURCE, alive, bound, values
 from .resource_keys import image_key
 from .image_snapshots import stored_encoding
 from .anchors import COMPOSITE_KINDS, channel_of
@@ -123,10 +123,15 @@ class Binding:
     socket: object
     value: float
     identifier: str
+    aliases: tuple = ()   # further owners whose edits update it (a Mask Graph node's mask)
+    native: tuple = ()    # a Mask Graph binding: (unit key, tree address, (owner address, owner RNA type))
 
     def read(self):
         value = getattr(self.owner, self.field)
         return float(value if self.index is None else value[self.index])
+
+    def pointers(self):
+        return (self.owner.as_pointer(), *self.aliases)
 
 
 @dataclass
@@ -147,6 +152,26 @@ class ResourceBinding:
                                  # so a memfile undo never frees a leaf the material still binds)
     stable_image: object = None  # the RESOURCE leaf this stable binding owns, so its content is
                                  # regenerated in place even while a gesture preview stands on the node
+
+
+def _removed_graph_units(bindings):
+    """Units with a Mask Graph binding whose node, socket, ramp stop or tree is gone. Reading
+    it would dereference freed memory (no callback reaches us when a tree is deleted or
+    stops are reallocated), so the unit is rebuilt instead; 'global' when a unit is unknown."""
+    live, removed = {}, []
+    for binding in bindings:
+        if not binding.native:
+            continue
+        unit, tree, item = binding.native
+        if tree not in live:
+            from ..procedural_graph.program import live_items
+            live[tree] = live_items(tree)
+        if item not in live[tree]:
+            if unit is None:
+                return 'global'
+            if unit not in removed:
+                removed.append(unit)
+    return removed
 
 
 def _previous_strokes_leaf(n, key, channel, base_key, stamp):
@@ -476,6 +501,46 @@ class Graph(Math):
 
     def color_param(self, owner, field):
         return self.combine(*(self.param(owner, field, i) for i in range(3)))
+
+    @contextmanager
+    def native(self, mask):
+        """Compile ``mask``'s Mask Graph: its node bindings also answer to the mask, whose
+        callbacks are what a node edit notifies (``procedural_graph.edits``)."""
+        previous, self._native_mask = getattr(self, '_native_mask', None), mask
+        try:
+            yield
+        finally:
+            self._native_mask = previous
+
+    def _bind(self, key, binding):
+        mask = getattr(self, '_native_mask', None)
+        if mask is not None:
+            binding.aliases = (mask.as_pointer(),)
+            owner = binding.owner
+            binding.native = (self.unit.key if self.unit is not None else None, mask.node_group.as_pointer(),
+                              (owner.as_pointer(), owner.bl_rna.identifier))
+        self.bindings[key] = binding
+        for pointer in binding.pointers():
+            self.owner_bindings[pointer].append(binding)
+        if self.unit is not None:
+            self.unit.bindings[key] = binding
+
+    def native_param(self, owner, field, index=None, tree=''):
+        """A uniform bound to a Mask Graph node, socket or ramp stop (no stack path)."""
+        key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
+        if key not in self.bindings:
+            try:
+                path = owner.path_from_id()
+            except ValueError:
+                path = f'item@{owner.as_pointer():x}'   # a ramp stop: RNA builds no path inside a custom node
+            identifier = f'Parameter:{tree}:{path}.{field}' + (f'[{index}]' if index is not None else '')
+            with self.role(identifier):
+                node = self.node('ShaderNodeValue')
+            raw = getattr(owner, field)
+            value = float(raw if index is None else raw[index])
+            node.outputs[0].default_value = value
+            self._bind(key, Binding(owner, field, index, node.outputs[0], value, identifier))
+        return self.bindings[key].socket
 
     def scalar_mix(self, a, b, t):
         if not is_socket(a) and not is_socket(b) and a == b:
@@ -1433,7 +1498,17 @@ class Graph(Math):
             for mask in masks[:stop]:
                 if self._mask_active(mask, key[3]) and mask.source == 'REFERENCE':
                     refs.append(self._mask_reference_key(mask))
+                if self._mask_active(mask, key[3]):
+                    refs.append(self._graph_key(layer, mask))
         return [ref for ref in refs if isinstance(ref, tuple)]
+
+    @staticmethod
+    def _graph_key(layer, mask):
+        """The unit of a Custom Graph mask's Mask Graph (its own pass), or None."""
+        from ..procedural_graph import is_native
+        if mask.source == 'GRAPH' and is_native(mask.node_group):
+            return ('GRAPH', layer.id, mask.id)
+        return None
 
     def _continuation(self, key):
         """The longest shorter prefix unit this unit continues from, or None."""
@@ -1605,6 +1680,10 @@ class Graph(Math):
                     decal = ('inline-frame-v1',)
             return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
                     self._continuation(key), decal)
+        if key[0] == 'GRAPH':
+            from ..procedural_graph.program import unit_signature
+            mask = next((m for m in layer.masks if m.id == key[2]), None)
+            return ('mask-graph', unit_signature(mask.node_group) if mask is not None else None)
         masks = list(layer.masks)
         stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
         return (tuple(_mask_signature(m) for m in masks[:stop]), refs, self._continuation(key))
@@ -2079,7 +2158,8 @@ class Graph(Math):
                 from .mesh_masks import sampling_signature as mesh_signature
                 stamp += (('mesh', mesh_signature(self.ts, mask)),)
             if mask.source == 'GRAPH':
-                # The CPU reference bakes the group over the assigned meshes (custom_graph.evaluate).
+                # A Mask Graph evaluates on the CPU from its values; a legacy shader group is baked
+                # over the assigned meshes (custom_graph.evaluate).
                 from .custom_graph import signature as graph_signature
                 stamp += (('graph', graph_signature(mask.node_group), self._geometry_stamp(True)),)
             if mask.source == 'STROKES':
@@ -2278,6 +2358,10 @@ class Graph(Math):
         if mask.source in {'GENERATOR', 'NOISE'}:
             return self.generator(mask, layer)
         if mask.source == 'GRAPH':
+            key = self._graph_key(layer, mask)
+            if key is not None:
+                # A Mask Graph is its own unit: the mask samples its result.
+                return self._import_mask(self.compile_unit(key))
             return self._custom_graph(mask)
         if mask.source == 'PROCEDURAL':
             from ..texture_engine.procedurals import ALIASES
@@ -2291,6 +2375,11 @@ class Graph(Math):
                     value = self.math('MULTIPLY', value, self._coverage(self.coordinates(mask)))
                 return value
             return self._mask_source_boundary(layer, mask)
+        return self._mask_source_boundary(layer, mask)
+
+    def _native_graph(self, layer, mask):
+        """A Mask Graph's coverage; the material graph samples the CPU evaluation (the engine
+        compiles the graph to GPU code instead, ``EngineGraph._native_graph``)."""
         return self._mask_source_boundary(layer, mask)
 
     def _custom_graph(self, mask):
@@ -2366,6 +2455,22 @@ class Graph(Math):
             prop = channel_for(layer, key[2])
             owners.append(prop)
             owners.extend(list(prop.effects)[:key[3]])
+        elif key[0] == 'GRAPH':
+            from ..procedural_graph.program import GraphError, build
+            mask = next(m for m in layer.masks if m.id == key[2])
+            owners.append(mask)
+            try:
+                program = build(mask.node_group)
+            except GraphError:
+                program = None
+            if program is not None:
+                owners.extend((mask.node_group, program.output))
+                if program.result[0] == 'socket':
+                    owners.append(program.result[1])
+                for step in program.steps:
+                    owners.append(step.node)
+                    owners.extend(step.node.stops if step.kind == 'ramp' else ())
+                    owners.extend(ref[1] for ref in step.inputs.values() if ref[0] == 'socket')
         else:
             masks = list(layer.masks)
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
@@ -2390,6 +2495,8 @@ class Graph(Math):
             # are only valid while every owner still lives at its old address.
             if unit.owner_pointers != self._unit_owners(key):
                 return None
+            if _removed_graph_units(unit.bindings.values()):
+                return None   # a Mask Graph binding lost its node: compile afresh, never refresh it
         except (ValueError, StopIteration, ReferenceError):
             return None
         # Its published inputs must exist in this graph too (adopted or rebuilt),
@@ -2423,7 +2530,7 @@ class Graph(Math):
             # (0.9.8): it is retried only once an edit re-identifies the input
             # or Retry forgets the failure, not on every structural rebuild.
             self._request(binding, binding.signature, previous=previous)
-            if held is not None and held.get(RESOURCE) and held.users:
+            if held is not None and held.get(RESOURCE) and bound(held):
                 # The leaf the node still shows (the previous value, or an
                 # interrupted placeholder) follows the binding into this table,
                 # so it is released once the binding moves on. Never removed
@@ -2431,7 +2538,8 @@ class Graph(Math):
                 self.resources.adopt(held)
         self.bindings.update(unit.bindings)
         for binding in unit.bindings.values():
-            self.owner_bindings[binding.owner.as_pointer()].append(binding)
+            for pointer in binding.pointers():
+                self.owner_bindings[pointer].append(binding)
         self.resource_bindings.extend(unit.resource_bindings)
         self.image_bindings.extend(unit.image_bindings)
         for binding in unit.cache_bindings:
@@ -2502,12 +2610,21 @@ class Graph(Math):
         self.units[key] = unit
         return unit
 
+    def _new_unit_tree(self, key):
+        """The node tree a unit compiles into (the engine substitutes a headless one)."""
+        tree = bpy.data.node_groups.new(self._unit_name(key), 'ShaderNodeTree')
+        tree[OWNER] = True
+        tree['op_shader_graph'] = self.ts.id
+        tree['op_unit'] = repr(key)
+        return tree
+
+    def _free_tree(self, tree):
+        if tree is not None and not tree.users:
+            bpy.data.node_groups.remove(tree)
+
     def _compile(self, key, layer, stub=None, bypass=False):
         unit = Unit(key)
-        unit.tree = bpy.data.node_groups.new(self._unit_name(key), 'ShaderNodeTree')
-        unit.tree[OWNER] = True
-        unit.tree['op_shader_graph'] = self.ts.id
-        unit.tree['op_unit'] = repr(key)
+        unit.tree = self._new_unit_tree(key)
         try:
             with self.enter(unit):
                 unit.group_input = self.node('NodeGroupInput')
@@ -2532,6 +2649,10 @@ class Graph(Math):
                     self._export('Alpha', signal.alpha, 'NodeSocketFloat')
                 elif key[0] == 'MASK':
                     self._export('Value', self.mask(layer, key[2], key[3]), 'NodeSocketFloat')
+                elif key[0] == 'GRAPH':
+                    mask = next(m for m in layer.masks if m.id == key[2])
+                    with self.native(mask):
+                        self._export('Value', self._native_graph(layer, mask), 'NodeSocketFloat')
                 else:
                     self._compile_channel(unit, layer, key[2])
         except Exception:
@@ -2544,17 +2665,17 @@ class Graph(Math):
         for key in list(self.bindings):
             if key[0] == unit.key:
                 binding = self.bindings.pop(key)
-                owners = self.owner_bindings.get(binding.owner.as_pointer(), [])
-                if binding in owners:
-                    owners.remove(binding)
+                for pointer in binding.pointers():
+                    owners = self.owner_bindings.get(pointer, [])
+                    if binding in owners:
+                        owners.remove(binding)
         self.resource_bindings = [b for b in self.resource_bindings if b not in unit.resource_bindings]
         self.image_bindings = [b for b in self.image_bindings if b not in unit.image_bindings]
         self.cache_bindings = [b for b in self.cache_bindings if b not in unit.cache_bindings]
         for pointer in unit.compiled_effects:
             self._compiled_effects.pop(pointer, None)
         try:
-            if unit.tree is not None and not unit.tree.users:
-                bpy.data.node_groups.remove(unit.tree)
+            self._free_tree(unit.tree)
         except (ReferenceError, RuntimeError):
             pass
         unit.tree = None
@@ -3078,6 +3199,9 @@ class Graph(Math):
             self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None
         bindings = self.owner_bindings.get(pointer, ()) if pointer is not None else self.bindings.values()
+        removed = _removed_graph_units(bindings)
+        if removed:
+            raise RebuildRequired('A Mask Graph node was removed', removed)
         changed = []
         for binding in bindings:
             value = binding.read()
@@ -3247,7 +3371,7 @@ class Graph(Math):
                 binding.node.image, binding.pending_image = binding.pending_image, None
                 if binding.stable and binding.node.image.get(RESOURCE):
                     binding.stable_image = binding.node.image
-                if (stale is not None and stale is not binding.node.image and not stale.users
+                if (stale is not None and stale is not binding.node.image and not bound(stale)
                         and stale.get(RESOURCE) and not stale.get('op_shader_resource_ready')):
                     # An interrupted placeholder from a superseded graph: released, never
                     # removed while the material that sampled it may still be compiling.

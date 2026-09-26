@@ -221,10 +221,13 @@ np.testing.assert_array_equal((actual_charts > 0), (expected_charts > 0))
 # preview's single Bump connection are unchanged by exporting.
 LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
 np.testing.assert_allclose(images.pixels(images.output(ts, "NORMAL").image), neutral, atol=1e-7)
+from open_painter.core import texture_set_node
 roles = {node.get("role"): node for node in ts.material.node_tree.nodes}
-assert roles["Surface"].inputs["Normal"].links[0].from_node == roles["Height"]
-assert roles["Height"].inputs["Normal"].links[0].from_node == roles["Normal"]
-assert roles["Height"].inputs["Distance"].default_value == ts.height_distance
+assert roles["Surface"].inputs["Normal"].links[0].from_socket.name == "Normal"
+assert roles["Surface"].inputs["Normal"].links[0].from_node == roles["Texture Set"]
+inner = {node.get("role"): node for node in bpy.data.node_groups[texture_set_node.tree_name(ts)].nodes}
+assert inner["Height"].inputs["Normal"].links[0].from_node == inner["Normal Map"]
+assert inner["Height"].inputs["Distance"].default_value == ts.height_distance
 with TemporaryDirectory(prefix="op-relief-") as directory:
     root = Path(directory)
     ts.export.bit_depth = "16"
@@ -266,7 +269,7 @@ with TemporaryDirectory(prefix="op-relief-") as directory:
     encode.inputs[1].default_value = (.5, .5, .5)
     encode.inputs[2].default_value = (.5, .5, .5)
     emission = nodes.new("ShaderNodeEmission")
-    links.new(roles["Height"].outputs["Normal"], encode.inputs[0])
+    links.new(roles["Texture Set"].outputs["Normal"], encode.inputs[0])   # the bumped shading normal
     links.new(encode.outputs["Vector"], emission.inputs["Color"])
     links.new(emission.outputs["Emission"], roles["Output"].inputs["Surface"])
     # Render-pre flushes repair the managed material; inspect an independent

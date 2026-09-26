@@ -1,7 +1,8 @@
 # Mask Graphs
 
-A **Custom Graph** mask takes its coverage from a **Mask Graph**: Open Painter's own node
-tree (`OpenPainterMaskGraph`), with its own node types. The [Open Painter
+A **Custom Graph** mask takes its coverage from a **Mask Graph**, built from Open Painter's
+own node types. It's edited in the **Open Painter Graph** editor, the one Open Painter node
+editor: a Mask Graph is an Open Painter Graph tree marked as one. The [Open Painter
 engine](open-painter-engine.md) evaluates it as one GPU pass. The CPU reference (export,
 2D snapshots, the CPU backend) evaluates it with the same formulas. No Blender shader group
 is built, and editing a graph never touches a material.
@@ -9,9 +10,12 @@ is built, and editing a graph never touches a material.
 ## Authoring
 
 - A new Custom Graph mask starts with Coordinates → Noise → Ramp → Mask Output.
-- **Edit Mask Graph** opens the graph in a node editor beside the current one. It's in the
-  mask's panel in the Layers view and on the Custom Graph node in the Open Graph. The
-  editor is pinned to that graph.
+- **Edit Mask Graph** steps into the graph inside the Open Painter Graph editor, the way you
+  enter a node group. It's in the mask's panel in the Layers view and on the Custom Graph
+  node in the texture set's graph.
+  - The breadcrumb shows the texture set's graph above it.
+  - **Back to Texture Set Graph** in the header, or Tab, returns to it.
+  - With no graph editor open, Edit Mask Graph opens one on half of the current area.
 - Shift+A in the editor adds nodes from the Input, Texture, Converter and Output menus.
 - The Open Graph templates *Noise → Ramp*, *Cells → Ramp* and *Layered Noise → Ramp*
   create Mask Graphs. Each template owns its graph. Picking the same graph on another
@@ -109,7 +113,11 @@ Graph mask is still refused, because graphs don't travel with materials.
   - save and reload;
   - templates and starter graphs;
   - removed nodes, reallocated stops and a deleted graph never being read.
-- `tests/integration/graph_templates_ui.py` (real window): a template's graph opens in the
-  Mask Graph editor, and the older Edit Shader Group entry point reuses that editor.
+- `tests/integration/graph_templates_ui.py` (real window): a template's graph is entered inside
+  the texture set's Open Painter Graph editor, with no second editor. The older Edit Shader
+  Group entry point finds it there, and Back returns to the texture set's graph.
+- `tests/integration/mask_graphs.py` also checks that each kind of Open Painter Graph accepts
+  only its own nodes. A graph saved as a tree type of its own by an earlier 0.13 build is
+  rebuilt node for node when the file opens.
 - `tests/integration/engine_stages.py`: a structural graph edit rebuilds only the graph's
   unit, and the profile times the graph's pass.

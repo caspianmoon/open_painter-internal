@@ -1,32 +1,88 @@
-"""Owned surface adapter for procedural authoring and explicit baked previews."""
+"""The texture set's material: its Open Painter Texture Set node, a Principled BSDF and a
+Material Output, nothing else. What the surface shows of the channels (AO in the preview,
+normal and height, Engine Preview, View Mask, a CPU-reference display's images) lives
+inside the Texture Set node's group (``texture_set_node``)."""
 
 import bpy
 
 from ..constants import CHANNELS, OWNER
+
+# Nodes earlier versions placed around the surface; the Texture Set node carries all of it.
+LEGACY_ROLES = frozenset({'UV Tangent', 'AO Preview', 'Normal', 'Height', 'UDIM Source UV', 'UDIM Local UV',
+                          'Mask View', 'Procedural Graph', *CHANNELS})
+# Texture Set node output -> Principled BSDF input.
+SURFACE = (('Base Color', 'Base Color'), ('Metallic', 'Metallic'), ('Roughness', 'Roughness'),
+           ('Normal', 'Normal'), ('Emission', 'Emission Color'), ('Alpha', 'Alpha'), ('Tangent', 'Tangent'))
+LAYOUT = {'Texture Set': (-620, 0), 'Surface': (-260, 0), 'Output': (140, 0)}
+
+
+def _surface_values(ts, bsdf):
+    from ..targets.preview import specular
+    for socket, value in (("Emission Strength", 1), ("Anisotropic", ts.anisotropy),
+                          ("Coat Weight", ts.coat_weight), ("Coat Roughness", ts.coat_roughness),
+                          ("Specular IOR Level", specular(getattr(ts.id_data, 'open_painter', None)))):
+        if bsdf.inputs[socket].default_value != value:
+            bsdf.inputs[socket].default_value = value
 
 
 def update_surface(ts):
     """Update surface uniforms without compiling layers or touching images."""
     if not ts.material or not ts.material.use_nodes:
         return
-    roles = {node.get('role'): node for node in ts.material.node_tree.nodes if node.get(OWNER)}
-    bsdf = roles.get('Surface')
-    if bsdf:
-        for socket, value in (("Emission Strength", 1), ("Anisotropic", ts.anisotropy),
-                              ("Coat Weight", ts.coat_weight), ("Coat Roughness", ts.coat_roughness)):
-            if bsdf.inputs[socket].default_value != value:
-                bsdf.inputs[socket].default_value = value
-    if roles.get('Height'):
-        roles['Height'].inputs['Distance'].default_value = ts.height_distance
+    bsdf = next((node for node in ts.material.node_tree.nodes
+                 if node.get(OWNER) and node.get('role') == 'Surface'), None)
+    if bsdf is not None:
+        _surface_values(ts, bsdf)
     from .texture_set_node import sync
-    sync(ts)   # the texture set node's own Normal output bumps by the same distance
-    if roles.get('AO Preview'):
-        project = getattr(ts.id_data, 'open_painter', None)
-        indirect = False
-        if project is not None and project.engine_preview and project.engine_preview_ao_indirect:
-            from ..targets import get
-            indirect = get(project.target).ao_usage == 'INDIRECT'
-        roles['AO Preview'].inputs[0].default_value = 0 if indirect else (1 if ts.preview_ao else 0)
+    sync(ts, images=False)   # height distance and AO in the preview live in the node; a display's images stay
+
+
+def _adopt_defaults(nodes):
+    """A new material's own Principled BSDF and Material Output become the set's."""
+    for kind, role in (('ShaderNodeBsdfPrincipled', 'Surface'), ('ShaderNodeOutputMaterial', 'Output')):
+        found = next((node for node in nodes if node.bl_idname == kind and not node.get(OWNER)), None)
+        if found is not None:
+            found[OWNER], found['role'] = True, role
+
+
+def _drop_legacy(nodes):
+    """Remove the nodes earlier versions placed around the surface; True if any was removed."""
+    from ..targets.preview import PREFIX
+    removed = False
+    for node in list(nodes):
+        role = node.get('role')
+        if not node.get(OWNER) or role is None or not (role in LEGACY_ROLES or str(role).startswith(PREFIX)):
+            continue
+        tree = node.node_tree if role == 'Procedural Graph' else None
+        nodes.remove(node)
+        removed = True
+        if tree is not None and not tree.users and tree.get(OWNER):
+            bpy.data.node_groups.remove(tree)
+    return removed
+
+
+def _drop_untouched_defaults(nodes, keep):
+    """The Principled BSDF and Material Output a new material starts with, left beside the set's
+    own by earlier versions: removed while nothing is linked into them (an edited one stays).
+    Everything is decided before anything is removed: a removed node's wrapper reads freed memory."""
+    doomed = {}
+    for node in nodes:
+        if node.get(OWNER) or node.as_pointer() in keep or node.bl_idname != 'ShaderNodeBsdfPrincipled':
+            continue
+        targets = [link.to_node for socket in node.outputs for link in socket.links]
+        if any(socket.is_linked for socket in node.inputs) or any(
+                target.get(OWNER) or target.bl_idname != 'ShaderNodeOutputMaterial' for target in targets):
+            continue
+        doomed[node.as_pointer()] = node
+        for target in targets:
+            if all(link.from_node.as_pointer() == node.as_pointer() for socket in target.inputs for link in socket.links):
+                doomed[target.as_pointer()] = target
+    for node in nodes:
+        if (node.bl_idname == 'ShaderNodeOutputMaterial' and not node.get(OWNER) and node.as_pointer() not in keep
+                and not any(socket.is_linked for socket in node.inputs)):
+            doomed[node.as_pointer()] = node   # an unlinked default output would compete with the set's
+    for node in doomed.values():
+        nodes.remove(node)
 
 
 def _ensure_output(ts, channel):
@@ -96,16 +152,21 @@ def repair(ts, image_overrides=None):
                 slot = ref.object.material_slots[ref.slot_index]
                 if slot.material == previous:
                     slot.material = material
+    created = False
     if not material or not material.get(OWNER):
         material = bpy.data.materials.new(f"OP · {ts.name}")
         material[OWNER] = True
         material["texture_set_id"] = ts.id
         ts.material = material
+        created = True
     if not material.use_nodes:
         material.use_nodes = True
     nodes, links = material.node_tree.nodes, material.node_tree.links
+    if created:
+        _adopt_defaults(nodes)
+    relayout = _drop_legacy(nodes) or created
 
-    def node(role, kind, location):
+    def node(role, kind):
         found = next(
             (n for n in nodes if n.get(OWNER) and n.get("role") == role and n.bl_idname == kind),
             None,
@@ -113,119 +174,42 @@ def repair(ts, image_overrides=None):
         if found is None:
             found = nodes.new(kind)
             found[OWNER], found["role"] = True, role
-            found.label = "Open Painter · " + role
-        if tuple(found.location) != location:
-            found.location = location
+            found.location = LAYOUT[role]
+        elif relayout and tuple(found.location) != LAYOUT[role]:
+            found.location = LAYOUT[role]
+        if found.label:
+            found.label = ""   # the BSDF and output read as themselves; the set's node names its set
         return found
 
     def connect(source, target):
         if not any(link.from_socket == source for link in target.links):
             links.new(source, target)
 
-    output = node("Output", "ShaderNodeOutputMaterial", (800, 0))
-    if not output.is_active_output:
-        output.is_active_output = True
-    bsdf = node("Surface", "ShaderNodeBsdfPrincipled", (500, 0))
-    connect(bsdf.outputs["BSDF"], output.inputs["Surface"])
     from ..evaluation import shader_preview
-    colors = {}
+    from . import texture_set_node
+    # The engine renders the set's images; the CPU reference writes the same images, or a
+    # display (``image_overrides``) binds its own in the node's group.
     engine = image_overrides is None and shader_preview.requested(ts)
     if engine:
-        # The set's channels come from one Open Painter Texture Set node: the engine evaluates
-        # the stack into the set's images, the node samples them.
-        from . import texture_set_node
         for channel in CHANNELS:
             _ensure_output(ts, channel)
-        with texture_set_node.creating():
-            source = node("Texture Set", texture_set_node.NODE_ID, (-300, 150))
-        texture_set_node.bind(source, ts)
-        colors = {channel: source.outputs[texture_set_node.CHANNEL_SOCKETS[channel]] for channel in CHANNELS}
-        for old in list(nodes):
-            # Per-channel image nodes of the previous adapter; the node reads the same images.
-            if old.get(OWNER) and old.get("role") in CHANNELS and old.bl_idname == "ShaderNodeTexImage":
-                nodes.remove(old)
-    else:
-        # The explicit CPU reference (and a raster consumer's overrides) binds the images to
-        # one node per channel, which its reduced-resolution previews swap.
-        for old in list(nodes):
-            if old.get(OWNER) and old.get("role") == "Texture Set":
-                tree = old.node_tree
-                nodes.remove(old)
-                if tree is not None and tree.get('op_texture_set_node') is not None and not tree.users:
-                    bpy.data.node_groups.remove(tree)   # rebuilt when the engine adapter returns
-        uv_socket = None
-        if ts.udim_tile:
-            from ..geometry.udim import tile_origin
-            uv = node('UDIM Source UV', 'ShaderNodeUVMap', (-1000, 400))
-            uv.uv_map = ts.udim_source_uv
-            translated = node('UDIM Local UV', 'ShaderNodeVectorMath', (-800, 400))
-            translated.operation = 'SUBTRACT'
-            translated.inputs[1].default_value = (*tile_origin(ts.udim_tile), 0)
-            connect(uv.outputs['UV'], translated.inputs[0])
-            uv_socket = translated.outputs['Vector']
-        for i, channel in enumerate(CHANNELS):
-            texture = node(channel, "ShaderNodeTexImage", (-600, 400 - i * 250))
-            image = next((o.image for o in ts.outputs if o.channel == channel), None)
-            if image_overrides and channel in image_overrides:
-                image = image_overrides[channel]
-            if texture.image != image:
-                texture.image = image
-            if uv_socket is not None:
-                connect(uv_socket, texture.inputs['Vector'])
-            colors[channel] = texture.outputs['Color']
-    from ..targets import preview as engine_preview
-    project = getattr(ts.id_data, 'open_painter', None)
-    engine_preview.remove(nodes)
-    connect(colors['EMISSION'], bsdf.inputs['Emission Color'])
-    connect(colors['OPACITY'], bsdf.inputs['Alpha'])
-    for socket, value in (("Emission Strength",1),("Anisotropic",ts.anisotropy),
-                          ("Coat Weight",ts.coat_weight),("Coat Roughness",ts.coat_roughness)):
-        if bsdf.inputs[socket].default_value != value:
-            bsdf.inputs[socket].default_value = value
-    tangent = node("UV Tangent", "ShaderNodeTangent", (250, -450))
-    if tangent.direction_type != "UV_MAP":
-        tangent.direction_type = "UV_MAP"
-    connect(tangent.outputs["Tangent"], bsdf.inputs["Tangent"])
-    ao = node("AO Preview", "ShaderNodeMixRGB", (0, 300))
-    if ao.blend_type != "MULTIPLY":
-        ao.blend_type = "MULTIPLY"
-    factor = 1 if ts.preview_ao else 0
-    if ao.inputs[0].default_value != factor:
-        ao.inputs[0].default_value = factor
-    if bsdf.inputs['Specular IOR Level'].default_value != .5:
-        bsdf.inputs['Specular IOR Level'].default_value = .5
-    display = colors
-    if project is not None and project.engine_preview:
-        display = engine_preview.adapt(ts, project, colors, node, connect, bsdf, ao)
-    connect(display["BASE_COLOR"], ao.inputs[1])
-    connect(colors["AO"], ao.inputs[2])
-    connect(ao.outputs[0], bsdf.inputs["Base Color"])
-    for channel, socket in (("ROUGHNESS", "Roughness"), ("METALLIC", "Metallic")):
-        connect(display[channel], bsdf.inputs[socket])
-    normal = node("Normal", "ShaderNodeNormalMap", (0, -200))
-    bump = node("Height", "ShaderNodeBump", (250, -200))
-    if bump.inputs["Distance"].default_value != ts.height_distance:
-        bump.inputs["Distance"].default_value = ts.height_distance
-    connect(display["NORMAL"], normal.inputs["Color"])
-    connect(normal.outputs["Normal"], bump.inputs["Normal"])
-    connect(colors["HEIGHT"], bump.inputs["Height"])
-    connect(bump.outputs["Normal"], bsdf.inputs["Normal"])
-    # View Mask (ui/mask_view.py): while a mask snapshot is shown, the surface reads it instead.
-    from ..ui import mask_view
-    mask_view.wire(ts, nodes, links, node, connect, bsdf)
+    with texture_set_node.creating():
+        source = node("Texture Set", texture_set_node.NODE_ID)
+    texture_set_node.bind(source, ts, overrides=image_overrides)
+    bsdf = node("Surface", "ShaderNodeBsdfPrincipled")
+    output = node("Output", "ShaderNodeOutputMaterial")
+    _drop_untouched_defaults(nodes, {source.as_pointer(), bsdf.as_pointer(), output.as_pointer()})
+    if not output.is_active_output:
+        output.is_active_output = True
+    for name, socket in SURFACE:
+        connect(source.outputs[name], bsdf.inputs[socket])
+    connect(bsdf.outputs["BSDF"], output.inputs["Surface"])
+    _surface_values(ts, bsdf)
     for ref in ts.assignments:
         if ref.object and ref.slot_index < len(ref.object.material_slots):
             slot = ref.object.material_slots[ref.slot_index]
             if slot.material is None:
                 slot.material = material
-    # Materials compiled by earlier versions held the whole stack as a "Procedural Graph"
-    # group of node groups: the node above replaces it.
-    for old in list(nodes):
-        if old.get(OWNER) and old.get('role') == 'Procedural Graph':
-            tree = old.node_tree
-            nodes.remove(old)
-            if tree and not tree.users and tree.get(OWNER):
-                bpy.data.node_groups.remove(tree)
     from ..evaluation.shader_graph import remove_orphan_units
     remove_orphan_units(ts.id)
     shader_preview.mark_attached(ts.id_data, ts, engine)

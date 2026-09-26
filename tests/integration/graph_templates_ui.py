@@ -96,22 +96,36 @@ def run():
     yield .6
     mask = next(mask for layer in ts.layers for mask in layer.masks if mask.source == 'GRAPH')
     group = mask.node_group
-    from open_painter.procedural_graph.tree import TREE_ID as MASK_GRAPH
-    assert group.bl_idname == MASK_GRAPH, 'a template must create a Mask Graph, not a shader group'
+    from open_painter.procedural_graph import is_native
+    assert is_native(group) and group.bl_idname == TREE_ID, 'a template creates a Mask Graph in the Open Painter Graph'
+    count = len(window.screen.areas)
+    space = area.spaces.active
     with bpy.context.temp_override(area=area, region=region):
         assert bpy.ops.open_painter.mask_graph_edit(tree=group.name) == {'FINISHED'}
     yield .8
-    editors = [a for a in window.screen.areas if a.type == 'NODE_EDITOR' and a.spaces.active.edit_tree == group]
-    assert len(editors) == 1 and editors[0].spaces.active.tree_type == MASK_GRAPH, editors
-    assert area.spaces.active.node_tree == tree
-    count = len(window.screen.areas)
+    # One Open Painter editor: the Mask Graph is entered inside the texture set's graph.
+    assert len(window.screen.areas) == count, 'Edit Mask Graph opened another editor'
+    assert space.edit_tree == group and space.node_tree == tree and len(space.path) == 2, list(space.path)
+    # Framed once the editor drew the graph: every node of the template is in view.
+    view = [region.view2d.region_to_view(0, 0), region.view2d.region_to_view(region.width, region.height)]
+    for node in group.nodes:
+        x, y = node.location
+        assert view[0][0] <= x <= view[1][0] and view[0][1] <= y <= view[1][1], (node.name, (x, y), view)
+    shot = ROOT / '.blender-test' / 'graph-templates-mask-graph.png'
     with bpy.context.temp_override(area=area, region=region):
-        # The older Edit Shader Group entry point reuses the Mask Graph editor (no Shader Editor).
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=2)
+    bpy.ops.screen.screenshot(filepath=str(shot))
+    report['mask_graph_screenshot'] = str(shot)
+    with bpy.context.temp_override(area=area, region=region):
+        # The older Edit Shader Group entry point finds the graph already open.
         assert bpy.ops.open_painter.graph_edit_shader(mask_id=mask.id) == {'FINISHED'}
     yield .4
-    assert len(window.screen.areas) == count
-    report['steps'].append('Edit Mask Graph opens the mask\'s own graph in the Mask Graph editor')
-
+    assert len(window.screen.areas) == count and space.edit_tree == group
+    with bpy.context.temp_override(area=area, region=region):
+        assert bpy.ops.node.tree_path_parent() == {'FINISHED'}   # Tab / the header's Back
+    yield .4
+    assert space.edit_tree == tree and len(space.path) == 1
+    report['steps'].append('Edit Mask Graph enters the mask\'s graph in the same Open Painter editor; Back returns')
 
 steps = run()
 

@@ -192,11 +192,9 @@ def mask_drawn():
     assert bpy.ops.open_painter.view_mask(action="VIEW") == {"FINISHED"}
     view = mask_view.active(ts)
     assert view is not None and view["layer_id"] == coat.id
-    material = ts.material
-    node = next(n for n in material.node_tree.nodes if n.get("role") == mask_view.ROLE)
-    bsdf = next(n for n in material.node_tree.nodes if n.get("role") == "Surface")
-    assert any(link.from_node == node for link in bsdf.inputs["Base Color"].links), "the surface shows the snapshot"
-    assert not bsdf.inputs["Normal"].links
+    from open_painter.core import texture_set_node
+    assert len(ts.material.node_tree.nodes) == 3, "the material keeps its Texture Set node, BSDF and output"
+    assert texture_set_node.showing_mask(ts), "the surface shows the snapshot"
     state["checks"].append("view-mask-rewires-the-display-to-a-snapshot")
     redraw()
     later(viewing_drawn, 1.5)
@@ -212,9 +210,8 @@ def viewing_drawn():
     assert mask_view.stale(ts), "an edit marks the snapshot out of date"
     assert bpy.ops.open_painter.view_mask(action="BACK") == {"FINISHED"}
     assert mask_view.active(ts) is None
-    bsdf = next(n for n in ts.material.node_tree.nodes if n.get("role") == "Surface")
-    assert bsdf.inputs["Normal"].links and not any(
-        link.from_node.get("role") == mask_view.ROLE for link in bsdf.inputs["Base Color"].links)
+    from open_painter.core import texture_set_node
+    assert not texture_set_node.showing_mask(ts) and len(ts.material.node_tree.nodes) == 3
     state["checks"].append("back-to-material-restores-the-shaded-display")
     # Add Paint to Mask keeps the generator and adds an explicit paint mask on top.
     before = [m.source for m in coat.masks]

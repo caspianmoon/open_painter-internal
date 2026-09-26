@@ -32,14 +32,15 @@ engine computes from the *exported* files rather than from the live float graph:
   and rebuilds Z from X and Y the way BC5 / Unity's *Normal map* import does;
 - roughness goes through the smoothness round trip for Unity targets;
 - `AO Indirect Only`: engines apply the AO map to indirect light, so the directly
-  lit viewport shows none of it (the *AO Preview* multiply is set to 0);
+  lit viewport shows none of it (the Texture Set node's AO in the preview is set to 0);
 - the scene's view transform switches to Standard (Unreal's ACES tone map is not
   reproduced; the choice is restored when the preview is turned off).
 
-The adapters are role-tagged nodes (`Open Painter · Engine · …`) between the
-compiled graph's outputs and the Principled BSDF: shader bindings are untouched
-and toggling never rebuilds or recompiles the graph. `tests/integration/engine_preview.py`
-bakes the adapter outputs and checks them against numpy to 2/255.
+The adapters are role-tagged nodes (`Engine · …`) inside the Open Painter Texture
+Set node's group, between its samplers and its outputs. The material stays the node, a
+Principled BSDF and a Material Output. Toggling the preview never rebuilds the stack.
+`tests/integration/engine_preview.py` bakes the adapter outputs and checks them against
+NumPy to 2/255.
 
 ## Export → Target
 

@@ -1,6 +1,8 @@
 """Engine Preview: the display material shows what the target engine computes from the
 exported textures — 8-bit sRGB colour, smoothness/DirectX round trips, BC5 Z reconstruction,
-AO indirect only, Standard view — and toggling it back restores the plain preview."""
+AO indirect only, Standard view — and toggling it back restores the plain preview. The
+adapters live in the Texture Set node's group: the material stays that node, a Principled
+BSDF and a Material Output throughout."""
 import sys
 from pathlib import Path
 from time import monotonic
@@ -14,6 +16,7 @@ import open_painter
 from open_painter.constants import OWNER
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
+from open_painter.core import texture_set_node
 from open_painter.evaluation import cache, shader_preview
 from open_painter.targets import preview
 
@@ -50,17 +53,32 @@ def ready():
     raise AssertionError(shader_preview.diagnostics(scene, ts))
 
 
+def group():
+    return bpy.data.node_groups[texture_set_node.tree_name(ts)]
+
+
 def roles():
-    return {node.get('role'): node for node in ts.material.node_tree.nodes if node.get(OWNER)}
+    """What decides what the surface shows: the nodes of the Texture Set node's group."""
+    kinds = sorted(node.bl_idname for node in ts.material.node_tree.nodes)
+    assert kinds == sorted([texture_set_node.NODE_ID, 'ShaderNodeBsdfPrincipled', 'ShaderNodeOutputMaterial']), kinds
+    return {node.get('role'): node for node in group().nodes if node.get('role')}
 
 
-def bake(socket):
+def group_output():
+    return next(node for node in group().nodes if node.bl_idname == 'NodeGroupOutput')
+
+
+def bake(inner):
+    """Bake ``inner`` (a socket inside the group) through a temporary output of the group."""
     # A scripted bake fires no bake handler: copy the engine's results into the images' pixels
     # (Cycles reads those), as the add-on's own bakes do.
     shader_preview.sync_pixels()
     scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = 1
     scene.render.bake.margin = 0; scene.render.bake.use_clear = True
+    probe = group().interface.new_socket(name='Probe', in_out='OUTPUT', socket_type='NodeSocketColor')
+    group().links.new(inner, group_output().inputs['Probe'])
     tree = ts.material.node_tree
+    socket = next(n for n in tree.nodes if n.bl_idname == texture_set_node.NODE_ID).outputs['Probe']
     target = bpy.data.images.new('Engine readback', width=N, height=N, float_buffer=True)
     target.colorspace_settings.name = 'Non-Color'
     output = next(n for n in tree.nodes if n.bl_idname == 'ShaderNodeOutputMaterial')
@@ -75,6 +93,7 @@ def bake(socket):
     tree.links.new(surface, output.inputs['Surface'])
     tree.nodes.remove(node); tree.nodes.remove(emission)
     bpy.data.images.remove(target)
+    group().interface.remove(probe)
     return value
 
 
@@ -100,8 +119,8 @@ assert shader_preview.ensure(scene, ts) is graph and graph.node_identities() == 
 assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds
 after = roles()
 assert all(preview.PREFIX + name in after for name in ('Base Color', 'Metallic', 'Roughness', 'Normal')), list(after)
-assert after['Surface'].inputs['Roughness'].links[0].from_node == after[preview.PREFIX + 'Roughness']
-assert after['Normal'].inputs['Color'].links[0].from_node == after[preview.PREFIX + 'Normal']
+assert group_output().inputs['Roughness'].links[0].from_node == after[preview.PREFIX + 'Roughness']
+assert after['Normal Map'].inputs['Color'].links[0].from_node == after[preview.PREFIX + 'Normal']
 assert after['AO Preview'].inputs[0].default_value == 0, 'AO must be indirect only'
 assert scene.view_settings.view_transform == 'Standard' and project.saved_view_transform == 'AgX'
 normal = bake(after[preview.PREFIX + 'Normal'].outputs['Color'])
@@ -140,10 +159,8 @@ project.engine_preview = False
 ready()
 final = roles()
 assert not any(str(role).startswith(preview.PREFIX) for role in final), [r for r in final if str(r).startswith(preview.PREFIX)]
-from open_painter.core.texture_set_node import NODE_ID
-source = next(node for node in ts.material.node_tree.nodes if node.bl_idname == NODE_ID)
-assert final['Surface'].inputs['Roughness'].links[0].from_socket == source.outputs['Roughness']
-assert final['Normal'].inputs['Color'].links[0].from_socket == source.outputs['Normal Map']
+assert group_output().inputs['Roughness'].links[0].from_node == final['ROUGHNESS Value']
+assert final['Normal Map'].inputs['Color'].links[0].from_node == final['NORMAL']
 assert final['AO Preview'].inputs[0].default_value == 1
 assert scene.view_settings.view_transform == 'AgX' and not project.saved_view_transform
 scene.view_settings.view_transform = saved_view

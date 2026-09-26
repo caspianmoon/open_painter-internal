@@ -1,12 +1,13 @@
-"""Engine Preview: reconfigure the display material to what the target engine computes.
+"""Engine Preview: show the texture set as the target engine computes it.
 
-Inserted between the compiled graph's outputs and the Principled BSDF as
-role-tagged nodes (``Engine · <stage>``), so shader bindings stay untouched and
-toggling is numeric: 8-bit quantisation of every exported channel (through sRGB
-for colour), the DirectX green-flip round trip and BC5 Z reconstruction for
-normals, smoothness round trip for roughness, AO removed from direct light
-(engines apply it to indirect light only), specular F0 0.04, and the Standard
-view transform. Removing the nodes restores the plain preview.
+The adapters are role-tagged nodes (``Engine · <stage>``) inside the Open Painter
+Texture Set node's group, between its samplers and its outputs, so the material stays
+the node, a Principled BSDF and a Material Output: 8-bit quantisation of every exported
+channel (through sRGB for colour), the DirectX green-flip round trip and BC5 Z
+reconstruction for normals, smoothness round trip for roughness, AO removed from direct
+light (engines apply it to indirect light only, ``texture_set_node.ao_factor``), the
+target's specular F0 on the BSDF (``specular``), and the Standard view transform.
+Turning the preview off drops the adapters.
 """
 import bpy
 
@@ -154,8 +155,17 @@ def _gloss_adapter(tree):
     tree.links.new(out.outputs[0], group_out.inputs['Value'])
 
 
-def adapt(ts, project, colors, node, connect, bsdf, ao_mix):
-    """Insert the engine adapters for the project's target; returns the adapted sockets."""
+def specular(project):
+    """The Principled BSDF's Specular IOR Level: the target's under Engine Preview, else Blender's."""
+    if project is not None and project.engine_preview:
+        from . import get
+        return get(project.target).specular
+    return .5
+
+
+def adapt(ts, project, colors, node, connect):
+    """Insert the engine adapters for the project's target (``node``/``connect`` build them in
+    the texture set node's group); returns the adapted sockets."""
     from . import get
     target = get(project.target)
     adapted = dict(colors)
@@ -181,17 +191,12 @@ def adapt(ts, project, colors, node, connect, bsdf, ao_mix):
     normal.inputs['Reconstruct Z'].default_value = 1.0 if project.engine_preview_normal_reconstruct else 0.0
     connect(colors['NORMAL'], normal.inputs['Color'])
     adapted['NORMAL'] = normal.outputs['Color']
-    if target.ao_usage == 'INDIRECT' and project.engine_preview_ao_indirect:
-        # Engines apply the AO map to indirect light only; a directly lit viewport shows none of it.
-        if ao_mix.inputs[0].default_value != 0:
-            ao_mix.inputs[0].default_value = 0
-    if bsdf.inputs['Specular IOR Level'].default_value != target.specular:
-        bsdf.inputs['Specular IOR Level'].default_value = target.specular
     return adapted
 
 
 def remove(nodes):
-    """Drop every engine adapter node of a material (the plain preview is rewired by repair)."""
+    """Drop the engine adapter nodes earlier versions placed in a material (they live in the
+    texture set node's group now)."""
     for item in list(nodes):
         if item.get(OWNER) and str(item.get('role', '')).startswith(PREFIX):
             nodes.remove(item)

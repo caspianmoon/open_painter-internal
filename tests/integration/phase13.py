@@ -15,7 +15,7 @@ from open_painter.core import (
     image_manager as images,
     surface_presets,
 )
-from open_painter.constants import CHANNELS, DEFAULTS, OWNER
+from open_painter.constants import CHANNELS, DEFAULTS
 from open_painter.evaluation.evaluator import LayerEvaluator
 
 open_painter.register()
@@ -28,7 +28,12 @@ ts.preview_backend = 'CPU'  # Explicit channel-image allocation/export contract.
 LayerEvaluator(scene).evaluate_texture_set(ts.id)
 assert obj.active_material == ts.material
 assert {o.channel for o in ts.outputs} == set(CHANNELS)
-roles = {n.get("role"): n for n in ts.material.node_tree.nodes if n.get(OWNER)}
+# The material is the Texture Set node, a Principled BSDF and a Material Output; the channel
+# images are sampled inside the node's group, in the CPU reference as with the engine.
+from open_painter.core import texture_set_node
+kinds = sorted(n.bl_idname for n in ts.material.node_tree.nodes)
+assert kinds == sorted([texture_set_node.NODE_ID, "ShaderNodeBsdfPrincipled", "ShaderNodeOutputMaterial"]), kinds
+roles = texture_set_node.channel_nodes(ts)
 assert all(
     roles[key].image == next(o.image for o in ts.outputs if o.channel == key) for key in CHANNELS
 )

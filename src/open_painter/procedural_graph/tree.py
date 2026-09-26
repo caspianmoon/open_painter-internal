@@ -1,7 +1,11 @@
-"""The Mask Graph node tree: Open Painter's own node types, sockets and Add menu.
+"""Mask Graph nodes, sockets and Add menu, in the Open Painter Graph editor.
 
-Nodes carry their settings as properties and plain value sockets; nothing here
-evaluates anything. ``program`` reads a tree into the ordered steps both
+A Mask Graph is an Open Painter Graph tree (``graph.tree``, the one Open Painter node
+editor) marked with ``MARKER``: its nodes are these, a texture set's graph never shows
+them and they never show its layer nodes. Graphs saved by 0.13 builds as a tree type of
+their own (``LEGACY_ID``) load through a hidden type and are rebuilt on load
+(``convert_legacy``). Nodes carry their settings as properties and plain value sockets;
+nothing here evaluates anything. ``program`` reads a tree into the ordered steps both
 evaluators share. A property edit is *numeric* (a uniform: the engine renders
 the new value, nothing recompiles) or *structural* (a kind, an operation, a
 link: the graph's pass is rebuilt); ``edits`` routes both to the masks that
@@ -11,8 +15,18 @@ import zlib
 
 import bpy
 
-TREE_ID = 'OpenPainterMaskGraph'
+from ..graph.tree import TREE_ID
+from . import MARKER, is_native
+
+LEGACY_ID = 'OpenPainterMaskGraph'   # a Mask Graph's own tree type in 0.13 builds before one editor
 VALUE_SOCKET, VECTOR_SOCKET = 'OPMaskGraphValue', 'OPMaskGraphVector'
+
+
+def new_tree(name):
+    """A new, empty Mask Graph."""
+    tree = bpy.data.node_groups.new(name, TREE_ID)
+    tree[MARKER] = True   # before any node: the nodes' poll reads it
+    return tree
 
 
 def _numeric(self, context):
@@ -74,18 +88,15 @@ RAMP_MODES = _items((('LINEAR', 'Linear', 'Straight segments between stops'), ('
                      ('CONSTANT', 'Constant', 'Each stop holds until the next')))
 
 
-class OP_MaskGraphTree(bpy.types.NodeTree):
-    """Open Painter's procedural graph for a Custom Graph mask (evaluated by Open Painter)"""
-    bl_idname = TREE_ID
-    bl_label = 'Open Painter Mask Graph'
+class OP_MaskGraphTreeLegacy(bpy.types.NodeTree):
+    """A Mask Graph saved as a tree type of its own (0.13 builds); rebuilt as an Open Painter Graph on load"""
+    bl_idname = LEGACY_ID
+    bl_label = 'Open Painter Mask Graph (converted on load)'
     bl_icon = 'NODETREE'
 
-    def update(self):
-        from ..registration import _registered
-        if not _registered:
-            return
-        from . import edits
-        edits.tree_changed(self)
+    @classmethod
+    def poll(cls, context):
+        return False   # never an editor of its own: files keep loading, the menu shows one Open Painter editor
 
 
 # ---- sockets -----------------------------------------------------------------------------
@@ -132,7 +143,7 @@ class OP_MaskGraphVectorSocket(bpy.types.NodeSocket):
 class _MaskGraphNode:
     @classmethod
     def poll(cls, tree):
-        return tree.bl_idname == TREE_ID
+        return is_native(tree) or tree.bl_idname == LEGACY_ID
 
     def _value(self, name, default, output=False):
         socket = (self.outputs if output else self.inputs).new(VALUE_SOCKET, name)
@@ -431,7 +442,8 @@ MENU = (
 
 
 def add_menu(self, context):
-    if getattr(context.space_data, 'tree_type', '') != TREE_ID:
+    space = context.space_data
+    if getattr(space, 'tree_type', '') != TREE_ID or not is_native(getattr(space, 'edit_tree', None)):
         return
     layout = self.layout
     for index, (category, entries) in enumerate(MENU):
@@ -444,15 +456,101 @@ def add_menu(self, context):
             op.type, op.use_transform = idname, True
 
 
-CLASSES = (OP_MaskGraphTree, OP_MaskGraphValueSocket, OP_MaskGraphVectorSocket, OP_MaskGraphRampStop,
+CLASSES = (OP_MaskGraphTreeLegacy, OP_MaskGraphValueSocket, OP_MaskGraphVectorSocket, OP_MaskGraphRampStop,
            OP_MaskGraphCoordinates, OP_MaskGraphValue, OP_MaskGraphNoise, OP_MaskGraphCells, OP_MaskGraphPattern,
            OP_MaskGraphSurface, OP_MaskGraphMeshMap, OP_MaskGraphMath, OP_MaskGraphMix, OP_MaskGraphRamp,
            OP_MaskGraphLevels, OP_MaskGraphMapping, OP_MaskGraphOutput, OP_OT_mask_graph_ramp_stop)
 
 
+# ---- graphs saved as a tree type of their own ------------------------------------------------------
+
+_BASE = frozenset(prop.identifier for prop in bpy.types.Node.bl_rna.properties)
+
+
+def _copy_settings(source, target):
+    """The node's own settings (not Blender's): its properties and its ramp stops."""
+    for prop in source.bl_rna.properties:
+        name = prop.identifier
+        if name in _BASE or prop.is_readonly and prop.type != 'COLLECTION':
+            continue
+        if prop.type == 'COLLECTION':
+            items = getattr(target, name)
+            items.clear()
+            for item in getattr(source, name):
+                copy = items.add()
+                for field in item.bl_rna.properties:
+                    if field.identifier != 'rna_type' and not field.is_readonly:
+                        setattr(copy, field.identifier, getattr(item, field.identifier))
+        elif prop.type != 'POINTER':
+            setattr(target, name, getattr(source, name))
+
+
+def convert_legacy():
+    """Rebuild each Mask Graph saved as its own tree type as an Open Painter Graph tree (same
+    name, nodes, settings, sockets and links) and point the masks and fake user at it."""
+    from ..constants import OWNER
+    converted = []
+    for old in [tree for tree in bpy.data.node_groups if tree.bl_idname == LEGACY_ID]:
+        new = new_tree(old.name + ' (converting)')
+        if old.get(OWNER):
+            new[OWNER] = True
+        nodes = {}
+        for node in old.nodes:
+            copy = new.nodes.new(node.bl_idname)
+            copy.name, copy.label = node.name, node.label
+            copy.location, copy.width, copy.mute, copy.hide = node.location, node.width, node.mute, node.hide
+            _copy_settings(node, copy)
+            for socket in node.inputs:
+                inner = next((s for s in copy.inputs if s.identifier == socket.identifier), None)
+                if inner is not None:
+                    inner.enabled = socket.enabled
+                    if hasattr(socket, 'default_value'):
+                        inner.default_value = socket.default_value
+            nodes[node.name] = copy
+        for link in old.links:
+            source = next(s for s in nodes[link.from_node.name].outputs if s.identifier == link.from_socket.identifier)
+            target = next(s for s in nodes[link.to_node.name].inputs if s.identifier == link.to_socket.identifier)
+            new.links.new(source, target).is_muted = link.is_muted
+        for scene in bpy.data.scenes:
+            project = getattr(scene, 'open_painter', None)
+            for ts in (project.texture_sets if project is not None else ()):
+                for layer in ts.layers:
+                    for mask in layer.masks:
+                        if mask.node_group == old:
+                            mask.node_group = new
+        name, fake = old.name, old.use_fake_user
+        bpy.data.node_groups.remove(old)
+        new.name, new.use_fake_user = name, fake
+        converted.append(new)
+    if converted:
+        from . import edits
+        edits.forget()
+    return converted
+
+
+@bpy.app.handlers.persistent
+def _on_load(*_):
+    convert_legacy()
+
+
+def _convert_open_file():
+    try:
+        convert_legacy()
+    except Exception:
+        from ..utils.logging import logger
+        logger.debug('Mask Graph conversion skipped', exc_info=True)
+    return None
+
+
 def register():
     bpy.types.NODE_MT_add.append(add_menu)
+    bpy.app.handlers.load_post.insert(0, _on_load)   # before the engine binds the masks of the file
+    bpy.app.timers.register(_convert_open_file, first_interval=0.0)   # a file open while enabling
 
 
 def unregister():
     bpy.types.NODE_MT_add.remove(add_menu)
+    if _on_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_on_load)
+    if bpy.app.timers.is_registered(_convert_open_file):
+        bpy.app.timers.unregister(_convert_open_file)

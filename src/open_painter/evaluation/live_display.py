@@ -58,17 +58,15 @@ def _canvases():
 
 
 def _bind_nodes(ts, channel, image, only=None):
-    material = ts.material
-    if not material or not material.use_nodes or not material.node_tree:
+    """Show ``image`` for ``channel`` in the material's Texture Set node (its group's sampler)."""
+    if not ts.material:
         return False
-    changed = False
-    for node in material.node_tree.nodes:
-        if (node.bl_idname == 'ShaderNodeTexImage' and node.get(OWNER)
-                and node.get('role') == channel and node.image != image
-                and (only is None or node.image in only)):
-            node.image = image
-            changed = True
-    return changed
+    from ..core.texture_set_node import channel_nodes
+    node = channel_nodes(ts).get(channel)
+    if node is None or node.image == image or (only is not None and node.image not in only):
+        return False
+    node.image = image
+    return True
 
 
 def _remove(image):

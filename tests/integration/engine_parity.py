@@ -83,14 +83,13 @@ def compare(label, scene, ts, tolerance=TOLERANCE):
 
 
 def material_is_clean(ts):
+    """The managed material is the Texture Set node, a Principled BSDF and a Material Output."""
     from open_painter.core import texture_set_node
     material = ts.material
     tree = material.node_tree
-    kinds = [node.bl_idname for node in tree.nodes]
-    assert texture_set_node.NODE_ID in kinds, kinds
-    assert not any(node.get('role') == 'Procedural Graph' for node in tree.nodes), kinds
+    kinds = sorted(node.bl_idname for node in tree.nodes)
+    assert kinds == sorted([texture_set_node.NODE_ID, 'ShaderNodeBsdfPrincipled', 'ShaderNodeOutputMaterial']), kinds
     assert not any(group.get('op_shader_graph') for group in bpy.data.node_groups), 'compiled node groups remain'
-    assert len(tree.nodes) <= 10, f'{len(tree.nodes)} nodes in the managed material'
     node = next(node for node in tree.nodes if node.bl_idname == texture_set_node.NODE_ID)
     assert node.texture_set_id == ts.id and node.node_tree is not None
     return len(tree.nodes), len(node.node_tree.nodes)

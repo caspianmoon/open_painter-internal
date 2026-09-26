@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 import open_painter
 from open_painter.authoring import assets, commands, context as authoring, document, schema, transactions
-from open_painter.ai import session, viewport
+from open_painter.ai import session, viewport, visual_context
 from open_painter.core import layer_stack as stack, texture_set_manager as sets
 from open_painter.evaluation import shader_preview
 from open_painter.evaluation.metrics import Metrics
@@ -617,9 +617,14 @@ class DirectorTests(unittest.TestCase):
         settings = bpy.context.window_manager.open_painter_director
         settings.mode, settings.prompt = "REFINE", "Fix those two problems"
         settings.scope, settings.send_view = "SET", False
+        # No model images in a background run: no generated textures and no candidate review.
+        settings.generate_textures, settings.correction_enabled = False, False
         messages = []
         from types import SimpleNamespace
-        with patch.object(session, "ensure_online"), patch.object(session, "connection", SimpleNamespace(send=messages.append)):
+        # About the conversation history, not the geometry evidence authoring requires (no mesh
+        # maps are baked here, and a background run captures no view).
+        with patch.object(session, "ensure_online"), patch.object(session, "connection", SimpleNamespace(send=messages.append)), \
+                patch.object(visual_context, "require_geometry_maps"):
             with patch.dict(session.state, signed_in=True):
                 session.run(bpy.context)
         history = json.loads(messages[-1]["input"])["recent_conversation"]

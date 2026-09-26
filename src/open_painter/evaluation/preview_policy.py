@@ -52,7 +52,6 @@ def current(scene, ts, channel):
 
 def publish(scene, ts, channel, size, serial, pixels):
     from ..core import image_manager
-    from ..constants import OWNER
     if serial != ts.edit_serial:
         return None
     key = (*key_for(scene, ts), channel)
@@ -68,10 +67,8 @@ def publish(scene, ts, channel, size, serial, pixels):
         image['open_painter_disposable_preview'] = True
     image_manager.write(image, pixels, pack=False)
     _proxies[key] = (serial, size, image)
-    if ts.material and ts.material.use_nodes:
-        for node in ts.material.node_tree.nodes:
-            if node.get(OWNER) and node.get('role') == channel and node.bl_idname == 'ShaderNodeTexImage':
-                node.image = image
+    from ..core.texture_set_node import show_image
+    show_image(ts, channel, image)   # the material's Texture Set node samples it instead of the set's own
     return image
 
 
@@ -99,10 +96,9 @@ def clear():
                 # Cleanup only adapters that actually reference a CPU preview.
                 # Native authoring graphs must survive disable/load without
                 # rebuilding recipes (which may intentionally lack mesh maps).
-                if ts.material and ts.material.node_tree and any(
-                        node.type == 'TEX_IMAGE' and node.image and
-                        node.image.get('open_painter_disposable_preview')
-                        for node in ts.material.node_tree.nodes):
+                from ..core.texture_set_node import channel_nodes
+                if ts.material and any(node.image and node.image.get('open_painter_disposable_preview')
+                                       for node in channel_nodes(ts).values()):
                     material_manager.repair(ts, image_overrides={})
     _proxies.clear()
     for cache in _resources.values():

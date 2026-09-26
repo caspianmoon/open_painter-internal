@@ -13,6 +13,7 @@ image identities and object matrices plus the stamps of everything it reads. A
 channel whose chain stamp is unchanged is not rendered; a changed one re-renders
 its chain, reusing retained SRC/MASK results whose stamps still match.
 """
+import os
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
 from time import perf_counter
@@ -29,6 +30,11 @@ SCALAR = 'R32F'
 RETAIN_BYTES = 512 * 1024 * 1024    # SRC/MASK results kept between evaluations, per texture set
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
+# Publication through the images' pixel buffers: None follows the backend (Vulkan), True/False
+# force it (tests run the Vulkan path on Metal). On Vulkan Blender's image textures are storage,
+# not render targets, and every pixel write makes Blender rebuild the image's texture and mips.
+PIXEL_PUBLISH = True if os.environ.get('OP_ENGINE_PIXEL_PUBLISH') == '1' else None   # the env: whole suites
+PIXEL_BUDGET_MS = 20.0   # per evaluation through pixels: the channels waiting longest publish first
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -56,6 +62,10 @@ void main() {
   op_out1 = value;   /* the source of its mip chain */
 }
 '''
+# Through pixels (Vulkan) only the image's content is read back: no second target for a mip chain
+# Blender rebuilds itself.
+PUBLISH_PIXELS = PUBLISH.replace('  op_out1 = value;   /* the source of its mip chain */\n', '')
+assert PUBLISH_PIXELS != PUBLISH
 MIP = r'''
 void main() {
   ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source, 0), q = p * 2;
@@ -136,6 +146,7 @@ class Device:
         self.compile_seconds = 0.0
         self.passes = 0
         self.wait_cost = 0.0 # ms of submitting a pass that does nothing and waiting for it (``calibrate``)
+        self._readbacks = {}  # side -> float buffer a pixel publication reads into (no allocation each time)
         self._fixed = {}
         try:
             self.max_samplers = int(gpu.capabilities.max_textures_frag_get())
@@ -192,6 +203,7 @@ class Device:
         if shader is None:
             source, samplers, ints, targets = {
                 'publish': (PUBLISH, ['op_source', 'op_donor'], ('op_mode', 'op_pad'), 2),
+                'publish_pixels': (PUBLISH_PIXELS, ['op_source', 'op_donor'], ('op_mode', 'op_pad'), 1),
                 'mip': (MIP, ['op_source'], (), 2),
                 'finish': (FINISH, ['op_source'], ('op_mode',), 1),
                 'pad': (PAD, ['op_source', 'op_donor'], (), 1),
@@ -205,8 +217,10 @@ class Device:
     def texture(self, n, fmt=RGBA):
         import gpu
         free = self.pool.get((n, fmt))
-        if free:
-            return free.pop()
+        while free:
+            texture = free.pop()
+            if texture.width == n and texture.height == n:
+                return texture   # (a texture released under another size is dropped, never reused)
         metrics.count('engine_texture_allocations')
         return gpu.types.GPUTexture((n, n), format=fmt)
 
@@ -269,6 +283,24 @@ class Device:
                 shader.uniform_sampler(name, texture)
             self._batch(shader).draw(shader)
         self.passes += 1
+
+    @property
+    def pixel_publish(self):
+        """Results reach the images through their pixel buffers (Vulkan), not a framebuffer pass."""
+        return PIXEL_PUBLISH if PIXEL_PUBLISH is not None else self.backend == 'VULKAN'
+
+    def readback(self, texture, n):
+        """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K
+        channel is 64 MB, allocated once rather than on every stroke tick."""
+        import gpu
+        buffer = self._readbacks.get(n)
+        if buffer is None:
+            self._readbacks.clear()   # one resolution at a time
+            buffer = self._readbacks[n] = gpu.types.Buffer('FLOAT', n * n * 4)
+        framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
+        with framebuffer.bind():
+            framebuffer.read_color(0, 0, n, n, 4, 0, 'FLOAT', data=buffer)
+        return buffer
 
     def finish(self):
         """Wait for every pass submitted so far (a profile then times each pass alone)."""
@@ -411,6 +443,8 @@ class Engine:
         self._in_use = Counter()
         self._surface_key = None        # (geometry key,) of the running evaluation
         self.dirty_cpu = set()          # channels whose image pixels lag behind the GPU result
+        self.waiting = {}               # channel -> when its change was first held back (pixel budget)
+        self.deferred = set()           # channels the last evaluation held back for the next
 
     # ---- graph -----------------------------------------------------------------------
 
@@ -419,7 +453,7 @@ class Engine:
         n_before = self.graph.n if self.graph is not None else None
         self.graph = graph
         if n_before is not None and n_before != graph.n:
-            self.close()
+            self.close(n_before)   # the textures were rendered at the previous resolution
         live = {}
         for key, unit in graph.units.items():
             state = self.states.get(key)
@@ -447,8 +481,10 @@ class Engine:
         state.textures = None
         self.retained.pop(key, None)
 
-    def close(self):
-        n = self.graph.n if self.graph is not None else None
+    def close(self, n=None):
+        """Release every unit's textures to the pool, under ``n`` (default: the graph's side): the
+        resolution they were created at, or a later request would be handed a texture of another size."""
+        n = n if n is not None else (self.graph.n if self.graph is not None else None)
         for key, state in list(self.states.items()):
             self._free(key, state, n)
         self.states = {}
@@ -792,10 +828,14 @@ class Engine:
 
     # ---- evaluation --------------------------------------------------------------------------
 
-    def evaluate(self, channels=None, epochs=None, images=None):
+    def evaluate(self, channels=None, epochs=None, images=None, budget=None):
         """Render changed channels and publish them into the set's images; returns the channels written.
 
-        ``images`` maps channel -> Image to publish into (default: the set's outputs).
+        ``images`` maps channel -> Image to publish into (default: the set's outputs). Through pixels
+        (Vulkan) each publication costs a read-back, a pixel write and Blender's rebuild of the
+        image's texture, so an evaluation spends at most ``budget`` ms on them (default
+        ``PIXEL_BUDGET_MS``; False: no limit), always at least one channel, the channels waiting
+        longest first; the others stay in ``deferred`` for the next evaluation.
         """
         graph = self.graph
         if graph is None:
@@ -813,14 +853,27 @@ class Engine:
         self.rendered = []
         self._in_use = Counter()
         self._surface_key = None
+        pixels = dev.pixel_publish
+        if budget is None:
+            budget = PIXEL_BUDGET_MS if pixels and images is None and not self.profiling else False
+        now = perf_counter()
+        order = list(channels or CHANNELS)
+        if budget is not False:
+            order.sort(key=lambda channel: (self.waiting.get(channel, now), CHANNELS.index(channel)))
+        deferred, spent = set(), 0.0
         with dev.state():
-            for channel in channels or CHANNELS:
+            for channel in order:
                 image = (images or {}).get(channel) or _output_image(ts, channel)
                 if image is None:
                     continue
                 stamp = self._ref_stamp(self.finals[channel], memo, epochs)
                 pointer = image.as_pointer()
                 if self.published.get(channel) == stamp and self.images.get(channel) == pointer:
+                    self.waiting.pop(channel, None)
+                    continue
+                if budget is not False and written and spent >= budget:
+                    deferred.add(channel)   # published by a later evaluation (cache.tick keeps coming)
+                    self.waiting.setdefault(channel, now)
                     continue
                 released = self._checkpoints(channel, memo, epochs)
                 for key in released:
@@ -835,19 +888,27 @@ class Engine:
                     dev.finish()
                 # The padding table it may build first counts as a CPU input, not as publishing;
                 # a profile's wait is not the GPU's time.
-                self.stages['publish_ms'] += max(0.0, (perf_counter() - publishing) * 1000
-                                                 - (self.stages['inputs_ms'] - inputs)
-                                                 - (dev.wait_cost if self.profiling else 0.0))
+                elapsed = max(0.0, (perf_counter() - publishing) * 1000
+                              - (self.stages['inputs_ms'] - inputs)
+                              - (dev.wait_cost if self.profiling else 0.0))
+                self.stages['publish_ms'] += elapsed
+                spent += elapsed
                 self.stages['published'].append(channel)
+                self.waiting.pop(channel, None)
                 if final[0] == 'unit':
                     self._settle(final[1], n)
                 self.published[channel] = stamp
                 self.images[channel] = pointer
                 written.add(channel)
-        self.dirty_cpu |= written
+        if pixels:
+            self.dirty_cpu -= written   # published through the pixel buffers: the CPU already has them
+        else:
+            self.dirty_cpu |= written
+        self.deferred = deferred
+        self.stages['deferred'] = sorted(deferred)
         dev.trim(POOL_SPARES)
         self.stages['compiles'] = dev.compiles - compiles
-        self.stages['publish_path'] = ('pixels' if dev.backend == 'VULKAN' else 'framebuffer') if written else ''
+        self.stages['publish_path'] = ('pixels' if pixels else 'framebuffer') if written else ''
         self.report = {'evaluate_ms': (perf_counter() - started) * 1000, 'channels': sorted(written),
                        'passes': dev.passes - passes, 'units_rendered': len(self.rendered),
                        'programs': len(dev.shaders), 'compiles': dev.compiles,
@@ -899,12 +960,12 @@ class Engine:
         chain = dev.texture(n, fmt)
         ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0}
         samplers = [('op_source', result), ('op_donor', donor if donor is not None else result)]
-        if dev.backend == 'VULKAN':
-            # Image textures are not render targets on Vulkan: go through the pixel buffer.
-            spare = dev.texture(n, fmt)
-            dev.draw(dev.fixed('publish'), [chain, spare], n, samplers, ints=ints)
-            write_pixels(image, np.array(chain.read(), np.float32).reshape(n, n, 4))
-            dev.release(spare, n, fmt)
+        if dev.pixel_publish:
+            # Vulkan: Blender creates image textures as storage, not render targets. The result goes
+            # through the pixel buffer, read into a reused buffer and handed over without a copy in
+            # Python; Blender then rebuilds the image's texture and mip chain on its next draw.
+            dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
+            image.pixels.foreach_set(dev.readback(chain, n))
             dev.release(chain, n, fmt)
             return
         target = gpu.texture.from_image(image)

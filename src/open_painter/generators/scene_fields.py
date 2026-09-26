@@ -29,9 +29,16 @@ def _attribute(ts, field, n):
     from ..geometry.uv_rasterizer import interpolate, rasterize
     result = np.zeros((n,n),np.float32)
     with targets(ts) as meshes:
+        meshes = list(meshes)
+        # The field's object narrows the attribute to one of the set's own meshes (the Material
+        # Director names one). Any other object is an influencer a previous kind left behind (a
+        # Contact field's bolt); the panel hides it for attributes, so it must not hide the meshes.
+        source = getattr(field, 'object', None)
+        if source is not None and not any(target['object'] == source for target in meshes):
+            source = None
         for target in meshes:
             mesh, obj = target['mesh'], target['object']
-            if getattr(field, 'object', None) is not None and obj != field.object:
+            if source is not None and obj != source:
                 continue
             if field.kind == 'VERTEX_GROUP':
                 group = obj.vertex_groups.get(field.attribute)

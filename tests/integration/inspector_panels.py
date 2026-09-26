@@ -141,10 +141,20 @@ def run(context):
     assert view is not None and view["layer_id"] == coat_id
     image = mask_view.image_of(view)
     assert image is not None and image.size[0] == min(int(body.resolution), mask_view.MAX_SIDE)
-    nodes = body.material.node_tree.nodes
-    bsdf = next(n for n in nodes if n.get("role") == "Surface")
-    assert any(link.from_node.get("role") == mask_view.ROLE for link in bsdf.inputs["Base Color"].links)
-    assert not bsdf.inputs["Normal"].links and not bsdf.inputs["Roughness"].links
+    from open_painter.core import texture_set_node
+
+    def group_output():
+        group = bpy.data.node_groups[texture_set_node.tree_name(body)]
+        return group, next(n for n in group.nodes if n.bl_idname == "NodeGroupOutput")
+
+    # The material stays its three nodes; the Texture Set node's group shows the snapshot.
+    kinds = sorted(n.bl_idname for n in body.material.node_tree.nodes)
+    assert kinds == ["OPShaderNodeTextureSet", "ShaderNodeBsdfPrincipled", "ShaderNodeOutputMaterial"], kinds
+    assert texture_set_node.showing_mask(body)
+    group, output = group_output()
+    assert output.inputs["Base Color"].links[0].from_node.get("role") == texture_set_node.MASK_VIEW
+    assert output.inputs["Roughness"].links[0].from_node.get("role") == texture_set_node.MASK_VIEW_ROLES[1]
+    assert output.inputs["Normal"].links[0].from_node.bl_idname == "ShaderNodeNewGeometry"
     assert [(m.source, m.generator) for m in dirt.masks] == sources, "never rasterised"
     target, layout = draw(context)
     assert "Back to Material" in layout.text and "Snapshot current" in layout.text
@@ -156,15 +166,16 @@ def run(context):
     assert not mask_view.stale(body)
     assert bpy.ops.open_painter.view_mask(action="BACK") == {"FINISHED"}
     assert mask_view.active(body) is None
-    bsdf = next(n for n in body.material.node_tree.nodes if n.get("role") == "Surface")
-    assert bsdf.inputs["Normal"].links and bsdf.inputs["Roughness"].links
-    assert not any(link.from_node.get("role") == mask_view.ROLE for link in bsdf.inputs["Base Color"].links)
+    assert not texture_set_node.showing_mask(body)
+    group, output = group_output()
+    assert not any(n.get("role") in texture_set_node.MASK_VIEW_ROLES for n in group.nodes)
+    assert output.inputs["Normal"].links[0].from_node.bl_idname == "ShaderNodeBump"
+    assert len(body.material.node_tree.nodes) == 3
     # Viewing a layer that is then deleted falls back to the material.
     assert bpy.ops.open_painter.view_mask(action="VIEW") == {"FINISHED"}
     assert bpy.ops.open_painter.layer(action="DELETE") == {"FINISHED"}
     assert mask_view.active(body) is None
-    bsdf = next(n for n in body.material.node_tree.nodes if n.get("role") == "Surface")
-    assert not any(link.from_node.get("role") == mask_view.ROLE for link in bsdf.inputs["Base Color"].links)
+    assert not texture_set_node.showing_mask(body)
     print("INSPECTOR mask view: PASS", flush=True)
 
     # --- Add Paint to Mask keeps the generator, adds an explicit role on top ---

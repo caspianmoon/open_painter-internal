@@ -21,7 +21,7 @@ def is_graph(tree):
 
 
 class OP_GraphTree(bpy.types.NodeTree):
-    """Open Painter's live node view of a texture set."""
+    """Open Painter's node editor: a texture set's live graph, or a Mask Graph."""
 
     bl_idname = TREE_ID
     bl_label = "Open Painter Graph"
@@ -32,6 +32,10 @@ class OP_GraphTree(bpy.types.NodeTree):
         # registered. Reading their sockets then can dereference retired RNA.
         from ..registration import _registered
         if not _registered:
+            return
+        if self.get("op_mask_graph"):
+            from ..procedural_graph import edits as mask_graph_edits
+            mask_graph_edits.tree_changed(self)
             return
         from . import edits
         edits.on_tree_update(self)
@@ -87,7 +91,7 @@ class _GraphNode:
 
     @classmethod
     def poll(cls, tree):
-        return tree.bl_idname == TREE_ID
+        return tree.bl_idname == TREE_ID and not tree.get("op_mask_graph")   # a Mask Graph has its own nodes
 
     def draw_buttons(self, context, layout):
         from . import mirror

@@ -77,6 +77,16 @@ for resolution in ('1024', '512', '2048'):
     assert not info.get('error'), info
     sizes = boundary_sizes()
     assert sizes and all(size == (n, n) for size in sizes.values()), (resolution, sizes)
+    # The engine's texture pool: every free texture is the size it is filed under (a switch
+    # once released the previous resolution's textures under the new size).
+    from open_painter.evaluation.engine import runtime
+    misfiled = [(side, texture.width) for (side, _), free in runtime.device().pool.items() for texture in free
+                if texture.width != side or texture.height != side]
+    assert not misfiled, misfiled
+    engine = shader_preview.session_engine(scene, ts)
+    wrong = [(key[0], texture.width) for key, state in engine.states.items() for texture in (state.textures or ())
+             if texture.width != n or texture.height != n]
+    assert not wrong, ('units render into textures of another size', wrong)
     print('RESOLUTION_SWITCH_OK', resolution, len(sizes), flush=True)
 print('RESOLUTION_SWITCH_PASS', flush=True)
 open_painter.unregister()

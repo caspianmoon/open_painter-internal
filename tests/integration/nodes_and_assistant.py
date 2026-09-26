@@ -111,8 +111,29 @@ def run(context):
         def send(self, payload):
             sent.append(payload)
 
+    from open_painter.ai import visual_context
+    from open_painter.authoring.schema import AuthoringError
     with patch.object(session, "connection", Connection()), patch.object(session, "ensure_online"), \
             patch("open_painter.ai.viewport.capture", lambda *a, **k: "data:image/png;base64,AAAA"):
+        session.state.update(connected=True, signed_in=True, models=[])
+        # Authoring needs the view, the mesh maps and current bakes: without them nothing is sent.
+        for send_view, send_maps in ((False, True), (True, False), (False, False), (True, True)):
+            settings.send_view, settings.send_maps = send_view, send_maps
+            count = len(sent)
+            try:
+                session.run(context)
+                raise AssertionError(f"authored without its geometry evidence {(send_view, send_maps)}")
+            except AuthoringError as error:
+                expected = "Create current geometry maps" if (send_view and send_maps) else "Enable Send Mesh Maps"
+                assert expected in str(error), error
+            assert len(sent) == count, "a refused run sent a request"
+        print("ASSISTANT geometry evidence required: PASS", flush=True)
+    with patch.object(session, "connection", Connection()), patch.object(session, "ensure_online"), \
+            patch("open_painter.ai.viewport.capture", lambda *a, **k: "data:image/png;base64,AAAA"), \
+            patch.object(visual_context, "require_geometry_maps"):
+        # The payload builder: for any toggles, what is sent is what the summary says. Candidate
+        # review needs the view, so texture generation and review are off for the view-less rows.
+        settings.generate_textures, settings.correction_enabled = False, False
         session.state.update(connected=True, signed_in=True, models=[])
         for send_view, send_maps in ((True, True), (False, True), (True, False), (False, False)):
             settings.send_view, settings.send_maps = send_view, send_maps

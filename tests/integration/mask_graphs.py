@@ -7,6 +7,9 @@ isolated cell edges may round the other way). A numeric edit in a graph is a uni
 (no rebuild, no program compiled); a structural edit rebuilds the graph's pass only.
 An invalid graph reports why and recovers. Save and reload keep the graph, and the
 templates and new Custom Graph masks create Mask Graphs, not Blender shader groups.
+A Mask Graph is an Open Painter Graph tree (one Open Painter node editor): each kind
+of graph accepts only its own nodes, and a graph saved as a tree type of its own by an
+earlier 0.13 build is rebuilt as one on load, node for node.
 """
 import json
 import sys
@@ -26,7 +29,7 @@ from open_painter.evaluation.engine import runtime
 from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.metrics import Metrics
 from open_painter.procedural_graph import is_native, templates
-from open_painter.procedural_graph.tree import MIX_BLENDS, MATH_OPERATIONS, RAMP_MODES, TREE_ID
+from open_painter.procedural_graph.tree import MIX_BLENDS, MATH_OPERATIONS, RAMP_MODES, TREE_ID, new_tree
 from open_painter.utils.ids import new_id
 
 N = 512
@@ -96,7 +99,7 @@ stack.channel_for(layer, 'BASE_COLOR').color = (1, 1, 1, 1)
 mask = layer.masks.add()
 mask_id = mask.id = new_id()
 mask.source = 'GRAPH'
-tree = bpy.data.node_groups.new('Graph under test', TREE_ID)
+tree = new_tree('Graph under test')
 mask.node_group = tree
 coordinates = tree.nodes.new('OPMGCoordinates')
 output = tree.nodes.new('OPMGOutput')
@@ -305,7 +308,7 @@ print('MASK_GRAPHS templates: PASS', flush=True)
 
 # ---- 7. a removed node is never read: a node replaced by an identical one, reallocated ramp stops, a deleted graph ----
 from open_painter.evaluation.shader_graph import _removed_graph_units
-tree = bpy.data.node_groups.new('Graph edited', TREE_ID)
+tree = new_tree('Graph edited')
 the_mask().node_group = tree
 coordinates = tree.nodes.new('OPMGCoordinates')
 output = tree.nodes.new('OPMGOutput')
@@ -343,7 +346,7 @@ for _ in range(20):
 tree = templates.build('CELLULAR_RAMP', 'Graph after a deletion')
 the_mask().node_group = tree
 compare(scene, ts, 'a new graph after a deletion', statistical=True)
-tree = bpy.data.node_groups.new('Graph output only', TREE_ID)
+tree = new_tree('Graph output only')
 the_mask().node_group = tree
 output = tree.nodes.new('OPMGOutput')
 output.inputs['Coverage'].default_value = .4
@@ -353,6 +356,63 @@ output = tree.nodes.new('OPMGOutput')
 output.inputs['Coverage'].default_value = .6
 compare(scene, ts, 'a replaced unlinked Mask Output')
 print('MASK_GRAPHS removed nodes: PASS', flush=True)
+
+# ---- 8. one Open Painter node editor; graphs of the separate type convert on load -----------------------------------
+from open_painter.graph.tree import TREE_ID as GRAPH_TREE
+from open_painter.procedural_graph import program
+from open_painter.procedural_graph.tree import LEGACY_ID, convert_legacy
+assert TREE_ID == GRAPH_TREE and the_mask().node_group.bl_idname == GRAPH_TREE, 'a Mask Graph is an Open Painter Graph'
+from open_painter.procedural_graph.tree import OP_MaskGraphTreeLegacy
+assert not OP_MaskGraphTreeLegacy.poll(bpy.context), 'no second Open Painter editor type is offered'
+set_graph = bpy.data.node_groups.new('A texture set graph', TREE_ID)
+try:
+    set_graph.nodes.new('OPMGNoise')
+    raise AssertionError('a Mask Graph node was added to a texture set graph')
+except RuntimeError:
+    pass
+try:
+    tree.nodes.new('OPLayerNode')
+    raise AssertionError('a layer node was added to a Mask Graph')
+except RuntimeError:
+    pass
+bpy.data.node_groups.remove(set_graph)
+legacy = bpy.data.node_groups.new('Graph from 0.13', LEGACY_ID)
+built = {}
+for name, idname, values in (('Coordinates', 'OPMGCoordinates', {}), ('Cells', 'OPMGCells', dict(kind='WORLEY', scale=7.0, seed=4)),
+                             ('Noise', 'OPMGNoise', dict(kind='RIDGED', scale=3.0)), ('Math', 'OPMGMath', dict(operation='MAXIMUM')),
+                             ('Ramp', 'OPMGRamp', dict(interpolation='EASE')), ('Output', 'OPMGOutput', {})):
+    item = legacy.nodes.new(idname)
+    item.name = name
+    for key, value in values.items():
+        setattr(item, key, value)
+    built[name] = item
+stop = built['Ramp'].stops.add()
+stop.position, stop.value = .4, .8
+built['Math'].inputs['B'].default_value = .3
+for source, output_name, target, input_name in (('Coordinates', 'UV', 'Cells', 'Vector'), ('Coordinates', 'Position', 'Noise', 'Vector'),
+                                               ('Cells', 'Value', 'Math', 'A'), ('Noise', 'Value', 'Math', 'B'),
+                                               ('Math', 'Value', 'Ramp', 'Fac'), ('Ramp', 'Value', 'Output', 'Coverage')):
+    legacy.links.new(built[source].outputs[output_name], built[target].inputs[input_name])
+legacy.use_fake_user = True
+expected = program.values(legacy)
+the_mask().node_group = legacy          # as a file of that build saved it (the poll is not consulted on load)
+assert the_mask().node_group == legacy
+path = ROOT / '.blender-test' / 'mask-graphs-legacy.blend'
+bpy.ops.wm.save_as_mainfile(filepath=str(path))
+bpy.ops.wm.open_mainfile(filepath=str(path))   # load_post converts
+if bpy.app.timers.is_registered(cache.tick):
+    bpy.app.timers.unregister(cache.tick)
+scene = bpy.context.scene
+ts = next(item for item in scene.open_painter.texture_sets if item.name == 'Mask graphs')
+converted = the_mask().node_group
+assert is_native(converted) and converted.name == 'Graph from 0.13' and converted.use_fake_user, converted
+assert not any(group.bl_idname == LEGACY_ID for group in bpy.data.node_groups), 'the separate tree type is gone'
+assert program.values(converted) == expected, 'the converted graph evaluates differently'
+assert len(converted.nodes['Ramp'].stops) == 3 and converted.nodes['Math'].operation == 'MAXIMUM'
+material_manager.repair(ts)
+compare(scene, ts, 'a converted graph', statistical=True)
+assert convert_legacy() == [], 'nothing left to convert'
+print('MASK_GRAPHS one editor: PASS', flush=True)
 
 report['result'] = 'PASS'
 destination = ROOT / '.blender-test' / 'mask-graphs.json'

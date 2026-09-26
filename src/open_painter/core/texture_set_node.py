@@ -2,9 +2,14 @@
 
 One input node gives any material a texture set's channels: Base Color, Metallic,
 Roughness, a ready-to-use shading Normal (tangent normal map with the height as
-bump), Height, Emission, AO and Alpha, plus the raw Normal Map colour. The set's
-stack is evaluated by the Open Painter engine into the set's channel images; the
-node only samples them, so it never changes when layers, masks or filters do.
+bump), Height, Emission, AO and Alpha, plus the raw Normal Map colour and the UV
+Tangent. The set's stack is evaluated into the set's channel images; the node only
+samples them, so it never changes when layers, masks or filters do.
+
+A set's managed material is this node, a Principled BSDF and a Material Output,
+nothing else: what the surface shows of the channels lives inside the node's group —
+AO in the preview (Base Color), Engine Preview's target adapters, View Mask's
+snapshot, and the images a CPU-reference display binds instead of the set's own.
 
 Blender does not let add-ons define shader code, so the node is a
 ``ShaderNodeCustomGroup``: a registered node type whose small internal group (one
@@ -32,12 +37,15 @@ OUTPUTS = (
     ('AO', 'NodeSocketFloat', 'AO'),
     ('Alpha', 'NodeSocketFloat', 'OPACITY'),
     ('Normal Map', 'NodeSocketColor', 'NORMAL'),
+    ('Tangent', 'NodeSocketVector', None),
 )
 # The raw channel each socket carries, for material wiring (NORMAL is the tangent colour).
 CHANNEL_SOCKETS = {'BASE_COLOR': 'Base Color', 'METALLIC': 'Metallic', 'ROUGHNESS': 'Roughness',
                    'NORMAL': 'Normal Map', 'HEIGHT': 'Height', 'EMISSION': 'Emission', 'AO': 'AO',
                    'OPACITY': 'Alpha'}
 SCALARS = {'METALLIC', 'ROUGHNESS', 'HEIGHT', 'AO', 'OPACITY'}
+MASK_VIEW = 'Mask View'
+MASK_VIEW_ROLES = (MASK_VIEW, MASK_VIEW + ' Roughness', MASK_VIEW + ' Metallic', MASK_VIEW + ' Normal')
 
 
 def _all_sets():
@@ -93,12 +101,13 @@ def _show(node, tree):
         bpy.data.node_groups.remove(previous)
 
 
-def bind(node, ts):
-    """Show ``ts`` (None: no set) on ``node`` with its internal tree up to date."""
+def bind(node, ts, overrides=None):
+    """Show ``ts`` (None: no set) on ``node`` with its internal tree up to date; ``overrides``
+    (channel → image) are shown instead of the set's own images (a CPU-reference display)."""
     identifier = ts.id if ts is not None else ''
     if node.texture_set_id != identifier:
         node.texture_set_id = identifier
-    _show(node, tree_for(ts))
+    _show(node, tree_for(ts, overrides))
 
 
 _creating = []
@@ -128,10 +137,16 @@ def _active_set(context):
 def _interface(tree):
     existing = [(item.name, item.socket_type) for item in tree.interface.items_tree
                 if item.item_type == 'SOCKET' and item.in_out == 'OUTPUT']
-    if existing == [(name, kind) for name, kind, _ in OUTPUTS]:
+    wanted = [(name, kind) for name, kind, _ in OUTPUTS]
+    if existing == wanted:
+        return
+    if existing == wanted[:len(existing)]:
+        # A later version added outputs: appended, so the links of the others survive.
+        for name, kind in wanted[len(existing):]:
+            tree.interface.new_socket(name=name, in_out='OUTPUT', socket_type=kind)
         return
     tree.interface.clear()
-    for name, kind, _ in OUTPUTS:
+    for name, kind in wanted:
         tree.interface.new_socket(name=name, in_out='OUTPUT', socket_type=kind)
 
 
@@ -151,13 +166,18 @@ def _connect(tree, source, target):
         tree.links.new(source, target)
 
 
+def _drop(tree, predicate):
+    for node in [n for n in tree.nodes if predicate(n)]:
+        tree.nodes.remove(node)
+
+
 def tree_name(ts):
     """The internal tree of a set: named by its id, or as ``material_manager.repair`` recorded
     when it separated a scene copy that shares the id."""
     return ts.get('op_node_tree') or TREE_PREFIX + ts.id
 
 
-def tree_for(ts):
+def tree_for(ts, overrides=None):
     """The internal tree of ``ts`` (created and brought up to date), or the neutral one."""
     name = EMPTY_TREE if ts is None else tree_name(ts)
     tree = bpy.data.node_groups.get(name)
@@ -165,7 +185,7 @@ def tree_for(ts):
         tree = bpy.data.node_groups.new(name, 'ShaderNodeTree')
         tree[OWNER] = True
         tree['op_texture_set_node'] = ts.id if ts is not None else ''
-    sync_tree(tree, ts)
+    sync_tree(tree, ts, overrides)
     return tree
 
 
@@ -183,18 +203,55 @@ def release(ts, material):
             node.image = None
 
 
-def sync(ts):
-    """Bring the set's internal tree up to date (images, UV map, height distance)."""
+def sync(ts, images=True):
+    """Bring the set's internal tree up to date (UV map, height distance, AO in the preview,
+    Engine Preview, View Mask); ``images=False`` keeps the images a display bound."""
     tree = bpy.data.node_groups.get(tree_name(ts))
     if tree is not None:
-        sync_tree(tree, ts)
+        sync_tree(tree, ts, images=images)
     return tree
 
 
-def sync_tree(tree, ts):
+def channel_nodes(ts):
+    """The set's channel samplers inside its internal tree (channel → Image Texture node)."""
+    tree = bpy.data.node_groups.get(tree_name(ts))
+    if tree is None:
+        return {}
+    return {node['role']: node for node in tree.nodes
+            if node.bl_idname == 'ShaderNodeTexImage' and node.get('role') in CHANNELS}
+
+
+def show_image(ts, channel, image):
+    """Show ``image`` for ``channel`` instead of the set's own (a display's proxy); True if it changed."""
+    node = channel_nodes(ts).get(channel)
+    if node is None or node.image == image:
+        return False
+    node.image = image
+    return True
+
+
+def showing_mask(ts):
+    """The node shows View Mask's snapshot of ``ts`` instead of its surface."""
+    tree = bpy.data.node_groups.get(tree_name(ts))
+    node = next((n for n in tree.nodes if n.get('role') == MASK_VIEW), None) if tree is not None else None
+    return node is not None and bool(node.outputs['Color'].links)
+
+
+def ao_factor(ts):
+    """How much the set's AO darkens its Base Color output: none when AO in Preview is off,
+    or while Engine Preview's target applies AO to indirect light only."""
+    project = getattr(ts.id_data, 'open_painter', None)
+    if project is not None and project.engine_preview and project.engine_preview_ao_indirect:
+        from ..targets import get
+        if get(project.target).ao_usage == 'INDIRECT':
+            return 0.0
+    return 1.0 if ts.preview_ao else 0.0
+
+
+def sync_tree(tree, ts, overrides=None, images=True):
     from ..constants import DEFAULTS
     _interface(tree)
-    output = _node(tree, 'Output', 'NodeGroupOutput', (900, 0))
+    output = _node(tree, 'Output', 'NodeGroupOutput', (1400, 0))
     if not output.is_active_output:
         output.is_active_output = True
     if ts is None:
@@ -225,9 +282,11 @@ def sync_tree(tree, ts):
     samples = {}
     for index, channel in enumerate(CHANNELS):
         texture = _node(tree, channel, 'ShaderNodeTexImage', (-400, 450 - index * 280))
-        image = next((o.image for o in ts.outputs if o.channel == channel), None)
-        if texture.image != image:
-            texture.image = image
+        if images:
+            image = (overrides[channel] if overrides is not None and channel in overrides
+                     else next((o.image for o in ts.outputs if o.channel == channel), None))
+            if texture.image != image:
+                texture.image = image
         if texture.interpolation != 'Linear':
             texture.interpolation = 'Linear'
         if vector is not None:
@@ -238,20 +297,73 @@ def sync_tree(tree, ts):
             samples[channel] = split.outputs['Red']
         else:
             samples[channel] = texture.outputs['Color']
-    normal_map = _node(tree, 'Normal Map', 'ShaderNodeNormalMap', (200, -250))
+    display = _display(tree, ts, samples)
+    ao = _node(tree, 'AO Preview', 'ShaderNodeMixRGB', (700, 450))
+    if ao.blend_type != 'MULTIPLY':
+        ao.blend_type = 'MULTIPLY'
+    factor = ao_factor(ts)
+    if ao.inputs[0].default_value != factor:
+        ao.inputs[0].default_value = factor
+    _connect(tree, display['BASE_COLOR'], ao.inputs[1])
+    _connect(tree, samples['AO'], ao.inputs[2])
+    normal_map = _node(tree, 'Normal Map', 'ShaderNodeNormalMap', (450, -250))
     if normal_map.space != 'TANGENT':
         normal_map.space = 'TANGENT'
     if normal_map.uv_map != uv_name:
         normal_map.uv_map = uv_name
-    bump = _node(tree, 'Height', 'ShaderNodeBump', (450, -250))
+    bump = _node(tree, 'Height', 'ShaderNodeBump', (700, -250))
     if bump.inputs['Distance'].default_value != ts.height_distance:
         bump.inputs['Distance'].default_value = ts.height_distance
-    _connect(tree, samples['NORMAL'], normal_map.inputs['Color'])
+    _connect(tree, display['NORMAL'], normal_map.inputs['Color'])
     _connect(tree, normal_map.outputs['Normal'], bump.inputs['Normal'])
     _connect(tree, samples['HEIGHT'], bump.inputs['Height'])
-    for name, _, channel in OUTPUTS:
-        source = bump.outputs['Normal'] if channel is None else samples[channel]
+    tangent = _node(tree, 'Tangent', 'ShaderNodeTangent', (700, -600))
+    if tangent.direction_type != 'UV_MAP':
+        tangent.direction_type = 'UV_MAP'
+    if tangent.uv_map != uv_name:
+        tangent.uv_map = uv_name
+    routes = {'Base Color': ao.outputs[0], 'Metallic': display['METALLIC'], 'Roughness': display['ROUGHNESS'],
+              'Normal': bump.outputs['Normal'], 'Height': samples['HEIGHT'], 'Emission': samples['EMISSION'],
+              'AO': samples['AO'], 'Alpha': samples['OPACITY'], 'Normal Map': samples['NORMAL'],
+              'Tangent': tangent.outputs['Tangent']}
+    routes.update(_mask_view(tree, ts, vector))
+    for name, source in routes.items():
         _connect(tree, source, output.inputs[name])
+
+
+def _display(tree, ts, samples):
+    """The channels as the surface shows them: Engine Preview's target adapters, or as sampled."""
+    from ..targets import preview
+    project = getattr(ts.id_data, 'open_painter', None)
+    if project is None or not project.engine_preview:
+        _drop(tree, lambda node: str(node.get('role', '')).startswith(preview.PREFIX))
+        return samples
+    return preview.adapt(ts, project, samples, lambda role, kind, location: _node(tree, role, kind, location),
+                         lambda source, target: _connect(tree, source, target))
+
+
+def _mask_view(tree, ts, vector):
+    """While View Mask shows a snapshot of ``ts``: the snapshot as the colour of a flat,
+    rough, non-metallic surface (the outputs it replaces)."""
+    from ..ui import mask_view
+    image = mask_view.shown_image(ts)
+    if image is None:
+        _drop(tree, lambda node: node.get('role') in MASK_VIEW_ROLES)
+        return {}
+    texture = _node(tree, MASK_VIEW, 'ShaderNodeTexImage', (700, 900))
+    if texture.image != image:
+        texture.image = image
+    if vector is not None:
+        _connect(tree, vector, texture.inputs['Vector'])
+    values = {}
+    for role, value, location in ((MASK_VIEW_ROLES[1], 1.0, (1000, 900)), (MASK_VIEW_ROLES[2], 0.0, (1000, 780))):
+        node = _node(tree, role, 'ShaderNodeValue', location)
+        if node.outputs[0].default_value != value:
+            node.outputs[0].default_value = value
+        values[role] = node.outputs[0]
+    geometry = _node(tree, MASK_VIEW_ROLES[3], 'ShaderNodeNewGeometry', (1000, 660))
+    return {'Base Color': texture.outputs['Color'], 'Roughness': values[MASK_VIEW_ROLES[1]],
+            'Metallic': values[MASK_VIEW_ROLES[2]], 'Normal': geometry.outputs['Normal']}
 
 
 # ---- the node ---------------------------------------------------------------------------

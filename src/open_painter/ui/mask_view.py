@@ -5,7 +5,8 @@ by the CPU reference at a bounded resolution — as flat coverage (white where t
 layer shows through), and *Back to Material* restores the shaded material. Nothing is
 rasterised into the mask itself: the snapshot is a display image that says when it is
 out of date and can be refreshed. The view is presentation state (per scene, never
-saved); ``material_manager.repair`` asks ``wire`` for the surface links it implies.
+saved); the texture set node's group shows the snapshot while a view is active
+(``texture_set_node``), so the material itself never changes.
 """
 import bpy
 import numpy as np
@@ -38,6 +39,17 @@ def viewed_layer(ts):
 
 def image_of(view):
     return bpy.data.images.get(view["image"]) if view else None
+
+
+def shown_image(ts):
+    """The snapshot the surface of ``ts`` shows (None without a view; a view whose image is gone ends)."""
+    view = active(ts)
+    if view is None:
+        return None
+    image = image_of(view)
+    if image is None:
+        _views.pop(_key(ts), None)
+    return image
 
 
 def stale(ts, view=None):
@@ -145,30 +157,6 @@ def _redraw(context):
             area.tag_redraw()
 
 
-def wire(ts, nodes, links, node, connect, bsdf):
-    """Called at the end of ``material_manager.repair``: the surface shows the snapshot while a view is active."""
-    view = active(ts)
-    existing = next((n for n in nodes if n.get(OWNER) and n.get("role") == ROLE), None)
-    if view is None:
-        if existing is not None:
-            for link in list(existing.outputs[0].links):
-                links.remove(link)
-        return
-    image = image_of(view)
-    if image is None:
-        _views.pop(_key(ts), None)
-        return
-    texture = node(ROLE, "ShaderNodeTexImage", (-600, 700))
-    if texture.image != image:
-        texture.image = image
-    for socket in ("Base Color", "Roughness", "Metallic", "Normal"):
-        for link in list(bsdf.inputs[socket].links):
-            links.remove(link)
-    links.new(texture.outputs["Color"], bsdf.inputs["Base Color"])
-    bsdf.inputs["Roughness"].default_value = 1.0
-    bsdf.inputs["Metallic"].default_value = 0.0
-
-
 def on_layer_removed(ts):
     """A viewed layer that is gone ends the view (a valid fallback, not a stale image)."""
     if active(ts) is not None and viewed_layer(ts) is None:
@@ -178,13 +166,12 @@ def on_layer_removed(ts):
 
 def resync(scene):
     """After undo/redo: the document's links must agree with the view state."""
+    from ..core.texture_set_node import showing_mask
     for ts in scene.open_painter.texture_sets:
         view = active(ts)
-        material = ts.material
-        if material is None or not material.use_nodes:
+        if ts.material is None:
             continue
-        existing = next((n for n in material.node_tree.nodes if n.get(OWNER) and n.get("role") == ROLE), None)
-        linked = existing is not None and bool(existing.outputs[0].links)
+        linked = showing_mask(ts)
         if (view is not None) != linked or (view is not None and viewed_layer(ts) is None):
             if view is not None and viewed_layer(ts) is None:
                 _views.pop(_key(ts), None)
@@ -194,16 +181,15 @@ def resync(scene):
 def clear():
     """File load: no view survives; materials saved mid-view are repaired on their next use."""
     _views.clear()
+    from ..core.texture_set_node import showing_mask
     for scene in bpy.data.scenes:
         project = getattr(scene, "open_painter", None)
         if project is None:
             continue
         for ts in project.texture_sets:
-            material = ts.material
-            if material is None or not material.use_nodes:
+            if ts.material is None:
                 continue
-            existing = next((n for n in material.node_tree.nodes if n.get(OWNER) and n.get("role") == ROLE), None)
-            if existing is not None and existing.outputs[0].links:
+            if showing_mask(ts):
                 try:
                     _repair(ts)
                 except Exception:

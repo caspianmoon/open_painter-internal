@@ -42,6 +42,13 @@ def physical_changed(self, context):
     resolve(self, context)
 
 
+
+def _graph_poll(tree):
+    """A Mask Graph (an Open Painter Graph tree marked as one), or an earlier version's shader group
+    (or a Mask Graph saved as its own tree type, until it is converted on load)."""
+    from ..procedural_graph import is_native
+    return is_native(tree) or tree.bl_idname in {'ShaderNodeTree', 'OpenPainterMaskGraph'}
+
 class OP_Mask(bpy.types.PropertyGroup):
     # Opt-in metric coordinates shared with surface channels. Legacy controls
     # remain untouched; derived UI values are excluded from graph snapshots.
@@ -110,7 +117,7 @@ class OP_Mask(bpy.types.PropertyGroup):
     # Mask groups (0.9.3): members carry the id of their group and follow it in the list.
     parent_id: bpy.props.StringProperty(update=changed)
     node_group: bpy.props.PointerProperty(name='Mask Graph', type=bpy.types.NodeTree, update=changed,
-        poll=lambda self, tree: tree.bl_idname in {'OpenPainterMaskGraph', 'ShaderNodeTree'},
+        poll=lambda self, tree: _graph_poll(tree),
         description='The Mask Graph whose Mask Output drives the mask (a Blender shader group from an earlier '
                     'version still works: its first output, baked on the CPU)')
     stroke_key: bpy.props.StringProperty(update=changed, description='Key of the vector strokes this mask renders')

@@ -49,7 +49,8 @@ for painting, evaluation, smart materials and undo.
   are configured in the Inspector.
 - **Mask Group**, **Custom Graph** and **Vector Strokes** have their own node
   types. A Custom Graph starts with a usable Noise → Ramp [Mask Graph](mask-graphs.md);
-  **Edit Mask Graph** opens it in a node editor beside this one. Vector Strokes gets an
+  **Edit Mask Graph** steps into it in this editor, like entering a node group (Tab returns).
+  Vector Strokes gets an
   independent stroke key; author strokes through the Painter tools.
 - **Procedural Fill** creates a fill layer with coordinated color, roughness and
   height detail using any source in the procedural catalog. Fill nodes expose the

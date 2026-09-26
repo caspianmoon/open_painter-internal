@@ -490,8 +490,10 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
     return result
 
 
-def _evaluate(scene, ts, entry):
-    """Render the set's changed channels into its images; returns the channels written."""
+def _evaluate(scene, ts, entry, budget=None):
+    """Render the set's changed channels into its images; returns the channels written. Through
+    pixels (Vulkan) the engine may hold channels back for the next tick (``budget``: see
+    ``Engine.evaluate``); the session stays dirty, so not current, until they are published."""
     engine = entry.get('engine')
     if engine is None or entry.get('graph') is None:
         return set()
@@ -506,7 +508,7 @@ def _evaluate(scene, ts, entry):
     from ..core import texture_set_node
     texture_set_node.sync(ts)   # the node samples the images the engine writes (a replaced one too)
     try:
-        written = engine.evaluate(epochs=dependencies.image_epochs())
+        written = engine.evaluate(epochs=dependencies.image_epochs(), budget=budget)
     except EngineUnavailable as exc:
         entry.update(error=str(exc), serial=ts.edit_serial)
         return set()
@@ -514,7 +516,10 @@ def _evaluate(scene, ts, entry):
         logger.exception('Open Painter engine evaluation')
         entry.update(error=f'Evaluation failed: {exc}', serial=ts.edit_serial)
         return set()
-    entry['dirty'] = False
+    entry['dirty'] = bool(engine.deferred)
+    if engine.deferred:
+        from . import cache
+        cache.wake()
     entry['evaluations'] = entry.get('evaluations', 0) + 1
     if written:
         publishing = perf_counter()
@@ -572,13 +577,17 @@ def _cpu_viewport(scene):
 
 
 def sync_pixels():
-    """Copy every published result into its image's pixels (a bake samples them on the CPU)."""
-    for key, entry in _sessions.items():
+    """Copy every published result into its image's pixels (a bake samples them on the CPU).
+    Channels a pixel budget held back (Vulkan) are published first: a bake needs every one."""
+    for key, entry in list(_sessions.items()):
         engine = entry.get('engine')
-        if engine is None or not engine.dirty_cpu:
+        if engine is None or not (engine.dirty_cpu or engine.deferred):
             continue
         try:
-            engine.sync_pixels()
+            if engine.deferred:
+                _evaluate(engine.scene, engine.ts(), entry, budget=False)
+            if engine.dirty_cpu:
+                engine.sync_pixels()
         except (ReferenceError, StopIteration):
             pass   # the set is gone; prune forgets the session
 
@@ -694,7 +703,7 @@ def flush(scene, ts, pixels=True):
     tick(scene, ts, force_repair=False, ignore_gate=True)
     if entry.get('error'):
         raise RuntimeError(entry['error'])
-    _evaluate(scene, ts, entry)
+    _evaluate(scene, ts, entry, budget=False)   # render, export and bakes need every channel now
     engine = entry.get('engine')
     if engine is not None and pixels:
         engine.sync_pixels()

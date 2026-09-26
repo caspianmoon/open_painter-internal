@@ -14,7 +14,9 @@ An update that reaches the images runs up to seven stages:
   (the GPU runs asynchronously); ``Engine.profile`` times each pass on the GPU (five draws
   less one, each followed by a wait), per unit, with each Mask Graph a pass of its own;
 - **publish**: results written into the set's images: a framebuffer pass (OpenGL, Metal),
-  or a read-back into pixels (Vulkan, and for Cycles, which samples pixels on the CPU).
+  or a read-back into pixels (Vulkan, where Blender's image textures are not render targets;
+  and for Cycles, which samples pixels on the CPU). Through pixels an evaluation publishes
+  within a time budget and holds the other changed channels for the next tick.
 
 ``shader_preview`` accumulates build, update and CPU inputs between evaluations and
 ``record``s one row per evaluation; ``report`` renders the history and the last profile
@@ -56,7 +58,8 @@ def record(entry, rendered):
            'render': sum(rendered['render_ms'].values()), 'passes': sum(rendered['passes'].values()),
            'render_by_kind': dict(rendered['render_ms']), 'passes_by_kind': dict(rendered['passes']),
            'publish': rendered['publish_ms'], 'published': list(rendered['published']),
-           'publish_path': rendered['publish_path'], 'profiled': rendered['profiled']}
+           'publish_path': rendered['publish_path'], 'profiled': rendered['profiled'],
+           'deferred': list(rendered.get('deferred', ()))}
     row['total'] = sum(row[stage] for stage in STAGES)
     entry.setdefault('history', deque(maxlen=HISTORY)).append(row)
     if rendered['profiled']:
@@ -117,8 +120,10 @@ def machine():
 
 def _stage_line(row):
     kinds = ' · '.join(f'{kind} {count}' for kind, count in sorted(row['passes_by_kind'].items()))
+    held = row.get('deferred') or ()
     publish = (f"{row['publish']:.1f} ({len(row['published'])} channel{'s' if len(row['published']) != 1 else ''}"
-               f"{', ' + row['publish_path'] if row['publish_path'] else ''})")
+               f"{', ' + row['publish_path'] if row['publish_path'] else ''}"
+               f"{f', {len(held)} held for the next tick' if held else ''})")
     build = f"{row['build']:.1f}"
     if row['builds']:
         build += f" ({row['rebuilt']} unit{'s' if row['rebuilt'] != 1 else ''} rebuilt, {row['reused']} kept)"
@@ -161,6 +166,10 @@ def report(scene, ts):
             lines.append(f"Structural rebuilds: {len(builds)} (mean {sum(r['build'] for r in builds) / len(builds):.1f} ms;"
                          f" the last rebuilt {builds[-1]['rebuilt']} of {builds[-1]['rebuilt'] + builds[-1]['reused']} units)")
         lines.append('  render is CPU submission time: the GPU runs asynchronously. Profile Engine measures it.')
+        if last['publish_path'].startswith('pixels'):
+            lines.append('  publish goes through the CPU: on Vulkan Blender\'s image textures cannot be render targets,'
+                         ' so each channel is read back, written into the image and re-uploaded by Blender'
+                         ' (the OpenGL backend writes them on the GPU).')
     else:
         lines.append('No update recorded yet.')
     profile = entry.get('profile')

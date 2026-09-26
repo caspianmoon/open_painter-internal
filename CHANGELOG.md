@@ -24,6 +24,30 @@
 - Cycles viewports and bakes read the engine's results (copied into the images' pixels);
   a scene copy gets its own channel images; the Evaluation setting reads *Open Painter
   Engine* (*CPU Reference* is unchanged and keeps its per-channel image nodes).
+- **Vulkan**: results reach the images through their pixel buffers, since Blender's Vulkan image
+  textures cannot be render targets. That route now:
+  - reads each channel back once into a reused buffer and hands it to Blender without a copy;
+  - spends at most 20 ms per update on it, publishing the channels waiting longest first and
+    the rest over the next ticks, so painting and slider drags stay responsive;
+  - no longer reads pixels back a second time for a Cycles viewport, a save or a bake. A bake
+    publishes any held channels first.
+
+  The engine report names the path.
+- Fixed: after a texture set's resolution changed, the engine could keep rendering some layers
+  into textures of the previous size, so part of the result was missing until the file was
+  reopened.
+- One Open Painter node editor, the **Open Painter Graph**.
+  - Mask Graphs are edited in it: Edit Mask Graph steps into the graph from the texture set's
+    graph, and Tab or Back returns.
+  - The separate Open Painter Mask Graph editor type is gone.
+  - Mask Graphs saved by earlier 0.13 builds are converted when the file opens.
+- The texture set's material is three nodes: the **Open Painter Texture Set** node, a
+  Principled BSDF and a Material Output, wired directly.
+  - Everything else the surface shows lives inside the node: AO in the preview, normal
+    and height, the UV tangent, Engine Preview's adapters, View Mask and the CPU
+    reference's previews.
+  - Materials of earlier builds are repaired to the three nodes on their next update, and
+    they render identically.
 - Fixed: a structural edit made while a paint gesture held the session (a first stroke
   linking its layer) could leave the live result without that layer until another
   structural edit; a Paint Material preview now reaches the engine's inputs.

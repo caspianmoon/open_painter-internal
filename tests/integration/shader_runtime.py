@@ -105,7 +105,7 @@ before_serial = ts.edit_serial
 before_dirty = {out.channel: out.dirty for out in ts.outputs}
 ts.height_distance, ts.coat_weight = .15, .6
 roles = {node.get('role'): node for node in ts.material.node_tree.nodes if node.get(OWNER)}
-assert abs(roles['Height'].inputs['Distance'].default_value - .15) < 1e-6
+assert set(roles) == {'Texture Set', 'Surface', 'Output'}, sorted(roles)   # the bump lives in the node's group
 assert abs(roles['Surface'].inputs['Coat Weight'].default_value - .6) < 1e-6
 assert ts.edit_serial == before_serial and shader_preview.current(scene, ts)
 assert {out.channel: out.dirty for out in ts.outputs} == before_dirty

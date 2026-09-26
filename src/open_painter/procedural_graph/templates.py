@@ -1,7 +1,7 @@
 """Starter Mask Graphs: what a new Custom Graph mask and the graph templates begin with."""
 import bpy
 
-from .tree import TREE_ID
+from .tree import new_tree
 
 KINDS = ('NOISE_RAMP', 'CELLULAR_RAMP', 'LAYERED_NOISE')
 
@@ -21,7 +21,7 @@ def _ramp(node, low, high):
 def build(kind, name):
     """A new Mask Graph: Noise → Ramp (the default), Cells → Ramp, or two noises multiplied → Ramp."""
     from ..constants import OWNER
-    tree = bpy.data.node_groups.new(name, TREE_ID)
+    tree = new_tree(name)
     try:
         tree[OWNER] = True
         coordinates = _node(tree, 'OPMGCoordinates', (-700, 0))

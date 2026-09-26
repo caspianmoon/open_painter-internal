@@ -49,8 +49,15 @@ Original images remain editable inputs. See [the engine](docs/open-painter-engin
 `engine.stages` times every update by stage (build, update, CPU inputs, translate, compile,
 render, publish), and `Engine.profile` times each pass on the GPU for the engine report.
 
-Custom Graph masks read a **Mask Graph** (`procedural_graph/`): a third NodeTree subtype,
-`OpenPainterMaskGraph`, with Open Painter's own node types.
+Custom Graph masks read a **Mask Graph** (`procedural_graph/`), built from Open Painter's own
+node types. It's an `OpenPainterGraph` tree (the one Open Painter node editor) marked
+`op_mask_graph`.
+
+- Its nodes appear only in Mask Graphs, and the Open Graph's layer nodes only in texture-set
+  graphs.
+- Edit Mask Graph enters it on the texture set's graph editor path. Tab returns.
+- Graphs saved as their own tree type by earlier 0.13 builds load through a hidden type
+  (`poll` False, so it's never an editor). `convert_legacy` rebuilds them on `load_post`.
 
 - `program.build` reads the tree into ordered steps, validating links itself, since
   `NodeTree.update` runs before Blender validates a new link.
@@ -107,14 +114,28 @@ Removal deliberately leaves owned datablocks recoverable for manual orphan clean
 
 ## Material ownership
 
-Each texture set gets a managed material with a fixed-size graph: the Open Painter Texture Set
-node (whose shared hidden group samples the set's eight channel images), Principled, Normal
-Map, Bump, AO multiply, UV Tangent and Material Output. Emission and Opacity connect to the
-corresponding surface inputs; scalar anisotropy and clearcoat settings control display
-response. The texture set node can also be added to any material (Add ▸ Input); its Normal
-output is the tangent normal map with the height as bump. Nodes carry ownership plus stable
-role tags. Repair adds/reconnects missing managed nodes, retains unrelated nodes and replaces
-the Procedural Graph group of files compiled by earlier versions. Assigning a mesh preserves
+Each texture set gets a managed material of three nodes: the Open Painter Texture Set node, a
+Principled BSDF and a Material Output. A new material keeps the BSDF and output Blender creates
+for it. The node feeds the BSDF directly: Base Color, Metallic, Roughness, Normal, Emission,
+Alpha and Tangent. Everything else the surface shows lives inside the node's hidden per-set
+group, never in the material:
+
+- the eight channel samplers;
+- the normal map with the height as bump;
+- AO in the preview (Base Color);
+- the UV tangent;
+- Engine Preview's target adapters;
+- View Mask's snapshot;
+- the images a CPU-reference display binds instead of the set's own.
+
+Scalar anisotropy, clearcoat and specular settings control display response on the BSDF. The
+node can also be added to any material (Add ▸ Input). Nodes carry ownership plus stable role
+tags. Repair works as follows:
+
+- It reconnects the three nodes and retains unrelated nodes.
+- It removes the wrapper nodes of earlier layouts: Normal Map, Bump, AO multiply, UV Tangent,
+  per-channel images, engine adapters and the Procedural Graph group.
+- It removes the untouched default BSDF and output that earlier versions left beside their own. Assigning a mesh preserves
 its prior material per slot. Unassignment restores it only if the slot still references this
 texture set's material. Slots are retained to avoid silently reindexing other assignments.
 

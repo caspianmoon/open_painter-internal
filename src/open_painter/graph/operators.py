@@ -371,7 +371,8 @@ class OP_OT_graph_edit_shader(SafeOperator, bpy.types.Operator):
 class _AddMenu:
     @classmethod
     def poll(cls, context):
-        return getattr(context.space_data, 'tree_type', '') == TREE_ID
+        space = context.space_data
+        return getattr(space, 'tree_type', '') == TREE_ID and bool(is_graph(getattr(space, 'edit_tree', None)))
 
     def item(self, kind, choice, text, icon='NONE', channel=''):
         op = self.layout.operator('open_painter.graph_add', text=text, icon=icon)
@@ -506,11 +507,26 @@ def _reference_report(tree, ts):
     return cached[1], cached[2]
 
 
+def _mask_graph_header(layout, space, tree):
+    """Inside a Mask Graph: which graph, the masks that read it, and the way back."""
+    from ..procedural_graph.edits import users
+    layout.label(text=f'Mask Graph · {tree.name}', icon='NODETREE')
+    readers = [mask.name or 'Custom Graph' for _, mask in users(tree)]
+    if readers:
+        layout.label(text='Used by ' + ', '.join(readers[:3]) + (' …' if len(readers) > 3 else ''))
+    if len(space.path) > 1:
+        layout.operator('node.tree_path_parent', text='Back to Texture Set Graph', icon='FILE_PARENT')
+
+
 def header(self, context):
     space = context.space_data
     if getattr(space, 'tree_type', '') != TREE_ID:
         return
     layout = self.layout
+    from ..procedural_graph import is_native
+    if is_native(space.edit_tree):
+        _mask_graph_header(layout, space, space.edit_tree)
+        return
     tree = space.node_tree
     ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
     if ts is None:
@@ -539,11 +555,15 @@ def header(self, context):
 
 
 def add_menu(self, context):
-    if getattr(context.space_data, 'tree_type', '') != TREE_ID:
+    space = context.space_data
+    if getattr(space, 'tree_type', '') != TREE_ID:
         return
+    from ..procedural_graph import is_native
+    if is_native(space.edit_tree):
+        return   # a Mask Graph's own nodes (procedural_graph.tree.add_menu)
     layout = self.layout
     from ..core.layer_stack import active
-    tree = context.space_data.node_tree
+    tree = space.node_tree
     ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
     layer = active(ts) if ts is not None else None
     layout.operator('open_painter.graph_search', icon='VIEWZOOM')

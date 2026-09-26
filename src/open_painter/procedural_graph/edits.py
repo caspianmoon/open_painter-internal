@@ -61,37 +61,79 @@ def forget():
     _structures.clear()
 
 
+def _window_region(area):
+    return next(region for region in area.regions if region.type == 'WINDOW')
+
+
 def show(context, tree):
-    """Show ``tree`` in a node editor: one already showing it, or half of the current area
-    (a node editor or 3D view when the call has no area). Raises ``ValueError`` when no area can be split."""
-    from .tree import TREE_ID
+    """Edit ``tree`` in the Open Painter Graph editor, entered from the graph of the texture set
+    whose mask reads it (the breadcrumb and Tab lead back to it): an editor already editing it,
+    that set's graph editor, the current graph editor, or half of the current area. Raises
+    ``ValueError`` when no area can be split. Returns the area."""
+    from ..graph import mirror
+    from ..graph.tree import TREE_ID, is_graph
     screen = context.screen
-    area = next((a for a in screen.areas if a.type == 'NODE_EDITOR' and a.spaces.active.tree_type == TREE_ID
-                 and a.spaces.active.node_tree == tree), None)
+    editors = [a for a in screen.areas if a.type == 'NODE_EDITOR' and a.spaces.active.tree_type == TREE_ID]
+    area = next((a for a in editors if a.spaces.active.edit_tree == tree), None)
     if area is None:
-        before = {a.as_pointer() for a in screen.areas}
-        target = context.area if context.area is not None else next(
-            (a for a in screen.areas if a.type in {'NODE_EDITOR', 'VIEW_3D'}), None)
-        if target is None:
-            raise ValueError('Open a node editor or a 3D view to split for the graph')
-        with context.temp_override(area=target):
-            bpy.ops.screen.area_split(direction='VERTICAL', factor=.5)
-        area = next((a for a in screen.areas if a.as_pointer() not in before), None)
+        owner = next((ts for ts, _ in users(tree)), None)
+        area = next((a for a in editors if owner is not None and is_graph(a.spaces.active.node_tree)
+                     and a.spaces.active.node_tree.get('op_graph_set') == owner.id), None)
+        if area is None and context.area is not None and any(a == context.area for a in editors):
+            area = context.area
         if area is None:
-            raise ValueError('Blender could not split this area; try a larger editor')
-        area.ui_type = TREE_ID
-        area.spaces.active.pin = True
-        area.spaces.active.node_tree = tree
-    with context.temp_override(area=area, region=next(r for r in area.regions if r.type == 'WINDOW')):
+            before = {a.as_pointer() for a in screen.areas}
+            target = context.area if context.area is not None else next(
+                (a for a in screen.areas if a.type in {'NODE_EDITOR', 'VIEW_3D'}), None)
+            if target is None:
+                raise ValueError('Open a node editor or a 3D view to split for the graph')
+            with context.temp_override(area=target):
+                bpy.ops.screen.area_split(direction='VERTICAL', factor=.5)
+            area = next((a for a in screen.areas if a.as_pointer() not in before), None)
+            if area is None:
+                raise ValueError('Blender could not split this area; try a larger editor')
+            area.ui_type = TREE_ID
+            space = area.spaces.active
+            space.pin = True
+            space.node_tree = mirror.ensure_tree(owner) if owner is not None else tree
+        space = area.spaces.active
+        if space.edit_tree != tree:
+            with context.temp_override(area=area, region=_window_region(area)):
+                space.path.append(tree)   # entered from the set's graph, like a node group
+    with context.temp_override(area=area, region=_window_region(area)):
         try:
             bpy.ops.node.view_all()
         except RuntimeError:
             pass
+    area.tag_redraw()
+    _frame_after_draw(area, tree)
     return area
 
 
+def _frame_after_draw(area, tree):
+    """Frame the graph again once the editor has drawn it: node sizes are known only then,
+    so framing at once can zoom into a corner of the graph."""
+    pointer, name = area.as_pointer(), tree.name
+
+    def frame():
+        for window in bpy.context.window_manager.windows:
+            for item in window.screen.areas:
+                if item.as_pointer() != pointer or item.type != 'NODE_EDITOR':
+                    continue
+                edit = item.spaces.active.edit_tree
+                if edit is not None and edit.name == name:
+                    with bpy.context.temp_override(window=window, area=item, region=_window_region(item)):
+                        try:
+                            bpy.ops.node.view_all()
+                        except RuntimeError:
+                            pass
+        return None
+
+    bpy.app.timers.register(frame, first_interval=0.2)
+
+
 class OP_OT_mask_graph_edit(bpy.types.Operator):
-    """Open this mask's Mask Graph in a node editor beside this one"""
+    """Edit this mask's Mask Graph in the Open Painter Graph editor (Tab returns to the texture set's graph)"""
     bl_idname = 'open_painter.mask_graph_edit'
     bl_label = 'Edit Mask Graph'
     bl_options = {'REGISTER'}
@@ -99,9 +141,9 @@ class OP_OT_mask_graph_edit(bpy.types.Operator):
     tree: bpy.props.StringProperty()
 
     def execute(self, context):
-        from .tree import TREE_ID
+        from . import is_native
         tree = bpy.data.node_groups.get(self.tree)
-        if tree is None or tree.bl_idname != TREE_ID:
+        if not is_native(tree):
             self.report({'ERROR'}, 'Choose a Custom Graph mask with a Mask Graph first')
             return {'CANCELLED'}
         try:

@@ -14,7 +14,7 @@ Painted Metal, 5 643 material nodes in 241 node groups):
 
 | Action | Material graph | Open Painter engine |
 |---|---|---|
-| Material | 5 643 nodes, 241 groups | 7 nodes + one 16-node group |
+| Material | 5 643 nodes, 241 groups | 3 nodes (Texture Set node, Principled BSDF, Material Output) |
 | First build of the set (512 px) | 16.1 s | 8.6 s (programs cached afterwards) |
 | Add a mask from the Open Graph | 440–510 ms rebuild, 0.85–1.0 s UI freeze, full material recompile | 25–50 ms rebuild, one small program compiled once |
 | One slider step (2K, 3 059 nodes) | ~80 ms: Blender re-derives the whole material | uniform update + GPU passes of the layers above |
@@ -85,20 +85,45 @@ than a half-float step).
 
 **Publication.** The finished channel is padded across UV seams with the exporter's donor
 map and written, with its mip chain, straight into the image's GPU texture (Metal and
-OpenGL). Vulkan does not allow image textures as render targets; there the result goes
-through the image's pixel buffer. EEVEE and Workbench sample the GPU textures directly;
+OpenGL).
+
+On Vulkan, Blender 5.2 creates image textures for sampling and storage, not as render targets,
+and the Python API can neither write their mip levels nor regenerate them. So the result goes
+through the image's pixel buffer (`runtime.PIXEL_PUBLISH`). Blender then rebuilds the image's
+texture and mip chain on its next draw. Several things keep that affordable:
+
+- **One read-back, no Python copy.** The finished channel is read back once into a buffer
+  reused across publications (a 2K channel is 64 MB) and handed to Blender directly: no
+  second target, no allocation, no copy in Python.
+- **A time budget per evaluation** (`PIXEL_BUDGET_MS`, 20 ms). At least one channel is
+  published, the channels waiting longest go first, and the rest are held for the next ticks.
+  During a stroke or a slider drag the UI keeps drawing while channels catch up. The set is
+  not current until every channel is out. Render, export and bakes flush every channel at once.
+- **No second read-back.** Channels published this way already have their pixels, so a Cycles
+  viewport, a save or a bake reads nothing back.
+- **Compile once per machine.** Programs are generated deterministically, so Vulkan's on-disk
+  SPIR-V cache compiles each one once per machine.
+
+`tests/integration/engine_pixel_publish.py` runs this path on any backend. EEVEE and Workbench sample the GPU textures directly;
 Cycles reads pixels on the CPU, so the results are copied into the images' pixel buffers
 before renders and bakes and, while a 3D view renders with Cycles, as they are published.
 The channel images of an engine-evaluated set are not packed on save: they are re-rendered
 after the file opens (a CPU-mode set's outputs are its result and are packed).
 
 **Node.** `core/texture_set_node.py` registers `OPShaderNodeTextureSet`, a
-`ShaderNodeCustomGroup` (the one way an add-on can register a shader node type). One
-hidden group per texture set holds the image samplers; outputs are Base Color, Metallic,
-Roughness, Normal (normal map with the height as bump, ready for a BSDF), Height,
-Emission, AO, Alpha and the raw Normal Map colour. `material_manager.repair` wires the
-managed material from it; files compiled by earlier versions lose their Procedural Graph
-group on the first repair.
+`ShaderNodeCustomGroup` (the one way an add-on can register a shader node type). One hidden
+group per texture set holds the image samplers. The outputs are:
+
+- Base Color, with AO in the preview;
+- Metallic and Roughness;
+- Normal: the normal map with the height as bump, ready for a BSDF;
+- Height, Emission, AO and Alpha;
+- the raw Normal Map colour and the UV Tangent.
+
+A set's managed material is exactly that node, a Principled BSDF and a Material Output,
+wired directly. Engine Preview's adapters, View Mask's snapshot and a CPU-reference display's
+images live inside the node's group too, so no mode adds a node to the material.
+`material_manager.repair` brings materials of earlier layouts back to the three nodes.
 
 ## What still runs on the CPU
 

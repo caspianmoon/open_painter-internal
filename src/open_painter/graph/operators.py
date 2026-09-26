@@ -180,7 +180,7 @@ def _graph_target(context):
 
 
 class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
-    """Add a mask or channel filter node to the active layer (appended to its chain)."""
+    """Add a mask or channel filter node to the active layer, parked until wired."""
     bl_idname = 'open_painter.graph_add'
     bl_label = 'Add Node'
     bl_options = {'REGISTER', 'UNDO'}
@@ -209,6 +209,8 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
                 effect.kind, effect.name = self.choice, title
                 effect.amount = 0 if self.choice in {'BRIGHTNESS_CONTRAST', 'TEMPERATURE'} else \
                     1 if self.choice in {'NORMAL_STRENGTH', 'NORMAL_COMBINE', 'HEIGHT_TO_NORMAL', 'AO_STRENGTH'} else .5
+                # Parked until wired: the node floats free, affecting nothing.
+                effect.enabled = False
             prop.active_effect = len(prop.effects) - 1
             if layer.type != 'PAINT':
                 context.scene.open_painter.properties_channel = prop.channel
@@ -235,9 +237,13 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
                 mask.source, mask.name, mask.effect.kind = 'FILTER', title, self.choice
             elif self.kind == 'REFERENCE':
                 mask.source, mask.name = 'REFERENCE', 'Published Input'
+                mask.enabled = False   # parked until an anchor is wired in
             elif self.kind == 'MASK_ANCHOR':
                 from ..ui.anchors import _next_name
                 mask.source, mask.name = 'ANCHOR', _next_name(ts)
+            if self.kind in {'MASK', 'GENERATOR', 'PROCEDURAL', 'SCENE', 'MASK_FILTER'}:
+                # Parked until wired: the node floats free, affecting nothing.
+                mask.enabled = False
             layer.active_mask = len(layer.masks) - 1
             selected_mask = True
         invalidate(ts)

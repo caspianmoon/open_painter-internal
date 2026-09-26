@@ -202,7 +202,7 @@ assert [e.kind for e in stack.channel_for(layer(reader_id), 'ROUGHNESS').effects
 settle()
 print('GRAPH_LINKS node deletion: PASS', flush=True)
 
-# 8. The Add menu operator appends masks and filters to the active layer's chains.
+# 8. The Add menu operator parks masks and filters until they are wired.
 ts.active_layer = stack.index_of(ts, child_id)
 area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
 with bpy.context.temp_override(area=area):
@@ -213,9 +213,23 @@ with bpy.context.temp_override(area=area):
 added = layer(child_id)
 assert [m.source for m in added.masks] == ['GENERATOR', 'SCENE'] and added.masks[1].influence.kind == 'UP'
 assert [e.kind for e in stack.channel_for(added, 'ROUGHNESS').effects] == ['LEVELS', 'ANCHOR']
+assert [m.enabled for m in added.masks] == [False, False]
+assert [e.enabled for e in stack.channel_for(added, 'ROUGHNESS').effects] == [False, True]
 settle()
 keys = link_keys(tree)
-assert (mirror.mask_node_id(added, 1, added.masks[1]), 'out', child_id, 'mask') in keys
+assert not any(k[2] == child_id and k[3] in {'mask', 'content#ROUGHNESS'} for k in keys)
+# Wiring a parked node puts it to work and moves it into place.
+scene_node = mirror.mask_node_id(added, 1, added.masks[1])
+user_link(scene_node, 'out', child_id, 'mask')
+assert added.masks[1].enabled
+levels_node = mirror.effect_node_id(added, 'ROUGHNESS', 0, stack.channel_for(added, 'ROUGHNESS').effects[0])
+anchor_node = mirror.effect_node_id(added, 'ROUGHNESS', 1, stack.channel_for(added, 'ROUGHNESS').effects[1])
+user_link(levels_node, 'out', anchor_node, 'in')
+assert stack.channel_for(added, 'ROUGHNESS').effects[0].enabled
+settle()
+keys = link_keys(tree)
+assert (scene_node, 'out', child_id, 'mask') in keys
+assert (levels_node, 'out', anchor_node, 'in') in keys
 channel_anchor = stack.channel_for(added, 'ROUGHNESS').effects[1].id
 assert (channel_anchor, 'out', child_id, 'content#ROUGHNESS') in keys
 print('GRAPH_LINKS add menu: PASS', flush=True)
@@ -279,5 +293,23 @@ assert ([m.id for m in layer(reader_id).masks], [m.id for m in layer(base_id).ma
 assert 'cycle' in scene.open_painter.status.lower(), scene.open_painter.status
 settle()
 print('GRAPH_LINKS mask sharing: PASS', flush=True)
+
+# 11. Optional wiring: cutting a chain wire parks its source, wiring re-enables,
+# and the chain heals around parked nodes.
+scene.open_painter.status = ''
+scene_m = next(m for m in layer(child_id).masks if m.source == 'SCENE')
+scratch_m = next(m for m in layer(child_id).masks if m.source == 'REFERENCE')
+link = next(l for l in tree.links if l.from_node.op_id == scene_m.id and l.to_socket.identifier == 'prev')
+tree.links.remove(link)   # unplug the scene mask: it floats, affecting nothing
+assert scene_m.enabled is False
+settle()
+keys = link_keys(tree)
+assert not any(k[0] == scene_m.id for k in keys)
+assert not any(k[2] == scratch_m.id and k[3] == 'prev' for k in keys)
+user_link(scene_m.id, 'out', scratch_m.id, 'prev')
+assert scene_m.enabled
+settle()
+assert (scene_m.id, 'out', scratch_m.id, 'prev') in link_keys(tree)
+print('GRAPH_LINKS optional wiring: PASS', flush=True)
 print('GRAPH_LINK_EDITS_PASS', flush=True)
 open_painter.unregister()

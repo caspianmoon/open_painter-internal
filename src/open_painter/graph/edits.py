@@ -7,6 +7,11 @@ anchor field; removing it clears the field. A link into a structural socket
 (``prev`` of a mask, ``in`` of a later filter, a layer's ``mask`` /
 ``content#<channel>`` chain end, ``below`` / ``children``) is an order edit:
 "place this mask before that one", "make this layer sit under that one".
+Wiring is optional: only enabled entries draw chain wires, drawing one
+re-enables its endpoints, and cutting one parks (disables) its source instead
+of forcing the chain redrawn, so floating nodes affect nothing. Dropping a
+mask onto another layer's Mask input shares it there (an Anchor Point plus a
+Published Input per target).
 Deleting a mask or filter node deletes it from the stack (painted masks are
 kept); deleting a layer or folder node deletes it with its subtree, like the
 panel Delete. Dropping a mask onto another layer's Mask input shares it there
@@ -138,6 +143,9 @@ def connect(ts, from_node, from_socket, to_node, to_socket):
     previous = getattr(owner, field)
     setattr(owner, field, identifier)
     changes.append((owner, field, previous))
+    if type(owner).__name__ == 'OP_Mask' and not owner.enabled:
+        owner.enabled = True   # wiring a parked mask puts it back to work
+        changes.append((owner, 'enabled', False))
     errors = issues(ts)
     if errors:
         _revert(changes)
@@ -335,6 +343,48 @@ def is_mask_share(ts, from_node, from_socket, to_node, to_socket):
             and target_mask is None and target_effect is None and source.id != target.id)
 
 
+def _enable_endpoints(ts, source, target):
+    """Enable mask/filter chain endpoints touched by a newly drawn chain link.
+
+    Drawing a wire into a parked (disabled) mask or filter puts it back to
+    work before the reorder below positions it. Anchor feeds keep their own
+    path through ``connect``; layer endpoints are untouched.
+    """
+    from .mirror import owner_of
+    for node_id in (source, target):
+        try:
+            _, mask, _, effect = owner_of(ts, node_id)
+        except (AttributeError, TypeError):
+            continue
+        item = mask if mask is not None else effect
+        if item is not None and not item.enabled:
+            item.enabled = True
+
+
+def _unplug_source(ts, source, to_socket):
+    """Park the mask/filter whose chain wire was removed; True if one was.
+
+    Cutting a chain wire bypasses its source node (``enabled = False``, which
+    both evaluators skip), so an unlinked mask floats free instead of forcing
+    the chain redrawn. Anchor feeds (``ref`` / ``detail#``) and layer sockets
+    keep their existing field-driven behavior.
+    """
+    if to_socket != 'prev' and to_socket != 'mask' and to_socket != 'in' \
+            and not to_socket.startswith('content#'):
+        return False
+    try:
+        from .mirror import owner_of
+        _, mask, _, effect = owner_of(ts, source)
+    except (AttributeError, TypeError):
+        return False
+    item = mask if mask is not None else effect
+    if item is None or not item.enabled:
+        return False
+    item.enabled = False
+    invalidate(ts)
+    return True
+
+
 def _remove_added(added):
     """Drop collection items appended by a refused share, by id."""
     for collection, identifier in reversed(added):
@@ -483,6 +533,7 @@ def on_tree_update(tree):
             if is_mask_share(ts, source, from_socket, target, to_socket):
                 share_mask(ts, source, target)
             elif is_chain_link(ts, source, from_socket, target, to_socket):
+                _enable_endpoints(ts, source, target)
                 reorder(ts, source, from_socket, target, to_socket)
             else:
                 connect(ts, source, from_socket, target, to_socket)
@@ -500,6 +551,8 @@ def on_tree_update(tree):
             continue
         if source in deleted:
             continue  # its node was deleted with it; the subtree is already gone
+        if _unplug_source(ts, source, to_socket):
+            continue
         disconnect(ts, target, to_socket)
     if len(tree.nodes) != tree.get('op_node_count', len(tree.nodes)):
         tree['op_links_dirty'] = True   # a deleted frame/layer node or a pasted duplicate: redraw

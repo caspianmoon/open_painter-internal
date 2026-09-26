@@ -25,7 +25,7 @@ FRAME_PREFIX = 'frame:'
 STACK_PREFIX = 'stack#'   # one Texture Set Output input per root layer: <prefix><layer id>
 # Bumped when the projection's sockets change: trees saved with the previous socket types
 # reconcile once on load (the signature otherwise depends on the stack alone).
-GRAPH_FORMAT = 6
+GRAPH_FORMAT = 7
 _syncing = False
 
 
@@ -94,14 +94,15 @@ def project(ts):
     """Expected graph: nodes {id: spec}, frames {id: spec}, links [(from, socket, to, socket)].
 
     Every layer, mask and channel filter is a node. Links show the actual data
-    flow: mask chains into the layer's Mask input, filter chains into its
-    channel content, nested siblings into the Backdrop of the layer above
-    them, the top child into its folder's Children input, every root layer
-    into its own Texture Set Output socket, and every anchor reference. Each
-    stack socket is a material bundle spanning every channel (listed under the
-    output spec's background ``maps`` key), so the compact single-line view
-    loses no channel data. Root order reads from Y rows, so roots never link
-    to each other.
+    flow: enabled masks chain into the layer's Mask input, enabled filters
+    into their channel content, nested siblings into the Backdrop of the layer
+    above them, the top child into its folder's Children input, every root
+    layer into its own Texture Set Output socket, and every anchor reference.
+    Parked (disabled) masks and filters draw no chain wires: unlinking parks,
+    linking re-enables. Each stack socket is a material bundle spanning every
+    channel (listed under the output spec's background ``maps`` key), so the
+    compact single-line view loses no channel data. Root order reads from Y
+    rows, so roots never link to each other.
     """
     registry = anchors.index(ts)
     legacy = legacy_targets(ts)
@@ -139,7 +140,8 @@ def project(ts):
                                 SOCKET_COVERAGE if channel == 'MASK' else _content_socket(channel)))
         nodes[layer.id] = {'kind': 'FOLDER' if layer.type == 'FOLDER' else 'LAYER', 'label': layer.name,
                            'inputs': inputs, 'outputs': outputs, 'frame': own_frame, 'owner': layer.id, 'channel': ''}
-        # Mask chain: previous coverage in, coverage out, ending in the layer's Mask input.
+        # Mask chain: previous *enabled* coverage in, coverage out, ending in the
+        # layer's Mask input. Parked (disabled) masks float free: no wires.
         previous = None
         for index, mask in enumerate(layer.masks):
             identifier = mask_node_id(layer, index, mask)
@@ -155,9 +157,10 @@ def project(ts):
             nodes[identifier] = {'kind': 'MASK', 'label': label, 'inputs': mask_inputs,
                                  'outputs': [('out', 'Coverage', SOCKET_COVERAGE)],
                                  'frame': own_frame, 'owner': layer.id, 'channel': ''}
-            if previous is not None:
-                links.append((previous, 'out', identifier, 'prev'))
-            previous = identifier
+            if mask.enabled:
+                if previous is not None:
+                    links.append((previous, 'out', identifier, 'prev'))
+                previous = identifier
         if previous is not None:
             links.append((previous, 'out', layer.id, 'mask'))
         # Filter chains per channel: content in, content out, ending in the channel input.
@@ -175,9 +178,10 @@ def project(ts):
                 nodes[identifier] = {'kind': 'EFFECT', 'label': f'{label} ({CHANNEL_LABELS.get(prop.channel, prop.channel)})',
                                      'inputs': [('in', 'Content', kind)], 'outputs': [('out', 'Content', kind)],
                                      'frame': own_frame, 'owner': layer.id, 'channel': prop.channel}
-                if previous is not None:
-                    links.append((previous, 'out', identifier, 'in'))
-                previous = identifier
+                if effect.enabled:
+                    if previous is not None:
+                        links.append((previous, 'out', identifier, 'in'))
+                    previous = identifier
             if previous is not None:
                 links.append((previous, 'out', layer.id, f'content#{prop.channel}'))
     by_layer = {layer.id: layer for layer in ts.layers}
@@ -256,7 +260,7 @@ def signature(ts):
                              m.effect.kind if m.source == 'FILTER' else '')
                             for m in layer.masks),
                       tuple((p.channel, p.enabled, p.anchor, p.anchor_channel,
-                             tuple((e.kind, e.id, e.name) for e in p.effects)) for p in layer.channels)))
+                             tuple((e.kind, e.id, e.name, e.enabled) for e in p.effects)) for p in layer.channels)))
     parts.append(('format', GRAPH_FORMAT))
     return sha256(repr(parts).encode()).hexdigest()
 

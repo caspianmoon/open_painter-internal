@@ -150,8 +150,15 @@ def land_edge_maps(scene_name, set_id, expected, produced):
     ts = (next((item for item in scene.open_painter.texture_sets if item.id == set_id), None)
           if scene is not None else None)
     if ts is None or record(ts, 'CURVATURE') != expected:
+        from ..core.image_manager import live_bake_pointers
+        live = live_bake_pointers(ts) if ts is not None else set()
         for image in produced.values():
-            bpy.data.images.remove(image)
+            try:
+                if image.as_pointer() in live:
+                    continue  # a rebaked live map is restored by the baker, never removed
+                bpy.data.images.remove(image)
+            except ReferenceError:
+                pass
         status = ('Scene removed; edge map rebake discarded' if scene is None
                   else 'Bake inputs changed; edge map rebake discarded')
         if scene is not None:

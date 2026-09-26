@@ -25,7 +25,7 @@ FRAME_PREFIX = 'frame:'
 STACK_PREFIX = 'stack#'   # one Texture Set Output input per root layer: <prefix><layer id>
 # Bumped when the projection's sockets change: trees saved with the previous socket types
 # reconcile once on load (the signature otherwise depends on the stack alone).
-GRAPH_FORMAT = 7
+GRAPH_FORMAT = 8
 _syncing = False
 
 

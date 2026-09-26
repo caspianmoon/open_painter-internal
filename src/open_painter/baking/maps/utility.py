@@ -400,7 +400,17 @@ def bake_utility(ts, kind):
             pixels = _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata)
     if kind == "SELECTION":
         metadata["selected_faces"] = json.dumps(metadata.get("selected_faces", {}), sort_keys=True)
-    image = images.create(f"{ts.name}_Baked{kind.title().replace('_', '')}", n)
+    canonical = f"{ts.name}_Baked{kind.title().replace('_', '')}"
+    existing = images.reusable_bake_image(ts, kind)
+    fresh = existing is None
+    # Like the Cycles maps, a rebake overrides the live image in place: same
+    # datablock, same name, every bound channel keeps reading it.
+    image = existing if existing is not None else images.create(canonical, n)
+    if not fresh:
+        if tuple(image.size) != (n, n):
+            image.scale(n, n)
+        if image.name != canonical:
+            image.name = canonical
     try:
         image["open_painter_mesh_map"] = kind
         image["open_painter_utility_method"] = "EVALUATED_TARGET_UV_V1"
@@ -412,6 +422,8 @@ def bake_utility(ts, kind):
             image[key] = value
         images.write(image, pixels)
     except Exception:
-        bpy.data.images.remove(image)
+        # Only a fresh image may go: the live map of a failed rebake stays put.
+        if fresh:
+            bpy.data.images.remove(image)
         raise
     return image

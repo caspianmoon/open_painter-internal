@@ -190,9 +190,15 @@ def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
     except BaseException:
         # Stopped (GeneratorExit from the modal's Esc/cancel) or failed part-way:
         # the reaches already produced are packed fake-user images nobody
-        # registers, so they would otherwise persist in the file.
+        # registers, so they would otherwise persist in the file. A rebake
+        # writes into the live map, whose pixels the baker already restored:
+        # never remove what the set still binds.
+        from ..core.image_manager import live_bake_pointers
+        live = live_bake_pointers(ts)
         for image in result.values():
             try:
+                if image.as_pointer() in live:
+                    continue
                 bpy.data.images.remove(image)
             except ReferenceError:
                 pass  # a memfile undo mid-job already freed it

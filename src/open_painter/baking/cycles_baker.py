@@ -215,8 +215,30 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False, radius=No
     # exclusion pass is not tied to projection the way the cage and source passes are.
     exclude = corrections.raster(ts, 'AO_EXCLUDE') if kind == 'AO' and settings.ao_scope == 'SET' else None
     image = scratch = alternative = None
+    canonical = f"{ts.name}_Baked{kind.title().replace('_', '')}"
+    fresh, snapshot = True, None
     try:
-        image = create(f"{ts.name}_Baked{kind.title().replace('_', '')}", working, DEFAULT_COLORS[kind])
+        from ..core.image_manager import reusable_bake_image
+        existing = reusable_bake_image(ts, kind)
+        if existing is not None:
+            # A rebake overrides the live map in place: the name never gains a
+            # .001 suffix and every channel bound to the image keeps reading it.
+            image, fresh = existing, False
+            try:
+                snapshot = pixels(image).copy()
+            except ValueError:
+                snapshot = None
+            if tuple(image.size) != (working, working):
+                image.scale(working, working)
+            if image.name != canonical:
+                image.name = canonical  # Blender keeps it only when free; heals old .001 names
+            if regions is None:
+                # use_clear stays off (the image is shared across parts), so a
+                # full rebake starts from the neutral base: changed UVs leave
+                # no stale background behind.
+                write(image, np.full((working, working, 4), DEFAULT_COLORS[kind], np.float32), pack=False)
+        else:
+            image = create(canonical, working, DEFAULT_COLORS[kind])
         scratch = create('OP Bake Unassigned Slots', 32)
         with prepared(context, ts, parts, image, scratch, flush=flush) as stage:
             bake_settings = stage.scene.render.bake
@@ -324,6 +346,9 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False, radius=No
                 image.update()
                 bpy.data.images.remove(alternative)
                 alternative = None
+        # Cycles writes pixels without touching the managed revision the caches
+        # key on: a rebake into the live image must invalidate them explicitly.
+        image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
         if working != resolution:
             reduced = downsample(pixels(image), factor, 'NORMAL' if kind in {'NORMAL', 'BEVEL_NORMAL'} else kind)
             image.scale(resolution, resolution)  # keep the datablock identity; pixels are replaced below
@@ -342,7 +367,17 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False, radius=No
         return image
     except Exception:
         if image:
-            bpy.data.images.remove(image)
+            if snapshot is not None:
+                # A failed rebake keeps its previous map: the datablock the
+                # references still bind is restored, never removed.
+                try:
+                    if (image.size[0], image.size[1]) != (snapshot.shape[1], snapshot.shape[0]):
+                        image.scale(snapshot.shape[1], snapshot.shape[0])
+                    write(image, snapshot, pack=False)
+                except (ReferenceError, ValueError):
+                    pass
+            elif fresh:
+                bpy.data.images.remove(image)
         if alternative:
             bpy.data.images.remove(alternative)
         raise

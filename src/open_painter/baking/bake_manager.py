@@ -180,8 +180,17 @@ def bake_steps(context, ts):
         produced = image if isinstance(image, dict) else {kind: image}
         if record(ts, kind) != expected[kind]:
             import bpy
+            from ..core.image_manager import live_bake_pointers
+            live = live_bake_pointers(ts)
             for item in produced.values():
-                bpy.data.images.remove(item)
+                try:
+                    # A rebaked live map keeps its (complete, provenance-stale)
+                    # pixels here: flagged out of date, converging on rebake.
+                    if item.as_pointer() in live:
+                        continue
+                    bpy.data.images.remove(item)
+                except ReferenceError:
+                    pass
             raise ValueError("Bake inputs changed; discarded stale map")
         register_maps(ts, produced)
         history.landed(ts, kind)

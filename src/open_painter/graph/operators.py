@@ -6,7 +6,7 @@ from ..core.project_manager import require_set
 from ..ui.operators import SafeOperator
 from . import mirror
 from .rows import OP_OT_graph_toggle_rows
-from .tree import IMAGE_PREFIX, TREE_ID, is_graph
+from .tree import IMAGE_PREFIX, SOCKET_CONTENT, TREE_ID, is_graph
 
 
 def graph_area(screen, ts):
@@ -161,6 +161,9 @@ class OP_OT_graph_add_image(SafeOperator, bpy.types.Operator):
             node.label = 'Image Texture'
             node.width = 240
             node.location = (vx + (existing % 4) * 24, vy - (existing % 4) * 48)
+            # The exit slot exists at birth: the mirror only re-enforces it on
+            # its next pass, which is too late to wire the node right away.
+            node.outputs.new(SOCKET_CONTENT, 'Image', identifier='out')
         # The node is already in the tree: select it on the next sync,
         # exclusively, so it can be placed immediately.
         mirror.request_select(tree, identifier)
@@ -217,6 +220,51 @@ def _graph_target(context):
     return ts, layer
 
 
+def _add_edge_wear_2(ts, layer):
+    """Append the Edge Wear 2.0 recipe, wired and on; return the first node id.
+
+    Edge Wear (0.11 amount, 4.32 contrast, baked edge maps) into Grunge Medium
+    (triplanar, hardness 1) into a Levels filter (white 0.28, gamma 0.5), all
+    multiplying. A designed preset arrives working, exactly like its reference
+    setup; lone mask adds stay parked until wired.
+    """
+    from ..utils.ids import new_id
+    first = None
+    for source, name, values in (
+            ('GENERATOR', 'Edge Wear', {'generator': 'EDGE_WEAR', 'amount': 0.11, 'contrast': 4.32,
+                                        'noise_scale': 1.0, 'edge_source': 'BAKED'}),
+            ('PROCEDURAL', 'Grunge Medium', {'procedural': 'GRUNGE_MEDIUM', 'noise_scale': 2.0, 'seed': 1,
+                                             'projection': 'TRIPLANAR', 'triplanar_hardness': 1.0,
+                                             'scale': (1.0, 1.0), 'rotation': 0.0, 'offset': (0.0, 0.0)}),
+            ('FILTER', 'Levels', {'effect_kind': 'LEVELS', 'effect_black': 0.0, 'effect_white': 0.28,
+                                  'effect_gamma': 0.5, 'effect_output_black': 0.0, 'effect_output_white': 1.0})):
+        mask = layer.masks.add()
+        mask.id, mask.source, mask.name = new_id(), source, name
+        mask.operation, mask.strength, mask.black, mask.white = 'MULTIPLY', 1.0, 0.0, 1.0
+        mask.enabled = True
+        if source == 'GENERATOR':
+            mask.generator = values['generator']
+            mask.amount, mask.contrast, mask.noise_scale = values['amount'], values['contrast'], values['noise_scale']
+            mask.edge_source = values['edge_source']
+        elif source == 'PROCEDURAL':
+            mask.procedural = values['procedural']
+            mask.noise_scale, mask.seed = values['noise_scale'], values['seed']
+            mask.projection, mask.triplanar_hardness = values['projection'], values['triplanar_hardness']
+            mask.scale = values['scale']
+            mask.rotation = values['rotation']
+            mask.offset = values['offset']
+        else:
+            mask.effect.kind = values['effect_kind']
+            mask.effect.black, mask.effect.white = values['effect_black'], values['effect_white']
+            mask.effect.gamma = values['effect_gamma']
+            mask.effect.output_black, mask.effect.output_white = (values['effect_output_black'],
+                                                                  values['effect_output_white'])
+        if first is None:
+            first = mirror.mask_node_id(layer, len(layer.masks) - 1, mask)
+    layer.active_mask = len(layer.masks) - 1
+    return first
+
+
 class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
     """Add a mask or channel filter node to the active layer, parked until wired."""
     bl_idname = 'open_painter.graph_add'
@@ -224,7 +272,7 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     kind: bpy.props.EnumProperty(items=[(k, k.replace('_', ' ').title(), '') for k in (
         'MASK', 'GENERATOR', 'PROCEDURAL', 'SCENE', 'MASK_FILTER', 'REFERENCE', 'MASK_ANCHOR',
-        'FILTER', 'CHANNEL_ANCHOR')])
+        'FILTER', 'CHANNEL_ANCHOR', 'RECIPE')])
     choice: bpy.props.StringProperty()
     channel: bpy.props.StringProperty()
 
@@ -254,6 +302,11 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
                 context.scene.open_painter.properties_channel = prop.channel
             selected_mask = False
             node_id = mirror.effect_node_id(layer, prop.channel, len(prop.effects) - 1, effect)
+        elif self.kind == 'RECIPE':
+            if self.choice != 'EDGE_WEAR_2':
+                raise ValueError(f'Unknown recipe: {self.choice}')
+            node_id = _add_edge_wear_2(ts, layer)
+            selected_mask = True
         else:
             mask = layer.masks.add()
             mask.id = new_id()
@@ -330,6 +383,8 @@ class OP_MT_graph_add_generator(_AddMenu, bpy.types.Menu):
     bl_label = 'Generator'
 
     def draw(self, context):
+        self.item('RECIPE', 'EDGE_WEAR_2', 'Edge Wear 2.0', 'MOD_MASK')
+        self.layout.separator()
         from ..generators.base import REQUIRED_MAPS
         for kind in REQUIRED_MAPS:
             self.item('GENERATOR', kind, kind.replace('_', ' ').title())

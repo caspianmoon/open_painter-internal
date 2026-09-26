@@ -13,6 +13,19 @@ def changed(self, context):
 def numeric(self, context):
     """A uniform or resource-identity edit; graph structure is unchanged."""
     _changed(self, context, False)
+    if hasattr(self, 'value') and hasattr(self, 'channel'):
+        # The RNA bounds stay wide so Height can be typed past 1; every other
+        # scalar channel is physical 0..1 and is clamped back here.
+        low, high = _VALUE_RANGES.get(self.channel or '', (0.0, 1.0))
+        clamped = min(max(self.value, low), high)
+        if clamped != self.value:
+            self.value = clamped
+
+
+# Stored value bounds per channel. The RNA property stays wide (soft 0..1 keeps
+# every slider compact) so Height alone can be typed past 1; `numeric` clamps
+# everything else back to physical 0..1.
+_VALUE_RANGES = {'HEIGHT': (-1.0, 10.0)}
 
 
 def owning_set(owner):
@@ -122,7 +135,8 @@ class OP_Channel(bpy.types.PropertyGroup):
         default=(0.5, 0.5, 0.5, 1),
         update=numeric,
     )
-    value: bpy.props.FloatProperty(name="Value", default=0.5, min=0, max=1, update=numeric)
+    value: bpy.props.FloatProperty(name="Value", default=0.5, min=-1.0, soft_min=0.0,
+                                         soft_max=1.0, max=10.0, update=numeric)
     # Fill content instantiated from an anchor point; replaces image/color/value.
     anchor: bpy.props.StringProperty(name="Anchor", update=changed,
         description="Anchor point whose published result becomes this channel's content")

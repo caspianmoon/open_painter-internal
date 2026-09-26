@@ -96,7 +96,9 @@ shader, one reach per Bevel radius multiple). Position, world/object normals, ma
 IDs, UV islands/borders and raycast thickness use evaluated-mesh utility baking. A `finally` block restores material slots, render engine,
 Cycles device/samples, bake properties, visibility, selection, active object and mode. Temporary
 materials and scratch images are removed. Successfully completed maps are registered independently.
-Baked map use in shading is explicit via a generated fill layer.
+A rebake overrides the live map image in place (same datablock and name, so no
+.001 duplicates and every bound channel keeps reading it); a failed rebake
+restores its pixels instead of dropping the image. Baked map use in shading is explicit via a generated fill layer.
 
 ## Material aging (0.10.0)
 

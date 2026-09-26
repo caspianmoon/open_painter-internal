@@ -29,6 +29,47 @@ def adopt_alpha_mode(image):
         image.alpha_mode = 'CHANNEL_PACKED'
 
 
+def reusable_bake_image(ts, kind):
+    """The live baked-map image for ``kind`` when it is ours to bake into, else None.
+
+    A rebake overrides the registered map in place: the name never gains a
+    .001 suffix and every channel bound to the image keeps reading it. Only a
+    managed (OWNER-tagged) image with pixel data qualifies; a user-supplied
+    image is never overwritten in place, it is replaced by registration.
+    """
+    try:
+        entries = list(ts.baked_maps)
+    except (ReferenceError, AttributeError):
+        return None
+    for entry in entries:
+        try:
+            if entry.kind != kind or not entry.image:
+                continue
+            image = entry.image
+            if not image.get(OWNER) or not image.size[0] or not len(image.pixels):
+                return None
+        except ReferenceError:
+            return None
+        return image
+    return None
+
+
+def live_bake_pointers(ts):
+    """as_pointer() set of the set's current baked-map images; empty when unreadable."""
+    try:
+        entries = list(ts.baked_maps)
+    except (ReferenceError, AttributeError):
+        return set()
+    pointers = set()
+    for entry in entries:
+        try:
+            if entry.image:
+                pointers.add(entry.image.as_pointer())
+        except ReferenceError:
+            continue
+    return pointers
+
+
 @measured('image_read')
 def pixels(image, out=None) -> np.ndarray:
     if not image or not image.size[0] or not len(image.pixels):

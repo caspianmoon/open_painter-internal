@@ -1,10 +1,11 @@
 """Bake convex edges of the assigned render UVs with a transient Cycles shader.
 
-Each reach runs the exact Bevel-normal/cross-product/length/smooth-step graph
-(``cycles_baker.curvature_graph``) against the target's own surface at its own
-Bevel radius, always in Cycles like the other mesh-map bakes. The geometric
-crease helpers below stay: the LIVE edge field and the Mean Curvature crease
-overlay still rasterize them on the CPU.
+Each reach runs the reference Bevel-normal/cross-product/length/smootherstep
+graph (``cycles_baker.curvature_graph``) into a Diffuse BSDF, baked as DIFFUSE
+with the COLOR pass only, against the target's own surface at its own Bevel
+radius, always in Cycles like the other mesh-map bakes. The geometric crease
+helpers below stay: the LIVE edge field and the Mean Curvature crease overlay
+still rasterize them on the CPU.
 """
 
 from math import cos, radians
@@ -168,6 +169,9 @@ def edge_map_set_complete(ts):
 
 def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
     """Bake the edge set with the Cycles Bevel shader: one blocking bake per reach.
+
+    Each reach follows the reference procedure (Bevel 12, Normal sockets,
+    Smootherstep, Diffuse COLOR bake) at its own radius multiple.
 
     Yields progress (0..1) between reaches so the modal refresh keeps responding
     and Esc stops between maps; returns {kind: image}. The settings are read

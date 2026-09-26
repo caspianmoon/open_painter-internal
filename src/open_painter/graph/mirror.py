@@ -18,7 +18,7 @@ from ..evaluation import anchors
 from ..evaluation.anchors import DETAIL_KINDS
 from . import layout
 from .tree import (NODE_TYPES, OUTPUT_NODE, SOCKET_COLOR, SOCKET_CONTENT, SOCKET_COVERAGE, SOCKET_DESCRIPTIONS,
-                   SOCKET_NORMAL, SOCKET_SCALAR, TREE_ID, is_graph)
+                   SOCKET_NORMAL, SOCKET_SCALAR, TREE_ID, IMAGE_PREFIX, is_graph)
 
 SCALAR_CHANNELS = frozenset({'ROUGHNESS', 'METALLIC', 'HEIGHT', 'AO', 'OPACITY'})
 FRAME_PREFIX = 'frame:'
@@ -351,8 +351,11 @@ def reconcile(tree, ts, force_layout=False):
             seen.add(identifier)
         existing = nodes_by_id(tree)
         for identifier, node in list(existing.items()):
+            # Image Texture nodes are tree-only state the mirror preserves: the
+            # stack holds the copied values, never the node.
             wanted = (identifier in nodes and node.bl_idname == NODE_TYPES[nodes[identifier]['kind']]) or \
-                     (identifier in frames and node.bl_idname == 'NodeFrame')
+                     (identifier in frames and node.bl_idname == 'NodeFrame') or \
+                     (getattr(node, 'op_kind', '') == 'IMAGE' and identifier.startswith(IMAGE_PREFIX))
             if not identifier or not wanted:
                 tree.nodes.remove(node)
         existing = nodes_by_id(tree)
@@ -380,6 +383,12 @@ def reconcile(tree, ts, force_layout=False):
             _sockets(node.outputs, spec['outputs'])
             for socket in node.inputs:
                 socket.link_limit = 1
+        for node in tree.nodes:
+            if getattr(node, 'op_kind', '') == 'IMAGE':
+                # Free nodes keep one bundle output; the feed links below are
+                # redrawn from the recorded mapping, never from the projection.
+                _sockets(node.inputs, [])
+                _sockets(node.outputs, [('out', 'Image', SOCKET_CONTENT)])
         for identifier, spec in list(nodes.items()) + list(frames.items()):
             node = existing[identifier]
             parent = existing.get(spec['frame']) if spec['frame'] else None
@@ -394,6 +403,16 @@ def reconcile(tree, ts, force_layout=False):
             b = next((s for s in consumer.inputs if s.identifier == to_socket), None)
             if a is not None and b is not None:
                 tree.links.new(a, b)
+        feed_links = _feed_links(tree, ts)
+        for source, from_socket, target, to_socket in feed_links:
+            producer, consumer = existing.get(source), existing.get(target)
+            if producer is None or consumer is None:
+                continue
+            a = next((s for s in producer.outputs if s.identifier == from_socket), None)
+            b = next((s for s in consumer.inputs if s.identifier == to_socket), None)
+            if a is not None and b is not None:
+                tree.links.new(a, b)
+        links = links + feed_links
         place(tree, ts, existing, nodes, links, only=None if force_layout else set(created))
         tree['op_signature'] = signature(ts)
         tree['op_serial'] = ts.edit_serial
@@ -406,6 +425,38 @@ def reconcile(tree, ts, force_layout=False):
 
 
 STRUCTURAL = frozenset({'below', 'children'})
+
+
+def _feed_links(tree, ts):
+    """Drawable image-feed wires, pruning dead mapping entries first.
+
+    A feed redraws while its node, layer and channel exist and the channel
+    still holds the node's image (a panel override breaks the feed and frees
+    the node). A filtered channel keeps its mapping but draws no wire: the
+    socket already ends the filter chain.
+    """
+    from . import edits
+    by_id = nodes_by_id(tree)
+    mapping, kept, result = edits.feeds(tree), {}, []
+    for key, node_id in mapping.items():
+        layer_id, _, channel = key.partition('\t')
+        node = by_id.get(node_id)
+        layer = next((item for item in ts.layers if item.id == layer_id), None)
+        prop = channel_for(layer, channel) if layer is not None else None
+        try:
+            match = (prop is not None and node is not None and prop.image
+                     and node.image and prop.image == node.image)
+        except ReferenceError:
+            match = False
+        if (node is None or getattr(node, 'op_kind', '') != 'IMAGE' or prop is None
+                or layer.type != 'FILL' or not match):
+            continue  # node deleted, channel gone, or the panel overrode the image
+        kept[key] = node_id
+        if not prop.effects:
+            result.append((node_id, 'out', layer_id, f'content#{channel}'))
+    if kept != mapping:
+        edits._store_feeds(tree, kept)
+    return result
 
 
 def place(tree, ts, existing, nodes, links, only=None):
@@ -424,8 +475,19 @@ def place(tree, ts, existing, nodes, links, only=None):
                for identifier, spec in nodes.items()}
     for layer in ts.layers:
         if layer.type == 'FILL':
-            sockets[layer.id] = sockets.get(layer.id, 0) + sum(
-                1 for prop in layer.channels if prop.enabled)
+            # Channel switch grid, then value/image rows per enabled channel.
+            sockets[layer.id] = sockets.get(layer.id, 0) + 2
+            for prop in layer.channels:
+                if not prop.enabled:
+                    continue
+                sockets[layer.id] += 2
+                if prop.image or prop.detail_image or prop.procedural:
+                    # Projection row (hardness joins it) plus scale/rotation/offset.
+                    sockets[layer.id] += 4
+        for index, mask in enumerate(layer.masks):
+            if mask.source in {'FILL', 'PROCEDURAL'}:
+                identifier = mask_node_id(layer, index, mask)
+                sockets[identifier] = sockets.get(identifier, 0) + 4
     inline, subrows = {}, {}
     for layer in ts.layers:
         if layer.masks:
@@ -478,9 +540,41 @@ def sync(window):
                 area.tag_redraw()
             if mirror_selection(tree, ts, window, area):
                 area.tag_redraw()
+            if consume_pending_select(tree, ts):
+                area.tag_redraw()
         except Exception as error:   # a stale tree must never break the UI timer
             from ..utils.logging import logger
             logger.error('Open Graph sync: %s', error)
+
+
+def request_select(tree, node_id):
+    """Select ``node_id`` exclusively on the next sync, for placement.
+
+    Add operators record the new node here: reconcile creates it on the tick
+    after the operator runs, so selecting immediately would target a node that
+    does not exist yet (or lose to the selection mirror).
+    """
+    tree['op_select_pending'] = node_id
+
+
+def consume_pending_select(tree, ts):
+    """Exclusively select the node an add operator recorded; True if one was."""
+    identifier = tree.get('op_select_pending', '')
+    if not identifier:
+        return False
+    tree['op_select_pending'] = ''
+    node = nodes_by_id(tree).get(identifier)
+    if node is None:
+        return False
+    with syncing():
+        for item in tree.nodes:
+            item.select = item is node
+        tree.nodes.active = node
+    layer, _mask, _prop, _effect = owner_of(ts, identifier)
+    tree['op_active_node'] = identifier
+    if layer is not None:
+        tree['op_active'] = layer.id
+    return True
 
 
 def mirror_selection(tree, ts, window, area):
@@ -600,6 +694,18 @@ def draw_mask(layout, ts, layer, mask):
             layout.prop(mask, name, text='')
         else:
             layout.prop(mask, name)
+    if mask.source in {'FILL', 'PROCEDURAL'}:
+        # Coordinate selection lives on the node: UV or Triplanar plus the
+        # transform the compiled shader reads. Hardness joins the projection
+        # row: it is the weight the manual triplanar blend uses, so no
+        # Box-projection Blend control applies (see shader_graph.projected).
+        row = layout.row(align=True)
+        row.prop(mask, 'projection', text='')
+        if mask.projection == 'TRIPLANAR':
+            row.prop(mask, 'triplanar_hardness', text='')
+        layout.prop(mask, 'scale', text='Scale')
+        layout.prop(mask, 'rotation', text='Rotation')
+        layout.prop(mask, 'offset', text='Offset')
     if mask.source not in {'ANCHOR', 'REFERENCE'}:
         row = layout.row(align=True)
         row.prop(mask, 'black', text='Black')
@@ -622,7 +728,27 @@ def draw_effect(layout, ts, layer, prop, effect):
     _edit_button(layout, layer, prop=prop, effect=effect)
 
 
+# Short switch labels for the Fill node's channel grid (one toggle per channel).
+CHANNEL_SHORT = {'BASE_COLOR': 'Base', 'ROUGHNESS': 'Rough', 'METALLIC': 'Metal', 'NORMAL': 'Normal',
+                 'HEIGHT': 'Height', 'AO': 'AO', 'EMISSION': 'Emis.', 'OPACITY': 'Opac.'}
+
+
+def draw_image_node(layout, node):
+    """An Image Texture node: the image plus the mapping a fed channel copies."""
+    layout.template_ID(node, 'image', new='image.new', open='image.open')
+    row = layout.row(align=True)
+    row.prop(node, 'projection', text='')
+    if node.projection == 'TRIPLANAR':
+        row.prop(node, 'triplanar_hardness', text='')
+    layout.prop(node, 'scale', text='Scale')
+    layout.prop(node, 'rotation', text='Rotation')
+    layout.prop(node, 'offset', text='Offset')
+
+
 def draw_node(node, context, layout):
+    if getattr(node, 'op_kind', '') == 'IMAGE':
+        draw_image_node(layout, node)
+        return
     tree = node.id_data
     ts = texture_set_of(tree, context.scene if context else None)
     if node.op_kind == 'OUTPUT':
@@ -646,9 +772,18 @@ def draw_node(node, context, layout):
     else:
         layout.prop(layer, 'blend_mode', text='')
     if layer.type == 'FILL':
-        # Fill content, editable like the panel: one row per enabled channel.
+        # Channel switches, no panel needed: two compact rows toggle every
+        # channel on or off; the value, image and mapping rows follow only the
+        # enabled ones. Toggling is structural (sockets come and go).
         from ..constants import CHANNELS
         from ..core.layer_stack import channel_for
+        for block in (CHANNELS[:4], CHANNELS[4:]):
+            row = layout.row(align=True)
+            for channel_id in block:
+                prop = channel_for(layer, channel_id)
+                if prop is None:
+                    continue
+                row.prop(prop, 'enabled', text=CHANNEL_SHORT[channel_id], toggle=True)
         for channel_id in CHANNELS:
             prop = channel_for(layer, channel_id)
             if prop is None or not prop.enabled:
@@ -658,6 +793,21 @@ def draw_node(node, context, layout):
                 layout.prop(prop, 'color', text=label)
             else:
                 layout.prop(prop, 'value', text=label, slider=True)
+            # Any image attaches to any channel here, exactly like the panel's
+            # Texture picker: the shader reads channel.image, so no link is needed.
+            layout.template_ID(prop, 'image', open='image.open')
+            if prop.image or prop.detail_image or prop.procedural:
+                # Coordinate selection lives on the node: UV or Triplanar plus
+                # the transform the compiled shader reads (scale/rotation/
+                # offset, and the hardness the manual triplanar blend weights
+                # by). Filtering and wrap stay in the panel.
+                row = layout.row(align=True)
+                row.prop(prop, 'projection', text='')
+                if prop.projection == 'TRIPLANAR':
+                    row.prop(prop, 'triplanar_hardness', text='')
+                layout.prop(prop, 'scale', text='Scale')
+                layout.prop(prop, 'rotation', text='Rotation')
+                layout.prop(prop, 'offset', text='Offset')
     row = layout.row(align=True)
     row.prop(layer, 'publish_output', text='Publish', toggle=True, icon='ANCHOR_CENTER')
     if layer.type == 'FOLDER':

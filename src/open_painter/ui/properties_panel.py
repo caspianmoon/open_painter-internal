@@ -139,6 +139,13 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
                 mask.image.pack()
             from ..core import mask_stack
             layer.active_mask = mask_stack.adopt(layer, len(layer.masks) - 1, anchor)
+            from ..graph import mirror
+            tree = mirror.find_tree(ts)
+            if tree is not None:
+                # The node appears on the next sync: select it then, exclusively,
+                # so it can be placed immediately.
+                index = layer.active_mask
+                mirror.request_select(tree, mirror.mask_node_id(layer, index, layer.masks[index]))
         elif layer.masks:
             from ..core import mask_stack
             i = max(0, min(layer.active_mask, len(layer.masks) - 1))
@@ -220,6 +227,10 @@ class OP_OT_mask_paint(SafeOperator, bpy.types.Operator):
         mask_id = mask.id
         layer.active_mask = len(layer.masks) - 1
         invalidate(ts)
+        from ..graph import mirror
+        tree = mirror.find_tree(ts)
+        if tree is not None:
+            mirror.request_select(tree, mirror.mask_node_id(layer, layer.active_mask, mask))
         from . import selection
         target = selection.select(context, layer.id, selection.MASK, mask_id=mask_id, ts=ts, synchronize=False)
         if self.start_painting:

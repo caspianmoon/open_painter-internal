@@ -60,7 +60,7 @@ BEVEL_KINDS = {'BEVEL_NORMAL', 'BEVEL_MASK'}
 # module imports this one, never the reverse).
 CURVATURE_METHOD = 'CYCLES_BEVEL'
 CURVATURE_REACHES = frozenset({'CURVATURE_THIN', 'CURVATURE', 'CURVATURE_WIDE', 'CURVATURE_XWIDE'})
-CURVATURE_SAMPLES = 4
+CURVATURE_SAMPLES = 12
 DEFAULT_COLORS = {'NORMAL': (.5, .5, 1, 1), 'BEVEL_NORMAL': (.5, .5, 1, 1),
                   'AO': (1, 1, 1, 1), 'BEVEL_MASK': (0, 0, 0, 1),
                   'CURVATURE_THIN': (0, 0, 0, 1), 'CURVATURE': (0, 0, 0, 1),
@@ -104,11 +104,12 @@ def bevel_graph(material, kind, radius, samples):
 def curvature_graph(material, radius):
     """Wire the transient bake material for one Curvature edge reach.
 
-    Texture Coordinate (Object) into the Bevel node, the bevel Normal crossed
-    with the object vector, its length smooth-stepped from 0..1 to 0..1, out
-    as the map. A bare float cannot drive the Material Output surface closure,
-    so an Emission node at strength 1 carries the exact value into the EMIT
-    bake; the pass reads only this material, never the scene's.
+    The reference edge-wear procedure: Texture Coordinate (Normal) into the
+    Bevel node, the bevel Normal crossed with the same Normal vector, its
+    length through a Float Map Range (SMOOTHERSTEP 0..1 to 0..1) into a
+    Diffuse BSDF at Roughness 1, out as the map. Baked as DIFFUSE with the
+    COLOR pass only (direct/indirect off); the pass reads only this material,
+    never the scene's.
     """
     tree = material.node_tree
     nodes, links = tree.nodes, tree.links
@@ -119,26 +120,33 @@ def curvature_graph(material, radius):
     bevel = nodes.new('ShaderNodeBevel')
     bevel.samples = CURVATURE_SAMPLES
     bevel.inputs['Radius'].default_value = radius
-    links.new(coord.outputs['Object'], bevel.inputs['Normal'])
+    links.new(coord.outputs['Normal'], bevel.inputs['Normal'])
     cross = nodes.new('ShaderNodeVectorMath')
     cross.operation = 'CROSS_PRODUCT'
     links.new(bevel.outputs['Normal'], cross.inputs[0])
-    links.new(coord.outputs['Object'], cross.inputs[1])
+    links.new(coord.outputs['Normal'], cross.inputs[1])
     length = nodes.new('ShaderNodeVectorMath')
     length.operation = 'LENGTH'
     links.new(cross.outputs['Vector'], length.inputs[0])
     remap = nodes.new('ShaderNodeMapRange')
     remap.data_type = 'FLOAT'
-    remap.interpolation = 'SMOOTHSTEP'
+    try:
+        remap.interpolation_type = 'SMOOTHERSTEP'
+    except AttributeError:
+        pass
+    try:
+        remap.interpolation = 'SMOOTHERSTEP'
+    except AttributeError:
+        pass
     remap.inputs['From Min'].default_value = 0.0
     remap.inputs['From Max'].default_value = 1.0
     remap.inputs['To Min'].default_value = 0.0
     remap.inputs['To Max'].default_value = 1.0
     links.new(length.outputs['Value'], remap.inputs['Value'])
-    shader = nodes.new('ShaderNodeEmission')
+    shader = nodes.new('ShaderNodeBsdfDiffuse')
+    shader.inputs['Roughness'].default_value = 1.0
     links.new(remap.outputs['Result'], shader.inputs['Color'])
-    shader.inputs['Strength'].default_value = 1.0
-    links.new(shader.outputs[0], output.inputs['Surface'])
+    links.new(shader.outputs['BSDF'], output.inputs['Surface'])
 
 
 def bake(context: bpy.types.Context, ts, kind: str, flush=False) -> bpy.types.Image:
@@ -283,11 +291,20 @@ def _bake(context, ts, kind, regions=None, polygons=None, flush=False, radius=No
                             logger.info('Baking %s for %s from %d source(s)', kind, part.low.name, len(step_sources))
                             if kind == 'BEVEL_NORMAL':
                                 bake_type = 'NORMAL'
-                            elif kind == 'BEVEL_MASK' or edge:
+                            elif kind == 'BEVEL_MASK':
                                 bake_type = 'EMIT'
+                            elif edge:
+                                bake_type = 'DIFFUSE'
                             else:
                                 bake_type = kind
-                            _run_bake(type=bake_type, uv_layer=uv.name)
+                            if edge:
+                                # The reference procedure: Diffuse COLOR pass only, no direct/indirect light.
+                                bake_settings.use_pass_direct = False
+                                bake_settings.use_pass_indirect = False
+                                bake_settings.use_pass_color = True
+                                _run_bake(type=bake_type, pass_filter={'COLOR'}, uv_layer=uv.name)
+                            else:
+                                _run_bake(type=bake_type, uv_layer=uv.name)
                             for material in target.data.materials:
                                 node = material.node_tree.nodes.active if material and material.use_nodes else None
                                 if node is not None and node.image is target_image:

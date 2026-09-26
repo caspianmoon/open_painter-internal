@@ -6,7 +6,7 @@ from ..core.project_manager import require_set
 from ..ui.operators import SafeOperator
 from . import mirror
 from .rows import OP_OT_graph_toggle_rows
-from .tree import TREE_ID, is_graph
+from .tree import IMAGE_PREFIX, TREE_ID, is_graph
 
 
 def graph_area(screen, ts):
@@ -129,6 +129,44 @@ class OP_OT_graph_auto_layout(SafeOperator, bpy.types.Operator):
         mirror.reconcile(tree, ts, force_layout=True)
 
 
+class OP_OT_graph_add_image(SafeOperator, bpy.types.Operator):
+    """Add an empty Image Texture node to this graph.
+
+    Choose the image on the node itself: Open loads an external file, the
+    dropdown lists the blend file's images. Link its output into a fill
+    channel input to feed that channel.
+    """
+    bl_idname = 'open_painter.graph_add_image'
+    bl_label = 'Add Image Texture Node'
+    bl_description = "Add an empty Image Texture node; choose its image on the node"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def run(self, context):
+        from ..utils.ids import new_id
+        tree = getattr(context.space_data, 'node_tree', None)
+        ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
+        if ts is None:
+            raise ValueError('This editor shows no Open Painter graph.')
+        try:
+            region = next(r for r in context.area.regions if r.type == 'WINDOW')
+            vx, vy = region.view2d.region_to_view(region.width // 2, region.height // 2)
+        except (AttributeError, RuntimeError, StopIteration):
+            vx, vy = 0.0, 0.0
+        existing = sum(1 for item in tree.nodes if getattr(item, 'op_kind', '') == 'IMAGE')
+        with mirror.syncing():
+            node = tree.nodes.new('OPImageNode')
+            identifier = IMAGE_PREFIX + new_id()
+            node.op_id, node.op_kind = identifier, 'IMAGE'
+            node.name = identifier
+            node.label = 'Image Texture'
+            node.width = 240
+            node.location = (vx + (existing % 4) * 24, vy - (existing % 4) * 48)
+        # The node is already in the tree: select it on the next sync,
+        # exclusively, so it can be placed immediately.
+        mirror.request_select(tree, identifier)
+        return {'FINISHED'}
+
+
 class OP_OT_graph_select(SafeOperator, bpy.types.Operator):
     bl_idname = 'open_painter.graph_select'
     bl_label = 'Edit in Panel'
@@ -215,6 +253,7 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
             if layer.type != 'PAINT':
                 context.scene.open_painter.properties_channel = prop.channel
             selected_mask = False
+            node_id = mirror.effect_node_id(layer, prop.channel, len(prop.effects) - 1, effect)
         else:
             mask = layer.masks.add()
             mask.id = new_id()
@@ -246,7 +285,13 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
                 mask.enabled = False
             layer.active_mask = len(layer.masks) - 1
             selected_mask = True
+            node_id = mirror.mask_node_id(layer, len(layer.masks) - 1, mask)
         invalidate(ts)
+        tree = mirror.find_tree(ts)
+        if tree is not None:
+            # The node appears on the next sync: select it then, exclusively,
+            # so it can be placed immediately.
+            mirror.request_select(tree, node_id)
         from ..ui import selection
         layer_id = layer.id
         selection.select(context, layer_id, selection.MASK if selected_mask else selection.CONTENT,
@@ -401,13 +446,15 @@ def add_menu(self, context):
     layout.menu('OP_MT_graph_add_mask', icon='MOD_MASK')
     layout.menu('OP_MT_graph_add_filter', icon='SHADERFX')
     layout.separator()
+    layout.operator('open_painter.graph_add_image', text='Image Texture', icon='IMAGE_DATA')
+    layout.separator()
     for action, label, icon in (('FILL', 'Fill Layer', 'MATERIAL'), ('PAINT', 'Paint Layer', 'BRUSH_DATA'),
                                 ('FOLDER', 'Folder', 'FILE_FOLDER')):
         layout.operator('open_painter.layer', text=label, icon=icon).action = action
 
 
 CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
-           OP_OT_graph_toggle_rows,
+           OP_OT_graph_add_image, OP_OT_graph_toggle_rows,
             OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
             OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter)
 

@@ -24,9 +24,9 @@ rounded object is the flat baseline), and turning below a 0.1 rad dead zone coun
 flat. Faces are sampled at half the radius; candidates are gathered per radius-sized
 block, so cost scales with covered area, not face count.
 
-- `CURVATURE` (`CYCLES_BEVEL`) = the transient Bevel-normal/cross-product/length/
-  smooth-step shader baked in Cycles, one reach per Bevel radius multiple (thin,
-  normal, wide, extreme). Every recipe that reads Curvature gets edge wear from
+- `CURVATURE` (`CYCLES_BEVEL`) = the reference Bevel-normal/cross-product/length/
+  smootherstep-into-Diffuse shader baked in Cycles as DIFFUSE COLOR, one reach
+  per Bevel radius multiple (thin, normal, wide, extreme). Every recipe that reads Curvature gets edge wear from
   the same shader the viewport could evaluate. Maps baked with older methods
   report stale and rebake into the set.
 - `MEAN_CURVATURE` = signed estimate (0.5 flat, convex above, concave below), stretched so

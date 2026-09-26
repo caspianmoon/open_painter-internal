@@ -25,9 +25,12 @@ mirror's next sync: rejected links disappear when the tree is reconciled.
 from ..core.layer_stack import channel_for, invalidate
 from ..evaluation import anchors
 from ..evaluation.references import issues
-from .tree import OUTPUT_NODE, is_graph
+from .tree import IMAGE_PREFIX, OUTPUT_NODE, is_graph
 
 STRUCTURAL = frozenset({'prev', 'mask', 'below', 'children'})
+# Image feeds: {layer id + tab + channel: image node id} on the tree. The link
+# is the assignment: drawing it copies the node's image and mapping onto the
+# channel, cutting it takes the image back off (deleting the node keeps it).
 
 
 class LinkError(ValueError):
@@ -229,7 +232,12 @@ def delete_layer(ts, node_id):
 
 
 def _duplicate_mask(ts, layer, mask):
-    """Copy one mask after the original; return the copy's graph node id."""
+    """Copy one mask after the original, parked; return the copy's graph node id.
+
+    Duplicates float free until wired: an enabled copy would join the chain
+    unasked (the spaghetti of copying a mask together with its layer), and
+    drawing its wire puts it back to work.
+    """
     from ..core import layer_stack
     from ..core.image_manager import clone
     from ..utils.ids import new_id
@@ -239,6 +247,7 @@ def _duplicate_mask(ts, layer, mask):
     layer_stack.restore(layer_stack.snapshot(mask), copy)
     copy.id = new_id()
     copy.name = (mask.name or 'Mask') + ' Copy'
+    copy.enabled = False
     if copy.source == 'PAINT' and copy.image:
         copy.image = clone(copy.image)
     layer.masks.move(len(layer.masks) - 1, index + 1)
@@ -248,7 +257,7 @@ def _duplicate_mask(ts, layer, mask):
 
 
 def _duplicate_effect(ts, layer, prop, effect):
-    """Copy one channel filter after the original; return its graph node id."""
+    """Copy one channel filter after the original, parked; return its graph node id."""
     from ..core import layer_stack
     from ..utils.ids import new_id
     from .mirror import effect_node_id
@@ -256,41 +265,70 @@ def _duplicate_effect(ts, layer, prop, effect):
     copy = prop.effects.add()
     layer_stack.restore(layer_stack.snapshot(effect), copy)
     copy.id = new_id()
+    copy.enabled = False
     prop.effects.move(len(prop.effects) - 1, index + 1)
     prop.active_effect = index + 1
     layer_stack.invalidate(ts)
     return effect_node_id(layer, prop.channel, index + 1, copy)
 
 
-def _duplicate_item(ts, node_id):
-    """Duplicate the stack item behind a duplicated node; return the copy's node id.
+def _duplicate_layer(ts, node_id):
+    """Duplicate the whole layer or folder behind a duplicated node; return the copy's id.
 
-    Returns '' for nodes with no stack item (frames, output): the mirror
-    redraws those. Whole layers and folders go through ``layer_stack.duplicate``,
-    exactly like the panel Duplicate.
+    Whole layers and folders go through ``layer_stack.duplicate``, exactly
+    like the panel Duplicate.
     """
     from .mirror import owner_of
     from ..core import layer_stack
     layer, mask, prop, effect = owner_of(ts, node_id)
-    if layer is None:
+    if layer is None or mask is not None or effect is not None:
         return ''
-    if mask is not None:
-        return _duplicate_mask(ts, layer, mask)
-    if effect is not None:
-        return _duplicate_effect(ts, layer, prop, effect)
     copy = layer_stack.duplicate(ts, layer_stack.index_of(ts, layer.id))
     return copy.id
+
+
+def _adopt_stack_extra(ts, layer_map, node_id):
+    """Adopt a duplicated mask/filter node; return the copy's node id.
+
+    When its owner layer was duplicated in the same pass, the extra joins the
+    new layer's copy at the same index instead of putting a second mask on
+    the original: the duplicated set stays connected to itself and nothing
+    else. Otherwise it becomes a parked copy after the original.
+    """
+    from .mirror import effect_node_id, mask_node_id, owner_of
+    layer, mask, prop, effect = owner_of(ts, node_id)
+    if layer is None:
+        return ''
+    if mask is not None and layer.id in layer_map:
+        new_layer = _layer(ts, layer_map[layer.id])
+        index = next((i for i, item in enumerate(layer.masks) if item.id == mask.id), None)
+        if new_layer is not None and index is not None and index < len(new_layer.masks):
+            new_mask = new_layer.masks[index]
+            return mask_node_id(new_layer, index, new_mask)
+    if effect is not None and prop is not None and layer.id in layer_map:
+        new_layer = _layer(ts, layer_map[layer.id])
+        new_prop = channel_for(new_layer, prop.channel) if new_layer is not None else None
+        index = next((i for i, item in enumerate(prop.effects) if item.id == effect.id), None)
+        if new_prop is not None and index is not None and index < len(new_prop.effects):
+            return effect_node_id(new_layer, prop.channel, index, new_prop.effects[index])
+    if mask is not None:
+        return _duplicate_mask(ts, layer, mask)
+    if effect is not None and prop is not None:
+        return _duplicate_effect(ts, layer, prop, effect)
+    return ''
 
 
 def adopt_duplicates(tree, ts):
     """Turn Shift+D duplicated nodes into duplicated stack items; True if any.
 
-    Called from ``mirror.sync`` before reconciling. Nodes sharing an ``op_id``
-    are Blender duplicates: each extra instance becomes a real duplicated
-    layer, mask or filter with a fresh id, keeping the dropped position, while
-    links touching extras are dropped so the link diff never misreads them as
-    user edits. Unknown ids (frames, output, stale nodes) are left alone: the
-    mirror's dedupe redraws them.
+    Called from ``mirror.sync`` before reconciling. Layers adopt first, then
+    masks and filters: an extra whose owner layer was duplicated in the same
+    pass joins the new layer's copy at the same index, so the duplicated set
+    stays connected to itself and nothing else. Anything else becomes a real
+    duplicated layer, mask or filter with a fresh id, keeping the dropped
+    position, while links touching extras are dropped so the link diff never
+    misreads them as user edits. Unknown ids (frames, output, stale nodes) are
+    left alone: the mirror's dedupe redraws them.
     """
     from . import mirror
     groups = {}
@@ -304,10 +342,24 @@ def adopt_duplicates(tree, ts):
     adopted = False
     with mirror.syncing():
         pointers = set()
-        for extra in extras:
+        layer_map = {}
+        ordered = sorted(extras, key=lambda node: 0 if getattr(node, 'bl_idname', '') in {
+            'OPLayerNode', 'OPFolderNode'} else 1)
+        for extra in ordered:
             identifier = extra.op_id if hasattr(extra, 'op_id') else extra.get('op_id', '')
             try:
-                replacement = _duplicate_item(ts, identifier)
+                if getattr(extra, 'bl_idname', '') == 'OPImageNode':
+                    # Tree-only state: a duplicated image node keeps its image and
+                    # mapping under a fresh id (the feed mapping still names the
+                    # original, so only the original redraws its wire).
+                    from ..utils.ids import new_id
+                    replacement = IMAGE_PREFIX + new_id()
+                elif getattr(extra, 'bl_idname', '') in {'OPLayerNode', 'OPFolderNode'}:
+                    replacement = _duplicate_layer(ts, identifier)
+                    if replacement:
+                        layer_map[identifier] = replacement
+                else:
+                    replacement = _adopt_stack_extra(ts, layer_map, identifier)
             except (LinkError, ValueError):
                 continue
             if not replacement:
@@ -472,6 +524,121 @@ def _revert(changes):
         setattr(owner, field, value)
 
 
+def feeds(tree):
+    """{layer id + tab + channel: image node id} feeding fill channels."""
+    stored = tree.get('op_image_feeds', {})
+    try:
+        items = stored.items()
+    except AttributeError:
+        return {}
+    return {str(key): str(value) for key, value in items}
+
+
+def _store_feeds(tree, mapping):
+    tree['op_image_feeds'] = dict(mapping)
+
+
+def _apply_feed(prop, node):
+    """Copy an image node's image and mapping onto a fill channel."""
+    prop.image = node.image
+    prop.projection = node.projection
+    prop.scale[0], prop.scale[1] = node.scale[0], node.scale[1]
+    prop.rotation = node.rotation
+    prop.offset[0], prop.offset[1] = node.offset[0], node.offset[1]
+    prop.triplanar_hardness = node.triplanar_hardness
+
+
+def feed_key(layer_id, channel):
+    return f'{layer_id}\t{channel}'
+
+
+def feed_image(ts, tree, from_node, to_node, to_socket):
+    """Feed an Image Texture node into a fill channel.
+
+    The channel takes the node's image and its mapping (projection, scale,
+    rotation, offset, hardness); the mapping is recorded on the tree so the
+    mirror redraws the wire. Filtered channels refuse: their content socket
+    already ends the filter chain, so set the image in the panel instead.
+    """
+    from . import mirror
+    node = mirror.nodes_by_id(tree).get(from_node)
+    if node is None or getattr(node, 'op_kind', '') != 'IMAGE':
+        raise LinkError('That output is not an anchor point.')
+    if node.image is None:
+        raise LinkError('Choose an image on the Image Texture node first.')
+    layer, mask, _prop, effect = _owner(ts, to_node)
+    if mask is not None or effect is not None:
+        raise LinkError('Images feed fill layer channels, not masks or filters.')
+    if not to_socket.startswith('content#'):
+        raise LinkError('Images feed a channel input.')
+    prop = channel_for(layer, to_socket.partition('#')[2])
+    if prop is None or layer.type != 'FILL':
+        raise LinkError('Images feed fill layer channels.')
+    if prop.effects:
+        raise LinkError('That channel has filters: set its image in the panel, or remove the filters first.')
+    _apply_feed(prop, node)
+    mapping = feeds(tree)
+    mapping[feed_key(layer.id, prop.channel)] = from_node
+    _store_feeds(tree, mapping)
+    return from_node
+
+
+def push_image_node(node, context):
+    """Copy an image node's current values into every fill channel it feeds.
+
+    Node-side edits (the picker, projection, transform) follow the wire that
+    already exists; nothing happens for an unlinked node.
+    """
+    from . import mirror
+    import bpy
+    tree = getattr(node, 'id_data', None)
+    if tree is None or not is_graph(tree):
+        return
+    ts = mirror.texture_set_of(tree, getattr(bpy.context, 'scene', None))
+    if ts is None:
+        return
+    identifier = node.op_id if hasattr(node, 'op_id') else node.get('op_id', '')
+    for key, node_id in feeds(tree).items():
+        if node_id != identifier:
+            continue
+        layer_id, _, channel = key.partition('\t')
+        layer = _layer(ts, layer_id)
+        prop = channel_for(layer, channel) if layer is not None else None
+        if prop is None:
+            continue
+        _apply_feed(prop, node)
+
+
+def feed_remove(ts, tree, source, to_node, to_socket, source_present):
+    """Clear an image feed whose wire was removed; True if it was one.
+
+    Cutting the wire stops the feed, so the channel image goes with it (unless
+    the panel already replaced it). Deleting the node instead keeps the
+    channel's image as an ordinary panel value.
+    """
+    if not to_socket.startswith('content#'):
+        return False
+    from . import mirror
+    mapping = feeds(tree)
+    key = feed_key(to_node, to_socket.partition('#')[2])
+    if mapping.get(key) != source:
+        return False
+    del mapping[key]
+    _store_feeds(tree, mapping)
+    if source_present:
+        node = mirror.nodes_by_id(tree).get(source)
+        layer = _layer(ts, to_node)
+        prop = channel_for(layer, to_socket.partition('#')[2]) if layer is not None else None
+        if prop is not None and node is not None:
+            try:
+                if prop.image and node.image and prop.image == node.image:
+                    prop.image = None
+            except ReferenceError:
+                pass
+    invalidate(ts)
+    return True
+
+
 def link_keys(tree):
     """{(from id, from socket, to id, to socket)} of the tree's current links."""
     keys = set()
@@ -506,6 +673,7 @@ def on_tree_update(tree):
         if identifier in seen:
             duplicates.add(identifier)
         seen.add(identifier)
+    by_id = mirror.nodes_by_id(tree)
     for identifier in sorted(shown_nodes - present):
         if mirror.owner_of(ts, identifier)[0] is None:
             continue  # its layer was deleted with it this pass; nothing dangles
@@ -530,7 +698,10 @@ def on_tree_update(tree):
             continue
         touched.add((target, to_socket))
         try:
-            if is_mask_share(ts, source, from_socket, target, to_socket):
+            source_node = by_id.get(source)
+            if source_node is not None and getattr(source_node, 'op_kind', '') == 'IMAGE':
+                feed_image(ts, tree, source, target, to_socket)
+            elif is_mask_share(ts, source, from_socket, target, to_socket):
                 share_mask(ts, source, target)
             elif is_chain_link(ts, source, from_socket, target, to_socket):
                 _enable_endpoints(ts, source, target)
@@ -551,6 +722,8 @@ def on_tree_update(tree):
             continue
         if source in deleted:
             continue  # its node was deleted with it; the subtree is already gone
+        if feed_remove(ts, tree, source, target, to_socket, source in present):
+            continue
         if _unplug_source(ts, source, to_socket):
             continue
         disconnect(ts, target, to_socket)

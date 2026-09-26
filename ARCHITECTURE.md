@@ -278,7 +278,12 @@ projection and translates the difference into anchor fields through `graph/edits
 by `references.issues`; refused links leave the stack untouched and vanish on the next sync.
 Node identity is the `op_id` property, never a cached RNA reference; the tree is a fake-user
 datablock owned by the set id, so undo restores stack and mirror together. The compiled shader
-graph stays derived from the stack and is never the editing surface.
+graph stays derived from the stack and is never the editing surface. Image Texture nodes
+(`OPImageNode`, `image:` ids) are the one tree-only exception the mirror preserves: linking
+one into a fill channel copies its image and mapping onto that channel and records the feed
+in `op_image_feeds` for the redraw; cutting the wire takes the image back off, deleting the
+node keeps it as a panel value. Fill nodes also carry per-channel image pickers plus
+projection/scale/rotation/offset rows (hardness joins the projection row under Triplanar).
 
 Composite anchors back the graph's *Output* and *Composite* sockets: `publish_output` /
 `publish_group` on `OP_Layer` own the derived anchor ids `<id>:out` / `<id>:group`;

@@ -13,7 +13,7 @@ from hashlib import sha256
 import bpy
 
 from ..constants import CHANNEL_LABELS, CHANNELS, OWNER
-from ..core.layer_stack import channel_for
+from ..core.layer_stack import channel_for, visible_rows
 from ..evaluation import anchors
 from ..evaluation.anchors import DETAIL_KINDS
 from . import layout
@@ -22,9 +22,10 @@ from .tree import (NODE_TYPES, OUTPUT_NODE, SOCKET_COLOR, SOCKET_CONTENT, SOCKET
 
 SCALAR_CHANNELS = frozenset({'ROUGHNESS', 'METALLIC', 'HEIGHT', 'AO', 'OPACITY'})
 FRAME_PREFIX = 'frame:'
+STACK_PREFIX = 'stack#'   # one Texture Set Output input per root layer: <prefix><layer id>
 # Bumped when the projection's sockets change: trees saved with the previous socket types
 # reconcile once on load (the signature otherwise depends on the stack alone).
-GRAPH_FORMAT = 2
+GRAPH_FORMAT = 6
 _syncing = False
 
 
@@ -94,9 +95,13 @@ def project(ts):
 
     Every layer, mask and channel filter is a node. Links show the actual data
     flow: mask chains into the layer's Mask input, filter chains into its
-    channel content, each layer's output into the Backdrop of the layer above
-    it, the top child into its folder's Children input, the top root layer into
-    the Texture Set Output, and every anchor reference.
+    channel content, nested siblings into the Backdrop of the layer above
+    them, the top child into its folder's Children input, every root layer
+    into its own Texture Set Output socket, and every anchor reference. Each
+    stack socket is a material bundle spanning every channel (listed under the
+    output spec's background ``maps`` key), so the compact single-line view
+    loses no channel data. Root order reads from Y rows, so roots never link
+    to each other.
     """
     registry = anchors.index(ts)
     legacy = legacy_targets(ts)
@@ -116,8 +121,10 @@ def project(ts):
         inputs = [('below', 'Backdrop', SOCKET_CONTENT)]
         if layer.type == 'FOLDER':
             inputs.append(('children', 'Children', SOCKET_CONTENT))
-        if layer.masks:
-            inputs.append(('mask', 'Mask', SOCKET_COVERAGE))
+        # Every layer shows its Mask input, even before it has a mask: the
+        # node editor is a first-class authoring surface, not a mirror that
+        # only lights up after panel edits.
+        inputs.append(('mask', 'Mask', SOCKET_COVERAGE))
         for prop in layer.channels:
             if (layer.type == 'FILL' and prop.enabled) or prop.effects:
                 inputs.append((f'content#{prop.channel}', CHANNEL_LABELS.get(prop.channel, prop.channel),
@@ -173,9 +180,16 @@ def project(ts):
                 previous = identifier
             if previous is not None:
                 links.append((previous, 'out', layer.id, f'content#{prop.channel}'))
+    by_layer = {layer.id: layer for layer in ts.layers}
+    root_ids = [ts.layers[index].id for index, _ in visible_rows(ts)
+                if not ts.layers[index].parent_id]
+    stack_inputs = [(f'{STACK_PREFIX}{lid}', by_layer[lid].name, SOCKET_CONTENT) for lid in root_ids]
     nodes[OUTPUT_NODE] = {'kind': 'OUTPUT', 'label': 'Texture Set Output', 'frame': '',
-                          'inputs': [(f'final#{channel}', CHANNEL_LABELS.get(channel, channel),
-                                      _content_socket(channel)) for channel in CHANNELS],
+                          'inputs': stack_inputs,
+                          # Background data, never drawn: the bundle each stack
+                          # socket carries spans every channel, so the compact
+                          # single-line view loses no information.
+                          'maps': list(CHANNELS),
                           'outputs': [], 'owner': '', 'channel': ''}
     # Anchor references: the consumer socket sits on the first filter of a
     # filtered channel, on the layer otherwise; on the mask node for masks.
@@ -199,17 +213,19 @@ def project(ts):
                     anchor = registry.get(anchor_id) if anchor_id else None
                     if anchor is not None:
                         links.append((*producer_of(ts, anchor), identifier, f'detail#{slot}'))
-    # Composition: bottom to top among siblings, children into their folder, the top root out.
+    # Composition: nested siblings chain bottom to top through Backdrop, the top
+    # child feeds its folder's Children, and every root layer feeds the output
+    # node from its own socket. Root order reads from Y rows, so roots never
+    # link to each other.
     for parent_id, siblings in children.items():
+        if not parent_id:
+            continue
         for below, above in zip(siblings, siblings[1:]):
             links.append((below.id, 'out', above.id, 'below'))
-        if parent_id and parent_id in nodes:
+        if parent_id in nodes:
             links.append((siblings[-1].id, 'out', parent_id, 'children'))
-    roots = children.get('', [])
-    if roots:
-        top = roots[-1]
-        for channel in CHANNELS:
-            links.append((top.id, 'out', OUTPUT_NODE, f'final#{channel}'))
+    for root in children.get('', []):
+        links.append((root.id, 'out', OUTPUT_NODE, f'{STACK_PREFIX}{root.id}'))
     return nodes, frames, links
 
 
@@ -442,6 +458,12 @@ def sync(window):
         if ts is None:
             continue
         try:
+            from . import edits as graph_edits
+            from . import rows
+            if graph_edits.adopt_duplicates(tree, ts):
+                area.tag_redraw()
+            if rows.order_from_y(tree, ts):
+                area.tag_redraw()
             if tree.get('op_signature') != signature(ts) or tree.get('op_links_dirty'):
                 tree['op_links_dirty'] = False
                 reconcile(tree, ts)

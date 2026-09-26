@@ -6,6 +6,7 @@ root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'src'))
 import bpy
 import open_painter
+from open_painter.constants import CHANNELS
 from open_painter.core import texture_set_manager as sets, layer_stack as stack
 from open_painter.evaluation import anchors
 from open_painter.graph import mirror
@@ -61,10 +62,18 @@ for layer in ts.layers:
             assert item.op_owner == layer.id and item.op_channel == prop.channel
 from open_painter.graph.edits import link_keys
 assert link_keys(tree) == set(links), (link_keys(tree) ^ set(links))
-# The stack result feeds the output node from the top root layer; siblings chain
-# bottom to top through Backdrop; the top child feeds its folder's Children.
-top = [layer for layer in ts.layers if not layer.parent_id][-1]
-assert all((top.id, 'out', OUTPUT_NODE, f'final#{c}') in links for c in ('BASE_COLOR', 'ROUGHNESS'))
+# Every root layer feeds the output node from its own socket; root order reads from
+# Y rows, so roots never chain through Backdrop; nested children still chain
+# bottom to top, and the top child feeds its folder's Children.
+roots = [layer for layer in ts.layers if not layer.parent_id]
+assert roots
+assert all((layer.id, 'out', OUTPUT_NODE, f'stack#{layer.id}') in links for layer in roots)
+# Compact view: no per-channel map sockets are drawn, but every channel rides
+# the bundle in the background.
+assert nodes[OUTPUT_NODE]['maps'] == list(CHANNELS)
+root_ids = {layer.id for layer in roots}
+assert not any(to_socket == 'below' and to_node in root_ids
+               for _, _, to_node, to_socket in links)
 folder = folders[0]
 kids = [layer for layer in ts.layers if layer.parent_id == folder.id]
 assert len(kids) > 1

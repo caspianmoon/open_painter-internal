@@ -88,7 +88,7 @@ settle()
 assert (reader_id, 'out', base_id, 'content#ROUGHNESS') not in link_keys(tree)
 # Links into the output node are informational: refused without touching the stack.
 before = {layer.id: stack.channel_for(layer, 'ROUGHNESS').anchor for layer in ts.layers}
-user_link(base_id, 'out', OUTPUT_NODE, 'final#ROUGHNESS')
+user_link(reader_id, 'out', OUTPUT_NODE, f'stack#{base_id}')
 settle()
 assert before == {layer.id: stack.channel_for(layer, 'ROUGHNESS').anchor for layer in ts.layers}
 print('GRAPH_LINKS refusal: PASS', flush=True)
@@ -160,9 +160,21 @@ user_link(anchor_id, 'out', reader_id, 'content#ROUGHNESS')   # refused: filtere
 assert 'first filter' in scene.open_painter.status, scene.open_painter.status
 settle()
 order = [l.id for l in ts.layers]
-user_link(reader_id, 'out', base_id, 'below')                  # Reader moves directly under Base
+scene.open_painter.status = ''
+user_link(reader_id, 'out', base_id, 'below')                  # refused: roots stack by row, not by link
+assert [l.id for l in ts.layers] == order, 'a root below-link changed the stack'
+assert 'row' in scene.open_painter.status.lower(), scene.open_painter.status
+settle()
+assert (reader_id, 'out', base_id, 'below') not in link_keys(tree)
+# Y rows order flat roots instead: Reader dragged under Base in the view.
+from open_painter.graph import rows as graph_rows
+nodes = by_id()
+reader_node, base_node = nodes[reader_id], nodes[base_id]
+reader_node.location_absolute = (base_node.location_absolute[0], base_node.location_absolute[1] - 500.)
+assert graph_rows.order_from_y(tree, ts) is True
 assert [l.id for l in ts.layers].index(reader_id) == [l.id for l in ts.layers].index(base_id) - 1
 settle()
+assert (reader_id, 'out', OUTPUT_NODE, f'stack#{reader_id}') in link_keys(tree)
 user_link(reader_id, 'out', folder_id, 'children')             # ... then becomes the folder's top child
 assert layer(reader_id).parent_id == folder_id and [l.id for l in ts.layers if l.parent_id == folder_id][-1] == reader_id
 settle()
@@ -228,5 +240,44 @@ settle()
 assert sum(1 for n in tree.nodes if getattr(n, 'op_id', '') == extra_mask.id) == 1
 assert any(n.bl_idname == 'NodeFrame' for n in tree.nodes)
 print('GRAPH_LINKS robustness: PASS', flush=True)
+
+# 10. Cross-layer mask sharing: one mask fans out into other layers' Mask inputs.
+from open_painter.graph.edits import is_mask_share
+scene.open_painter.status = ''
+base_count, reader_count, child_count = (len(layer(i).masks) for i in (base_id, reader_id, child_id))
+# An existing anchor shares with one link and no inserted anchor...
+assert is_mask_share(ts, anchor_id, 'out', reader_id, 'mask')
+assert not is_mask_share(ts, anchor_id, 'out', anchor_id, 'mask')
+user_link(anchor_id, 'out', reader_id, 'mask')
+assert len(layer(base_id).masks) == base_count, 'sharing minted an anchor it did not need'
+reader_ref = layer(reader_id).masks[-1]
+assert reader_ref.reference_anchor == anchor_id
+settle()
+keys = link_keys(tree)
+assert (anchor_id, 'out', reader_ref.id, 'ref') in keys
+assert (reader_ref.id, 'out', reader_id, 'mask') in keys
+# ...and fans out: the same anchor feeds a second layer too.
+user_link(anchor_id, 'out', child_id, 'mask')
+assert len(layer(base_id).masks) == base_count
+assert layer(child_id).masks[-1].reference_anchor == anchor_id
+settle()
+assert (anchor_id, 'out', layer(child_id).masks[-1].id, 'ref') in link_keys(tree)
+# A plain mask shares through an auto-inserted anchor that leaves its source unchanged.
+gen_id = next(m.id for m in layer(child_id).masks if m.source == 'GENERATOR')
+user_link(gen_id, 'out', reader_id, 'mask')
+child_masks = layer(child_id).masks
+auto = child_masks[1]
+assert auto.source == 'ANCHOR' and child_masks[0].id == gen_id
+assert layer(reader_id).masks[-1].reference_anchor == auto.id
+settle()
+assert (auto.id, 'out', layer(reader_id).masks[-1].id, 'ref') in link_keys(tree)
+# Downhill shares are refused as cycles, with nothing left behind.
+scene.open_painter.status = ''
+before = ([m.id for m in layer(reader_id).masks], [m.id for m in layer(base_id).masks])
+user_link(wear_id, 'out', base_id, 'mask')
+assert ([m.id for m in layer(reader_id).masks], [m.id for m in layer(base_id).masks]) == before
+assert 'cycle' in scene.open_painter.status.lower(), scene.open_painter.status
+settle()
+print('GRAPH_LINKS mask sharing: PASS', flush=True)
 print('GRAPH_LINK_EDITS_PASS', flush=True)
 open_painter.unregister()

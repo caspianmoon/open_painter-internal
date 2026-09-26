@@ -5,6 +5,7 @@ from ..constants import CHANNEL_LABELS
 from ..core.project_manager import require_set
 from ..ui.operators import SafeOperator
 from . import mirror
+from .rows import OP_OT_graph_toggle_rows
 from .tree import TREE_ID, is_graph
 
 
@@ -366,6 +367,9 @@ def header(self, context):
     row.operator('open_painter.graph_view', text='Frame Selected', icon='RESTRICT_SELECT_OFF').scope = 'SELECTED'
     row.operator('open_painter.graph_view', text='Full Graph', icon='VIEW_ORTHO').scope = 'ALL'
     layout.operator('open_painter.graph_auto_layout', text='Auto Layout', icon='SNAP_GRID')
+    from . import rows as _rows
+    layout.operator('open_painter.graph_toggle_rows', text='Rows', icon='GRID',
+                    depress=_rows.is_enabled())
     from ..evaluation.references import issues, warnings
     problems = issues(ts)
     if problems:
@@ -397,15 +401,20 @@ def add_menu(self, context):
 
 
 CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
-           OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
-           OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter)
+           OP_OT_graph_toggle_rows,
+            OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
+            OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter)
 
 
 def register():
+    from . import rows
+    rows.register_handlers()
     bpy.types.NODE_HT_header.prepend(header)
     bpy.types.NODE_MT_add.append(add_menu)
 
 
 def unregister():
+    from . import rows
+    rows.unregister_handlers()
     bpy.types.NODE_MT_add.remove(add_menu)
     bpy.types.NODE_HT_header.remove(header)

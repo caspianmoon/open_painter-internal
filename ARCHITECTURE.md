@@ -265,8 +265,12 @@ set rather than a document. `mirror.project(ts)` derives the expected nodes (one
 per folder containing the folder node and its children, one output node), sockets (anchor
 producers on the right: *Output*, folder *Composite*, mask and channel anchors, read-only legacy
 whole-layer outputs while used; consumers on the left: enabled fill channels, Published Input
-masks, generator micro-detail slots) and links (every consumer field, plus the top root layer's
-output into the output node). `mirror.reconcile` edits the tree in place to match and stores a
+masks, generator micro-detail slots; one *stack* input per root layer on the output node)
+and links (every consumer field, nested siblings through Backdrop, every root layer's output
+into its own output socket; each stack socket is a bundle spanning every channel, recorded
+under the output spec's background ``maps`` key. Root order reads from Y rows, so roots
+never link to each other).
+`mirror.reconcile` edits the tree in place to match and stores a
 structural signature; the UI lifecycle tick reconciles open graphs whose signature changed and
 mirrors the active selection both ways. `NodeTree.update()` diffs the tree's links against the
 projection and translates the difference into anchor fields through `graph/edits.py`, validated

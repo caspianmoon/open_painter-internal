@@ -8,7 +8,12 @@ anchor field; removing it clears the field. A link into a structural socket
 ``content#<channel>`` chain end, ``below`` / ``children``) is an order edit:
 "place this mask before that one", "make this layer sit under that one".
 Deleting a mask or filter node deletes it from the stack (painted masks are
-kept). Every edit is validated with ``references.issues`` and reverted on
+kept); deleting a layer or folder node deletes it with its subtree, like the
+panel Delete. Dropping a mask onto another layer's Mask input shares it there
+(an Anchor Point plus a Published Input per target, so one mask fans out).
+Duplicated nodes (Shift+D) become duplicated stack items with
+fresh ids, keeping the position they were dropped at. Every edit is validated
+with ``references.issues`` and reverted on
 failure, so the stack never holds a cycle. Tree mutation itself is left to the
 mirror's next sync: rejected links disappear when the tree is reconciled.
 """
@@ -147,7 +152,7 @@ def reorder(ts, from_node, from_socket, to_node, to_socket):
         raise LinkError('Chain links start at an Output or Coverage socket.')
     source, source_mask, source_prop, source_effect = _owner(ts, from_node)
     if to_node == OUTPUT_NODE:
-        raise LinkError('The output node shows the top layer; move a layer above the others instead.')
+        raise LinkError('The output shows the whole stack; it cannot take links.')
     target, target_mask, target_prop, target_effect = _owner(ts, to_node)
     if source_mask is not None or target_mask is not None:
         if source_mask is None or source.id != target.id or (target_mask is None and to_socket != 'mask'):
@@ -167,6 +172,8 @@ def reorder(ts, from_node, from_socket, to_node, to_socket):
     elif to_socket == 'below':
         if source.id == target.id:
             raise LinkError('A layer cannot sit under itself.')
+        if not source.parent_id and not target.parent_id:
+            raise LinkError('Root layers stack by row: drag the node above or below instead.')
         layer_stack.place(ts, source.id, (0, target.parent_id, 'BELOW', target.id))   # depth is informational
         return
     elif to_socket == 'children':
@@ -201,6 +208,193 @@ def delete(ts, node_id):
         return False   # layers are deleted in the panel; the mirror recreates the node
     invalidate(ts)
     return True
+
+
+def delete_layer(ts, node_id):
+    """Remove the layer or folder (with its subtree) behind a deleted node."""
+    from ..core import layer_stack
+    layer = next((item for item in ts.layers if item.id == node_id), None)
+    if layer is None:
+        return False
+    layer_stack.remove_tree(ts, node_id)
+    return True
+
+
+def _duplicate_mask(ts, layer, mask):
+    """Copy one mask after the original; return the copy's graph node id."""
+    from ..core import layer_stack
+    from ..core.image_manager import clone
+    from ..utils.ids import new_id
+    from .mirror import mask_node_id
+    index = next(i for i, item in enumerate(layer.masks) if item.id == mask.id)
+    copy = layer.masks.add()
+    layer_stack.restore(layer_stack.snapshot(mask), copy)
+    copy.id = new_id()
+    copy.name = (mask.name or 'Mask') + ' Copy'
+    if copy.source == 'PAINT' and copy.image:
+        copy.image = clone(copy.image)
+    layer.masks.move(len(layer.masks) - 1, index + 1)
+    layer.active_mask = index + 1
+    layer_stack.invalidate(ts)
+    return mask_node_id(layer, index + 1, copy)
+
+
+def _duplicate_effect(ts, layer, prop, effect):
+    """Copy one channel filter after the original; return its graph node id."""
+    from ..core import layer_stack
+    from ..utils.ids import new_id
+    from .mirror import effect_node_id
+    index = next(i for i, item in enumerate(prop.effects) if item.id == effect.id)
+    copy = prop.effects.add()
+    layer_stack.restore(layer_stack.snapshot(effect), copy)
+    copy.id = new_id()
+    prop.effects.move(len(prop.effects) - 1, index + 1)
+    prop.active_effect = index + 1
+    layer_stack.invalidate(ts)
+    return effect_node_id(layer, prop.channel, index + 1, copy)
+
+
+def _duplicate_item(ts, node_id):
+    """Duplicate the stack item behind a duplicated node; return the copy's node id.
+
+    Returns '' for nodes with no stack item (frames, output): the mirror
+    redraws those. Whole layers and folders go through ``layer_stack.duplicate``,
+    exactly like the panel Duplicate.
+    """
+    from .mirror import owner_of
+    from ..core import layer_stack
+    layer, mask, prop, effect = owner_of(ts, node_id)
+    if layer is None:
+        return ''
+    if mask is not None:
+        return _duplicate_mask(ts, layer, mask)
+    if effect is not None:
+        return _duplicate_effect(ts, layer, prop, effect)
+    copy = layer_stack.duplicate(ts, layer_stack.index_of(ts, layer.id))
+    return copy.id
+
+
+def adopt_duplicates(tree, ts):
+    """Turn Shift+D duplicated nodes into duplicated stack items; True if any.
+
+    Called from ``mirror.sync`` before reconciling. Nodes sharing an ``op_id``
+    are Blender duplicates: each extra instance becomes a real duplicated
+    layer, mask or filter with a fresh id, keeping the dropped position, while
+    links touching extras are dropped so the link diff never misreads them as
+    user edits. Unknown ids (frames, output, stale nodes) are left alone: the
+    mirror's dedupe redraws them.
+    """
+    from . import mirror
+    groups = {}
+    for node in tree.nodes:
+        identifier = node.op_id if hasattr(node, 'op_id') else node.get('op_id', '')
+        groups.setdefault(identifier, []).append(node)
+    extras = [node for identifier, members in groups.items()
+              if identifier for node in members[1:]]
+    if not extras:
+        return False
+    adopted = False
+    with mirror.syncing():
+        pointers = set()
+        for extra in extras:
+            identifier = extra.op_id if hasattr(extra, 'op_id') else extra.get('op_id', '')
+            try:
+                replacement = _duplicate_item(ts, identifier)
+            except (LinkError, ValueError):
+                continue
+            if not replacement:
+                continue
+            pointers.add(extra.as_pointer())
+            extra.op_id = replacement
+            extra.name = replacement
+            adopted = True
+        if adopted:
+            for link in list(tree.links):
+                if link.from_node.as_pointer() in pointers or link.to_node.as_pointer() in pointers:
+                    tree.links.remove(link)
+    return adopted
+
+
+def is_mask_share(ts, from_node, from_socket, to_node, to_socket):
+    """True when a link shares one layer's mask with another layer's mask chain.
+
+    Dropping a mask's Coverage onto a *different* layer's Mask input does not
+    reorder anything: it publishes the source chain through an Anchor Point
+    and appends a Published Input to the target chain (see ``share_mask``),
+    so one mask can feed any number of layers.
+    """
+    if from_socket != 'out' or to_socket != 'mask':
+        return False
+    try:
+        from .mirror import owner_of
+        source, source_mask, _, _ = owner_of(ts, from_node)
+        target, target_mask, _, target_effect = owner_of(ts, to_node)
+    except (AttributeError, TypeError):
+        return False
+    return (source is not None and target is not None and source_mask is not None
+            and target_mask is None and target_effect is None and source.id != target.id)
+
+
+def _remove_added(added):
+    """Drop collection items appended by a refused share, by id."""
+    for collection, identifier in reversed(added):
+        try:
+            collection.remove(next(i for i, item in enumerate(collection) if item.id == identifier))
+        except (StopIteration, ValueError, RuntimeError):
+            continue
+
+
+def share_mask(ts, from_node, to_node):
+    """Feed one layer's mask coverage into another layer's mask chain.
+
+    Publishes the source chain at the dropped mask through an Anchor Point
+    (inserted right after it, so the source layer looks unchanged) and appends
+    a Published Input to the target chain reading that anchor. Sharing the
+    same mask again reuses that anchor, so one mask fans out into any number
+    of layers with a single Anchor Point. Refused (with nothing left behind)
+    when the reference would cycle.
+    """
+    from .mirror import owner_of
+    from ..core import layer_stack
+    from ..utils.ids import new_id
+    source, source_mask, _, _ = owner_of(ts, from_node)
+    target, target_mask, _, target_effect = owner_of(ts, to_node)
+    if (source is None or target is None or source_mask is None or target_mask is not None
+            or target_effect is not None or source.id == target.id):
+        raise LinkError('Masks chain within one layer; share coverage with an Anchor Point and a Published Input.')
+    added = []
+    try:
+        if source_mask.source == 'ANCHOR' and source_mask.id:
+            anchor_id = source_mask.id
+            anchor_name = source_mask.name or 'Anchor'
+        else:
+            from ..ui.anchors import _next_name
+            source_index = next(i for i, item in enumerate(source.masks) if item.id == source_mask.id)
+            follower = source.masks[source_index + 1] if source_index + 1 < len(source.masks) else None
+            if follower is not None and follower.source == 'ANCHOR' and follower.id:
+                anchor_id, anchor_name = follower.id, follower.name or 'Anchor'
+            else:
+                anchor = source.masks.add()
+                anchor.id, anchor.source = new_id(), 'ANCHOR'
+                anchor.name = _next_name(ts)
+                source.masks.move(len(source.masks) - 1, source_index + 1)
+                source.active_mask = source_index + 1
+                added.append((source.masks, anchor.id))
+                anchor_id, anchor_name = anchor.id, anchor.name
+        ref = target.masks.add()
+        ref.id, ref.source, ref.name = new_id(), 'REFERENCE', anchor_name + ' Input'
+        ref.reference_anchor = anchor_id
+        added.append((target.masks, ref.id))
+        target.active_mask = len(target.masks) - 1
+    except LinkError:
+        _remove_added(added)
+        raise
+    errors = issues(ts)
+    if errors:
+        _remove_added(added)
+        raise LinkError(' | '.join(errors))
+    layer_stack.invalidate(ts)
+    return anchor_id
 
 
 def disconnect(ts, to_node, to_socket):
@@ -252,18 +446,43 @@ def on_tree_update(tree):
     actual = link_keys(tree)
     status, touched = None, set()
     # Diff against what the tree showed after its last sync: a projection the
-    # tree has not caught up with (a mask just added in the panel) is not an edit.
+    # tree may not have caught up with yet (a mask just added in the panel) is not an edit.
     present = set(mirror.nodes_by_id(tree))
+    # Shift+D duplicates share their op_id until the next sync adopts them: their
+    # links are not user edits, so both diffs ignore anything touching them.
+    seen, duplicates = set(), set()
+    for node in tree.nodes:
+        identifier = node.op_id if hasattr(node, 'op_id') else node.get('op_id', '')
+        if identifier in seen:
+            duplicates.add(identifier)
+        seen.add(identifier)
     for identifier in sorted(shown_nodes - present):
+        if mirror.owner_of(ts, identifier)[0] is None:
+            continue  # its layer was deleted with it this pass; nothing dangles
         try:
             delete(ts, identifier)
         except LinkError as error:
             status = str(error)
         tree['op_links_dirty'] = True
+    # A layer or folder node deleted in the editor deletes its subtree, like the
+    # panel Delete. Only when the tree is settled: a missing node on a stale
+    # tree is a layer the panel just added, not a deletion.
+    deleted = set()
+    if tree.get('op_signature') == mirror.signature(ts) and not tree.get('op_links_dirty'):
+        for layer in list(ts.layers):
+            if layer.id not in present:
+                deleted.add(layer.id)
+        for identifier in sorted(deleted):
+            delete_layer(ts, identifier)
+            tree['op_links_dirty'] = True
     for source, from_socket, target, to_socket in sorted(actual - shown_links):
+        if source in duplicates or target in duplicates:
+            continue
         touched.add((target, to_socket))
         try:
-            if is_chain_link(ts, source, from_socket, target, to_socket):
+            if is_mask_share(ts, source, from_socket, target, to_socket):
+                share_mask(ts, source, target)
+            elif is_chain_link(ts, source, from_socket, target, to_socket):
                 reorder(ts, source, from_socket, target, to_socket)
             else:
                 connect(ts, source, from_socket, target, to_socket)
@@ -279,6 +498,8 @@ def on_tree_update(tree):
         # redraws the right link either way.
         if target == OUTPUT_NODE or (target, to_socket) in touched:
             continue
+        if source in deleted:
+            continue  # its node was deleted with it; the subtree is already gone
         disconnect(ts, target, to_socket)
     if len(tree.nodes) != tree.get('op_node_count', len(tree.nodes)):
         tree['op_links_dirty'] = True   # a deleted frame/layer node or a pasted duplicate: redraw

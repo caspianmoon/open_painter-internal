@@ -47,8 +47,14 @@ def run(context):
     assert kinds["content#ROUGHNESS"] == graph_tree.SOCKET_SCALAR
     assert node.outputs["Output (unpublished)"].bl_idname == graph_tree.SOCKET_CONTENT
     output = next(item for item in tree.nodes if getattr(item, "op_id", "") == graph_tree.OUTPUT_NODE)
-    finals = {socket.identifier: socket.bl_idname for socket in output.inputs}
-    assert finals["final#NORMAL"] == graph_tree.SOCKET_NORMAL and finals["final#EMISSION"] == graph_tree.SOCKET_COLOR
+    kinds = {socket.identifier: socket.bl_idname for socket in output.inputs}
+    roots = [item for item in body.layers if not item.parent_id]
+    assert roots and all(f"stack#{item.id}" in kinds for item in roots), kinds
+    assert kinds[f"stack#{roots[0].id}"] == graph_tree.SOCKET_CONTENT
+    # Compact view: channels ride the bundle in the background, not as sockets.
+    assert not any(name.startswith("final#") for name in kinds)
+    from open_painter.constants import CHANNELS
+    assert mirror.project(body)[0][graph_tree.OUTPUT_NODE]["maps"] == list(CHANNELS)
     assert graph_tree.OP_SocketContent.bl_label == "Material" and "bundle" in node.inputs["Backdrop"].description
     assert node.inputs["BaseColor"].description == "One colour channel (RGB)"
     # A tree saved with the previous socket types reconciles once (the format is in the signature).

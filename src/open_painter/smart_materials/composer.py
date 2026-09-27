@@ -5,20 +5,20 @@ normal output evaluator consumes the stored layer data after a successful edit.
 """
 
 import math
+from uuid import UUID, uuid5
 from zlib import crc32
 
 import bpy
 
 from ..core import layer_stack as stack
-from ..texture_engine.procedurals import ALIASES, CATALOG as PROCEDURALS
+from ..core.surface_settings import DEFAULTS as SURFACE_DEFAULTS
+from ..core.surface_settings import valid as valid_surface
+from ..texture_engine.procedurals import ALIASES
+from ..texture_engine.procedurals import CATALOG as PROCEDURALS
 from ..utils.ids import new_id
-from uuid import UUID, uuid5
-
-from .catalog import CATALOG, DIRT, DUST, OIL, PATINA, RUST, STEEL, layer, mask, recipe as recipe_block
 from . import generated_sources
-
-SURFACE_DEFAULTS = {"anisotropy": 0, "coat_weight": 0, "coat_roughness": .03,
-                    "height_distance": .05}
+from .catalog import CATALOG, DIRT, DUST, OIL, PATINA, RUST, STEEL, layer, mask
+from .catalog import recipe as recipe_block
 
 
 def _validate_projection(spec):
@@ -226,7 +226,7 @@ def validate(data):
     for key, value in data.get("surface", {}).items():
         if key not in SURFACE_DEFAULTS:
             raise ValueError("Unknown material surface parameter: " + key)
-        if not math.isfinite(value) or value < 0 or (key != "height_distance" and value > 1):
+        if not valid_surface(key, value):
             raise ValueError("Invalid material surface parameter: " + key)
 
 

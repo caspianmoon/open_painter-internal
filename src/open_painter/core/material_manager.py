@@ -6,6 +6,7 @@ inside the Texture Set node's group (``texture_set_node``)."""
 import bpy
 
 from ..constants import CHANNELS, OWNER
+from .surface_settings import inputs as surface_inputs
 
 # Nodes earlier versions placed around the surface; the Texture Set node carries all of it.
 LEGACY_ROLES = frozenset({'UV Tangent', 'AO Preview', 'Normal', 'Height', 'UDIM Source UV', 'UDIM Local UV',
@@ -18,10 +19,10 @@ LAYOUT = {'Texture Set': (-620, 0), 'Surface': (-260, 0), 'Output': (140, 0)}
 
 def _surface_values(ts, bsdf):
     from ..targets.preview import specular
-    for socket, value in (("Emission Strength", 1), ("Anisotropic", ts.anisotropy),
-                          ("Coat Weight", ts.coat_weight), ("Coat Roughness", ts.coat_roughness),
+    for socket, value in (*surface_inputs(ts),
                           ("Specular IOR Level", specular(getattr(ts.id_data, 'open_painter', None)))):
-        if bsdf.inputs[socket].default_value != value:
+        current = bsdf.inputs[socket].default_value
+        if (tuple(current) if isinstance(value, tuple) else current) != value:
             bsdf.inputs[socket].default_value = value
 
 

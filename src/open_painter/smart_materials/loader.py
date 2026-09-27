@@ -1,14 +1,16 @@
 """Apply validated stacks with fresh IDs and independent packed image assets."""
 
+import json
 from contextlib import contextmanager
 from pathlib import Path
-import json
 from tempfile import TemporaryDirectory
 
 import bpy
 
 from ..constants import OWNER
 from ..core.layer_stack import copy_ids, invalidate, restore, snapshot
+from ..core.surface_settings import DEFAULTS as SURFACE_DEFAULTS
+from ..core.surface_settings import FIELDS as SURFACE_FIELDS
 from ..properties.mesh_selector import degrees_to_radians
 from ..utils.ids import new_id
 from .format import asset_colorspace, read
@@ -25,6 +27,7 @@ def decode_assets(assets, loaded):
     the instance's own copy and carry no hash.
     """
     from hashlib import sha256
+
     from ..constants import OWNER
     from .modules import ASSET_HASH, asset_image
     decoded_images = {}
@@ -87,7 +90,9 @@ def _stroke_records(data):
     back). A stroke keyed to nothing the document renders is dropped.
     """
     from binascii import Error as DecodeError
+
     import numpy as np
+
     from ..painting.stroke_raster import unpack_samples
     from ..painting.surface_reach import unpack_anchors
     records = data.get('strokes', [])
@@ -192,7 +197,7 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     loaded_graphs = []
     added_strokes = []
     start = len(ts.layers)
-    old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")}
+    old_surface = {key:getattr(ts,key) for key in SURFACE_FIELDS}
     try:
         with decode_assets(assets, loaded) as decode:
             for source in data["layers"]:
@@ -267,7 +272,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
             inserted = [snapshot(layer) for layer in modules.subtree(ts, root.id)]
             modules.write_base(module['id'], int(module['version']),
                                modules.comparable(modules.remap(inserted, modules.denamespace_mapping(inserted, token))))
-        for key, value in data.get("surface", {}).items():
+        optical = {key: SURFACE_DEFAULTS[key] for key in ("ior", "transmission_weight", "subsurface_weight", "subsurface_scale")}
+        for key, value in {**optical, **data.get("surface", {})}.items():
             if key in old_surface and (module is None or any(layer.get('master_controls') for layer in data['layers'])):
                 setattr(ts,key,value)
         aging = data.get('aging')

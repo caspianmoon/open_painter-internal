@@ -4,6 +4,8 @@ import json
 import math
 from zipfile import ZipFile, is_zipfile
 
+from ..core.surface_settings import valid as valid_surface
+
 VERSION = 5  # resolved stroke payloads, editable text and portable native graphs
 MODULE_VERSION = 5
 MAX_BYTES = 512 * 1024 * 1024
@@ -69,9 +71,7 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
     validate_assets(data)
     surface = data.get("surface", {})
     if not isinstance(surface, dict) or any(
-        key not in {"anisotropy","coat_weight","coat_roughness","height_distance"}
-        or not isinstance(value,(float,int)) or not math.isfinite(value)
-        or value < 0 or (key != "height_distance" and value > 1)
+        not valid_surface(key, value)
         for key,value in surface.items()
     ):
         raise ValueError("Invalid smart material surface values.")

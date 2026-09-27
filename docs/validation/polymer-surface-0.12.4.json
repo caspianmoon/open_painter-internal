@@ -1,0 +1,17 @@
+{
+  "version": "0.12.4",
+  "blender": "5.2.1 LTS",
+  "unit_tests": 161,
+  "integration": [
+    "polymer_surface",
+    "portable_smart_materials",
+    "texture_operations",
+    "module_update",
+    "master_controls",
+    "shader_runtime"
+  ],
+  "clean_install": "PASS: two processes, reopen, export, disable/re-enable",
+  "archive_bytes": 127288090,
+  "archive_sha256": "581c223767921d9e9c42b92dfdb8d7edfcba864f2626d42743a4e9ae8b2b4e40",
+  "paid_materials_bundled": false
+}

@@ -3,9 +3,9 @@
 import hashlib
 import json
 
+from ..core.surface_settings import FIELDS as SURFACE
 from .schema import AuthoringError
 
-SURFACE = ("anisotropy", "coat_weight", "coat_roughness", "height_distance")
 TRANSIENT = {"dirty", "revision", "active_mask", "active_effect", "expanded", "order",
              "opacity_percent", "master_factor", "master_scale", "image_name", "detail_image_name"}
 
@@ -68,8 +68,8 @@ def canonical(value):
 
 
 def digest(ts):
-    from ..geometry.provenance import record
     from ..geometry.influencers import signature
+    from ..geometry.provenance import record
     # Pixel edits are tracked by the managed revision alone: ``is_dirty`` flips
     # on every save (packing clears it) without any material change.
     sources = []

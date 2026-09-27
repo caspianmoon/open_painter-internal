@@ -8,6 +8,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import bpy
 
 from ..core.layer_stack import snapshot
+from ..core.surface_settings import FIELDS as SURFACE_FIELDS
 from . import format as material_format
 from .format import LINEAR, MODULE_VERSION, VERSION
 
@@ -143,8 +144,8 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         layers = [layer_data(layer) for layer in ts.layers]
         strokes = stroke_data(ts.layers)
     else:
-        from . import modules
         from ..utils.ids import new_id
+        from . import modules
         root = next((layer for layer in ts.layers if layer.id == root_id), None)
         if root is None or root.type != 'FOLDER':
             raise ValueError('Save a folder as a module.')
@@ -191,7 +192,7 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         "format_version": MODULE_VERSION if root_id is not None else VERSION,
         "name": ts.name if root_id is None else (module.get('name') or root.name),
         "layers": layers,
-        "surface": {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")},
+        "surface": {key:getattr(ts,key) for key in SURFACE_FIELDS},
         'authoring_state': state,
     }
     if root_id is not None:

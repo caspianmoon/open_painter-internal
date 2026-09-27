@@ -8,7 +8,9 @@ and brush, a mask's stack and levels, a filter's parameters — and publishing, 
 caching and profiling sit in collapsed sections after them. Drawing reads presentation
 data only; nothing here evaluates, bakes or renders.
 """
+
 from ..core.layer_stack import channel_for
+from ..core.surface_settings import FIELDS as SURFACE_FIELDS
 
 COLOR_CHANNELS = {"BASE_COLOR", "NORMAL", "EMISSION"}
 CHANNEL_SHORT = {"BASE_COLOR": "Color", "ROUGHNESS": "Rough", "METALLIC": "Metal", "NORMAL": "Normal",
@@ -339,6 +341,7 @@ def draw_paint(layout, context, target):
     if body is not None:
         body.operator("open_painter.material_stamp", text="Material Stamp (4 Channels)", icon="BRUSH_DATA")
         from .strokes_panel import draw_strokes
+        from .vector_brush import draw_vector_brush
         draw_vector_brush(body, context)
         draw_strokes(body, context, ts, layer)
     layout.separator()
@@ -457,7 +460,7 @@ def draw_secondary(layout, context, ts, layer, *, module=False, surface=False):
         head, body = layout.panel("painter_material_surface", default_closed=True)
         head.label(text="Surface Response", icon="SHADING_RENDERED")
         if body is not None:
-            for key in ("anisotropy", "coat_weight", "coat_roughness", "height_distance"):
+            for key in SURFACE_FIELDS:
                 body.prop(ts, key)
     from .performance import draw_performance_section
     draw_performance_section(layout, context, ts, layer)

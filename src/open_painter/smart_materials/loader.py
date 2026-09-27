@@ -245,7 +245,7 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
             inserted = [snapshot(layer) for layer in modules.subtree(ts, root.id)]
             modules.write_base(module['id'], int(module['version']),
                                modules.comparable(modules.remap(inserted, modules.denamespace_mapping(inserted, token))))
-        optical = {key: SURFACE_DEFAULTS[key] for key in ("ior", "transmission_weight", "subsurface_weight", "subsurface_scale")}
+        optical = {key: SURFACE_DEFAULTS[key] for key in ("ior", "transmission_weight", "subsurface_weight", "subsurface_scale", "sheen_weight", "sheen_roughness")}
         for key, value in {**optical, **data.get("surface", {})}.items():
             if key in old_surface and (module is None or any(layer.get('master_controls') for layer in data['layers'])):
                 setattr(ts,key,value)

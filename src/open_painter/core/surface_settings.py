@@ -2,7 +2,7 @@
 import math
 
 DEFAULTS = {"anisotropy": 0, "coat_weight": 0, "coat_roughness": .03, "height_distance": .05,
-            "ior": 1.5, "transmission_weight": 0, "subsurface_weight": 0, "subsurface_scale": .001}
+            "ior": 1.5, "transmission_weight": 0, "subsurface_weight": 0, "subsurface_scale": .001, "sheen_weight": 0, "sheen_roughness": .5}
 FIELDS = tuple(DEFAULTS)
 BOUNDS = {key: (0, 1) for key in FIELDS}
 BOUNDS.update(ior=(1, 4), height_distance=(0, math.inf), subsurface_scale=(0, 10))
@@ -20,4 +20,5 @@ def inputs(ts):
             ("Coat Weight", ts.coat_weight), ("Coat Roughness", ts.coat_roughness),
             ("IOR", ts.ior), ("Transmission Weight", ts.transmission_weight),
             ("Subsurface Weight", ts.subsurface_weight), ("Subsurface Scale", ts.subsurface_scale),
-            ("Subsurface Radius", (1., 1., 1.)))
+            ("Subsurface Radius", (1., 1., 1.)),
+            ("Sheen Weight", ts.sheen_weight), ("Sheen Roughness", ts.sheen_roughness))

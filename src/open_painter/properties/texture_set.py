@@ -122,6 +122,8 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     transmission_weight: bpy.props.FloatProperty(name='Transmission', default=0, min=0, max=1, update=surface_changed)
     subsurface_weight: bpy.props.FloatProperty(name='Subsurface', default=0, min=0, max=1, update=surface_changed)
     subsurface_scale: bpy.props.FloatProperty(name='Scattering Distance', default=.001, min=0, max=10, subtype='DISTANCE', unit='LENGTH', update=surface_changed)
+    sheen_weight: bpy.props.FloatProperty(name='Sheen', default=0, min=0, max=1, update=surface_changed)
+    sheen_roughness: bpy.props.FloatProperty(name='Sheen Roughness', default=.5, min=0, max=1, update=surface_changed)
     height_distance: bpy.props.FloatProperty(
         name="Height Distance", default=0.05, min=0, update=height_changed,
         description="World-space relief for a full height range; also included in exported normals"

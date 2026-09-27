@@ -1,3 +1,9 @@
+## 0.12.5
+
+- Add native fabric sheen weight and roughness to Surface Response, saved smart materials, master controls, texture-set copies and both preview backends.
+- Reset omitted sheen values when applying legacy materials so old packs keep their previous appearance.
+- Subscriber glass and fabric materials remain separate library downloads.
+
 # Changes
 
 ## 0.14.1 — Metal editing performance

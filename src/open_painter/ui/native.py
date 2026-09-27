@@ -102,6 +102,8 @@ def prepare_assets(*, refresh_sources=False):
             path = Path(entry[2]).with_suffix('.png')
         if category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}:
             path = Path("/__open_painter_no_preview__")
+        preview_version = (f'{VERSION}:{path.stat().st_mtime_ns}'
+                           if entry[1] == 'LIBRARY_SMART' and path.exists() else VERSION)
         source = (bpy.data.images.get(entry[2]) if entry[1] == "TEXTURE" else
                   bpy.data.textures.get(entry[2]) if entry[1] == "ALPHA" and entry[2] else None)
         image = (assets.preview(entry[0]) if path.exists() and entry[1] != 'LIBRARY_SMART'
@@ -137,7 +139,7 @@ def prepare_assets(*, refresh_sources=False):
         image.asset_data.description = description + (
             " (Color swatch preview)" if image.get("open_painter_preview_kind") == "COLOR_SWATCH" else ""
         )
-        if not path.exists() and ((source and refresh_sources) or image.get("open_painter_preview_version") != VERSION or image.preview is None or not image.preview.image_size[0]):
+        if not path.exists() and ((source and refresh_sources) or image.get("open_painter_preview_version") != preview_version or image.preview is None or not image.preview.image_size[0]):
             import numpy as np
             source_image = source.image if isinstance(source, bpy.types.Texture) else source
             if source_image:
@@ -147,7 +149,7 @@ def prepare_assets(*, refresh_sources=False):
                     # avoid copying their full raster into Python just to browse.
                     with bpy.context.temp_override(id=image):
                         bpy.ops.ed.lib_id_load_custom_preview(filepath=source_path)
-                    image["open_painter_preview_version"] = VERSION
+                    image["open_painter_preview_version"] = preview_version
                     continue
                 from ..core.image_manager import pixels
                 rgba = pixels(source_image)
@@ -159,11 +161,11 @@ def prepare_assets(*, refresh_sources=False):
             preview = image.preview_ensure()
             preview.image_size = (rgba.shape[1], rgba.shape[0])
             preview.image_pixels_float = rgba.ravel()
-            image["open_painter_preview_version"] = VERSION
-        if path.exists() and (image.get("open_painter_preview_version") != VERSION or image.preview is None or not image.preview.image_size[0]):
+            image["open_painter_preview_version"] = preview_version
+        if path.exists() and (image.get("open_painter_preview_version") != preview_version or image.preview is None or not image.preview.image_size[0]):
             with bpy.context.temp_override(id=image):
                 bpy.ops.ed.lib_id_load_custom_preview(filepath=str(path))
-            image["open_painter_preview_version"] = VERSION
+            image["open_painter_preview_version"] = preview_version
     valid = {categories.key(entry) for entry in entries if not shelf_library.is_builtin(entry)}
     for handle in handles.values():
         if handle.get(ASSET_KEY) not in valid and handle.asset_data:

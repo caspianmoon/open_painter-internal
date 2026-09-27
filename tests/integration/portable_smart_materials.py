@@ -148,10 +148,13 @@ with TemporaryDirectory() as directory:
         assert library_categories.KIND_CATEGORY[entry[1]] == 'SMART_MATERIALS'
         assert any(item[0] == 'library:' + str(target) for item in texture_operations.material_items(None, bpy.context))
         assert native.missing_requirements(bpy.context, entry) == []
-        native.prepare_assets()
+        portable.refresh_installed()
         assert any(handle.get(native.ASSET_KEY) == library_categories.key(entry) for handle in native.handles())
     finally:
         target.unlink()
+    portable.refresh_installed()
+    assert not any(handle.asset_data and handle.get(native.ASSET_KEY) == library_categories.key(entry)
+                   for handle in native.handles()), 'removed library material remains in the shelf'
     # Save/reopen preserves master bindings and the live destination-bake pointer.
     blend = Path(directory) / 'portable.blend'
     bpy.ops.wm.save_as_mainfile(filepath=str(blend))

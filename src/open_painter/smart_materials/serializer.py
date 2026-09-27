@@ -74,6 +74,10 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         # imported copy paints on its own. The stroke key stays: the loader re-keys it
         # together with the strokes saved below.
         values['paint_link'] = ''
+        for channel in values.get('channels', []):
+            if channel.get('mesh_map'):
+                channel['image'] = None  # Rebind to the recipient mesh; never package its donor bake.
+                channel['image_name'] = ''
         for mask in values.get('masks', []):
             if 'mesh' in mask:
                 # Mesh masks re-link by name on import; datablock pointers are not portable.

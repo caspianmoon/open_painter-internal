@@ -155,6 +155,9 @@ def comparable(layers):
         return value
     result = [clean(layer) for layer in layers]
     for layer in result:
+        for channel in layer.get('channels', []):
+            if channel.get('mesh_map'):
+                channel['image'] = None  # Recipient bakes are bindings, never authored overrides.
         for mask in layer.get('masks', []):
             if mask.get('source') == 'PAINT' and mask.get('image'):
                 mask['image'] = dict(PAINT_MARKER)
@@ -325,6 +328,8 @@ def update(ts, root, path, replace=False):
     from .format import read
     from .loader import decode_assets
     data, assets = read(Path(path))
+    from . import portable
+    portable.preflight(ts, data)
     module = data.get('module')
     if module is None or module['id'] != root.module_id:
         raise ValueError('That document is not a version of this module.')
@@ -333,9 +338,34 @@ def update(ts, root, path, replace=False):
     loaded = []
     with decode_assets(assets, loaded) as decode:
         parent_raw = [decode(layer) for layer in data['layers']]
-    return apply_update(ts, root, comparable(parent_raw), int(module['version']),
+        for layer in parent_raw:
+            for channel in layer.get('channels', []):
+                if channel.get('mesh_map'):
+                    channel['image'] = portable.mesh_image(ts, channel['mesh_map'])
+    if any(layer.get('master_controls') for layer in parent_raw):
+        # Authored library files can omit default fields/channels. Merge the same
+        # complete RNA shape that insertion recorded as the instance's base.
+        root_id = root.id
+        from ..core.layer_stack import replay, restore
+        expanded = []
+        with replay(ts):
+            for values in parent_raw:
+                scratch = ts.layers.add()
+                try:
+                    restore(values, scratch)
+                    _ensure_channels(scratch)
+                    for channel in scratch.channels:
+                        channel.layer_id = scratch.id
+                    expanded.append(_snapshot(scratch))
+                finally:
+                    ts.layers.remove(len(ts.layers) - 1)
+        parent_raw = expanded
+        root = next(layer for layer in ts.layers if layer.id == root_id)
+    result = apply_update(ts, root, comparable(parent_raw), int(module['version']),
                         module.get('name') or root.module_name, 'library:' + Path(path).name, loaded, replace,
                         parent_raw=parent_raw)
+    portable.bind_mesh_maps(ts)
+    return result
 
 
 def catalog_name(root):

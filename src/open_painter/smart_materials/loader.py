@@ -132,6 +132,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     from . import modules
     path = Path(path)
     data, assets = read(path)
+    from . import portable
+    portable.preflight(ts, data)
     module = data.get('module')
     tokens = {}
     if module is not None:
@@ -182,6 +184,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                     values['stroke_key'] = stroke_keys[values['stroke_key']]
                 values['paint_link'] = ''
                 for channel in values.get("channels", []):
+                    if channel.get('mesh_map'):
+                        channel['image'] = portable.mesh_image(ts, channel['mesh_map'])
                     channel["layer_id"] = values["id"]
                     if channel.get('anchor'):
                         channel['anchor'] = anchor_mapping.get(channel['anchor'], channel['anchor'])
@@ -237,7 +241,7 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
             modules.write_base(module['id'], int(module['version']),
                                modules.comparable(modules.remap(inserted, modules.denamespace_mapping(inserted, token))))
         for key, value in data.get("surface", {}).items():
-            if key in old_surface and module is None:
+            if key in old_surface and (module is None or any(layer.get('master_controls') for layer in data['layers'])):
                 setattr(ts,key,value)
         aging = data.get('aging')
         if aging and module is None and aging.get('folder_id') in mapping:

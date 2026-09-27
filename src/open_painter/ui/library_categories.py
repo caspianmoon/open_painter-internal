@@ -20,12 +20,14 @@ CATEGORY_ITEMS = [
     ("GEOMETRY_EFFECTS", "Geometry", "Geometry effect presets for the selected object", 8),
 ]
 KIND_CATEGORY = {
+    "LIBRARY_SMART": "SMART_MATERIALS",
     "FILL": "MATERIALS", "SMART": "SMART_MATERIALS",
     "SMART_RECIPE": "SMART_MATERIALS", "SMART_MASK": "MASKS",
     "FILTER": "FILTERS", "BRUSH": "BRUSHES", "ALPHA": "ALPHAS",
     "PROCEDURAL": "TEXTURES", "TEXTURE": "TEXTURES", "GEOMETRY": "GEOMETRY_EFFECTS",
 }
 KIND_LABELS = {
+    "LIBRARY_SMART": "Smart Material",
     "FILL": "Material", "SMART": "Smart Material", "SMART_RECIPE": "Smart Material", "SMART_MASK": "Smart Mask",
     "FILTER": "Filter", "BRUSH": "Brush", "ALPHA": "Brush Alpha", "PROCEDURAL": "Procedural Texture",
     "TEXTURE": "Image Texture", "GEOMETRY": "Geometry Effect",

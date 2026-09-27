@@ -58,3 +58,17 @@ after import, while a reference cycle is refused and rolled back. Add-ons older 
 
 The authored built-in recipe schema in `smart_materials/catalog.py` is separate from this portable
 format: the composer expands recipes into the persistent layer/channel/mask records before export.
+
+Open Painter 0.12.3 also supports data-only smart profiles on version 4 modules. A root
+folder's `master_controls` JSON string contains `version: 1`, `required_maps` and one
+to eight `controls` using the native `Control`/`Member` vocabulary. Targets have stable
+UUID5 identities under the module UUID: `layer:<label>`, `mask:<label>:<index>` and
+`effect:<label>:<channel>:<index>`. Controls survive namespacing, rename, duplicate,
+save/import and module updates. Only whitelisted numeric/color properties are allowed;
+profiles cannot execute code. Missing required bakes are reported before insertion.
+
+A channel's optional `mesh_map` names its destination texture-set bake (for example
+`NORMAL`). Its image is resolved on insertion and after rebaking, and omitted from saved
+archives. This prevents a saved material from carrying the donor object's normal map.
+Installed profiled modules appear in the Smart Materials shelf and material picker;
+the module data and textures are distributed separately from the core add-on.

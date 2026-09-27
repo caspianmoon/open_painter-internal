@@ -115,6 +115,7 @@ def _set_master(layer, family, value):
 
 
 class OP_Layer(bpy.types.PropertyGroup):
+    master_controls: bpy.props.StringProperty(description="Portable authored master-control definitions")
     director_recipe: bpy.props.StringProperty(description="Material Director recipe provenance")
     aging_role: bpy.props.StringProperty(description="The aging outcome this layer materialises; the Material Aging engine drives it",
                                          options={'HIDDEN'})

@@ -142,6 +142,7 @@ class OP_Channel(bpy.types.PropertyGroup):
     effects: bpy.props.CollectionProperty(type=OP_TextureEffect)
     active_effect: bpy.props.IntProperty()
     image_name: bpy.props.StringProperty()
+    mesh_map: bpy.props.StringProperty(description="Destination mesh-map binding", update=changed)
     image: bpy.props.PointerProperty(name="Texture", type=bpy.types.Image, update=image_changed)
     detail_image_name: bpy.props.StringProperty()
     detail_image: bpy.props.PointerProperty(

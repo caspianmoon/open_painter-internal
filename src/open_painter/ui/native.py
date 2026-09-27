@@ -23,13 +23,14 @@ def catalog(local=True):
     """Every shelf entry; ``local=False`` leaves out the open file's textures (and never reads ``bpy.data``)."""
     from ..smart_masks.library import PRESETS
     from ..smart_materials.catalog import CATALOG
+    from ..smart_materials.portable import entries as installed_materials
 
     return assets.MATERIALS + [
         (name, "SMART_RECIPE", name, data["layers"][0]["color"], data["layers"][0]["roughness"], "")
         for name, data in CATALOG.items()
     ] + [
         (p[0], "SMART_MASK", p[0], (0.5, 0.5, 0.5), 0.5, "") for p in PRESETS
-    ] + categories.extras(local)
+    ] + categories.extras(local) + (installed_materials() if local else [])
 
 
 def handles():
@@ -54,6 +55,8 @@ def remark_handles(_):
 
 
 def description_of(entry, CATALOG):
+    if entry[1] == 'LIBRARY_SMART':
+        return 'Installed smart material: editable master controls and mesh-aware effects'
     return (
         "Smart mask: apply to the selected layer or folder"
         if entry[1] == "SMART_MASK"
@@ -95,11 +98,14 @@ def prepare_assets(*, refresh_sources=False):
             / "assets/previews"
             / (entry[0].replace(" ", "_") + ".png")
         )
+        if entry[1] == 'LIBRARY_SMART':
+            path = Path(entry[2]).with_suffix('.png')
         if category not in {"MATERIALS", "SMART_MATERIALS", "MASKS"}:
             path = Path("/__open_painter_no_preview__")
         source = (bpy.data.images.get(entry[2]) if entry[1] == "TEXTURE" else
                   bpy.data.textures.get(entry[2]) if entry[1] == "ALPHA" and entry[2] else None)
-        image = assets.preview(entry[0]) if path.exists() else handles.get(entry_key)
+        image = (assets.preview(entry[0]) if path.exists() and entry[1] != 'LIBRARY_SMART'
+                 else handles.get(entry_key))
         if image is None and source:
             image = next((handle for handle in handles.values()
                           if handle.get(categories.SOURCE_KEY) == source
@@ -215,7 +221,7 @@ def application_target(context, entry):
         return "Create a texture set first", False
     target = selection.resolve(context, ts)
     layer = target.layer
-    if kind in {"FILL", "SMART", "SMART_RECIPE"}:
+    if kind in {"FILL", "SMART", "SMART_RECIPE", "LIBRARY_SMART"}:
         return f"Adds an editable group to {ts.name}", True
     if kind == "SMART_MASK":
         if layer is None:
@@ -243,6 +249,9 @@ def missing_requirements(context, entry):
     if entry[1] == "SMART_RECIPE":
         from ..smart_materials.composer import requirements
         required = requirements(entry[0])
+    elif entry[1] == 'LIBRARY_SMART':
+        from ..smart_materials import portable
+        required = portable.requirements(portable.header(entry[2]))
     elif entry[1] == "SMART_MASK":
         from ..smart_masks.library import PRESETS
         from ..generators.base import required_maps
@@ -342,7 +351,10 @@ class OP_OT_native_asset(SafeOperator, bpy.types.Operator):
     def apply_entry(self, context, entry, source):
         if categories.activate(context, entry, source):
             return
-        if entry[1] == "SMART_MASK":
+        if entry[1] == 'LIBRARY_SMART':
+            from .assets_panel import apply_document
+            apply_document(context, require_set(context), entry[2])
+        elif entry[1] == "SMART_MASK":
             from ..smart_masks.library import apply, PRESETS
             from ..generators.base import required_maps
             from ..baking.bake_manager import refresh_stale_curvature

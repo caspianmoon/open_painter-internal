@@ -67,6 +67,7 @@ class Control:
     field: str = ""            # RNA property on the owner
     channel: str = ""          # owner is this channel of the layer
     mask: int = -1             # owner is this mask of the layer (index in the recipe)
+    effect: int = -1           # owner is this channel filter, when authored
     kind: str = "float"        # float, color, bool (direct) or factor, multiplier (computed)
     scope: str = "layer"       # "set": a surface field of the texture set (anisotropy)
     mode: str = ""             # computed: invert, depth or scale
@@ -712,6 +713,9 @@ def catalog_name(folder):
 
 def available(folder):
     """The authored controls of this folder's recipe, or [] (an ordinary folder has none)."""
+    if getattr(folder, 'master_controls', ''):
+        from .portable import profile
+        return profile(folder)[1]
     return list(CONTROLS.get(catalog_name(folder), ()))
 
 
@@ -721,23 +725,24 @@ def has_controls(folder):
 
 def _plain_id(folder, label):
     from .composer import catalog_module_id
-    return uuid5(UUID(catalog_module_id(catalog_name(folder))), "layer:" + label).hex
+    module_id = folder.module_id if getattr(folder, 'master_controls', '') else catalog_module_id(catalog_name(folder))
+    return uuid5(UUID(module_id), "layer:" + label).hex
 
 
 def _instance_id(folder, label):
-    return f"{folder.module_instance}.{_plain_id(folder, label)}"
+    return (folder.module_instance + '.' if folder.module_instance else '') + _plain_id(folder, label)
 
 
 def _instance_mask_id(folder, label, index):
     from .composer import catalog_module_id
-    module_id = catalog_module_id(catalog_name(folder))
-    return f"{folder.module_instance}.{uuid5(UUID(module_id), f'mask:{label}:{index}').hex}"
+    module_id = folder.module_id if getattr(folder, 'master_controls', '') else catalog_module_id(catalog_name(folder))
+    return (folder.module_instance + '.' if folder.module_instance else '') + uuid5(UUID(module_id), f'mask:{label}:{index}').hex
 
 
 def _instance_effect_id(folder, label, channel, index):
     from .composer import catalog_module_id
-    module_id = catalog_module_id(catalog_name(folder))
-    return f"{folder.module_instance}.{uuid5(UUID(module_id), f'effect:{label}:{channel}:{index}').hex}"
+    module_id = folder.module_id if getattr(folder, 'master_controls', '') else catalog_module_id(catalog_name(folder))
+    return (folder.module_instance + '.' if folder.module_instance else '') + uuid5(UUID(module_id), f'effect:{label}:{channel}:{index}').hex
 
 
 def _owner(ts, folder, layer_label, channel="", mask=-1, effect=-1):
@@ -837,9 +842,9 @@ def resolve(ts, folder, control):
             binding.reason = f"'{control.label}' has nothing to scale: its authored values are zero"
             return binding
         binding.owner, binding.field = folder, FAMILIES[control.kind]
-        binding.index = _SLOTS[catalog_name(folder)][control.label]
+        binding.index = slots(available(folder))[control.label]
         return binding
-    owner, layer, reason = _owner(ts, folder, control.layer, control.channel, control.mask)
+    owner, layer, reason = _owner(ts, folder, control.layer, control.channel, control.mask, control.effect)
     if owner is None:
         binding.reason = reason
         return binding
@@ -959,7 +964,7 @@ def _owning_set(folder):
 def master_values(folder, family):
     """Getter of the folder's family vector: every computed control of that family, others neutral."""
     values = [1.0 if family == "multiplier" else 0.0] * SLOTS
-    if not folder.module_id or catalog_name(folder) not in CONTROLS:
+    if not folder.module_id or not available(folder):
         return values
     ts = _owning_set(folder)
     if ts is None:
@@ -972,7 +977,7 @@ def master_values(folder, family):
 
 def set_master_values(folder, family, values):
     """Setter of the folder's family vector: the components that changed reach their members."""
-    if not folder.module_id or catalog_name(folder) not in CONTROLS:
+    if not folder.module_id or not available(folder):
         return
     ts = _owning_set(folder)
     if ts is None:

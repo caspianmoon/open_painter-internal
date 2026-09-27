@@ -24,10 +24,12 @@ rounded object is the flat baseline), and turning below a 0.1 rad dead zone coun
 flat. Faces are sampled at half the radius; candidates are gathered per radius-sized
 block, so cost scales with covered area, not face count.
 
-- `CURVATURE` (`GEOMETRIC_CREASES_V2`) = max(crease lines as before, convex part of the
-  new estimate with edges above the crease angle excluded). Every recipe that reads
-  Curvature gets edge wear on smooth geometry after a rebake. Maps baked with the old
-  method report "Stale · crease-only map, rebake for smooth edges".
+- `CURVATURE` defaults to `GEOMETRIC_CREASES_V2`: convex crease lines plus smooth
+  convex edge bands at four measuring radii (thin, normal, wide, extreme).
+- **Edge Method → Cycles Bevel** opts into `CYCLES_BEVEL`: the Bevel-normal/cross-product/
+  length/smootherstep shader baked as DIFFUSE COLOR. Each reach blocks during its
+  Cycles pass. It can produce much weaker coverage on smooth bevels; the geometric
+  method remains the default. Switching methods marks the existing edge set stale.
 - `MEAN_CURVATURE` = signed estimate (0.5 flat, convex above, concave below), stretched so
   the strongest feature saturates, with convex/concave crease lines drawn on top so sharp
   lips on coarse meshes stay crisp. A `BAKED` mask source; use levels/invert to pick
@@ -39,7 +41,7 @@ Earlier attempts and why they were rejected: a per-vertex port bled across large
 and read a sphere body as convex; a fixed-radius edge kernel rippled when the radius was
 smaller than the edge spacing; a per-face estimate exploded on sliver triangles.
 
-Measured on the project at 2048: rebake 31.7 s (crease-only was ~5 s); texels above 0.01
+Historical geometric-method measurement on the project at 2048: rebake 31.7 s (crease-only was ~5 s); texels above 0.01
 went from 0.018 % to 12.65 %; the Blue paint coat CHIPS mask went from no coverage to
 1.6 % concentrated on panel rims. Renders with the unchanged recipe:
 [before](validation/curvature-v2-before.png), [after](validation/curvature-v2-after.png),

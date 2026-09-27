@@ -115,6 +115,91 @@ def remove_orphan_units(ts_id):
             bpy.data.node_groups.remove(tree)
 
 
+def owned_tops(ts_id):
+    """Live top-level graphs of one texture set, resolved without node references.
+
+    Iterating ``bpy.data`` only ever yields live datablocks, so this is safe
+    where reading ``SomeGroupNode.node_tree`` is not: that getter refines a
+    raw ``bNode.id`` pointer, and Blender refines it without a validity check
+    (``rna_NodeTree_refine`` dereferences ``ntree->typeinfo``), so a group
+    node whose tree was freed access-violates Blender instead of raising.
+    """
+    return [tree for tree in bpy.data.node_groups
+            if tree.get('op_shader_graph') == ts_id and not tree.get('op_unit')
+            and tree.get(OWNER)]
+
+
+def owned_units(ts_id):
+    """Live unit trees of one texture set (same pointer-safe resolution)."""
+    return [tree for tree in bpy.data.node_groups
+            if tree.get('op_shader_graph') == ts_id and tree.get('op_unit')
+            and tree.get(OWNER)]
+
+
+def remove_orphan_tops(ts_id):
+    """Delete top-level graphs of this texture set that no node references.
+
+    The tag/user-count sweep mirrors ``remove_orphan_units``: it never reads
+    a group node's ``node_tree`` pointer, so it cannot touch freed memory.
+    """
+    for tree in owned_tops(ts_id):
+        if not tree.users:
+            try:
+                bpy.data.node_groups.remove(tree)
+            except (ReferenceError, RuntimeError):
+                pass
+
+
+def _adoptable_top(ts_id, instance):
+    """The single live top-level tree a material instance node can adopt.
+
+    Never reads ``instance.node_tree`` (see ``owned_tops``): the tree is
+    resolved by its owner tags over live datablocks, then checked for a
+    one-to-one correspondence with the instance (exactly one signed,
+    singly-referenced candidate, and an output interface that covers the
+    channels the instance exposes). Anything ambiguous rebuilds instead of
+    adopting.
+    """
+    candidates = [tree for tree in owned_tops(ts_id)
+                  if tree.get('op_signature') and tree.users == 1
+                  and instance.get('op_tree_identity')
+                  and tree.get('op_tree_identity') == instance.get('op_tree_identity')]
+    if len(candidates) != 1:
+        # No graph, a copied material still sharing the original's tree
+        # (users > 1), or several live graphs: compile a separate one
+        # instead of putting two sessions on one graph.
+        return None
+    top = candidates[0]
+    outputs = {item.name for item in top.interface.items_tree
+               if item.item_type == 'SOCKET' and item.in_out == 'OUTPUT'}
+    if any(channel not in outputs for channel in CHANNELS):
+        return None
+    try:
+        names = {socket.name for socket in instance.outputs}
+    except (ReferenceError, RuntimeError):
+        return None
+    if any(channel not in names for channel in CHANNELS):
+        # The instance was wired for another tree: adopt nothing, rebuild.
+        return None
+    return top
+
+
+def _adoptable_unit(ts_id, key_repr, instance):
+    """The live unit tree for one top-tree instance node, resolved by tags.
+
+    Never reads ``node.node_tree`` (see ``owned_tops``). Unit tags are minted
+    per texture set, so exactly one referenced candidate may exist; anything
+    else rebuilds the unit instead of adopting a stranger's tree.
+    """
+    candidates = [tree for tree in owned_units(ts_id)
+                  if tree.get('op_unit') == key_repr and tree.users > 0
+                  and instance.get('op_tree_identity')
+                  and tree.get('op_tree_identity') == instance.get('op_tree_identity')]
+    if len(candidates) != 1:
+        return None
+    return candidates[0]
+
+
 @dataclass
 class Binding:
     owner: object
@@ -2616,6 +2701,8 @@ class Graph(Math):
         tree[OWNER] = True
         tree['op_shader_graph'] = self.ts.id
         tree['op_unit'] = repr(key)
+        from ..utils.ids import new_id
+        tree['op_tree_identity'] = new_id()
         return tree
 
     def _free_tree(self, tree):
@@ -2758,6 +2845,7 @@ class Graph(Math):
             node = self.node('ShaderNodeGroup')
         node.node_tree = unit.tree
         node['op_unit'] = repr(unit.key)
+        node['op_tree_identity'] = unit.tree['op_tree_identity']
         node.label = ' '.join(str(part) for part in unit.key)
         unit.instance = node
         return node
@@ -2792,6 +2880,8 @@ class Graph(Math):
         self.tree = bpy.data.node_groups.new('OP Procedural · ' + self.ts.name, 'ShaderNodeTree')
         self.tree[OWNER] = True
         self.tree['op_shader_graph'] = self.ts.id
+        from ..utils.ids import new_id
+        self.tree['op_tree_identity'] = new_id()
         self.geometry = self.node('ShaderNodeNewGeometry')
         self.uv = self.node('ShaderNodeTexCoord').outputs['UV']
         if self.ts.udim_tile:
@@ -2841,6 +2931,7 @@ class Graph(Math):
         self.instance[OWNER] = True
         self.instance['role'] = 'Procedural Graph'
         self.instance.node_tree = self.tree
+        self.instance['op_tree_identity'] = self.tree['op_tree_identity']
         self.instance.label = 'Open Painter · Editable Material'
         self.instance.location = (-400, 200)
         self.outputs = {channel: self.instance.outputs[channel] for channel in CHANNELS}
@@ -2888,22 +2979,27 @@ class Graph(Math):
         if self.material is None or self.material.node_tree is None or hierarchy_issues(self.ts):
             return False
         instance = next((node for node in self.material.node_tree.nodes
-                         if node.get(OWNER) and node.get('role') == 'Procedural Graph'), None)
-        top = instance.node_tree if instance is not None else None
-        if top is None or top.get('op_shader_graph') != self.ts.id or not top.get('op_signature'):
+                         if node.bl_idname == 'ShaderNodeGroup'
+                         and node.get(OWNER) and node.get('role') == 'Procedural Graph'), None)
+        if instance is None:
             return False
-        if top.users != 1:
-            # A copied material still points at the original's trees; adopting
-            # them would put two sessions on one graph. Compile a separate one.
+        # Resolved by owner tags, never through ``instance.node_tree``: that
+        # getter refines a raw pointer and access-violates Blender when the
+        # referenced tree is gone instead of raising (see ``owned_tops``).
+        top = _adoptable_top(self.ts.id, instance)
+        if top is None:
             return False
         started = perf_counter()
         plan = self.plan()
         units, by_instance = {}, {}
         for node in top.nodes:
-            if node.bl_idname != 'ShaderNodeGroup' or not node.get('op_unit') or node.node_tree is None:
+            if node.bl_idname != 'ShaderNodeGroup' or not node.get('op_unit'):
                 continue
+            unit_tree = _adoptable_unit(self.ts.id, node['op_unit'], node)
+            if unit_tree is None:
+                return False
             unit = Unit(literal_eval(node['op_unit']))
-            unit.tree, unit.instance = node.node_tree, node
+            unit.tree, unit.instance = unit_tree, node
             unit.group_input = next((n for n in unit.tree.nodes if n.bl_idname == 'NodeGroupInput'), None)
             unit.group_output = next((n for n in unit.tree.nodes if n.bl_idname == 'NodeGroupOutput'), None)
             if unit.group_input is None or unit.group_output is None:

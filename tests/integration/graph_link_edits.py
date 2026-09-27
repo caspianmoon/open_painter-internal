@@ -88,7 +88,7 @@ settle()
 assert (reader_id, 'out', base_id, 'content#ROUGHNESS') not in link_keys(tree)
 # Links into the output node are informational: refused without touching the stack.
 before = {layer.id: stack.channel_for(layer, 'ROUGHNESS').anchor for layer in ts.layers}
-user_link(base_id, 'out', OUTPUT_NODE, 'final#ROUGHNESS')
+user_link(reader_id, 'out', OUTPUT_NODE, f'stack#{base_id}')
 settle()
 assert before == {layer.id: stack.channel_for(layer, 'ROUGHNESS').anchor for layer in ts.layers}
 print('GRAPH_LINKS refusal: PASS', flush=True)
@@ -160,9 +160,21 @@ user_link(anchor_id, 'out', reader_id, 'content#ROUGHNESS')   # refused: filtere
 assert 'first filter' in scene.open_painter.status, scene.open_painter.status
 settle()
 order = [l.id for l in ts.layers]
-user_link(reader_id, 'out', base_id, 'below')                  # Reader moves directly under Base
+scene.open_painter.status = ''
+user_link(reader_id, 'out', base_id, 'below')                  # refused: roots stack by row, not by link
+assert [l.id for l in ts.layers] == order, 'a root below-link changed the stack'
+assert 'row' in scene.open_painter.status.lower(), scene.open_painter.status
+settle()
+assert (reader_id, 'out', base_id, 'below') not in link_keys(tree)
+# Y rows order flat roots instead: Reader dragged under Base in the view.
+from open_painter.graph import rows as graph_rows
+nodes = by_id()
+reader_node, base_node = nodes[reader_id], nodes[base_id]
+reader_node.location_absolute = (base_node.location_absolute[0], base_node.location_absolute[1] - 500.)
+assert graph_rows.order_from_y(tree, ts) is True
 assert [l.id for l in ts.layers].index(reader_id) == [l.id for l in ts.layers].index(base_id) - 1
 settle()
+assert (reader_id, 'out', OUTPUT_NODE, f'stack#{reader_id}') in link_keys(tree)
 user_link(reader_id, 'out', folder_id, 'children')             # ... then becomes the folder's top child
 assert layer(reader_id).parent_id == folder_id and [l.id for l in ts.layers if l.parent_id == folder_id][-1] == reader_id
 settle()
@@ -190,7 +202,7 @@ assert [e.kind for e in stack.channel_for(layer(reader_id), 'ROUGHNESS').effects
 settle()
 print('GRAPH_LINKS node deletion: PASS', flush=True)
 
-# 8. The Add menu operator appends masks and filters to the active layer's chains.
+# 8. The Add menu operator parks masks and filters until they are wired.
 ts.active_layer = stack.index_of(ts, child_id)
 area = next(a for a in bpy.context.screen.areas if a.type == 'VIEW_3D')
 with bpy.context.temp_override(area=area):
@@ -201,9 +213,25 @@ with bpy.context.temp_override(area=area):
 added = layer(child_id)
 assert [m.source for m in added.masks] == ['GENERATOR', 'SCENE'] and added.masks[1].influence.kind == 'UP'
 assert [e.kind for e in stack.channel_for(added, 'ROUGHNESS').effects] == ['LEVELS', 'ANCHOR']
+assert [m.enabled for m in added.masks] == [False, False]
+assert [e.enabled for e in stack.channel_for(added, 'ROUGHNESS').effects] == [False, True]
 settle()
 keys = link_keys(tree)
-assert (mirror.mask_node_id(added, 1, added.masks[1]), 'out', child_id, 'mask') in keys
+assert not any(k[2] == child_id and k[3] == 'mask' for k in keys)
+# The enabled channel anchor still publishes the unchanged channel content.
+assert (stack.channel_for(added, 'ROUGHNESS').effects[1].id, 'out', child_id, 'content#ROUGHNESS') in keys
+# Wiring a parked node puts it to work and moves it into place.
+scene_node = mirror.mask_node_id(added, 1, added.masks[1])
+user_link(scene_node, 'out', child_id, 'mask')
+assert added.masks[1].enabled
+levels_node = mirror.effect_node_id(added, 'ROUGHNESS', 0, stack.channel_for(added, 'ROUGHNESS').effects[0])
+anchor_node = mirror.effect_node_id(added, 'ROUGHNESS', 1, stack.channel_for(added, 'ROUGHNESS').effects[1])
+user_link(levels_node, 'out', anchor_node, 'in')
+assert stack.channel_for(added, 'ROUGHNESS').effects[0].enabled
+settle()
+keys = link_keys(tree)
+assert (scene_node, 'out', child_id, 'mask') in keys
+assert (levels_node, 'out', anchor_node, 'in') in keys
 channel_anchor = stack.channel_for(added, 'ROUGHNESS').effects[1].id
 assert (channel_anchor, 'out', child_id, 'content#ROUGHNESS') in keys
 print('GRAPH_LINKS add menu: PASS', flush=True)
@@ -228,5 +256,68 @@ settle()
 assert sum(1 for n in tree.nodes if getattr(n, 'op_id', '') == extra_mask.id) == 1
 assert any(n.bl_idname == 'NodeFrame' for n in tree.nodes)
 print('GRAPH_LINKS robustness: PASS', flush=True)
+
+# 10. Cross-layer mask sharing: one mask fans out into other layers' Mask inputs.
+from open_painter.graph.edits import is_mask_share
+scene.open_painter.status = ''
+base_count, reader_count, child_count = (len(layer(i).masks) for i in (base_id, reader_id, child_id))
+# An existing anchor shares with one link and no inserted anchor...
+assert is_mask_share(ts, anchor_id, 'out', reader_id, 'mask')
+assert not is_mask_share(ts, anchor_id, 'out', anchor_id, 'mask')
+user_link(anchor_id, 'out', reader_id, 'mask')
+assert len(layer(base_id).masks) == base_count, 'sharing minted an anchor it did not need'
+reader_ref = layer(reader_id).masks[-1]
+assert reader_ref.reference_anchor == anchor_id
+settle()
+keys = link_keys(tree)
+assert (anchor_id, 'out', reader_ref.id, 'ref') in keys
+assert (reader_ref.id, 'out', reader_id, 'mask') in keys
+# ...and fans out: the same anchor feeds a second layer too.
+user_link(anchor_id, 'out', child_id, 'mask')
+assert len(layer(base_id).masks) == base_count
+assert layer(child_id).masks[-1].reference_anchor == anchor_id
+settle()
+assert (anchor_id, 'out', layer(child_id).masks[-1].id, 'ref') in link_keys(tree)
+# A plain mask shares through an auto-inserted anchor that leaves its source unchanged.
+gen_id = next(m.id for m in layer(child_id).masks if m.source == 'GENERATOR')
+user_link(gen_id, 'out', reader_id, 'mask')
+child_masks = layer(child_id).masks
+auto = child_masks[1]
+assert auto.source == 'ANCHOR' and child_masks[0].id == gen_id
+assert layer(reader_id).masks[-1].reference_anchor == auto.id
+settle()
+assert (auto.id, 'out', layer(reader_id).masks[-1].id, 'ref') in link_keys(tree)
+# A share reading the target's complete output would cycle; nothing is left behind.
+layer(base_id).publish_output = True
+next(m for m in layer(reader_id).masks if m.id == wear_id).detail_height_anchor = anchors.output_id(base_id)
+settle()
+scene.open_painter.status = ''
+before = ([m.id for m in layer(reader_id).masks], [m.id for m in layer(base_id).masks])
+user_link(wear_id, 'out', base_id, 'mask')
+assert ([m.id for m in layer(reader_id).masks], [m.id for m in layer(base_id).masks]) == before
+assert 'cycle' in scene.open_painter.status.lower(), scene.open_painter.status
+settle()
+print('GRAPH_LINKS mask sharing: PASS', flush=True)
+
+# 11. Optional wiring: cutting a chain wire parks its source, wiring re-enables,
+# and the chain heals around parked nodes.
+scene.open_painter.status = ''
+scene_id = next(m.id for m in layer(child_id).masks if m.source == 'SCENE')
+scratch_id = next(m.id for m in layer(child_id).masks if m.source == 'REFERENCE')
+# Section 9 parked the scene mask: link it again before testing a fresh cut.
+user_link(scene_id, 'out', scratch_id, 'prev')
+settle()
+link = next(l for l in tree.links if l.from_node.op_id == scene_id and l.to_socket.identifier == 'prev')
+tree.links.remove(link)
+assert not next(m for m in layer(child_id).masks if m.id == scene_id).enabled
+settle()
+keys = link_keys(tree)
+assert not any(k[0] == scene_id for k in keys)
+assert (scene_id, 'out', scratch_id, 'prev') not in keys
+user_link(scene_id, 'out', scratch_id, 'prev')
+assert next(m for m in layer(child_id).masks if m.id == scene_id).enabled
+settle()
+assert (scene_id, 'out', scratch_id, 'prev') in link_keys(tree)
+print('GRAPH_LINKS optional wiring: PASS', flush=True)
 print('GRAPH_LINK_EDITS_PASS', flush=True)
 open_painter.unregister()

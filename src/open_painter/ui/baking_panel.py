@@ -90,7 +90,7 @@ class OP_OT_bake(SafeOperator, bpy.types.Operator):
 
             if not any(ref.object for ref in ts.assignments):
                 raise ValueError("Assign the target mesh before baking its edge map.")
-            register_maps(ts, bake_curvature_set(ts))
+            register_maps(ts, bake_curvature_set(ts, context=context))
             invalidate(ts)
         elif self.action == "ADD_HIGH":
             for obj in context.selected_objects:

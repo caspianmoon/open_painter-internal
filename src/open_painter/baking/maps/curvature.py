@@ -1,16 +1,15 @@
-"""Bake convex edges of the evaluated target into the assigned render UVs.
+"""Edge-map sets with geometric smooth-edge coverage or an opt-in Cycles Bevel shader.
 
-Two signals are combined by maximum: hard creases above the minimum angle as
-fixed-pixel-width lines (the original GEOMETRIC_CREASES_V1 behaviour), and the
-convex part of the physical-radius curvature in ``mean_curvature`` so smooth
-bevels and tessellated rims register too. This is an edge map of the target
-mesh, not a derivative of tangent normals; high-poly normal detail is not
-curvature.
+The geometric method remains the default for smooth rims and dense assets. The
+Cycles method reproduces the contributor's Bevel reference, one pass per reach.
 """
 
 from math import cos, radians
+from types import SimpleNamespace
 import bpy
 import numpy as np
+
+from ..cycles_baker import CURVATURE_METHOD, bake_curvature_reach
 from ...core import image_manager as images
 
 
@@ -153,14 +152,17 @@ def rasterize(mesh, world, slots, n, minimum_angle, width, concave=False):
             return done.value
 
 
-METHOD = "GEOMETRIC_CREASES_V2"
+METHOD = 'GEOMETRIC_CREASES_V2'
 
 
-# The edge map is baked as a set: the same crease lines with the smooth convex
-# curvature at four reaches, so Edge Size can blend between them live.
+def method_of(ts):
+    return CURVATURE_METHOD if ts.bake.curvature_method == 'CYCLES_BEVEL' else METHOD
+
+
+# Both methods bake four physical reaches so Edge Size can blend them live.
 EDGE_MAP_KINDS = ("CURVATURE_THIN", "CURVATURE", "CURVATURE_WIDE", "CURVATURE_XWIDE")
-EDGE_RADIUS_FACTORS = {"CURVATURE_THIN": .5, "CURVATURE": 1., "CURVATURE_WIDE": 2., "CURVATURE_XWIDE": 4.}
 EDGE_SUFFIXES = {"CURVATURE_THIN": "Thin", "CURVATURE": "", "CURVATURE_WIDE": "Wide", "CURVATURE_XWIDE": "XWide"}
+EDGE_RADIUS_FACTORS = {"CURVATURE_THIN": .5, "CURVATURE": 1., "CURVATURE_WIDE": 2., "CURVATURE_XWIDE": 4.}
 
 
 def edge_map_set_complete(ts):
@@ -168,7 +170,54 @@ def edge_map_set_complete(ts):
     return all(any(m.kind == kind and m.image for m in ts.baked_maps) for kind in EDGE_MAP_KINDS)
 
 
-def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
+def _cycles_steps(context, ts, kinds=EDGE_MAP_KINDS):
+    """Bake the edge set with the Cycles Bevel shader: one blocking bake per reach.
+
+    Each reach follows the reference procedure (Bevel 12, Normal sockets,
+    Smootherstep, Diffuse COLOR bake) at its own radius multiple.
+
+    Yields progress (0..1) between reaches so the modal refresh keeps responding
+    and Esc stops between maps; returns {kind: image}. The settings are read
+    before the first yield: a modal caller may mutate the project between steps.
+    Closing the generator releases the reaches baked so far, mirroring the old
+    cooperative cleanup: only landed maps persist.
+    """
+    scene_name, set_id = ts.id_data.name, ts.id
+    from ...geometry.provenance import record
+    expected = record(ts, 'CURVATURE')
+    base = float(ts.bake.mean_curvature_distance)
+    radii = {kind: base * EDGE_RADIUS_FACTORS[kind] for kind in kinds}
+    yield 0.02
+    result = {}
+    try:
+        for position, kind in enumerate(kinds):
+            # RNA collections may have moved during a yield. Resolve again by identity.
+            scene = bpy.data.scenes.get(scene_name)
+            ts = next((item for item in scene.open_painter.texture_sets if item.id == set_id), None) if scene else None
+            if ts is None or record(ts, 'CURVATURE') != expected:
+                raise ValueError('Bake inputs changed; restart the edge-map bake')
+            with context.temp_override(scene=scene):
+                result[kind] = bake_curvature_reach(context, ts, kind, radii[kind])
+            yield 0.15 + 0.83 * (position + 1) / len(kinds)
+    except BaseException:
+        # Stopped (GeneratorExit from the modal's Esc/cancel) or failed part-way:
+        # the reaches already produced are packed fake-user images nobody
+        # registers, so they would otherwise persist in the file. Published
+        # maps were never used as scratch and keep their previous pixels.
+        from ...core.image_manager import live_bake_pointers
+        live = live_bake_pointers(ts)
+        for image in result.values():
+            try:
+                if image.as_pointer() in live:
+                    continue
+                bpy.data.images.remove(image)
+            except ReferenceError:
+                pass  # a memfile undo mid-job already freed it
+        raise
+    return result
+
+
+def _geometric_steps(ts, kinds=EDGE_MAP_KINDS):
     """Bake the edge map set cooperatively: yields progress (0..1), returns {kind: image}.
 
     Mesh data is read into arrays in one evaluated-mesh scope up front; the
@@ -183,7 +232,7 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
     # Everything the set provides is read before the first yield: a modal caller
     # may add or remove texture sets (or undo) between steps, which reallocates
     # the collection under this RNA reference.
-    name = ts.name
+    name, set_id = ts.name, ts.id
     radii = {kind: base * EDGE_RADIUS_FACTORS[kind] for kind in kinds}
     with targets(ts) as meshes:
         # No yields while evaluated meshes are alive: the depsgraph may change between steps.
@@ -221,6 +270,7 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
             rgba = np.ones((n, n, 4), dtype=np.float32)
             rgba[..., :3] = values[..., None]
             image = result[kind] = images.create(f"{name}_BakedCurvature{EDGE_SUFFIXES[kind]}", n)
+            image["op_bake_result"] = set_id
             image["open_painter_curvature_method"] = METHOD
             image["mean_curvature_distance"] = float(radii[kind])
             image["open_painter_edge_kind"] = kind
@@ -238,9 +288,16 @@ def curvature_steps(ts, kinds=EDGE_MAP_KINDS):
     return result
 
 
-def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS):
+def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
+    """Dispatch the chosen method; both yield progress and publish only complete sets."""
+    if ts.bake.curvature_method == 'CYCLES_BEVEL':
+        return (yield from _cycles_steps(context, ts, kinds))
+    return (yield from _geometric_steps(ts, kinds))
+
+
+def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS, context=None):
     """Synchronous edge-map set bake: {kind: image}."""
-    steps = curvature_steps(ts, kinds)
+    steps = curvature_steps(context or bpy.context, ts, kinds)
     while True:
         try:
             next(steps)
@@ -248,6 +305,6 @@ def bake_curvature_set(ts, kinds=EDGE_MAP_KINDS):
             return done.value
 
 
-def bake_curvature(ts):
+def bake_curvature(ts, context=None):
     """The CURVATURE map alone (scripts and tests); the queue bakes the whole set."""
-    return bake_curvature_set(ts, ("CURVATURE",))["CURVATURE"]
+    return bake_curvature_set(ts, ("CURVATURE",), context=context)["CURVATURE"]

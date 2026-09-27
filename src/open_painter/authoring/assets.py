@@ -52,13 +52,14 @@ def semantic(name):
 
 def new_layer(identifier, name, kind="FILL", parent_id=""):
     from ..constants import CHANNELS, DEFAULTS
+    from ..core.layer_stack import FILL_DEFAULT_CHANNELS
     layer = defaults("OP_Layer")
     layer.update(id=identifier, name=name, type=kind, parent_id=parent_id)
     layer["channels"] = []
     for key in CHANNELS:
         prop = defaults("OP_Channel")
         prop.update(channel=key, layer_id=identifier, color=list(DEFAULTS[key]), value=DEFAULTS[key][0],
-                    enabled=kind == "FOLDER" or key in {"BASE_COLOR", "ROUGHNESS", "METALLIC"})
+                    enabled=kind == "FOLDER" or (kind == "FILL" and key in FILL_DEFAULT_CHANNELS))
         layer["channels"].append(prop)
     return layer
 

@@ -50,6 +50,8 @@ obj, original_uv, original_material = fixture()
 bpy.context.view_layer.objects.active = obj
 obj.select_set(True)
 created = udim.create(scene, [obj], 'Robot', 512)
+for item in created:
+    item.bake.device = 'CPU'  # deterministic bake acceptance; GPU policy is tested separately
 ids = [ts.id for ts in created]
 assert [ts.udim_tile for ts in created] == [1001, 1002]
 assert [p.material_index for p in obj.data.polygons] == [1, 2]

@@ -76,6 +76,13 @@ def run():
     yield .6
     assert {'OPMeshMaskNode', 'OPStrokeMaskNode'} <= {node.bl_idname for node in tree.nodes}
     report['steps'].append('search creates procedural fill; new mesh and stroke controls draw')
+    with bpy.context.temp_override(area=area, region=region):
+        assert bpy.ops.open_painter.graph_add_image() == {'FINISHED'}
+    yield .5
+    image_node = next(n for n in tree.nodes if n.bl_idname == 'OPImageNode')
+    assert image_node.outputs and image_node.outputs[0].identifier == 'out'
+    assert image_node.dimensions.x > 0 and image_node.dimensions.y > 0
+    report['steps'].append('image node picker, mapping controls and output draw')
 
     # Adjacent selected layer nodes become one folder, with their identities intact.
     ids = {layer.id for layer in ts.layers if layer.type == 'FILL'}

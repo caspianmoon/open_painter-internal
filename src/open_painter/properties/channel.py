@@ -13,6 +13,19 @@ def changed(self, context):
 def numeric(self, context):
     """A uniform or resource-identity edit; graph structure is unchanged."""
     _changed(self, context, False)
+    if hasattr(self, 'value') and hasattr(self, 'channel'):
+        # The RNA bounds stay wide so Height can be typed past 1; every other
+        # scalar channel is physical 0..1 and is clamped back here.
+        low, high = _VALUE_RANGES.get(self.channel or '', (0.0, 1.0))
+        clamped = min(max(self.value, low), high)
+        if clamped != self.value:
+            self.value = clamped
+
+
+# Stored value bounds per channel. The RNA property stays wide (soft 0..1 keeps
+# every slider compact) so Height alone can be typed past 1; `numeric` clamps
+# everything else back to physical 0..1.
+_VALUE_RANGES = {'HEIGHT': (-1.0, 10.0)}
 
 
 def owning_set(owner):
@@ -42,6 +55,25 @@ def _resolve_physical(owner):
         physical.sync_owner(owner, ts)
 
 
+# These derived controls apply an explicit node-side edit across a fill layer.
+# Stored channel fields stay independent for recipes, image feeds and old files.
+_PROJECTIONS = ('UV', 'TRIPLANAR', 'DECAL')
+
+
+def _set_fill_mapping(prop, field, value):
+    from ..core.layer_stack import replay
+    ts = owning_set(prop)
+    if ts is None:
+        return
+    layer = next((layer for layer in ts.layers
+                  if any(item.as_pointer() == prop.as_pointer() for item in layer.channels)), None)
+    if layer is None or layer.type != 'FILL':
+        return
+    with replay(ts):
+        for other in layer.channels:
+            setattr(other, field, value)
+
+
 def _changed(self, context, structural):
     self.dirty = True
     if replaying():
@@ -68,6 +100,8 @@ def _changed(self, context, structural):
 
 
 def image_changed(self, context):
+    from ..graph.edits import detach_image_feed
+    detach_image_feed(self)
     self.image_name = self.image.name if self.image else ""
     changed(self, context)
 
@@ -122,7 +156,8 @@ class OP_Channel(bpy.types.PropertyGroup):
         default=(0.5, 0.5, 0.5, 1),
         update=numeric,
     )
-    value: bpy.props.FloatProperty(name="Value", default=0.5, min=0, max=1, update=numeric)
+    value: bpy.props.FloatProperty(name="Value", default=0.5, min=-1.0, soft_min=0.0,
+                                         soft_max=1.0, max=10.0, update=numeric)
     # Fill content instantiated from an anchor point; replaces image/color/value.
     anchor: bpy.props.StringProperty(name="Anchor", update=changed,
         description="Anchor point whose published result becomes this channel's content")
@@ -204,6 +239,22 @@ class OP_Channel(bpy.types.PropertyGroup):
     )
     rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=numeric)
     offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=numeric)
+    fill_projection: bpy.props.EnumProperty(name="Projection",
+        items=[(key, key.title(), '') for key in _PROJECTIONS],
+        get=lambda self: _PROJECTIONS.index(self.projection),
+        set=lambda self, value: _set_fill_mapping(self, 'projection', _PROJECTIONS[value]))
+    fill_scale: bpy.props.FloatVectorProperty(name="Scale", size=2, min=.001,
+        get=lambda self: tuple(self.scale),
+        set=lambda self, value: _set_fill_mapping(self, 'scale', value))
+    fill_rotation: bpy.props.FloatProperty(name="Rotation", subtype='ANGLE',
+        get=lambda self: self.rotation,
+        set=lambda self, value: _set_fill_mapping(self, 'rotation', value))
+    fill_offset: bpy.props.FloatVectorProperty(name="Offset", size=2,
+        get=lambda self: tuple(self.offset),
+        set=lambda self, value: _set_fill_mapping(self, 'offset', value))
+    fill_triplanar_hardness: bpy.props.FloatProperty(name="Triplanar Hardness", min=1, max=64,
+        get=lambda self: self.triplanar_hardness,
+        set=lambda self, value: _set_fill_mapping(self, 'triplanar_hardness', value))
     dirty: bpy.props.BoolProperty(default=True)
 
 

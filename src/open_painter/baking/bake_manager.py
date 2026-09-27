@@ -2,6 +2,7 @@
 
 from ..core.layer_stack import invalidate
 from ..core.validation import validate
+from ..utils.logging import logger
 from .cycles_baker import bake
 from .maps.curvature import EDGE_MAP_KINDS, bake_curvature_set, edge_map_set_complete
 from .maps.utility import UTILITY_KINDS, bake_utility
@@ -44,6 +45,36 @@ def register_map(ts, kind, image):
         prop = ts.baked_maps.add()
         prop.kind = kind
     previous = prop.image
+    # Build in scratch images; publish only after the bake and provenance check.
+    # Retain the old packed datablock for undo, while this set's explicit image
+    # bindings follow the new map. Other texture sets keep their own bindings.
+    if previous is not None and previous != image and image.get('op_bake_result') == ts.id:
+        from ..constants import OWNER
+        from ..core.layer_stack import replay
+        if previous.get(OWNER):
+            with replay(ts):
+                for layer in ts.layers:
+                    for channel in layer.channels:
+                        for field in ('image', 'detail_image'):
+                            if getattr(channel, field) == previous:
+                                setattr(channel, field, image)
+                    for mask in layer.masks:
+                        if mask.image == previous:
+                            mask.image = image
+                from ..graph import mirror
+                tree = mirror.find_tree(ts)
+                if tree is not None:
+                    with mirror.syncing():
+                        for node in tree.nodes:
+                            if getattr(node, 'op_kind', '') == 'IMAGE' and node.image == previous:
+                                node.image = image
+            canonical = f"{ts.name}_Baked{kind.title().replace('_', '')}"
+            if previous.name == canonical:
+                previous.name = canonical + ' Previous'
+            image.name = canonical
+            image['open_painter_pixel_revision'] = max(
+                image.get('open_painter_pixel_revision', 0),
+                previous.get('open_painter_pixel_revision', 0) + 1)
     prop.image = image
     if previous is not None and previous != image:
         # The superseded map would otherwise stay in the file through its fake
@@ -122,6 +153,13 @@ def bake_steps(context, ts):
     if issues:
         raise ValueError(" | ".join(issues))
     settings = ts.bake
+    # Device preflight: the bake device is resolved before any map allocates,
+    # and a GPU request Cycles cannot satisfy is reported here and staged as
+    # CPU rather than failing inside the first bake call.
+    from . import devices
+    _device, device_note = devices.resolve(context.scene, settings.device)
+    if device_note:
+        logger.warning(device_note)
     low = {ref.object for ref in ts.assignments}
     high = {ref.object for ref in settings.high_objects if ref.object}
     cycles_maps = settings.normal or settings.ao
@@ -157,7 +195,7 @@ def bake_steps(context, ts):
         tasks.append(("AO", lambda: bake(context, ts, "AO", flush=True)))
     tasks.extend((kind, lambda kind=kind: bake(context, ts, kind, flush=True)) for kind in bevel_kinds)
     if settings.curvature:
-        tasks.append(("CURVATURE", lambda: bake_curvature_set(ts)))
+        tasks.append(("CURVATURE", lambda: bake_curvature_set(ts, context=context)))
     tasks.extend((kind, lambda kind=kind: bake_utility(ts, kind)) for kind in selected_utility)
     from ..geometry.provenance import record
     from . import history
@@ -172,8 +210,16 @@ def bake_steps(context, ts):
         produced = image if isinstance(image, dict) else {kind: image}
         if record(ts, kind) != expected[kind]:
             import bpy
+            from ..core.image_manager import live_bake_pointers
+            live = live_bake_pointers(ts)
             for item in produced.values():
-                bpy.data.images.remove(item)
+                try:
+                    # Defensive: cleanup may only remove unpublished images.
+                    if item.as_pointer() in live:
+                        continue
+                    bpy.data.images.remove(item)
+                except ReferenceError:
+                    pass
             raise ValueError("Bake inputs changed; discarded stale map")
         register_maps(ts, produced)
         history.landed(ts, kind)
@@ -204,26 +250,25 @@ def owned_curvature(ts):
 def stale_curvature(ts):
     """The owned Curvature map an edge-driven recipe should replace, or None.
 
-    Stale means crease-only (baked before GEOMETRIC_CREASES_V2) or missing the
+    Stale means a different baking method or missing the
     thin/wide/extreme companions that Edge Size blends between.
     """
     prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
     if prop is None:
         return None
-    from .maps.curvature import METHOD
+    from .maps.curvature import method_of
     method = prop.image.get("open_painter_curvature_method")
     if method is None and "BakedCurvature" not in prop.image.name:
         return None  # a user-supplied image: never replace it
-    if method == METHOD and edge_map_set_complete(ts):
+    if method == method_of(ts) and edge_map_set_complete(ts):
         return None
     return prop
 
 
 def refresh_stale_curvature(ts, required, context=None):
-    """Rebake a crease-only Curvature map when an edge-driven recipe uses it.
+    """Rebake mismatched or incomplete Curvature maps when an edge-driven recipe uses them.
 
-    Maps baked before GEOMETRIC_CREASES_V2 are empty on smooth geometry, so an
-    effect that reads them appears to do nothing. Nothing happens when the map
+    Maps must match the selected method and supply all four edge reaches. Nothing happens when the map
     is missing (the recipe preflight reports that) or already current. With a
     window context the bake runs as a cooperative modal job and 'QUEUED' is
     returned; the recipe is added right away and reads the new map when it

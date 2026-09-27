@@ -146,12 +146,15 @@ geometry raster rasterize all UV triangles of a target in batches (`geometry/uv_
 same float32 barycentric sequence as the per-triangle path, later triangle wins);
 `geometry/snapshots.targets` exposes triangle index arrays and builds RNA triangle lists only on
 request. Temporary per-slot materials own active
-bake image nodes. Unassigned slots use a scratch target. Normal and AO are Cycles CPU bakes; curvature
-uses convex creases from the evaluated target mesh. Position, world/object normals, material/object
+bake image nodes. Unassigned slots use a scratch target. Normal, AO, the Bevel maps and the
+Curvature edge set are Cycles bakes (the edge set runs a transient Bevel-normal/cross-product
+shader, one reach per Bevel radius multiple). Position, world/object normals, material/object
 IDs, UV islands/borders and raycast thickness use evaluated-mesh utility baking. A `finally` block restores material slots, render engine,
 Cycles device/samples, bake properties, visibility, selection, active object and mode. Temporary
 materials and scratch images are removed. Successfully completed maps are registered independently.
-Baked map use in shading is explicit via a generated fill layer.
+A rebake overrides the live map image in place (same datablock and name, so no
+.001 duplicates and every bound channel keeps reading it); a failed rebake
+restores its pixels instead of dropping the image. Baked map use in shading is explicit via a generated fill layer.
 
 ## Material aging (0.10.0)
 
@@ -321,15 +324,25 @@ set rather than a document. `mirror.project(ts)` derives the expected nodes (one
 per folder containing the folder node and its children, one output node), sockets (anchor
 producers on the right: *Output*, folder *Composite*, mask and channel anchors, read-only legacy
 whole-layer outputs while used; consumers on the left: enabled fill channels, Published Input
-masks, generator micro-detail slots) and links (every consumer field, plus the top root layer's
-output into the output node). `mirror.reconcile` edits the tree in place to match and stores a
+masks, generator micro-detail slots; one *stack* input per root layer on the output node)
+and links (every consumer field, nested siblings through Backdrop, every root layer's output
+into its own output socket; each stack socket is a bundle spanning every channel, recorded
+under the output spec's background ``maps`` key. Root order reads from Y rows, so roots
+never link to each other).
+`mirror.reconcile` edits the tree in place to match and stores a
 structural signature; the UI lifecycle tick reconciles open graphs whose signature changed and
 mirrors the active selection both ways. `NodeTree.update()` diffs the tree's links against the
 projection and translates the difference into anchor fields through `graph/edits.py`, validated
 by `references.issues`; refused links leave the stack untouched and vanish on the next sync.
 Node identity is the `op_id` property, never a cached RNA reference; the tree is a fake-user
 datablock owned by the set id, so undo restores stack and mirror together. The compiled shader
-graph stays derived from the stack and is never the editing surface.
+graph stays derived from the stack and is never the editing surface. Image Texture nodes
+(`OPImageNode`, `image:` ids) are the one tree-only exception the mirror preserves: linking
+one into a fill channel copies its image and mapping onto that channel and records the feed
+in `op_image_feeds` for the redraw; cutting the wire takes the image back off, deleting the
+node keeps it as a panel value. Fill nodes carry a channel switch grid with per-channel
+image pickers and one shared mapping block. Edits to that block apply to every fill
+channel; ordinary channel properties and image feeds retain independent mappings.
 
 Composite anchors back the graph's *Output* and *Composite* sockets: `publish_output` /
 `publish_group` on `OP_Layer` own the derived anchor ids `<id>:out` / `<id>:group`;

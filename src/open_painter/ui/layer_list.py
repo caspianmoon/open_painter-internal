@@ -131,6 +131,12 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
                 from .dock import state
 
                 state.get(context.area).selected_layers = {created.id}
+            from ..graph import mirror
+            tree = mirror.find_tree(ts)
+            if tree is not None:
+                # The node appears on the next sync: select it then, exclusively,
+                # so it can be placed immediately.
+                mirror.request_select(tree, created.id)
             return
         layer = layer_stack.active(ts)
         if not layer:

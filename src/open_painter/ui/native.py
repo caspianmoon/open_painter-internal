@@ -817,6 +817,7 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         ts = active_set(context)
         if not ts:
             return
+        row.operator("open_painter.texture_set", text="", icon="TRASH").action = "DELETE"
         row.prop(ts, "resolution", text="")
         if ts.udim_tile:
             layout.label(text=f"UDIM {ts.udim_tile} · {ts.udim_name}", icon="UV")

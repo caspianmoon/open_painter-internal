@@ -29,6 +29,22 @@ def adopt_alpha_mode(image):
         image.alpha_mode = 'CHANNEL_PACKED'
 
 
+def live_bake_pointers(ts):
+    """as_pointer() set of the set's current baked-map images; empty when unreadable."""
+    try:
+        entries = list(ts.baked_maps)
+    except (ReferenceError, AttributeError):
+        return set()
+    pointers = set()
+    for entry in entries:
+        try:
+            if entry.image:
+                pointers.add(entry.image.as_pointer())
+        except ReferenceError:
+            continue
+    return pointers
+
+
 @measured('image_read')
 def pixels(image, out=None) -> np.ndarray:
     if not image or not image.size[0] or not len(image.pixels):

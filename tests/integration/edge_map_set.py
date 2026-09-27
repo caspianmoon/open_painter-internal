@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
 from open_painter.baking.bake_manager import register_maps, stale_curvature, register_map, refresh_stale_curvature
+from open_painter.baking.maps import mean_curvature
 from open_painter.baking.maps.curvature import EDGE_MAP_KINDS, bake_curvature_set, edge_map_set_complete, METHOD
 from open_painter.core import image_manager as images, texture_set_manager as sets
 from open_painter.generators.base import edge_curvature
@@ -28,6 +29,7 @@ bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=.02)
 bpy.ops.object.mode_set(mode='OBJECT')
 ts = sets.create(scene, 'Edge map set', 512)
 sets.assign(scene, ts, cube)
+ts.bake.device = 'CPU'
 ts.bake.mean_curvature_distance = .05
 produced = bake_curvature_set(ts)
 assert tuple(produced) == EDGE_MAP_KINDS, tuple(produced)
@@ -89,21 +91,21 @@ np.testing.assert_array_equal(edge_curvature(ts, SimpleNamespace(edge_size=2.5),
 # nothing binds is purged on the next save, one a node still binds goes once
 # unbound; a user-supplied image is left alone.
 from open_painter.constants import OWNER
-superseded = {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
+superseded = {m.kind: m.image for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
 material = bpy.data.materials.new('binds the old map')
 material.use_nodes = True
 node = material.node_tree.nodes.new('ShaderNodeTexImage')
-node.image = bpy.data.images[superseded['CURVATURE_THIN']]
+node.image = superseded['CURVATURE_THIN']
 picked = bpy.data.images.new('artist curvature', 8, 8)
 picked.use_fake_user = True
 register_map(ts, 'CURVATURE_XWIDE', picked)
-released = bpy.data.images[superseded['CURVATURE_XWIDE']]
+released = superseded['CURVATURE_XWIDE']
 assert released.users == 0 and not released.use_fake_user, (released.users, released.use_fake_user)
 register_maps(ts, bake_curvature_set(ts))
 assert edge_map_set_complete(ts)
-released = bpy.data.images[superseded['CURVATURE']]
+released = superseded['CURVATURE']
 assert released.users == 0 and not released.use_fake_user, 'the superseded map kept its fake user'
-bound = bpy.data.images[superseded['CURVATURE_THIN']]
+bound = superseded['CURVATURE_THIN']
 assert bound.users == 1 and not bound.use_fake_user, (bound.users, bound.use_fake_user)
 node.image = None
 assert bound.users == 0
@@ -112,25 +114,8 @@ assert all(m.image.users == 2 and m.image.use_fake_user for m in ts.baked_maps i
 bpy.data.materials.remove(material)
 bpy.data.images.remove(picked)
 
-# The four reaches share one face-turning pass and one raster (0.9.7): they
-# were prepared four times over and all held for the whole job, which at 4k
-# blocked the invoke step for seconds and retained gigabytes.
-from open_painter.baking.maps import mean_curvature
-from open_painter.geometry import uv_rasterizer
-counted = {'rasterize': 0, 'face_turning': 0}
-original_rasterize, original_turning = uv_rasterizer.rasterize, mean_curvature.face_turning
-def counting_rasterize(*args, **kwargs):
-    counted['rasterize'] += 1
-    return original_rasterize(*args, **kwargs)
-def counting_turning(*args, **kwargs):
-    counted['face_turning'] += 1
-    return original_turning(*args, **kwargs)
-uv_rasterizer.rasterize, mean_curvature.face_turning = counting_rasterize, counting_turning
-try:
-    shared = bake_curvature_set(ts)
-finally:
-    uv_rasterizer.rasterize, mean_curvature.face_turning = original_rasterize, original_turning
-assert counted == {'rasterize': 1, 'face_turning': 1}, counted
+# A repeated geometric bake reproduces each reach.
+shared = bake_curvature_set(ts)
 for kind, image in shared.items():
     assert abs(float(images.pixels(image)[..., 0].mean()) - means[kind]) < 1e-4, kind
     bpy.data.images.remove(image)

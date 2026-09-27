@@ -83,6 +83,7 @@ def setup():
     assert stale_curvature(ts) is not None
     state['texture_set_id'] = ts.id
     state['old_image'] = old.name
+    state['old_image_pointer'] = old.as_pointer()
     state['phase'] = 'add'
 
 
@@ -122,7 +123,7 @@ def poll():
                 return .05
             ts = texture_set()
             prop = next(m for m in ts.baked_maps if m.kind == 'CURVATURE')
-            assert prop.image is not None and prop.image.name != state['old_image']
+            assert prop.image is not None and prop.image.as_pointer() != state['old_image_pointer']
             assert prop.image.get('open_painter_curvature_method') == 'GEOMETRIC_CREASES_V2'
             assert stale_curvature(ts) is None
             from open_painter.baking.maps.curvature import EDGE_MAP_KINDS, edge_map_set_complete

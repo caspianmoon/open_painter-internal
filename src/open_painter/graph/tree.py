@@ -154,6 +154,40 @@ class OP_StrokeMaskNode(_GraphNode, bpy.types.Node):
     bl_icon = "CURVE_DATA"
 
 
+def _push_image_feed(node, context):
+    """A node-side image/mapping edit feeds the linked fill channel, if any."""
+    from . import edits
+    try:
+        edits.push_image_node(node, context)
+    except (AttributeError, RuntimeError):
+        pass  # midway through load/undo the tree or set may not exist yet
+
+
+class OP_ImageNode(_GraphNode, bpy.types.Node):
+    """An imported image feeding a fill channel: outputs only, never stack state.
+
+    The node owns its mapping controls; drawing its output into a fill
+    channel's content input copies the image and the mapping onto that
+    channel (see edits.feed_image). The node itself is tree-only state the
+    mirror preserves; the stack only ever holds the copied values.
+    """
+    bl_idname = "OPImageNode"
+    bl_label = "Image Texture"
+    bl_icon = "IMAGE_DATA"
+    image: bpy.props.PointerProperty(name="Image", type=bpy.types.Image, update=_push_image_feed)
+    projection: bpy.props.EnumProperty(
+        name="Projection",
+        items=[("UV", "UV", ""), ("TRIPLANAR", "Triplanar", "World-space projection")],
+        update=_push_image_feed,
+    )
+    scale: bpy.props.FloatVectorProperty(name="Scale", size=2, default=(1, 1), min=0.001,
+                                         update=_push_image_feed)
+    rotation: bpy.props.FloatProperty(name="Rotation", subtype="ANGLE", update=_push_image_feed)
+    offset: bpy.props.FloatVectorProperty(name="Offset", size=2, update=_push_image_feed)
+    triplanar_hardness: bpy.props.FloatProperty(name="Triplanar Hardness", default=4, min=1, max=64,
+                                                update=_push_image_feed)
+
+
 class OP_OutputNode(_GraphNode, bpy.types.Node):
     """The texture set's final channels (informational)."""
     bl_idname = "OPOutputNode"
@@ -162,9 +196,10 @@ class OP_OutputNode(_GraphNode, bpy.types.Node):
 
 
 NODE_TYPES = {"LAYER": OP_LayerNode.bl_idname, "FOLDER": OP_FolderNode.bl_idname, "OUTPUT": OP_OutputNode.bl_idname,
-              "MASK": OP_MaskNode.bl_idname, "EFFECT": OP_EffectNode.bl_idname}
+              "MASK": OP_MaskNode.bl_idname, "EFFECT": OP_EffectNode.bl_idname, "IMAGE": OP_ImageNode.bl_idname}
+IMAGE_PREFIX = "image:"
 MASK_NODE_TYPES = {'MESH': OP_MeshMaskNode.bl_idname, 'GROUP': OP_MaskGroupNode.bl_idname,
                    'GRAPH': OP_CustomGraphNode.bl_idname, 'STROKES': OP_StrokeMaskNode.bl_idname}
 CLASSES = (OP_GraphTree, OP_SocketContent, OP_SocketScalar, OP_SocketCoverage, OP_SocketColor, OP_SocketNormal,
            OP_LayerNode, OP_FolderNode, OP_MaskNode, OP_EffectNode, OP_OutputNode,
-           OP_MeshMaskNode, OP_MaskGroupNode, OP_CustomGraphNode, OP_StrokeMaskNode)
+           OP_MeshMaskNode, OP_MaskGroupNode, OP_CustomGraphNode, OP_StrokeMaskNode, OP_ImageNode)

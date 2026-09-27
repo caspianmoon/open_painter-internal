@@ -140,10 +140,14 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         name="AO Distance", default=10.0, min=0.0, subtype="DISTANCE",
         description="World-space occlusion reach for the AO bake; 10 matches previous bakes made without an explicit world",
     )
+    # Keep the saved CPU=0 / SCENE=1 enum values; append AUTO.
     device: bpy.props.EnumProperty(name="Bake Device", items=[
-        ('CPU', 'CPU', 'Use CPU without changing scene settings or device preferences'),
-        ('SCENE', 'Scene Device', 'Use the current scene Cycles device and existing device preferences'),
-    ], default='CPU')
+        ('CPU', 'CPU', 'Always bake on CPU, whatever devices are enabled'),
+        ('SCENE', 'Scene Device',
+         "Use the current scene's Cycles device; falls back to CPU when no Cycles GPU device is enabled"),
+        ('AUTO', 'Auto (GPU if available)',
+         'Bake on an enabled Cycles GPU device whenever one is available, otherwise CPU'),
+    ], default='AUTO')
     separate_cage_distance: bpy.props.BoolProperty(name="Separate Cage Extrusion", default=False,
         description="Use a separate ray-origin extrusion; older projects retain Ray Distance for both values")
     cage_extrusion: bpy.props.FloatProperty(name="Cage Extrusion", default=.1, min=0, subtype='DISTANCE')
@@ -172,9 +176,12 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         name="Mean Curvature (Signed)", default=False,
         description="Smooth signed curvature of the evaluated target: 0.5 flat, brighter convex, darker concave",
     )
+    curvature_method: bpy.props.EnumProperty(name="Edge Method", default='GEOMETRIC', items=[
+        ('GEOMETRIC', 'Geometric', 'Convex creases and smooth edge bands; cooperative CPU bake'),
+        ('CYCLES_BEVEL', 'Cycles Bevel', 'Reference Bevel shader; blocks per reach and can be weaker on smooth bevels')])
     mean_curvature_distance: bpy.props.FloatProperty(
         name="Curvature Radius", default=0.02, min=0.0001, max=1000.0, subtype="DISTANCE",
-        description="World-space radius within which surface turning is measured for the Curvature and Mean Curvature maps; edge bands are about this wide",
+        description="World-space measuring radius, or Bevel radius for the Cycles method; scaled for thin, normal, wide and extreme reaches",
     )
     selection: bpy.props.BoolProperty(
         name="Selected Faces", default=False,
@@ -185,20 +192,14 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         description="Maximum inward intersection distance and white value; zero uses the largest complete target-mesh bounds diagonal",
     )
     curvature_angle: bpy.props.FloatProperty(
-        name="Minimum Edge Angle",
-        default=20,
-        min=1,
-        max=179,
+        name="Minimum Edge Angle", default=20, min=1, max=179,
         description="Convex target-mesh creases below this angle are excluded before intensity is applied",
     )
     curvature_width: bpy.props.FloatProperty(
-        name="Edge Width (px)",
-        default=4,
-        min=1,
-        max=64,
+        name="Edge Width (px)", default=4, min=1, max=64,
         description="Width of baked edge coverage in texture pixels",
     )
-    selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=True)
+    selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=False)
     margin: bpy.props.IntProperty(name="Margin", default=16, min=0, max=128)
     ray_distance: bpy.props.FloatProperty(
         name="Ray Distance", default=0.1, min=0, subtype="DISTANCE"

@@ -5,7 +5,8 @@ from ..constants import CHANNEL_LABELS
 from ..core.project_manager import require_set
 from ..ui.operators import SafeOperator
 from . import mirror
-from .tree import TREE_ID, is_graph
+from .rows import OP_OT_graph_toggle_rows
+from .tree import IMAGE_PREFIX, SOCKET_CONTENT, TREE_ID, is_graph
 
 
 def graph_area(screen, ts):
@@ -128,6 +129,47 @@ class OP_OT_graph_auto_layout(SafeOperator, bpy.types.Operator):
         mirror.reconcile(tree, ts, force_layout=True)
 
 
+class OP_OT_graph_add_image(SafeOperator, bpy.types.Operator):
+    """Add an empty Image Texture node to this graph.
+
+    Choose the image on the node itself: Open loads an external file, the
+    dropdown lists the blend file's images. Link its output into a fill
+    channel input to feed that channel.
+    """
+    bl_idname = 'open_painter.graph_add_image'
+    bl_label = 'Add Image Texture Node'
+    bl_description = "Add an empty Image Texture node; choose its image on the node"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def run(self, context):
+        from ..utils.ids import new_id
+        tree = getattr(context.space_data, 'node_tree', None)
+        ts = mirror.texture_set_of(tree, context.scene) if is_graph(tree) else None
+        if ts is None:
+            raise ValueError('This editor shows no Open Painter graph.')
+        try:
+            region = next(r for r in context.area.regions if r.type == 'WINDOW')
+            vx, vy = region.view2d.region_to_view(region.width // 2, region.height // 2)
+        except (AttributeError, RuntimeError, StopIteration):
+            vx, vy = 0.0, 0.0
+        existing = sum(1 for item in tree.nodes if getattr(item, 'op_kind', '') == 'IMAGE')
+        with mirror.syncing():
+            node = tree.nodes.new('OPImageNode')
+            identifier = IMAGE_PREFIX + new_id()
+            node.op_id, node.op_kind = identifier, 'IMAGE'
+            node.name = identifier
+            node.label = 'Image Texture'
+            node.width = 240
+            node.location = (vx + (existing % 4) * 24, vy - (existing % 4) * 48)
+            # The exit slot exists at birth: the mirror only re-enforces it on
+            # its next pass, which is too late to wire the node right away.
+            node.outputs.new(SOCKET_CONTENT, 'Image', identifier='out')
+        # The node is already in the tree: select it on the next sync,
+        # exclusively, so it can be placed immediately.
+        mirror.request_select(tree, identifier)
+        return {'FINISHED'}
+
+
 class OP_OT_graph_select(SafeOperator, bpy.types.Operator):
     bl_idname = 'open_painter.graph_select'
     bl_label = 'Edit in Panel'
@@ -183,14 +225,59 @@ def _graph_target(context, require_layer=True):
     return ts, layer
 
 
+def _add_edge_wear_2(ts, layer):
+    """Append the Edge Wear 2.0 recipe, wired and on; return the first node id.
+
+    Edge Wear (0.11 amount, 4.32 contrast, baked edge maps) into Grunge Medium
+    (triplanar, hardness 1) into a Levels filter (white 0.28, gamma 0.5), all
+    multiplying. A designed preset arrives working, exactly like its reference
+    setup; lone mask adds stay parked until wired.
+    """
+    from ..utils.ids import new_id
+    first = None
+    for source, name, values in (
+            ('GENERATOR', 'Edge Wear', {'generator': 'EDGE_WEAR', 'amount': 0.11, 'contrast': 4.32,
+                                        'noise_scale': 1.0, 'edge_source': 'BAKED'}),
+            ('PROCEDURAL', 'Grunge Medium', {'procedural': 'GRUNGE_MEDIUM', 'noise_scale': 2.0, 'seed': 1,
+                                             'projection': 'TRIPLANAR', 'triplanar_hardness': 1.0,
+                                             'scale': (1.0, 1.0), 'rotation': 0.0, 'offset': (0.0, 0.0)}),
+            ('FILTER', 'Levels', {'effect_kind': 'LEVELS', 'effect_black': 0.0, 'effect_white': 0.28,
+                                  'effect_gamma': 0.5, 'effect_output_black': 0.0, 'effect_output_white': 1.0})):
+        mask = layer.masks.add()
+        mask.id, mask.source, mask.name = new_id(), source, name
+        mask.operation, mask.strength, mask.black, mask.white = 'MULTIPLY', 1.0, 0.0, 1.0
+        mask.enabled = True
+        if source == 'GENERATOR':
+            mask.generator = values['generator']
+            mask.amount, mask.contrast, mask.noise_scale = values['amount'], values['contrast'], values['noise_scale']
+            mask.edge_source = values['edge_source']
+        elif source == 'PROCEDURAL':
+            mask.procedural = values['procedural']
+            mask.noise_scale, mask.seed = values['noise_scale'], values['seed']
+            mask.projection, mask.triplanar_hardness = values['projection'], values['triplanar_hardness']
+            mask.scale = values['scale']
+            mask.rotation = values['rotation']
+            mask.offset = values['offset']
+        else:
+            mask.effect.kind = values['effect_kind']
+            mask.effect.black, mask.effect.white = values['effect_black'], values['effect_white']
+            mask.effect.gamma = values['effect_gamma']
+            mask.effect.output_black, mask.effect.output_white = (values['effect_output_black'],
+                                                                  values['effect_output_white'])
+        if first is None:
+            first = mirror.mask_node_id(layer, len(layer.masks) - 1, mask)
+    layer.active_mask = len(layer.masks) - 1
+    return first
+
+
 class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
-    """Add a mask or channel filter node to the active layer (appended to its chain)."""
+    """Add a mask or channel filter node to the active layer, parked until wired."""
     bl_idname = 'open_painter.graph_add'
     bl_label = 'Add Node'
     bl_options = {'REGISTER', 'UNDO'}
     kind: bpy.props.EnumProperty(items=[(k, k.replace('_', ' ').title(), '') for k in (
         'MASK', 'GENERATOR', 'PROCEDURAL', 'SCENE', 'MASK_FILTER', 'REFERENCE', 'MASK_ANCHOR',
-        'FILTER', 'CHANNEL_ANCHOR', 'LAYER', 'PROCEDURAL_FILL', 'MESH')])
+        'FILTER', 'CHANNEL_ANCHOR', 'LAYER', 'PROCEDURAL_FILL', 'MESH', 'RECIPE')])
     choice: bpy.props.StringProperty()
     channel: bpy.props.StringProperty()
 
@@ -204,6 +291,11 @@ class OP_OT_graph_add(SafeOperator, bpy.types.Operator):
             mask_index = next((i for i, mask in enumerate(layer.masks) if mask.id == getattr(node, 'op_id', '')), None)
         identifier = authoring.add(ts, layer, self.kind, self.choice,
                                    self.channel or context.scene.open_painter.properties_channel, mask_index)
+        if self.kind not in {'LAYER', 'PROCEDURAL_FILL', 'RECIPE', 'MASK_ANCHOR', 'CHANNEL_ANCHOR'}:
+            _, mask, _, effect = mirror.owner_of(ts, identifier)
+            item = mask if mask is not None else effect
+            if item is not None:
+                item.enabled = False
         _select_added(context, ts, identifier)
 
 
@@ -404,6 +496,8 @@ class OP_MT_graph_add_generator(_AddMenu, bpy.types.Menu):
     bl_label = 'Generator'
 
     def draw(self, context):
+        self.item('RECIPE', 'EDGE_WEAR_2', 'Edge Wear 2.0', 'MOD_MASK')
+        self.layout.separator()
         from ..generators.base import REQUIRED_MAPS
         for kind in REQUIRED_MAPS:
             self.item('GENERATOR', kind, kind.replace('_', ' ').title())
@@ -424,9 +518,30 @@ class OP_MT_graph_add_scene(_AddMenu, bpy.types.Menu):
     bl_label = 'Scene Field'
 
     def draw(self, context):
+        for identifier, name in _scene_kind_items():
+            self.item('SCENE', identifier, name)
+
+
+def _scene_kind_items():
+    """(identifier, name) pairs for scene influencer kinds, registration-proof.
+
+    Menu draws keep running across disable/enable (the reinstall script):
+    ``bpy.types.OP_Influencer`` vanishes in that window and every redraw
+    logged an AttributeError instead of drawing.
+    """
+    candidates = [getattr(bpy.types, 'OP_Influencer', None)]
+    try:
         from ..properties.influencer import OP_Influencer
-        for item in OP_Influencer.bl_rna.properties['kind'].enum_items:
-            self.item('SCENE', item.identifier, item.name)
+        candidates.append(OP_Influencer)
+    except ImportError:
+        pass
+    for candidate in candidates:
+        try:
+            items = candidate.bl_rna.properties['kind'].enum_items
+        except (AttributeError, KeyError):
+            continue
+        return tuple((item.identifier, item.name) for item in items)
+    return ()
 
 
 class OP_MT_graph_add_mask_filter(_AddMenu, bpy.types.Menu):
@@ -544,6 +659,9 @@ def header(self, context):
     row.operator('open_painter.graph_view', text='Frame Selected', icon='RESTRICT_SELECT_OFF').scope = 'SELECTED'
     row.operator('open_painter.graph_view', text='Full Graph', icon='VIEW_ORTHO').scope = 'ALL'
     layout.operator('open_painter.graph_auto_layout', text='Auto Layout', icon='SNAP_GRID')
+    from . import rows as _rows
+    layout.operator('open_painter.graph_toggle_rows', text='Rows', icon='GRID',
+                    depress=_rows.is_enabled())
     problems, notes = _reference_report(tree, ts)
     if problems:
         layout.label(text=problems[0], icon='ERROR')
@@ -573,6 +691,8 @@ def add_menu(self, context):
     layout.menu('OP_MT_graph_add_mask', icon='MOD_MASK')
     layout.menu('OP_MT_graph_add_filter', icon='SHADERFX')
     layout.separator()
+    layout.operator('open_painter.graph_add_image', text='Image Texture', icon='IMAGE_DATA')
+    layout.separator()
     for action, label, icon in (('FILL', 'Fill Layer', 'MATERIAL'), ('PAINT', 'Paint Layer', 'BRUSH_DATA'),
                                 ('FOLDER', 'Folder', 'FILE_FOLDER')):
         op = layout.operator('open_painter.graph_add', text=label, icon=icon)
@@ -581,6 +701,7 @@ def add_menu(self, context):
 
 
 CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_graph_select, OP_OT_graph_add,
+           OP_OT_graph_add_image, OP_OT_graph_toggle_rows,
            OP_MT_graph_add_mask, OP_MT_graph_add_generator, OP_MT_graph_add_procedural,
            OP_MT_graph_add_scene, OP_MT_graph_add_mask_filter, OP_MT_graph_add_filter,
            OP_OT_graph_template, OP_OT_graph_search, OP_OT_graph_group, OP_OT_graph_edit_shader,
@@ -588,10 +709,14 @@ CLASSES = (OP_OT_open_graph, OP_OT_graph_view, OP_OT_graph_auto_layout, OP_OT_gr
 
 
 def register():
+    from . import rows
+    rows.register_handlers()
     bpy.types.NODE_HT_header.prepend(header)
     bpy.types.NODE_MT_add.append(add_menu)
 
 
 def unregister():
+    from . import rows
+    rows.unregister_handlers()
     bpy.types.NODE_MT_add.remove(add_menu)
     bpy.types.NODE_HT_header.remove(header)

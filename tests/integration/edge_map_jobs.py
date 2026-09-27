@@ -31,6 +31,8 @@ bpy.ops.object.mode_set(mode='OBJECT')
 filler = sets.create(scene, 'Filler', 512)
 ts = sets.create(scene, 'Edge jobs', 512)
 sets.assign(scene, ts, cube)
+ts.bake.device = 'CPU'
+ts.bake.curvature_method = 'CYCLES_BEVEL'
 SET_ID = ts.id
 
 
@@ -48,7 +50,7 @@ assert bpy.ops.open_painter.edge_map_refresh.get_rna_type().properties['set_id']
 
 # Adding and removing sets while the job runs reallocates the collection under
 # the generator's reference; the images are still named after the right set.
-job = curvature_steps(ts)
+job = curvature_steps(bpy.context, ts)
 next(job)
 for index in range(24):
     sets.create(scene, f'Added {index}', 512)
@@ -71,32 +73,33 @@ print('EDGE_MAP_JOBS set add/remove mid-job: PASS', flush=True)
 
 # Stopping the job after some reaches landed releases the packed images.
 before = curvature_images()
-job = curvature_steps(ts)
+job = curvature_steps(bpy.context, ts)
 while len(curvature_images()) < len(before) + 2:
     next(job)
 job.close()
 assert curvature_images() == before, curvature_images() - before
 # A failure part-way releases them too.
-original_write = images.write
+from open_painter.baking import cycles_baker
+original_run = cycles_baker._run_bake
 calls = []
 
 
-def failing_write(image, values, pack=True):
-    calls.append(image.name)
+def failing_run(**kwargs):
+    calls.append(kwargs.get('type'))
     if len(calls) == 2:
         raise RuntimeError('out of memory')
-    return original_write(image, values, pack)
+    return original_run(**kwargs)
 
 
-images.write = failing_write
+cycles_baker._run_bake = failing_run
 try:
     bake_curvature_set(ts)
     raise AssertionError('the failing bake did not raise')
 except RuntimeError:
     pass
 finally:
-    images.write = original_write
-assert len(calls) == 2 and curvature_images() == before, curvature_images() - before
+    cycles_baker._run_bake = original_run
+assert len(calls) == 2 and curvature_images() == before, (calls, curvature_images() - before)
 print('EDGE_MAP_JOBS stop/failure releases partial reaches: PASS', flush=True)
 
 # Landing: the crease-only map is replaced on the recorded scene even while
@@ -121,11 +124,12 @@ assert scene.open_painter.status == status and other.open_painter.status == 'unt
 ts = texture_set()
 assert edge_map_set_complete(ts) and stale_curvature(ts) is None
 landed = {m.kind: m.image.name for m in ts.baked_maps if m.kind in EDGE_MAP_KINDS}
-assert landed['CURVATURE'] != old_name
+assert landed['CURVATURE'] == old_name
+assert old.name != old_name
 # The superseded map is released, not removed (0.9.7): no fake user and nothing
 # binding it, so the next save purges it, while an undo of the rebake still finds
 # its pixels (a removed generated datablock comes back blank from the memfile).
-superseded = bpy.data.images[old_name]
+superseded = old
 assert not superseded.use_fake_user and superseded.users == 0, (superseded.users, superseded.use_fake_user)
 cube = bpy.data.objects['Cube']
 cube.location.x += 1
@@ -150,8 +154,8 @@ bpy.ops.ed.undo_push(message='before the rebake')
 from open_painter.baking.bake_manager import register_maps
 register_maps(ts, bake_curvature_set(ts))
 ts = texture_set()
-assert next(m.image.name for m in ts.baked_maps if m.kind == 'CURVATURE') != previous_name
-assert not bpy.data.images[previous_name].use_fake_user and bpy.data.images[previous_name].users == 0
+assert next(m.image for m in ts.baked_maps if m.kind == 'CURVATURE') != previous
+assert not previous.use_fake_user and previous.users == 0
 bpy.ops.ed.undo_push(message='rebaked')
 assert bpy.ops.ed.undo() == {'FINISHED'}
 scene = bpy.data.scenes[SCENE]

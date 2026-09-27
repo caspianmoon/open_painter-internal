@@ -79,18 +79,24 @@ def settings_of(ts, kind):
                    'source_mode','device','separate_cage_distance','cage_extrusion')
     fields = {'NORMAL': shared_bake,
               'AO': (*shared_bake,'ao_scope'),
-              'CURVATURE': ('curvature_angle','curvature_width','mean_curvature_distance'),
-              'CURVATURE_THIN': ('curvature_angle','curvature_width','mean_curvature_distance'),
-              'CURVATURE_WIDE': ('curvature_angle','curvature_width','mean_curvature_distance'),
-              'CURVATURE_XWIDE': ('curvature_angle','curvature_width','mean_curvature_distance'),
+              'CURVATURE': ('mean_curvature_distance','margin','samples','device'),
+              'CURVATURE_THIN': ('mean_curvature_distance','margin','samples','device'),
+              'CURVATURE_WIDE': ('mean_curvature_distance','margin','samples','device'),
+              'CURVATURE_XWIDE': ('mean_curvature_distance','margin','samples','device'),
               'UV_BORDER': ('uv_border_width',),
               'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance'),
-              'MEAN_CURVATURE': ('mean_curvature_distance',),
+              'MEAN_CURVATURE': ('mean_curvature_distance','curvature_angle','curvature_width'),
               'BEVEL_NORMAL': ('bevel_radius','bevel_samples','margin','samples','device'),
               'BEVEL_MASK': ('bevel_radius','bevel_samples','margin','samples','device')}
+    if kind.startswith('CURVATURE') and ts.bake.curvature_method == 'GEOMETRIC':
+        fields[kind] = ('curvature_angle', 'curvature_width', 'mean_curvature_distance')
     settings = {key: identity(getattr(ts.bake,key)) if key == 'cage_object' else getattr(ts.bake,key)
                 for key in fields.get(kind, ())}
-    if kind in {'NORMAL', 'AO', 'BEVEL_NORMAL', 'BEVEL_MASK'} and int(ts.bake.supersample) != 1:
+    cycles = kind in {'NORMAL', 'AO', 'BEVEL_NORMAL', 'BEVEL_MASK'} or (
+        kind.startswith('CURVATURE') and ts.bake.curvature_method == 'CYCLES_BEVEL')
+    if kind.startswith('CURVATURE') and ts.bake.curvature_method == 'CYCLES_BEVEL':
+        settings['curvature_method'] = ts.bake.curvature_method
+    if cycles and int(ts.bake.supersample) != 1:
         settings['supersample'] = int(ts.bake.supersample)
     if kind == 'AO' and ts.bake.ao_distance != 10.0:
         # Recorded only when it differs from the implicit distance of earlier
@@ -159,9 +165,10 @@ def status(ts, prop):
     if not prop.provenance:
         return 'Unverified inputs'
     method = prop.image.get('open_painter_curvature_method')
-    if prop.kind == 'CURVATURE' and (method not in (None, 'GEOMETRIC_CREASES_V2')
+    from ..baking.maps.curvature import method_of
+    if prop.kind.startswith('CURVATURE') and (method not in (None, method_of(ts))
                                      or (method is None and 'BakedCurvature' in prop.image.name)):
-        return 'Stale · crease-only map, rebake for smooth edges'
+        return 'Stale · edge method changed, rebake the edge set'
     # The panel asks on every redraw; the record serialises mesh signatures and
     # modifier settings, so reuse it until geometry, settings or targets change.
     from ..evaluation.dependencies import epoch

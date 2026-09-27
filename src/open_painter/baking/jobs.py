@@ -150,8 +150,15 @@ def land_edge_maps(scene_name, set_id, expected, produced):
     ts = (next((item for item in scene.open_painter.texture_sets if item.id == set_id), None)
           if scene is not None else None)
     if ts is None or record(ts, 'CURVATURE') != expected:
+        from ..core.image_manager import live_bake_pointers
+        live = live_bake_pointers(ts) if ts is not None else set()
         for image in produced.values():
-            bpy.data.images.remove(image)
+            try:
+                if image.as_pointer() in live:
+                    continue  # defensive: never remove a registered image
+                bpy.data.images.remove(image)
+            except ReferenceError:
+                pass
         status = ('Scene removed; edge map rebake discarded' if scene is None
                   else 'Bake inputs changed; edge map rebake discarded')
         if scene is not None:
@@ -218,8 +225,8 @@ class OP_OT_edge_map_refresh(bpy.types.Operator):
             self._set_id = ts.id
             self._scene_name = context.scene.name
             self._expected = record(ts, 'CURVATURE')
-            self._job = curvature_steps(ts)
-            next(self._job)  # reads the evaluated meshes now, while the depsgraph is current
+            self._job = curvature_steps(context, ts)
+            next(self._job)  # captures bake inputs before the first modal step
             self._status(context, 'Rebaking edge maps… 2% · Esc stops')
             self._timer = context.window_manager.event_timer_add(.02, window=context.window)
             self._last_timer_duration = self._timer.time_duration

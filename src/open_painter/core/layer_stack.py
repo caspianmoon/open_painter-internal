@@ -11,6 +11,13 @@ DERIVED = {('OP_Channel', 'opacity_percent'), ('OP_Layer', 'opacity_percent'), (
            ('OP_Layer', 'master_scale'), ('OP_BakeCorrections', 'value'),
            ('OP_Influencer', 'distance_m'), ('OP_Influencer', 'bounds_m'),
            ('OP_Mask', 'chip_radius_m'), ('OP_Mask', 'period_m')}
+DERIVED.update(('OP_Channel', 'fill_' + field) for field in
+               ('projection', 'scale', 'rotation', 'offset', 'triplanar_hardness'))
+
+# New fill layers author the PBR core; Height, AO, Emission and Opacity stay
+# off until enabled, so a fresh layer touches nothing else. Folders keep every
+# channel: they composite whatever their children carry.
+FILL_DEFAULT_CHANNELS = frozenset({"BASE_COLOR", "ROUGHNESS", "METALLIC", "NORMAL"})
 
 _replays = 0
 
@@ -60,9 +67,7 @@ def ensure_channels(layer):
         prop = layer.channels.add()
         prop.channel, prop.layer_id = channel, layer.id
         prop.color, prop.value = DEFAULTS[channel], DEFAULTS[channel][0]
-        prop.enabled = layer.type == "FOLDER" or (
-            layer.type == "FILL" and channel in {"BASE_COLOR", "ROUGHNESS", "METALLIC"}
-        )
+        prop.enabled = layer.type == "FOLDER" or (layer.type == "FILL" and channel in FILL_DEFAULT_CHANNELS)
 
 
 def active(ts):

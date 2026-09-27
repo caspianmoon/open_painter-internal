@@ -53,11 +53,8 @@ def _drop_legacy(nodes):
         role = node.get('role')
         if not node.get(OWNER) or role is None or not (role in LEGACY_ROLES or str(role).startswith(PREFIX)):
             continue
-        tree = node.node_tree if role == 'Procedural Graph' else None
         nodes.remove(node)
         removed = True
-        if tree is not None and not tree.users and tree.get(OWNER):
-            bpy.data.node_groups.remove(tree)
     return removed
 
 
@@ -210,7 +207,8 @@ def repair(ts, image_overrides=None):
             slot = ref.object.material_slots[ref.slot_index]
             if slot.material is None:
                 slot.material = material
-    from ..evaluation.shader_graph import remove_orphan_units
+    from ..evaluation.shader_graph import remove_orphan_tops, remove_orphan_units
+    remove_orphan_tops(ts.id)
     remove_orphan_units(ts.id)
     shader_preview.mark_attached(ts.id_data, ts, engine)
     return material

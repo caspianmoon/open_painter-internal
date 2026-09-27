@@ -16,6 +16,7 @@ def add(ts, layer, kind, choice='', channel='ROUGHNESS', mask_index=None):
 
     choices = {
         'LAYER': {'FILL', 'PAINT', 'FOLDER'},
+        'RECIPE': {'EDGE_WEAR_2'},
         'MASK': {'PAINT', 'FILL', 'BAKED', 'NOISE', 'GROUP', 'GRAPH', 'STROKES'},
         'PROCEDURAL': procedurals, 'PROCEDURAL_FILL': procedurals,
         'GENERATOR': {item.identifier for item in OP_Mask.bl_rna.properties['generator'].enum_items},
@@ -42,6 +43,10 @@ def add(ts, layer, kind, choice='', channel='ROUGHNESS', mask_index=None):
             return added.id
     if layer is None:
         raise ValueError('Select a layer node first: masks and filters are added to that layer.')
+    if kind == 'RECIPE':
+        from .operators import _add_edge_wear_2
+        with stack.replay(ts):
+            return _add_edge_wear_2(ts, layer)
     if kind in {'FILTER', 'CHANNEL_ANCHOR'}:
         if layer.type == 'FOLDER':
             raise ValueError('Channel filters belong on fill and paint layers.')

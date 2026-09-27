@@ -142,7 +142,7 @@ The native Painter tool header has an **Assets** menu (import, save, refresh) be
 4. Click **Bake Mesh Maps** in the tool header to open the **Bake** tab (Setup, Maps, Results). Under Setup, select
    high-poly objects and click **Add Selected**, then set the ray distance. Maps shows every map's real state
    (Missing, Up to Date, Out of Date, Baking, Failed or Not Checked); **Select** picks the maps the material reads,
-   **Bake Selected Maps** bakes them. For self-bakes, disable **Bake from High Poly**. Previous maps stay until a
+   **Bake Selected Maps** bakes them. **Bake from High Poly** is off by default; enable it for projection from the selected sources. Previous maps stay until a
    replacement lands, and **Stop After This Map** ends the queue honestly.
 5. Use **Add Layer** (Paint, Fill, Folder, Decal, Smart Material, Module), **Add Mask**, **Add Effect** and **More**
    above the layer list. Select layer content by clicking its name; the mask icon beside it selects its mask stack.

@@ -237,7 +237,7 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
     if kind == "MEAN_CURVATURE":
         from .mean_curvature import signed_map
         values, covered, extra = signed_map(targets, n, ts.bake.mean_curvature_distance,
-                                            ts.bake.curvature_angle, ts.bake.curvature_width)
+                                           ts.bake.curvature_angle, ts.bake.curvature_width)
         result[..., :3] = values[..., None]
         result[..., 3] = covered
         if metadata is not None:
@@ -399,7 +399,9 @@ def bake_utility(ts, kind):
             pixels = _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata)
     if kind == "SELECTION":
         metadata["selected_faces"] = json.dumps(metadata.get("selected_faces", {}), sort_keys=True)
-    image = images.create(f"{ts.name}_Baked{kind.title().replace('_', '')}", n)
+    canonical = f"{ts.name}_Baked{kind.title().replace('_', '')}"
+    image = images.create(canonical, n)
+    image['op_bake_result'] = ts.id
     try:
         image["open_painter_mesh_map"] = kind
         image["open_painter_utility_method"] = "EVALUATED_TARGET_UV_V1"

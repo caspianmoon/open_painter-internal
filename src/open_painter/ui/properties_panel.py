@@ -185,6 +185,13 @@ class OP_OT_mask(SafeOperator, bpy.types.Operator):
                 mask.image.pack()
             from ..core import mask_stack
             layer.active_mask = mask_stack.adopt(layer, len(layer.masks) - 1, anchor)
+            from ..graph import mirror
+            tree = mirror.find_tree(ts)
+            if tree is not None:
+                # The node appears on the next sync: select it then, exclusively,
+                # so it can be placed immediately.
+                index = layer.active_mask
+                mirror.request_select(tree, mirror.mask_node_id(layer, index, layer.masks[index]))
         elif layer.masks:
             from ..core import mask_stack
             i = max(0, min(layer.active_mask, len(layer.masks) - 1))
@@ -266,6 +273,10 @@ class OP_OT_mask_paint(SafeOperator, bpy.types.Operator):
         mask_id = mask.id
         layer.active_mask = len(layer.masks) - 1
         invalidate(ts)
+        from ..graph import mirror
+        tree = mirror.find_tree(ts)
+        if tree is not None:
+            mirror.request_select(tree, mirror.mask_node_id(layer, layer.active_mask, mask))
         from . import selection
         target = selection.select(context, layer.id, selection.MASK, mask_id=mask_id, ts=ts, synchronize=False)
         if self.start_painting:
@@ -524,9 +535,9 @@ def draw_mask_settings(layout, context, ts, layer, mask):
                 image
                 and image.get(OWNER)
                 and "BakedCurvature" in image.name
-                and image.get("open_painter_curvature_method") != "GEOMETRIC_CREASES_V2"
+                and image.get("open_painter_curvature_method") != ("CYCLES_BEVEL" if ts.bake.curvature_method == "CYCLES_BEVEL" else "GEOMETRIC_CREASES_V2")
             ):
-                layout.label(text="Crease-only curvature: rebake edge map for smooth edges.", icon="ERROR")
+                layout.label(text="Edge method changed: rebake the edge map.", icon="ERROR")
             from ..baking.maps.curvature import edge_map_set_complete
             radius = ts.bake.mean_curvature_distance
             if edge_map_set_complete(ts):
@@ -536,9 +547,11 @@ def draw_mask_settings(layout, context, ts, layer, mask):
             layout.prop(mask, "edge_width", text="Edge Width", slider=True)
             box = layout.box()
             box.label(text="Baked edge maps: thin, normal, wide, extreme", icon="IMAGE_DATA")
+            box.prop(ts.bake, "curvature_method")
             box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
-            box.prop(ts.bake, "curvature_angle")
-            box.prop(ts.bake, "curvature_width")
+            if ts.bake.curvature_method == "GEOMETRIC":
+                box.prop(ts.bake, "curvature_angle")
+                box.prop(ts.bake, "curvature_width")
             box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA").set_id = ts.id
         from ..generators.micro_details import KINDS as MICRO_KINDS
         if mask.generator in MICRO_KINDS:

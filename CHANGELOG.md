@@ -1,5 +1,11 @@
 # Changes
 
+## 0.12.4
+
+- Add native transmission, refractive index and subsurface controls for plastics and resin.
+- Preserve surface response through material save/import, authoring, duplication and module updates.
+- Subscriber materials remain separate downloads.
+
 ## 0.12.3 — Installed smart materials
 
 - Installed library modules can carry the same editable master controls and stable

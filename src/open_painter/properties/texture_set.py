@@ -1,10 +1,10 @@
 import bpy
 
 from ..constants import RESOLUTIONS
+from .aging import OP_Aging
 from .bake import OP_BakedMap, OP_BakeSettings
 from .channel import OP_Output
 from .export import OP_ExportSettings
-from .aging import OP_Aging
 from .layer import OP_Layer, changed
 
 
@@ -82,6 +82,10 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     anisotropy: bpy.props.FloatProperty(name='Anisotropy',default=0,min=0,max=1,update=surface_changed)
     coat_weight: bpy.props.FloatProperty(name='Clear Coat',default=0,min=0,max=1,update=surface_changed)
     coat_roughness: bpy.props.FloatProperty(name='Coat Roughness',default=.03,min=0,max=1,update=surface_changed)
+    ior: bpy.props.FloatProperty(name='Index of Refraction', default=1.5, min=1, max=4, update=surface_changed)
+    transmission_weight: bpy.props.FloatProperty(name='Transmission', default=0, min=0, max=1, update=surface_changed)
+    subsurface_weight: bpy.props.FloatProperty(name='Subsurface', default=0, min=0, max=1, update=surface_changed)
+    subsurface_scale: bpy.props.FloatProperty(name='Scattering Distance', default=.001, min=0, max=10, subtype='DISTANCE', unit='LENGTH', update=surface_changed)
     height_distance: bpy.props.FloatProperty(
         name="Height Distance", default=0.05, min=0, update=height_changed,
         description="World-space relief for a full height range; also included in exported normals"

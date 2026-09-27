@@ -3,6 +3,7 @@
 import bpy
 
 from ..constants import OWNER
+from ..core.surface_settings import FIELDS as SURFACE_FIELDS
 from ..utils.ids import new_id
 from .project_manager import project_for
 
@@ -156,7 +157,7 @@ def duplicate(scene, index):
     maps = [(m.kind, m.image) for m in source.baked_maps]
     settings = snapshot(source.bake)
     surface = {key: getattr(source, key) for key in
-               ("anisotropy", "coat_weight", "coat_roughness", "height_distance")}
+               SURFACE_FIELDS}
     # Read everything from ``source`` before ``create`` grows the collection: the reference is stale after that.
     from ..aging import engine as aging_engine
     aging_settings = aging_engine.export_settings(source.aging) if source.aging.folder_id else None

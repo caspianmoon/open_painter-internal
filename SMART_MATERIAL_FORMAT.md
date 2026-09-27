@@ -10,7 +10,17 @@ assets/0001.exr
 
 `material.json` has `format_version: 3`, `name`, an ordered `layers` array, and optional
 `surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`,
-`height_distance`). Missing `height_distance` preserves the target texture set's
+`height_distance`, `ior`, `transmission_weight`, `subsurface_weight`,
+`subsurface_scale`). IOR is finite in [1, 4], transmission and subsurface weights
+are in [0, 1], and subsurface scale is in [0, 10] metres. These optical settings
+use the native Principled BSDF and remain editable texture-set properties;
+opacity is independent of transmission. Importing a legacy material without
+optical fields restores IOR 1.5, zero transmission/subsurface weight, and a
+0.001 m subsurface scale. Optical settings require Open Painter 0.12.4.
+Texture-only exports do not encode IOR, transmission or subsurface settings;
+configure those shader properties in the target renderer. Closed meshes with
+real thickness and metre-correct scale are needed for physical transmission
+and scattering. Missing `height_distance` preserves the target texture set's
 existing setting. Version 1 and 2 files remain readable. Each layer has
 `id`, `name`, `type` (`FILL`, `PAINT`, `FOLDER`), optional `parent_id`, `visible`, `opacity`,
 `blend_mode`, `channels`, and `masks`. Layers run bottom to top. Defaults are Blender property defaults;

@@ -9,12 +9,14 @@ from pathlib import Path
 from uuid import UUID, uuid5
 from zipfile import ZipFile, is_zipfile
 
+from ..core.surface_settings import FIELDS as SURFACE_FIELDS
+
 MAPS = {'NORMAL', 'AO', 'CURVATURE', 'WORLD_NORMAL', 'POSITION', 'OBJECT_NORMAL',
         'THICKNESS', 'BEVEL_NORMAL', 'BEVEL_MASK', 'MEAN_CURVATURE'}
 FIELDS = {'opacity', 'visible', 'color', 'value', 'scale', 'amount', 'edge_size',
           'edge_width', 'noise_scale', 'noise_strength', 'detail_normal_strength',
           'detail_radius', 'output_white', 'output_black', 'anisotropy',
-          'coat_weight', 'coat_roughness', 'height_distance'}
+          'coat_weight', 'coat_roughness', 'height_distance'} | set(SURFACE_FIELDS)
 
 
 def profile(folder):
@@ -58,8 +60,7 @@ def parse(value):
                     or not isinstance(target.mask, int) or not -1 <= target.mask <= 255
                     or not isinstance(target.effect, int) or not -1 <= target.effect <= 255):
                 raise ValueError('Invalid master control target.')
-        if control.scope == 'set' and (control.computed or control.field not in {
-                'anisotropy', 'coat_weight', 'coat_roughness', 'height_distance'}):
+        if control.scope == 'set' and (control.computed or control.field not in SURFACE_FIELDS):
             raise ValueError('Invalid material surface control.')
         controls.append(control)
     slots(controls)
@@ -149,6 +150,7 @@ _installed_stamp = None
 def refresh_installed():
     """Pick up Connect installs/removals in an already open Painter workspace."""
     import bpy
+
     from . import library
     global _installed_stamp
     try:
@@ -203,6 +205,7 @@ def header(path):
 def entries(context=None):
     """Only installed smart modules: empty on a clean free install."""
     import bpy
+
     from . import library
     newest = {}
     for path in library.entries(context or bpy.context):

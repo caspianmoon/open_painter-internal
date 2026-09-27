@@ -3,6 +3,7 @@
 import bpy
 
 from ..constants import CHANNELS, OWNER
+from .surface_settings import inputs as surface_inputs
 
 
 def update_surface(ts):
@@ -12,9 +13,9 @@ def update_surface(ts):
     roles = {node.get('role'): node for node in ts.material.node_tree.nodes if node.get(OWNER)}
     bsdf = roles.get('Surface')
     if bsdf:
-        for socket, value in (("Emission Strength", 1), ("Anisotropic", ts.anisotropy),
-                              ("Coat Weight", ts.coat_weight), ("Coat Roughness", ts.coat_roughness)):
-            if bsdf.inputs[socket].default_value != value:
+        for socket, value in surface_inputs(ts):
+            if (tuple(bsdf.inputs[socket].default_value) if isinstance(value, tuple)
+                else bsdf.inputs[socket].default_value) != value:
                 bsdf.inputs[socket].default_value = value
     if roles.get('Height'):
         roles['Height'].inputs['Distance'].default_value = ts.height_distance
@@ -118,9 +119,9 @@ def repair(ts, image_overrides=None):
     engine_preview.remove(nodes)
     connect(colors['EMISSION'], bsdf.inputs['Emission Color'])
     connect(colors['OPACITY'], bsdf.inputs['Alpha'])
-    for socket, value in (("Emission Strength",1),("Anisotropic",ts.anisotropy),
-                          ("Coat Weight",ts.coat_weight),("Coat Roughness",ts.coat_roughness)):
-        if bsdf.inputs[socket].default_value != value:
+    for socket, value in surface_inputs(ts):
+        if (tuple(bsdf.inputs[socket].default_value) if isinstance(value, tuple)
+                else bsdf.inputs[socket].default_value) != value:
             bsdf.inputs[socket].default_value = value
     tangent = node("UV Tangent", "ShaderNodeTangent", (250, -450))
     if tangent.direction_type != "UV_MAP":

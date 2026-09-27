@@ -156,6 +156,7 @@ def register():
     from .ui.native import toolbar, asset_type_buttons, layer_context_menu
     from .ai import session as director
     from .ui import vector_brush
+    from .smart_materials import portable
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
@@ -177,7 +178,8 @@ def register():
                                     (texture_set_node.register,texture_set_node.unregister),
                                     (mask_graph_tree.register,mask_graph_tree.unregister),
                                     (director.register,director.unregister),
-                                    (vector_brush.register,vector_brush.unregister)):
+                                    (vector_brush.register,vector_brush.unregister),
+                                    (portable.register,portable.unregister)):
             # Install rollback before initialization, including partial failures.
             _cleanups.append(cleanup)
             initialize()

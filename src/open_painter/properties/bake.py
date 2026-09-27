@@ -76,6 +76,8 @@ def map_changed(self, context):
     if project:
         for ts in project.texture_sets:
             if any(item.as_pointer() == self.as_pointer() for item in ts.baked_maps):
+                from ..smart_materials.portable import bind_mesh_maps
+                bind_mesh_maps(ts)
                 from ..core.layer_stack import invalidate
                 invalidate(ts)
                 from ..evaluation.shader_preview import notify

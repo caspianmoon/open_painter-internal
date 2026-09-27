@@ -34,8 +34,14 @@ def filter_items(self, context):
 
 def material_items(self, context):
     from ..smart_materials.catalog import CATALOG
-    return _items("materials", ((name, data["category"] + ": " + data["description"])
-                                for name, data in CATALOG.items()))
+    from ..smart_materials.portable import entries
+    installed = entries(context)
+    key = ('materials', tuple((entry[0], entry[2]) for entry in installed))
+    if key not in _enum_cache:
+        _enum_cache[key] = [(name, name, data["category"] + ": " + data["description"])
+                            for name, data in CATALOG.items()] + [
+            ('library:' + entry[2], entry[0], 'Installed smart material') for entry in installed]
+    return _enum_cache[key]
 
 
 def effect_items(self, context):
@@ -282,6 +288,11 @@ class OP_OT_catalog_material(SearchPicker, SafeOperator, bpy.types.Operator):
         from ..smart_materials.composer import apply, requirements
         from ..baking.bake_manager import refresh_stale_curvature
         ts = require_set(context)
+        if self.choice.startswith('library:'):
+            from .assets_panel import apply_document
+            apply_document(context, ts, self.choice[len('library:'):])
+            _redraw(context, ts, mask=False)
+            return
         refreshed = refresh_stale_curvature(ts, requirements(self.choice), context)
         if refreshed:
             self.report({"INFO"}, "Rebaking the edge map in the background; the material updates when it lands"

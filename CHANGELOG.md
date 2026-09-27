@@ -1,5 +1,17 @@
 # Changes
 
+## 0.13.1 — Installed smart materials
+
+- Installed library modules can carry the same editable master controls and stable
+  layer identities as included smart materials. They appear in the Smart Materials
+  shelf and searchable material picker after installation.
+- Required mesh maps are checked before applying a material. Destination normal-map
+  bindings follow rebakes automatically and remain portable when saving a material.
+- Duplicating, renaming, saving and updating a downloaded smart module preserves its
+  controls. Updates preserve local edits and merge authored properties consistently.
+- Subscriber recipes and textures remain in separately downloaded packs; this release
+  adds the generic workflow without including premium assets in the free add-on.
+
 ## Unreleased — Open Painter engine
 
 - The layer stack is evaluated by Open Painter's own GPU engine instead of being compiled

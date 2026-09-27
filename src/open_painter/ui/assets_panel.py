@@ -30,6 +30,11 @@ class OP_OT_save_material(SafeOperator, bpy.types.Operator, ExportHelper):
 def apply_document(context, ts, path):
     """Apply a library document as one named, editable group (a module document is already one)."""
     from ..core import layer_stack
+    from ..smart_materials import portable
+    from ..baking.bake_manager import refresh_stale_curvature
+    data = portable.header(path)
+    portable.preflight(ts, data)
+    refresh_stale_curvature(ts, portable.requirements(data), context)
     roots = loader.apply(ts, path)
     ids = [layer.id for layer in roots]
     if len(ids) == 1 and next(layer for layer in ts.layers if layer.id == ids[0]).type == "FOLDER":

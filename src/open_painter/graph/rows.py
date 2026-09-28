@@ -134,13 +134,14 @@ def _draw():
             lines.extend([(-GRID_HALF_X, y), (GRID_HALF_X, y)])
         if not lines:
             return
+        blend = gpu.state.blend_get()
         gpu.state.blend_set('ALPHA')
         try:
             _shader.bind()
             _shader.uniform_float('color', GRID_COLOR)
             batch_for_shader(_shader, 'LINES', {'pos': lines}).draw(_shader)
         finally:
-            gpu.state.blend_set('NONE')
+            gpu.state.blend_set(blend)
     except (AttributeError, ImportError):
         return
 

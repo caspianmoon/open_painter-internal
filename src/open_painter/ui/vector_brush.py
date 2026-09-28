@@ -271,7 +271,7 @@ class OP_OT_vector_brush(bpy.types.Operator):
         if not segments:
             return
         if self._batch is None:
-            shader = gpu.shader.from_builtin('UNIFORM_COLOR')
+            shader = gpu.shader.from_builtin('POLYLINE_UNIFORM_COLOR')
             coords, indices, offset = [], [], 0
             for segment in segments:
                 coords.extend(tuple(p) for p in segment)
@@ -279,13 +279,16 @@ class OP_OT_vector_brush(bpy.types.Operator):
                 offset += len(segment)
             self._batch = (shader, batch_for_shader(shader, 'LINES', {'pos': coords}, indices=indices))
         shader, batch = self._batch
-        gpu.state.depth_test_set('LESS_EQUAL')
-        gpu.state.line_width_set(2.0)
-        shader.bind()
-        shader.uniform_float('color', (1.0, .6, .2, 1.0))
-        batch.draw(shader)
-        gpu.state.depth_test_set('NONE')
-        gpu.state.line_width_set(1.0)
+        depth = gpu.state.depth_test_get()
+        try:
+            gpu.state.depth_test_set('LESS_EQUAL')
+            shader.bind()
+            shader.uniform_float('viewportSize', gpu.state.viewport_get()[2:])
+            shader.uniform_float('lineWidth', 2.0)
+            shader.uniform_float('color', (1.0, .6, .2, 1.0))
+            batch.draw(shader)
+        finally:
+            gpu.state.depth_test_set(depth)
 
 
 def interrupt(commit, reason):

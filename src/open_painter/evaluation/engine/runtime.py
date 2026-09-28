@@ -140,6 +140,7 @@ class Device:
         ensure_gpu()
         self.backend = gpu.platform.backend_type_get()
         self.shaders = {}
+        self._interfaces = {}
         self.batch = None
         self.pool = {}
         self.compiles = 0
@@ -191,6 +192,16 @@ class Device:
             shader = gpu.shader.create_from_info(info)
         except Exception as error:
             raise RuntimeError(f'Open Painter engine program failed to compile: {error}\n{source}') from error
+        # OpenGL removes unused uniforms (even op_inv_size in a constant fill).
+        # Reflect once at compilation, rather than failing or probing on every pass.
+        uniforms = frozenset(name for name in ('op_inv_size', *ints)
+                             if _has_uniform(shader, name))
+        # Samplers have ordinary uniform locations only on OpenGL. Metal/Vulkan
+        # use separate resource bindings, which uniform_from_name cannot query.
+        uniforms |= frozenset(name for name in samplers
+                              if self.backend != 'OPENGL' or _has_uniform(shader, name))
+        block = bool(parameter_slots or objects) and _has_uniform(shader, 'op_params', block=True)
+        self._interfaces[shader] = (uniforms, block)
         self.compiles += 1
         elapsed = perf_counter() - started
         self.compile_seconds += elapsed
@@ -245,6 +256,7 @@ class Device:
     def state(self):
         import gpu
         viewport = gpu.state.viewport_get()
+        scissor = gpu.state.scissor_get()
         blend = gpu.state.blend_get()
         depth = gpu.state.depth_test_get()
         depth_mask = gpu.state.depth_mask_get()
@@ -255,6 +267,7 @@ class Device:
             yield
         finally:
             gpu.state.viewport_set(*viewport)
+            gpu.state.scissor_set(*scissor)
             gpu.state.blend_set(blend)
             gpu.state.depth_test_set(depth)
             gpu.state.depth_mask_set(depth_mask)
@@ -262,7 +275,9 @@ class Device:
     def _batch(self, shader):
         if self.batch is None:
             from gpu_extras.batch import batch_for_shader
-            self.batch = batch_for_shader(shader, 'TRI_FAN', {'op_pos': ((-1, -1), (1, -1), (1, 1), (-1, 1))})
+            # One oversized triangle covers the target without a diagonal seam or
+            # triangle-fan emulation on backends that do not support fans natively.
+            self.batch = batch_for_shader(shader, 'TRIS', {'op_pos': ((-1, -1), (3, -1), (-1, 3))})
         return self.batch
 
     def draw(self, shader, targets, size, samplers=(), ubo=None, ints=None, mip=0):
@@ -271,16 +286,23 @@ class Device:
         slots = [({'texture': texture, 'mip': mip} if mip and not isinstance(texture, dict) else texture)
                  for texture in targets]
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=slots)
+        uniforms, block = self._interfaces[shader]
         with framebuffer.bind():
             gpu.state.viewport_set(0, 0, size, size)
+            # Keep the caller's scissor-test enable state; cover the entire target
+            # whether clipping is enabled or disabled. state() restores its rectangle.
+            gpu.state.scissor_set(0, 0, size, size)
             shader.bind()
-            shader.uniform_float('op_inv_size', (1.0 / size, 1.0 / size))
-            if ubo is not None:
+            if 'op_inv_size' in uniforms:
+                shader.uniform_float('op_inv_size', (1.0 / size, 1.0 / size))
+            if ubo is not None and block:
                 shader.uniform_block('op_params', ubo)
             for name, value in (ints or {}).items():
-                shader.uniform_int(name, value)
+                if name in uniforms:
+                    shader.uniform_int(name, value)
             for name, texture in samplers:
-                shader.uniform_sampler(name, texture)
+                if name in uniforms:
+                    shader.uniform_sampler(name, texture)
             self._batch(shader).draw(shader)
         self.passes += 1
 
@@ -298,7 +320,7 @@ class Device:
             self._readbacks.clear()   # one resolution at a time
             buffer = self._readbacks[n] = gpu.types.Buffer('FLOAT', n * n * 4)
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
-        with framebuffer.bind():
+        with self.state(), framebuffer.bind():
             framebuffer.read_color(0, 0, n, n, 4, 0, 'FLOAT', data=buffer)
         return buffer
 
@@ -307,9 +329,11 @@ class Device:
         import gpu
         texture = self.texture(1, SCALAR)
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
-        with framebuffer.bind():
-            _wait(framebuffer)
-        self.release(texture, 1, SCALAR)
+        try:
+            with self.state(), framebuffer.bind():
+                _wait(framebuffer)
+        finally:
+            self.release(texture, 1, SCALAR)
 
     def calibrate(self, samples=7):
         """The cost of submitting a pass that does nothing and waiting for it (a 1×1 draw:
@@ -317,13 +341,14 @@ class Device:
         target, source = self.texture(1, SCALAR), self.texture(1, SCALAR)
         passes, costs = self.passes, []
         try:
-            self.finish()
-            for index in range(samples + 1):
-                started = perf_counter()
-                self.draw(self.fixed('copy'), [target], 1, [('op_source', source)])
+            with self.state():
                 self.finish()
-                if index:   # the first draw warms the pipeline
-                    costs.append((perf_counter() - started) * 1000)
+                for index in range(samples + 1):
+                    started = perf_counter()
+                    self.draw(self.fixed('copy'), [target], 1, [('op_source', source)])
+                    self.finish()
+                    if index:   # the first draw warms the pipeline
+                        costs.append((perf_counter() - started) * 1000)
         finally:
             self.passes = passes
             self.release(target, 1, SCALAR)
@@ -334,9 +359,19 @@ class Device:
     def fill(self, texture, size, color):
         import gpu
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
-        with framebuffer.bind():
+        with self.state(), framebuffer.bind():
             gpu.state.viewport_set(0, 0, size, size)
+            gpu.state.scissor_set(0, 0, size, size)
             framebuffer.clear(color=tuple(color))
+
+
+def _has_uniform(shader, name, *, block=False):
+    """Only declared resources are queried; a driver may optimize them away."""
+    try:
+        location = (shader.uniform_block_from_name(name) if block else shader.uniform_from_name(name))
+        return location >= 0
+    except ValueError:
+        return False
 
 
 def _wait(framebuffer):
@@ -884,6 +919,12 @@ class Engine:
                     dev.finish()   # what was queued before is not publishing's
                 publishing, inputs = perf_counter(), self.stages['inputs_ms']
                 self._publish(image, channel, result, n)
+                # A later channel may fail. Already published GPU pixels must still
+                # be synchronized on save/export, even when this evaluation aborts.
+                if pixels:
+                    self.dirty_cpu.discard(channel)
+                else:
+                    self.dirty_cpu.add(channel)
                 if self.profiling:
                     dev.finish()
                 # The padding table it may build first counts as a CPU input, not as publishing;
@@ -900,10 +941,6 @@ class Engine:
                 self.published[channel] = stamp
                 self.images[channel] = pointer
                 written.add(channel)
-        if pixels:
-            self.dirty_cpu -= written   # published through the pixel buffers: the CPU already has them
-        else:
-            self.dirty_cpu |= written
         self.deferred = deferred
         self.stages['deferred'] = sorted(deferred)
         dev.trim(POOL_SPARES)
@@ -960,29 +997,28 @@ class Engine:
         chain = dev.texture(n, fmt)
         ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0}
         samplers = [('op_source', result), ('op_donor', donor if donor is not None else result)]
-        if dev.pixel_publish:
-            # Vulkan: Blender creates image textures as storage, not render targets. The result goes
-            # through the pixel buffer, read into a reused buffer and handed over without a copy in
-            # Python; Blender then rebuilds the image's texture and mip chain on its next draw.
-            dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
-            image.pixels.foreach_set(dev.readback(chain, n))
-            dev.release(chain, n, fmt)
-            return
-        target = gpu.texture.from_image(image)
-        # Finish, pad and write level 0 in one pass; each mip level in one more (EEVEE samples
-        # Image Texture nodes with mipmaps, so the chain Blender allocated must follow).
-        dev.draw(dev.fixed('publish'), [target, chain], n, samplers, ints=ints)
-        source, size, level = chain, n, 0
         scratch = [(chain, n)]
-        while size > 1:
-            size = max(1, size // 2)
-            level += 1
-            smaller = dev.texture(size, fmt)
-            dev.draw(dev.fixed('mip'), [{'texture': target, 'mip': level}, smaller], size, [('op_source', source)])
-            scratch.append((smaller, size))
-            source = smaller
-        for texture, size in scratch:
-            dev.release(texture, size, fmt)
+        try:
+            if dev.pixel_publish:
+                # Vulkan: image textures cannot be render targets. Reuse a readback
+                # buffer; Blender rebuilds the image texture and mips on its next draw.
+                dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
+                image.pixels.foreach_set(dev.readback(chain, n))
+                return
+            target = gpu.texture.from_image(image)
+            # Finish, pad and write level 0 in one pass; each mip level in one more.
+            dev.draw(dev.fixed('publish'), [target, chain], n, samplers, ints=ints)
+            source, size, level = chain, n, 0
+            while size > 1:
+                size = max(1, size // 2)
+                level += 1
+                smaller = dev.texture(size, fmt)
+                scratch.append((smaller, size))
+                dev.draw(dev.fixed('mip'), [{'texture': target, 'mip': level}, smaller], size, [('op_source', source)])
+                source = smaller
+        finally:
+            for texture, size in scratch:
+                dev.release(texture, size, fmt)
 
     # ---- CPU pixels ----------------------------------------------------------------------------
 
@@ -997,8 +1033,9 @@ class Engine:
                 continue
             n = image.size[0]
             texture = gpu.texture.from_image(image)
-            values = np.array(texture.read(), np.float32).reshape(n, n, 4)
-            write_pixels(image, values)
+            # Reuse the same buffer as Vulkan publication: avoid another full-size
+            # GPU read buffer and NumPy copy for every channel on save/export.
+            image.pixels.foreach_set(device().readback(texture, n))
             self.dirty_cpu.discard(channel)
 
 

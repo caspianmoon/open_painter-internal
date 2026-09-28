@@ -183,8 +183,8 @@ class Device:
         info.fragment_source(FRAGMENT)
         self.shader = gpu.shader.create_from_info(info)
         metrics.count('live_gpu_shader_compilations')
-        self.batch = batch_for_shader(self.shader, 'TRI_FAN', {
-            'position': ((-1, -1), (1, -1), (1, 1), (-1, 1))})
+        self.batch = batch_for_shader(self.shader, 'TRIS', {
+            'position': ((-1, -1), (3, -1), (-1, 3))})
         self.dummy = self.upload(np.ones((1, 1), np.float32))
 
     def _check(self):

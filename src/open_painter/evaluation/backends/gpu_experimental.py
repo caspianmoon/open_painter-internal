@@ -58,7 +58,7 @@ class Backend:
             info.vertex_source('void main(){gl_Position=vec4(position,0.0,1.0);}')
             info.fragment_source(FRAGMENT)
             self.shader=gpu.shader.create_from_info(info)
-            self.batch=batch_for_shader(self.shader,'TRI_FAN',{'position':((-1,-1),(1,-1),(1,1),(-1,1))})
+            self.batch=batch_for_shader(self.shader,'TRIS',{'position':((-1,-1),(3,-1),(-1,3))})
             self.compile_seconds=perf_counter()-start
 
     def close(self):
@@ -81,6 +81,7 @@ class Backend:
                 raise RuntimeError('Experimental GPU window context changed or was closed')
             h,w=source.shape[:2]
             old_viewport=gpu.state.viewport_get(); old_blend=gpu.state.blend_get(); old_depth=gpu.state.depth_test_get()
+            old_scissor=gpu.state.scissor_get(); old_depth_mask=gpu.state.depth_mask_get()
             textures=[]; frames=[]
             try:
                 upload=perf_counter()
@@ -90,6 +91,7 @@ class Backend:
                 frames=[gpu.types.GPUFrameBuffer(color_slots=texture) for texture in textures[2:]]
                 report.update(upload_create_s=perf_counter()-upload,gpu_resource_bytes=source.nbytes*4,backend=gpu.platform.backend_type_get(),fallback='')
                 gpu.state.blend_set('NONE'); gpu.state.depth_test_set('NONE')
+                gpu.state.depth_mask_set(False)
                 current=textures[0]; target_index=0
                 compute=perf_counter()
                 for operation in operations:
@@ -102,6 +104,7 @@ class Backend:
                     for opcode in steps:
                         with frames[target_index].bind():
                             gpu.state.viewport_set(0,0,w,h)
+                            gpu.state.scissor_set(0,0,w,h)
                             self.shader.bind()
                             self.shader.uniform_sampler('current_image',current)
                             self.shader.uniform_sampler('source_image',textures[0]); self.shader.uniform_sampler('mask_image',textures[1])
@@ -114,6 +117,7 @@ class Backend:
                 report['readback_s']=perf_counter()-readback
             finally:
                 gpu.state.viewport_set(*old_viewport); gpu.state.blend_set(old_blend); gpu.state.depth_test_set(old_depth)
+                gpu.state.scissor_set(*old_scissor); gpu.state.depth_mask_set(old_depth_mask)
                 frames.clear(); textures.clear()
         publish=perf_counter()
         if target: images.write(target,result,pack=False)

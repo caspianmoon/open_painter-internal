@@ -200,8 +200,8 @@ class MaskDevice:
         info.vertex_source('void main(){gl_Position=vec4(position,0.0,1.0);}')
         info.fragment_source(FRAGMENT)
         self.shader = gpu.shader.create_from_info(info)
-        self.batch = batch_for_shader(self.shader, 'TRI_FAN', {
-            'position': ((-1,-1),(1,-1),(1,1),(-1,1))})
+        self.batch = batch_for_shader(self.shader, 'TRIS', {
+            'position': ((-1,-1),(3,-1),(-1,3))})
         self.white = gpu.types.GPUTexture((1,1), format='R32F',
             data=gpu.types.Buffer('FLOAT',1,[1.]))
         metrics.count('live_gpu_mask_shader_compilations')

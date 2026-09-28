@@ -1,5 +1,12 @@
 # Validation
 
+GPU backend hardening has a dedicated matrix:
+`python3 scripts/run_gpu_compatibility.py --blender /path/to/blender`.
+It combines strict simulated Vulkan/OpenGL API contracts with actual GPU pixel
+parity and forced Vulkan-style publication on the available backend. See
+[GPU backend compatibility](docs/gpu-backend-compatibility.md) for commands,
+the 16-sampler constraint, recorded evidence and hardware-validation limits.
+
 Current project acceptance uses the artist-supplied `open painter test.blend`,
 retaining its 2048 resolution and complete model. `tests/performance/shader_user_project.py`
 measures the existing controls; `tests/integration/shader_project_ui.py` drives

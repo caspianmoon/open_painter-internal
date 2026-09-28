@@ -17,7 +17,51 @@ from pathlib import Path
 
 
 # An override also supports running a copied text block inside Blender.
-SOURCE_DIR = Path(os.environ['OPEN_PAINTER_SOURCE']) if os.environ.get('OPEN_PAINTER_SOURCE') else Path(__file__).resolve().parent
+# NOTE: when run as a Blender Text block, __file__ is virtual (e.g. "\Text"),
+# so Path(__file__).parent resolves to a drive root like C:\. Detect that case
+# and fall back to the linked text filepath or OPEN_PAINTER_SOURCE.
+def _resolve_source_dir():
+    env = os.environ.get('OPEN_PAINTER_SOURCE')
+    if env:
+        return Path(env)
+    try:
+        candidate_file = Path(__file__).resolve()
+        candidate_dir = candidate_file.parent
+        # Only trust __file__ if it looks like a real checkout.
+        if (candidate_dir / "blender_manifest.toml").exists():
+            return candidate_dir
+    except Exception:
+        pass
+    try:
+        for text_block in getattr(bpy.data, "texts", []):
+            filepath = getattr(text_block, "filepath", "") or ""
+            if Path(filepath).name == "reinstall_addon_from_source.py":
+                resolved = Path(filepath).resolve().parent
+                if (resolved / "blender_manifest.toml").exists():
+                    return resolved
+                return resolved
+    except Exception:
+        pass
+    try:
+        space_text = getattr(getattr(bpy.context, "space_data", None), "text", None)
+        filepath = getattr(space_text, "filepath", "") or ""
+        if filepath:
+            return Path(filepath).resolve().parent
+    except Exception:
+        pass
+    # Last-resort guesses: this checkout and the process cwd. This unblocks
+    # running as an unsaved/copied Text block (filepath == "").
+    try:
+        for guess in (Path(r"C:\Users\USER\Desktop\OpenPainter"), Path.cwd()):
+            if (guess / "blender_manifest.toml").exists() and (guess / "src" / "open_painter" / "__init__.py").exists():
+                return guess
+    except Exception:
+        pass
+    # Last resort: historical behaviour (fails loudly in main() if wrong).
+    return Path(__file__).resolve().parent
+
+
+SOURCE_DIR = _resolve_source_dir()
 PACKAGE_DIR = SOURCE_DIR / "src" / "open_painter"
 MANIFEST_PATH = SOURCE_DIR / "blender_manifest.toml"
 PKG_ID = "open_painter"
@@ -121,7 +165,13 @@ def main():
     if not SOURCE_DIR.exists():
         raise FileNotFoundError(f"Source folder not found: {SOURCE_DIR}")
     if not (PACKAGE_DIR / "__init__.py").exists():
-        raise FileNotFoundError(f"Not an extension folder, missing __init__.py: {PACKAGE_DIR}")
+        raise FileNotFoundError(
+            f"Not an extension folder, missing __init__.py: {PACKAGE_DIR} "
+            f"(resolved SOURCE_DIR={SOURCE_DIR} from __file__={__file__!r}; "
+            f"open the file from disk in Blender's Text Editor or set "
+            f"OPEN_PAINTER_SOURCE to your checkout, e.g. "
+            f"C:\\Users\\USER\\Desktop\\OpenPainter)"
+        )
     if not MANIFEST_PATH.exists():
         raise FileNotFoundError(f"Extension manifest not found: {MANIFEST_PATH}")
 

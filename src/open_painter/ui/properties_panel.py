@@ -535,9 +535,9 @@ def draw_mask_settings(layout, context, ts, layer, mask):
                 image
                 and image.get(OWNER)
                 and "BakedCurvature" in image.name
-                and image.get("open_painter_curvature_method") != ("CYCLES_BEVEL" if ts.bake.curvature_method == "CYCLES_BEVEL" else "GEOMETRIC_CREASES_V2")
+                and image.get("open_painter_curvature_method") != "CYCLES_BEVEL"
             ):
-                layout.label(text="Edge method changed: rebake the edge map.", icon="ERROR")
+                layout.label(text="Pre-Cycles curvature: rebake edge map for the Bevel set.", icon="ERROR")
             from ..baking.maps.curvature import edge_map_set_complete
             radius = ts.bake.mean_curvature_distance
             if edge_map_set_complete(ts):
@@ -547,11 +547,7 @@ def draw_mask_settings(layout, context, ts, layer, mask):
             layout.prop(mask, "edge_width", text="Edge Width", slider=True)
             box = layout.box()
             box.label(text="Baked edge maps: thin, normal, wide, extreme", icon="IMAGE_DATA")
-            box.prop(ts.bake, "curvature_method")
             box.prop(ts.bake, "mean_curvature_distance", text="Curvature Radius")
-            if ts.bake.curvature_method == "GEOMETRIC":
-                box.prop(ts.bake, "curvature_angle")
-                box.prop(ts.bake, "curvature_width")
             box.operator("open_painter.edge_map_refresh", text="Rebake Edge Map", icon="IMAGE_DATA").set_id = ts.id
         from ..generators.micro_details import KINDS as MICRO_KINDS
         if mask.generator in MICRO_KINDS:

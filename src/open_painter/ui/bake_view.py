@@ -17,7 +17,7 @@ CATEGORY = "Bake"
 MAPS = (
     ("normal", "NORMAL", "Normal", "Cycles projection", "cycles"),
     ("ao", "AO", "Ambient Occlusion", "Cycles occlusion", "cycles"),
-    ("curvature", "CURVATURE", "Curvature (edge set)", "Geometric or Cycles Bevel, four reaches", "target"),
+    ("curvature", "CURVATURE", "Curvature (edge set)", "Cycles Bevel node, four reaches", "cycles"),
     ("bevel_normal", "BEVEL_NORMAL", "Bevel Normal", "Cycles Bevel node, tangent space", "cycles"),
     ("bevel_mask", "BEVEL_MASK", "Bevel Mask", "Cycles Bevel node, edge amount", "cycles"),
     ("mean_curvature", "MEAN_CURVATURE", "Mean Curvature (signed)", "Evaluated target, radius", "target"),
@@ -107,8 +107,7 @@ def _dimensions_text(ts):
 
 
 def uses_cycles(settings):
-    return (settings.normal or settings.ao or settings.bevel_normal or settings.bevel_mask
-            or (settings.curvature and settings.curvature_method == 'CYCLES_BEVEL'))
+    return settings.normal or settings.ao or settings.curvature or settings.bevel_normal or settings.bevel_mask
 
 
 def draw_actions(layout, context, ts):
@@ -215,13 +214,9 @@ def draw_maps(layout, context, ts):
             body.prop(settings, "ao_scope")
             body.prop(settings, "ao_distance", text="AO Distance")
         elif key == "curvature":
-            body.prop(settings, "curvature_method")
-            if settings.curvature_method == "GEOMETRIC":
-                body.prop(settings, "curvature_angle")
-                body.prop(settings, "curvature_width")
             body.prop(settings, "mean_curvature_distance", text="Curvature Radius")
             body.prop(settings, "auto_edge_rebake")
-            body.label(text="Four reaches: thin, normal, wide and extreme; Edge Size blends them live", icon="INFO")
+            body.label(text="Cycles Bevel shader; bakes thin, normal, wide and extreme reaches; Edge Size blends them live", icon="INFO")
             body.operator("open_painter.bake", text="Rebake Edge Map Set", icon="IMAGE_DATA").action = "CURVATURE"
         elif key in {"bevel_normal", "bevel_mask"}:
             body.prop(settings, "bevel_radius")

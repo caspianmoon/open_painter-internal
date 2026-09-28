@@ -176,12 +176,9 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
         name="Mean Curvature (Signed)", default=False,
         description="Smooth signed curvature of the evaluated target: 0.5 flat, brighter convex, darker concave",
     )
-    curvature_method: bpy.props.EnumProperty(name="Edge Method", default='GEOMETRIC', items=[
-        ('GEOMETRIC', 'Geometric', 'Convex creases and smooth edge bands; cooperative CPU bake'),
-        ('CYCLES_BEVEL', 'Cycles Bevel', 'Reference Bevel shader; blocks per reach and can be weaker on smooth bevels')])
     mean_curvature_distance: bpy.props.FloatProperty(
-        name="Curvature Radius", default=0.02, min=0.0001, max=1000.0, subtype="DISTANCE",
-        description="World-space measuring radius, or Bevel radius for the Cycles method; scaled for thin, normal, wide and extreme reaches",
+        name="Curvature Radius", default=0.025, min=0.0001, max=1000.0, subtype="DISTANCE",
+        description="Bevel node radius for the Curvature edge set (scaled per reach: thin, normal, wide, extreme); also the measuring radius of the Mean Curvature map",
     )
     selection: bpy.props.BoolProperty(
         name="Selected Faces", default=False,
@@ -190,14 +187,6 @@ class OP_BakeSettings(bpy.types.PropertyGroup):
     thickness_max_distance: bpy.props.FloatProperty(
         name="Thickness Distance", default=0, min=0, subtype="DISTANCE",
         description="Maximum inward intersection distance and white value; zero uses the largest complete target-mesh bounds diagonal",
-    )
-    curvature_angle: bpy.props.FloatProperty(
-        name="Minimum Edge Angle", default=20, min=1, max=179,
-        description="Convex target-mesh creases below this angle are excluded before intensity is applied",
-    )
-    curvature_width: bpy.props.FloatProperty(
-        name="Edge Width (px)", default=4, min=1, max=64,
-        description="Width of baked edge coverage in texture pixels",
     )
     selected_to_active: bpy.props.BoolProperty(name="Bake from High Poly", default=False)
     margin: bpy.props.IntProperty(name="Margin", default=16, min=0, max=128)

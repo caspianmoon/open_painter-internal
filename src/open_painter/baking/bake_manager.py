@@ -250,25 +250,26 @@ def owned_curvature(ts):
 def stale_curvature(ts):
     """The owned Curvature map an edge-driven recipe should replace, or None.
 
-    Stale means a different baking method or missing the
+    Stale means pre-Cycles (baked before CYCLES_BEVEL) or missing the
     thin/wide/extreme companions that Edge Size blends between.
     """
     prop = next((m for m in ts.baked_maps if m.kind == "CURVATURE" and m.image), None)
     if prop is None:
         return None
-    from .maps.curvature import method_of
+    from .maps.curvature import METHOD
     method = prop.image.get("open_painter_curvature_method")
     if method is None and "BakedCurvature" not in prop.image.name:
         return None  # a user-supplied image: never replace it
-    if method == method_of(ts) and edge_map_set_complete(ts):
+    if method == METHOD and edge_map_set_complete(ts):
         return None
     return prop
 
 
 def refresh_stale_curvature(ts, required, context=None):
-    """Rebake mismatched or incomplete Curvature maps when an edge-driven recipe uses them.
+    """Rebake a pre-Cycles Curvature map when an edge-driven recipe uses it.
 
-    Maps must match the selected method and supply all four edge reaches. Nothing happens when the map
+    Maps baked before CYCLES_BEVEL predate the Bevel-shader edge set, so an
+    effect that reads them sees stale edges. Nothing happens when the map
     is missing (the recipe preflight reports that) or already current. With a
     window context the bake runs as a cooperative modal job and 'QUEUED' is
     returned; the recipe is added right away and reads the new map when it

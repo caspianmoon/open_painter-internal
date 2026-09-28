@@ -236,8 +236,9 @@ def _rasterize(targets, ts, kind, n, minimum, maximum, palette, metadata=None):
     nondegenerate = span > max(float(np.linalg.norm(span)) * 1e-6, 1e-12)
     if kind == "MEAN_CURVATURE":
         from .mean_curvature import signed_map
-        values, covered, extra = signed_map(targets, n, ts.bake.mean_curvature_distance,
-                                           ts.bake.curvature_angle, ts.bake.curvature_width)
+        # The signed map keeps its crease overlay at the retired bake defaults;
+        # only its measuring radius still follows the Curvature Radius setting.
+        values, covered, extra = signed_map(targets, n, ts.bake.mean_curvature_distance, 20.0, 4.0)
         result[..., :3] = values[..., None]
         result[..., 3] = covered
         if metadata is not None:

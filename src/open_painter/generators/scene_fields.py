@@ -197,14 +197,16 @@ def _live_curvature_steps(ts, field, n):
     kind = field.kind
     with targets(ts) as meshes:
         # No yields while evaluated meshes are alive; density per vertex is cheap.
-        densities = [live_curvature.vertex_density(target, radius, radians(ts.bake.curvature_angle) if kind == 'EDGE' else None)
+        # The live edge threshold is fixed: the bake setting it once followed
+        # was retired with the geometric edge-set bake.
+        densities = [live_curvature.vertex_density(target, radius, radians(20.0) if kind == 'EDGE' else None)
                      for target in meshes]
         arrays = [{key: target[key] for key in ('tri_vertices', 'tri_loops', 'uv')} for target in meshes]
         creases = []
         if kind == 'EDGE':
             width = max(1.0, radius * _texels_per_unit(meshes, n))
             creases = [prepare_creases(target['mesh'], target['object'].matrix_world, target['slots'], n,
-                                       ts.bake.curvature_angle, width) for target in meshes]
+                                       20.0, width) for target in meshes]
     yield 0.1
     result = np.zeros((n, n), np.float32)
     covered = np.zeros((n, n), bool)

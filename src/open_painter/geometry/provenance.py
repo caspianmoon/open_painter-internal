@@ -85,18 +85,13 @@ def settings_of(ts, kind):
               'CURVATURE_XWIDE': ('mean_curvature_distance','margin','samples','device'),
               'UV_BORDER': ('uv_border_width',),
               'THICKNESS': ('thickness_resolution','thickness_samples','thickness_max_distance'),
-              'MEAN_CURVATURE': ('mean_curvature_distance','curvature_angle','curvature_width'),
+              'MEAN_CURVATURE': ('mean_curvature_distance',),
               'BEVEL_NORMAL': ('bevel_radius','bevel_samples','margin','samples','device'),
               'BEVEL_MASK': ('bevel_radius','bevel_samples','margin','samples','device')}
-    if kind.startswith('CURVATURE') and ts.bake.curvature_method == 'GEOMETRIC':
-        fields[kind] = ('curvature_angle', 'curvature_width', 'mean_curvature_distance')
     settings = {key: identity(getattr(ts.bake,key)) if key == 'cage_object' else getattr(ts.bake,key)
                 for key in fields.get(kind, ())}
-    cycles = kind in {'NORMAL', 'AO', 'BEVEL_NORMAL', 'BEVEL_MASK'} or (
-        kind.startswith('CURVATURE') and ts.bake.curvature_method == 'CYCLES_BEVEL')
-    if kind.startswith('CURVATURE') and ts.bake.curvature_method == 'CYCLES_BEVEL':
-        settings['curvature_method'] = ts.bake.curvature_method
-    if cycles and int(ts.bake.supersample) != 1:
+    if kind in {'NORMAL', 'AO', 'BEVEL_NORMAL', 'BEVEL_MASK', 'CURVATURE', 'CURVATURE_THIN',
+                'CURVATURE_WIDE', 'CURVATURE_XWIDE'} and int(ts.bake.supersample) != 1:
         settings['supersample'] = int(ts.bake.supersample)
     if kind == 'AO' and ts.bake.ao_distance != 10.0:
         # Recorded only when it differs from the implicit distance of earlier
@@ -165,10 +160,9 @@ def status(ts, prop):
     if not prop.provenance:
         return 'Unverified inputs'
     method = prop.image.get('open_painter_curvature_method')
-    from ..baking.maps.curvature import method_of
-    if prop.kind.startswith('CURVATURE') and (method not in (None, method_of(ts))
+    if prop.kind == 'CURVATURE' and (method not in (None, 'CYCLES_BEVEL')
                                      or (method is None and 'BakedCurvature' in prop.image.name)):
-        return 'Stale · edge method changed, rebake the edge set'
+        return 'Stale · pre-Cycles map, rebake for the Bevel edge set'
     # The panel asks on every redraw; the record serialises mesh signatures and
     # modifier settings, so reuse it until geometry, settings or targets change.
     from ..evaluation.dependencies import epoch

@@ -1,0 +1,145 @@
+{
+  "date": "2026-09-28",
+  "status": "GPU_UI_PACKAGE_PASS_WITH_THREE_KNOWN_UNIT_FAILURES",
+  "base_commit": "1645a4dbbb47aaabe2d5145ee4b6a5165fad02b6",
+  "local_branch": "fix/windows-vulkan-performance",
+  "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+  "blender": "5.2.2 LTS",
+  "performance_evidence": "docs/validation/windows-gpu-performance.json",
+  "final_gpu_suites": {
+    "vulkan": [
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050"
+      },
+      {
+        "name": "pixel-publication",
+        "status": "PASS",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050"
+      },
+      {
+        "name": "engine-stages",
+        "status": "PASS",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050"
+      }
+    ],
+    "opengl": [
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2"
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2"
+      },
+      {
+        "name": "pixel-publication",
+        "status": "PASS",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2"
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2"
+      }
+    ]
+  },
+  "real_window_graph_checks": {
+    "vulkan": {
+      "status": "PASS",
+      "steps": [
+        "open graph splits the area",
+        "node click selects the layer",
+        "list selection follows",
+        "link becomes an anchor reference"
+      ],
+      "errors": []
+    },
+    "opengl": {
+      "status": "PASS",
+      "steps": [
+        "open graph splits the area",
+        "node click selects the layer",
+        "list selection follows",
+        "link becomes an anchor reference"
+      ],
+      "errors": []
+    }
+  },
+  "grid_cleanup_check": {
+    "status": "PASS",
+    "allocated_before_teardown": true,
+    "resources_released": true,
+    "vma_unfreed_allocation_reported": false,
+    "evidence": ".blender-test/windows-vulkan/graph-ui-vulkan-cleanup.json"
+  },
+  "unit_tests": {
+    "total": 305,
+    "passed": 299,
+    "skipped": 3,
+    "failures": 2,
+    "errors": 1,
+    "export_transaction_tests": "PASS",
+    "unchanged_failures": [
+      {
+        "test": "test_frozen_sources_match_recorded_commit_hashes",
+        "cause": "CRLF checkout changes raw source hashes; LF-normalized sources match"
+      },
+      {
+        "test": "test_access_only_private_copy_removed_and_source_unchanged",
+        "cause": "POSIX 0600 assertion; Windows reports 0666"
+      },
+      {
+        "test": "test_archive_inventory_rejects_missing_file_and_incomplete_capture",
+        "cause": "Gallery inventory backslash paths differ from normalized ZIP member paths"
+      }
+    ],
+    "evidence": ".blender-test/windows-vulkan/pure-tests-final.log"
+  },
+  "package_checks": [
+    {
+      "stage": "build-final",
+      "returncode": 0
+    },
+    {
+      "stage": "validate-package",
+      "returncode": 0
+    },
+    {
+      "stage": "install-package-test",
+      "returncode": 0
+    },
+    {
+      "stage": "install-user",
+      "returncode": 0
+    },
+    {
+      "stage": "verify-user",
+      "returncode": 0
+    }
+  ],
+  "installed": {
+    "enabled": true,
+    "backend_preference": "OPENGL",
+    "fresh_process_backend": "OPENGL",
+    "verified_python_files": 307,
+    "archive": "dist/open_painter-0.13.1-windows-performance.zip",
+    "archive_sha256": "c0b7e0d798257f82645f4fb564adbcd3ee52262aa6f84c845a05bc8e869927f3"
+  },
+  "limitations": [
+    "Synthetic engine timings and graph CPU timings are not viewport FPS measurements.",
+    "GPU interaction sweeps cover 512, 1024 and 2048; 4096 canvas scan timing is CPU-only.",
+    "Vulkan still publishes Blender images through CPU pixels; no Vulkan end-to-end speedup is claimed.",
+    "The real-window OpenGL screenshot includes initial EEVEE shader compilation; warm engine timings exclude first-use compilation."
+  ]
+}

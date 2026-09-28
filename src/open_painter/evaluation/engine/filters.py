@@ -182,7 +182,8 @@ def _apply_uv(source, effect, n, extent=None, origin=(0, 0), global_size=None, d
     before = source
     try:
         # Two reusable intermediates bound peak scratch even for iterative filters.
-        buffers = [dev.texture(n, 'RGBA32F'), dev.texture(n, 'RGBA32F')]
+        for _ in range(2):
+            buffers.append(dev.texture(n, 'RGBA32F'))
         def draw(shader, samplers, ints=None):
             nonlocal before
             target = buffers[1] if before is buffers[0] else buffers[0]
@@ -288,7 +289,8 @@ def apply(source, effect, n, ts=None):
         remap[seams.rows[pick], seams.cols[pick], 1] = seams.source_y[pick]
         map_texture = dev.upload(remap, 'RG32F')
         uploads.append(map_texture)
-        scratch = [dev.texture(n, 'RGBA32F'), dev.texture(n, 'RGBA32F')]
+        for _ in range(2):
+            scratch.append(dev.texture(n, 'RGBA32F'))
         padded = source
         params = uniforms(effect, n, n)
         for _ in range(3):
@@ -310,13 +312,13 @@ def apply(source, effect, n, ts=None):
             entries = entries[(seams.depth[entries] <= halo) & (seams.rows[entries] >= r0) & (seams.rows[entries] < r1)
                               & (seams.cols[entries] >= c0) & (seams.cols[entries] < c1)]
             coords[seams.rows[entries] - r0, seams.cols[entries] - c0] = np.stack((seams.source_x[entries], seams.source_y[entries]), axis=-1)
-            lookup = dev.upload(coords, 'RG32F')
-            mask = np.zeros((side, side), np.float32)
-            mask[:height, :width] = seams.island_of[r0:r1, c0:c1] == island
-            mask_tex = dev.upload(mask, 'R32F')
-            crop = dev.texture(side, 'RGBA32F')
-            filtered = direction_tex = None
+            lookup = mask_tex = crop = filtered = direction_tex = None
             try:
+                lookup = dev.upload(coords, 'RG32F')
+                mask = np.zeros((side, side), np.float32)
+                mask[:height, :width] = seams.island_of[r0:r1, c0:c1] == island
+                mask_tex = dev.upload(mask, 'R32F')
+                crop = dev.texture(side, 'RGBA32F')
                 dev.draw(gather, [crop], side, [('op_source', padded), ('op_map', lookup), ('op_field', source)], params)
                 if direction is not None:
                     values = np.zeros((side, side, 2), np.float32)

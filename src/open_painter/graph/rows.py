@@ -40,6 +40,7 @@ TIE_EPSILON = 8.0
 _show_rows = True
 _handler = None
 _shader = None
+_batch = None
 
 
 # ---- pure helpers (no bpy data: unit-testable) -------------------------------
@@ -126,20 +127,20 @@ def _draw():
             return
         import gpu
         from gpu_extras.batch import batch_for_shader
-        global _shader
+        global _shader, _batch
         if _shader is None:
             _shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-        lines = []
-        for y in grid_ys():
-            lines.extend([(-GRID_HALF_X, y), (GRID_HALF_X, y)])
-        if not lines:
-            return
+        if _batch is None:
+            # Node-view coordinates are fixed: panning and zooming only change
+            # Blender's view matrix. Reuse the GPU buffer across redraws.
+            lines = [(x, y) for y in grid_ys() for x in (-GRID_HALF_X, GRID_HALF_X)]
+            _batch = batch_for_shader(_shader, 'LINES', {'pos': lines})
         blend = gpu.state.blend_get()
         gpu.state.blend_set('ALPHA')
         try:
             _shader.bind()
             _shader.uniform_float('color', GRID_COLOR)
-            batch_for_shader(_shader, 'LINES', {'pos': lines}).draw(_shader)
+            _batch.draw(_shader)
         finally:
             gpu.state.blend_set(blend)
     except (AttributeError, ImportError):
@@ -158,7 +159,9 @@ def register_handlers():
 
 
 def unregister_handlers():
-    global _handler
+    global _handler, _shader, _batch
+    _batch = None
+    _shader = None
     if _handler is None:
         return
     try:
@@ -213,7 +216,7 @@ def order_from_y(tree, ts):
             return False
         if len(ts.layers) < 2:
             return False
-        if tree.get('op_signature') != signature(ts) or tree.get('op_links_dirty'):
+        if tree.get('op_links_dirty'):
             return False  # a panel or link edit is still waiting for its reconcile
         by_node = nodes_by_id(tree)
         y_by_id = {}
@@ -230,6 +233,10 @@ def order_from_y(tree, ts):
         previous = tree.get('op_row_y', {})
         if len(roots) < 2 or not any(lid in previous and abs(y_by_id[lid] - previous[lid]) > .01 for lid in roots):
             return False
+        # An idle graph has no row drag to adopt. Only fingerprint the stack
+        # after a node actually moved; mirror.sync already checks it each tick.
+        if tree.get('op_signature') != signature(ts):
+            return False  # a panel edit must reconcile before node order can win
         if is_ambiguous(y_by_id[lid] for lid in roots):
             return False
         desired = desired_root_order_bottom_first(roots, y_by_id)

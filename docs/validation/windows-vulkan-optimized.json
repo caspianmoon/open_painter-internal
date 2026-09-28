@@ -1,0 +1,1639 @@
+{
+  "date": "2026-09-28",
+  "status": "PASS",
+  "scope": "Final Vulkan engine preparation/completion and separate CPU callback measurements; no native viewport FPS claim",
+  "measurement_version": 2,
+  "fixture": "two_fills_cellular_mask_v1",
+  "repeat": 12,
+  "idle_repeat": 100,
+  "reports": {
+    "baseline": ".blender-test/windows-vulkan/vulkan-final.json",
+    "optimized": ".blender-test/windows-vulkan/vulkan-optimized.json"
+  },
+  "environment": {
+    "blender": "5.2.2 LTS",
+    "os": "Windows-11-10.0.22631-SP0",
+    "backend": "VULKAN",
+    "renderer": "NVIDIA GeForce GTX 1050",
+    "vendor": "NVIDIA Corporation",
+    "driver": "NVIDIA 560.70",
+    "pixel_publish": true,
+    "pixel_publish_override": "auto",
+    "pixel_budget_ms": 20.0,
+    "precise_intermediates": false
+  },
+  "sizes": [
+    {
+      "size": 512,
+      "same_environment": true,
+      "same_protocol": true,
+      "final_pixels_identical": true,
+      "baseline_source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+      "optimized_source_sha256": "4d2371b5e23a01989a6e6320c433639f80e6c6a97e93ace48ffbc96b45255603",
+      "before_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.03324999943288276,
+            "p95": 0.07689999983995222,
+            "maximum": 0.1787999990483513
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.16474999938509427,
+            "p95": 0.34580000101414043,
+            "maximum": 0.4279000004316913
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 5.651400000715512,
+            "p95": 6.615300000703428,
+            "maximum": 6.615300000703428
+          },
+          "maximum_tick_ms": {
+            "median": 5.090899999231624,
+            "p95": 6.038899999111891,
+            "maximum": 6.038899999111891
+          },
+          "completion_ms": {
+            "median": 3.433900000345602,
+            "p95": 4.683600000134902,
+            "maximum": 4.683600000134902
+          },
+          "wall_ms": {
+            "median": 9.319150000010268,
+            "p95": 9.985699998651398,
+            "maximum": 9.985699998651398
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 14.938349999283673,
+            "p95": 15.810299999429844,
+            "maximum": 15.810299999429844
+          },
+          "maximum_tick_ms": {
+            "median": 14.34975000029226,
+            "p95": 15.22830000067188,
+            "maximum": 15.22830000067188
+          },
+          "completion_ms": {
+            "median": 11.23714999994263,
+            "p95": 13.465500000165775,
+            "maximum": 13.465500000165775
+          },
+          "wall_ms": {
+            "median": 25.918049999745563,
+            "p95": 28.26889999960258,
+            "maximum": 28.26889999960258
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 25.41635000034148,
+            "p95": 31.220200000461773,
+            "maximum": 31.220200000461773
+          },
+          "maximum_tick_ms": {
+            "median": 24.78010000049835,
+            "p95": 28.63950000028126,
+            "maximum": 28.63950000028126
+          },
+          "completion_ms": {
+            "median": 19.712249999429332,
+            "p95": 21.830099998624064,
+            "maximum": 21.830099998624064
+          },
+          "wall_ms": {
+            "median": 45.16700000021956,
+            "p95": 53.05029999908584,
+            "maximum": 53.05029999908584
+          }
+        }
+      },
+      "after_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.027400000362831634,
+            "p95": 0.03310000101919286,
+            "maximum": 0.043199999709031545
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.1200500009872485,
+            "p95": 0.17269999989366625,
+            "maximum": 0.26760000037029386
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 4.573599999275757,
+            "p95": 6.208800001331838,
+            "maximum": 6.208800001331838
+          },
+          "maximum_tick_ms": {
+            "median": 4.122699999243196,
+            "p95": 5.674399999406887,
+            "maximum": 5.674399999406887
+          },
+          "completion_ms": {
+            "median": 2.915650000431924,
+            "p95": 3.4730999996099854,
+            "maximum": 3.4730999996099854
+          },
+          "wall_ms": {
+            "median": 7.665850000194041,
+            "p95": 9.348300000056042,
+            "maximum": 9.348300000056042
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 9.487599999374652,
+            "p95": 10.748599999715225,
+            "maximum": 10.748599999715225
+          },
+          "maximum_tick_ms": {
+            "median": 8.801049999419774,
+            "p95": 10.174200000619749,
+            "maximum": 10.174200000619749
+          },
+          "completion_ms": {
+            "median": 7.170599998971738,
+            "p95": 7.738099999187398,
+            "maximum": 7.738099999187398
+          },
+          "wall_ms": {
+            "median": 16.311700000187557,
+            "p95": 18.246600000566104,
+            "maximum": 18.246600000566104
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 12.078349999683269,
+            "p95": 16.661999999996624,
+            "maximum": 16.661999999996624
+          },
+          "maximum_tick_ms": {
+            "median": 12.023449999105651,
+            "p95": 16.540399999939837,
+            "maximum": 16.540399999939837
+          },
+          "completion_ms": {
+            "median": 9.633300001041789,
+            "p95": 13.934399999925517,
+            "maximum": 13.934399999925517
+          },
+          "wall_ms": {
+            "median": 21.827700000358163,
+            "p95": 29.220700000223587,
+            "maximum": 29.220700000223587
+          }
+        }
+      },
+      "before_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            4194304
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            9
+          ],
+          "units_rendered": [
+            5
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            16777216
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            4
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            16
+          ],
+          "units_rendered": [
+            8
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            8
+          ],
+          "texture_readback_bytes": [
+            33554432
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            4194304
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            7
+          ],
+          "units_rendered": [
+            4
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            3
+          ],
+          "texture_readback_bytes": [
+            12582912
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            3
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            10
+          ],
+          "units_rendered": [
+            6
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            16777216
+          ],
+          "uniform_publications": [
+            4
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_cold_engine_counters": {
+        "engine_graph_builds": 1,
+        "shader_runtime_builds": 1,
+        "engine_program_compiles": 6,
+        "engine_texture_allocations": 5,
+        "engine_texture_allocated_bytes": 7340032,
+        "engine_texture_readbacks": 4,
+        "engine_texture_readback_bytes": 16777216,
+        "engine_uniform_cpu_initializations": 4,
+        "engine_uniform_cpu_bytes": 16777216,
+        "engine_uniform_publications": 4,
+        "engine_pool_evictions": 0,
+        "engine_channel_publications": 8
+      },
+      "before_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "after_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "final_output_sha256": {
+        "BASE_COLOR": "6a0c997ce4af541c932b84754ed153316b2642b5b9cf7909901004ebc794b846",
+        "ROUGHNESS": "b7f3a890d81ad1c614f0e0c47f07158b9058a88aebc6fa9a846d361d7b43f8ba",
+        "METALLIC": "265fdd8b962213ef628b5727812bfa6399fec4ea7484d0e570004f6dba96b34e",
+        "NORMAL": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+        "HEIGHT": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+        "AO": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+        "EMISSION": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+        "OPACITY": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d"
+      }
+    },
+    {
+      "size": 1024,
+      "same_environment": true,
+      "same_protocol": true,
+      "final_pixels_identical": true,
+      "baseline_source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+      "optimized_source_sha256": "4d2371b5e23a01989a6e6320c433639f80e6c6a97e93ace48ffbc96b45255603",
+      "before_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.027549999686016236,
+            "p95": 0.03060000017285347,
+            "maximum": 0.035000000934815034
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.11759999961213907,
+            "p95": 0.13670000043930486,
+            "maximum": 0.22769999850424938
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 11.665449998872646,
+            "p95": 16.073599999799626,
+            "maximum": 16.073599999799626
+          },
+          "maximum_tick_ms": {
+            "median": 11.08974999988277,
+            "p95": 15.537699999185861,
+            "maximum": 15.537699999185861
+          },
+          "completion_ms": {
+            "median": 9.846449998804019,
+            "p95": 14.338400000269758,
+            "maximum": 14.338400000269758
+          },
+          "wall_ms": {
+            "median": 21.155950000320445,
+            "p95": 28.533799999422627,
+            "maximum": 28.533799999422627
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 44.926049999958195,
+            "p95": 46.73950000142213,
+            "maximum": 46.73950000142213
+          },
+          "maximum_tick_ms": {
+            "median": 23.28490000036254,
+            "p95": 31.7070999990392,
+            "maximum": 31.7070999990392
+          },
+          "completion_ms": {
+            "median": 37.57575000054203,
+            "p95": 46.895599998606485,
+            "maximum": 46.895599998606485
+          },
+          "wall_ms": {
+            "median": 81.813300000249,
+            "p95": 93.63510000002861,
+            "maximum": 93.63510000002861
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 93.53104999900097,
+            "p95": 118.84139999892795,
+            "maximum": 118.84139999892795
+          },
+          "maximum_tick_ms": {
+            "median": 31.8510500001139,
+            "p95": 39.75189999982831,
+            "maximum": 39.75189999982831
+          },
+          "completion_ms": {
+            "median": 77.04120000016701,
+            "p95": 88.81019999898854,
+            "maximum": 88.81019999898854
+          },
+          "wall_ms": {
+            "median": 171.6702499998064,
+            "p95": 197.82309999936842,
+            "maximum": 197.82309999936842
+          }
+        }
+      },
+      "after_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.024599999960628338,
+            "p95": 0.02620000122988131,
+            "maximum": 0.03020000076503493
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.11059999997087289,
+            "p95": 0.14770000052521937,
+            "maximum": 0.23390000023937318
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 8.853150000504684,
+            "p95": 10.71580000098038,
+            "maximum": 10.71580000098038
+          },
+          "maximum_tick_ms": {
+            "median": 8.34339999983058,
+            "p95": 10.226700000202982,
+            "maximum": 10.226700000202982
+          },
+          "completion_ms": {
+            "median": 8.900400000129594,
+            "p95": 13.80050000079791,
+            "maximum": 13.80050000079791
+          },
+          "wall_ms": {
+            "median": 18.295300000318093,
+            "p95": 22.768300001189345,
+            "maximum": 22.768300001189345
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 28.64915000009205,
+            "p95": 34.39980000075593,
+            "maximum": 34.39980000075593
+          },
+          "maximum_tick_ms": {
+            "median": 27.78204999958689,
+            "p95": 30.13470000041707,
+            "maximum": 30.13470000041707
+          },
+          "completion_ms": {
+            "median": 28.70954999980313,
+            "p95": 35.17199999987497,
+            "maximum": 35.17199999987497
+          },
+          "wall_ms": {
+            "median": 56.272149999131216,
+            "p95": 63.44859999990149,
+            "maximum": 63.44859999990149
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 54.071450001174526,
+            "p95": 143.27029999913066,
+            "maximum": 143.27029999913066
+          },
+          "maximum_tick_ms": {
+            "median": 29.79990000039834,
+            "p95": 51.38720000104513,
+            "maximum": 51.38720000104513
+          },
+          "completion_ms": {
+            "median": 82.1870999998282,
+            "p95": 154.16779999941355,
+            "maximum": 154.16779999941355
+          },
+          "wall_ms": {
+            "median": 135.00455000030342,
+            "p95": 289.27939999994123,
+            "maximum": 289.27939999994123
+          }
+        }
+      },
+      "before_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            16777216
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            9
+          ],
+          "units_rendered": [
+            5
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            67108864
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            4
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            16
+          ],
+          "units_rendered": [
+            8
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            8
+          ],
+          "texture_readback_bytes": [
+            134217728
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            16777216
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            7
+          ],
+          "units_rendered": [
+            4
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            3
+          ],
+          "texture_readback_bytes": [
+            50331648
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            3
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            10
+          ],
+          "units_rendered": [
+            6
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            67108864
+          ],
+          "uniform_publications": [
+            4
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_cold_engine_counters": {
+        "engine_graph_builds": 1,
+        "shader_runtime_builds": 1,
+        "engine_program_compiles": 6,
+        "engine_texture_allocations": 5,
+        "engine_texture_allocated_bytes": 29360128,
+        "engine_texture_readbacks": 4,
+        "engine_texture_readback_bytes": 67108864,
+        "engine_pool_evictions": 0,
+        "engine_channel_publications": 8,
+        "engine_uniform_cpu_initializations": 4,
+        "engine_uniform_cpu_bytes": 67108864,
+        "engine_uniform_publications": 4
+      },
+      "before_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "after_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "final_output_sha256": {
+        "BASE_COLOR": "39c3a27bb5f9b1ddb4ffd110b342320224ca3e110e7f0e390c2abb8002e06f43",
+        "ROUGHNESS": "a8346b1d562777326276c8cb146df3287a98e28051f9cfde417523ade3c60eeb",
+        "METALLIC": "7452c51f71364c1ffa809e9cc5278844114a452cf23c10eb129f3c6a33e6b7c1",
+        "NORMAL": "84c36b0bcc7d950db5b209fec6878e14885e3c621e53c1317638dbede14df0d7",
+        "HEIGHT": "524ddce29649f2876d8d5e7d0a1490ecafcb96770b2ded5a2f059c76d99ccda6",
+        "AO": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38",
+        "EMISSION": "c8ee7522792ab18a3a396d5e4b65c3b4061fd52e7eb75268fa6e05a29157754c",
+        "OPACITY": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38"
+      }
+    },
+    {
+      "size": 2048,
+      "same_environment": true,
+      "same_protocol": true,
+      "final_pixels_identical": true,
+      "baseline_source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+      "optimized_source_sha256": "4d2371b5e23a01989a6e6320c433639f80e6c6a97e93ace48ffbc96b45255603",
+      "before_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.023100000362319406,
+            "p95": 0.02429999949526973,
+            "maximum": 0.028200000087963417
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.0992499999483698,
+            "p95": 0.14000000010128133,
+            "maximum": 0.2585000002000015
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 53.41049999969982,
+            "p95": 102.72450000047684,
+            "maximum": 102.72450000047684
+          },
+          "maximum_tick_ms": {
+            "median": 52.76119999962248,
+            "p95": 97.98630000113917,
+            "maximum": 97.98630000113917
+          },
+          "completion_ms": {
+            "median": 37.96299999976327,
+            "p95": 64.08120000014605,
+            "maximum": 64.08120000014605
+          },
+          "wall_ms": {
+            "median": 91.35900000001129,
+            "p95": 142.55659999980708,
+            "maximum": 142.55659999980708
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 169.85674999978073,
+            "p95": 209.39139999973122,
+            "maximum": 209.39139999973122
+          },
+          "maximum_tick_ms": {
+            "median": 49.97114999969199,
+            "p95": 73.17890000012994,
+            "maximum": 73.17890000012994
+          },
+          "completion_ms": {
+            "median": 104.02519999934157,
+            "p95": 139.54279999961727,
+            "maximum": 139.54279999961727
+          },
+          "wall_ms": {
+            "median": 275.6278500000917,
+            "p95": 348.9341999993485,
+            "maximum": 348.9341999993485
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 385.8461999998326,
+            "p95": 486.3334000001487,
+            "maximum": 486.3334000001487
+          },
+          "maximum_tick_ms": {
+            "median": 85.67200000015873,
+            "p95": 105.80639999898267,
+            "maximum": 105.80639999898267
+          },
+          "completion_ms": {
+            "median": 220.20305000023654,
+            "p95": 391.1360000001878,
+            "maximum": 391.1360000001878
+          },
+          "wall_ms": {
+            "median": 607.2063000001435,
+            "p95": 877.4694000003365,
+            "maximum": 877.4694000003365
+          }
+        }
+      },
+      "after_summary": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.052999999752501026,
+            "p95": 0.10760000077425502,
+            "maximum": 0.14059999921300914
+          }
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "wall_ms": {
+            "median": 0.21299999934853986,
+            "p95": 0.35339999885763973,
+            "maximum": 0.49109999963548034
+          }
+        },
+        "roughness": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 34.31245000047056,
+            "p95": 48.388500001237844,
+            "maximum": 48.388500001237844
+          },
+          "maximum_tick_ms": {
+            "median": 33.82895000049757,
+            "p95": 47.686699999758275,
+            "maximum": 47.686699999758275
+          },
+          "completion_ms": {
+            "median": 22.240100000090024,
+            "p95": 24.50960000169289,
+            "maximum": 24.50960000169289
+          },
+          "wall_ms": {
+            "median": 56.24969999917084,
+            "p95": 70.23210000079416,
+            "maximum": 70.23210000079416
+          }
+        },
+        "mask_strength": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 104.65085000032559,
+            "p95": 134.2917000001762,
+            "maximum": 134.2917000001762
+          },
+          "maximum_tick_ms": {
+            "median": 40.294899999935296,
+            "p95": 52.30699999992794,
+            "maximum": 52.30699999992794
+          },
+          "completion_ms": {
+            "median": 62.91464999958407,
+            "p95": 87.9702999991423,
+            "maximum": 87.9702999991423
+          },
+          "wall_ms": {
+            "median": 167.05060000003868,
+            "p95": 215.90869999999995,
+            "maximum": 215.90869999999995
+          }
+        },
+        "republish": {
+          "samples": 12,
+          "prepare_ms": {
+            "median": 144.15910000025178,
+            "p95": 182.22100000093633,
+            "maximum": 182.22100000093633
+          },
+          "maximum_tick_ms": {
+            "median": 39.50970000005327,
+            "p95": 59.20549999973446,
+            "maximum": 59.20549999973446
+          },
+          "completion_ms": {
+            "median": 92.5903000006656,
+            "p95": 98.46709999874292,
+            "maximum": 98.46709999874292
+          },
+          "wall_ms": {
+            "median": 236.9084500005556,
+            "p95": 279.9811000004411,
+            "maximum": 279.9811000004411
+          }
+        }
+      },
+      "before_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            67108864
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            9
+          ],
+          "units_rendered": [
+            5
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            268435456
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            4
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            16
+          ],
+          "units_rendered": [
+            8
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            8
+          ],
+          "texture_readback_bytes": [
+            536870912
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_work": {
+        "roughness": {
+          "samples": 12,
+          "gpu_passes": [
+            2
+          ],
+          "units_rendered": [
+            1
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            1
+          ],
+          "texture_readback_bytes": [
+            67108864
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            1
+          ]
+        },
+        "mask_strength": {
+          "samples": 12,
+          "gpu_passes": [
+            7
+          ],
+          "units_rendered": [
+            4
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            3
+          ],
+          "texture_readback_bytes": [
+            201326592
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            3
+          ]
+        },
+        "republish": {
+          "samples": 12,
+          "gpu_passes": [
+            10
+          ],
+          "units_rendered": [
+            6
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            4
+          ],
+          "texture_readback_bytes": [
+            268435456
+          ],
+          "uniform_publications": [
+            4
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            8
+          ]
+        }
+      },
+      "after_cold_engine_counters": {
+        "engine_graph_builds": 1,
+        "shader_runtime_builds": 1,
+        "engine_program_compiles": 6,
+        "engine_texture_allocations": 5,
+        "engine_texture_allocated_bytes": 117440512,
+        "engine_texture_readbacks": 4,
+        "engine_texture_readback_bytes": 268435456,
+        "engine_pool_evictions": 0,
+        "engine_channel_publications": 8,
+        "engine_uniform_cpu_initializations": 4,
+        "engine_uniform_cpu_bytes": 268435456,
+        "engine_uniform_publications": 4
+      },
+      "before_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "after_idle_work": {
+        "idle_engine_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        },
+        "idle_scheduler_tick": {
+          "samples": 100,
+          "gpu_passes": [
+            0
+          ],
+          "units_rendered": [
+            0
+          ],
+          "compiles": [
+            0
+          ],
+          "texture_readbacks": [
+            0
+          ],
+          "texture_readback_bytes": [
+            0
+          ],
+          "uniform_publications": [
+            0
+          ],
+          "uniform_cpu_initializations": [
+            0
+          ],
+          "channel_publications": [
+            0
+          ]
+        }
+      },
+      "final_output_sha256": {
+        "BASE_COLOR": "473f214cd7fcff9a6aa14ae493b9fb5e33bd38a9a3aeae324dd268ed71f01a0e",
+        "ROUGHNESS": "ccd470f624cf6f38812c36f3d907509681f750763a1f4c2852af17ce2e8f1bdc",
+        "METALLIC": "fe2ee13c0ba952f11949b04ff70ead333fe9bbee802525b7f278d0e2781b091c",
+        "NORMAL": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e",
+        "HEIGHT": "06b34e6cef5e4e78bb6b21f61d6673b126bdb9670b40c44adac7e76ff071051a",
+        "AO": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae",
+        "EMISSION": "5a32675bdcb2f4f27b9b6e67d183923ef739cade791e61c4f5788b3c2eeaccfd",
+        "OPACITY": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+      }
+    }
+  ],
+  "interpretation": {
+    "mask_edit": "Neutral NORMAL no longer renders or republishes. Readbacks fall from four to three per warmed edit.",
+    "forced_republish": "Four proven neutral data outputs clear every mip without GPU readback or repeated CPU initialization. This deliberately forces all outputs and is not an ordinary edit.",
+    "roughness": "One nonuniform output uses the same two-pass, one-readback path before and after. Timing improvement must not be attributed to uniform pruning.",
+    "variance": "1024 forced-republish samples retain identical work and zero repeated CPU initialization; completion time rises during the sample sequence. Median and p95 are retained rather than replacing the final result with an intermediate prototype."
+  },
+  "republish_1024_final_samples": [
+    {
+      "prepare_ms": 47.50590000003285,
+      "completion_ms": 45.73869999876479,
+      "wall_ms": 93.24459999879764,
+      "maximum_tick_ms": 31.774000000950764,
+      "ticks": 2
+    },
+    {
+      "prepare_ms": 53.294700001060846,
+      "completion_ms": 45.47629999979108,
+      "wall_ms": 98.77100000085193,
+      "maximum_tick_ms": 26.846000000659842,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 54.848200001288205,
+      "completion_ms": 50.32079999909911,
+      "wall_ms": 105.16900000038731,
+      "maximum_tick_ms": 27.825799999845913,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 48.749099998531165,
+      "completion_ms": 49.13800000031188,
+      "wall_ms": 97.88709999884304,
+      "maximum_tick_ms": 24.18290000059642,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 52.254400001402246,
+      "completion_ms": 48.61669999991136,
+      "wall_ms": 100.87110000131361,
+      "maximum_tick_ms": 26.37940000022354,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 50.35600000155682,
+      "completion_ms": 44.872899999973015,
+      "wall_ms": 95.22890000152984,
+      "maximum_tick_ms": 25.55449999999837,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 50.78669999966223,
+      "completion_ms": 114.0534000005573,
+      "wall_ms": 164.84010000021954,
+      "maximum_tick_ms": 24.911499998779618,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 127.75389999842446,
+      "completion_ms": 132.0611999999528,
+      "wall_ms": 259.81509999837726,
+      "maximum_tick_ms": 51.03919999965001,
+      "ticks": 4
+    },
+    {
+      "prepare_ms": 106.88650000156485,
+      "completion_ms": 134.5945999983087,
+      "wall_ms": 241.48109999987355,
+      "maximum_tick_ms": 51.38720000104513,
+      "ticks": 3
+    },
+    {
+      "prepare_ms": 143.27029999913066,
+      "completion_ms": 143.51320000059786,
+      "wall_ms": 286.7834999997285,
+      "maximum_tick_ms": 37.21399999994901,
+      "ticks": 5
+    },
+    {
+      "prepare_ms": 135.1116000005277,
+      "completion_ms": 154.16779999941355,
+      "wall_ms": 289.27939999994123,
+      "maximum_tick_ms": 50.82640000000538,
+      "ticks": 4
+    },
+    {
+      "prepare_ms": 106.80580000007467,
+      "completion_ms": 124.76889999925334,
+      "wall_ms": 231.574699999328,
+      "maximum_tick_ms": 50.93809999925725,
+      "ticks": 3
+    }
+  ],
+  "cpu_cached_layer_callbacks": {
+    "scope": "Actual Blender RNA; 100 layers, 400 cached channels, 40 warmed samples; no GPU work",
+    "before_report": ".blender-test/windows-vulkan/scheduler-details-before.json",
+    "after_report": ".blender-test/windows-vulkan/scheduler-details-final.json",
+    "before": {
+      "blender": "5.2.2 LTS",
+      "layers": 100,
+      "cached_channels": 400,
+      "full_diagnostics": {
+        "median_ms": 18.166750001000764,
+        "max_ms": 19.666899999720044,
+        "samples": 40
+      },
+      "status": {
+        "median_ms": 18.525200001022313,
+        "max_ms": 20.569500000419794,
+        "samples": 40
+      },
+      "scheduler_idle": {
+        "median_ms": 35.70124999896507,
+        "max_ms": 66.60720000036235,
+        "samples": 40
+      }
+    },
+    "after": {
+      "blender": "5.2.2 LTS",
+      "layers": 100,
+      "cached_channels": 400,
+      "full_diagnostics": {
+        "median_ms": 2.3832999995647697,
+        "max_ms": 2.6961000003211666,
+        "samples": 40
+      },
+      "status": {
+        "median_ms": 0.01269999938813271,
+        "max_ms": 0.020600000425474718,
+        "samples": 40
+      },
+      "ui_status": {
+        "median_ms": 0.036499999623629265,
+        "max_ms": 0.06860000030428637,
+        "samples": 40
+      },
+      "scheduler_idle": {
+        "median_ms": 0.10304999977961415,
+        "max_ms": 0.16759999925852753,
+        "samples": 40
+      }
+    }
+  },
+  "other_cpu_measurements": {
+    "document": "docs/viewport-interaction-performance.md",
+    "graph_ui_lifecycle_median_ms": {
+      "before": 16.8,
+      "after": 9.17
+    },
+    "fingerprints_per_idle_ui_tick": {
+      "before": 2,
+      "after": 1
+    },
+    "unchanged_canvas_scan_4096_median_ms": {
+      "before": 78.46,
+      "after": 78.26
+    },
+    "interpretation": "The canvas scan cost is unchanged; the fallback scan is deferred during modal navigation. Separate cProfile fixture, not the GPU benchmark."
+  },
+  "artifact": "dist/open_painter-0.13.1-windows-vulkan-optimized.zip",
+  "intended_user_backend": "VULKAN"
+}

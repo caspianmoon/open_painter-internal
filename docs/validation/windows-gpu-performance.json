@@ -1,0 +1,810 @@
+{
+  "date": "2026-09-28",
+  "status": "PASS",
+  "scope": "Engine preparation and completion; no native viewport FPS or display latency claim",
+  "measurement_version": 2,
+  "fixture": "two_fills_cellular_mask_v1",
+  "repeat": 12,
+  "idle_repeat": 100,
+  "reports": {
+    "OPENGL": ".blender-test/windows-vulkan/opengl-final.json",
+    "VULKAN": ".blender-test/windows-vulkan/vulkan-final.json"
+  },
+  "backends": {
+    "OPENGL": [
+      {
+        "size": 512,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "vendor": "NVIDIA Corporation",
+        "driver": "4.6.0 NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": false,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.02719999974942766,
+              "p95": 0.052200000936863944,
+              "maximum": 0.14729999929841142
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.1172499996755505,
+              "p95": 0.22060000083001796,
+              "maximum": 0.44859999979962595
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 4.152650000833091,
+              "p95": 4.649999998946441,
+              "maximum": 4.649999998946441
+            },
+            "maximum_tick_ms": {
+              "median": 3.657799999928102,
+              "p95": 4.141099998378195,
+              "maximum": 4.141099998378195
+            },
+            "completion_ms": {
+              "median": 1.2674500003413414,
+              "p95": 1.52669999988575,
+              "maximum": 1.52669999988575
+            },
+            "wall_ms": {
+              "median": 5.4349500005628215,
+              "p95": 6.130499999926542,
+              "maximum": 6.130499999926542
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 10.908850000305392,
+              "p95": 14.500699999189237,
+              "maximum": 14.500699999189237
+            },
+            "maximum_tick_ms": {
+              "median": 10.148799999114999,
+              "p95": 13.956700000562705,
+              "maximum": 13.956700000562705
+            },
+            "completion_ms": {
+              "median": 1.65854999977455,
+              "p95": 2.414100001260522,
+              "maximum": 2.414100001260522
+            },
+            "wall_ms": {
+              "median": 12.927049999234441,
+              "p95": 16.91480000044976,
+              "maximum": 16.91480000044976
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 26.488399999834655,
+              "p95": 54.555900000195834,
+              "maximum": 54.555900000195834
+            },
+            "maximum_tick_ms": {
+              "median": 26.365650000116148,
+              "p95": 54.42779999975755,
+              "maximum": 54.42779999975755
+            },
+            "completion_ms": {
+              "median": 2.2720999995726743,
+              "p95": 7.542900000771624,
+              "maximum": 7.542900000771624
+            },
+            "wall_ms": {
+              "median": 29.457900000124937,
+              "p95": 62.09880000096746,
+              "maximum": 62.09880000096746
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "1f5fae4269f59cce487d21183bdbd875c853253eb3c6c982ba9e47e1046df14c",
+          "ROUGHNESS": "a65a718fad6a33122331c01452877384e1aeab28a7e40bb38c8219c2655deb82",
+          "METALLIC": "fa944b5deea89622c97355fcac34fac1a5729fff066c447dc8af90e7c6e682c0",
+          "NORMAL": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "HEIGHT": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "AO": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "EMISSION": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "OPACITY": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d"
+        }
+      },
+      {
+        "size": 1024,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "vendor": "NVIDIA Corporation",
+        "driver": "4.6.0 NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": false,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.03594999998313142,
+              "p95": 0.07439999899361283,
+              "maximum": 0.10380000094301067
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.1648499992370489,
+              "p95": 0.29240000003483146,
+              "maximum": 0.3481999992800411
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 5.2702499997394625,
+              "p95": 7.172499999796855,
+              "maximum": 7.172499999796855
+            },
+            "maximum_tick_ms": {
+              "median": 4.660700000385987,
+              "p95": 6.42859999970824,
+              "maximum": 6.42859999970824
+            },
+            "completion_ms": {
+              "median": 1.6126500004247646,
+              "p95": 3.0270999995991588,
+              "maximum": 3.0270999995991588
+            },
+            "wall_ms": {
+              "median": 6.98744999954215,
+              "p95": 10.033299999122391,
+              "maximum": 10.033299999122391
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 9.712899999613,
+              "p95": 11.383299999579322,
+              "maximum": 11.383299999579322
+            },
+            "maximum_tick_ms": {
+              "median": 9.07299999926181,
+              "p95": 10.587299999315292,
+              "maximum": 10.587299999315292
+            },
+            "completion_ms": {
+              "median": 2.796450000460027,
+              "p95": 4.30429999869375,
+              "maximum": 4.30429999869375
+            },
+            "wall_ms": {
+              "median": 12.44219999989582,
+              "p95": 14.288599999417784,
+              "maximum": 14.288599999417784
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 15.392850000353064,
+              "p95": 24.996899999678135,
+              "maximum": 24.996899999678135
+            },
+            "maximum_tick_ms": {
+              "median": 15.35024999975576,
+              "p95": 24.912699998822063,
+              "maximum": 24.912699998822063
+            },
+            "completion_ms": {
+              "median": 1.3779999999314896,
+              "p95": 1.8583000000944594,
+              "maximum": 1.8583000000944594
+            },
+            "wall_ms": {
+              "median": 16.901300000427,
+              "p95": 26.49779999956081,
+              "maximum": 26.49779999956081
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "ebdab315195775a94a93ae592724cf205a988d3c98c30f5dc229df2a74ba6e45",
+          "ROUGHNESS": "75a92f043060fba486cc2b7143abcd0204c8d5e48269c399247ab9d7f429f818",
+          "METALLIC": "795870342328af85c639fdfe54a029e7a9387873f3e752e41d9a6723feadd36d",
+          "NORMAL": "84c36b0bcc7d950db5b209fec6878e14885e3c621e53c1317638dbede14df0d7",
+          "HEIGHT": "524ddce29649f2876d8d5e7d0a1490ecafcb96770b2ded5a2f059c76d99ccda6",
+          "AO": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38",
+          "EMISSION": "c8ee7522792ab18a3a396d5e4b65c3b4061fd52e7eb75268fa6e05a29157754c",
+          "OPACITY": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38"
+        }
+      },
+      {
+        "size": 2048,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "vendor": "NVIDIA Corporation",
+        "driver": "4.6.0 NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": false,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.07774999903631397,
+              "p95": 0.09750000026542693,
+              "maximum": 0.14039999950909987
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.24895000024116598,
+              "p95": 0.36299999919719994,
+              "maximum": 0.4976999989594333
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 6.638950000706245,
+              "p95": 25.215100000423263,
+              "maximum": 25.215100000423263
+            },
+            "maximum_tick_ms": {
+              "median": 5.968949999441975,
+              "p95": 22.70229999885487,
+              "maximum": 22.70229999885487
+            },
+            "completion_ms": {
+              "median": 9.156500000244705,
+              "p95": 10.712299999795505,
+              "maximum": 10.712299999795505
+            },
+            "wall_ms": {
+              "median": 15.769750000799831,
+              "p95": 35.44379999948433,
+              "maximum": 35.44379999948433
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 9.609549999368028,
+              "p95": 16.359499999452964,
+              "maximum": 16.359499999452964
+            },
+            "maximum_tick_ms": {
+              "median": 9.048750000147265,
+              "p95": 15.79430000128923,
+              "maximum": 15.79430000128923
+            },
+            "completion_ms": {
+              "median": 5.19345000066096,
+              "p95": 75.56359999944107,
+              "maximum": 75.56359999944107
+            },
+            "wall_ms": {
+              "median": 14.866949999486678,
+              "p95": 87.48019999984535,
+              "maximum": 87.48019999984535
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 12.038650000249618,
+              "p95": 16.80080000005546,
+              "maximum": 16.80080000005546
+            },
+            "maximum_tick_ms": {
+              "median": 11.97295000019949,
+              "p95": 16.757800000050338,
+              "maximum": 16.757800000050338
+            },
+            "completion_ms": {
+              "median": 4.451199999493838,
+              "p95": 5.3353000002971385,
+              "maximum": 5.3353000002971385
+            },
+            "wall_ms": {
+              "median": 16.447099999822967,
+              "p95": 19.086400001469883,
+              "maximum": 19.086400001469883
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "354fd5d73fc1f7148cca6790103e9e765cbf891a1cbb073824f825eb01a20670",
+          "ROUGHNESS": "e5aa1a45077594330473285b3ebec318aa4e2ff9b37130c8b3cced04dd83dca9",
+          "METALLIC": "011a9d955f8cb5b99214498a4b921a91de2d86c2fb35d92cdcaf32eb52001d72",
+          "NORMAL": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e",
+          "HEIGHT": "06b34e6cef5e4e78bb6b21f61d6673b126bdb9670b40c44adac7e76ff071051a",
+          "AO": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae",
+          "EMISSION": "5a32675bdcb2f4f27b9b6e67d183923ef739cade791e61c4f5788b3c2eeaccfd",
+          "OPACITY": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+        }
+      }
+    ],
+    "VULKAN": [
+      {
+        "size": 512,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "vendor": "NVIDIA Corporation",
+        "driver": "NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": true,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.03324999943288276,
+              "p95": 0.07689999983995222,
+              "maximum": 0.1787999990483513
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.16474999938509427,
+              "p95": 0.34580000101414043,
+              "maximum": 0.4279000004316913
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 5.651400000715512,
+              "p95": 6.615300000703428,
+              "maximum": 6.615300000703428
+            },
+            "maximum_tick_ms": {
+              "median": 5.090899999231624,
+              "p95": 6.038899999111891,
+              "maximum": 6.038899999111891
+            },
+            "completion_ms": {
+              "median": 3.433900000345602,
+              "p95": 4.683600000134902,
+              "maximum": 4.683600000134902
+            },
+            "wall_ms": {
+              "median": 9.319150000010268,
+              "p95": 9.985699998651398,
+              "maximum": 9.985699998651398
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 14.938349999283673,
+              "p95": 15.810299999429844,
+              "maximum": 15.810299999429844
+            },
+            "maximum_tick_ms": {
+              "median": 14.34975000029226,
+              "p95": 15.22830000067188,
+              "maximum": 15.22830000067188
+            },
+            "completion_ms": {
+              "median": 11.23714999994263,
+              "p95": 13.465500000165775,
+              "maximum": 13.465500000165775
+            },
+            "wall_ms": {
+              "median": 25.918049999745563,
+              "p95": 28.26889999960258,
+              "maximum": 28.26889999960258
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 25.41635000034148,
+              "p95": 31.220200000461773,
+              "maximum": 31.220200000461773
+            },
+            "maximum_tick_ms": {
+              "median": 24.78010000049835,
+              "p95": 28.63950000028126,
+              "maximum": 28.63950000028126
+            },
+            "completion_ms": {
+              "median": 19.712249999429332,
+              "p95": 21.830099998624064,
+              "maximum": 21.830099998624064
+            },
+            "wall_ms": {
+              "median": 45.16700000021956,
+              "p95": 53.05029999908584,
+              "maximum": 53.05029999908584
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "6a0c997ce4af541c932b84754ed153316b2642b5b9cf7909901004ebc794b846",
+          "ROUGHNESS": "b7f3a890d81ad1c614f0e0c47f07158b9058a88aebc6fa9a846d361d7b43f8ba",
+          "METALLIC": "265fdd8b962213ef628b5727812bfa6399fec4ea7484d0e570004f6dba96b34e",
+          "NORMAL": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "HEIGHT": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "AO": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "EMISSION": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "OPACITY": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d"
+        }
+      },
+      {
+        "size": 1024,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "vendor": "NVIDIA Corporation",
+        "driver": "NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": true,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.027549999686016236,
+              "p95": 0.03060000017285347,
+              "maximum": 0.035000000934815034
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.11759999961213907,
+              "p95": 0.13670000043930486,
+              "maximum": 0.22769999850424938
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 11.665449998872646,
+              "p95": 16.073599999799626,
+              "maximum": 16.073599999799626
+            },
+            "maximum_tick_ms": {
+              "median": 11.08974999988277,
+              "p95": 15.537699999185861,
+              "maximum": 15.537699999185861
+            },
+            "completion_ms": {
+              "median": 9.846449998804019,
+              "p95": 14.338400000269758,
+              "maximum": 14.338400000269758
+            },
+            "wall_ms": {
+              "median": 21.155950000320445,
+              "p95": 28.533799999422627,
+              "maximum": 28.533799999422627
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 44.926049999958195,
+              "p95": 46.73950000142213,
+              "maximum": 46.73950000142213
+            },
+            "maximum_tick_ms": {
+              "median": 23.28490000036254,
+              "p95": 31.7070999990392,
+              "maximum": 31.7070999990392
+            },
+            "completion_ms": {
+              "median": 37.57575000054203,
+              "p95": 46.895599998606485,
+              "maximum": 46.895599998606485
+            },
+            "wall_ms": {
+              "median": 81.813300000249,
+              "p95": 93.63510000002861,
+              "maximum": 93.63510000002861
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 93.53104999900097,
+              "p95": 118.84139999892795,
+              "maximum": 118.84139999892795
+            },
+            "maximum_tick_ms": {
+              "median": 31.8510500001139,
+              "p95": 39.75189999982831,
+              "maximum": 39.75189999982831
+            },
+            "completion_ms": {
+              "median": 77.04120000016701,
+              "p95": 88.81019999898854,
+              "maximum": 88.81019999898854
+            },
+            "wall_ms": {
+              "median": 171.6702499998064,
+              "p95": 197.82309999936842,
+              "maximum": 197.82309999936842
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "39c3a27bb5f9b1ddb4ffd110b342320224ca3e110e7f0e390c2abb8002e06f43",
+          "ROUGHNESS": "a8346b1d562777326276c8cb146df3287a98e28051f9cfde417523ade3c60eeb",
+          "METALLIC": "7452c51f71364c1ffa809e9cc5278844114a452cf23c10eb129f3c6a33e6b7c1",
+          "NORMAL": "84c36b0bcc7d950db5b209fec6878e14885e3c621e53c1317638dbede14df0d7",
+          "HEIGHT": "524ddce29649f2876d8d5e7d0a1490ecafcb96770b2ded5a2f059c76d99ccda6",
+          "AO": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38",
+          "EMISSION": "c8ee7522792ab18a3a396d5e4b65c3b4061fd52e7eb75268fa6e05a29157754c",
+          "OPACITY": "7752dc2b3cceb8f14367cd5b2000f47de812a3ac09843a82e2cd01a761ebaf38"
+        }
+      },
+      {
+        "size": 2048,
+        "source_sha256": "96f118ee46f0b453492ef024d82d65d7eb6e428cc0235269e5483ec04084d13a",
+        "blender": "5.2.2 LTS",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "vendor": "NVIDIA Corporation",
+        "driver": "NVIDIA 560.70",
+        "os": "Windows-11-10.0.22631-SP0",
+        "pixel_publish": true,
+        "precise_intermediates": false,
+        "pixel_budget_ms": 20.0,
+        "idle_pixels_unchanged": true,
+        "summary": {
+          "idle_engine_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.023100000362319406,
+              "p95": 0.02429999949526973,
+              "maximum": 0.028200000087963417
+            }
+          },
+          "idle_scheduler_tick": {
+            "samples": 100,
+            "wall_ms": {
+              "median": 0.0992499999483698,
+              "p95": 0.14000000010128133,
+              "maximum": 0.2585000002000015
+            }
+          },
+          "roughness": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 53.41049999969982,
+              "p95": 102.72450000047684,
+              "maximum": 102.72450000047684
+            },
+            "maximum_tick_ms": {
+              "median": 52.76119999962248,
+              "p95": 97.98630000113917,
+              "maximum": 97.98630000113917
+            },
+            "completion_ms": {
+              "median": 37.96299999976327,
+              "p95": 64.08120000014605,
+              "maximum": 64.08120000014605
+            },
+            "wall_ms": {
+              "median": 91.35900000001129,
+              "p95": 142.55659999980708,
+              "maximum": 142.55659999980708
+            }
+          },
+          "mask_strength": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 169.85674999978073,
+              "p95": 209.39139999973122,
+              "maximum": 209.39139999973122
+            },
+            "maximum_tick_ms": {
+              "median": 49.97114999969199,
+              "p95": 73.17890000012994,
+              "maximum": 73.17890000012994
+            },
+            "completion_ms": {
+              "median": 104.02519999934157,
+              "p95": 139.54279999961727,
+              "maximum": 139.54279999961727
+            },
+            "wall_ms": {
+              "median": 275.6278500000917,
+              "p95": 348.9341999993485,
+              "maximum": 348.9341999993485
+            }
+          },
+          "republish": {
+            "samples": 12,
+            "prepare_ms": {
+              "median": 385.8461999998326,
+              "p95": 486.3334000001487,
+              "maximum": 486.3334000001487
+            },
+            "maximum_tick_ms": {
+              "median": 85.67200000015873,
+              "p95": 105.80639999898267,
+              "maximum": 105.80639999898267
+            },
+            "completion_ms": {
+              "median": 220.20305000023654,
+              "p95": 391.1360000001878,
+              "maximum": 391.1360000001878
+            },
+            "wall_ms": {
+              "median": 607.2063000001435,
+              "p95": 877.4694000003365,
+              "maximum": 877.4694000003365
+            }
+          }
+        },
+        "idle_work_totals": {
+          "idle_engine_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          },
+          "idle_scheduler_tick": {
+            "gpu_passes": 0,
+            "compiles": 0,
+            "units_rendered": 0,
+            "engine_texture_readbacks": 0
+          }
+        },
+        "final_pixel_sha256": {
+          "BASE_COLOR": "473f214cd7fcff9a6aa14ae493b9fb5e33bd38a9a3aeae324dd268ed71f01a0e",
+          "ROUGHNESS": "ccd470f624cf6f38812c36f3d907509681f750763a1f4c2852af17ce2e8f1bdc",
+          "METALLIC": "fe2ee13c0ba952f11949b04ff70ead333fe9bbee802525b7f278d0e2781b091c",
+          "NORMAL": "f1aafe088213c63b4baf7ff9138f9b4a6a5e4d0f8fc460d7fb6dc88d459e5e9e",
+          "HEIGHT": "06b34e6cef5e4e78bb6b21f61d6673b126bdb9670b40c44adac7e76ff071051a",
+          "AO": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae",
+          "EMISSION": "5a32675bdcb2f4f27b9b6e67d183923ef739cade791e61c4f5788b3c2eeaccfd",
+          "OPACITY": "17270ffba329a90f158af707bc812e60abbe019cf99957e8a6786bd86aff51ae"
+        }
+      }
+    ]
+  },
+  "cross_backend_checksums": {
+    "512": {
+      "matching": [
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "different": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC"
+      ],
+      "interpretation": "Hashes detect differences but do not quantify numerical error; use GPU/CPU parity tests for tolerance."
+    },
+    "1024": {
+      "matching": [
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "different": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC"
+      ],
+      "interpretation": "Hashes detect differences but do not quantify numerical error; use GPU/CPU parity tests for tolerance."
+    },
+    "2048": {
+      "matching": [
+        "NORMAL",
+        "HEIGHT",
+        "AO",
+        "EMISSION",
+        "OPACITY"
+      ],
+      "different": [
+        "BASE_COLOR",
+        "ROUGHNESS",
+        "METALLIC"
+      ],
+      "interpretation": "Hashes detect differences but do not quantify numerical error; use GPU/CPU parity tests for tolerance."
+    }
+  }
+}

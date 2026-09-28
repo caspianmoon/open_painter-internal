@@ -53,7 +53,7 @@ def of(context, ts=None):
         return Status("Baking", "edge maps in the background")
     from ..evaluation import cache, shader_preview
     if shader_preview.requested(ts):
-        info = shader_preview.diagnostics(scene, ts)
+        info = shader_preview.diagnostics(scene, ts, details=False)
         if info["error"]:
             return Status("Failed", _shorten(info["error"]))
         if info["frozen"]:

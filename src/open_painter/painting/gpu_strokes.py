@@ -10,25 +10,27 @@ import numpy as np
 
 from ..evaluation.engine import runtime
 from ..evaluation.engine.resources import TextureResource
+from ..geometry.triangle_bounds import TriangleBounds
 from . import stroke_raster as raster
 
 _canvases = WeakSet()
 
 
 def active_bytes(set_id):
-    """Owned gesture textures; borrowed retained inputs are counted by their owner."""
-    textures = {}
+    """Owned gesture resources; borrowed retained inputs are counted by their owner."""
+    textures, surfaces = {}, {}
     for canvas in _canvases:
         if canvas.set_id != set_id:
             continue
         owned = [t for channel, t in canvas.bases.items() if channel not in canvas.borrowed]
         owned.extend(r.texture for r in canvas.outputs.values())
-        owned.extend((canvas.coverage, canvas.scratch, canvas.alpha))
+        owned.extend((canvas.coverage, canvas.scratch, canvas.alpha, canvas.depth_eligible))
         if canvas.owns_surface or canvas.surface.pending_close:
             owned.extend((canvas.surface.position, canvas.surface.normal))
+            surfaces[id(canvas.surface)] = canvas.surface
         textures.update((id(t), t) for t in owned if t is not None)
     leases = runtime.device()._leases
-    return sum(leases.get(identifier, 0) for identifier in textures)
+    return sum(leases.get(identifier, 0) for identifier in textures) + sum(s.bounds_bytes for s in surfaces.values())
 
 
 class UnsupportedSurface(ValueError):
@@ -143,12 +145,23 @@ class Surface:
         self.entries, self.n = entries, n
         self.pins, self.pending_close = 0, False
         self.position = self.normal = None
+        self.triangle_bounds = []
+        self.triangle_indexes = []
+        self.sorted_triangle_indices = []
         positions = np.zeros((n, n, 4), np.float32)
         normals = np.zeros_like(positions)
         interiors = np.zeros((n, n), bool)
         self.count = 0
         for entry in entries:
             vertices, loops = entry['tri_vertices'], entry['tri_loops']
+            # Geometry is immutable for this surface. Keep only the two bounds
+            # per triangle; each dab gathers corners only inside its brush box.
+            corners = entry['positions'][vertices]
+            self.triangle_bounds.append((corners.min(axis=1), corners.max(axis=1)))
+            self.triangle_indexes.append(TriangleBounds(*self.triangle_bounds[-1]))
+            indices = np.asarray(entry['tri_indices'], np.int64)
+            self.sorted_triangle_indices.append(bool(np.all(indices[1:] > indices[:-1])))
+            del corners
             uv = entry['uv'][loops]
             for batch in raster._batches(uv, n):
                 rows, cols, tri, weights = rasterize(uv[batch], n, unique=False)
@@ -197,17 +210,23 @@ class Surface:
         offset = 0
         windows = []
         lo, hi = raster.bounds(sample[None])
-        for entry, sheet in zip(self.entries, sheets):
+        for entry, sheet, bounds_index, sorted_indices in zip(
+                self.entries, sheets, self.triangle_indexes, self.sorted_triangle_indices):
             count = len(entry['tri_vertices'])
-            picked = np.arange(count)
-            test = raster.eligibility(sheet, entry, picked)
-            allowed = np.ones(count, bool) if test is None else test(picked, 0, 1)[:, 0]
+            if sheet is None:
+                allowed = np.ones(count, bool)
+            elif sorted_indices:
+                allowed = sheet.mask_sorted(np.asarray(entry['tri_indices'], np.int64), 0, 1)[:, 0]
+            else:
+                picked = np.arange(count)
+                allowed = raster.eligibility(sheet, entry, picked)(picked, 0, 1)[:, 0]
             values.ravel()[offset:offset + count] = allowed
-            corners = entry['positions'][entry['tri_vertices']]
-            chosen = allowed & np.all(corners.max(axis=1) >= lo, axis=1) & np.all(corners.min(axis=1) <= hi, axis=1)
-            if chosen.any():
+            candidates = bounds_index.query(lo, hi)
+            chosen = candidates[allowed[candidates]]
+            if len(chosen):
                 uv = entry['uv'][entry['tri_loops'][chosen]]
-                windows.append(raster.uv_window(corners[chosen], uv, lo, hi, margin=2 / self.n))
+                corners = entry['positions'][entry['tri_vertices'][chosen]]
+                windows.append(raster.uv_window(corners, uv, lo, hi, margin=2 / self.n))
             offset += count
         if not windows:
             return values, None
@@ -215,6 +234,16 @@ class Surface:
         low = np.clip(np.floor(boxes[:, 0].min(axis=0) * self.n).astype(int), 0, self.n)
         high = np.clip(np.ceil(boxes[:, 1].max(axis=0) * self.n).astype(int), 0, self.n)
         return values, tuple(map(int, (*low, *(high - low)))) if np.all(high > low) else None
+
+    @property
+    def bounds_bytes(self):
+        indexes = {id(index): index for index in self.triangle_indexes}
+        for entry in self.entries:
+            index = entry.get('_reach', {}).get('bounds_index')
+            if index is not None:
+                indexes[id(index)] = index
+        return sum(array.nbytes for bounds in self.triangle_bounds for array in bounds) + sum(
+            index.extra_bytes for index in indexes.values())
 
     def close(self):
         if self.pins:
@@ -225,6 +254,10 @@ class Surface:
             if texture is not None:
                 runtime.device().discard(texture)
                 setattr(self, name, None)
+        self.triangle_bounds.clear()
+        self.triangle_indexes.clear()
+        self.sorted_triangle_indices.clear()
+        self.entries = ()
 
 
 class Canvas:
@@ -241,14 +274,17 @@ class Canvas:
         self.borrowed, self.base_scalar = set(), set()
         self.coverage = self.scratch = None
         self.alpha, self.alpha_key = None, None
+        self.depth_eligible = None
         self.region = None
         self.total_region = None
         self.published_region = None
         self.base_premul = set()
         _canvases.add(self)
         dev = runtime.device()
+        texture = None
         try:
-            self.coverage, self.scratch = dev.texture(n, 'R32F'), dev.texture(n, 'R32F')
+            self.coverage = dev.texture(n, 'R32F')
+            self.scratch = dev.texture(n, 'R32F')
             dev.fill(self.coverage, n, (0, 0, 0, 0))
             for channel, base in bases.items():
                 scalar = channel in SCALAR_CHANNELS
@@ -280,7 +316,10 @@ class Canvas:
                         initial = np.ascontiguousarray(initial[..., [0, 3]])
                     texture = dev.upload(initial, fmt)
                 self.outputs[channel] = TextureResource(('gesture', id(self), channel), texture, fmt, 'rg' if scalar else 'rgba')
+                texture = None   # self.outputs owns the successfully initialized target
         except Exception:
+            if texture is not None:
+                dev.discard(texture)   # an initial copy can fail before self.outputs takes ownership
             self.close()
             raise
 
@@ -321,7 +360,16 @@ class Canvas:
                 allowed, rect = self.surface.eligible(sample, settings, anchors[index] if anchors is not None else None)
                 if rect is None:
                     continue
-                eligible = dev.upload(allowed, 'R32F')
+                # DEPTH admits every triangle on this immutable surface. Reuse
+                # its texture throughout the gesture instead of uploading and
+                # retiring the same mask for every dab. SURFACE varies per hit.
+                depth = settings['reach'] != 'SURFACE'
+                if depth:
+                    if self.depth_eligible is None:
+                        self.depth_eligible = dev.upload(allowed, 'R32F')
+                    eligible = self.depth_eligible
+                else:
+                    eligible = dev.upload(allowed, 'R32F')
                 try:
                     axis = sample[3:6] if settings['planar'] is None else np.asarray(settings['planar'], np.float32)
                     axis = axis / max(float(np.linalg.norm(axis)), 1e-8)
@@ -342,7 +390,8 @@ class Canvas:
                     self.region = union_rect(self.region, rect)
                     self.total_region = union_rect(self.total_region, rect)
                 finally:
-                    dev.discard(eligible)
+                    if not depth:
+                        dev.discard(eligible)
 
     def publish(self, settings):
         if self.published_region is not None and not settings.get('_dab'):
@@ -398,7 +447,7 @@ class Canvas:
         if self.owns_surface or (not self.surface.pins and self.surface.pending_close):
             self.surface.close()
         for texture in (*(t for c, t in self.bases.items() if c not in self.borrowed),
-                         *(r.texture for r in self.outputs.values()), self.alpha):
+                         *(r.texture for r in self.outputs.values()), self.alpha, self.depth_eligible):
             if texture is not None:
                 dev.discard(texture)
         for texture in (self.coverage, self.scratch):
@@ -406,7 +455,7 @@ class Canvas:
                 dev.release(texture, self.n, 'R32F')
         self.bases.clear()
         self.outputs.clear()
-        self.coverage = self.scratch = self.alpha = None
+        self.coverage = self.scratch = self.alpha = self.depth_eligible = None
 
 
 def union_rect(a, b):

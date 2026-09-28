@@ -15,6 +15,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from open_painter.export import transaction  # noqa: E402
@@ -819,6 +821,47 @@ class IdenticalContentTests(unittest.TestCase):
                     self.assertEqual(transaction.recover(scene.out), [])
                 finally:
                     scene.close()
+
+
+@unittest.skipUnless(os.name == 'nt', 'Windows process handles')
+class WindowsProcessProbeTests(unittest.TestCase):
+    def test_current_process_is_alive_without_signals(self):
+        with patch.object(transaction.os, 'kill', side_effect=AssertionError('must not send signals')):
+            self.assertTrue(transaction._pid_alive(os.getpid()))
+            for invalid in (0, -1, 0x100000000):
+                self.assertFalse(transaction._pid_alive(invalid))
+
+    def test_probe_preserves_live_child_and_recognizes_exit(self):
+        child = subprocess.Popen([sys.executable, '-c', 'import sys; sys.stdin.buffer.read(1)'],
+                                 stdin=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
+        try:
+            with patch.object(transaction.os, 'kill', side_effect=AssertionError('must not send signals')):
+                self.assertTrue(transaction._pid_alive(child.pid))
+                self.assertIsNone(child.poll(), 'checking a lock owner must not terminate it')
+                child.communicate(b'x', timeout=10)
+                self.assertEqual(child.returncode, 0)
+                self.assertFalse(transaction._pid_alive(child.pid))
+        finally:
+            if child.poll() is None:
+                child.kill()  # Only the worker created by this test.
+                child.wait(timeout=10)
+            if child.stdin:
+                child.stdin.close()
+
+    def test_unknown_state_keeps_lock_and_closes_handle(self):
+        kernel32 = SimpleNamespace(OpenProcess=Mock(return_value=None),
+                                   WaitForSingleObject=Mock(), CloseHandle=Mock())
+        with patch('ctypes.WinDLL', return_value=kernel32), patch('ctypes.get_last_error') as error:
+            for code, alive in ((87, False), (5, True), (8, True)):
+                error.return_value = code
+                self.assertEqual(transaction._pid_alive(1234), alive)
+            kernel32.CloseHandle.assert_not_called()
+            kernel32.OpenProcess.return_value = 0x100000001  # Preserve a 64-bit HANDLE.
+            for result, alive in ((0, False), (258, True), (0xFFFFFFFF, True)):
+                kernel32.WaitForSingleObject.return_value = result
+                self.assertEqual(transaction._pid_alive(1234), alive)
+                kernel32.WaitForSingleObject.assert_called_with(0x100000001, 0)
+                kernel32.CloseHandle.assert_called_with(0x100000001)
 
 
 if __name__ == "__main__":

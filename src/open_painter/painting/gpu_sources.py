@@ -51,7 +51,8 @@ def retained_bytes(set_id):
     stores = [s for key, s in _stores.items() if key[1] == set_id]
     surfaces = {id(s.surface): s.surface for s in stores if s.surface is not None}
     surfaces.update((id(surface), surface) for key, surface in _preview_surfaces.items() if key[1] == set_id)
-    return sum(s.output.bytes if s.output else 0 for s in stores) + sum(s.n * s.n * 32 for s in surfaces.values())
+    return sum(s.output.bytes if s.output else 0 for s in stores) + sum(
+        s.n * s.n * 32 + s.bounds_bytes for s in surfaces.values())
 
 
 def surface_for(scene, ts, n):

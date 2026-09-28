@@ -370,15 +370,31 @@ class GalleryTests(unittest.TestCase):
                 gallery.collect(root,root/'invalid.html',case_ids={'T99'})
 
     def test_archive_inventory_rejects_missing_file_and_incomplete_capture(self):
-        with tempfile.TemporaryDirectory() as path:
-            base=Path(path);root=base/'source';root.mkdir();_,directory=example(root)
-            checked=gallery.export_archive(root,base/'evidence.zip');self.assertEqual(checked['status'],'COMPLETE')
-            with zipfile.ZipFile(base/'evidence.zip') as archive,zipfile.ZipFile(base/'truncated.zip','w') as changed:
-                for item in archive.infolist():
-                    if not item.filename.endswith('01_create_front.png'):changed.writestr(item,archive.read(item.filename))
-            self.assertEqual(gallery.validate_archive(base/'truncated.zip')['status'],'INCOMPLETE')
-            (directory/'01_create_front.png').unlink()
-            with self.assertRaisesRegex(ValueError,'Incomplete'):gallery.export_archive(root,base/'bad.zip')
+        for separate_blends in (False, True):
+            with self.subTest(separate_blends=separate_blends), tempfile.TemporaryDirectory() as path:
+                base=Path(path);root=base/'source';root.mkdir();_,directory=example(root)
+                blend=directory/'nested'/'scene.blend';blend.parent.mkdir()
+                blend.write_bytes(b'synthetic archive inventory fixture, not a Blender scene')
+                checked=gallery.export_archive(root,base/'evidence.zip',separate_blends=separate_blends)
+                self.assertEqual(checked['status'],'COMPLETE')
+                with zipfile.ZipFile(base/'evidence.zip') as archive,zipfile.ZipFile(base/'truncated.zip','w') as changed:
+                    inventory=json.loads(archive.read('evidence_inventory.json'))
+                    self.assertTrue(all('\\' not in name for name in inventory['files']))
+                    self.assertLessEqual(set(inventory['files']),set(archive.namelist()))
+                    for item in archive.infolist():
+                        if not item.filename.endswith('01_create_front.png'):changed.writestr(item,archive.read(item.filename))
+                self.assertEqual(gallery.validate_archive(base/'truncated.zip')['status'],'INCOMPLETE')
+                if separate_blends:
+                    name='T03/H/1/nested/scene.blend'
+                    self.assertEqual(set(inventory['companion_blends']),{name})
+                    companion=base/inventory['companion_archive']
+                    with zipfile.ZipFile(companion) as archive:
+                        self.assertEqual(archive.namelist(),[name])
+                        self.assertEqual(archive.read(name),blend.read_bytes())
+                    companion.unlink()
+                    self.assertEqual(gallery.validate_archive(base/'evidence.zip')['status'],'INCOMPLETE')
+                (directory/'01_create_front.png').unlink()
+                with self.assertRaisesRegex(ValueError,'Incomplete'):gallery.export_archive(root,base/'bad.zip')
 
     def test_png_requires_actual_decoding_and_expected_dimensions(self):
         valid=png(4);self.assertEqual(decode_png(valid,(4,4))['status'],'DECODED')

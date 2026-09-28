@@ -16,6 +16,7 @@ its chain, reusing retained SRC/MASK results whose stamps still match.
 import os
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
+from dataclasses import replace
 from time import perf_counter
 
 import numpy as np
@@ -38,6 +39,10 @@ PRECISE = False   # full-float intermediates for every channel by default (parit
 # not render targets, and every pixel write makes Blender rebuild the image's texture and mips.
 PIXEL_PUBLISH = True if os.environ.get('OP_ENGINE_PIXEL_PUBLISH') == '1' else None   # the env: whole suites
 PIXEL_BUDGET_MS = 20.0   # per evaluation through pixels: the channels waiting longest publish first
+FUSE_PIXEL_PUBLISH = True   # test/diagnostic opt-out; the normal publication path remains available
+FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured faster compact path
+CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one texel on Vulkan
+CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -110,6 +115,9 @@ void main() {
 COPY = r'''
 void main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy), 0); }
 '''
+SAMPLE_PIXELS = r'''
+void main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy) * op_step, 0); }
+'''
 GEOMETRY = frozenset({'position', 'normal', 'tangent', 'bitangent'})
 NEUTRAL_SURFACE = {'position': (0.0, 0.0, 0.0, 1.0), 'normal': (0.0, 0.0, 1.0, 1.0),
                    'tangent': (1.0, 0.0, 0.0, 1.0), 'bitangent': (0.0, 1.0, 0.0, 1.0)}
@@ -147,12 +155,15 @@ class Device:
         self._interfaces = {}
         self.batch = None
         self.pool = OrderedDict()
+        self._pooled_bytes = 0
+        self._pooled_ids = set()
         self._leases = {}  # id -> base-level bytes; metadata only, never keeps a texture alive
         self.compiles = 0
         self.compile_seconds = 0.0
         self.passes = 0
         self.wait_cost = 0.0 # ms of submitting a pass that does nothing and waiting for it (``calibrate``)
         self._readbacks = {}  # side -> float buffer a pixel publication reads into (no allocation each time)
+        self._compact_readback = None  # (side, components, buffer), at most one compact transfer buffer
         self._fixed = {}
         try:
             self.max_samplers = int(gpu.capabilities.max_textures_frag_get())
@@ -226,6 +237,7 @@ class Device:
                 'finish': (FINISH, ['op_source'], ('op_mode',), 1),
                 'pad': (PAD, ['op_source', 'op_donor'], (), 1),
                 'downsample': (DOWNSAMPLE, ['op_source'], (), 1),
+                'sample_pixels': (SAMPLE_PIXELS, ['op_source'], ('op_step',), 1),
                 'copy': (COPY, ['op_source'], (), 1)}[name]
             shader = self._fixed[name] = self._create(source, samplers, targets=targets, ints=ints)
         return shader
@@ -234,12 +246,14 @@ class Device:
 
     def texture(self, n, fmt=RGBA):
         import gpu
-        free = self.pool.get((n, fmt))
+        key = (n, fmt)
+        free = self.pool.get(key)
         while free:
-            texture = free.pop()
+            texture = self._take_pooled(key)
             if texture.width == n and texture.height == n:
                 self._leases[id(texture)] = texture_bytes(n, n, fmt)
                 return texture   # (a texture released under another size is dropped, never reused)
+            metrics.count('engine_pool_evictions')
         metrics.count('engine_texture_allocations')
         texture = gpu.types.GPUTexture((n, n), format=fmt)
         self._leases[id(texture)] = texture_bytes(n, n, fmt)
@@ -247,10 +261,43 @@ class Device:
         return texture
 
     def release(self, texture, n, fmt=RGBA):
-        if texture is not None:
-            self._leases.pop(id(texture), None)
-            self.pool.setdefault((n, fmt), []).append(texture)
-            self.pool.move_to_end((n, fmt))
+        if texture is None or id(texture) in self._pooled_ids:
+            return
+        size = texture_bytes(n, n, fmt)
+        self._leases.pop(id(texture), None)
+        # Island-filter scratch and undo patches are returned inside long loops,
+        # and failed evaluations never reach the normal end-of-call trim. Bound
+        # free storage immediately; active leases are never eviction candidates.
+        if size > max(0, POOL_BYTES) or POOL_SPARES <= 0:
+            metrics.count('engine_pool_evictions')
+            return
+        key = (n, fmt)
+        free = self.pool.setdefault(key, [])
+        free.append(texture)
+        self._pooled_ids.add(id(texture))
+        self._pooled_bytes += size
+        self.pool.move_to_end(key)
+        while len(free) > POOL_SPARES:
+            self._take_pooled(key, 0)
+            metrics.count('engine_pool_evictions')
+        self._trim_pool_bytes()
+
+    def _take_pooled(self, key, index=-1):
+        """Remove one free texture and its accounting, pruning empty buckets."""
+        free = self.pool[key]
+        texture = free.pop(index)
+        n, fmt = key
+        self._pooled_bytes -= texture_bytes(n, n, fmt)
+        self._pooled_ids.remove(id(texture))
+        if not free:
+            del self.pool[key]
+        return texture
+
+    def _trim_pool_bytes(self):
+        while self._pooled_bytes > max(0, POOL_BYTES):
+            key = next(iter(self.pool))
+            self._take_pooled(key, 0)
+            metrics.count('engine_pool_evictions')
 
     def discard(self, texture):
         """Forget an uploaded texture whose owner is dropping its last reference."""
@@ -258,8 +305,7 @@ class Device:
 
     def memory(self):
         return {'leased_bytes': sum(self._leases.values()),
-                'pooled_bytes': sum(texture_bytes(n, n, fmt) * len(free)
-                                    for (n, fmt), free in self.pool.items())}
+                'pooled_bytes': self._pooled_bytes}
 
     def upload(self, array, fmt=RGBA):
         import gpu
@@ -275,15 +321,12 @@ class Device:
 
     def trim(self, spares=0):
         """Free pooled textures beyond ``spares`` per size and format (0: all of them)."""
-        for key, free in self.pool.items():
-            metrics.count('engine_pool_evictions', max(0, len(free) - spares))
-            del free[spares:]
-        total = self.memory()['pooled_bytes']
-        for (n, fmt), free in self.pool.items():
-            while free and total > POOL_BYTES:
-                free.pop()
+        spares = max(0, spares)
+        for key, free in list(self.pool.items()):
+            while len(free) > spares:
+                self._take_pooled(key)
                 metrics.count('engine_pool_evictions')
-                total -= texture_bytes(n, n, fmt)
+        self._trim_pool_bytes()
 
     # ---- passes -------------------------------------------------------------------
 
@@ -352,18 +395,65 @@ class Device:
 
     def readback(self, texture, n):
         """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K
-        channel is 64 MB, allocated once rather than on every stroke tick."""
+        channel is 64 MB, allocated once rather than on every stroke tick.
+
+        Read compact textures with their actual component count: Vulkan does not expand
+        R/RG framebuffer reads to RGBA. Missing components use (0, 0, 0, 1), as OpenGL
+        does.
+        The returned buffer is borrowed and is overwritten by the next readback.
+        """
         import gpu
+        buffer = self._readback_buffer(n)
+        components = {'R16F': 1, 'R32F': 1, 'RG16F': 2, 'RG32F': 2}.get(getattr(texture, 'format', ''), 4)
+        transfer = buffer
+        if components != 4:
+            if self._compact_readback is None or self._compact_readback[:2] != (n, components):
+                self._compact_readback = (n, components, gpu.types.Buffer('FLOAT', n * n * components))
+            transfer = self._compact_readback[2]
         metrics.count('engine_texture_readbacks')
-        metrics.count('engine_texture_readback_bytes', n * n * 16)
+        metrics.count('engine_texture_readback_bytes', n * n * components * 4)
+        framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
+        with self.state(), framebuffer.bind():
+            framebuffer.read_color(0, 0, n, n, components, 0, 'FLOAT', data=transfer)
+        if components != 4:
+            from .compact_readback import expand_compact
+            expand_compact(transfer, buffer, components)
+        return buffer
+
+    def _readback_buffer(self, n):
+        """Borrow one resolution's RGBA transfer buffer, also used for uniform CPU fills."""
+        import gpu
         buffer = self._readbacks.get(n)
         if buffer is None:
             self._readbacks.clear()   # one resolution at a time
+            self._compact_readback = None
             buffer = self._readbacks[n] = gpu.types.Buffer('FLOAT', n * n * 4)
-        framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
-        with self.state(), framebuffer.bind():
-            framebuffer.read_color(0, 0, n, n, 4, 0, 'FLOAT', data=buffer)
         return buffer
+
+    def readback_sampled(self, texture, n):
+        """Read the exact strided texels needed by a bounded brush preview.
+
+        Preview reduction is point sampling, not mip filtering. Copy those
+        texels in the source format before transfer, preserving both precision
+        and R/RG default-component behavior without expanding the full image.
+        As with readback(), the returned buffer is borrowed.
+        """
+        size = texture.width
+        if n <= 0 or texture.height != size or size < n or size % n:
+            raise ValueError('Preview readback needs an integer reduction of a square texture')
+        if size == n:
+            return self.readback(texture, n)
+        fmt = texture.format
+        if fmt not in {'R16F', 'R32F', 'RG16F', 'RG32F', 'RGBA16F', 'RGBA32F'}:
+            raise ValueError(f'Unsupported preview source format: {fmt}')
+        target = self.texture(n, fmt)
+        try:
+            with self.state():
+                self.draw(self.fixed('sample_pixels'), [target], n,
+                          [('op_source', texture)], ints={'op_step': size // n})
+                return self.readback(target, n)
+        finally:
+            self.release(target, n, fmt)
 
     def finish(self):
         """Wait for every pass submitted so far (a profile then times each pass alone)."""
@@ -470,6 +560,35 @@ class UnitState:
         return self.ubo
 
 
+def _publication_program(program, scalar=False, donor=False):
+    """Fuse a non-normal final CHANNEL with its clamp/padding publication pass.
+
+    The last intermediate and publication target have the same precision. For
+    finite RGB, clamping to [0, 1] commutes with that last half/full store, so no
+    intermediate quantization is lost. NORMAL cannot use this shortcut: its
+    normalization must read the already-quantized intermediate.
+
+    Only the translator's known coordinate prologue is rewritten. A future
+    program using fragment coordinates elsewhere falls back rather than sampling
+    a donor's inputs with the destination pixel's coordinates.
+    """
+    prefix = 'void main() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n'
+    if (len(program.targets) != 1 or not program.source.startswith(prefix)
+            or program.source.count('gl_FragCoord') != 1):
+        return None
+    coordinates = 'void op_channel() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n'
+    samplers = list(program.samplers)
+    if donor:
+        coordinates += ('  vec2 donor = texelFetch(op_final_donor, op_texel, 0).xy;\n'
+                        '  if (donor.x >= 0.0) { op_texel = ivec2(donor); }\n')
+        samplers.append(glsl.Sampler('op_final_donor', 'publication_donor'))
+    source = program.source.replace(prefix, coordinates, 1).replace('op_out0', 'op_channel_value')
+    rgb = 'vec3(op_channel_value.r)' if scalar else 'op_channel_value.rgb'
+    source = ('vec4 op_channel_value;\n' + source + '\nvoid main() {\n  op_channel();\n'
+              f'  op_out0 = vec4(clamp({rgb}, 0.0, 1.0), 1.0);\n}}\n')
+    return replace(program, source=source, samplers=samplers)
+
+
 def _image_identity(image, epochs):
     if image is None:
         return None
@@ -523,15 +642,21 @@ class Engine:
         self._in_use = Counter()
         self._surface_key = None        # (geometry key,) of the running evaluation
         self.dirty_cpu = set()          # channels whose image pixels lag behind the GPU result
+        self._uniform_cpu = {}          # channel -> known CPU constant (image pointer, side, RGBA, revision)
+        self._constant_renderer = None
+        self._publication_programs = {} # unit + padding -> (original program, fused program)
         self.waiting = {}               # channel -> when its change was first held back (pixel budget)
         self.deferred = set()           # channels the last evaluation held back for the next
+        self._state_cache = None        # only live inside one synchronous evaluation
 
     # ---- graph -----------------------------------------------------------------------
 
     def adopt(self, graph):
         """Take a (re)built graph; states of units it adopted unchanged keep their programs and results."""
         n_before = self.graph.n if self.graph is not None else None
+        self._clear_constant_renderer()
         self.graph = graph
+        self._publication_programs.clear()
         self._clear_filters()
         if n_before is not None and n_before != graph.n:
             self.close(n_before)   # the textures were rendered at the previous resolution
@@ -574,12 +699,20 @@ class Engine:
         self.keep.clear()
         self.published = {}
         self.images = {}
+        self._uniform_cpu.clear()
+        self._clear_constant_renderer()
+        self._publication_programs.clear()
         self._clear_geometry()
         if self.padding is not None and self.padding[1] is not None:
             device().discard(self.padding[1])
         self.geometry = {}
         self.geometry_key = None
         self.padding = None
+
+    def _clear_constant_renderer(self):
+        if self._constant_renderer is not None:
+            self._constant_renderer.close()
+            self._constant_renderer = None
 
     def _clear_filters(self):
         for _, texture, n in self.filter_states.values():
@@ -600,6 +733,12 @@ class Engine:
                                     for node, image in self._images(key)))
 
     def _state(self, key):
+        cache = self._state_cache
+        cached = cache.get(key) if cache is not None else None
+        if cached is not None and cached[0] is self.inline and cached[1] == self.precise:
+            metrics.count('engine_state_cache_hits')
+            return cached[2]
+        metrics.count('engine_state_signature_checks')
         state = self.states[key]
         unit = state.unit
         signature = self._signature(key)
@@ -629,7 +768,24 @@ class Engine:
             compiled = device().compile_seconds - compiled
             self.stages['compile_ms'] += compiled * 1000
             self.stages['translate_ms'] += (perf_counter() - started - compiled) * 1000
+        if cache is not None:
+            cache[key] = (self.inline, self.precise, state)
         return state
+
+    @contextmanager
+    def _evaluation_states(self):
+        """Share prepared states across stamping and drawing this synchronous call.
+
+        Bindings can change between calls without rebuilding the graph. Nothing
+        survives the scope, including after failures. Sampler-limit decisions
+        change ``inline``; cached entries from before that decision are rechecked.
+        """
+        previous = self._state_cache
+        self._state_cache = {} if CACHE_EVALUATION_STATES else None
+        try:
+            yield
+        finally:
+            self._state_cache = previous
 
     def _inlined(self, key):
         """The producers compiled into ``key``'s program, nearest first."""
@@ -729,7 +885,15 @@ class Engine:
                         for sampler in program.samplers]
             dev = device()
             if state.textures is None:
-                state.textures = [dev.texture(n, fmt) for fmt in state.formats]
+                allocated = []
+                try:
+                    for fmt in state.formats:
+                        allocated.append(dev.texture(n, fmt))
+                except Exception:
+                    for texture, fmt in zip(allocated, state.formats):
+                        dev.release(texture, n, fmt)
+                    raise
+                state.textures = allocated
             drawn = perf_counter()
             uniforms = state.uniforms()
             dev.draw(state.shader, state.textures, n, samplers, uniforms)
@@ -751,6 +915,83 @@ class Engine:
         if key[0] != 'CHANNEL' or self.graph.consumers.get(key):
             self._retain(key, state, n)
         return state.textures
+
+    def _fused_final(self, channel, n, memo, epochs):
+        """Render a disposable final result directly in its publication layout.
+
+        Imported/retained CHANNEL outputs keep the ordinary representation, as
+        do normals, other backends and profiles of individual unit passes. The
+        caller owns and releases the returned RGBA publication scratch.
+        """
+        dev = device()
+        final = self.finals[channel]
+        if (not FUSE_PIXEL_PUBLISH or n > FUSE_PIXEL_PUBLISH_MAX_SIZE
+                or dev.backend != 'VULKAN' or not dev.pixel_publish
+                or self.profiling or channel == 'NORMAL' or final[0] != 'unit'):
+            return None
+        key = final[1]
+        if key[0] != 'CHANNEL' or key in self.keep or self.graph.consumers.get(key):
+            return None
+        state = self._state(key)
+        stamp = self._stamp(key, memo, epochs)
+        if state.textures is not None and state.stamp == stamp:
+            return None   # a retained result needs only the existing copy pass
+        if len(state.program.targets) != 1:
+            return None
+        donor = self._donor(n) if self.pad else None
+        if len(state.program.samplers) + int(donor is not None) > dev.max_samplers:
+            return None
+        program_key = (key, donor is not None)
+        cached_program = self._publication_programs.get(program_key)
+        if cached_program is None or cached_program[0] is not state.program:
+            translated = perf_counter()
+            self._publication_programs[program_key] = (state.program, _publication_program(
+                state.program, scalar_unit(key), donor is not None))
+            self.stages['translate_ms'] += (perf_counter() - translated) * 1000
+        # Replace each unit's old variant when image/layout identity changes;
+        # a long editing session must not retain every obsolete rewrite.
+        program = self._publication_programs[program_key][1]
+        if program is None:
+            return None
+        compiled = dev.compile_seconds
+        shader = dev.shader(program)
+        compiled = dev.compile_seconds - compiled
+        self.stages['compile_ms'] += compiled * 1000
+        position = self.positions.get(key)
+        inputs = {s.producer[0] for p in glsl.programs(state.program)
+                  for s in p.samplers if s.kind == 'import'}
+        inputs |= {ref[1] for ref in (position or ()) if ref is not None and ref[0] == 'unit'}
+        self._in_use.update(inputs)
+        result = None
+        fmt = RGBA if self.precise or channel == 'HEIGHT' else HALF
+        try:
+            backdrop = self._texture_of(position[0], n, memo, epochs, scalar_unit(key)) if position else None
+            grouped = self._texture_of(position[1], n, memo, epochs, scalar_unit(key)) if position and position[1] else None
+            samplers = [(s.name, self._bind(s, n, memo, epochs, backdrop, grouped, key))
+                        for s in state.program.samplers]
+            if donor is not None:
+                samplers.append(('op_final_donor', donor))
+            result = dev.texture(n, fmt)
+            drawn = perf_counter()
+            dev.draw(shader, [result], n, samplers, state.uniforms())
+            self.stages['render_ms']['CHANNEL'] += (perf_counter() - drawn) * 1000
+            self.stages['passes']['CHANNEL'] += 1
+        except Exception:
+            if result is not None:
+                dev.release(result, n, fmt)
+            raise
+        finally:
+            self._in_use.subtract(inputs)
+        # No CHANNEL texture is retained: its raw alpha/layout is different from
+        # this finished image. A later dependency can still render it normally.
+        self._free(key, state, n)
+        state.stamp = stamp
+        self.rendered.append(key)
+        for ref in position or ():
+            if ref is not None and ref[0] == 'unit':
+                self._settle(ref[1], n)
+        metrics.count('engine_fused_publications')
+        return result
 
     def _gpu_time(self, state, n, samplers, uniforms, repeats=5):
         """A pass's GPU milliseconds: (``repeats`` draws and a wait) less (one draw and a wait),
@@ -1006,13 +1247,16 @@ class Engine:
         order = list(channels or CHANNELS)
         if budget is not False:
             order.sort(key=lambda channel: (self.waiting.get(channel, now), CHANNELS.index(channel)))
-        deferred, spent = set(), 0.0
-        with dev.state():
+        deferred, spent, uniform_writes = set(), 0.0, 0
+        with self._evaluation_states(), dev.state():
             for channel in order:
                 image = (images or {}).get(channel) or _output_image(ts, channel)
                 if image is None:
                     continue
-                stamp = self._ref_stamp(self.finals[channel], memo, epochs)
+                uniform = self._uniform_output(ts, channel, image) if images is None else None
+                stamp = (('uniform', uniform, n, self.precise, image.get('open_painter_pixel_revision', 0))
+                         if uniform is not None else
+                         self._ref_stamp(self.finals[channel], memo, epochs))
                 pointer = image.as_pointer()
                 if self.published.get(channel) == stamp and self.images.get(channel) == pointer:
                     self.waiting.pop(channel, None)
@@ -1021,18 +1265,48 @@ class Engine:
                     deferred.add(channel)   # published by a later evaluation (cache.tick keeps coming)
                     self.waiting.setdefault(channel, now)
                     continue
-                released = self._checkpoints(channel, memo, epochs)
-                for key in released:
-                    self._settle(key, n)
                 final = self.finals[channel]
-                result = self._texture_of(final, n, memo, epochs)
+                fused = False
+                constant_publish_ms = 0.0
+                if uniform is None and images is None and self._constant_output(ts, channel, image):
+                    from .constant_outputs import ConstantRenderer
+                    if self._constant_renderer is None:
+                        self._constant_renderer = ConstantRenderer()
+                    uniform = self._constant_renderer.evaluate(self, channel, epochs)
+                    self.rendered.extend(self._constant_renderer.rendered)
+                    for stage in ('render_ms', 'passes'):
+                        self.stages[stage].update(self._constant_renderer.stages[stage])
+                    for stage in ('inputs_ms', 'translate_ms', 'compile_ms'):
+                        self.stages[stage] += self._constant_renderer.stages[stage]
+                    constant_publish_ms = self._constant_renderer.stages['publish_ms']
+                if uniform is None:
+                    released = self._checkpoints(channel, memo, epochs)
+                    for key in released:
+                        self._settle(key, n)
+                    result = self._fused_final(channel, n, memo, epochs)
+                    fused = result is not None
+                    if not fused:
+                        result = self._texture_of(final, n, memo, epochs)
                 if self.profiling:
                     dev.finish()   # what was queued before is not publishing's
                 publishing, inputs = perf_counter(), self.stages['inputs_ms']
-                self._publish(image, channel, result, n)
+                if uniform is not None:
+                    self._publish_uniform(image, channel, uniform, n)
+                    uniform_writes += 1
+                else:
+                    if fused:
+                        try:
+                            self._uniform_cpu.pop(channel, None)
+                            if tuple(image.size) != (n, n):
+                                raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
+                            image.pixels.foreach_set(dev.readback(result, n))
+                        finally:
+                            dev.release(result, n, RGBA if self.precise or channel == 'HEIGHT' else HALF)
+                    else:
+                        self._publish(image, channel, result, n)
                 # A later channel may fail. Already published GPU pixels must still
                 # be synchronized on save/export, even when this evaluation aborts.
-                if pixels:
+                if pixels or uniform is not None:
                     self.dirty_cpu.discard(channel)
                 else:
                     self.dirty_cpu.add(channel)
@@ -1040,14 +1314,14 @@ class Engine:
                     dev.finish()
                 # The padding table it may build first counts as a CPU input, not as publishing;
                 # a profile's wait is not the GPU's time.
-                elapsed = max(0.0, (perf_counter() - publishing) * 1000
+                elapsed = constant_publish_ms + max(0.0, (perf_counter() - publishing) * 1000
                               - (self.stages['inputs_ms'] - inputs)
                               - (dev.wait_cost if self.profiling else 0.0))
                 self.stages['publish_ms'] += elapsed
                 spent += elapsed
                 self.stages['published'].append(channel)
                 self.waiting.pop(channel, None)
-                if final[0] == 'unit':
+                if uniform is None and final[0] == 'unit':
                     self._settle(final[1], n)
                 self.published[channel] = stamp
                 self.images[channel] = pointer
@@ -1060,7 +1334,10 @@ class Engine:
         self.stages['deferred'] = sorted(deferred)
         dev.trim(POOL_SPARES)
         self.stages['compiles'] = dev.compiles - compiles
-        self.stages['publish_path'] = ('pixels' if pixels else 'framebuffer') if written else ''
+        path = 'pixels' if pixels else 'framebuffer'
+        if uniform_writes:
+            path = 'uniform publication' if uniform_writes == len(written) else path + ' + uniform publication'
+        self.stages['publish_path'] = path if written else ''
         self.report = {'evaluate_ms': (perf_counter() - started) * 1000, 'channels': sorted(written),
                        'passes': dev.passes - passes, 'units_rendered': len(self.rendered),
                        'programs': len(dev.shaders), 'compiles': dev.compiles,
@@ -1069,6 +1346,79 @@ class Engine:
             metrics.count('engine_channel_publications', len(written))
             metrics.sample('engine_evaluate_ms', self.report['evaluate_ms'])
         return written
+
+    def _constant_output(self, ts, channel, image):
+        """Use original shaders at one texel only when the entire channel is spatially constant."""
+        dev = device()
+        if (not CONSTANT_OUTPUTS or self.profiling or dev.backend != 'VULKAN'
+                or PIXEL_PUBLISH is not None or channel == 'BASE_COLOR'
+                or not getattr(getattr(image, 'colorspace_settings', None), 'is_data', False)):
+            return False
+        from .constant_channels import spatially_constant_channel
+        return spatially_constant_channel(ts, channel)
+
+    def _uniform_output(self, ts, channel, image):
+        """Prove a default output before dropping any dependencies from its stamp.
+
+        Vulkan transfer-clears can update all image mips without CPU publication.
+        Only exact neutral defaults are admitted: no half-float rounding changes
+        or color-space conversion are hidden by the shortcut. Explicit pixel
+        publication remains available for tests and compatibility fallback.
+        """
+        dev = device()
+        if (dev.backend != 'VULKAN' or PIXEL_PUBLISH is not None or channel == 'BASE_COLOR' or
+                not getattr(getattr(image, 'colorspace_settings', None), 'is_data', False)):
+            return None
+        color = (*DEFAULTS[channel][:3], 1.0)
+        ref = self.finals[channel]
+        if ref[0] == 'const' and tuple(ref[1]) == color:
+            return color
+        if ref[0] == 'unit':
+            from .uniforms import uniform_channel
+            return uniform_channel(ts, channel, precise=self.precise)
+        return None
+
+    def _publish_uniform(self, image, channel, color, n):
+        """Update canonical CPU constants, or refresh unchanged GPU mips without a readback.
+
+        Keeping the CPU constant current also makes Blender's texture eviction,
+        explicit gl_free(), saving and Cycles safe without a later GPU read.
+        """
+        import gpu
+        if tuple(image.size) != (n, n):
+            raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
+        stamp = (image.as_pointer(), n, color, image.get('open_painter_pixel_revision', 0))
+        if self._uniform_cpu.get(channel) != stamp:
+            buffer = device()._readback_buffer(n)
+            values = np.frombuffer(buffer, np.float32)
+            # Duplicate a completed RGBA prefix with contiguous copies. Strided
+            # component writes revisit every cache line up to four times at 2K+.
+            values[:4] = color
+            filled = 4
+            while filled < values.size:
+                count = min(filled, values.size - filled)
+                np.copyto(values[filled:filled + count], values[:count])
+                filled += count
+            image.pixels.foreach_set(buffer)
+            self._uniform_cpu[channel] = stamp
+            metrics.count('engine_uniform_cpu_initializations')
+            metrics.count('engine_uniform_cpu_bytes', n * n * 16)
+            metrics.count('engine_uniform_publications')
+            # foreach_set already invalidates the image texture and mip chain.
+            # Let Blender upload them when sampled, like ordinary publication:
+            # an eager from_image + clear only repeats the same update and stalls
+            # the callback before the other channels can submit their work.
+            return
+        # Vulkan's texture transfer-clear covers its full mip range. Unlike a
+        # level-zero compute write, distant/minified material samples stay current.
+        texture = gpu.texture.from_image(image)
+        # Vulkan's float clear can truncate a half-float target, while Blender's
+        # CPU image upload rounds to nearest. Quantize only the clear value to
+        # match that upload; precise canonical CPU pixels keep their full value.
+        gpu_color = tuple(np.asarray(color, np.float16).astype(np.float32)) if texture.format == HALF else color
+        texture.clear(format='FLOAT', value=gpu_color)
+        metrics.count('engine_uniform_texture_clears')
+        metrics.count('engine_uniform_publications')
 
     def memory(self):
         """Engine-owned base textures, excluding Blender images and driver overhead."""
@@ -1109,7 +1459,7 @@ class Engine:
         self.stages = stages.evaluation()
         self._in_use = Counter()
         self._surface_key = None
-        with device().state():
+        with self._evaluation_states(), device().state():
             texture = self._texture_of(self.finals[channel], n, memo, epochs or {})
             values = np.array(device().readback(texture, texture.width), np.float32).reshape(texture.height, texture.width, 4)
             if getattr(texture, 'format', '') in {'RG16F', 'RG32F'}:
@@ -1119,6 +1469,7 @@ class Engine:
     def _publish(self, image, channel, result, n):
         import gpu
         dev = device()
+        self._uniform_cpu.pop(channel, None)
         if tuple(image.size) != (n, n):
             raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
         donor = self._donor(n) if self.pad else None

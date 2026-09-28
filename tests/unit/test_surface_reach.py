@@ -2,6 +2,7 @@
 stamp may paint. Each case states the geometry, the anchor and the accepted/excluded pairs."""
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
@@ -9,6 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from open_painter.painting import surface_reach as reach  # noqa: E402
 from open_painter.painting.stroke_raster import kernel  # noqa: E402
+from open_painter.geometry.triangle_bounds import TriangleBounds  # noqa: E402
 
 
 def grid(nx, ny, size=1.0, z=0.0, origin=(0.0, 0.0), flip=False, vertex_offset=0, polygon_offset=0):
@@ -55,6 +57,62 @@ def accepted(target, samples, anchors, planar=None, depth_limit=1.0):
                           np.asarray(anchors, np.float32) if anchors is not None else None, planar, depth_limit)
     count = len(target["all_tri_vertices"])
     return sheets.mask(np.arange(count), 0, len(samples))
+
+
+class IndexedCandidates(unittest.TestCase):
+    def test_sorted_material_subsets_keep_chunk_boundaries_and_widened_anchor(self):
+        target = target_of([grid(48, 48)])
+        samples = np.repeat(sample((.5, .5, 0), radius=.04)[None], 259, axis=0)
+        anchors = np.repeat(anchor((.5, .5, 0), 24 * 48 + 24)[None], len(samples), axis=0)
+        sheet = reach.Sheets(target, samples, anchors)
+        for triangles in (np.arange(4608), np.arange(4608)[::3],
+                          np.array([-8, -1, 4608, 100000]), np.zeros(0, np.int64)):
+            for start, stop in ((0, 1), (3, 7), (254, 259), (0, 0)):
+                np.testing.assert_array_equal(sheet.mask_sorted(triangles, start, stop),
+                                              sheet.mask(triangles, start, stop))
+        # The retained hit can widen the walk beyond the current brush box.
+        # Sparse lookup must include every candidate, not just the UV window.
+        widened = reach.Sheets(target, sample((.1, .1, 0), radius=.04)[None],
+                               anchor((.9, .9, 0), 43 * 48 + 43)[None])
+        full = np.arange(4608)
+        actual = widened.mask_sorted(full, 0, 1)
+        np.testing.assert_array_equal(actual, widened.mask(full, 0, 1))
+        self.assertTrue(actual[43 * 48 * 2 + 43 * 2].any())
+        broad = reach.Sheets(target, sample((.5, .5, 0), radius=2.)[None], anchors[:1])
+        subset = [17, 60]
+        expected = broad.mask(subset, 0, 1)
+        with patch.object(broad, 'mask', wraps=broad.mask) as generic:
+            np.testing.assert_array_equal(broad.mask_sorted(subset, 0, 1), expected)
+            self.assertEqual(generic.call_count, 1)
+
+    def test_dense_disconnected_sheets_and_stale_anchors_match_full_scans(self):
+        entries = [target_of([grid(48, 48, z=z)]) for z in (0., .02)]
+        samples = np.asarray([sample((.25, .25, 0), radius=.025),
+                              sample((.62, .57, 0), radius=.12),
+                              sample((.91, .91, .02), radius=.4),
+                              sample((.5, .5, .01), radius=.15),
+                              sample((4, 4, 4), radius=.02)], np.float32)
+        anchors = np.asarray([anchor(row[:3], int(min(row[1], .99) * 48) * 48 + int(min(row[0], .99) * 48))
+                              for row in samples], np.float32)
+
+        def direct(index, low, high):
+            return np.flatnonzero(np.all(index.minimum <= high, axis=1) & np.all(index.maximum >= low, axis=1))
+
+        for planar in (None, (0, .1, 1)):
+            for hit in (anchors, None, anchors + np.array([0, 0, 0, 100000], np.float32)):
+                current = reach.for_targets(entries, samples, hit, planar=planar)
+                actual = [sheets.mask(np.arange(len(entry['all_tri_vertices'])), 0, len(samples))
+                          for entry, sheets in zip(entries, current)]
+                self.assertTrue(all(entry['_reach']['bounds_index'].extra_bytes for entry in entries))
+                with patch.object(TriangleBounds, 'query', direct):
+                    previous = reach.for_targets(entries, samples, hit, planar=planar)
+                    expected = [sheets.mask(np.arange(len(entry['all_tri_vertices'])), 0, len(samples))
+                                for entry, sheets in zip(entries, previous)]
+                for a, b in zip(actual, expected):
+                    np.testing.assert_array_equal(a, b)
+                if hit is anchors:
+                    self.assertFalse(actual[1][:, 0].any(), 'the rear object must remain excluded')
+                    self.assertFalse(actual[0][:, 2].any(), 'the front object must remain excluded')
 
 
 class Adjacency(unittest.TestCase):

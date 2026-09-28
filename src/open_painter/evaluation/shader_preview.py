@@ -213,7 +213,12 @@ def session_engine(scene, ts):
     return entry.get('engine') if entry else None
 
 
-def diagnostics(scene, ts):
+def diagnostics(scene, ts, *, details=True):
+    """Session state; ``details=False`` skips per-layer and engine report walks.
+
+    Timer/status callers need only readiness and errors. Cache-state lookup
+    resolves live RNA layers per binding and belongs to explicit diagnostics.
+    """
     key = key_for(scene, ts)
     entry = _sessions.get(key, {})
     graph = entry.get('graph')
@@ -233,11 +238,11 @@ def diagnostics(scene, ts):
             'update_calls': entry.get('update_calls', 0),
             'resource_steps': entry.get('resource_steps', 0),
             'evaluations': entry.get('evaluations', 0),
-            'engine': dict(engine.report) if engine is not None else {},
+            'engine': dict(engine.report) if details and engine is not None else {},
             'frozen': frozen(scene, ts),
             'held': key in _holds,
             'deferred_owners': len(_deferred.get(key, ())),
-            'cache_states': (graph.cache_states() if graph is not None and hasattr(graph, 'cache_states')
+            'cache_states': (graph.cache_states() if details and graph is not None and hasattr(graph, 'cache_states')
                              and not _moved(entry, ts) else {})}
 
 
@@ -248,7 +253,7 @@ def mark_attached(scene, ts, attached=True):
 
 
 def status(scene, ts):
-    info = diagnostics(scene, ts)
+    info = diagnostics(scene, ts, details=False)
     if info['error']:
         return 'Open Painter engine: ' + info['error']
     if info['frozen']:

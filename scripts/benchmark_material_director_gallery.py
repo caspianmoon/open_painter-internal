@@ -265,8 +265,8 @@ def export_archive(root, output, *, separate_blends=False):
             if companion_path.exists():raise FileExistsError(companion_path)
             with zipfile.ZipFile(companion_path,'x',compression=zipfile.ZIP_DEFLATED) as archive:
                 for path in package.rglob('*.blend'):
-                    companion[str(path.relative_to(package))]=digest(path)
-                    archive.write(path,str(path.relative_to(package)))
+                    companion[path.relative_to(package).as_posix()]=digest(path)
+                    archive.write(path,path.relative_to(package).as_posix())
             # The primary HTML keeps state links valid only in a complete archive.
             # Companion export therefore includes a plaintext declaration and
             # removes state anchors, never advertises silently broken links.
@@ -275,14 +275,14 @@ def export_archive(root, output, *, separate_blends=False):
             text=re.sub(r'<a href="[^"]+\.blend">([^<]+)</a>',r'<span>\1: see declared companion archive</span>',text)
             (package/'gallery.html').write_text(text)
             for path in package.rglob('*.blend'):path.unlink()
-        records={str(p.relative_to(package)):digest(p) for p in package.rglob('*') if p.is_file()}
+        records={p.relative_to(package).as_posix():digest(p) for p in package.rglob('*') if p.is_file()}
         inventory={'format':'director_evidence_zip_v1','files':records,'companion_blends':companion,
                    'companion_archive':companion_path.name if separate_blends else None,'portable_review':False}
         (package/'evidence_inventory.json').write_text(json.dumps(inventory,indent=2))
         output.parent.mkdir(parents=True,exist_ok=True)
         with zipfile.ZipFile(output,'x',compression=zipfile.ZIP_DEFLATED) as archive:
             for p in package.rglob('*'):
-                if p.is_file():archive.write(p,str(p.relative_to(package)))
+                if p.is_file():archive.write(p,p.relative_to(package).as_posix())
     checked=validate_archive(output)
     if checked['status']!='COMPLETE': raise ValueError(checked)
     return checked

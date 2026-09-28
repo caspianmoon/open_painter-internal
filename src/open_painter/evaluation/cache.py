@@ -100,7 +100,7 @@ def _end_progress(scene):
 def job_state(scene, ts):
     from . import shader_preview
     if shader_preview.requested(ts):
-        info = shader_preview.diagnostics(scene, ts)
+        info = shader_preview.diagnostics(scene, ts, details=False)
         return dict(state='SHADER' if info['state'] == 'SHADER' else
                     'FAILED' if info['error'] else 'PREPARING_INPUT',
                     serial=ts.edit_serial, error=info['error'])
@@ -178,6 +178,18 @@ def _modal_painting(scene):
     """Blender's brush operator is modal in a window showing this scene (a stroke is in progress)."""
     windows = [w for w in bpy.context.window_manager.windows if w.scene == scene]
     return any(op.bl_idname == "PAINT_OT_image_paint" for w in windows for op in w.modal_operators)
+
+
+_NAVIGATION_OPERATORS = frozenset({
+    'VIEW3D_OT_rotate', 'VIEW3D_OT_move', 'VIEW3D_OT_zoom', 'VIEW3D_OT_dolly',
+    'VIEW3D_OT_view_roll', 'VIEW3D_OT_walk', 'VIEW3D_OT_fly',
+    'IMAGE_OT_view_pan', 'IMAGE_OT_view_zoom',
+})
+
+
+def _modal_navigation(windows):
+    """Native orbit/pan/zoom owns input in a window showing this scene."""
+    return any(op.bl_idname in _NAVIGATION_OPERATORS for w in windows for op in w.modal_operators)
 
 
 def painting_active(scene):
@@ -349,7 +361,11 @@ def _tick():
                 from ..baking import corrections
                 corrections.poll(scene)
                 _rebake_pending(scene)
-            elif not any(is_area(area) for w in windows for area in w.screen.areas):
+            elif (not _modal_navigation(windows)
+                  and not any(is_area(area) for w in windows for area in w.screen.areas)):
+                # Catch short, unobserved native strokes, but not mid-orbit: a
+                # dirty canvas stays dirty after a stroke and a 4K read/compare
+                # can stall navigation. Keep the scan due until navigation ends.
                 detect(scene)
         texture_sets = list(scene.open_painter.texture_sets)
         active = scene.open_painter.active_texture_set
@@ -363,7 +379,7 @@ def _tick():
                 discard(key)
                 _regions.pop(key, None)
                 ready = shader_preview.tick(scene, ts)
-                info = shader_preview.diagnostics(scene, ts)
+                info = shader_preview.diagnostics(scene, ts, details=False)
                 set_state(scene, ts, 'SHADER' if ready else
                           'FAILED' if info['error'] else 'PREPARING_INPUT', info['error'])
                 if (info['pending_resources'] and not info['error'] and not info.get('frozen')

@@ -9,7 +9,7 @@ from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
-version = tomllib.loads((root / "blender_manifest.toml").read_text())["version"]
+version = tomllib.loads((root / "blender_manifest.toml").read_text(encoding="utf-8"))["version"]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, help="Build a candidate without replacing a published archive")
 args = parser.parse_args()
@@ -40,8 +40,8 @@ def write_file(archive, path, archive_name):
             return f'[{label}]({urlunsplit(("", "", relative, url.query, url.fragment))})'
         return match.group(0)
 
-    content = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', rewrite, path.read_text())
-    archive.writestr(str(archive_name), content)
+    content = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', rewrite, path.read_text(encoding="utf-8"))
+    archive.writestr(Path(archive_name).as_posix(), content)
 
 
 with ZipFile(output, "w", ZIP_DEFLATED) as archive:

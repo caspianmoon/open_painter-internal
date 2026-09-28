@@ -1,0 +1,349 @@
+{
+  "date": "2026-09-28",
+  "status": "INSTALLED_AND_VERIFIED",
+  "branch": "fix/windows-vulkan-performance",
+  "base_commit": "1645a4dbbb47aaabe2d5145ee4b6a5165fad02b6",
+  "source_sha256": "4d2371b5e23a01989a6e6320c433639f80e6c6a97e93ace48ffbc96b45255603",
+  "performance_report": "docs/validation/windows-vulkan-optimized.json",
+  "vulkan_validation": {
+    "status": "PASS",
+    "passed": 15,
+    "tests": [
+      {
+        "name": "simulated-contracts",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.48,
+        "scope": "simulated API contracts",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/simulated-contracts/run.log",
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.4,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/backend-contract/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "procedurals",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 18.7,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/procedurals/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 52.54,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/engine-parity/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "pixel-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 49.1,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/pixel-parity/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "pixel-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 8.78,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/pixel-publication/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "uniform-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 7.38,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/uniform-publication/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "engine-stages",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 7.66,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized-rerun/engine-stages/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized-rerun/report.json"
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 13.93,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/gpu-strokes/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "pixel-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 14.61,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/pixel-strokes/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 13.19,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/authoring-workflow/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "pixel-authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 12.37,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/pixel-authoring-workflow/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "gpu-filters",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 13.84,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/gpu-filters/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "authoring-sources",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.12,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/authoring-sources/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      },
+      {
+        "name": "material-nodes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.68,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-vulkan-optimized/material-nodes/run.log",
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-vulkan-optimized/report.json"
+      }
+    ],
+    "rerun_note": "The original engine-stages check assumed every compiled unit executes. The corrected check verifies each executed pass exactly once and verifies uniform work is skipped. Its targeted rerun passed; the original failed report remains available."
+  },
+  "opengl_compatibility": {
+    "status": "PASS",
+    "passed": 4,
+    "tests": [
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.72,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-opengl-optimized/backend-contract/run.log",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-opengl-optimized/report.json"
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 58.54,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-opengl-optimized/engine-parity/run.log",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-opengl-optimized/report.json"
+      },
+      {
+        "name": "uniform-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 7.03,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-opengl-optimized/uniform-publication/run.log",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-opengl-optimized/report.json"
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 18.0,
+        "scope": "actual GPU",
+        "log": ".blender-test/windows-vulkan/matrix-opengl-optimized/gpu-strokes/run.log",
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16,
+        "report": ".blender-test/windows-vulkan/matrix-opengl-optimized/report.json"
+      }
+    ]
+  },
+  "cpu_integration": [
+    {
+      "name": "diagnostics_scheduling",
+      "status": "PASS",
+      "log": ".blender-test/windows-vulkan/diagnostics_scheduling-optimized.log"
+    },
+    {
+      "name": "navigation_scheduling",
+      "status": "PASS",
+      "log": ".blender-test/windows-vulkan/navigation_scheduling-optimized.log"
+    },
+    {
+      "name": "contributor_regressions",
+      "status": "PASS",
+      "log": ".blender-test/windows-vulkan/contributor_regressions-optimized.log"
+    }
+  ],
+  "window_interaction": {
+    "status": "PASS",
+    "backend": "VULKAN",
+    "steps": [
+      "open graph splits the area",
+      "node click selects the layer",
+      "list selection follows",
+      "link becomes an anchor reference"
+    ],
+    "grid_resources_released": true,
+    "report": ".blender-test/windows-vulkan/graph-ui-optimized.json"
+  },
+  "pure_tests": {
+    "status": "KNOWN_PLATFORM_FAILURES",
+    "ran": 316,
+    "passed": 310,
+    "skipped": 3,
+    "failures": 2,
+    "errors": 1,
+    "log": ".blender-test/windows-vulkan/pure-tests-optimized.log",
+    "issues": [
+      "Frozen procedural source hashes differ after CRLF checkout conversion; LF-normalized content matches.",
+      "The material director gallery inventory uses backslashes while ZIP member names use forward slashes.",
+      "A benchmark runtime test expects POSIX mode 0600 while Windows reports 0666."
+    ]
+  },
+  "package_stages": [
+    {
+      "stage": "build-optimized",
+      "returncode": 0
+    },
+    {
+      "stage": "validate-package-optimized",
+      "returncode": 0
+    },
+    {
+      "stage": "install-package-optimized-test",
+      "returncode": 0
+    },
+    {
+      "stage": "install-user-optimized",
+      "returncode": 0
+    },
+    {
+      "stage": "verify-user-optimized",
+      "returncode": 0
+    }
+  ],
+  "installation": {
+    "status": "PASS",
+    "blender": "5.2.2 LTS",
+    "backend": "VULKAN",
+    "renderer": "NVIDIA GeForce GTX 1050",
+    "preference_backend": "VULKAN",
+    "installed": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\extensions\\user_default\\open_painter",
+    "enabled": true,
+    "archive": "C:\\Users\\User\\Desktop\\openpainter\\dist\\open_painter-0.13.1-windows-vulkan-optimized.zip",
+    "archive_sha256": "e8102ec2d0a068b176716260c7a9a8f6728cfc0c716103b7cc25d6eff5b5c5c3",
+    "verified_python_files": 308,
+    "preferences": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\config\\userpref.blend"
+  },
+  "fresh_start": {
+    "status": "PASS",
+    "backend": "VULKAN",
+    "enabled": true,
+    "installed": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\extensions\\user_default\\open_painter\\__init__.py"
+  },
+  "scope": "Measured engine interaction and CPU callback improvements, with identical final Vulkan output hashes at 512, 1024 and 2048. These are not viewport FPS measurements."
+}

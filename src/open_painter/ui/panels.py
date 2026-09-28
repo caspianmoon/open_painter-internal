@@ -72,7 +72,7 @@ class OP_PT_texture_set(bpy.types.Panel):
         if addon and addon.preferences.developer_mode:
             layout.label(text=f"ID: {ts.id}")
             from ..evaluation import shader_preview
-            info = shader_preview.diagnostics(context.scene, ts)
+            info = shader_preview.diagnostics(context.scene, ts, details=False)
             box = layout.box()
             box.label(text=f"Shader: {info['state']} · builds {info['graph_builds']} · updates {info['update_calls']}")
             if info.get('units'):

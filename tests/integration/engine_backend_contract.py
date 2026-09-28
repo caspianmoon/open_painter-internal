@@ -62,6 +62,21 @@ def main():
             checks.extend(['full coverage and orientation at 1/8/17/32 pixels',
                            'unused uniforms and block', 'clipping and draw state restored',
                            'unclipped clear', 'readback state restored'])
+            # Vulkan framebuffer reads retain the texture's native component count.
+            # Distinct pixels catch packed R/RG data mistaken for an RGBA array.
+            for fmt, components in (('R16F', 1), ('R32F', 1), ('RG16F', 2), ('RG32F', 2)):
+                values = np.arange(8 * 8 * components, dtype=np.float32).reshape(8, 8, components) / 128
+                texture = dev.upload(values, fmt)
+                try:
+                    actual = np.asarray(dev.readback(texture, 8)).reshape(8, 8, 4)
+                    expected = np.zeros((8, 8, 4), np.float32)
+                    expected[..., 3] = 1
+                    expected[..., :components] = values
+                    np.testing.assert_array_equal(actual, expected)
+                    assert state() == original
+                finally:
+                    dev.discard(texture)
+            checks.append('compact R/RG readback preserves pixel order and missing components')
             with patch.object(dev, '_batch', side_effect=RuntimeError('injected draw failure')):
                 try:
                     with dev.state():

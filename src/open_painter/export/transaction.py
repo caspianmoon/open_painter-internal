@@ -152,6 +152,31 @@ def _same_file(a, b):
 
 
 def _pid_alive(pid):
+    if os.name == 'nt':
+        # Unlike POSIX, os.kill(pid, 0) terminates the process on Windows.
+        # A process handle becomes signaled when it exits; a zero-timeout wait
+        # observes that state without sending a signal or requesting kill rights.
+        import ctypes
+        from ctypes import wintypes
+
+        if pid <= 0 or pid > 0xFFFFFFFF:
+            return False
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            # Only ERROR_INVALID_PARAMETER proves there is no such process.
+            # Access denied and other failures must not let us break its lock.
+            return ctypes.get_last_error() != 87
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) != 0  # WAIT_OBJECT_0
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -327,7 +352,9 @@ class Transaction:
             # No hard links here (some network or FAT volumes): exclusive create, claim, then fill.
             if error.errno not in {errno.EPERM, errno.ENOTSUP, getattr(errno, 'EOPNOTSUPP', errno.ENOTSUP), errno.EMLINK, errno.ENOSYS}:
                 raise
-            fd = os.open(str(item.destination), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+            # CRT text mode on Windows would translate LF bytes inside images.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_BINARY', 0)
+            fd = os.open(str(item.destination), flags, 0o644)
             try:
                 failpoint('after_exclusive_create')
                 item.claimed = True

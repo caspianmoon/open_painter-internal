@@ -8,6 +8,7 @@ not the trigger). Nodes are found by ``op_id``; no RNA reference survives a
 tick, matching the rest of the add-on's collection-reallocation discipline.
 """
 from contextlib import contextmanager
+from functools import lru_cache
 from hashlib import sha256
 
 import bpy
@@ -310,6 +311,17 @@ def producer_of(ts, anchor):
     return anchor.id, 'out'   # mask and channel anchors are nodes of their own
 
 
+@lru_cache(maxsize=64)
+def _signature_digest(parts):
+    # Keep the serialized signature identical to existing saved graph trees.
+    return sha256(repr(list(parts)).encode()).hexdigest()
+
+
+def clear_caches():
+    _signature_digest.cache_clear()
+    _owner_indexes.clear()
+
+
 def signature(ts):
     """Structural fingerprint of everything the projection reads."""
     parts = []
@@ -323,7 +335,9 @@ def signature(ts):
                       tuple((p.channel, p.enabled, p.anchor, p.anchor_channel,
                              tuple((e.kind, e.id, e.name, e.enabled) for e in p.effects)) for p in layer.channels)))
     parts.append(('format', GRAPH_FORMAT))
-    return sha256(repr(parts).encode()).hexdigest()
+    # Always read live RNA: raw names, IDs and collection edits need not bump
+    # edit_serial. Only serialization/hashing of identical content is reused.
+    return _signature_digest(tuple(parts))
 
 
 # ---- tree ownership ----------------------------------------------------------
@@ -905,16 +919,21 @@ def draw_node(node, context, layout):
         # channel on or off; the value, image and mapping rows follow only the
         # enabled ones. Toggling is structural (sockets come and go).
         from ..constants import CHANNELS
-        from ..core.layer_stack import channel_for
+        # All three control groups read the same small collection. Index it
+        # once for this draw, preserving channel_for's first-match semantics
+        # without retaining RNA references across collection edits or undo.
+        channels = {}
+        for prop in layer.channels:
+            channels.setdefault(prop.channel, prop)
         for block in (CHANNELS[:4], CHANNELS[4:]):
             row = layout.row(align=True)
             for channel_id in block:
-                prop = channel_for(layer, channel_id)
+                prop = channels.get(channel_id)
                 if prop is None:
                     continue
                 row.prop(prop, 'enabled', text=CHANNEL_SHORT[channel_id], toggle=True)
         for channel_id in CHANNELS:
-            prop = channel_for(layer, channel_id)
+            prop = channels.get(channel_id)
             if prop is None or not prop.enabled:
                 continue
             label = CHANNEL_LABELS.get(channel_id, channel_id)
@@ -925,7 +944,7 @@ def draw_node(node, context, layout):
             # Any image attaches to any channel here, exactly like the panel's
             # Texture picker: the shader reads channel.image, so no link is needed.
             layout.template_ID(prop, 'image', open='image.open')
-        textured = [channel_for(layer, channel_id) for channel_id in CHANNELS]
+        textured = [channels.get(channel_id) for channel_id in CHANNELS]
         textured = [prop for prop in textured
                     if prop is not None and prop.enabled
                     and (prop.image or prop.detail_image or prop.procedural)]
@@ -955,7 +974,7 @@ def draw_node(node, context, layout):
         box.prop(layer, 'decal_depth', text='Depth')
     if layer.type == 'FILL':
         channel = context.scene.open_painter.properties_channel
-        prop = channel_for(layer, channel)
+        prop = channels.get(channel)
         if prop is not None:
             box = layout.box()
             box.label(text=CHANNEL_LABELS.get(channel, channel))

@@ -1,0 +1,937 @@
+{
+  "date": "2026-09-29",
+  "status": "INSTALLED_AND_VERIFIED",
+  "branch": "fix/windows-vulkan-performance",
+  "base_commit": "1645a4dbbb47aaabe2d5145ee4b6a5165fad02b6",
+  "source_sha256": "9e93f9b9c3f25d7994822b73bfcd258f9e3cfa95ae3d639221f5ca2b18baf6df",
+  "python_files": 312,
+  "archive_source_verified": true,
+  "performance_report": "docs/validation/windows-vulkan-round5.json",
+  "vulkan_validation": {
+    "requested_backend": "vulkan",
+    "selected_tests": [
+      "simulated-contracts",
+      "backend-contract",
+      "compact-readback",
+      "preview-readback",
+      "state-cache",
+      "memory-soak",
+      "procedurals",
+      "engine-parity",
+      "pixel-parity",
+      "pixel-publication",
+      "uniform-publication",
+      "fused-publication",
+      "constant-publication",
+      "engine-stages",
+      "gpu-strokes",
+      "pixel-strokes",
+      "authoring-workflow",
+      "pixel-authoring-workflow",
+      "gpu-filters",
+      "authoring-sources",
+      "material-nodes"
+    ],
+    "tests": [
+      {
+        "name": "simulated-contracts",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.12,
+        "scope": "simulated API contracts",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\simulated-contracts\\user\\datafiles"
+          },
+          "configuration_verified": true
+        }
+      },
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 4.5,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\backend-contract\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "compact-readback",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.14,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\compact-readback\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "preview-readback",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 4.85,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\preview-readback\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "state-cache",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.82,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\state-cache\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "memory-soak",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 51.59,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\memory-soak\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "procedurals",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 17.2,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\procedurals\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 44.71,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-parity\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 44.27,
+        "scope": "forced pixel publication on actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-parity\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 8.01,
+        "scope": "forced pixel publication on actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "uniform-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.82,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\uniform-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "fused-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 8.7,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\fused-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "constant-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 10.57,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\constant-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "engine-stages",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 19.08,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\engine-stages\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 13.67,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-strokes\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 15.73,
+        "scope": "forced pixel publication on actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-strokes\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 11.35,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-workflow\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 11.44,
+        "scope": "forced pixel publication on actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\pixel-authoring-workflow\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "gpu-filters",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.63,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\gpu-filters\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "authoring-sources",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.38,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\authoring-sources\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "material-nodes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.57,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-vulkan-round5\\material-nodes\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "VULKAN",
+        "renderer": "NVIDIA GeForce GTX 1050",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      }
+    ],
+    "status": "PASS",
+    "limitation": "Simulated contracts and forced publication do not validate a Vulkan/OpenGL driver."
+  },
+  "opengl_compatibility": {
+    "requested_backend": "opengl",
+    "selected_tests": [
+      "backend-contract",
+      "compact-readback",
+      "preview-readback",
+      "state-cache",
+      "memory-soak",
+      "engine-parity",
+      "uniform-publication",
+      "fused-publication",
+      "constant-publication",
+      "gpu-strokes"
+    ],
+    "tests": [
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.23,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\backend-contract\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "compact-readback",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 6.09,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\compact-readback\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "preview-readback",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.74,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\preview-readback\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "state-cache",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 13.1,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\state-cache\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "memory-soak",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 34.76,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\memory-soak\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 51.0,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\engine-parity\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "uniform-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 7.69,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\uniform-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "fused-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 8.42,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\fused-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "constant-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 9.76,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\constant-publication\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 16.42,
+        "scope": "actual GPU",
+        "log": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\run.log",
+        "profile_isolation": {
+          "root": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user",
+          "configuration": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user\\config",
+          "resource_overrides": {
+            "BLENDER_USER_RESOURCES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user",
+            "BLENDER_USER_CONFIG": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user\\config",
+            "BLENDER_USER_SCRIPTS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user\\scripts",
+            "BLENDER_USER_EXTENSIONS": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user\\extensions",
+            "BLENDER_USER_DATAFILES": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\matrix-opengl-round5\\gpu-strokes\\user\\datafiles"
+          },
+          "configuration_verified": true
+        },
+        "backend": "OPENGL",
+        "renderer": "NVIDIA GeForce GTX 1050/PCIe/SSE2",
+        "blender": "5.2.2 LTS",
+        "sampler_limit": 16
+      }
+    ],
+    "status": "PASS",
+    "limitation": "Simulated contracts and forced publication do not validate a Vulkan/OpenGL driver."
+  },
+  "integration_validation": [
+    {
+      "backend": "vulkan",
+      "returncode": 0
+    },
+    {
+      "backend": "opengl",
+      "returncode": 0
+    },
+    {
+      "test": "diagnostics_scheduling",
+      "returncode": 0
+    },
+    {
+      "test": "navigation_scheduling",
+      "returncode": 0
+    },
+    {
+      "test": "contributor_regressions",
+      "returncode": 0
+    },
+    {
+      "test": "graph_signature_cache",
+      "returncode": 0
+    },
+    {
+      "test": "graph_channel_controls",
+      "returncode": 0
+    },
+    {
+      "test": "engine_image_queries",
+      "returncode": 0
+    },
+    {
+      "test": "stroke_surface_bounds",
+      "returncode": 0
+    },
+    {
+      "test": "graph_mirror",
+      "returncode": 0
+    },
+    {
+      "test": "pure-tests",
+      "returncode": 0,
+      "note": "All tests must pass after portability fixes."
+    }
+  ],
+  "native_gui_validation": {
+    "status": "PASS",
+    "backend": "VULKAN",
+    "actual_preferences": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\config\\userpref.blend",
+    "source_sha256": "9e93f9b9c3f25d7994822b73bfcd258f9e3cfa95ae3d639221f5ca2b18baf6df",
+    "user_preferences_sha256_before": "7e13619e15baf1b5cc1ebc4de84a8fc0cc5797c77e89a0f83ccf5718a22b97c6",
+    "cases": [
+      {
+        "test": "graph-ui-round5-final2",
+        "status": "PASS",
+        "returncode": 0,
+        "report": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\graph-ui-round5-final2.json",
+        "screenshot": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\graph-ui-round5-final2.png"
+      },
+      {
+        "test": "native-ui-round5-final2",
+        "status": "PASS",
+        "returncode": 0,
+        "report": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\native-ui-round5-final2.json",
+        "screenshot": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\round5-final2-native\\workspace.png"
+      }
+    ],
+    "screenshots_reviewed": true,
+    "source_sha256_after": "9e93f9b9c3f25d7994822b73bfcd258f9e3cfa95ae3d639221f5ca2b18baf6df",
+    "source_hash_verified_after_run": true,
+    "user_preferences_sha256_after": "7e13619e15baf1b5cc1ebc4de84a8fc0cc5797c77e89a0f83ccf5718a22b97c6",
+    "user_preferences_unchanged": true,
+    "visual_review": "Both final-source screenshots opened and reviewed; no splash or modal obstruction. See per-case visual notes."
+  },
+  "pure_tests": {
+    "status": "PASS",
+    "ran": 352,
+    "passed": 349,
+    "skipped": 3,
+    "failures": 0,
+    "errors": 0,
+    "previous_windows_issues_resolved": true,
+    "log": ".blender-test/windows-vulkan/pure-tests-round5.log"
+  },
+  "package_stages": [
+    {
+      "stage": "build-round5",
+      "returncode": 0
+    },
+    {
+      "stage": "verify-test-profile-round5",
+      "returncode": 0
+    },
+    {
+      "stage": "validate-package-round5",
+      "returncode": 0
+    },
+    {
+      "stage": "install-package-round5-test",
+      "returncode": 0
+    },
+    {
+      "stage": "install-user-round5",
+      "returncode": 0
+    },
+    {
+      "stage": "verify-user-round5",
+      "returncode": 0
+    }
+  ],
+  "package_profile_isolation": {
+    "status": "PASS",
+    "user_preferences_unchanged_through_isolated_tests": true,
+    "preferences_sha256_before_install": "7e13619e15baf1b5cc1ebc4de84a8fc0cc5797c77e89a0f83ccf5718a22b97c6",
+    "profile": "C:\\Users\\User\\Desktop\\openpainter\\.blender-test\\windows-vulkan\\package-profile-round5"
+  },
+  "installation": {
+    "status": "PASS",
+    "blender": "5.2.2 LTS",
+    "backend": "VULKAN",
+    "renderer": "NVIDIA GeForce GTX 1050",
+    "preference_backend": "VULKAN",
+    "installed": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\extensions\\user_default\\open_painter",
+    "enabled": true,
+    "archive": "C:\\Users\\User\\Desktop\\openpainter\\dist\\open_painter-0.13.1-windows-vulkan-round5.zip",
+    "archive_sha256": "676426d6d47ed0c298403d535c037be4c45dea3f692625f424a28e7cc2e71237",
+    "verified_python_files": 312,
+    "preferences": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\config\\userpref.blend"
+  },
+  "fresh_start": {
+    "status": "PASS",
+    "backend": "VULKAN",
+    "enabled": true,
+    "installed": "C:\\Users\\User\\AppData\\Roaming\\Blender Foundation\\Blender\\5.2\\extensions\\user_default\\open_painter\\__init__.py"
+  },
+  "scope": "Measured and verified on this Windows/GTX1050 machine. GPU brush updates and engine edits are not display-presented viewport FPS or certification across other GPUs."
+}

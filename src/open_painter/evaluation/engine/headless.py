@@ -406,10 +406,12 @@ class Nodes:
     def __init__(self, tree):
         self._tree = tree
         self._items = []
+        self._image_nodes = None
 
     def new(self, kind):
         node = Node(self._tree, kind)
         self._items.append(node)
+        self._image_nodes = None
         return node
 
     def remove(self, node):
@@ -419,6 +421,20 @@ class Nodes:
         if node.bl_idname == 'ShaderNodeGroup' and isinstance(node._tree, Tree):
             node._tree._instances.discard(node)
         self._items.remove(node)
+        self._image_nodes = None
+
+    @property
+    def image_nodes(self):
+        """Stable image-node topology; each node's image remains a live binding.
+
+        Runtime signatures query these on every edit. Compiled trees contain
+        many arithmetic nodes, so rescan only after insertion or removal. The
+        tuple belongs to this collection and cannot retain a replaced tree.
+        """
+        if self._image_nodes is None:
+            self._image_nodes = tuple(node for node in self._items
+                                      if node.bl_idname == 'ShaderNodeTexImage')
+        return self._image_nodes
 
     def get(self, name, default=None):
         return next((node for node in self._items if node.name == name), default)

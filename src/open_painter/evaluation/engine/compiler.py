@@ -309,4 +309,6 @@ class EngineGraph(Graph):
     def unit_images(self, key):
         """(node, image) of every image node of a unit, in node order."""
         unit = self.units[key]
-        return [(node, node.image) for node in unit.tree.nodes if node.bl_idname == 'ShaderNodeTexImage']
+        # Only node membership is cached. Resource replacement, image identity
+        # and color/alpha metadata must be read afresh by the runtime.
+        return [(node, node.image) for node in unit.tree.nodes.image_nodes]

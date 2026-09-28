@@ -723,5 +723,6 @@ def register():
 def unregister():
     from . import rows
     rows.unregister_handlers()
+    mirror.clear_caches()
     bpy.types.NODE_MT_add.remove(add_menu)
     bpy.types.NODE_HT_header.remove(header)

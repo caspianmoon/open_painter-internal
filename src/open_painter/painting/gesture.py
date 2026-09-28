@@ -261,15 +261,18 @@ class Preview:
                 continue
             if resource is not None:
                 from ..evaluation.engine import runtime
-                base = np.array(runtime.device().readback(resource.texture, self.n)).reshape(self.n, self.n, 4)
+                # The bounded preview uses exact point samples. Download only
+                # those texels, instead of expanding and copying the full canvas
+                # before discarding most of it in _shrink.
+                base = np.array(runtime.device().readback_sampled(resource.texture, self.size)).reshape(self.size, self.size, 4)
                 if resource.mapping == 'rg':
                     base = base[..., [0, 0, 0, 1]]
                 self.resource_sources[channel] = resource
                 node.gpu_resource = None
             else:
                 base = images.pixels(source)
-            if self.factor > 1:
-                base = _shrink(base, self.factor)
+                if self.factor > 1:
+                    base = _shrink(base, self.factor)
             premultiplied = resource is None and bool(source.is_float and not source.get(RESOURCE))
             if premultiplied:
                 base = _straight(base)

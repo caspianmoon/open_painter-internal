@@ -78,7 +78,8 @@ class StrictGPU:
         self.attachments = []
         self.texture = SimpleNamespace(from_image=self.from_image)
         self.types = SimpleNamespace(
-            GPUTexture=lambda size, **kwargs: SimpleNamespace(width=size[0], height=size[1], image=False),
+            GPUTexture=lambda size, format='RGBA8', **kwargs: SimpleNamespace(
+                width=size[0], height=size[1], format=format, image=False),
             GPUShaderCreateInfo=Mock,
             GPUFrameBuffer=self.framebuffer,
             Buffer=lambda kind, n: np.zeros(n, np.float32))
@@ -107,7 +108,16 @@ class StrictGPU:
                 self.values['viewport'] = self.values['scissor'] = (0, 0, 1, 1)
 
         def read_color(*args, data):
-            data[:] = .375
+            components = {'R16F': 1, 'R32F': 1, 'RG16F': 2, 'RG32F': 2}.get(texture.format, 4)
+            if self.backend == 'VULKAN':
+                # Vulkan copies native components even when the caller requests RGBA.
+                data[:args[2] * args[3] * components] = .375
+            else:
+                values = data.reshape(-1, args[4])
+                values[:] = 0.0
+                if args[4] == 4:
+                    values[:, 3] = 1.0
+                values[:, :components] = .375
 
         return SimpleNamespace(bind=bind, read_color=read_color, clear=Mock())
 
@@ -228,6 +238,33 @@ class BackendContract(unittest.TestCase):
             self.assertEqual(set(dev._readbacks), {16})
             self.assertEqual(gpu.values, before)
 
+    def test_compact_readback_preserves_pixels_and_default_components(self):
+        for backend in ('OPENGL', 'VULKAN'):
+            with self.subTest(backend=backend), self.device(backend) as (gpu, dev):
+                before = gpu.values.copy()
+                for fmt, expected in (('R32F', (.375, 0, 0, 1)), ('RG16F', (.375, .375, 0, 1))):
+                    values = dev.readback(dev.texture(8, fmt), 8)
+                    np.testing.assert_array_equal(np.asarray(values).reshape(-1, 4), np.tile(expected, (64, 1)))
+                self.assertEqual(gpu.values, before)
+
+    def test_publication_keeps_gpu_rgba_expansion_and_height_precision(self):
+        with self.device('VULKAN') as (gpu, dev):
+            image = SimpleNamespace(size=(8, 8), pixels=SimpleNamespace(foreach_set=Mock()))
+            engine = runtime.Engine(None, SimpleNamespace(id='test'))
+            engine.pad = False
+            before = gpu.values.copy()
+            for channel, precise, fmt in (('ROUGHNESS', False, 'RGBA16F'), ('HEIGHT', False, 'RGBA32F'),
+                                          ('METALLIC', True, 'RGBA32F')):
+                engine.precise = precise
+                with dev.state():
+                    engine._publish(image, channel, dev.texture(8), 8)
+                self.assertIn((8, fmt), dev.pool)
+                values = image.pixels.foreach_set.call_args.args[0]
+                np.testing.assert_array_equal(np.asarray(values), np.full(8 * 8 * 4, .375))
+            calls = image.pixels.foreach_set.call_args_list
+            self.assertTrue(all(call.args[0] is calls[0].args[0] for call in calls))
+            self.assertEqual(gpu.values, before)
+
     def test_retention_counts_real_formats_and_pins_consumers(self):
         with self.device('OPENGL') as (_, dev):
             engine = runtime.Engine(None, SimpleNamespace(id='test'))
@@ -284,7 +321,9 @@ class BackendContract(unittest.TestCase):
             old = dev.texture(4, 'RGBA32F')
             dev.release(recent, 4, 'RGBA16F')
             dev.release(old, 4, 'RGBA32F')
-            dev.release(dev.texture(4, 'RGBA16F'), 4, 'RGBA16F')
+            # The immediate cap may evict the first free texture already.
+            recent = dev.texture(4, 'RGBA16F')
+            dev.release(recent, 4, 'RGBA16F')
             dev.trim(3)
             self.assertEqual(dev.memory()['pooled_bytes'], 128)
             self.assertIs(dev.texture(4, 'RGBA16F'), recent)

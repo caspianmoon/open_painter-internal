@@ -21,6 +21,8 @@ pure numpy and unit-tested against small meshes (``tests/unit/test_surface_reach
 """
 import numpy as np
 
+from ..geometry.triangle_bounds import TriangleBounds
+
 FACING = .05        # the kernel's front-facing threshold, applied to triangle normals during the walk
 CHUNK = 256         # samples per walk (matches the kernel's sample chunk)
 ANCHOR_WIDTH = 4    # x y z polygon
@@ -48,6 +50,7 @@ def prepare(target):
     cached = {'normals': normals.astype(np.float32), 'lo': corners.min(axis=1).astype(np.float32),
               'hi': corners.max(axis=1).astype(np.float32), 'corners': corners.astype(np.float32),
               'order': order, 'sorted_polygons': polygons[order], 'count': len(tri_vertices)}
+    cached['bounds_index'] = TriangleBounds(cached['lo'], cached['hi'])
     target['_reach'] = cached
     return cached
 
@@ -169,7 +172,7 @@ def nearest(reach, anchors, axes, band, which):
     for sample in np.flatnonzero(which):
         reach_box = float(band[sample])
         point = anchors[sample, :3]
-        near = np.flatnonzero(np.all(reach['lo'] <= point + reach_box, axis=1) & np.all(reach['hi'] >= point - reach_box, axis=1))
+        near = reach['bounds_index'].query(point - reach_box, point + reach_box)
         if not len(near):
             continue
         facing = reach['normals'][near] @ np.asarray(axes[sample], np.float32) > FACING
@@ -244,7 +247,7 @@ class Sheets:
         # Candidate triangles: those a stamp box of the stroke can reach.
         if len(samples):
             lo, hi = self.box_lo.min(axis=0), self.box_hi.max(axis=0)
-            self.candidates = np.flatnonzero(np.all(reach['lo'] <= hi, axis=1) & np.all(reach['hi'] >= lo, axis=1))
+            self.candidates = reach['bounds_index'].query(lo, hi)
         else:
             self.candidates = np.zeros(0, np.int64)
         self.tri_vertices = np.asarray(target['all_tri_vertices'], np.int64)[self.candidates]
@@ -319,6 +322,35 @@ class Sheets:
             visited = self.chunk(index)
             until = min(stop, (index + 1) * CHUNK)
             result[known, at - start:until - start] = visited[local[known], at - index * CHUNK:until - index * CHUNK]
+            at = until
+        return result
+
+    def mask_sorted(self, triangles, start, stop):
+        """Eligibility in a strictly increasing, unique material triangle list.
+
+        An immutable Surface validates that precondition once. Looking up the
+        sparse candidates in the material list avoids searching every material
+        triangle for each dab; the returned full mask has the same row order.
+        """
+        triangles = np.asarray(triangles, np.int64)
+        if len(self.candidates) >= len(triangles):
+            # A broad brush may include many other material slots. Search the
+            # smaller material list when inverse lookup would do more work.
+            return self.mask(triangles, start, stop)
+        result = np.zeros((len(triangles), stop - start), bool)
+        if not len(triangles) or not len(self.candidates):
+            return result
+        positions = np.minimum(np.searchsorted(triangles, self.candidates), len(triangles) - 1)
+        known = triangles[positions] == self.candidates
+        if not known.any():
+            return result
+        rows = positions[known]
+        at = start
+        while at < stop:
+            index = at // CHUNK
+            visited = self.chunk(index)
+            until = min(stop, (index + 1) * CHUNK)
+            result[rows, at - start:until - start] = visited[known, at - index * CHUNK:until - index * CHUNK]
             at = until
         return result
 

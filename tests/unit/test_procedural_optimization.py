@@ -78,7 +78,11 @@ class ProceduralOptimizationTests(unittest.TestCase):
         metadata = json.loads((HERE / "reference_noise_metadata.json").read_text())
         self.assertEqual(metadata["commit"], "df32483a158fb3852564654c6d10f5f2ff7673d4")
         for entry in metadata["files"].values():
-            self.assertEqual(hashlib.sha256((ROOT / entry["reference"]).read_bytes()).hexdigest(),
+            # The recorded hashes describe Git's LF source blobs. Windows Git
+            # may check text out as CRLF; Python loads either representation as
+            # the same source. Preserve every byte except that newline mapping.
+            content = (ROOT / entry["reference"]).read_bytes().replace(b"\r\n", b"\n")
+            self.assertEqual(hashlib.sha256(content).hexdigest(),
                              entry["sha256"])
 
     def test_all_sources_and_aliases_are_exact_at_wrapped_uvs_and_angles(self):

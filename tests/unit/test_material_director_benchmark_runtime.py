@@ -3,6 +3,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import time
@@ -13,6 +14,43 @@ from runtime import AuthRefreshRequired, MAX_AUTH_BYTES, isolated_login, preflig
 
 
 class BenchmarkRuntimeTests(unittest.TestCase):
+    def assert_private_copy(self, target):
+        if os.name != "nt":
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+            return
+        # Windows stat() exposes CRT read/write bits, not access permissions.
+        # Check the actual inherited ACL on both the temporary directory and
+        # the file, using only a synthetic login created by this test.
+        command = """
+$privateUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$privatePaths = @([System.IO.Path]::GetDirectoryName($env:OP_TEST_PRIVATE_PATH), $env:OP_TEST_PRIVATE_PATH)
+$privateRecords = foreach ($privatePath in $privatePaths) {
+    $privateAcl = Get-Acl -LiteralPath $privatePath -ErrorAction Stop
+    [pscustomobject]@{
+        user = $privateUser
+        owner = $privateAcl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+        allowed = @($privateAcl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) |
+            Where-Object { $_.AccessControlType -eq 'Allow' } |
+            ForEach-Object { $_.IdentityReference.Value })
+    }
+}
+ConvertTo-Json -InputObject @($privateRecords) -Depth 4 -Compress
+"""
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+            env=dict(os.environ, OP_TEST_PRIVATE_PATH=str(target)),
+            capture_output=True, text=True, check=True, timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW)
+        records = json.loads(completed.stdout)
+        self.assertEqual(len(records), 2)
+        for access in records:
+            self.assertEqual(access["owner"], access["user"])
+            self.assertTrue(access["allowed"])
+            # SYSTEM/admin access is analogous to privileged access to POSIX
+            # 0600 files. OWNER RIGHTS applies only to the verified file owner.
+            self.assertLessEqual(set(access["allowed"]),
+                                 {access["user"], "S-1-5-18", "S-1-5-32-544", "S-1-3-4"})
+
     def auth(self, directory, expires):
         payload = base64.urlsafe_b64encode(json.dumps({"exp": expires}).encode()).decode().rstrip("=")
         path = Path(directory) / "source.json"
@@ -29,7 +67,7 @@ class BenchmarkRuntimeTests(unittest.TestCase):
                 value = json.loads(target.read_text())
                 self.assertEqual(value["tokens"]["refresh_token"], "")
                 self.assertNotIn("never-copy-me", target.read_text())
-                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+                self.assert_private_copy(target)
                 self.assertEqual(value["tokens"]["id_token"], "test-identity")
             self.assertFalse(isolated.exists())
             self.assertEqual(source.read_bytes(), before)

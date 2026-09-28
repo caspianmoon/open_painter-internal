@@ -164,6 +164,46 @@ text = stages.report(scene, ts)
 assert 'pixels' in text and 'goes through the CPU' in text, text
 print('PIXEL_PUBLISH report: PASS', flush=True)
 
+# Scalar channels keep RGB equal and alpha opaque. Allow driver-specific half-float
+# rounding for preview outputs; Height and precise mode must retain float32 values,
+# including details smaller than a half-float step.
+from types import SimpleNamespace
+from open_painter.evaluation import metrics
+from open_painter.evaluation.engine.formats import SCALAR_CHANNELS
+n = 8
+values = np.linspace(-.1, 1.1, n * n, dtype=np.float32).reshape(n, n)
+values[2, 3] = .50003125
+source_values = np.empty((n, n, 4), np.float32)
+source_values[..., :3] = values[..., None]
+source_values[..., 3] = .25
+dev = runtime.device()
+source = dev.upload(source_values)
+target = images.create('Scalar publication regression', n)
+isolated = runtime.Engine(None, SimpleNamespace(id='scalar-regression'))
+isolated.pad = False
+try:
+    for precise in (False, True):
+        isolated.precise = precise
+        for channel in sorted(SCALAR_CHANNELS):
+            with metrics.Metrics() as observed, dev.state():
+                isolated._publish(target, channel, source, n)
+            actual = images.pixels(target)
+            full_precision = precise or channel == 'HEIGHT'
+            expected = np.repeat(np.clip(values, 0, 1)[..., None], 3, axis=2)
+            if full_precision:
+                np.testing.assert_array_equal(actual[..., :3], expected)
+                assert actual[2, 3, 0] != np.float32(.5), 'sub-half-float detail was lost'
+            else:
+                np.testing.assert_allclose(actual[..., :3], expected, atol=5e-4, rtol=0,
+                                           err_msg=f'{channel}, precise={precise}')
+            np.testing.assert_array_equal(actual[..., :3], np.repeat(actual[..., :1], 3, axis=2))
+            np.testing.assert_array_equal(actual[..., 3], np.ones((n, n), np.float32))
+            assert observed.counts['engine_texture_readback_bytes'] == n * n * 4 * 4
+finally:
+    dev.discard(source)
+    bpy.data.images.remove(target)
+print('PIXEL_PUBLISH scalar precision, alpha and transfer size: PASS', flush=True)
+
 runtime.PIXEL_PUBLISH = None
 print('PIXEL_PUBLISH_PASS', flush=True)
 open_painter.unregister()

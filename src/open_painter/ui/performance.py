@@ -217,7 +217,7 @@ class OP_MT_native_performance(bpy.types.Menu):
 def draw_freeze_status(layout, context, ts):
     """The set's shader status line, marking a stroke-time freeze, plus the toggle."""
     from ..evaluation.shader_preview import diagnostics, status
-    info = diagnostics(context.scene, ts)
+    info = diagnostics(context.scene, ts, details=False)
     layout.label(text=status(context.scene, ts), icon='TIME' if info.get('frozen') else 'INFO')
     layout.prop(context.scene.open_painter, 'freeze_while_painting')
 

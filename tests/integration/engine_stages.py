@@ -10,6 +10,7 @@ stage and the heaviest passes.
 """
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from time import monotonic
 
@@ -42,6 +43,23 @@ def rows(scene, ts):
     return list(shader_preview._sessions[shader_preview.key_for(scene, ts)].get('history', ()))
 
 
+def completed_update(history):
+    """One edit may publish over several budgeted Vulkan ticks; retain every stage."""
+    assert history, 'the update must record an evaluation'
+    combined = dict(history[-1])
+    for field in (*stages.STAGES, 'builds', 'rebuilt', 'reused', 'updates',
+                  'compiles', 'passes', 'total'):
+        combined[field] = sum(row[field] for row in history)
+    for field in ('render_by_kind', 'passes_by_kind'):
+        totals = Counter()
+        for row in history:
+            totals.update(row[field])
+        combined[field] = dict(totals)
+    combined['published'] = [channel for row in history for channel in row['published']]
+    assert not combined['deferred'], 'the completed update still holds channels'
+    return combined
+
+
 def layer_by_id(ts, identifier):
     return next(layer for layer in ts.layers if layer.id == identifier)
 
@@ -71,7 +89,7 @@ report = {}
 
 # ---- 1. the first build: every unit rebuilt, programs compiled, channels published --------------------
 ready(scene, ts)
-first = rows(scene, ts)[-1]
+first = completed_update(rows(scene, ts))
 assert first['builds'] == 1 and first['rebuilt'] > 0 and first['reused'] == 0, first
 assert first['compiles'] > 0 and first['compile'] > 0 and first['translate'] > 0, first
 assert first['passes'] > 0 and first['render'] > 0 and first['published'], first
@@ -86,8 +104,7 @@ print('ENGINE_STAGES first build: PASS', json.dumps({k: first[k] for k in ('tota
 count = len(rows(scene, ts))
 layer_by_id(ts, rust_id).masks[0].strength = .6
 ready(scene, ts)
-numeric = rows(scene, ts)[-1]
-assert len(rows(scene, ts)) == count + 1, 'a numeric edit must record one row'
+numeric = completed_update(rows(scene, ts)[count:])
 assert numeric['builds'] == 0 and numeric['updates'] >= 1 and numeric['update'] > 0, numeric
 assert numeric['compiles'] == 0 and numeric['translate'] == 0 and numeric['compile'] == 0, numeric
 assert numeric['published'] and numeric['render'] > 0, numeric
@@ -97,9 +114,10 @@ print('ENGINE_STAGES numeric edit: PASS', flush=True)
 # ---- 3. a structural edit inside the Mask Graph: its unit alone is rebuilt ------------------------------
 graph = layer_by_id(ts, rust_id).masks[0].node_group
 multiply = next(node for node in graph.nodes if node.bl_idname == 'OPMGMath')
+count = len(rows(scene, ts))
 multiply.operation = 'MAXIMUM'
 ready(scene, ts)
-structural = rows(scene, ts)[-1]
+structural = completed_update(rows(scene, ts)[count:])
 assert structural['builds'] == 1 and structural['rebuilt'] == 1 and structural['reused'] > 0, structural
 assert structural['compiles'] >= 1 and structural['passes_by_kind'].get('GRAPH') == 1, structural
 report['structural'] = structural
@@ -117,7 +135,11 @@ assert profiled['profiled'] and len(rows(scene, ts)) == count + 1, profiled
 assert graph_key in units and units[graph_key] > 0, sorted(units)
 # Two octave-summed noises cost more than a flat fill's pass.
 assert units[graph_key] >= min(ms for key, ms in units.items() if key[0] == 'CHANNEL'), units
-assert set(units) == {key for key in engine.states if key not in engine.inline}, 'every pass is timed once'
+# Uniform output proofs can omit compiled channel units entirely. Profile each
+# executed pass once; skipped work must not be charged as a rendered pass.
+assert set(units) == set(engine.rendered) and len(units) == len(engine.rendered), 'every executed pass is timed once'
+if runtime.device().backend == 'VULKAN' and runtime.PIXEL_PUBLISH is None:
+    assert any(key not in engine.inline and key not in units for key in engine.states), 'neutral channel was not skipped'
 assert abs(sum(units.values()) - profiled['render']) < 1e-6, (sum(units.values()), profiled['render'])
 assert len(profiled['published']) == len([o for o in ts.outputs if o.image is not None]), profiled['published']
 assert np.abs(engine.render_channel('BASE_COLOR') - before).max() == 0, 'profiling changed the result'

@@ -1283,8 +1283,16 @@ class Graph(Math):
     def cache_states(self):
         """'CURRENT' | 'STALE' | 'MISSING' per cached layer channel, for diagnostics and the UI."""
         states = {}
+        if not self.cache_bindings:
+            return states
+        # Each layer can publish several cached channels. Resolve the current
+        # RNA collection once per report, not once per channel. Keep the first
+        # match just as _find_layer does while a duplicate is being repaired.
+        layers = {}
+        for layer in self.ts.layers:
+            layers.setdefault(layer.id, layer)
         for binding in self.cache_bindings:
-            layer = self._find_layer(binding.layer_id)
+            layer = layers.get(binding.layer_id)
             row = self._cache_row(layer, binding.channel) if layer is not None else None
             image = row.image if row is not None else None
             if image is None or tuple(image.size) != (self.n, self.n) or not image.has_data:

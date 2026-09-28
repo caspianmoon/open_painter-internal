@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import bpy
 import gpu
@@ -63,9 +64,14 @@ for mode in ('MAX', 'FLOW'):
                 canvas = gpu_strokes.Canvas(entries, n, {c: base for c in ('BASE_COLOR', 'ROUGHNESS', 'HEIGHT')},
                                             {c: False for c in ('BASE_COLOR', 'ROUGHNESS', 'HEIGHT')})
                 try:
+                    depth_texture = None
                     for i in range(len(samples)):
                         canvas.stamp(samples[i:i + 1], data, anchors[i:i + 1])
                         canvas.publish(data)
+                        if reach == 'DEPTH':
+                            if depth_texture is not None:
+                                assert canvas.depth_eligible is depth_texture, 'DEPTH texture was replaced per dab'
+                            depth_texture = canvas.depth_eligible
                     from open_painter.painting.surface_reach import pack_anchors
                     stroke = SimpleNamespace(samples=stroke_raster.pack_samples(samples),
                         hardness=settings.hardness, flow=settings.flow, opacity=settings.opacity,
@@ -92,7 +98,89 @@ for mode in ('MAX', 'FLOW'):
                         cases += 1
                 finally:
                     canvas.close()
+                    assert canvas.depth_eligible is None
+                    if depth_texture is not None:
+                        assert id(depth_texture) not in runtime.device()._leases
+                    depth_texture = None
 print('GPU_STROKES_PASS', cases, gpu.platform.backend_type_get(), flush=True)
+
+# Changing reach within one canvas must never reuse the all-ones DEPTH mask
+# for SURFACE. Two nearby sheets use separate UV islands, so the CPU reference
+# visibly distinguishes the eligible front sheet from the excluded rear one.
+from open_painter.painting.surface_reach import pack_anchors
+paired = [{key: value.copy() for key, value in entries[0].items() if isinstance(value, np.ndarray)}
+          for _ in range(2)]
+for index, entry in enumerate(paired):
+    entry['positions'][:, 2] += .02 * index
+    entry['uv'][:, 0] = entry['uv'][:, 0] * .45 + .025 + .5 * index
+settings.blend, settings.accumulate, settings.alpha_image = 'PAINT', 'MAX', None
+canvas = gpu_strokes.Canvas(paired, n, {'BASE_COLOR': base}, {'BASE_COLOR': False}, set_id='depth-cache-test')
+dev = runtime.device()
+coverage = np.zeros((n, n), np.float32)
+try:
+    with patch.object(dev, 'upload', wraps=dev.upload) as uploads:
+        cached = None
+        for index, reach in enumerate(('DEPTH', 'SURFACE', 'DEPTH', 'SURFACE')):
+            row = samples[:1].copy()
+            row[0, :3], row[0, 7] = (-.6 + .4 * index, .1, 0), .18
+            hit = np.array([[*row[0, :3], 0]], np.float32)
+            settings.reach = reach
+            data = gesture.stroke_settings(settings)
+            canvas.stamp(row, data, hit)
+            canvas.publish(data)
+            if cached is None:
+                cached = canvas.depth_eligible
+            assert canvas.depth_eligible is cached
+            stroke = SimpleNamespace(samples=stroke_raster.pack_samples(row), hardness=settings.hardness,
+                flow=settings.flow, opacity=1., accumulate='MAX', projection='SURFACE', plane_normal=(0, 0, 1),
+                alpha_image=None, alpha_rotation='RAKE', alpha_angle=0, depth_limit=settings.depth_limit,
+                reach=reach, anchors=pack_anchors(hit))
+            coverage = np.maximum(coverage, stroke_raster._rasterise(stroke, n, paired))
+            alpha_coverage = coverage[..., None] * settings.opacity
+            expected = base.copy()
+            out_alpha = alpha_coverage + base[..., 3:4] * (1 - alpha_coverage)
+            expected[..., :3] = (np.array(settings.base_color[:3]) * alpha_coverage +
+                                 base[..., :3] * base[..., 3:4] * (1 - alpha_coverage)) / out_alpha
+            expected[..., 3:4] = out_alpha
+            actual = np.array(dev.readback(canvas.outputs['BASE_COLOR'].texture, n)).reshape(n, n, 4)
+            assert np.max(np.abs(actual - expected)) <= 1e-3, (index, reach, float(np.max(np.abs(actual - expected))))
+        # One brush alpha, one retained DEPTH mask, two varying SURFACE masks.
+        assert uploads.call_count == 4, uploads.call_count
+        own_textures = [canvas.surface.position, canvas.surface.normal, canvas.coverage, canvas.scratch,
+                        canvas.alpha, cached, *canvas.bases.values(), *(r.texture for r in canvas.outputs.values())]
+        assert gpu_strokes.active_bytes('depth-cache-test') == sum(dev._leases[id(t)] for t in own_textures) + canvas.surface.bounds_bytes
+finally:
+    canvas.close()
+assert id(cached) not in dev._leases and gpu_strokes.active_bytes('depth-cache-test') == 0
+cached = None
+own_textures.clear()
+
+# Allocation failure leaves no half-owned mask; failures after allocation keep
+# a cached DEPTH mask owned until close and always retire temporary SURFACE masks.
+for reach, failure in (('DEPTH', 'upload'), ('DEPTH', 'draw'), ('SURFACE', 'draw')):
+    before = set(dev._leases)
+    canvas = gpu_strokes.Canvas(entries, n, {'BASE_COLOR': base}, {'BASE_COLOR': False})
+    settings.reach = reach
+    data = gesture.stroke_settings(settings)
+    # Pre-create the alpha so the injected upload failure specifically targets
+    # the eligibility mask, rather than the unrelated one-texel brush alpha.
+    canvas.alpha = dev.upload(np.ones((1, 1), np.float32), 'R32F')
+    canvas.alpha_key = None
+    try:
+        with patch.object(dev, failure, side_effect=RuntimeError('injected eligibility failure')):
+            try:
+                canvas.stamp(samples[:1], data)
+                raise AssertionError('expected injected eligibility failure')
+            except RuntimeError as error:
+                assert str(error) == 'injected eligibility failure'
+        if failure == 'upload' or reach == 'SURFACE':
+            assert canvas.depth_eligible is None
+        else:
+            assert id(canvas.depth_eligible) in dev._leases
+    finally:
+        canvas.close()
+    assert set(dev._leases) == before, (reach, failure, set(dev._leases) - before)
+print('GPU_STROKE_DEPTH_CACHE_PASS', gpu.platform.backend_type_get(), flush=True)
 
 # The engine must consume persisted records through GPU inputs and restore a
 # prior prefix through its region history without rerasterizing old strokes.
@@ -157,7 +245,6 @@ canvas.close()
 assert surface.position is None and surface.normal is None
 
 # Partial shader failures preserve records and publish a deterministic CPU replay.
-from unittest.mock import patch
 with patch.object(gpu_strokes.Canvas, 'publish', side_effect=RuntimeError('injected pass failure')):
     with metrics.Metrics() as measured:
         strokes.record(scene.open_painter, ts, layer, samples[1:2], settings, universal=False)

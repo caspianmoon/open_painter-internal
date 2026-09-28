@@ -19,7 +19,7 @@ import bpy
 
 from .tree import TEXTURE_NODES, UNARY, VECTOR_SOCKET
 
-KINDS = {'OPMGCoordinates': 'coordinates', 'OPMGValue': 'value', 'OPMGMeshMap': 'mesh_map', 'OPMGMath': 'math',
+KINDS = {'OPMGText': 'text', 'OPMGCoordinates': 'coordinates', 'OPMGValue': 'value', 'OPMGMeshMap': 'mesh_map', 'OPMGMath': 'math',
          'OPMGMix': 'mix', 'OPMGRamp': 'ramp', 'OPMGLevels': 'levels', 'OPMGMapping': 'mapping',
          **{name: 'procedural' for name in TEXTURE_NODES}}
 NUMBERS = {'value': ('value',), 'procedural': ('scale', 'seed'), 'levels': ('black', 'white', 'gamma', 'output_black',
@@ -40,6 +40,9 @@ class Step:
     def settings(self):
         """The node's compiled settings (not its uniforms)."""
         node = self.node
+        if self.kind == 'text':
+            from ..evaluation.text_source import signature
+            return signature(node.text)
         if self.kind in {'procedural', 'mesh_map'}:
             return (node.kind,)
         if self.kind == 'math':

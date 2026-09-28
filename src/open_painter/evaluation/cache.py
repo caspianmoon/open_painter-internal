@@ -637,6 +637,10 @@ def _relearn(*, forget_corrections):
 
 @persistent
 def on_load(_):
+    from .text_source import clear as clear_text
+    clear_text()
+    from ..painting.gpu_sources import clear as clear_stroke_gpu
+    clear_stroke_gpu()
     from ..baking.bake_manager import forget as forget_released
     from .shader_resources import forget_graveyard, retire_unloaded_leaves, freeze_new_leaves
     forget_graveyard()         # the previous file's released datablocks went with it
@@ -813,6 +817,8 @@ def register():
 
 
 def unregister():
+    from .text_source import clear as clear_text
+    clear_text()
     from ..painting.paint_session import restore_faces
     from .raster_cache import clear_shared
 

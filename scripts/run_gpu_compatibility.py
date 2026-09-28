@@ -39,6 +39,12 @@ def main():
             ('pixel-parity', 'engine_parity.py', True),
             ('pixel-publication', 'engine_pixel_publish.py', True),
             ('engine-stages', 'engine_stages.py', False),
+            ('gpu-strokes', 'gpu_strokes.py', False),
+            ('pixel-strokes', 'gpu_strokes.py', True),
+            ('authoring-workflow', 'authoring_workflow.py', False),
+            ('pixel-authoring-workflow', 'authoring_workflow.py', True),
+            ('gpu-filters', 'engine_filters.py', False),
+            ('authoring-sources', 'authoring_sources.py', False),
             ('material-nodes', 'material_nodes.py', False)]
     results = []
     for name, script, pixels in runs:

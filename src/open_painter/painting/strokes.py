@@ -124,7 +124,7 @@ SCOPE_VERSION = 1   # explicit per-stroke permission (0.13 hardening, H2)
 
 
 def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), universal=True, key='', sets=None,
-           anchors=None):
+           anchors=None, dabs=None):
     """Store a gesture as a stroke of the layer's key (or of ``key``: a Vector Strokes
     mask's own key); link paint layers in other sets it reaches. ``sets`` (ids) limits
     the sets a universal stroke may link to those the gesture explicitly crossed.
@@ -151,6 +151,9 @@ def record(project, ts, layer, samples, settings, plane_normal=(0, 0, 1), univer
     stroke.plane_normal = plane_normal
     stroke.samples = stroke_raster.pack_samples(samples)
     stroke.sample_count = len(samples)
+    if dabs is not None:
+        from .payload import VERSION, encode
+        stroke.payload_version, stroke.dab_payload = VERSION, encode(dabs)
     if anchors is not None and len(anchors) == len(samples):
         from .surface_reach import pack_anchors
         stroke.anchors = pack_anchors(anchors)
@@ -253,7 +256,8 @@ def enable_channels(project, key):
 STROKE_FIELDS = ('name', 'radius', 'hardness', 'opacity', 'flow', 'accumulate', 'alpha_image', 'alpha_rotation',
                  'alpha_angle', 'projection', 'plane_normal', 'depth_limit', 'blend', 'channels', 'base_color',
                  'roughness', 'metallic', 'height', 'ao', 'emission', 'opacity_value', 'normal', 'samples',
-                 'sample_count', 'bounds_min', 'bounds_max', 'order', 'anchors', 'reach', 'scope', 'scope_version')
+                 'sample_count', 'bounds_min', 'bounds_max', 'order', 'anchors', 'reach', 'scope', 'scope_version',
+                 'payload_version', 'dab_payload', 'brush_graph_data')
 
 
 def copy_key(project, key, ts=None, into=None):

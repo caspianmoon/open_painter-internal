@@ -144,6 +144,7 @@ def _image(node):
     node.outputs._add(Socket(node, 'Color', RGBA, True))
     node.outputs._add(Socket(node, 'Alpha', VALUE, True))
     node._image, node._image_key = None, None
+    node.gpu_resource = None
     node.interpolation = 'Linear'
     node.extension = 'REPEAT'
     node.projection = 'FLAT'
@@ -200,12 +201,20 @@ def _group_io(node):
             node._interface_socket(item)
 
 
+def _spatial_filter(node):
+    node.inputs._add(Socket(node, 'Color', RGBA, False))
+    node.inputs._add(Socket(node, 'Alpha', VALUE, False, 1.0))
+    node.outputs._add(Socket(node, 'Color', RGBA, True))
+    node.effect = None
+
+
 TEMPLATES = {
     'ShaderNodeMath': _math, 'ShaderNodeVectorMath': _vector_math, 'ShaderNodeCombineXYZ': _combine,
     'ShaderNodeSeparateXYZ': _separate, 'ShaderNodeRGB': _rgb, 'ShaderNodeValue': _value,
     'ShaderNodeTexImage': _image, 'ShaderNodeNewGeometry': _geometry, 'ShaderNodeTexCoord': _coordinates,
     'ShaderNodeNormalMap': _normal_map, 'ShaderNodeUVMap': _uv_map, 'ShaderNodeGroup': _group,
     'NodeGroupInput': _group_io, 'NodeGroupOutput': _group_io, 'OPProcedural': _procedural,
+    'OPSpatialFilter': _spatial_filter,
 }
 # Blender's node.type strings, for code that inspects built trees.
 TYPES = {'ShaderNodeMath': 'MATH', 'ShaderNodeVectorMath': 'VECT_MATH', 'ShaderNodeCombineXYZ': 'COMBXYZ',
@@ -213,6 +222,7 @@ TYPES = {'ShaderNodeMath': 'MATH', 'ShaderNodeVectorMath': 'VECT_MATH', 'ShaderN
          'ShaderNodeTexImage': 'TEX_IMAGE', 'ShaderNodeNewGeometry': 'NEW_GEOMETRY', 'ShaderNodeTexCoord': 'TEX_COORD',
          'ShaderNodeNormalMap': 'NORMAL_MAP', 'ShaderNodeUVMap': 'UVMAP', 'ShaderNodeGroup': 'GROUP',
          'NodeGroupInput': 'GROUP_INPUT', 'NodeGroupOutput': 'GROUP_OUTPUT', 'OPProcedural': 'OP_PROCEDURAL'}
+TYPES['OPSpatialFilter'] = 'OP_SPATIAL_FILTER'
 
 
 class Node:
@@ -269,6 +279,7 @@ class Node:
     def release_image(self):
         """Stop binding the image (the unit is discarded)."""
         if self.bl_idname == 'ShaderNodeTexImage':
+            self.gpu_resource = None
             self.image = None
 
     # ---- group nodes ----------------------------------------------------------

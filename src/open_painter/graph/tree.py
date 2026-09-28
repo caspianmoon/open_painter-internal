@@ -33,6 +33,8 @@ class OP_GraphTree(bpy.types.NodeTree):
         from ..registration import _registered
         if not _registered:
             return
+        if self.get('op_brush_graph'):
+            return  # validated and frozen once, when a gesture starts
         if self.get("op_mask_graph"):
             from ..procedural_graph import edits as mask_graph_edits
             mask_graph_edits.tree_changed(self)
@@ -91,7 +93,7 @@ class _GraphNode:
 
     @classmethod
     def poll(cls, tree):
-        return tree.bl_idname == TREE_ID and not tree.get("op_mask_graph")   # a Mask Graph has its own nodes
+        return tree.bl_idname == TREE_ID and not tree.get("op_mask_graph") and not tree.get('op_brush_graph')
 
     def draw_buttons(self, context, layout):
         from . import mirror

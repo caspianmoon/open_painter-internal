@@ -10,7 +10,7 @@ version = tomllib.loads((root / "blender_manifest.toml").read_text())["version"]
 repo = bpy.context.preferences.extensions.repos.new(
     name="Open Painter Test",
     module="open_painter_test",
-    custom_directory=str(root / ".blender-test/extension-repository"),
+    custom_directory=os.environ.get('OP_INSTALL_TEST_REPOSITORY', str(root / ".blender-test/extension-repository")),
 )
 print("INSTALL_REPO", repo.module, repo.directory)
 result = bpy.ops.extensions.package_install_files(
@@ -88,6 +88,19 @@ assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
 units = shader_preview.session_graph(bpy.context.scene, ts).units
 assert any(key[0] == 'GRAPH' for key in units), sorted(units)
 print('INSTALLED_NATIVE_SHADER_PASS', shader_preview.diagnostics(bpy.context.scene, ts))
+assert importlib.import_module(module + '.smart_materials.format').VERSION == 5
+mask.source = 'TEXT'
+mask.text.content = 'Installed text'
+assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
+assert mask.text.image is not None and mask.text.image.packed_file
+brush_graph = importlib.import_module(module + '.painting.brush_graph')
+tree = bpy.data.node_groups.new('Installed Brush Graph', 'OpenPainterGraph')
+tree[brush_graph.MARKER] = True
+inputs, output = tree.nodes.new('OPBrushInputs'), tree.nodes.new('OPBrushOutput')
+tree.links.new(inputs.outputs['Pressure'], output.inputs['Flow'])
+program = brush_graph.compile(tree)
+assert abs(brush_graph.evaluate(program, dict(brush_graph.INPUTS, Pressure=.4), 1)['Flow'] - .4) < 1e-6
+print('INSTALLED_AUTHORING_PASS')
 director = importlib.import_module(module + '.ai.session')
 document = importlib.import_module(module + '.authoring.document')
 transactions = importlib.import_module(module + '.authoring.transactions')

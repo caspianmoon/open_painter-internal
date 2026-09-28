@@ -129,6 +129,9 @@ def _moved(entry, ts):
 
 def _alive(entry, ts):
     try:
+        engine = entry.get('engine')
+        if engine is not None and engine.scene_uid != getattr(ts.id_data, 'session_uid', None):
+            return False
         return not _moved(entry, ts)
     except (ReferenceError, AttributeError):
         return False
@@ -387,7 +390,9 @@ def ensure(scene, ts):
             raise
         entry = _sessions.setdefault(key, {})
         engine = entry.get('engine')
-        if engine is None or engine.set_id != ts.id:
+        if engine is None or engine.set_id != ts.id or engine.scene_uid != getattr(scene, 'session_uid', None):
+            if engine is not None:
+                engine.close()
             engine = Engine(scene, ts)
         engine.adopt(candidate)
         entry.update(graph=candidate, engine=engine, dirty=True,
@@ -458,6 +463,8 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
     started = perf_counter()
     result = None
     for scene, ts, layer in _owners(owner):
+        from ..core.shared_stacks import publish
+        publish(ts)
         if not requested(ts):
             continue
         key = key_for(scene, ts)
@@ -813,6 +820,8 @@ def native_paint_input(scene):
 
 
 def prune(live):
+    from ..painting.gpu_sources import prune as prune_strokes
+    prune_strokes(live)
     for key in set(_deferred) - set(live):
         _deferred.pop(key, None)
     for key in set(_retiring) - set(live):

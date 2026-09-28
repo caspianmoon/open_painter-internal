@@ -1,4 +1,4 @@
-# Smart material format, version 3
+# Smart material format, version 5
 
 A `.openpaintmaterial` file is either UTF-8 JSON (for constant/procedural-only materials) or a ZIP:
 
@@ -8,10 +8,10 @@ assets/0000.exr
 assets/0001.exr
 ```
 
-`material.json` has `format_version: 3`, `name`, an ordered `layers` array, and optional
+`material.json` has `format_version: 5`, `name`, an ordered `layers` array, and optional
 `surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`,
 `height_distance`). Missing `height_distance` preserves the target texture set's
-existing setting. Version 1 and 2 files remain readable. Each layer has
+existing setting. Versions 1–4 remain readable. Each layer has
 `id`, `name`, `type` (`FILL`, `PAINT`, `FOLDER`), optional `parent_id`, `visible`, `opacity`,
 `blend_mode`, `channels`, and `masks`. Layers run bottom to top. Defaults are Blender property defaults;
 missing channels on imported non-folder layers are created disabled. IDs must be unique and folder
@@ -37,7 +37,7 @@ Masks support `source` (PAINT/BAKED/GENERATOR/NOISE/FILL/PROCEDURAL/FILTER/SCENE
 (`detail_height_anchor`, `detail_normal_anchor`, `detail_height_strength`, `detail_normal_strength`, `detail_radius`). Baked maps are resolved in the target texture set; they are
 not exported as project map records. A baked map explicitly assigned as a layer texture is bundled.
 
-The importer accepts versions 1 to 3, at most 256 layers and 512 MiB uncompressed ZIP data.
+The importer accepts versions 1 to 5, at most 256 layers and 512 MiB uncompressed ZIP data.
 Only directly contained `assets/*.exr` entries can satisfy asset references. Files are read by name
 and written to generated temporary paths; archive paths are never extracted directly. Invalid input
 raises an actionable error and rolls back newly created Blender data. Imported metadata is not executable.
@@ -72,3 +72,28 @@ A channel's optional `mesh_map` names its destination texture-set bake (for exam
 archives. This prevents a saved material from carrying the donor object's normal map.
 Installed profiled modules appear in the Smart Materials shelf and material picker;
 the module data and textures are distributed separately from the core add-on.
+
+## Version 5 authoring data
+
+Stroke records retain the existing packed float32 sample rows and optional surface
+anchors. `payload_version: 1` and `dab_payload` add a JSON object with `version: 1`
+and exactly one `dabs` record per sample. Records contain resolved material/brush
+`values`, an optional world-space smudge `donor`, and an optional reflected
+`planar` direction. Import validates dimensions, finite numbers and supported
+fields. `brush_graph_data` contains the frozen graph program and stable graph/node
+IDs for provenance; evaluation uses the resolved samples. Particle contacts use
+ordinary samples and never require simulation during replay or export.
+
+TEXT masks contain a `text` settings record with `schema_version: 1`: content, font path, normalized size,
+alignment, character/line spacing, position and the generated image asset. Font
+files are not bundled. A missing font retains the saved image. Native Mask Graphs
+are portable through `graph_data` version 1: an allowlisted node list, custom
+settings, input values and links. Text nodes include their generated image assets.
+Legacy Blender shader graphs still require baking before material export.
+
+In blend files, linked UDIM sets carry `shared_stack_version: 1`, `shared_stack_id` and `shared_stack_owner`.
+The owner holds the authoritative recipe; tile collections materialize that recipe
+using matching layer IDs while retaining their own images, baked maps, resolution
+and caches. Material export captures the selected tile's recipe and pixel assets;
+import creates an independent material with fresh IDs. Existing blend files with
+empty sharing markers retain independent tile stacks.

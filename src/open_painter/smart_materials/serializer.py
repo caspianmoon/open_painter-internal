@@ -60,6 +60,10 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
         return value
 
     def layer_data(layer):
+        from ..evaluation.text_source import ensure as ensure_text
+        for mask in layer.masks:
+            if mask.source == 'TEXT':
+                ensure_text(mask.text, int(ts.resolution))
         for channel in layer.channels:
             for field in ("image", "detail_image"):
                 if getattr(channel, field + "_name") and not getattr(channel, field):
@@ -90,7 +94,8 @@ def save(ts, path: str | Path, root_id=None, module=None) -> Path:
                         mask['mesh'][name + '_name'] = mask['mesh'][name].name
                 mask['mesh'].update(object=None, collection=None, material=None)
             if mask.get('source') == 'GRAPH':
-                raise ValueError('Custom Graph masks are not portable; bake the mask stack or replace the graph before saving a material')
+                from .graph_codec import encode as encode_graph
+                mask['graph_data'] = encode_graph(mask['node_group'], int(ts.resolution))
             mask['node_group'] = None   # a graph picked before the source changed
             field = mask['influence']
             if mask.get('source') == 'SCENE' and (field['mode'] != 'FROZEN' or not field['image']):

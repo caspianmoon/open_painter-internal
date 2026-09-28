@@ -1,5 +1,22 @@
 # Changes
 
+## Unreleased — GPU painting and authoring
+
+- Cache accounting uses actual texture formats; scalar GPU stages use RG16F and Height
+  uses RG32F. Painting can sample owned GPU resources, update affected regions and
+  restore evictable GPU undo patches. Persistent records remain authoritative.
+- Neighborhood filters use GPU passes with CPU-reference parity and seam-aware Surface
+  padding. Unsupported inputs keep the existing CPU path.
+- Add object-local XYZ symmetry, multichannel material smudging, editable text masks,
+  Brush Graphs and seeded particle painting with saved contact samples.
+- New UDIM groups share recipes while retaining tile-local pixels and resolutions.
+  Existing projects stay independent; explicit linking checks for conflicts, and
+  Make Independent copies editable stroke histories.
+- Smart materials write version 5, read versions 1–4 and include resolved stroke
+  payloads, text assets and portable native Mask Graphs.
+- Isolate temporary scene texture trees and stale engine sessions. Vulkan/OpenGL
+  contracts are simulated; actual GPU validation and measurements use Metal.
+
 ## 0.13.1 — Installed smart materials
 
 - Installed library modules can carry the same editable master controls and stable

@@ -39,6 +39,8 @@ if bpy.app.timers.is_registered(cache.tick):
 scene = bpy.context.scene
 project = scene.open_painter
 ts = project.texture_sets[0]
+# This fixture was baked on CPU before the default changed to AUTO.
+ts.bake.device = 'CPU'
 low = next(r.object for r in ts.assignments if r.object)
 timings = {}
 

@@ -47,15 +47,7 @@ def mouse(kind, value, x, y):
     env["window"].event_simulate(type=kind, value=value, x=int(x), y=int(y))
 
 
-def bound_stroke_images(scene, ts, layer):
-    """The shader session's boundary images of the layer's strokes, by channel."""
-    graph = shader_preview.ensure(scene, ts)
-    result = {}
-    for node in graph.nodes():
-        descriptor = node.get("op_boundary", "")
-        if descriptor.startswith('["strokes"') and layer.id in descriptor and node.image is not None:
-            result[json.loads(descriptor)[2]] = node.image
-    return result
+from gpu_input_probe import bound_inputs as bound_stroke_images, input_pixels
 
 
 def steps():
@@ -105,7 +97,7 @@ def steps():
     yield .3
     assert OP_OT_vector_brush._handler is not None
     before = bound_stroke_images(scene, body, layer)
-    before_pixels = {c: images.pixels(i).copy() for c, i in before.items()}
+    before_pixels = {c: input_pixels(i).copy() for c, i in before.items()}
     x0, x1 = region.x + int(region.width * .42), region.x + int(region.width * .58)
     from bpy_extras.view3d_utils import region_2d_to_origin_3d, region_2d_to_vector_3d
     view = area.spaces.active.region_3d
@@ -127,7 +119,7 @@ def steps():
         yield .04
         now = bound_stroke_images(scene, body, layer)
         for channel, image in now.items():
-            if channel in before_pixels and not np.array_equal(images.pixels(image), before_pixels[channel]):
+            if channel in before_pixels and not np.array_equal(input_pixels(image), before_pixels[channel]):
                 changed_during = True
     released = time.monotonic()
     mouse("LEFTMOUSE", "RELEASE", x1, cy)

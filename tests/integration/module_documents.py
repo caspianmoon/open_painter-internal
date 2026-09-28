@@ -61,7 +61,7 @@ with TemporaryDirectory() as directory:
     # 1. Save the folder as a module: ids stay the module's own, the root has no parent.
     path, block = modules.save_module(bpy.context, ts, layer_by_id(damage_id), Path(directory) / 'Damage v1.openpaintmaterial', 'Damage')
     data, assets = read(path)
-    assert data['format_version'] == 4 and data['module']['id'] == block['id'] and data['module']['version'] == 1
+    assert data['format_version'] == 5 and data['module']['id'] == block['id'] and data['module']['version'] == 1
     assert data['module']['root'] == damage_id
     assert [layer['id'] for layer in data['layers']] == [damage_id, scratches_id, dirt_id]
     assert data['layers'][0]['parent_id'] == '' and data['layers'][1]['parent_id'] == damage_id
@@ -123,7 +123,7 @@ with TemporaryDirectory() as directory:
     # 4. Whole-set saves stay format 3 and load as before; a v4 document without a module block is refused? No: accepted.
     whole = serializer.save(ts, Path(directory) / 'whole.openpaintmaterial')
     data, _ = read(whole)
-    assert data['format_version'] == 3 and 'module' not in data
+    assert data['format_version'] == 5 and 'module' not in data
     for fixture in sorted((root / 'src/open_painter/assets/smart_materials').glob('*.openpaintmaterial'))[:3]:
         read(fixture)
     # A module document whose root is not a folder is refused before any mutation.

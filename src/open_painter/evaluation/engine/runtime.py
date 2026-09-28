@@ -23,12 +23,15 @@ import numpy as np
 from ...constants import CHANNELS, DEFAULTS
 from .. import metrics
 from . import glsl, stages
+from .formats import layout, scalar_unit, texture_bytes
+from .resources import binding
 
 RGBA = 'RGBA32F'
 HALF = 'RGBA16F'   # display precision for every channel but Height (bump detail is sub-1/2048)
 SCALAR = 'R32F'
 RETAIN_BYTES = 512 * 1024 * 1024    # SRC/MASK results kept between evaluations, per texture set
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
+POOL_BYTES = 512 * 1024 * 1024         # global cap; fits a 4K float publication scratch plus compact stages
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
 # Publication through the images' pixel buffers: None follows the backend (Vulkan), True/False
 # force it (tests run the Vulkan path on Metal). On Vulkan Blender's image textures are storage,
@@ -50,6 +53,7 @@ void main() {
   }
   /* A channel no layer touches publishes its default: a one-texel constant. */
   vec3 rgb = texelFetch(op_source, min(q, textureSize(op_source, 0) - 1), 0).rgb;
+  if (op_scalar == 1) { rgb = vec3(rgb.r); }
   if (op_mode == 1) {
     /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */
     vec3 v = rgb * 2.0 - 1.0;
@@ -142,7 +146,8 @@ class Device:
         self.shaders = {}
         self._interfaces = {}
         self.batch = None
-        self.pool = {}
+        self.pool = OrderedDict()
+        self._leases = {}  # id -> base-level bytes; metadata only, never keeps a texture alive
         self.compiles = 0
         self.compile_seconds = 0.0
         self.passes = 0
@@ -168,6 +173,8 @@ class Device:
 
     def _create(self, source, samplers, parameter_slots=0, objects=0, targets=1, preamble=False, ints=()):
         import gpu
+        if len(samplers) > self.max_samplers:
+            raise ValueError(f'GPU pass needs {len(samplers)} samplers; device limit is {self.max_samplers}')
         started = perf_counter()
         info = gpu.types.GPUShaderCreateInfo()
         info.vertex_in(0, 'VEC2', 'op_pos')
@@ -213,8 +220,8 @@ class Device:
         shader = self._fixed.get(name)
         if shader is None:
             source, samplers, ints, targets = {
-                'publish': (PUBLISH, ['op_source', 'op_donor'], ('op_mode', 'op_pad'), 2),
-                'publish_pixels': (PUBLISH_PIXELS, ['op_source', 'op_donor'], ('op_mode', 'op_pad'), 1),
+                'publish': (PUBLISH, ['op_source', 'op_donor'], ('op_mode', 'op_pad', 'op_scalar'), 2),
+                'publish_pixels': (PUBLISH_PIXELS, ['op_source', 'op_donor'], ('op_mode', 'op_pad', 'op_scalar'), 1),
                 'mip': (MIP, ['op_source'], (), 2),
                 'finish': (FINISH, ['op_source'], ('op_mode',), 1),
                 'pad': (PAD, ['op_source', 'op_donor'], (), 1),
@@ -231,24 +238,52 @@ class Device:
         while free:
             texture = free.pop()
             if texture.width == n and texture.height == n:
+                self._leases[id(texture)] = texture_bytes(n, n, fmt)
                 return texture   # (a texture released under another size is dropped, never reused)
         metrics.count('engine_texture_allocations')
-        return gpu.types.GPUTexture((n, n), format=fmt)
+        texture = gpu.types.GPUTexture((n, n), format=fmt)
+        self._leases[id(texture)] = texture_bytes(n, n, fmt)
+        metrics.count('engine_texture_allocated_bytes', self._leases[id(texture)])
+        return texture
 
     def release(self, texture, n, fmt=RGBA):
         if texture is not None:
+            self._leases.pop(id(texture), None)
             self.pool.setdefault((n, fmt), []).append(texture)
+            self.pool.move_to_end((n, fmt))
+
+    def discard(self, texture):
+        """Forget an uploaded texture whose owner is dropping its last reference."""
+        self._leases.pop(id(texture), None)
+
+    def memory(self):
+        return {'leased_bytes': sum(self._leases.values()),
+                'pooled_bytes': sum(texture_bytes(n, n, fmt) * len(free)
+                                    for (n, fmt), free in self.pool.items())}
 
     def upload(self, array, fmt=RGBA):
         import gpu
         array = np.ascontiguousarray(array, np.float32)
         h, w = array.shape[:2]
-        return gpu.types.GPUTexture((w, h), format=fmt, data=gpu.types.Buffer('FLOAT', array.size, array.ravel()))
+        texture = gpu.types.GPUTexture((w, h), format=fmt, data=gpu.types.Buffer('FLOAT', array.size, array.ravel()))
+        self._leases[id(texture)] = texture_bytes(w, h, fmt)
+        metrics.count('engine_texture_allocations')
+        metrics.count('engine_texture_uploads')
+        metrics.count('engine_texture_uploaded_bytes', array.nbytes)
+        metrics.count('engine_texture_allocated_bytes', self._leases[id(texture)])
+        return texture
 
     def trim(self, spares=0):
         """Free pooled textures beyond ``spares`` per size and format (0: all of them)."""
         for key, free in self.pool.items():
+            metrics.count('engine_pool_evictions', max(0, len(free) - spares))
             del free[spares:]
+        total = self.memory()['pooled_bytes']
+        for (n, fmt), free in self.pool.items():
+            while free and total > POOL_BYTES:
+                free.pop()
+                metrics.count('engine_pool_evictions')
+                total -= texture_bytes(n, n, fmt)
 
     # ---- passes -------------------------------------------------------------------
 
@@ -280,18 +315,22 @@ class Device:
             self.batch = batch_for_shader(shader, 'TRIS', {'op_pos': ((-1, -1), (3, -1), (-1, 3))})
         return self.batch
 
-    def draw(self, shader, targets, size, samplers=(), ubo=None, ints=None, mip=0):
+    def draw(self, shader, targets, size, samplers=(), ubo=None, ints=None, mip=0, region=None):
         """One full-screen pass. A target is a texture or a {'texture': t, 'mip': k} slot."""
         import gpu
         slots = [({'texture': texture, 'mip': mip} if mip and not isinstance(texture, dict) else texture)
                  for texture in targets]
+        attachments = [slot['texture'] if isinstance(slot, dict) else slot for slot in slots]
+        if any(source is target for _, source in samplers for target in attachments):
+            raise ValueError('A GPU pass cannot sample its render target')
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=slots)
         uniforms, block = self._interfaces[shader]
         with framebuffer.bind():
-            gpu.state.viewport_set(0, 0, size, size)
+            viewport = region if region is not None else (0, 0, size, size)
+            gpu.state.viewport_set(*viewport)
             # Keep the caller's scissor-test enable state; cover the entire target
             # whether clipping is enabled or disabled. state() restores its rectangle.
-            gpu.state.scissor_set(0, 0, size, size)
+            gpu.state.scissor_set(*viewport)
             shader.bind()
             if 'op_inv_size' in uniforms:
                 shader.uniform_float('op_inv_size', (1.0 / size, 1.0 / size))
@@ -315,6 +354,8 @@ class Device:
         """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K
         channel is 64 MB, allocated once rather than on every stroke tick."""
         import gpu
+        metrics.count('engine_texture_readbacks')
+        metrics.count('engine_texture_readback_bytes', n * n * 16)
         buffer = self._readbacks.get(n)
         if buffer is None:
             self._readbacks.clear()   # one resolution at a time
@@ -394,6 +435,8 @@ def device():
 
 def forget_device():
     global _device
+    from ...painting.gpu_sources import clear
+    clear()
     _device = None
     Engine._constants.clear()
 
@@ -455,9 +498,11 @@ class Engine:
 
     def __init__(self, scene, ts):
         self.scene = scene
+        self.scene_uid = getattr(scene, 'session_uid', None)
         self.set_id = ts.id
         self.graph = None
         self.states = {}
+        self.filter_states = OrderedDict()
         self.positions = {}             # CHANNEL key -> (backdrop ref, grouped ref)
         self.finals = {}                # channel -> ref of the chain's result
         self.orders = {}                # channel -> CHANNEL keys in render order
@@ -487,6 +532,7 @@ class Engine:
         """Take a (re)built graph; states of units it adopted unchanged keep their programs and results."""
         n_before = self.graph.n if self.graph is not None else None
         self.graph = graph
+        self._clear_filters()
         if n_before is not None and n_before != graph.n:
             self.close(n_before)   # the textures were rendered at the previous resolution
         live = {}
@@ -522,14 +568,23 @@ class Engine:
         n = n if n is not None else (self.graph.n if self.graph is not None else None)
         for key, state in list(self.states.items()):
             self._free(key, state, n)
+        self._clear_filters()
         self.states = {}
         self.retained.clear()
         self.keep.clear()
         self.published = {}
         self.images = {}
+        self._clear_geometry()
+        if self.padding is not None and self.padding[1] is not None:
+            device().discard(self.padding[1])
         self.geometry = {}
         self.geometry_key = None
         self.padding = None
+
+    def _clear_filters(self):
+        for _, texture, n in self.filter_states.values():
+            device().release(texture, n, RGBA)
+        self.filter_states.clear()
 
     # ---- programs ----------------------------------------------------------------------
 
@@ -541,7 +596,8 @@ class Engine:
         # tree itself is held (compared by identity), so a freed tree's id is never matched.
         units = self.graph.units
         return (id(self.states[key].unit.tree), tuple((producer, units[producer].tree) for producer in self._inlined(key)),
-                self.precise, tuple(_alpha_signature(image) for _, image in self._images(key)))
+                self.precise, tuple((_alpha_signature(image), binding(node).mapping if binding(node) else None)
+                                    for node, image in self._images(key)))
 
     def _state(self, key):
         state = self.states[key]
@@ -551,7 +607,7 @@ class Engine:
             started, compiled = perf_counter(), device().compile_seconds
             program = glsl.translate(self.graph, unit, self.inline)
             limit = device().max_samplers
-            while len(program.samplers) > limit:
+            while max(len(p.samplers) for p in glsl.programs(program)) > limit:
                 # Over the GPU's textures per pass: the inlined producer carrying the most
                 # textures becomes a pass of its own, until the program fits.
                 direct = [producer for producer, _, _ in unit.imports if producer in self.inline]
@@ -591,22 +647,24 @@ class Engine:
         return [item for current in (key, *self._inlined(key)) for item in self.graph.unit_images(current)]
 
     def _format(self, key, color):
-        if color == 'Value':
-            return SCALAR
-        channel = key[2] if key[0] in {'CHANNEL', 'SRC'} else None
-        return RGBA if (self.precise or channel == 'HEIGHT') else HALF
+        return layout(key, color, self.precise)
 
     # ---- stamps --------------------------------------------------------------------------
 
     def _own_stamp(self, state, epochs):
-        program = state.program
-        # A program reading the surface (world position, normal, tangent frame) is stale when
-        # the assigned geometry moves or deforms.
-        surface = (self._surface() if any(sampler.kind in GEOMETRY for sampler in program.samplers) else None)
-        return (id(state.shader), tuple(float(socket.default_value) for socket in program.params),
-                tuple(_image_identity(sampler.node.image, epochs) for sampler in program.samplers
-                      if sampler.kind == 'image'),
-                tuple(_object_matrix(obj) for obj in program.objects), surface)
+        return id(state.shader), self._program_stamp(state.program, epochs)
+
+    def _program_stamp(self, program, epochs):
+        from .filters import signature
+        programs = tuple(glsl.programs(program))
+        samplers = [s for p in programs for s in p.samplers]
+        surface = (self._surface() if any(s.kind in GEOMETRY or
+                   (s.kind == 'filter' and getattr(s.node.effect, 'space', 'UV') == 'SURFACE') for s in samplers) else None)
+        return (tuple(float(socket.default_value) for p in programs for socket in p.params),
+                tuple((binding(s.node).stamp if binding(s.node) is not None else _image_identity(s.node.image, epochs))
+                      for s in samplers if s.kind == 'image'),
+                tuple(_object_matrix(obj) for p in programs for obj in p.objects), surface,
+                tuple(signature(s.node.effect) for s in samplers if s.kind == 'filter'))
 
     def _surface(self):
         """The geometry key of this evaluation (computed once per evaluation)."""
@@ -621,7 +679,8 @@ class Engine:
             raise ValueError('Published inputs contain a reference cycle')
         state = self._state(key)
         stack = stack + (key,)
-        imports = tuple(sorted({sampler.producer[0] for sampler in state.program.samplers if sampler.kind == 'import'}))
+        imports = tuple(sorted({sampler.producer[0] for p in glsl.programs(state.program)
+                                for sampler in p.samplers if sampler.kind == 'import'}))
         position = self.positions.get(key)
         where = None
         if position is not None:
@@ -640,11 +699,12 @@ class Engine:
 
     # ---- rendering -----------------------------------------------------------------------
 
-    def _texture_of(self, ref, n, memo, epochs):
+    def _texture_of(self, ref, n, memo, epochs, packed=False):
         if ref is None:
             return None
         if ref[0] == 'const':
-            return self._constant(n, ref[1])
+            color = ref[1]
+            return self._constant(n, (color[0], color[3], 0.0, 0.0) if packed else color)
         return self._render(ref[1], n, memo, epochs)[0]
 
     def _render(self, key, n, memo, epochs):
@@ -659,13 +719,13 @@ class Engine:
         position = self.positions.get(key)
         # Inputs rendered for this draw stay resident until it has drawn: the retention
         # budget must not hand their textures back to the pool (as this unit's target).
-        inputs = {sampler.producer[0] for sampler in program.samplers if sampler.kind == 'import'}
+        inputs = {sampler.producer[0] for p in glsl.programs(program) for sampler in p.samplers if sampler.kind == 'import'}
         inputs |= {ref[1] for ref in (position or ()) if ref is not None and ref[0] == 'unit'}
         self._in_use.update(inputs)
         try:
-            backdrop = self._texture_of(position[0], n, memo, epochs) if position else None
-            grouped = self._texture_of(position[1], n, memo, epochs) if position and position[1] else None
-            samplers = [(sampler.name, self._bind(sampler, n, memo, epochs, backdrop, grouped))
+            backdrop = self._texture_of(position[0], n, memo, epochs, scalar_unit(key)) if position else None
+            grouped = self._texture_of(position[1], n, memo, epochs, scalar_unit(key)) if position and position[1] else None
+            samplers = [(sampler.name, self._bind(sampler, n, memo, epochs, backdrop, grouped, key))
                         for sampler in program.samplers]
             dev = device()
             if state.textures is None:
@@ -722,9 +782,14 @@ class Engine:
                 device().release(texture, n, fmt)
             state.textures = None
 
-    def _bind(self, sampler, n, memo, epochs, backdrop, grouped):
+    def _bind(self, sampler, n, memo, epochs, backdrop, grouped, owner=None):
         kind = sampler.kind
+        if kind == 'filter':
+            return self._filter(sampler, n, memo, epochs, backdrop, grouped, owner)
         if kind == 'image':
+            resource = binding(sampler.node)
+            if resource is not None:
+                return resource.texture
             image = glsl.live_image(sampler.node.image)
             if image is None:
                 return self._constant(n, (0.0, 0.0, 0.0, 0.0))
@@ -739,10 +804,47 @@ class Engine:
             return grouped
         return self._geometry_texture(kind, n)
 
+    def _filter(self, sampler, n, memo, epochs, backdrop, grouped, owner):
+        from . import filters
+        source = sampler.source
+        imports = tuple(sorted({s.producer[0] for p in glsl.programs(source) for s in p.samplers if s.kind == 'import'}))
+        stamp = (self._program_stamp(source, epochs), filters.signature(sampler.node.effect),
+                 tuple(self._stamp(key, memo, epochs) for key in imports),
+                 tuple(self._ref_stamp(ref, memo, epochs) for ref in self.positions.get(owner, ())), n)
+        cached = self.filter_states.get(sampler.node)
+        if cached is not None and cached[0] == stamp:
+            self.filter_states.move_to_end(sampler.node)
+            return cached[1]
+        dev = device()
+        inputs = [(s.name, self._bind(s, n, memo, epochs, backdrop, grouped, owner)) for s in source.samplers]
+        input_texture = dev.texture(n, RGBA)
+        state = UnitState(None)
+        state.program = source
+        try:
+            dev.draw(dev.shader(source), [input_texture], n, inputs, state.uniforms())
+            texture = filters.apply(input_texture, sampler.node.effect, n, self.ts())
+        finally:
+            dev.release(input_texture, n, RGBA)
+        if cached is not None:
+            dev.release(cached[1], cached[2], RGBA)
+        self.filter_states[sampler.node] = stamp, texture, n
+        metrics.count('engine_spatial_filter_passes')
+        return texture
+
+    def _trim_filters(self, budget):
+        total = sum(texture_bytes(n, n, RGBA) for _, _, n in self.filter_states.values())
+        while self.filter_states and total > max(0, budget):
+            _, (_, texture, n) = self.filter_states.popitem(last=False)
+            device().release(texture, n, RGBA)
+            total -= texture_bytes(n, n, RGBA)
+            metrics.count('engine_filter_evictions')
+
     def _retain(self, key, state, n):
-        self.retained[key] = sum((4 if fmt == SCALAR else 16) * n * n for fmt in state.formats)
+        self.retained[key] = sum(texture_bytes(n, n, fmt) for fmt in state.formats)
         self.retained.move_to_end(key)
         total = sum(self.retained.values())
+        from ...painting.gpu_sources import trim
+        trim(self.set_id, max(0, RETAIN_BYTES - total))
         for victim in list(self.retained):
             if total <= RETAIN_BYTES:
                 break
@@ -784,10 +886,17 @@ class Engine:
 
     # ---- geometry --------------------------------------------------------------------------
 
+    def _clear_geometry(self):
+        for texture in self.geometry.values():
+            # Neutral constants belong to the device, not this geometry cache.
+            if not any(texture is value for value in self._constants.values()):
+                device().discard(texture)
+        self.geometry.clear()
+
     def _geometry_texture(self, kind, n):
         key = self._surface()
         if self.geometry_key != key:
-            self.geometry = {}
+            self._clear_geometry()
             self.geometry_key = key
         texture = self.geometry.get(kind)
         if texture is None:
@@ -846,6 +955,8 @@ class Engine:
 
     def _build_donor(self, ts, n, key):
         from ...export import padding
+        if self.padding is not None and self.padding[1] is not None:
+            device().discard(self.padding[1])
         texture = None
         try:
             owned = padding.ownership(ts, n)
@@ -942,6 +1053,10 @@ class Engine:
                 self.images[channel] = pointer
                 written.add(channel)
         self.deferred = deferred
+        self._trim_filters(RETAIN_BYTES - sum(self.retained.values()))
+        from ...painting.gpu_sources import trim as trim_strokes
+        trim_strokes(self.set_id, max(0, RETAIN_BYTES - sum(self.retained.values()) -
+                     sum(texture_bytes(size, size, RGBA) for _, _, size in self.filter_states.values())))
         self.stages['deferred'] = sorted(deferred)
         dev.trim(POOL_SPARES)
         self.stages['compiles'] = dev.compiles - compiles
@@ -949,11 +1064,23 @@ class Engine:
         self.report = {'evaluate_ms': (perf_counter() - started) * 1000, 'channels': sorted(written),
                        'passes': dev.passes - passes, 'units_rendered': len(self.rendered),
                        'programs': len(dev.shaders), 'compiles': dev.compiles,
-                       'stages': self.stages}
+                       'stages': self.stages, 'memory': self.memory()}
         if written:
             metrics.count('engine_channel_publications', len(written))
             metrics.sample('engine_evaluate_ms', self.report['evaluate_ms'])
         return written
+
+    def memory(self):
+        """Engine-owned base textures, excluding Blender images and driver overhead."""
+        n = self.graph.n if self.graph is not None else 0
+        retained = sum(self.retained.values())
+        active = sum(sum(texture_bytes(n, n, fmt) for fmt in state.formats)
+                     for key, state in self.states.items() if state.textures and key not in self.retained)
+        from ...painting.gpu_sources import memory, retained_bytes
+        from ...painting.gpu_strokes import active_bytes
+        active += active_bytes(self.set_id)
+        retained += retained_bytes(self.set_id) + sum(texture_bytes(size, size, RGBA) for _, _, size in self.filter_states.values())
+        return dict(device().memory(), retained_bytes=retained, active_bytes=active, undo_bytes=memory(self.set_id))
 
     def profile(self, epochs=None):
         """Render and publish every channel again with each pass timed on the GPU
@@ -984,7 +1111,9 @@ class Engine:
         self._surface_key = None
         with device().state():
             texture = self._texture_of(self.finals[channel], n, memo, epochs or {})
-            values = np.array(texture.read(), np.float32).reshape(texture.height, texture.width, 4)
+            values = np.array(device().readback(texture, texture.width), np.float32).reshape(texture.height, texture.width, 4)
+            if getattr(texture, 'format', '') in {'RG16F', 'RG32F'}:
+                values = values[..., [0, 0, 0, 1]]
             return np.broadcast_to(values, (n, n, 4)).copy() if values.shape[0] == 1 else values
 
     def _publish(self, image, channel, result, n):
@@ -995,7 +1124,8 @@ class Engine:
         donor = self._donor(n) if self.pad else None
         fmt = RGBA if (self.precise or channel == 'HEIGHT') else HALF
         chain = dev.texture(n, fmt)
-        ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0}
+        ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0,
+                'op_scalar': int(getattr(result, 'format', '') in {'RG16F', 'RG32F'})}
         samplers = [('op_source', result), ('op_donor', donor if donor is not None else result)]
         scratch = [(chain, n)]
         try:

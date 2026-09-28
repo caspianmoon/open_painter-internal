@@ -90,15 +90,9 @@ def strokes_of(scene, layer):
 
 
 def bound_previews(scene, ts, layer):
-    graph = shader_preview.session_graph(scene, ts)
-    if graph is None:
-        return []
-    found = []
-    for node in graph.nodes():
-        if node.bl_idname == "ShaderNodeTexImage" and node.image is not None and node.image.get("op_gesture_preview"):
-            if gesture.Preview._channel_of(node, layer) is not None:
-                found.append(node.image.name)
-    return found
+    from gpu_input_probe import bound_inputs
+    return [channel for channel, resource in bound_inputs(scene, ts, layer).items()
+            if resource.get('op_gesture_preview')]
 
 
 def world_to_window(region, view, point):

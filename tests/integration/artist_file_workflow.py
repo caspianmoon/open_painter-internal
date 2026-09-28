@@ -107,6 +107,8 @@ bpy.context.view_layer.update()
 # ---- 1. the file as saved -----------------------------------------------------------------
 assert len(project.texture_sets) == 1
 ts = project.texture_sets[0]
+# This fixture was baked on CPU before the default changed to AUTO.
+ts.bake.device = 'CPU'
 set_id = ts.id
 ts_of = lambda: next(t for t in project.texture_sets if t.id == set_id)
 assert int(ts.resolution) == 2048 and ts.preview_backend == 'LIVE'

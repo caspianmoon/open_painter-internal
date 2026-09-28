@@ -196,6 +196,11 @@ def evaluate(ts, mask, n, y0, y1, cache, geometry_cache, u, v):
             vector = np.broadcast_to(read(inputs['Vector']), (*shape, 3))
             value = procedural(node.kind, np.ascontiguousarray(vector[..., 0], F32),
                                np.ascontiguousarray(vector[..., 1], F32), seed=int(node.seed), scale=float(node.scale))
+        elif kind == 'text':
+            from ..evaluation.text_source import ensure
+            from ..core.image_manager import pixels
+            vector = np.broadcast_to(read(inputs['Vector']), (*shape, 3))
+            value = sample_uv(pixels(ensure(node.text, n)), vector[..., 0], vector[..., 1])[..., 0]
         elif kind == 'mesh_map':
             from ..evaluation.mask_eval import map_pixels
             value = sample_uv(map_pixels(ts, node.kind, cache), u, v)[..., 0].astype(F32)

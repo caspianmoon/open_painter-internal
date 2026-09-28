@@ -28,6 +28,12 @@ def ready(ts):
     raise AssertionError(info)
 
 
+# These fixtures verify CPU boundary caching and publication explicitly.
+# Supported neighborhood effects now run on the GPU by default; force the
+# established fallback here. engine_filters.py covers the native GPU path.
+from unittest.mock import patch
+_cpu_boundaries = patch('open_painter.evaluation.engine.filters.supported', return_value=False)
+_cpu_boundaries.start()
 open_painter.register()
 scene = bpy.context.scene
 ts = sets.create(scene, 'Isolated reference blur', 512)

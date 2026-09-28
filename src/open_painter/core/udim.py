@@ -133,6 +133,9 @@ def create(scene, objects, name='UDIM', resolution=2048):
         scene.view_layers[0].update()
         # Adding another set can reallocate every RNA reference: return fresh handles.
         result = [sets._set_by_id(project, identifier) for identifier in made]
+        if len(result) > 1:
+            from .shared_stacks import link
+            link(result)
         project.active_texture_set = next(i for i, item in enumerate(project.texture_sets) if item.id == made[0])
         return result
     except Exception:

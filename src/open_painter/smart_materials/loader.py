@@ -106,6 +106,16 @@ def _stroke_records(data):
             raise ValueError('Invalid smart material stroke anchors.')
         if not np.isfinite(samples).all():
             raise ValueError('Invalid smart material stroke samples.')
+        from types import SimpleNamespace
+        from ..painting.payload import decode
+        decode(SimpleNamespace(dab_payload=record.get('dab_payload', '')), len(samples))
+        if record.get('payload_version', 0) not in {0, 1}:
+            raise ValueError('Unsupported smart material stroke payload')
+        if record.get('brush_graph_data'):
+            import json
+            program = json.loads(record['brush_graph_data'])
+            if not isinstance(program, dict) or program.get('version') != 1 or len(program.get('steps', [])) > 256:
+                raise ValueError('Invalid saved Brush Graph')
     return records
 
 
@@ -179,6 +189,7 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
     stroke_records = _stroke_records(data)
     project = ts.id_data.open_painter
     loaded = []
+    loaded_graphs = []
     added_strokes = []
     start = len(ts.layers)
     old_surface = {key:getattr(ts,key) for key in ("anisotropy","coat_weight","coat_roughness","height_distance")}
@@ -204,6 +215,11 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
                         if effect.get('id'):
                             effect['id'] = effect_mapping.get(effect['id'], effect['id'])
                 for mask in values.get("masks", []):
+                    if 'graph_data' in mask:
+                        from .graph_codec import decode as decode_graph
+                        graph = decode_graph(mask.pop('graph_data'))
+                        loaded_graphs.append(graph)
+                        mask['node_group'] = graph
                     mask['id'] = mask_mapping.get(mask.get('id'), new_id())
                     if mask.get('parent_id'):   # mask group membership (0.9.3) follows the new ids
                         mask['parent_id'] = mask_mapping.get(mask['parent_id'], '')
@@ -278,6 +294,8 @@ def apply(ts, path: str | Path, parent_id: str = '', token: str | None = None) -
             for index in reversed([i for i, stroke in enumerate(project.strokes) if stroke.id in added_strokes]):
                 project.strokes.remove(index)
             project.stroke_serial += 1
+        for graph in loaded_graphs:
+            bpy.data.node_groups.remove(graph)
         for image in loaded:
             bpy.data.images.remove(image)
         raise

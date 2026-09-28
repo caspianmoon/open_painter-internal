@@ -174,7 +174,21 @@ def _drop(tree, predicate):
 def tree_name(ts):
     """The internal tree of a set: named by its id, or as ``material_manager.repair`` recorded
     when it separated a scene copy that shares the id."""
-    return ts.get('op_node_tree') or TREE_PREFIX + ts.id
+    name = ts.get('op_node_tree') or TREE_PREFIX + ts.id
+    tree = bpy.data.node_groups.get(name)
+    if tree is not None:
+        owner = tree.get('op_scene_owner')
+        if owner is None:
+            # Legacy trees carry no scene binding. Resolve the material that
+            # already uses the tree before a copied scene can synchronize it.
+            owner = next((scene for scene in bpy.data.scenes if hasattr(scene, 'open_painter')
+                          for other in scene.open_painter.texture_sets if other.id == ts.id and
+                          other.material and other.material.use_nodes and any(
+                              getattr(node, 'node_tree', None) == tree for node in other.material.node_tree.nodes)), None)
+        if owner is not None and owner != ts.id_data:
+            name = f'{TREE_PREFIX}{ts.id} · {ts.id_data.name}'
+            ts['op_node_tree'] = name
+    return name
 
 
 def tree_for(ts, overrides=None):
@@ -185,6 +199,8 @@ def tree_for(ts, overrides=None):
         tree = bpy.data.node_groups.new(name, 'ShaderNodeTree')
         tree[OWNER] = True
         tree['op_texture_set_node'] = ts.id if ts is not None else ''
+    if ts is not None:
+        tree['op_scene_owner'] = ts.id_data
     sync_tree(tree, ts, overrides)
     return tree
 

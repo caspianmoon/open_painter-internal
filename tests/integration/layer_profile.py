@@ -10,6 +10,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
+# Exercise the retained CPU-boundary fallback; GPU filters have dedicated parity coverage.
+from unittest.mock import patch
+patch('open_painter.evaluation.engine.filters.supported', return_value=False).start()
 from open_painter.core import layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, layer_cache, profile, shader_preview

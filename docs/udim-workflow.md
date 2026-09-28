@@ -1,7 +1,7 @@
 # UDIM texture sets
 
 Open Painter supports a texture set per occupied UDIM tile. Each tile has its own
-resolution, layers, masks, mesh maps and texture outputs. The original UV layout
+resolution, images, mesh maps and texture outputs. New groups share their layer and mask recipe. The original UV layout
 stays in UDIM space; you do not need to move islands back to 0–1.
 
 ## Create the sets
@@ -29,9 +29,14 @@ Project reports missing UV maps and faces that moved to another tile.
 ## Paint, bake and save
 
 Both **Paint Material** and the native single-channel brush work on the selected
-tile. Enable **Paint Across Sets** to paint across tile boundaries. Layers remain
-independent; linked paint layers receive the shared stroke. This is not a single
-shared layer stack across every tile.
+tile. Enable **Paint Across Sets** to paint across tile boundaries. Editing the shared
+recipe through any tile updates the group in one undo transaction; stroke permissions
+still restrict each gesture to the tiles it was allowed to touch.
+
+Existing files retain independent stacks. **Link Layer Stacks** explicitly links
+matching recipes and reports conflicts before changing anything. **Make Independent**
+detaches the group, preserving each tile's pixels and giving its editable strokes
+independent copies.
 
 Native painting temporarily selects a derived UV map with local tile coordinates.
 **Finish** restores the original active map, including after saving and reopening
@@ -41,7 +46,7 @@ Native painting needs room for that extra UV map in Blender's mesh UV layers.
 Bake maps for each tile using the usual bake controls. CPU evaluation, Shader
 Native preview, Cycles bake staging, curvature, correction brushes and regional
 rebaking use the tile's local coordinates. Ordinary `.blend` saves preserve the
-tile metadata and managed images. Images and layers use memory independently per
+tile metadata, shared recipe and managed images. Images and evaluation caches use memory per
 tile; choose resolution with the total number of tiles in mind.
 
 ## Export

@@ -319,7 +319,7 @@
       ],
       [
        "NORMAL",
-       false,
+       true,
        "INHERIT",
        1.0
       ],
@@ -1545,7 +1545,7 @@
       ],
       [
        "NORMAL",
-       false,
+       true,
        "INHERIT",
        1.0
       ],
@@ -2187,7 +2187,7 @@
       ],
       [
        "NORMAL",
-       false,
+       true,
        "INHERIT",
        1.0
       ],

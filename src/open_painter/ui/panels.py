@@ -94,6 +94,8 @@ class OP_PT_texture_set(bpy.types.Panel):
         if ts.udim_tile:
             layout.label(text=f"UDIM {ts.udim_tile} · {ts.udim_name}", icon="UV")
             layout.prop(ts, 'udim_name', text='Export Name')
+            op = layout.operator('open_painter.texture_set', text='Make Independent' if ts.shared_stack_id else 'Link Matching Tile Stacks')
+            op.action = 'UNLINK_UDIM' if ts.shared_stack_id else 'LINK_UDIM'
         layout.prop(ts, "resolution")
         from .strokes_panel import pending_resample
         pending = pending_resample(ts)

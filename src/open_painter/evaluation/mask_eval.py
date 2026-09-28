@@ -74,7 +74,10 @@ def _stack_signature(ts, layer, geometry_cache):
                      if item.image and (required is None or item.kind in required))
         common = (mask.source, mask.operation, mask.invert, mask.black, mask.white, mask.strength,
                   getattr(mask, 'parent_id', ''))
-        if mask.source == "ANCHOR":
+        if mask.source == 'TEXT':
+            from .text_source import signature
+            extra = signature(mask.text)
+        elif mask.source == "ANCHOR":
             extra = ()  # Pass-through; binding it to the edit serial would defeat generator caching.
         elif mask.source in {"GENERATOR", "NOISE"}:
             from .anchors import consumed
@@ -208,6 +211,9 @@ def _levels(mask, value):
 
 def _source_value(ts, layer, mask, n, y0, y1, cache, geometry_cache, u, v):
     """Raw coverage of one non-group, non-filter entry."""
+    if mask.source == 'TEXT':
+        from .text_source import ensure
+        return sample_uv(pixels(ensure(mask.text, n)), u, v)[..., 0]
     if mask.source == 'REFERENCE':
         from .references import evaluate
         return evaluate(ts, mask, n, y0, y1, cache, geometry_cache)

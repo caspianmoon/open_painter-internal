@@ -17,6 +17,9 @@ def touched(self, context):
 
 
 class OP_Stroke(bpy.types.PropertyGroup):
+    payload_version: bpy.props.IntProperty(default=0, options={'HIDDEN'})
+    dab_payload: bpy.props.StringProperty(options={'HIDDEN'})
+    brush_graph_data: bpy.props.StringProperty(options={'HIDDEN'})
     id: bpy.props.StringProperty()
     name: bpy.props.StringProperty(default='Stroke')
     layer_key: bpy.props.StringProperty(description='Links the paint layers (one per set) rendering this stroke')
@@ -44,7 +47,8 @@ class OP_Stroke(bpy.types.PropertyGroup):
         description='How far behind or in front of the stamp plane a surface may lie and still receive '
                     'paint, in radii (strokes recorded before 0.13 keep one radius)')
     blend: bpy.props.EnumProperty(name='Mode', default='PAINT', update=touched,
-        items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', 'Remove earlier strokes and paint under it')])
+        items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', 'Remove earlier strokes and paint under it'),
+               ('SMUDGE', 'Smudge', 'Transport accumulated paint and coverage together')])
     # Material
     channels: bpy.props.StringProperty(default='BASE_COLOR,ROUGHNESS,METALLIC,HEIGHT', update=touched,
                                        description='Channels this stroke writes (comma separated)')
@@ -84,6 +88,19 @@ class OP_Stroke(bpy.types.PropertyGroup):
 
 
 class OP_VectorBrushSettings(bpy.types.PropertyGroup):
+    particles: bpy.props.BoolProperty(name='Particle Painting', default=False)
+    particle_count: bpy.props.IntProperty(name='Particles per Dab', default=8, min=1, max=64)
+    particle_rate: bpy.props.FloatProperty(name='Emission Rate', default=60, min=1, max=1000)
+    particle_speed: bpy.props.FloatProperty(name='Speed', default=1., min=.001, max=100)
+    particle_spread: bpy.props.FloatProperty(name='Spread', default=.3, min=0, max=2)
+    particle_gravity: bpy.props.FloatVectorProperty(name='Gravity', size=3, default=(0, 0, -9.81))
+    particle_drag: bpy.props.FloatProperty(name='Drag', default=.1, min=0, max=50)
+    particle_lifetime: bpy.props.FloatProperty(name='Lifetime', default=1., min=.01, max=10)
+    particle_bounce: bpy.props.FloatProperty(name='Bounce', default=0., min=0, max=1)
+    node_group: bpy.props.PointerProperty(name='Brush Graph', type=bpy.types.NodeTree,
+        poll=lambda self, tree: bool(tree.get('op_brush_graph')))
+    symmetry: bpy.props.BoolVectorProperty(name='Symmetry', size=3, default=(False, False, False),
+        description='Reflect brush samples across the active object local X, Y and Z planes')
     radius: bpy.props.FloatProperty(name='Radius', default=.05, min=.0001, max=10, subtype='DISTANCE')
     radius_mode: bpy.props.EnumProperty(name='Radius', default='WORLD',
         items=[('WORLD', 'World', 'Radius in scene units'), ('SCREEN', 'Screen', 'Radius in pixels, resolved at the hit')])
@@ -108,7 +125,8 @@ class OP_VectorBrushSettings(bpy.types.PropertyGroup):
                                           description='Tablet pressure scales the radius')
     pressure_flow: bpy.props.BoolProperty(name='Pressure Flow', default=False,
                                           description='Tablet pressure scales the flow of each stamp')
-    blend: bpy.props.EnumProperty(name='Mode', default='PAINT', items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', '')])
+    blend: bpy.props.EnumProperty(name='Mode', default='PAINT', items=[('PAINT', 'Paint', ''), ('ERASE', 'Erase', ''),
+        ('SMUDGE', 'Smudge', 'Move the enabled material channels together')])
     channels: bpy.props.EnumProperty(name='Channels', options={'ENUM_FLAG'}, items=[(key, label, '') for key, label, _ in CHANNEL_ITEMS],
                                      default={'BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'HEIGHT'})
     base_color: bpy.props.FloatVectorProperty(name='Base Color', size=4, subtype='COLOR', default=(.5, .5, .5, 1), min=0, max=1)

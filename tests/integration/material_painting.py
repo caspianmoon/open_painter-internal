@@ -27,6 +27,15 @@ from open_painter.evaluation.metrics import Metrics
 from open_painter.evaluation.shader_resources import RESOURCE, Resources
 from open_painter.painting import gesture, stroke_raster, strokes as records, surface_reach
 
+# This suite asserts legacy Blender-image boundaries and incremental CPU rows.
+# GPU input/adoption paths are exercised by authoring_workflow and GUI painting.
+from unittest.mock import patch
+from open_painter.evaluation.engine.compiler import EngineGraph
+from open_painter.evaluation.shader_graph import Graph
+from open_painter.painting.gpu_strokes import UnsupportedSurface
+patch.object(EngineGraph, '_strokes_boundary', Graph._strokes_boundary).start()
+patch('open_painter.painting.gpu_strokes.Canvas', side_effect=UnsupportedSurface('CPU compatibility test')).start()
+patch('open_painter.evaluation.engine.filters.supported', return_value=False).start()
 open_painter.register()
 scene = bpy.context.scene
 bpy.ops.object.select_all(action="SELECT")

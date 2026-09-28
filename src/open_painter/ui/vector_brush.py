@@ -412,7 +412,17 @@ def draw_material_brush(layout, context):
     if extra:
         box.label(text='Also: ' + ', '.join(extra), icon='INFO')
     scope = box.column(align=True)
+    row = scope.row(align=True)
+    for index, axis in enumerate('XYZ'):
+        row.prop(settings, 'symmetry', index=index, text=axis, toggle=True)
     scope.prop(settings, 'reach')
+    scope.template_ID(settings, 'node_group')
+    scope.operator('open_painter.brush_graph', text='Edit Brush Graph', icon='NODETREE')
+    scope.prop(settings, 'particles')
+    if settings.particles:
+        for name in ('particle_count', 'particle_rate', 'particle_speed', 'particle_spread', 'particle_gravity',
+                     'particle_drag', 'particle_lifetime', 'particle_bounce'):
+            scope.prop(settings, name)
     scope.prop(settings, 'universal')
     if settings.universal:
         from ..core.project_manager import require_set

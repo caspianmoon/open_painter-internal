@@ -30,6 +30,8 @@ def invalidate(ts) -> None:
     for i, layer in enumerate(ts.layers):
         layer.order = i
         layer.dirty = True
+    from .shared_stacks import publish
+    publish(ts)
 
 
 def add(ts, kind="FILL", name=None, parent_id=""):
@@ -56,6 +58,8 @@ def add(ts, kind="FILL", name=None, parent_id=""):
     ts.edit_serial = serial + bool(affected)
     for out in ts.outputs:
         out.dirty = output_dirty.get(out.channel, False) or out.channel in affected
+    from .shared_stacks import publish
+    publish(ts)
     return layer
 
 
@@ -117,6 +121,8 @@ def release_images(layer) -> None:
         for channel in layer.channels:
             release_image(channel.image)
     for mask in layer.masks:
+        if mask.source == 'TEXT':
+            release_image(mask.text.image)
         if mask.source == "PAINT":
             release_image(mask.image)
 

@@ -69,8 +69,10 @@ def _prop_signature(prop, count=None):
 
 def _mask_signature(m):
     graph = getattr(m, 'node_group', None)
+    from .text_source import signature as text_signature
     return ('baked-edge-leaf-v1', m.id, m.enabled, m.source, getattr(m, 'parent_id', ''), getattr(m, 'material_mapping_version', 0),
             graph.name if graph is not None and m.source == 'GRAPH' else None,
+            text_signature(m.text) if m.source == 'TEXT' else None,
             m.generator, getattr(m, 'edge_source', 'BAKED'), getattr(m, 'stroke_key', ''),
             m.procedural, m.map_type, m.operation,
             m.projection, m.filtering, m.tiling, bool(m.image), m.reference_layer, m.reference_mask,
@@ -2433,6 +2435,10 @@ class Graph(Math):
             gray = (luminance(self, sample.color) if mask.reference_channel in {'BASE_COLOR', 'EMISSION', 'NORMAL'}
                     else self.separate(sample.color)[0])
             return self.math('MULTIPLY', gray, sample.alpha)
+        if mask.source == 'TEXT':
+            from .text_source import ensure
+            getter = lambda: ensure(mask.text, int(self.ts.resolution))
+            return self.separate(self.image(getter(), getter=getter, owner=mask).color)[0]
         if mask.source in {'FILL', 'PAINT'}:
             sample = (self.projected(mask, lambda uv: self.image(mask.image, uv, mask.filtering, mask.tiling,
                                                 getter=lambda mask=mask: mask.image, owner=mask))

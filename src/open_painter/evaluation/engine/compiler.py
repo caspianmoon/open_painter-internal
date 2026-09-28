@@ -75,6 +75,28 @@ class EngineGraph(Graph):
 
     # ---- sources the material graph had to rasterise on the CPU ----------------------
 
+    def _strokes_boundary(self, layer, prop, rehydrate=None):
+        """Stroke records are a GPU input; the CPU graph remains the export reference."""
+        from ...painting.gpu_sources import Source
+        node = self.node('ShaderNodeTexImage')
+        node.extension = 'EXTEND'
+        node.gpu_resource = Source(self, layer, prop)
+        node['op_stroke_layer'], node['op_stroke_channel'] = layer.id, prop.channel
+        self.link(self.coord_uv(), node.inputs['Vector'])
+        return Signal(node.outputs['Color'], node.outputs['Alpha'])
+
+    def spatial_effect(self, signal, effect):
+        from . import filters
+        from ..shader_effects import UnsupportedEffect
+        if not filters.supported(effect):
+            raise UnsupportedEffect(f'{effect.kind} uses the CPU reference')
+        node = self.node('OPSpatialFilter')
+        node.effect = effect
+        self.link(signal.color, node.inputs['Color'])
+        self.link(signal.alpha, node.inputs['Alpha'])
+        amount = self.math('MULTIPLY', self.param(effect, 'strength'), self.param(effect, 'enabled'))
+        return Signal(self.mix(signal.color, node.outputs['Color'], amount), signal.alpha)
+
     def _procedural(self, kind, coordinate, scale, seed):
         """A catalog source at ``coordinate``, evaluated in the unit's GPU program.
 

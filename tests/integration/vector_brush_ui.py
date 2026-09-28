@@ -101,7 +101,7 @@ def steps():
         yield .1
     info = shader_preview.diagnostics(scene, ts)
     assert shader_preview.current(scene, ts) and not info['error'], info
-    assert any(node.get('op_boundary', '').startswith('["strokes"') for node in shader_preview.ensure(scene, ts).nodes())
+    assert any(getattr(node, 'gpu_resource', None) is not None for node in shader_preview.ensure(scene, ts).nodes())
     report['steps'].append('stroke renders in the shader preview')
     shot = REPORT.with_suffix('.png')
     bpy.ops.screen.screenshot(filepath=str(shot))

@@ -449,6 +449,9 @@ def draw_mask_settings(layout, context, ts, layer, mask):
             box.label(text='Deformation-driven wear', icon='MOD_SIMPLEDEFORM')
             draw_action(box, 'STRAIN', text='Rest-State Strain…', icon='MOD_SIMPLEDEFORM')
             box.label(text='Writes open_painter_strain on the active mesh; read it as the attribute', icon='INFO')
+    elif mask.source == 'TEXT':
+        from ..evaluation.text_source import draw
+        draw(layout, mask.text)
     elif mask.source == "FILL":
         layout.template_ID(mask, "image")
         for name in ("projection", "filtering", "tiling", "scale", "rotation", "offset"):

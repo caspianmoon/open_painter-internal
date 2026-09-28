@@ -169,6 +169,7 @@ class Sampler:
     kind: str            # 'image', 'import', 'backdrop', 'grouped', 'position', 'normal', 'tangent', 'bitangent'
     node: object = None  # the image node for 'image'
     producer: tuple = None   # (unit key, target index) for 'import'
+    source: object = None    # canonical RGBA input program of a spatial pass
 
 
 @dataclass
@@ -210,9 +211,11 @@ def target_of(unit, export):
     """(target index, component) where a unit's export lands."""
     for index, (color, alpha) in enumerate(export_targets(unit)):
         if export == color:
-            return index, 'rgb' if color != 'Value' else 'r'
+            from .formats import scalar_unit
+            return index, ('rrr' if scalar_unit(unit.key) else 'rgb') if color != 'Value' else 'r'
         if export == alpha:
-            return index, 'a'
+            from .formats import scalar_unit
+            return index, 'g' if scalar_unit(unit.key) else 'a'
     raise Unsupported(f'Unit {unit.key} has no export {export}')
 
 
@@ -339,15 +342,19 @@ class Translator:
         self._set(node.outputs[0], self._param(node.outputs[0]), VALUE)
 
     def _node_ShaderNodeTexImage(self, node):
+        from .resources import binding, decode
         coordinate = self.input(node.inputs['Vector'], VECTOR)
         image = live_image(node.image)
-        if image is None:
+        resource = binding(node)
+        if image is None and resource is None:
             raw = 'vec4(0.0)'
         else:
             name = self._sampler(('image', id(node)), 'image', node=node)
             repeat = 'true' if node.extension == 'REPEAT' else 'false'
             nearest = 'true' if node.interpolation == 'Closest' else 'false'
             raw = self._variable(RGBA, f'op_sample({name}, ({coordinate}).xy, {repeat}, {nearest})')
+            if resource is not None:
+                raw = self._variable(RGBA, decode(raw, resource.mapping))
         color, alpha = node.outputs['Color'], node.outputs['Alpha']
         self._set(alpha, f'{raw}.a', VALUE)
         self._set(color, self._variable(RGBA, image_color(image, raw, alpha.is_linked)))
@@ -397,6 +404,18 @@ class Translator:
         self._set(node.outputs[0], self._variable(
             VALUE, f'{function_name(kind)}(({coordinate}).xy, {scale}, {seed})'))
 
+    def _node_OPSpatialFilter(self, node):
+        child = Translator(self.graph, self.unit, self.inline)
+        color = child.input(node.inputs['Color'], VECTOR)
+        alpha = child.input(node.inputs['Alpha'], VALUE)
+        source = ('void main() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n'
+                  '  vec2 op_uv = (vec2(op_texel) + 0.5) * op_inv_size;\n' + '\n'.join(child.lines)
+                  + f'\n  op_out0 = vec4({color}, {alpha});\n}}\n')
+        program = Program(source, child.samplers, child.params, child.objects, [('Color', 'Alpha')],
+                          child.imports, tuple(sorted(child.procedurals)))
+        name = self._sampler(('filter', id(node)), 'filter', node=node, source=program)
+        self._set(node.outputs['Color'], self._variable(RGBA, f'texelFetch({name}, op_texel, 0)'))
+
     def _node_NodeGroupInput(self, node):
         for socket in node.outputs:
             name = socket.name
@@ -411,6 +430,9 @@ class Translator:
                 # A constant backdrop is a 1x1 texture: the fetch clamps into it.
                 sampler = self._sampler(kind, kind)
                 fetch = f'texelFetch({sampler}, min(op_texel, textureSize({sampler}, 0) - 1), 0)'
+                from .formats import scalar_unit
+                if scalar_unit(self.unit.key):
+                    fetch = f'vec4(({fetch}).rrr, ({fetch}).g)'
                 if name.endswith(':Alpha'):
                     self._set(socket, f'{fetch}.a', VALUE)
                 elif socket.type == RGBA:
@@ -443,18 +465,19 @@ class Translator:
         sampler = self._sampler(('import', producer_key, target), 'import', producer=(producer_key, target))
         self.imports[socket.name] = (producer_key, export)
         fetch = f'texelFetch({sampler}, op_texel, 0)'
-        if component == 'a':
-            self._set(socket, f'{fetch}.a', VALUE)
+        if component in {'a', 'g'}:
+            self._set(socket, f'{fetch}.{component}', VALUE)
         elif component == 'r':
             self._set(socket, f'{fetch}.r', VALUE)
         elif socket.type == RGBA:
-            self._set(socket, f'vec4({fetch}.rgb, 1.0)', RGBA)
+            self._set(socket, f'vec4({fetch}.{component}, 1.0)', RGBA)
         else:
-            self._set(socket, f'{fetch}.rgb', VECTOR)
+            self._set(socket, f'{fetch}.{component}', VECTOR)
 
     # ---- program -------------------------------------------------------------------------
 
     def translate(self):
+        from .formats import scalar_unit
         unit = self.unit
         outputs = []
         for index, (color, alpha) in enumerate(export_targets(unit)):
@@ -463,6 +486,8 @@ class Translator:
             a = self._export(alpha, VALUE) if alpha else '1.0'
             if value is not None:
                 outputs.append(f'  op_out{index} = vec4({value}, {value}, {value}, 1.0);')
+            elif scalar_unit(unit.key):
+                outputs.append(f'  op_out{index} = vec4(({rgb or "vec3(0.0)"}).r, {a}, 0.0, 0.0);')
             else:
                 outputs.append(f'  op_out{index} = vec4({rgb or "vec3(0.0)"}, {a});')
         body = '\n'.join(self.lines + outputs)
@@ -502,3 +527,11 @@ def live_image(image):
 
 def translate(graph, unit, inline=frozenset()):
     return Translator(graph, unit, inline).translate()
+
+
+def programs(program):
+    """A program and the input passes behind its spatial-filter samplers."""
+    yield program
+    for sampler in program.samplers:
+        if sampler.source is not None:
+            yield from programs(sampler.source)

@@ -99,6 +99,8 @@ def apply_effect(b, signal, effect):
     """
     key = effect_key(effect.kind)
     if key not in POINTWISE:
+        if hasattr(b, 'spatial_effect'):
+            return b.spatial_effect(signal, effect)
         raise UnsupportedEffect(f"{effect.kind} requires a spatial raster boundary")
     m = b.math
     values = {}

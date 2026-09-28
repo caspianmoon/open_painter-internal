@@ -845,6 +845,9 @@ class OP_PT_native_sets(PainterPanel, bpy.types.Panel):
         if ts.udim_tile:
             body.prop(ts, 'udim_name', text='Export Name')
             body.label(text=f'Source UV: {ts.udim_source_uv}')
+            op = body.operator('open_painter.texture_set', text='Make Independent' if ts.shared_stack_id else 'Link Matching Tile Stacks',
+                               icon='UNLINKED' if ts.shared_stack_id else 'LINKED')
+            op.action = 'UNLINK_UDIM' if ts.shared_stack_id else 'LINK_UDIM'
         body.prop(ts, 'preview_backend', text="Evaluation")
         if ts.preview_backend == 'CPU':
             body.prop(ts, 'preview_quality')
@@ -1164,6 +1167,7 @@ class OP_MT_native_add_layer(bpy.types.Menu):
                                     ("FOLDER", "Folder", "NEWFOLDER")):
             layout.operator("open_painter.layer", text=label, icon=icon).action = action
         layout.separator()
+        layout.operator('open_painter.layer', text='Add Text', icon='FONT_DATA').action = 'TEXT'
         layout.operator("open_painter.decal", text="Decal Layer…", icon="OUTLINER_OB_IMAGE").action = "ADD"
         layout.operator("open_painter.catalog_material", text="Smart Material…", icon="ASSET_MANAGER")
         layout.operator("open_painter.module_insert", text="Module Instance…", icon="PACKAGE")

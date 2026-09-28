@@ -1,0 +1,2778 @@
+{
+  "blender": "5.2.1 LTS",
+  "actual_backend": "METAL",
+  "reference_revision": "dbf3ef0",
+  "method": {
+    "warm_samples": 5,
+    "cold_samples": 1,
+    "synchronization": "One pixel read from the actual result; diagnostic reads are excluded from transfer counters.",
+    "painting": "One resampled dab and publication; one or four enabled channels; bounded interactive preview, full document publication.",
+    "filter": "Radius-4 separable Gaussian; baseline scalar CPU versus upgraded RGBA GPU. GPU timing includes its output synchronization.",
+    "undo": "Blender opacity-edit undo transaction plus engine restoration; GPU stroke undo hits are verified separately.",
+    "memory": "Base-level addon textures only, excluding Blender images, mip storage and driver overhead; pooled bytes are global.",
+    "transfers": "Explicit addon GPU uploads/readbacks and allocation/eviction counters. Blender-internal transfers are not observable here.",
+    "interpretation": "Five warm samples are a small local comparison, not a production tail-latency guarantee."
+  },
+  "coverage": {
+    "background_scripts": 162,
+    "background_method": "Complete 161-script run plus corrected-test reruns and authoring_workflow.",
+    "unit_tests": 407,
+    "unit_skips": 2,
+    "gui_scripts": 33,
+    "additional_gpu_window_scripts": 6,
+    "backend_matrix_cases": 14,
+    "real_vulkan": false,
+    "real_opengl": false,
+    "api_simulations": [
+      "VULKAN",
+      "OPENGL"
+    ],
+    "legacy_reference": "0.12.2 compatibility contract passed, including saved appearance and export settings",
+    "unit_passed": 405
+  },
+  "tradeoffs": [
+    "First-use GPU surface preparation increases cold preview setup in most cases; geometry is cached across gestures.",
+    "The bounded texture pool can churn at four-channel 4K publication; measured publication is slower there.",
+    "Overlapping UVs, graph-resolved dabs and reflected planar dabs retain CPU source replay.",
+    "Vulkan/OpenGL driver behavior and performance remain unmeasured."
+  ],
+  "cases": [
+    {
+      "resolution": 1024,
+      "channel_count": 1,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 1024,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 252.98829199164174,
+        "preview_initialization_ms": 66.63204098003916,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 50.15999998431653,
+          "warm_ms": [
+            22.154874983243644,
+            23.627499991562217,
+            20.859957992797717,
+            21.577707986580208,
+            21.66795899393037
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 21.66795899393037,
+          "p95_ms": 23.332974989898503
+        },
+        "publication": {
+          "cold_ms": 2.673249982763082,
+          "warm_ms": [
+            2.05425001331605,
+            2.890167001169175,
+            2.5192920002155006,
+            3.9352920139208436,
+            2.9757500160485506
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 2.890167001169175,
+          "p95_ms": 3.743383614346385
+        },
+        "cpu_gaussian": {
+          "cold_ms": 17.458957998314872,
+          "warm_ms": [
+            17.134334018919617,
+            18.8566250144504,
+            17.465374985476956,
+            17.4613339768257,
+            16.375208011595532
+          ],
+          "counters": {},
+          "p50_ms": 17.4613339768257,
+          "p95_ms": 18.578375008655712
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 136.15879099234007,
+          "warm_ms": [
+            122.4570420163218,
+            118.8983749889303,
+            121.67962500825524,
+            122.79958400176838,
+            120.35970800206997
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 121.67962500825524,
+          "p95_ms": 122.73107560467906
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0010372090036980808,
+              "cpu_s": 0.0010310000000002262,
+              "exclusive_wall_s": 0.0010372090036980808,
+              "exclusive_cpu_s": 0.0010310000000002262
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.002430249995086342,
+              "cpu_s": 0.00243099999999985,
+              "exclusive_wall_s": 0.002430249995086342,
+              "exclusive_cpu_s": 0.00243099999999985
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 24,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 16777216,
+            "image_read_allocated_bytes": 16777216,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.5344169912859797,
+              "p95": 2.2312544984743,
+              "maximum": 2.419791999273002
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 2.7120620070490986,
+              "p95": 107.49524949642364,
+              "maximum": 242.98041700967588
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.031041490728966892,
+              "p95": 0.05556276300922036,
+              "maximum": 0.05941701238043606
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.0001169580064015463,
+              "p95": 0.0001573435074533336,
+              "maximum": 0.0001660830166656524
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 1299218432
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 1024,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 232.5444169982802,
+        "preview_initialization_ms": 459.7725000057835,
+        "preview_memory": {
+          "leased_bytes": 75497476,
+          "pooled_bytes": 41943036,
+          "retained_bytes": 33554432,
+          "active_bytes": 41943044,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 9.928583021974191,
+          "warm_ms": [
+            5.006541992770508,
+            4.739083000458777,
+            4.1415000159759074,
+            3.5911670129280537,
+            4.526874981820583
+          ],
+          "counters": {
+            "engine_program_compiles": 4,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 52,
+            "engine_channel_publications": 6,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 4.526874981820583,
+          "p95_ms": 4.953050194308162
+        },
+        "publication": {
+          "cold_ms": 2.3381249920930713,
+          "warm_ms": [
+            2.1136249997653067,
+            1.436207996448502,
+            1.547291991300881,
+            1.443457993445918,
+            2.394708018982783
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 1.547291991300881,
+          "p95_ms": 2.3384914151392877
+        },
+        "cpu_gaussian": {
+          "cold_ms": 17.240374989341944,
+          "warm_ms": [
+            15.003333013737574,
+            15.021750004962087,
+            14.535833994159475,
+            14.980250009102747,
+            15.070499997818843
+          ],
+          "counters": {},
+          "p50_ms": 15.003333013737574,
+          "p95_ms": 15.060749999247491
+        },
+        "gpu_gaussian": {
+          "cold_ms": 8.101416024146602,
+          "warm_ms": [
+            5.472542019560933,
+            5.26458298554644,
+            6.061082996893674,
+            5.165625014342368,
+            4.80941598652862
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 16777816,
+            "engine_texture_uploads": 6,
+            "engine_texture_uploaded_bytes": 600
+          },
+          "p50_ms": 5.26458298554644,
+          "p95_ms": 5.943374801427126
+        },
+        "undo_transaction": {
+          "cold_ms": 149.51212500454858,
+          "warm_ms": [
+            120.44979198253714,
+            119.20291700516827,
+            119.19387502712198,
+            118.6375830147881,
+            118.69412497617304
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 119.19387502712198,
+          "p95_ms": 120.20041698706336
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0009426250180695206,
+              "cpu_s": 0.0009369999999999656,
+              "exclusive_wall_s": 0.0009426250180695206,
+              "exclusive_cpu_s": 0.0009369999999999656
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.0024251670110970736,
+              "cpu_s": 0.0024250000000001215,
+              "exclusive_wall_s": 0.0024251670110970736,
+              "exclusive_cpu_s": 0.0024250000000001215
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 9,
+            "engine_texture_allocations": 45,
+            "engine_texture_allocated_bytes": 150995592,
+            "engine_pool_evictions": 0,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 16777216,
+            "image_read_allocated_bytes": 16777216,
+            "engine_texture_uploads": 18,
+            "engine_texture_uploaded_bytes": 83886732,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 9,
+              "p50": 0.580916996113956,
+              "p95": 1.0690830007661132,
+              "maximum": 1.3568330032285303
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 0.5223749758442864,
+              "p95": 114.38132350303931,
+              "maximum": 224.37229100614786
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.00011239598097745329,
+              "p95": 0.00020918980735586947,
+              "maximum": 0.0002582920133136213
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.030416500521823764,
+              "p95": 0.055541495385114104,
+              "maximum": 0.06370799383148551
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 1517240320
+        }
+      },
+      "painting_p50_speedup": 4.78651588147374,
+      "filter_p50_speedup": 3.3167553868491813
+    },
+    {
+      "resolution": 1024,
+      "channel_count": 4,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 1024,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 262.39558300585486,
+        "preview_initialization_ms": 75.8447079861071,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 50.849499995820224,
+          "warm_ms": [
+            23.243000003276393,
+            22.02487498288974,
+            23.260833986569196,
+            20.77124998322688,
+            20.012499997392297
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 22.02487498288974,
+          "p95_ms": 23.257267189910635
+        },
+        "publication": {
+          "cold_ms": 6.706792017212138,
+          "warm_ms": [
+            6.189542007632554,
+            6.127458997070789,
+            7.659583003260195,
+            8.113417017739266,
+            6.511125015094876
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 6.511125015094876,
+          "p95_ms": 8.022650214843452
+        },
+        "cpu_gaussian": {
+          "cold_ms": 62.352333014132455,
+          "warm_ms": [
+            63.568417011993006,
+            63.44195900601335,
+            61.66295800358057,
+            61.365583998849615,
+            62.52804197720252
+          ],
+          "counters": {},
+          "p50_ms": 62.52804197720252,
+          "p95_ms": 63.543125410797074
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 145.24308301042765,
+          "warm_ms": [
+            115.99620900233276,
+            118.61858301563188,
+            119.29216599673964,
+            129.07899997662753,
+            116.1007090122439
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 118.61858301563188,
+          "p95_ms": 127.12163318064995
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.000991707987850532,
+              "cpu_s": 0.0009879999999999889,
+              "exclusive_wall_s": 0.000991707987850532,
+              "exclusive_cpu_s": 0.0009879999999999889
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.007383334013866261,
+              "cpu_s": 0.010307999999999762,
+              "exclusive_wall_s": 0.007383334013866261,
+              "exclusive_cpu_s": 0.010307999999999762
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 25,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 67108864,
+            "image_read_allocated_bytes": 67108864,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.5477500089909881,
+              "p95": 0.5770746996859089,
+              "maximum": 0.5803329986520112
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 3.1007710058474913,
+              "p95": 110.59978076082189,
+              "maximum": 245.4952500120271
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.05237499135546386,
+              "p95": 0.06592700083274394,
+              "maximum": 0.06874999962747097
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.0001259789860341698,
+              "p95": 0.00016606199642410502,
+              "maximum": 0.00017479099915362895
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 1209008128
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 1024,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 252.9395830060821,
+        "preview_initialization_ms": 191.43074998282827,
+        "preview_memory": {
+          "leased_bytes": 37748740,
+          "pooled_bytes": 54525948,
+          "retained_bytes": 8388608,
+          "active_bytes": 29360132,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 18.122582987416536,
+          "warm_ms": [
+            9.580250014550984,
+            9.015292016556486,
+            7.298582990188152,
+            9.430083009647205,
+            8.493166998960078
+          ],
+          "counters": {
+            "engine_program_compiles": 5,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 52,
+            "engine_channel_publications": 24,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 9.015292016556486,
+          "p95_ms": 9.550216613570228
+        },
+        "publication": {
+          "cold_ms": 5.462416011141613,
+          "warm_ms": [
+            5.946874996880069,
+            5.459000007249415,
+            5.599084019195288,
+            6.645334011409432,
+            6.332666001981124
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 5.946874996880069,
+          "p95_ms": 6.58280040952377
+        },
+        "cpu_gaussian": {
+          "cold_ms": 61.390666000079364,
+          "warm_ms": [
+            59.05345801147632,
+            60.966292017837986,
+            63.56829099240713,
+            60.842417005915195,
+            58.32170799840242
+          ],
+          "counters": {},
+          "p50_ms": 60.842417005915195,
+          "p95_ms": 63.0478911974933
+        },
+        "gpu_gaussian": {
+          "cold_ms": 23.738874995615333,
+          "warm_ms": [
+            10.034333012299612,
+            8.763249992625788,
+            8.61024999176152,
+            9.539458027575165,
+            8.678915997734293
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 25,
+            "engine_texture_allocated_bytes": 16779616,
+            "engine_texture_uploads": 24,
+            "engine_texture_uploaded_bytes": 2400
+          },
+          "p50_ms": 8.763249992625788,
+          "p95_ms": 9.935358015354723
+        },
+        "undo_transaction": {
+          "cold_ms": 145.0400419998914,
+          "warm_ms": [
+            112.74479198618792,
+            116.76637499476783,
+            119.66254201252013,
+            113.07029100134969,
+            118.24691601213999
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 116.76637499476783,
+          "p95_ms": 119.3794168124441
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0008565420284867287,
+              "cpu_s": 0.0008519999999998529,
+              "exclusive_wall_s": 0.0008565420284867287,
+              "exclusive_cpu_s": 0.0008519999999998529
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.004082583007402718,
+              "cpu_s": 0.008035000000000014,
+              "exclusive_wall_s": 0.004082583007402718,
+              "exclusive_cpu_s": 0.008035000000000014
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 11,
+            "engine_texture_allocations": 71,
+            "engine_texture_allocated_bytes": 125831568,
+            "engine_pool_evictions": 0,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 67108864,
+            "image_read_allocated_bytes": 67108864,
+            "engine_texture_uploads": 42,
+            "engine_texture_uploaded_bytes": 52431252,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 11,
+              "p50": 0.2944159787148237,
+              "p95": 0.5936040106462315,
+              "maximum": 0.6572080019395798
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 1.250916495337151,
+              "p95": 112.10562450287398,
+              "maximum": 236.80912499548867
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.00012279200018383563,
+              "p95": 0.0002984482678584753,
+              "maximum": 0.00037741701817139983
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.04858350439462811,
+              "p95": 0.1401462432113476,
+              "maximum": 0.1677919935900718
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 1255276544
+        }
+      },
+      "painting_p50_speedup": 2.4430573011324865,
+      "filter_p50_speedup": 7.135257128327894
+    },
+    {
+      "resolution": 2048,
+      "channel_count": 1,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 2048,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 870.6647920189425,
+        "preview_initialization_ms": 75.45341699733399,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 51.47400000714697,
+          "warm_ms": [
+            23.511790990596637,
+            25.92016599373892,
+            33.68308302015066,
+            23.77949998481199,
+            25.340458989376202
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 25.340458989376202,
+          "p95_ms": 32.13049961486831
+        },
+        "publication": {
+          "cold_ms": 4.337916005169973,
+          "warm_ms": [
+            5.245458014542237,
+            4.39300001016818,
+            3.9723750087432563,
+            3.8139579992275685,
+            3.158209001412615
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 3.9723750087432563,
+          "p95_ms": 5.0749664136674255
+        },
+        "cpu_gaussian": {
+          "cold_ms": 75.28545899549499,
+          "warm_ms": [
+            71.6255420120433,
+            75.02049999311566,
+            73.09191601234488,
+            72.43033300619572,
+            72.8464999992866
+          ],
+          "counters": {},
+          "p50_ms": 72.8464999992866,
+          "p95_ms": 74.63478319696151
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 477.6321670215111,
+          "warm_ms": [
+            437.59645899990574,
+            432.73137498181313,
+            440.50820800475776,
+            455.1045830012299,
+            438.41408399748616
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 438.41408399748616,
+          "p95_ms": 452.1853080019355
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.001058333000401035,
+              "cpu_s": 0.0010519999999996088,
+              "exclusive_wall_s": 0.001058333000401035,
+              "exclusive_cpu_s": 0.0010519999999996088
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.008219042007112876,
+              "cpu_s": 0.008218999999999976,
+              "exclusive_wall_s": 0.008219042007112876,
+              "exclusive_cpu_s": 0.008218999999999976
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 26,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 67108864,
+            "image_read_allocated_bytes": 67108864,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.5125839961692691,
+              "p95": 0.6108702975325286,
+              "maximum": 0.6217909976840019
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 2.7480624994495884,
+              "p95": 435.3536249982426,
+              "maximum": 853.7822910002433
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.03341701813042164,
+              "p95": 0.04714549140771851,
+              "maximum": 0.04845799412578344
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.00012108348892070353,
+              "p95": 0.00014916648069629446,
+              "maximum": 0.00015370798064395785
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 3869229056
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 2048,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 863.3200000040233,
+        "preview_initialization_ms": 474.66716601047665,
+        "preview_memory": {
+          "leased_bytes": 75497476,
+          "pooled_bytes": 167772156,
+          "retained_bytes": 33554432,
+          "active_bytes": 41943044,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 10.463457991136238,
+          "warm_ms": [
+            7.1374579856637865,
+            6.475750007666647,
+            6.002499983878806,
+            6.634374993154779,
+            6.5999579965136945
+          ],
+          "counters": {
+            "engine_program_compiles": 4,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 52,
+            "engine_channel_publications": 6,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 6.5999579965136945,
+          "p95_ms": 7.036841387161985
+        },
+        "publication": {
+          "cold_ms": 4.067875008331612,
+          "warm_ms": [
+            4.250415979186073,
+            4.4937090133316815,
+            4.576417006319389,
+            4.350915987743065,
+            3.3040830167010427
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 4.350915987743065,
+          "p95_ms": 4.559875407721847
+        },
+        "cpu_gaussian": {
+          "cold_ms": 83.35174998501316,
+          "warm_ms": [
+            79.40008299192414,
+            71.24854199355468,
+            71.92937500076368,
+            76.26041700132191,
+            71.78599998587742
+          ],
+          "counters": {},
+          "p50_ms": 71.92937500076368,
+          "p95_ms": 78.77214979380369
+        },
+        "gpu_gaussian": {
+          "cold_ms": 19.830625009490177,
+          "warm_ms": [
+            8.060207997914404,
+            6.754292000550777,
+            6.293457990977913,
+            5.994625011226162,
+            5.900332995224744
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 67109464,
+            "engine_texture_uploads": 6,
+            "engine_texture_uploaded_bytes": 600
+          },
+          "p50_ms": 6.293457990977913,
+          "p95_ms": 7.799024798441678
+        },
+        "undo_transaction": {
+          "cold_ms": 482.37920898827724,
+          "warm_ms": [
+            492.9629589896649,
+            457.72641702205874,
+            499.8319580045063,
+            498.8147919939365,
+            510.23279200308025
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 498.8147919939365,
+          "p95_ms": 508.15262520336546
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0010244999721180648,
+              "cpu_s": 0.001034999999999675,
+              "exclusive_wall_s": 0.0010244999721180648,
+              "exclusive_cpu_s": 0.001034999999999675
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.012394124991260469,
+              "cpu_s": 0.012395999999999852,
+              "exclusive_wall_s": 0.012394124991260469,
+              "exclusive_cpu_s": 0.012395999999999852
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 9,
+            "engine_texture_allocations": 47,
+            "engine_texture_allocated_bytes": 377488008,
+            "engine_pool_evictions": 0,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 67108864,
+            "image_read_allocated_bytes": 67108864,
+            "engine_texture_uploads": 18,
+            "engine_texture_uploaded_bytes": 134218380,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 9,
+              "p50": 0.32466702396050096,
+              "p95": 0.6495661975350231,
+              "maximum": 0.698582996847108
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 0.5732079880544916,
+              "p95": 474.360520754999,
+              "maximum": 852.8345000231639
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.0001213750074384734,
+              "p95": 0.0004974437484634107,
+              "maximum": 0.0006412499933503568
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.04083300882484764,
+              "p95": 0.05531274655368179,
+              "maximum": 0.057792000006884336
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 3745136640
+        }
+      },
+      "painting_p50_speedup": 3.839487918371879,
+      "filter_p50_speedup": 11.574956105803338
+    },
+    {
+      "resolution": 2048,
+      "channel_count": 4,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 2048,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 881.795958004659,
+        "preview_initialization_ms": 84.49945898610167,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 60.62000000383705,
+          "warm_ms": [
+            41.12970898859203,
+            40.69908399833366,
+            40.63829101505689,
+            41.28495798795484,
+            41.72483299043961
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 41.12970898859203,
+          "p95_ms": 41.636857989942655
+        },
+        "publication": {
+          "cold_ms": 13.048250024439767,
+          "warm_ms": [
+            12.229165993630886,
+            12.170542002422735,
+            12.731000024359673,
+            12.794708018191159,
+            11.865708016557619
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 12.229165993630886,
+          "p95_ms": 12.781966419424862
+        },
+        "cpu_gaussian": {
+          "cold_ms": 292.93866601074114,
+          "warm_ms": [
+            293.6043329827953,
+            295.8514589990955,
+            296.1844170058612,
+            293.90808299649507,
+            291.3000000116881
+          ],
+          "counters": {},
+          "p50_ms": 293.90808299649507,
+          "p95_ms": 296.11782540450804
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 503.89512500260025,
+          "warm_ms": [
+            436.10316701233387,
+            426.10725000849925,
+            420.8835420140531,
+            430.6764590146486,
+            422.662292025052
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 426.10725000849925,
+          "p95_ms": 435.0178254127968
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0009334999194834381,
+              "cpu_s": 0.0009299999999994313,
+              "exclusive_wall_s": 0.0009334999194834381,
+              "exclusive_cpu_s": 0.0009299999999994313
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.015052167000249028,
+              "cpu_s": 0.018854000000000593,
+              "exclusive_wall_s": 0.015052167000249028,
+              "exclusive_cpu_s": 0.018854000000000593
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 27,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 268435456,
+            "image_read_allocated_bytes": 268435456,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.5576249968726188,
+              "p95": 0.6245247117476538,
+              "maximum": 0.6319580134004354
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 3.556166499038227,
+              "p95": 440.25438524840865,
+              "maximum": 840.4452079848852
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.05091700586490333,
+              "p95": 0.06741673860233277,
+              "maximum": 0.07049998384900391
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.00013314599345903844,
+              "p95": 0.00017659325385466218,
+              "maximum": 0.0001872910070233047
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 3603955712
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 2048,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 869.9316249985714,
+        "preview_initialization_ms": 208.73270800802857,
+        "preview_memory": {
+          "leased_bytes": 37748740,
+          "pooled_bytes": 218103804,
+          "retained_bytes": 8388608,
+          "active_bytes": 29360132,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 25.046916998689994,
+          "warm_ms": [
+            19.695499999215826,
+            20.606165984645486,
+            13.60158299212344,
+            16.33283297996968,
+            14.14650000515394
+          ],
+          "counters": {
+            "engine_program_compiles": 5,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 52,
+            "engine_channel_publications": 24,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 16.33283297996968,
+          "p95_ms": 20.424032787559554
+        },
+        "publication": {
+          "cold_ms": 11.071374989114702,
+          "warm_ms": [
+            11.165957985213026,
+            10.84454101510346,
+            11.441499984357506,
+            10.983333020703867,
+            10.939792002318427
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 10.983333020703867,
+          "p95_ms": 11.38639158452861
+        },
+        "cpu_gaussian": {
+          "cold_ms": 298.1501249887515,
+          "warm_ms": [
+            298.27004100661725,
+            297.12991599808447,
+            294.75487500894815,
+            290.57670797919855,
+            294.4847500184551
+          ],
+          "counters": {},
+          "p50_ms": 294.75487500894815,
+          "p95_ms": 298.0420160049107
+        },
+        "gpu_gaussian": {
+          "cold_ms": 44.996666023507714,
+          "warm_ms": [
+            28.781665983842686,
+            27.97987501253374,
+            26.23804099857807,
+            24.958041991339996,
+            24.68670898815617
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 25,
+            "engine_texture_allocated_bytes": 67111264,
+            "engine_texture_uploads": 24,
+            "engine_texture_uploaded_bytes": 2400
+          },
+          "p50_ms": 26.23804099857807,
+          "p95_ms": 28.621307789580896
+        },
+        "undo_transaction": {
+          "cold_ms": 502.7785000274889,
+          "warm_ms": [
+            436.39608297962695,
+            441.62337499437854,
+            433.75720898620784,
+            455.4714589903597,
+            452.4548750196118
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 441.62337499437854,
+          "p95_ms": 454.8681421962101
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0009287080029025674,
+              "cpu_s": 0.0009229999999997851,
+              "exclusive_wall_s": 0.0009287080029025674,
+              "exclusive_cpu_s": 0.0009229999999997851
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.01586620698799379,
+              "cpu_s": 0.020544000000000118,
+              "exclusive_wall_s": 0.01586620698799379,
+              "exclusive_cpu_s": 0.020544000000000118
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 11,
+            "engine_texture_allocations": 73,
+            "engine_texture_allocated_bytes": 390072720,
+            "engine_pool_evictions": 0,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 268435456,
+            "image_read_allocated_bytes": 268435456,
+            "engine_texture_uploads": 42,
+            "engine_texture_uploaded_bytes": 102762900,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 11,
+              "p50": 0.30583300394937396,
+              "p95": 0.560875007067807,
+              "maximum": 0.5699169996660203
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 1.3467289973050356,
+              "p95": 444.51653150463244,
+              "maximum": 834.2818329983857
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.00013320801372174174,
+              "p95": 0.00033296479668933884,
+              "maximum": 0.0004279169952496886
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.05466651055030525,
+              "p95": 0.15656249888706952,
+              "maximum": 0.1903749944176525
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 3665952768
+        }
+      },
+      "painting_p50_speedup": 2.5182225912083247,
+      "filter_p50_speedup": 11.201601636815147
+    },
+    {
+      "resolution": 4096,
+      "channel_count": 1,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 4096,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 4602.193416998489,
+        "preview_initialization_ms": 283.7218749918975,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 70.57208300102502,
+          "warm_ms": [
+            42.540541995549574,
+            45.29783298494294,
+            36.83237501536496,
+            38.176166999619454,
+            39.146458002505824
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 39.146458002505824,
+          "p95_ms": 44.74637478706427
+        },
+        "publication": {
+          "cold_ms": 9.168290998786688,
+          "warm_ms": [
+            9.889040986308828,
+            9.700916009023786,
+            9.02295799460262,
+            8.094666001852602,
+            9.683540993137285
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 9.683540993137285,
+          "p95_ms": 9.85141599085182
+        },
+        "cpu_gaussian": {
+          "cold_ms": 367.61433401261456,
+          "warm_ms": [
+            298.61370800063014,
+            300.84887499106117,
+            310.4309590125922,
+            296.83812501025386,
+            299.46054200991057
+          ],
+          "counters": {},
+          "p50_ms": 299.46054200991057,
+          "p95_ms": 308.514542208286
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 3034.9062499881256,
+          "warm_ms": [
+            2174.2919579846784,
+            2701.830500009237,
+            3099.1482499812264,
+            2610.5692080163863,
+            2540.8608749858104
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 2610.5692080163863,
+          "p95_ms": 3019.6846999868285
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.00235237498418428,
+              "cpu_s": 0.002165999999999002,
+              "exclusive_wall_s": 0.00235237498418428,
+              "exclusive_cpu_s": 0.002165999999999002
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.20780599999125116,
+              "cpu_s": 0.13747700000000052,
+              "exclusive_wall_s": 0.20780599999125116,
+              "exclusive_cpu_s": 0.13747700000000052
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 28,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 268435456,
+            "image_read_allocated_bytes": 268435456,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.5295829905662686,
+              "p95": 0.7455461047356948,
+              "maximum": 0.7695420063100755
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 3.1588959973305464,
+              "p95": 2891.739541752031,
+              "maximum": 4528.503624984296
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.12547901133075356,
+              "p95": 0.2708752508624457,
+              "maximum": 0.3140420012641698
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.0003582500066841021,
+              "p95": 0.0006860312569187954,
+              "maximum": 0.0007730000070296228
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 4883218432
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 4096,
+        "channels": [
+          "BASE_COLOR"
+        ],
+        "preview_resolution": 1024,
+        "initialization_ms": 4617.631250002887,
+        "preview_initialization_ms": 719.3773750041146,
+        "preview_memory": {
+          "leased_bytes": 75497476,
+          "pooled_bytes": 402653180,
+          "retained_bytes": 33554432,
+          "active_bytes": 41943044,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 21.55674999812618,
+          "warm_ms": [
+            14.711791998706758,
+            12.693374999798834,
+            10.993665986461565,
+            11.123125004814938,
+            14.050208003027365
+          ],
+          "counters": {
+            "engine_program_compiles": 4,
+            "engine_texture_allocations": 7,
+            "engine_texture_allocated_bytes": 52,
+            "engine_channel_publications": 6,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 12.693374999798834,
+          "p95_ms": 14.57947519957088
+        },
+        "publication": {
+          "cold_ms": 12.952167016919702,
+          "warm_ms": [
+            9.796291997190565,
+            8.413457981077954,
+            8.636083017336205,
+            8.561583003029227,
+            8.690541988471523
+          ],
+          "counters": {
+            "engine_channel_publications": 6
+          },
+          "p50_ms": 8.636083017336205,
+          "p95_ms": 9.575141995446756
+        },
+        "cpu_gaussian": {
+          "cold_ms": 421.46079198573716,
+          "warm_ms": [
+            310.98458301858045,
+            299.2073750065174,
+            297.3325000202749,
+            307.1361670154147,
+            302.75362500105985
+          ],
+          "counters": {},
+          "p50_ms": 302.75362500105985,
+          "p95_ms": 310.2148998179473
+        },
+        "gpu_gaussian": {
+          "cold_ms": 210.17741700052284,
+          "warm_ms": [
+            27.025749994209036,
+            24.15300000575371,
+            22.88754199980758,
+            22.209957998711616,
+            22.159207990625873
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 8,
+            "engine_texture_allocated_bytes": 536871512,
+            "engine_texture_uploads": 6,
+            "engine_texture_uploaded_bytes": 600
+          },
+          "p50_ms": 22.88754199980758,
+          "p95_ms": 26.45119999651797
+        },
+        "undo_transaction": {
+          "cold_ms": 3111.183417000575,
+          "warm_ms": [
+            2511.6814590001013,
+            2413.9510839886498,
+            3238.6749169963878,
+            3482.476749981288,
+            2946.4548339892644
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_texture_allocations": 6,
+            "engine_texture_allocated_bytes": 1610612736,
+            "engine_pool_evictions": 11,
+            "engine_channel_publications": 61,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 2946.4548339892644,
+          "p95_ms": 3433.716383384308
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0019327090412843972,
+              "cpu_s": 0.0019280000000034825,
+              "exclusive_wall_s": 0.0019327090412843972,
+              "exclusive_cpu_s": 0.0019280000000034825
+            },
+            "image_read": {
+              "calls": 1,
+              "wall_s": 0.16323245799867436,
+              "cpu_s": 0.12637000000000143,
+              "exclusive_wall_s": 0.16323245799867436,
+              "exclusive_cpu_s": 0.12637000000000143
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 9,
+            "engine_texture_allocations": 56,
+            "engine_texture_allocated_bytes": 3162505864,
+            "engine_pool_evictions": 12,
+            "engine_channel_publications": 82,
+            "image_read_bytes": 268435456,
+            "image_read_allocated_bytes": 268435456,
+            "engine_texture_uploads": 18,
+            "engine_texture_uploaded_bytes": 335544972,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 9,
+              "p50": 0.46341700362972915,
+              "p95": 1.7583077889867123,
+              "maximum": 2.3110409965738654
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 0.9007085027405992,
+              "p95": 3264.556594011083,
+              "maximum": 4551.148417027434
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.00024374949862249196,
+              "p95": 0.0022888289371621783,
+              "maximum": 0.0031712079944554716
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.13068699627183378,
+              "p95": 0.9552292467560619,
+              "maximum": 1.18787499377504
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 4471078912
+        }
+      },
+      "painting_p50_speedup": 3.0840070511685207,
+      "filter_p50_speedup": 13.08399748703588
+    },
+    {
+      "resolution": 4096,
+      "channel_count": 4,
+      "baseline": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "reference",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 4096,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 5529.531916981796,
+        "preview_initialization_ms": 871.1930419958662,
+        "preview_memory": null,
+        "painting": {
+          "cold_ms": 144.4188749883324,
+          "warm_ms": [
+            65.70983299752697,
+            61.44170800689608,
+            63.2322920137085,
+            58.8202920043841,
+            59.81862501357682
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 61.44170800689608,
+          "p95_ms": 65.21432480076328
+        },
+        "publication": {
+          "cold_ms": 38.102374994196,
+          "warm_ms": [
+            37.3432079795748,
+            36.973292008042336,
+            38.133082998683676,
+            38.69604101055302,
+            37.373917002696544
+          ],
+          "counters": {
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 37.373917002696544,
+          "p95_ms": 38.58344940817915
+        },
+        "cpu_gaussian": {
+          "cold_ms": 1307.0420840231236,
+          "warm_ms": [
+            1199.908292008331,
+            1196.280875010416,
+            1210.4584590124432,
+            1266.9088749971706,
+            1229.5095000008587
+          ],
+          "counters": {},
+          "p50_ms": 1210.4584590124432,
+          "p95_ms": 1259.4289999979082
+        },
+        "gpu_gaussian": null,
+        "undo_transaction": {
+          "cold_ms": 4533.919625013368,
+          "warm_ms": [
+            2683.9720840216614,
+            2162.397375010187,
+            2276.5404999954626,
+            2124.60108299274,
+            1981.6062499885447
+          ],
+          "counters": {
+            "engine_graph_builds": 6,
+            "shader_runtime_builds": 6,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "p50_ms": 2162.397375010187,
+          "p95_ms": 2602.4857672164217
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.001474541990319267,
+              "cpu_s": 0.0014590000000027636,
+              "exclusive_wall_s": 0.001474541990319267,
+              "exclusive_cpu_s": 0.0014590000000027636
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.7173071669822093,
+              "cpu_s": 0.5357590000000005,
+              "exclusive_wall_s": 0.7173071669822093,
+              "exclusive_cpu_s": 0.5357590000000005
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_program_compiles": 3,
+            "engine_texture_allocations": 29,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 1073741824,
+            "image_read_allocated_bytes": 1073741824,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 6
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 3,
+              "p50": 0.7765420014038682,
+              "p95": 0.7937167043564841,
+              "maximum": 0.7956250046845526
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 3.7157080078031868,
+              "p95": 3480.098135769367,
+              "maximum": 5291.391582984943
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.1264369930140674,
+              "p95": 0.3683227259898558,
+              "maximum": 0.43962497147731483
+            },
+            "shader_callback_seconds": {
+              "samples": 6,
+              "p50": 0.0003480419982224703,
+              "p95": 0.0009498749859631062,
+              "maximum": 0.0010993749892804772
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 5420711936
+        }
+      },
+      "upgrade": {
+        "blender": "5.2.1 LTS",
+        "backend": "METAL",
+        "implementation": "upgrade",
+        "synchronization": "one-pixel read of actual output after each operation",
+        "renderer": "Metal API",
+        "resolution": 4096,
+        "channels": [
+          "BASE_COLOR",
+          "ROUGHNESS",
+          "METALLIC",
+          "HEIGHT"
+        ],
+        "preview_resolution": 512,
+        "initialization_ms": 4425.6175410118885,
+        "preview_initialization_ms": 756.1660420033149,
+        "preview_memory": {
+          "leased_bytes": 37748740,
+          "pooled_bytes": 492131664,
+          "retained_bytes": 8388608,
+          "active_bytes": 29360132,
+          "undo_bytes": 0
+        },
+        "painting": {
+          "cold_ms": 121.67966697597876,
+          "warm_ms": [
+            59.14383300114423,
+            46.861792012350634,
+            47.03116702148691,
+            45.43095899862237,
+            44.667249982012436
+          ],
+          "counters": {
+            "engine_program_compiles": 5,
+            "engine_texture_allocations": 84,
+            "engine_texture_allocated_bytes": 2236962172,
+            "engine_pool_evictions": 91,
+            "engine_channel_publications": 24,
+            "engine_texture_uploads": 7,
+            "engine_texture_uploaded_bytes": 52
+          },
+          "p50_ms": 46.861792012350634,
+          "p95_ms": 56.721299805212766
+        },
+        "publication": {
+          "cold_ms": 51.40812500030734,
+          "warm_ms": [
+            45.05545800202526,
+            46.759249991737306,
+            45.99695900105871,
+            48.90616601915099,
+            51.13150001852773
+          ],
+          "counters": {
+            "engine_texture_allocations": 90,
+            "engine_texture_allocated_bytes": 2281701360,
+            "engine_pool_evictions": 90,
+            "engine_channel_publications": 24
+          },
+          "p50_ms": 46.759249991737306,
+          "p95_ms": 50.68643321865238
+        },
+        "cpu_gaussian": {
+          "cold_ms": 1281.4137079985812,
+          "warm_ms": [
+            1201.8973749945872,
+            1201.4450409915298,
+            1202.3096250195522,
+            1283.1842500017956,
+            1239.5614169945475
+          ],
+          "counters": {},
+          "p50_ms": 1202.3096250195522,
+          "p95_ms": 1274.459683400346
+        },
+        "gpu_gaussian": {
+          "cold_ms": 214.0659169817809,
+          "warm_ms": [
+            89.90975000779144,
+            91.45729200099595,
+            94.3986659985967,
+            100.10695797973312,
+            101.50329099269584
+          ],
+          "counters": {
+            "engine_program_compiles": 2,
+            "engine_texture_allocations": 25,
+            "engine_texture_allocated_bytes": 268437856,
+            "engine_texture_uploads": 24,
+            "engine_texture_uploaded_bytes": 2400
+          },
+          "p50_ms": 94.3986659985967,
+          "p95_ms": 101.2240243901033
+        },
+        "undo_transaction": {
+          "cold_ms": 4047.2029160009697,
+          "warm_ms": [
+            2558.661832998041,
+            2189.500250009587,
+            2108.4902080183383,
+            1965.5215829843655,
+            1930.2702080167364
+          ],
+          "counters": {
+            "engine_graph_builds": 7,
+            "shader_runtime_builds": 7,
+            "engine_texture_allocations": 102,
+            "engine_texture_allocated_bytes": 4294967280,
+            "engine_pool_evictions": 90,
+            "engine_channel_publications": 76,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "p50_ms": 2108.4902080183383,
+          "p95_ms": 2484.8295164003503
+        },
+        "metrics": {
+          "phases": {
+            "source_generation": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "masking": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "filters": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "blending": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "geometry_signature": {
+              "calls": 7,
+              "wall_s": 0.0016048760444391519,
+              "cpu_s": 0.0015900000000015346,
+              "exclusive_wall_s": 0.0016048760444391519,
+              "exclusive_cpu_s": 0.0015900000000015346
+            },
+            "image_read": {
+              "calls": 4,
+              "wall_s": 0.5364992080139928,
+              "cpu_s": 0.42927400000000127,
+              "exclusive_wall_s": 0.5364992080139928,
+              "exclusive_cpu_s": 0.42927400000000127
+            },
+            "image_write": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            },
+            "packing": {
+              "calls": 0,
+              "wall_s": 0.0,
+              "cpu_s": 0.0,
+              "exclusive_wall_s": 0.0,
+              "exclusive_cpu_s": 0.0
+            }
+          },
+          "counters": {
+            "engine_graph_builds": 8,
+            "shader_runtime_builds": 8,
+            "engine_program_compiles": 11,
+            "engine_texture_allocations": 359,
+            "engine_texture_allocated_bytes": 10640951648,
+            "engine_pool_evictions": 290,
+            "engine_channel_publications": 136,
+            "image_read_bytes": 1073741824,
+            "image_read_allocated_bytes": 1073741824,
+            "engine_texture_uploads": 42,
+            "engine_texture_uploaded_bytes": 304089492,
+            "shader_topology_invalidations": 1,
+            "shader_parameter_bindings_updated": 6,
+            "shader_parameter_updates": 6,
+            "shader_update_calls": 5
+          },
+          "distributions": {
+            "engine_program_compile_ms": {
+              "samples": 11,
+              "p50": 0.3860830038320273,
+              "p95": 0.7833540148567408,
+              "maximum": 1.0098330094479024
+            },
+            "engine_evaluate_ms": {
+              "samples": 26,
+              "p50": 2.0289579988457263,
+              "p95": 3181.5012392617064,
+              "maximum": 4270.187500020256
+            },
+            "shader_callback_seconds": {
+              "samples": 8,
+              "p50": 0.0002673754934221506,
+              "p95": 0.0013569272050517603,
+              "maximum": 0.0018540000019129366
+            },
+            "shader_submission_ms": {
+              "samples": 6,
+              "p50": 0.10860398469958454,
+              "p95": 0.9730630117701367,
+              "maximum": 1.237584016053006
+            }
+          },
+          "last_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "peak_observed_bytes": {
+            "live_leaf_cache_bytes": 0
+          },
+          "process_peak_rss_bytes": 5978341376
+        }
+      },
+      "painting_p50_speedup": 1.3111258739465799,
+      "filter_p50_speedup": 12.82283437173188
+    }
+  ],
+  "package": {
+    "path": "dist/open_painter-0.13.1-gpu-authoring.zip",
+    "sha256": "72871ae0fcafdd12862fdfbaf99ba232465ef89c462af4fa5ccf8eb67ad0cf3d",
+    "bytes": 127759899,
+    "validation": "Blender extension validate and isolated installation passed; registration cycles, installed text, Brush Graphs and shader rendering passed."
+  },
+  "backend_matrix": {
+    "requested_backend": null,
+    "tests": [
+      {
+        "name": "simulated-contracts",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.17,
+        "scope": "simulated API contracts",
+        "log": ".blender-test/authoring-upgrade/verified-backends/simulated-contracts/run.log"
+      },
+      {
+        "name": "backend-contract",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.2,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/backend-contract/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "procedurals",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.36,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/procedurals/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "engine-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 18.88,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/engine-parity/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-parity",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 18.71,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/pixel-parity/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-publication",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 2.19,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/pixel-publication/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "engine-stages",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.54,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/engine-stages/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "gpu-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.31,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/gpu-strokes/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-strokes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 5.24,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/pixel-strokes/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 3.68,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/authoring-workflow/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "pixel-authoring-workflow",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 3.71,
+        "scope": "forced pixel publication on actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/pixel-authoring-workflow/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "gpu-filters",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.54,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/gpu-filters/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "authoring-sources",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.32,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/authoring-sources/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      },
+      {
+        "name": "material-nodes",
+        "status": "PASS",
+        "returncode": 0,
+        "seconds": 1.36,
+        "scope": "actual GPU",
+        "log": ".blender-test/authoring-upgrade/verified-backends/material-nodes/run.log",
+        "backend": "METAL",
+        "renderer": "Metal API",
+        "blender": "5.2.1 LTS",
+        "sampler_limit": 16
+      }
+    ],
+    "status": "PASS",
+    "limitation": "Simulated contracts and forced publication do not validate a Vulkan/OpenGL driver."
+  }
+}

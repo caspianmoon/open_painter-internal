@@ -166,6 +166,23 @@ class OP_MaskGraphCoordinates(_MaskGraphNode, bpy.types.Node):
             self._vector(name, output=True)
 
 
+from ..properties.text import OP_TextSettings
+
+
+class OP_MaskGraphText(_MaskGraphNode, bpy.types.Node):
+    bl_idname = 'OPMGText'
+    bl_label = 'Text'
+    text: bpy.props.PointerProperty(type=OP_TextSettings)
+
+    def init(self, context):
+        self._vector('Vector')
+        self._value('Value', 0, output=True)
+
+    def draw_buttons(self, context, layout):
+        from ..evaluation.text_source import draw
+        draw(layout, self.text)
+
+
 class OP_MaskGraphValue(_MaskGraphNode, bpy.types.Node):
     """A constant value"""
     bl_idname = 'OPMGValue'
@@ -432,7 +449,8 @@ class OP_OT_mask_graph_ramp_stop(bpy.types.Operator):
 # ---- the Add menu -----------------------------------------------------------------------------
 
 MENU = (
-    ('Input', (('OPMGCoordinates', 'ORIENTATION_GLOBAL'), ('OPMGValue', 'NONE'), ('OPMGMeshMap', 'MESH_DATA'))),
+    ('Input', (('OPMGCoordinates', 'ORIENTATION_GLOBAL'), ('OPMGValue', 'NONE'), ('OPMGMeshMap', 'MESH_DATA'),
+               ('OPMGText', 'FONT_DATA'))),
     ('Texture', (('OPMGNoise', 'FORCE_TURBULENCE'), ('OPMGCells', 'MESH_ICOSPHERE'), ('OPMGPattern', 'TEXTURE'),
                  ('OPMGSurface', 'MATERIAL'))),
     ('Converter', (('OPMGMath', 'NONE'), ('OPMGMix', 'NONE'), ('OPMGRamp', 'IPO_EASE_IN_OUT'),
@@ -457,7 +475,7 @@ def add_menu(self, context):
 
 
 CLASSES = (OP_MaskGraphTreeLegacy, OP_MaskGraphValueSocket, OP_MaskGraphVectorSocket, OP_MaskGraphRampStop,
-           OP_MaskGraphCoordinates, OP_MaskGraphValue, OP_MaskGraphNoise, OP_MaskGraphCells, OP_MaskGraphPattern,
+           OP_MaskGraphCoordinates, OP_MaskGraphValue, OP_MaskGraphText, OP_MaskGraphNoise, OP_MaskGraphCells, OP_MaskGraphPattern,
            OP_MaskGraphSurface, OP_MaskGraphMeshMap, OP_MaskGraphMath, OP_MaskGraphMix, OP_MaskGraphRamp,
            OP_MaskGraphLevels, OP_MaskGraphMapping, OP_MaskGraphOutput, OP_OT_mask_graph_ramp_stop)
 

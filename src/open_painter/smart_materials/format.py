@@ -4,8 +4,8 @@ import json
 import math
 from zipfile import ZipFile, is_zipfile
 
-VERSION = 3  # 3: anchor points (anchor ids on masks, channels and filter items)
-MODULE_VERSION = 4  # 4: optional "module" block (a versioned folder subtree with stable ids)
+VERSION = 5  # resolved stroke payloads, editable text and portable native graphs
+MODULE_VERSION = 5
 MAX_BYTES = 512 * 1024 * 1024
 MAX_FILES = 2048
 LINEAR = "Linear Rec.709"   # what save_render writes into an asset EXR for any non-data source
@@ -43,13 +43,16 @@ def read(path) -> tuple[dict, dict[str, bytes]]:
         if path.stat().st_size > 4 * 1024 * 1024:
             raise ValueError("Smart material JSON is too large.")
         data = json.loads(path.read_text())
-    if data.get("format_version") not in {1, 2, VERSION, MODULE_VERSION}:
+    if data.get("format_version") not in {1, 2, 3, 4, VERSION}:
         raise ValueError("Unsupported smart material version.")
 
     def validate_assets(value):
         # Optional channel detail images use the existing version-2 image
         # reference format. Reject a broken archive before allocating layers.
         if isinstance(value, dict):
+            text = value.get('text')
+            if isinstance(text, dict) and text.get('schema_version', 1) != 1:
+                raise ValueError('Unsupported text source version')
             if "asset" in value:
                 key = value["asset"]
                 if not isinstance(key, str) or key not in assets:

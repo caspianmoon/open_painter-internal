@@ -639,6 +639,11 @@ def header(self, context):
         return
     layout = self.layout
     from ..procedural_graph import is_native
+    from ..painting.brush_graph import is_brush
+    if is_brush(space.edit_tree):
+        layout.label(text=f'Brush Graph · {space.edit_tree.name}', icon='BRUSH_DATA')
+        layout.template_ID(context.scene.open_painter.vector_brush, 'node_group')
+        return
     if is_native(space.edit_tree):
         _mask_graph_header(layout, space, space.edit_tree)
         return

@@ -34,6 +34,8 @@ from .properties.export import OP_ExportSettings
 from .properties.aging import CLASSES as AGING_PROPERTY_CLASSES
 from .properties.layer import OP_Layer, OP_LayerCache
 from .properties.mask import OP_Mask
+from .properties.text import OP_TextSettings
+from .painting.brush_graph import CLASSES as BRUSH_GRAPH_CLASSES
 from .properties.project import OP_PaintCanvas, OP_Project
 from .properties.stroke import OP_Stroke, OP_VectorBrushSettings
 from .ui.vector_brush import CLASSES as VECTOR_BRUSH_CLASSES
@@ -73,6 +75,7 @@ CLASSES = (
     OP_Output,
     OP_Influencer,
     OP_MeshSelector,
+    OP_TextSettings,
     OP_Mask,
     OP_LayerCache,
     OP_Layer,
@@ -86,6 +89,7 @@ CLASSES = (
     OP_TextureSet,
     OP_Stroke,
     OP_VectorBrushSettings,
+    *BRUSH_GRAPH_CLASSES,
     OP_PaintCanvas,
     OP_Project,
     OP_OT_texture_set,
@@ -157,6 +161,7 @@ def register():
     from .ai import session as director
     from .ui import vector_brush
     from .smart_materials import portable
+    from .painting import brush_graph
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
@@ -179,7 +184,8 @@ def register():
                                     (mask_graph_tree.register,mask_graph_tree.unregister),
                                     (director.register,director.unregister),
                                     (vector_brush.register,vector_brush.unregister),
-                                    (portable.register,portable.unregister)):
+                                    (portable.register,portable.unregister),
+                                    (brush_graph.register,brush_graph.unregister)):
             # Install rollback before initialization, including partial failures.
             _cleanups.append(cleanup)
             initialize()

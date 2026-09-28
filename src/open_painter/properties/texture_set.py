@@ -70,6 +70,9 @@ class OP_Assignment(bpy.types.PropertyGroup):
 
 
 class OP_TextureSet(bpy.types.PropertyGroup):
+    shared_stack_id: bpy.props.StringProperty(options={'HIDDEN'})
+    shared_stack_version: bpy.props.IntProperty(default=0, options={'HIDDEN'})
+    shared_stack_owner: bpy.props.StringProperty(options={'HIDDEN'})
     udim_tile: bpy.props.IntProperty(name="UDIM Tile", default=0, min=0, max=2000, update=changed)
     udim_group: bpy.props.StringProperty()
     udim_name: bpy.props.StringProperty(name="UDIM Export Name")

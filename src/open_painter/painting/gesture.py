@@ -194,7 +194,7 @@ def _straight(rgba):
 class Preview:
     """Bounded preview images bound to the layer's channel inputs for the gesture's duration."""
 
-    def __init__(self, scene, ts, layer, channels, entries):
+    def __init__(self, scene, ts, layer, channels, entries, *, gpu=True):
         """``entries`` are the set's evaluated geometry arrays (``snapshot_entries``)."""
         import bpy
         from ..core import image_manager as images
@@ -207,6 +207,7 @@ class Preview:
         self.entries = entries
         self.channels = list(channels)
         self.images, self.bases, self.nodes, self.premultiplied, self.buffers = {}, {}, {}, {}, {}
+        self.resource_sources = {}
         self.coverage = np.zeros((self.size, self.size), np.float32)
         self.covered = np.zeros((self.size, self.size), bool)
         self.last_publish = 0.0
@@ -214,29 +215,67 @@ class Preview:
         self.publications = 0
         self.profile = {'stamp_ms': [], 'publish_ms': [], 'init_ms': 0.0}
         self.active = False
+        self.gpu = None
         self.retired_at = None
+        self.resolved_samples, self.resolved_dabs, self.resolved_anchors = [], [], []
         opened = perf_counter()
         graph = shader_preview.session_graph(scene, ts) if shader_preview.requested(ts) else None
         if graph is None:
             return                      # no live shader: the committed stroke shows after release
+        if gpu:
+            candidates = {}
+            for node in graph.nodes():
+                resource = getattr(node, 'gpu_resource', None)
+                channel = self._channel_of(node, layer) if resource is not None else None
+                if channel in self.channels and tuple(resource.dimensions) == (self.n, self.n):
+                    candidates.setdefault(channel, (node, resource))
+            if len(candidates) == len(self.channels):
+                from .gpu_strokes import Canvas, UnsupportedSurface
+                from .gpu_sources import preview_surface
+                from ..evaluation.engine.resources import TextureResource
+                try:
+                    bases = {c: TextureResource(r.identity, r.texture, r.format, r.mapping) for c, (_, r) in candidates.items()}
+                    self.gpu = Canvas(entries, self.size, bases, {c: False for c in candidates},
+                                      surface=preview_surface(scene, ts, self.size, entries), precise=True, set_id=ts.id)
+                except UnsupportedSurface:
+                    pass
+                else:
+                    for channel, (node, resource) in candidates.items():
+                        self.resource_sources[channel] = resource
+                        self.nodes[channel] = node, node.image
+                        self.premultiplied[channel] = False
+                        node.gpu_resource = self.gpu.outputs[channel]
+                    self.active = True
+                    self._inputs_changed()
+                    self.profile['init_ms'] = (perf_counter() - opened) * 1000
+                    return
         for node in graph.nodes():
-            if node.bl_idname != 'ShaderNodeTexImage' or node.image is None:
+            resource = getattr(node, 'gpu_resource', None)
+            if node.bl_idname != 'ShaderNodeTexImage' or (node.image is None and resource is None):
                 continue
             channel = self._channel_of(node, layer)
             if channel is None or channel not in self.channels or channel in self.images:
                 continue
             source = node.image
-            if tuple(source.size) != (self.n, self.n):
+            if tuple(resource.dimensions if resource is not None else source.size) != (self.n, self.n):
                 continue
-            base = images.pixels(source)
+            if resource is not None:
+                from ..evaluation.engine import runtime
+                base = np.array(runtime.device().readback(resource.texture, self.n)).reshape(self.n, self.n, 4)
+                if resource.mapping == 'rg':
+                    base = base[..., [0, 0, 0, 1]]
+                self.resource_sources[channel] = resource
+                node.gpu_resource = None
+            else:
+                base = images.pixels(source)
             if self.factor > 1:
                 base = _shrink(base, self.factor)
-            premultiplied = bool(source.is_float and not source.get(RESOURCE))
+            premultiplied = resource is None and bool(source.is_float and not source.get(RESOURCE))
             if premultiplied:
                 base = _straight(base)
             preview = _new_preview_image(self.size)
-            preview.colorspace_settings.name = source.colorspace_settings.name
-            preview.alpha_mode = source.alpha_mode
+            preview.colorspace_settings.name = source.colorspace_settings.name if source is not None else 'Non-Color'
+            preview.alpha_mode = source.alpha_mode if source is not None else 'STRAIGHT'
             initial = base
             if premultiplied:
                 initial = np.array(base, copy=True)
@@ -247,6 +286,21 @@ class Preview:
             self.premultiplied[channel] = premultiplied
             node.image = preview
         self.active = bool(self.images)
+        if self.active and gpu:
+            from .gpu_strokes import Canvas, UnsupportedSurface
+            from ..evaluation.engine.headless import Node
+            if all(isinstance(node, Node) for node, _ in self.nodes.values()):
+                try:
+                    from .gpu_sources import preview_surface
+                    self.gpu = Canvas(entries, self.size, self.bases, self.premultiplied,
+                                      surface=preview_surface(scene, ts, self.size, entries), precise=True, set_id=ts.id)
+                    for channel, (node, _) in self.nodes.items():
+                        node.gpu_resource = self.gpu.outputs[channel]
+                except UnsupportedSurface:
+                    pass
+                except Exception:
+                    from ..utils.logging import logger
+                    logger.exception('GPU brush unavailable; using CPU preview')
         if self.active:
             self._inputs_changed()
         self.profile['init_ms'] = (perf_counter() - opened) * 1000
@@ -265,6 +319,11 @@ class Preview:
     def _channel_of(node, layer):
         """The layer channel a shader image node stands for: its strokes boundary, its paint canvas."""
         import json
+        if node.get('op_stroke_layer') == layer.id:
+            return node.get('op_stroke_channel')
+        resource = getattr(node, 'gpu_resource', None)
+        if resource is not None and getattr(resource, 'layer_id', None) == layer.id:
+            return resource.channel
         descriptor = node.get('op_boundary', '')
         if descriptor:
             try:
@@ -285,6 +344,16 @@ class Preview:
         if not self.active or not len(samples):
             return
         started = perf_counter()
+        if stroke_settings['blend'] == 'SMUDGE' and self.gpu is None or any(
+                'values' in dab or 'planar' in dab or 'alpha' in dab for dab in stroke_settings.get('dabs', ())):
+            self._resolved_stamp(samples, stroke_settings, anchors)
+            self.profile['stamp_ms'].append((perf_counter() - started) * 1000)
+            return
+        if self.gpu is not None:
+            self.gpu.stamp(samples, stroke_settings, anchors)
+            self.profile['stamp_ms'].append((perf_counter() - started) * 1000)
+            self.publish(stroke_settings)
+            return
         from types import SimpleNamespace
         from .stroke_raster import _batches, bounds, eligibility, kernel, reach_for, uv_window
         from ..geometry.uv_rasterizer import interpolate, rasterize
@@ -336,8 +405,50 @@ class Preview:
         if rows_touched:
             self.publish(stroke_settings)
 
+    def _resolved_stamp(self, samples, settings, anchors):
+        """Exact bounded CPU preview for unsupported resolved-dab combinations."""
+        from types import SimpleNamespace
+        from . import payload, stroke_raster
+        from .surface_reach import pack_anchors
+        if self.gpu is not None:
+            for channel, (node, _) in self.nodes.items():
+                node.gpu_resource = None
+            self.gpu.close()
+            self.gpu = None
+        self.resolved_samples.extend(np.asarray(samples).tolist())
+        self.resolved_dabs.extend(settings.get('dabs', [{} for _ in samples]))
+        if anchors is not None:
+            self.resolved_anchors.extend(np.asarray(anchors).tolist())
+        values = settings['values']
+        data = dict(vars(values)) if hasattr(values, '__dict__') else vars(brush_snapshot(values))
+        data.update(samples=stroke_raster.pack_samples(self.resolved_samples),
+                    dab_payload=payload.encode(self.resolved_dabs), anchors=pack_anchors(self.resolved_anchors),
+                    plane_normal=settings['planar'] or (0, 0, 1), alpha_angle=settings['alpha_angle'],
+                    alpha_rotation=settings['alpha_rotation'])
+        record = SimpleNamespace(**data)
+        for channel, image in self.images.items():
+            pixels = payload.replay_entries(self.entries, channel, [record], self.size, self.bases[channel])
+            if self.premultiplied[channel]:
+                pixels[..., :3] *= pixels[..., 3:4]
+            image.pixels.foreach_set(pixels.ravel())
+            image.update()
+            image['open_painter_pixel_revision'] = image.get('open_painter_pixel_revision', 0) + 1
+        self._inputs_changed()
+        self.publications += 1
+
     def publish(self, stroke_settings, force=False):
         """Composite the gesture over the base rows it touched and hand the images to Blender."""
+        if self.gpu is not None:
+            now = perf_counter()
+            if not self.active or (not force and now - self.last_publish < PREVIEW_INTERVAL):
+                return False
+            if not self.gpu.publish(stroke_settings):
+                return False
+            self._inputs_changed()
+            self.publications += 1
+            self.last_publish = perf_counter()
+            self.profile['publish_ms'].append((self.last_publish - now) * 1000)
+            return True
         if not self.active or self.dirty is None:
             return False
         now = perf_counter()
@@ -386,7 +497,9 @@ class Preview:
         """Put the layer's own inputs back (a discarded gesture) and let the preview images go."""
         for channel, (node, source) in list(self.nodes.items()):
             try:
-                if node.image == self.images[channel]:
+                if channel in self.resource_sources:
+                    node.gpu_resource = self.resource_sources.get(channel)
+                if channel in self.images and node.image == self.images[channel]:
                     node.image = source
             except ReferenceError:
                 pass
@@ -402,11 +515,16 @@ class Preview:
         0.13 stability S2). A node whose owned leaf is gone keeps the preview until its
         replacement publishes, as before."""
         from ..evaluation.shader_resources import RESOURCE, alive
-        if not self.images:
+        if not self.nodes:
             return
         stranded = False
         for channel, (node, source) in list(self.nodes.items()):
             try:
+                if channel in self.resource_sources:
+                    node.gpu_resource = self.resource_sources.get(channel)
+                if channel in self.resource_sources:
+                    node.image = source
+                    continue
                 if node.image != self.images[channel]:
                     continue                      # already moved on to its published leaf
                 if source is not None and alive(source) and source.get(RESOURCE):
@@ -426,13 +544,19 @@ class Preview:
     def _still_bound(self):
         for channel, (node, source) in self.nodes.items():
             try:
-                if node.image == self.images[channel]:
+                if channel in self.images and node.image == self.images[channel]:
                     return True
             except ReferenceError:
                 continue
         return False
 
     def _remove(self):
+        if self.gpu is not None:
+            for channel, (node, _) in self.nodes.items():
+                if node.gpu_resource is self.gpu.outputs.get(channel):
+                    node.gpu_resource = self.resource_sources.get(channel)
+            self.gpu.close()
+            self.gpu = None
         for image in self.images.values():
             _orphans.append((image, perf_counter()))
         self.images.clear()
@@ -477,6 +601,11 @@ class Gesture:
         self.reason = ''        # why the gesture was discarded, if it was
         self.new_source = False  # the target had no strokes yet: this gesture adds a source unit
         self.profile = {'advance_ms': [], 'start_ms': 0.0, 'end_ms': 0.0}
+        self.symmetry = []
+        self.dabs, self.new_dabs = [], []
+        self.graph_program = None
+        self.distance = 0.
+        self.started_at = 0.
 
     # ---- resolution -----------------------------------------------------------------------
 
@@ -576,6 +705,24 @@ class Gesture:
         opened = perf_counter()
         sweep()
         settings = self.brush = brush_snapshot(self.settings_group)
+        self.started_at = perf_counter()
+        if getattr(settings, 'node_group', None) is not None:
+            from .brush_graph import compile
+            try:
+                self.graph_program = compile(settings.node_group)
+            except ValueError as error:
+                self.reason = str(error)
+                return False
+        if any(getattr(settings, 'symmetry', ())):
+            import bpy
+            from .symmetry import transforms
+            obj = bpy.context.view_layer.objects.active
+            if obj is not None:
+                try:
+                    self.symmetry = list(transforms(obj.matrix_world, settings.symmetry))
+                except np.linalg.LinAlgError:
+                    self.reason = 'The symmetry object has a zero scale'
+                    return False
         self.active = True
         self.result, self.reason = None, ''
         self.plane = tuple(plane_normal) if (plane_normal is not None and settings.projection == 'PLANAR') else (0.0, 0.0, 1.0)
@@ -586,7 +733,8 @@ class Gesture:
             try:
                 entries = snapshot_entries(ts)
                 channels = [settings.channels] if isinstance(settings.channels, str) else sorted(settings.channels)
-                self.preview = Preview(self.scene, ts, layer, channels, entries)
+                direct = self.graph_program is None and not (self.symmetry and settings.projection == 'PLANAR')
+                self.preview = Preview(self.scene, ts, layer, channels, entries, gpu=direct)
             except Exception:
                 logger.exception('Paint Material: no live preview for this gesture')
                 self.preview = None
@@ -682,14 +830,127 @@ class Gesture:
             offset -= normal * offset.dot(normal)
             point = point + offset
         row = [*point, *normal, flow_pressure, radius, tilt_x, tilt_y, *tangent]
+        if getattr(settings, 'particles', False):
+            from .particles import contacts
+            emitted = contacts(point, normal, radius, settings, settings.seed + len(self.samples), self._particle_collision)
+            for _, _, at, axis, set_id, face, _, velocity in emitted:
+                path = velocity / max(np.linalg.norm(velocity), 1e-20)
+                contact = [*at, *axis, flow_pressure, radius, tilt_x, tilt_y, *path]
+                self._emit(contact, [*at, float(face)], set_id, pressure, settings)
+        else:
+            self._emit(row, anchor, owner, pressure, settings)
+        self.last = point
+        return True
+
+    def _particle_collision(self, start, delta):
+        import bpy
+        from mathutils import Vector
+        length = float(np.linalg.norm(delta))
+        if length < 1e-10:
+            return None
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        hit, at, axis, face, obj, _ = self.scene.ray_cast(depsgraph, Vector(start), Vector(delta / length), distance=length)
+        if not hit or obj is None:
+            return None
+        original = obj.original
+        if original.type != 'MESH' or original.hide_viewport or original.hide_get():
+            return None
+        mesh = obj.evaluated_get(depsgraph).data
+        if not 0 <= face < len(mesh.polygons):
+            return None
+        owner = self.scope.owner(original, mesh.polygons[face].material_index)
+        return (at, axis, owner, face, original.as_pointer()) if owner is not None else None
+
+    def _emit(self, row, anchor, owner, pressure, settings):
+        from mathutils import Vector
+        point, normal = Vector(row[:3]), Vector(row[3:6])
+        radius, tilt_x, tilt_y = row[7:10]
+        dab = {'donor': list(self.last if self.last is not None else point)} if settings.blend == 'SMUDGE' else {}
+        if self.last is not None:
+            self.distance += (point - self.last).length
+        if self.graph_program is not None:
+            from .brush_graph import evaluate, FIELDS
+            output = evaluate(self.graph_program, {'Pressure': pressure, 'Tilt': (tilt_x, tilt_y, 0),
+                'Position': tuple(point), 'Normal': tuple(normal), 'Distance': self.distance,
+                'Time': perf_counter() - self.started_at, 'Sample Index': len(self.samples)}, settings.seed)
+            values = {}
+            for name, field in FIELDS.items():
+                if name not in output:
+                    continue
+                value = output[name]
+                if name in {'Radius', 'Flow', 'Opacity'}:
+                    value = float(value) * (radius if name == 'Radius' else getattr(settings, field))
+                if np.ndim(value):
+                    values[field] = np.clip(value, 0, 1).tolist()
+                else:
+                    values[field] = float(np.clip(value, .00001 if name == 'Radius' else (-1e6 if name == 'Angle' else 0),
+                                                 10 if name == 'Radius' else (1e6 if name == 'Angle' else 1)))
+            if 'Alpha' in output:
+                values['flow'] = values.get('flow', settings.flow) * float(np.clip(output['Alpha'], 0, 1))
+            row[7] = values.get('radius', radius)
+            if 'Offset' in output:
+                row[:3] = (np.asarray(row[:3]) + output['Offset']).tolist()
+                resolved = self._symmetry_hit(row)
+                if resolved is None:
+                    self.last = point
+                    return False
+                row[:3], row[3:6] = list(resolved[0]), list(resolved[1])
+                anchor = [*resolved[0], float(resolved[4])]
+                owner = resolved[3]
+            dab['values'] = values
         self.samples.append(row)
         self.new.append(row)
         self.anchors.append(anchor)
         self.new_anchors.append(anchor)
         self.segments[-1].append(point.copy())
         self.hit_sets.add(owner)
-        self.last = point
+        self.dabs.append(dab)
+        self.new_dabs.append(dab)
+        if self.symmetry:
+            from .symmetry import reflect
+            for mirrored, matrix in reflect(row, self.symmetry, with_transform=True):
+                resolved = self._symmetry_hit(mirrored)
+                if resolved is None:
+                    continue
+                at, face_normal, _, set_id, face, _ = resolved
+                mirrored[:3], mirrored[3:6] = at, face_normal
+                mirror_anchor = [*at, float(face)]
+                self.samples.append(mirrored.tolist())
+                self.new.append(mirrored.tolist())
+                self.anchors.append(mirror_anchor)
+                self.new_anchors.append(mirror_anchor)
+                self.hit_sets.add(set_id)
+                mirror_dab = {'values': dict(dab['values'])} if 'values' in dab else {}
+                if 'donor' in dab:
+                    mirror_dab['donor'] = (matrix @ np.r_[dab['donor'], 1.])[:3].tolist()
+                if settings.projection == 'PLANAR':
+                    axis = np.linalg.inv(matrix[:3, :3]).T @ np.asarray(self.plane)
+                    mirror_dab['planar'] = (axis / max(np.linalg.norm(axis), 1e-20)).tolist()
+                self.dabs.append(mirror_dab)
+                self.new_dabs.append(mirror_dab)
         return True
+
+    def _symmetry_hit(self, row):
+        """Confirm reflected dabs against evaluated, visible, permitted geometry."""
+        import bpy
+        from mathutils import Vector
+        point, normal = Vector(row[:3]), Vector(row[3:6])
+        reach = max(float(row[7]) * .25, 1e-5)
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        hit, at, face_normal, face, obj, _ = self.scene.ray_cast(
+            depsgraph, point + normal * reach, -normal, distance=reach * 2)
+        if not hit or obj is None:
+            return None
+        original = obj.original
+        if original.type != 'MESH' or original.hide_viewport or original.hide_get():
+            return None
+        mesh = obj.evaluated_get(depsgraph).data
+        if not 0 <= face < len(mesh.polygons):
+            return None
+        owner = self.scope.owner(original, mesh.polygons[face].material_index)
+        if owner is None or face_normal.dot(normal) <= 0:
+            return None
+        return at, face_normal.normalized(), -normal, owner, face, original.as_pointer()
 
     def lift(self):
         """The pointer left the eligible surfaces: the next hit starts a new segment."""
@@ -706,6 +967,7 @@ class Gesture:
         if self.preview is not None and self.new:
             from .stroke_raster import SAMPLE_WIDTH
             try:
+                self.settings['dabs'] = self.new_dabs
                 self.preview.stamp(np.asarray(self.new, np.float32).reshape(-1, SAMPLE_WIDTH), self.settings,
                                    np.asarray(self.new_anchors, np.float32).reshape(-1, 4))
             except Exception:
@@ -713,6 +975,7 @@ class Gesture:
                 self.preview.restore()
                 self.preview = None
         self.new, self.new_anchors = [], []
+        self.new_dabs = []
 
     def end(self, commit, reason=''):
         """Close the gesture: one stroke record (``self.result``) or nothing."""
@@ -755,8 +1018,23 @@ class Gesture:
         samples = np.asarray(self.samples, np.float32).reshape(-1, SAMPLE_WIDTH)
         anchors = np.asarray(self.anchors, np.float32).reshape(-1, 4)
         settings = self.brush or brush_snapshot(self.settings_group)
-        return records.record(self.scene.open_painter, ts, layer, samples, settings, plane_normal=self.plane,
-                              universal=settings.universal, key=self.key, sets=set(self.hit_sets), anchors=anchors)
+        result = records.record(self.scene.open_painter, ts, layer, samples, settings, plane_normal=self.plane,
+                              universal=settings.universal, key=self.key, sets=set(self.hit_sets), anchors=anchors,
+                              dabs=self.dabs if any(self.dabs) else None)
+        if self.graph_program is not None:
+            import json
+            result.brush_graph_data = json.dumps(self.graph_program, allow_nan=False)
+        if self.preview is not None and self.preview.gpu is not None:
+            try:
+                self.preview.publish(self.settings, force=True)
+                from .gpu_sources import adopt
+                adopt(self.preview, result)
+            except Exception:
+                from ..utils.logging import logger
+                logger.exception('GPU gesture adoption failed; replaying the saved stroke')
+                self.preview.restore()
+                self.preview = None
+        return result
 
 
 # Preview images are made for one gesture and removed a while after nothing binds them: a

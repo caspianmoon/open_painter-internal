@@ -46,6 +46,10 @@ def emit(graph, mask):
             elif kind == 'procedural':
                 value = graph._procedural(canonical(node.kind), read(inputs['Vector']), number(node, 'scale'),
                                           graph.native_seed(node, 'seed', tree))
+            elif kind == 'text':
+                from ..evaluation.text_source import ensure
+                getter = lambda node=node: ensure(node.text, int(graph.ts.resolution))
+                value = graph.separate(graph.image(getter(), read(inputs['Vector']), getter=getter).color)[0]
             elif kind == 'mesh_map':
                 value = graph.separate(graph.mesh_map(node.kind).color)[0]
             elif kind == 'math':

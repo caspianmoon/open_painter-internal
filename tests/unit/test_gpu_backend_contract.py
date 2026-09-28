@@ -228,6 +228,93 @@ class BackendContract(unittest.TestCase):
             self.assertEqual(set(dev._readbacks), {16})
             self.assertEqual(gpu.values, before)
 
+    def test_retention_counts_real_formats_and_pins_consumers(self):
+        with self.device('OPENGL') as (_, dev):
+            engine = runtime.Engine(None, SimpleNamespace(id='test'))
+            def state(fmt):
+                return SimpleNamespace(formats=(fmt,), textures=[dev.texture(8, fmt)])
+            first, second, pinned = ('SRC', 'a'), ('SRC', 'b'), ('SRC', 'pinned')
+            for key in (first, second, pinned):
+                engine.states[key] = state('RGBA16F')
+            with patch.object(runtime, 'RETAIN_BYTES', 8 * 8 * 8 * 2):
+                engine._retain(first, engine.states[first], 8)
+                engine._retain(pinned, engine.states[pinned], 8)
+                self.assertEqual(sum(engine.retained.values()), 1024)
+                engine._in_use[pinned] += 1
+                engine._retain(second, engine.states[second], 8)
+                self.assertIsNone(engine.states[first].textures)
+                self.assertIsNotNone(engine.states[pinned].textures)
+                self.assertEqual(sum(engine.retained.values()), 1024)
+
+    def test_scalar_layout_preserves_height_precision_and_halves_storage(self):
+        from open_painter.evaluation.engine.formats import layout, texture_bytes
+        self.assertEqual(layout(('CHANNEL', 'x', 'ROUGHNESS'), 'Out'), 'RG16F')
+        self.assertEqual(layout(('SRC', 'x', 'HEIGHT', 0), 'Color'), 'RG32F')
+        self.assertEqual(layout(('MASK', 'x', 'm'), 'Value'), 'R32F')
+        self.assertEqual(texture_bytes(4096, 4096, 'RG16F'), 64 * 1024 * 1024)
+        self.assertEqual(texture_bytes(4096, 4096, 'RGBA16F'), 128 * 1024 * 1024)
+
+    def test_pool_moves_bytes_between_leased_and_free(self):
+        with self.device('VULKAN') as (_, dev):
+            texture = dev.texture(8, 'RG16F')
+            self.assertEqual(dev.memory(), {'leased_bytes': 256, 'pooled_bytes': 0})
+            dev.release(texture, 8, 'RG16F')
+            self.assertEqual(dev.memory(), {'leased_bytes': 0, 'pooled_bytes': 256})
+            self.assertIs(dev.texture(8, 'RG16F'), texture)
+            dev.release(texture, 8, 'RG16F')
+            dev.trim()
+            self.assertEqual(dev.memory(), {'leased_bytes': 0, 'pooled_bytes': 0})
+
+    def test_owned_resource_binding_avoids_blender_image_and_tracks_revision(self):
+        from open_painter.evaluation.engine.resources import TextureResource
+        for backend in ('OPENGL', 'VULKAN'):
+            with self.subTest(backend=backend), self.device(backend) as (_, dev):
+                texture = dev.texture(8, 'RG32F')
+                resource = TextureResource('height', texture, 'RG32F', 'rg')
+                sampler = SimpleNamespace(kind='image', node=SimpleNamespace(image=None, gpu_resource=resource))
+                engine = runtime.Engine(None, SimpleNamespace(id='test'))
+                self.assertIs(engine._bind(sampler, 8, {}, {}, None, {}), texture)
+                stamp = resource.stamp
+                resource.touch()
+                self.assertNotEqual(resource.stamp, stamp)
+
+    def test_pool_budget_preserves_recently_reused_format(self):
+        with self.device('VULKAN') as (_, dev), patch.object(runtime, 'POOL_BYTES', 256):
+            recent = dev.texture(4, 'RGBA16F')
+            old = dev.texture(4, 'RGBA32F')
+            dev.release(recent, 4, 'RGBA16F')
+            dev.release(old, 4, 'RGBA32F')
+            dev.release(dev.texture(4, 'RGBA16F'), 4, 'RGBA16F')
+            dev.trim(3)
+            self.assertEqual(dev.memory()['pooled_bytes'], 128)
+            self.assertIs(dev.texture(4, 'RGBA16F'), recent)
+
+    def test_reduced_sampler_limits_reject_pass_and_select_stroke_fallback(self):
+        from open_painter.painting.gpu_strokes import Canvas, UnsupportedSurface
+        for backend in ('OPENGL', 'VULKAN'):
+            with self.subTest(backend=backend), self.device(backend) as (_, dev):
+                dev.max_samplers = 4
+                with self.assertRaises(UnsupportedSurface):
+                    Canvas([], 8, {}, {})
+                with self.assertRaisesRegex(ValueError, 'device limit'):
+                    dev._create('void main() {}', ['a', 'b', 'c', 'd', 'e'])
+
+    def test_region_draw_restores_state_and_rejects_feedback(self):
+        for backend in ('OPENGL', 'VULKAN'):
+            with self.subTest(backend=backend), self.device(backend) as (gpu, dev):
+                source, target = dev.texture(16), dev.texture(16)
+                shader = dev.fixed('copy')
+                before = gpu.values.copy()
+                def check_region(shader):
+                    self.assertEqual(gpu.values['viewport'], (2, 3, 4, 5))
+                    self.assertEqual(gpu.values['scissor'], (2, 3, 4, 5))
+                dev.batch.draw.side_effect = check_region
+                with dev.state():
+                    dev.draw(shader, [target], 16, [('op_source', source)], region=(2, 3, 4, 5))
+                self.assertEqual(gpu.values, before)
+                with self.assertRaisesRegex(ValueError, 'render target'):
+                    dev.draw(shader, [source], 16, [('op_source', source)])
+
 
 if __name__ == '__main__':
     unittest.main()

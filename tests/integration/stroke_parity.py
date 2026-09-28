@@ -23,6 +23,12 @@ from open_painter.evaluation.shader_graph import Graph
 from open_painter.painting import strokes as records
 from open_painter.utils.ids import new_id
 
+# Keep this legacy boundary/undo regression on the CPU compatibility path.
+# Owned GPU sources and GPU undo are covered by gpu_strokes/authoring_workflow.
+from open_painter.evaluation.engine.compiler import EngineGraph
+patch.object(EngineGraph, '_strokes_boundary', Graph._strokes_boundary).start()
+patch('open_painter.evaluation.engine.filters.supported', return_value=False).start()
+
 N = 32
 open_painter.register()
 if bpy.app.timers.is_registered(cache.tick):

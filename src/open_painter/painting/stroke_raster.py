@@ -239,6 +239,18 @@ def _rasterise(stroke, n, entries):
     from ..geometry.uv_rasterizer import interpolate, rasterize
     metrics.count('stroke_rasterisations')
     samples = unpack_samples(stroke.samples)
+    if getattr(stroke, 'dab_payload', ''):
+        from .payload import decode, dab_stroke
+        from .surface_reach import unpack_anchors
+        dabs = decode(stroke, len(samples))
+        if any('planar' in dab or 'values' in dab for dab in dabs):
+            result = np.zeros((n, n), np.float32)
+            anchors = unpack_anchors(stroke.anchors)
+            for index, (sample, dab) in enumerate(zip(samples, dabs)):
+                one = dab_stroke(stroke, sample, dab, anchors[index] if len(anchors) == len(samples) else None)
+                one.opacity = 1.0
+                result = union_rows(result, _rasterise(one, n, entries), stroke.accumulate)
+            return result * float(stroke.opacity)
     result = np.zeros((n, n), np.float32)
     covered = np.zeros((n, n), bool)
     if len(samples) and entries:
@@ -390,6 +402,21 @@ def channel_rows(ts, layer, channel, n, y0, y1, resources=None, base=None, cache
     project = ts.id_data.open_painter
     rows = np.zeros((y1 - y0, n, 4), np.float32) if base is None else np.array(base, np.float32, copy=True)
     strokes = [stroke for stroke in strokes_for(project, layer.stroke_key, ts) if channel in stroke_channels(stroke)]
+    if any(s.blend == 'SMUDGE' or getattr(s, 'dab_payload', '') for s in strokes):
+        from .payload import replay_channel
+        from ..evaluation.channel_eval import _image_source
+        from ..evaluation.snapshots import capture
+        prop = next(c for c in layer.channels if c.channel == channel)
+        full_base = base if y0 == 0 and y1 == n else (None if prop.image is None else
+            _image_source(prop.image, capture(prop), 'PAINT', n, 0, n, cache or {}, ts, resources or {}))
+        key = ('resolved-strokes', ts.id, layer.id, channel, n, tuple((s.id, s.revision) for s in strokes),
+               repr(getattr(resources, 'geometry_stamp', None)), ts.edit_serial)
+        if cache is not None and key in cache:
+            return cache[key][y0:y1].copy()
+        full = replay_channel(ts, layer, channel, strokes, n, full_base, cache, resources)
+        if cache is not None:
+            cache[key] = full
+        return full[y0:y1].copy()
     for stroke, raster in zip(strokes, rasters(ts, strokes, n, resources, cache)):
         if not _touches_rows(raster, y0, y1, n):
             continue   # a stroke elsewhere on the canvas costs these rows nothing

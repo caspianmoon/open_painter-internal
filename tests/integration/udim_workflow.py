@@ -67,6 +67,11 @@ source = np.empty((8, 2), np.float32)
 obj.data.uv_layers['UVMap'].data.foreach_get('uv', source.ravel())
 assert np.array_equal(source, original_uv)
 check('tile discovery and local evaluated UVs preserve source UVs and original material')
+from open_painter.core.shared_stacks import make_independent
+assert created[0].shared_stack_id == created[1].shared_stack_id and created[0].shared_stack_id
+make_independent(created[0])
+assert not any(ts.shared_stack_id for ts in created)
+check('new groups share recipes and Make Independent preserves tile authoring')
 
 for index, ts in enumerate(created):
     layer = stack.add(ts, 'FILL', 'Independent color')

@@ -113,6 +113,8 @@ def _release_image(owner, field, ts) -> None:
 def remove(scene: bpy.types.Scene, index: int) -> None:
     project = scene.open_painter
     ts = project.texture_sets[index]
+    from .shared_stacks import removing
+    removing(ts)
     if project.paint_set_id == ts.id or any(entry.set_id == ts.id for entry in project.paint_canvases):
         # The canvas goes with the set: end the session while its mesh state is still resolvable,
         # or the object stays in Texture Paint with the face mask restricted and no canvas.

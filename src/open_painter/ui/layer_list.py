@@ -48,6 +48,7 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
             for x in (
                 "FILL",
                 "PAINT",
+                "TEXT",
                 "FOLDER",
                 "DELETE",
                 "DUPLICATE",
@@ -117,14 +118,20 @@ class OP_OT_layer(SafeOperator, bpy.types.Operator):
             if ui:
                 ui.selected_layers = {folder.id}
             return
-        if self.action in {"FILL", "PAINT", "FOLDER"}:
+        if self.action in {"FILL", "PAINT", "FOLDER", "TEXT"}:
             previous = layer_stack.active(ts)
             parent_id = (
                 previous.parent_id
                 if previous
                 else ""
             )
-            created = layer_stack.add(ts, self.action, parent_id=parent_id)
+            created = layer_stack.add(ts, 'FILL' if self.action == 'TEXT' else self.action, parent_id=parent_id)
+            if self.action == 'TEXT':
+                from ..utils.ids import new_id
+                created.name = 'Text'
+                mask = created.masks.add()
+                mask.id, mask.name, mask.source = new_id(), 'Text', 'TEXT'
+                mask.operation = 'MULTIPLY'
             if parent_id:
                 next(item for item in ts.layers if item.id == parent_id).expanded = True
             if context.area:

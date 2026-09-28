@@ -6,8 +6,11 @@ folders, masks, mesh-map baking, procedural generators, reusable smart materials
 Python and Blender's bundled NumPy are the core runtime requirements.
 
 **UDIM authoring:** use **Create UDIM Sets** for one texture set per occupied tile,
-paint across tiles, bake mesh maps and export numbered textures while preserving
+share a layer recipe, paint across tiles, bake mesh maps and export numbered textures while preserving
 the source UV layout. See the [UDIM workflow](docs/udim-workflow.md) for setup and scope.
+
+**Authoring tools:** object-local XYZ symmetry, material smudging, editable text masks,
+Brush Graphs and seeded particle painting. See the [authoring guide](docs/gpu-authoring-tools.md).
 
 **Open Graph now includes templates and more node sources:** searchable node
 creation, mesh masks, nested mask groups, vector strokes, procedural fills and
@@ -267,7 +270,7 @@ unused managed datablocks. Undo covers project edits; exported and library files
 - Normal channels offer RNM, whiteout, additive and replacement blending. Select the intended normal blend mode explicitly; existing projects retain their saved mode.
 - Curvature is a convex-crease map of the evaluated target mesh, filtered by Minimum Edge Angle. Smooth continuous curvature and high-poly-only normal detail are not transferred.
   Dust uses baked world-normal Z; moving or deforming geometry requires rebaking affected mesh maps.
-- Triplanar uses the mesh's world positions and interpolated vertex normals through the render UV layer. After moving geometry, use Refresh. UVs outside 0–1 require **Create UDIM Sets**; overlapping islands within a tile share texture pixels. UDIM sets have independent layer stacks and do not automatically migrate existing painted sets.
+- Triplanar uses the mesh's world positions and interpolated vertex normals through the render UV layer. After moving geometry, use Refresh. UVs outside 0–1 require **Create UDIM Sets**; overlapping islands within a tile share texture pixels. New UDIM groups share a layer recipe with tile-local pixels. Existing projects keep independent stacks until explicitly linked.
 - Automatic cages use a manual distance. Custom cage support is limited to one low-poly mesh with matching topology.
   Baking is synchronous and uses Cycles CPU for predictable behavior.
 - Shared mesh datablocks require an explicit single-user copy. Material slot insertion/reordering after

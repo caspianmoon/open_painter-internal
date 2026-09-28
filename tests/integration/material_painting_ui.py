@@ -67,19 +67,7 @@ def key(kind, ctrl=False):
     env["window"].event_simulate(type=kind, value="RELEASE", ctrl=ctrl)
 
 
-def bound_inputs(scene, ts, layer):
-    """The shader session's image inputs of the layer, by channel (leaf, canvas or preview)."""
-    graph = shader_preview.session_graph(scene, ts)
-    result = {}
-    if graph is None:
-        return result
-    for node in graph.nodes():
-        if node.bl_idname != "ShaderNodeTexImage" or node.image is None:
-            continue
-        channel = gesture.Preview._channel_of(node, layer)
-        if channel is not None:
-            result[channel] = node.image
-    return result
+from gpu_input_probe import bound_inputs, input_pixels
 
 
 def latency_stats(events, publications, draws):
@@ -222,7 +210,7 @@ def steps():
     # --- the measured fast drag: 6 pointer events over 16% of the region width ---
     env["draws"].clear(); env["publications"].clear(); env["ticks"] = []
     body, layer = resolve()
-    before = {c: images.pixels(i).copy() for c, i in bound_inputs(scene, body, layer).items()}
+    before = {c: input_pixels(i).copy() for c, i in bound_inputs(scene, body, layer).items()}
     events, injected = 6, []
     window.cursor_warp(x0, cy)
     mouse("MOUSEMOVE", "NOTHING", x0, cy)
@@ -239,7 +227,7 @@ def steps():
         if any(image.get("op_gesture_preview") for image in now.values()):
             previews_bound = True
         for channel, image in now.items():
-            if channel in before and (image.get("op_gesture_preview") or not np.array_equal(images.pixels(image), before[channel])):
+            if channel in before and not np.array_equal(input_pixels(image), before[channel]):
                 changed_during = True
     active_gesture = OP_OT_vector_brush._active._gesture
     profile = dict(active_gesture.preview.profile) if active_gesture.preview is not None else {}

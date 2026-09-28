@@ -235,23 +235,30 @@ def participants(project, ts, layer, obj):
     """(set, layer) pairs painting the same link on this object: the active set first."""
     from ..core import layer_stack as stack
     from ..utils.ids import new_id
+    set_id, layer_id = ts.id, layer.id
     if not layer.paint_link:
         layer.paint_link = new_id()
     link, key = layer.paint_link, layer.stroke_key
-    found = [(ts, layer)]
+    # Adding a layer can synchronize a shared recipe and relocate RNA collections.
+    # Keep stable IDs until all structural edits have finished.
+    found = [(set_id, layer_id)]
     for other in project.texture_sets:
         if other.id == ts.id or not any(r.object == obj for r in other.assignments):
             continue
         # A layer the vector brush linked through the stroke key is the same brush target.
+        shared = ts.shared_stack_id and other.shared_stack_id == ts.shared_stack_id
         linked = next((item for item in other.layers if item.type == "PAINT"
-                       and (item.paint_link == link or (key and item.stroke_key == key))), None)
+                       and ((shared and item.id == layer_id) or item.paint_link == link
+                            or (key and item.stroke_key == key))), None)
         if linked is None:
             linked = stack.add(other, "PAINT", layer.name)
             if key:
                 linked.stroke_key = key
         linked.paint_link = link
-        found.append((other, linked))
-    return found
+        found.append((other.id, linked.id))
+    return [(member, next(item for item in member.layers if item.id == identifier))
+            for member_id, identifier in found
+            for member in project.texture_sets if member.id == member_id]
 
 
 def begin_multi(context, ts, channel):

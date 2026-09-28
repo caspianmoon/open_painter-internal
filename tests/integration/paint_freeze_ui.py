@@ -17,6 +17,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
 import open_painter
+# Retain explicit coverage of CPU-boundary scheduling and invalidation.
+from unittest.mock import patch
+patch('open_painter.evaluation.engine.filters.supported', return_value=False).start()
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager, texture_set_manager as sets
 from open_painter.evaluation import cache, metrics, shader_preview
 from open_painter.painting import paint_session

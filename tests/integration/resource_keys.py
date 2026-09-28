@@ -48,6 +48,12 @@ def resource_images():
     return [image for image in bpy.data.images if image.get(RESOURCE)]
 
 
+# These fixtures verify CPU boundary caching and publication explicitly.
+# Supported neighborhood effects now run on the GPU by default; force the
+# established fallback here. engine_filters.py covers the native GPU path.
+from unittest.mock import patch
+_cpu_boundaries = patch('open_painter.evaluation.engine.filters.supported', return_value=False)
+_cpu_boundaries.start()
 open_painter.register()
 if bpy.app.timers.is_registered(cache.tick):
     bpy.app.timers.unregister(cache.tick)

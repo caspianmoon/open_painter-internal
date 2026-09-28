@@ -49,7 +49,11 @@ def _graph_poll(tree):
     from ..procedural_graph import is_native
     return is_native(tree) or tree.bl_idname in {'ShaderNodeTree', 'OpenPainterMaskGraph'}
 
+from .text import OP_TextSettings
+
+
 class OP_Mask(bpy.types.PropertyGroup):
+    text: bpy.props.PointerProperty(type=OP_TextSettings)
     # Opt-in metric coordinates shared with surface channels. Legacy controls
     # remain untouched; derived UI values are excluded from graph snapshots.
     material_mapping_version: bpy.props.IntProperty(default=0, min=0, max=1, update=changed)
@@ -111,6 +115,7 @@ class OP_Mask(bpy.types.PropertyGroup):
             ('MESH', 'Mesh Mask', 'Objects, collections, materials, vertex groups, face sets, selection, UV islands, normal direction or attributes of the assigned meshes'),
             ('GROUP', 'Mask Group', 'A nested mask stack: its members combine among themselves, then the group combines with the stack like any other source'),
             ('GRAPH', 'Custom Graph', 'A Mask Graph you author with Open Painter nodes; its Mask Output is the coverage'),
+            ('TEXT', 'Text', 'Editable text rasterized with Blender fonts'),
         ],
         update=changed,
     )

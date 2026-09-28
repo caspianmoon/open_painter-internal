@@ -33,6 +33,8 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
             for x in (
                 "ADD",
                 "ADD_UDIM",
+                "LINK_UDIM",
+                "UNLINK_UDIM",
                 "DELETE",
                 "ASSIGN",
                 "UNASSIGN",
@@ -57,6 +59,15 @@ class OP_OT_texture_set(SafeOperator, bpy.types.Operator):
         self.layout.label(text='One texture set per occupied UV tile')
 
     def run(self, context):
+        if self.action in {'LINK_UDIM', 'UNLINK_UDIM'}:
+            from ..core import shared_stacks
+            ts = require_set(context)
+            if self.action == 'LINK_UDIM':
+                shared_stacks.link([item for item in context.scene.open_painter.texture_sets
+                                    if item.udim_group and item.udim_group == ts.udim_group])
+            else:
+                shared_stacks.make_independent(ts)
+            return
         if self.action == 'ADD_UDIM':
             from ..core import udim
             meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']

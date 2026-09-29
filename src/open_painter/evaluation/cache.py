@@ -571,6 +571,8 @@ def _reset_runtime(*, forget_corrections):
     clear_live()
     from .shader_preview import clear as clear_shaders
     clear_shaders(undo=not forget_corrections)   # an undo keeps the leaves its rebuild adopts
+    from ..core import owners
+    owners.clear()
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -859,6 +861,8 @@ def unregister():
     clear_live()
     from .shader_preview import clear as clear_shaders
     clear_shaders()
+    from ..core import owners
+    owners.clear()
     from .engine.runtime import forget_device
     forget_device()   # the engine's compiled programs and pooled textures go with the add-on
     from .preview_policy import clear

@@ -423,31 +423,12 @@ def ensure(scene, ts):
 
 def _owners(owner):
     scene = getattr(owner, 'id_data', None)
-    project = getattr(scene, 'open_painter', None)
-    if project is None:
+    if getattr(scene, 'open_painter', None) is None:
         return
-    pointer = owner.as_pointer()
-    for ts in project.texture_sets:
-        if ts.as_pointer() == pointer:
-            yield scene, ts, None
-            return
-        for layer in ts.layers:
-            if layer.as_pointer() == pointer:
-                yield scene, ts, layer
-                return
-            if any(prop.as_pointer() == pointer or
-                   any(effect.as_pointer() == pointer for effect in prop.effects)
-                   for prop in layer.channels):
-                yield scene, ts, layer
-                return
-            if any(mask.as_pointer() == pointer or mask.effect.as_pointer() == pointer
-                   or mask.influence.as_pointer() == pointer or mask.mesh.as_pointer() == pointer
-                   for mask in layer.masks):
-                yield scene, ts, layer
-                return
-            if any(row.as_pointer() == pointer for row in layer.cache):
-                yield scene, ts, layer
-                return
+    from ..core.owners import locate
+    found = locate(owner)
+    if found is not None:
+        yield (scene, *found)
 
 
 def _pass_through(graph, ts, layer):

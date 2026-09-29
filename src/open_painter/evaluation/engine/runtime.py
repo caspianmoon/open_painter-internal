@@ -674,14 +674,36 @@ def forget_device():
 
 
 class UnitState:
-    __slots__ = ('unit', 'program', 'shader', 'signature', 'stamp', 'textures', 'formats', 'ubo', 'ubo_data')
+    __slots__ = ('unit', 'program', 'shader', 'signature', '_stamp', '_textures', 'formats', 'ubo', 'ubo_data',
+                 'slot')
 
     def __init__(self, unit):
         self.unit = unit
-        self.program = self.shader = self.signature = self.stamp = None
-        self.textures = None
+        self.program = self.shader = self.signature = self._stamp = None
+        self._textures = None
         self.formats = ()
         self.ubo = self.ubo_data = None
+        self.slot = None   # the native graph's mirror of stamp and residency (NativeGraph)
+
+    @property
+    def stamp(self):
+        return self._stamp
+
+    @stamp.setter
+    def stamp(self, value):
+        self._stamp = value
+        if self.slot is not None:
+            self.slot.sync(self)
+
+    @property
+    def textures(self):
+        return self._textures
+
+    @textures.setter
+    def textures(self, value):
+        self._textures = value
+        if self.slot is not None:
+            self.slot.sync(self)
 
     def uniforms(self):
         """The unit's uniform buffer holding its current parameter values (None without any)."""

@@ -202,6 +202,9 @@ def _adoptable_unit(ts_id, key_repr, instance):
     return candidates[0]
 
 
+UNKNOWN_UNIT = object()   # a binding registered without its unit: every unit counts as touched
+
+
 @dataclass
 class Binding:
     owner: object
@@ -212,6 +215,7 @@ class Binding:
     identifier: str
     aliases: tuple = ()   # further owners whose edits update it (a Mask Graph node's mask)
     native: tuple = ()    # a Mask Graph binding: (unit key, tree address, (owner address, owner RNA type))
+    unit: object = UNKNOWN_UNIT   # key of the unit whose tree holds the socket (None: the top tree)
 
     def read(self):
         value = getattr(self.owner, self.field)
@@ -385,6 +389,9 @@ class Graph(Math):
         self.outputs = {}
         self.bindings = {}
         self.owner_bindings = defaultdict(list)
+        # Units whose uniform sockets update() wrote since the evaluator last looked
+        # (take_touched); None when an edit's unit is unknown and every unit counts.
+        self.touched = set()
         self.resource_bindings = []
         self.image_bindings = []
         self.cache_bindings = []
@@ -579,7 +586,7 @@ class Graph(Math):
             raw = getattr(owner, field)
             value = float(raw if index is None else raw[index])
             node.outputs[0].default_value = value
-            binding = Binding(owner, field, index, node.outputs[0], value, identifier)
+            binding = Binding(owner, field, index, node.outputs[0], value, identifier, unit=key[0])
             self.bindings[key] = binding
             self.owner_bindings[owner.as_pointer()].append(binding)
             if self.unit is not None:
@@ -600,6 +607,7 @@ class Graph(Math):
             self._native_mask = previous
 
     def _bind(self, key, binding):
+        binding.unit = key[0]
         mask = getattr(self, '_native_mask', None)
         if mask is not None:
             binding.aliases = (mask.as_pointer(),)
@@ -3094,7 +3102,8 @@ class Graph(Math):
                     if owner is None:
                         return False
                     identifier = node.get('op_dependency')
-                    binding = Binding(owner, field, index, node.outputs[0], float(node.outputs[0].default_value), identifier)
+                    binding = Binding(owner, field, index, node.outputs[0], float(node.outputs[0].default_value),
+                                      identifier, unit=unit.key)
                     key = (unit.key, owner.as_pointer(), field, index)
                     self.bindings[key] = binding
                     unit.bindings[key] = binding
@@ -3316,11 +3325,18 @@ class Graph(Math):
         if removed:
             raise RebuildRequired('A Mask Graph node was removed', removed)
         changed = []
+        touched = self.touched
         for binding in bindings:
             value = binding.read()
             if value != binding.value:
                 binding.socket.default_value = value
                 binding.value = value
+                if touched is not None:
+                    unit = binding.unit
+                    if unit is UNKNOWN_UNIT or unit is None:
+                        self.touched = touched = None
+                    else:
+                        touched.add(unit)
                 if binding.identifier not in changed:
                     changed.append(binding.identifier)
         invalidated = set(changed)
@@ -3390,6 +3406,11 @@ class Graph(Math):
     @property
     def pending_resources(self):
         return self.resources.pending
+
+    def take_touched(self):
+        """Units whose uniforms changed since the last call; None means all of them."""
+        touched, self.touched = self.touched, set()
+        return touched
 
     def _request(self, binding, signature, previous=None):
         """Bind the cached image for ``signature``, or keep its placeholder pending.
@@ -3534,6 +3555,14 @@ class Graph(Math):
         """Effects reachable from visible layers; hidden-only content is not validated."""
         if not self.units:
             return list(self._compiled_effects.values())
+        # Liveness changes only with the compiled units or layer visibility (a uniform
+        # edit): validation on every slider step must not walk every unit again.
+        structure = getattr(self, '_structure', None)
+        visibility = tuple(layer.visible for layer in self.ts.layers)
+        cached = getattr(self, '_live_cache', None)
+        if (cached is not None and cached[0] is structure and cached[1] == len(self.units)
+                and cached[2] == visibility):
+            return cached[3]
         live, work = set(), []
         for key, unit in self.units.items():
             layer = self._layer(key[1])
@@ -3548,7 +3577,9 @@ class Graph(Math):
         effects = {}
         for key in live:
             effects.update(self.units[key].compiled_effects)
-        return list(effects.values())
+        result = list(effects.values())
+        self._live_cache = (structure, len(self.units), visibility, result)
+        return result
 
 
 def _sampler_limit():

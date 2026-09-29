@@ -81,22 +81,25 @@ def _changed(self, context, structural):
     # Resolve the owner by address, like layer.py and effect.py: a replayed
     # snapshot carries its source's layer_id until the copy is re-keyed, and a
     # lookup by that id would dirty the source set instead.
+    from ..core.owners import locate
+    found = locate(self)
+    if found is None or found[1] is None:
+        return
+    ts, layer = found
     pointer = self.as_pointer()
-    for ts in self.id_data.open_painter.texture_sets:
-        for layer in ts.layers:
-            if any(prop.as_pointer() == pointer for prop in layer.channels):
-                previous_dirty = {output.channel: output.dirty for output in ts.outputs}
-                layer.dirty = True
-                ts.dirty = True
-                ts.edit_serial += 1
-                from ..evaluation.references import dependent_channels
-                affected = dependent_channels(ts,layer.id,self.channel) | {self.channel}
-                for output in ts.outputs:
-                    if output.channel in affected:
-                        output.dirty = True
-                from ..evaluation.shader_preview import notify
-                notify(self, context, previous_dirty=previous_dirty, structural=structural)
-                return
+    if not any(prop.as_pointer() == pointer for prop in layer.channels):
+        return
+    previous_dirty = {output.channel: output.dirty for output in ts.outputs}
+    layer.dirty = True
+    ts.dirty = True
+    ts.edit_serial += 1
+    from ..evaluation.references import dependent_channels
+    affected = dependent_channels(ts,layer.id,self.channel) | {self.channel}
+    for output in ts.outputs:
+        if output.channel in affected:
+            output.dirty = True
+    from ..evaluation.shader_preview import notify
+    notify(self, context, previous_dirty=previous_dirty, structural=structural)
 
 
 def image_changed(self, context):

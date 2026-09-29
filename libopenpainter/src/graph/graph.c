@@ -9,7 +9,22 @@ struct op_graph {
     uint32_t *offsets, *edges, *order, *work;
     uint64_t *own;
     unsigned char *needed;
+    /* Optional composition (op_graph_set_composition): reset with the topology. */
+    uint32_t *backdrop, *grouped, *pending;
+    unsigned char *affine;
+    uint64_t *local, *rendered;
 };
+static void clear_composition(op_graph_t *g) {
+    free(g->backdrop);
+    free(g->grouped);
+    free(g->pending);
+    free(g->affine);
+    free(g->local);
+    free(g->rendered);
+    g->backdrop = g->grouped = g->pending = NULL;
+    g->affine = NULL;
+    g->local = g->rendered = NULL;
+}
 op_status_t op_graph_create(op_graph_t **out) {
     if (!out)
         return OP_INVALID_ARGUMENT;
@@ -25,6 +40,7 @@ void op_graph_destroy(op_graph_t *g) {
     free(g->work);
     free(g->needed);
     free(g->own);
+    clear_composition(g);
     free(g);
 }
 op_status_t op_graph_replace(op_graph_t *g, uint32_t count, const uint32_t *offsets,
@@ -92,6 +108,7 @@ op_status_t op_graph_replace(op_graph_t *g, uint32_t count, const uint32_t *offs
     free(g->work);
     free(g->needed);
     free(g->own);
+    clear_composition(g);
     g->own = own;
     own = NULL;
     g->work = stack;
@@ -139,6 +156,20 @@ op_status_t op_graph_evaluate(op_graph_t *g, const uint64_t *own, const uint64_t
         stamps[i] = stamp ? stamp : 1;
         if (resident[i] != stamps[i])
             plan[(*out_count)++] = i;
+        if (g->local) {
+            /* Everything the node reads except the one backdrop edge it composes
+             * over: unchanged while only the layers below it change. */
+            uint64_t local = mix(UINT64_C(0x84222325cbf29ce4), own[i]);
+            int skipped = g->backdrop[i] == UINT32_MAX;
+            for (uint32_t d = g->offsets[i]; d < g->offsets[i + 1]; d++) {
+                if (!skipped && g->edges[d] == g->backdrop[i]) {
+                    skipped = 1;
+                    continue;
+                }
+                local = mix(local, stamps[g->edges[d]]);
+            }
+            g->local[i] = local ? local : 1;
+        }
     }
     return OP_OK;
 }
@@ -252,6 +283,8 @@ op_status_t op_graph_execute(op_graph_t *g, uint32_t root, const uint64_t *resid
         status = submit(user, OP_GRAPH_RENDER, node, desired[node]);
         if (status)
             goto release;
+        if (g->rendered)
+            g->rendered[node] = g->local[node];
         (*rendered)++;
         for (uint32_t e = g->offsets[node]; e < g->offsets[node + 1]; e++) {
             uint32_t dependency = g->edges[e];
@@ -279,4 +312,135 @@ done:
     free(uses);
     free(plan);
     return status;
+}
+
+static int has_edge(const op_graph_t *g, uint32_t node, uint32_t target) {
+    for (uint32_t d = g->offsets[node]; d < g->offsets[node + 1]; d++)
+        if (g->edges[d] == target)
+            return 1;
+    return 0;
+}
+
+op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
+                                     const uint32_t *grouped, const unsigned char *affine,
+                                     uint32_t count) {
+    if (!g || (count && (!backdrop || !grouped || !affine)))
+        return OP_INVALID_ARGUMENT;
+    if (g->executing)
+        return OP_PENDING;
+    if (count != g->count)
+        return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < count; i++) {
+        if (backdrop[i] != UINT32_MAX && (backdrop[i] >= count || !has_edge(g, i, backdrop[i])))
+            return OP_VALIDATION_FAILED;
+        if (grouped[i] != UINT32_MAX && (grouped[i] >= count || !has_edge(g, i, grouped[i])))
+            return OP_VALIDATION_FAILED;
+    }
+    size_t n = (size_t)count + 1;
+    uint32_t *b = malloc(n * sizeof(*b)), *p = malloc(n * sizeof(*p));
+    /* The run walk pushes a node once per composition edge into it, plus the root. */
+    uint32_t *pending = malloc((2 * n + 1) * sizeof(*pending));
+    unsigned char *a = malloc(n);
+    uint64_t *local = calloc(n, sizeof(*local)), *rendered = calloc(n, sizeof(*rendered));
+    if (!b || !p || !pending || !a || !local || !rendered) {
+        free(b);
+        free(p);
+        free(pending);
+        free(a);
+        free(local);
+        free(rendered);
+        return OP_RESOURCE_EXHAUSTED;
+    }
+    if (count) {
+        memcpy(b, backdrop, count * sizeof(*b));
+        memcpy(p, grouped, count * sizeof(*p));
+        for (uint32_t i = 0; i < count; i++)
+            a[i] = affine[i] ? 1 : 0;
+    }
+    /* Preserve what is already known about a node whose composition did not change. */
+    if (g->rendered)
+        for (uint32_t i = 0; i < count; i++)
+            if (g->backdrop[i] == b[i] && g->grouped[i] == p[i] && g->affine[i] == a[i]) {
+                local[i] = g->local[i];
+                rendered[i] = g->rendered[i];
+            }
+    clear_composition(g);
+    g->backdrop = b;
+    g->grouped = p;
+    g->pending = pending;
+    g->affine = a;
+    g->local = local;
+    g->rendered = rendered;
+    return OP_OK;
+}
+
+static int run_member(const op_graph_t *g, uint32_t v, const uint64_t *current,
+                      const uint64_t *stamps) {
+    /* Stale only because its backdrop changed: everything else it reads is
+     * exactly what it read when it was last rendered. */
+    return current[v] != stamps[v] && g->affine[v] && g->rendered[v] &&
+           g->rendered[v] == g->local[v] && !g->needed[v];
+}
+
+op_status_t op_graph_suffix_runs(op_graph_t *g, uint32_t root, const uint64_t *current,
+                                 const uint64_t *stamps, op_graph_run_t *runs,
+                                 uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
+                                 uint32_t member_capacity, uint32_t *member_count) {
+    uint32_t depth = 0;
+    if (!g || !current || !stamps || !run_count || !member_count || root >= g->count ||
+        (run_capacity && !runs) || (member_capacity && !members))
+        return OP_INVALID_ARGUMENT;
+    *run_count = *member_count = 0;
+    if (g->executing)
+        return OP_PENDING;
+    if (!g->backdrop)
+        return OP_OK;
+    memset(g->needed, 0, g->count);
+    g->pending[depth++] = root;
+    while (depth) {
+        uint32_t u = g->pending[--depth];
+        if (g->needed[u] || current[u] == stamps[u])
+            continue;
+        uint32_t start = *member_count, length = 0, v = u;
+        while (v != UINT32_MAX && run_member(g, v, current, stamps)) {
+            if (*member_count >= member_capacity)
+                return OP_RESOURCE_EXHAUSTED;
+            members[(*member_count)++] = v;
+            length++;
+            v = g->backdrop[v];
+        }
+        if (length >= 2) {
+            if (*run_count >= run_capacity)
+                return OP_RESOURCE_EXHAUSTED;
+            uint64_t key = mix(mix(UINT64_C(0x9e3779b97f4a7c15), u), v);
+            for (uint32_t i = 0; i < length / 2; i++) {
+                uint32_t t = members[start + i];
+                members[start + i] = members[start + length - 1 - i];
+                members[start + length - 1 - i] = t;
+            }
+            for (uint32_t i = start; i < start + length; i++) {
+                g->needed[members[i]] = 1;
+                key = mix(mix(key, members[i]), g->local[members[i]]);
+            }
+            op_graph_run_t *run = &runs[(*run_count)++];
+            run->top = u;
+            run->bottom = members[start];
+            run->input = v;
+            run->length = length;
+            run->first = start;
+            run->reserved = 0;
+            run->key = key ? key : 1;
+            if (v != UINT32_MAX)
+                g->pending[depth++] = v;
+        } else {
+            *member_count = start;
+            g->needed[u] = 1;
+            /* Rendered normally: look for runs below it. */
+            if (g->backdrop[u] != UINT32_MAX && !g->needed[g->backdrop[u]])
+                g->pending[depth++] = g->backdrop[u];
+            if (g->grouped[u] != UINT32_MAX && !g->needed[g->grouped[u]])
+                g->pending[depth++] = g->grouped[u];
+        }
+    }
+    return OP_OK;
 }

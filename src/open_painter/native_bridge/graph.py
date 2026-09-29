@@ -9,6 +9,7 @@ from .core import NativeError
 
 U32, U64 = ctypes.c_uint32, ctypes.c_uint64
 MASK = (1 << 64) - 1
+NONE = 0xffffffff
 Submit = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, U32, U32, U64)
 
 
@@ -54,6 +55,7 @@ class NativeGraph:
             self.handle = ptr()
             self.check(lib.op_graph_create(ctypes.byref(self.handle)))
         self.topology = None
+        self.composition = None
         self.stamps = None
         self.plan = ()
         self.evaluations = 0
@@ -73,7 +75,7 @@ class NativeGraph:
             else:
                 self.lib.op_graph_destroy(self.handle)
             self.handle = None
-        self.topology = self.stamps = self.description = None
+        self.topology = self.stamps = self.description = self.composition = None
         self.own.clear()
 
     def prepare(self, engine, epochs):
@@ -122,7 +124,9 @@ class NativeGraph:
                     self.check(self.lib.op_graph_replace(self.handle, len(keys), a, b, len(edges)))
                 self.own.clear()
                 self.topology = topology
+                self.composition = None   # replacing the topology clears it in C
                 self.rebuilds += 1
+            self._compose(engine, keys, indices, states)
             self.description = (engine.graph, engine.inline, keys, indices, constants,
                                 tuple((key, states[key].program) for key in keys))
         count = len(keys)
@@ -154,6 +158,32 @@ class NativeGraph:
         self.evaluations += 1
         return self.stamps
 
+
+    def _compose(self, engine, keys, indices, states):
+        """Layer composition for C's affine suffix runs: what each unit composes over."""
+        if self.binding is None:
+            return
+        backdrop, grouped, affine = [], [], bytearray()
+        for key in keys:
+            position = engine.positions.get(key) or (None, None)
+            for refs, ref in ((backdrop, position[0]), (grouped, position[1])):
+                refs.append(indices[ref[1]] if ref is not None and ref[0] == 'unit' else NONE)
+            affine.append(int(key[0] == 'CHANNEL' and states[key].program.affine is not None))
+        composition = (tuple(backdrop), tuple(grouped), bytes(affine))
+        if composition != self.composition:
+            self.binding.graph_compose(self.handle, bytes((U32 * len(keys))(*backdrop)),
+                                       bytes((U32 * len(keys))(*grouped)), bytes(affine))
+            self.composition = composition
+
+    def runs(self, engine, root):
+        """Affine runs under ``root``, bottom-up: (top, input key or None, key, members bottom-up)."""
+        if self.binding is None or self.composition is None or root not in self.indices:
+            return []
+        resident = (U64 * len(self.keys))(*(resident_stamp(engine.states[k]) for k in self.keys))
+        keys = self.keys
+        rows = self.binding.graph_runs(self.handle, self.indices[root], bytes(resident))
+        return [(keys[top], None if source == NONE else keys[source], key, tuple(keys[m] for m in members))
+                for top, source, key, members in reversed(rows)]
 
     def render(self, engine, key, size, memo, epochs):
         """C owns pass order and the lifetime of every dependency in the batch."""

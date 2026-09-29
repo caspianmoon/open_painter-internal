@@ -217,7 +217,7 @@ class Snapshot(glsl.Translator):
                 rgb = self.convert(fetch, RGBA, VECTOR)
             self._set(socket, self.convert(rgb, VECTOR, socket.type), socket.type)
 
-    def compile(self, targets, names):
+    def compile(self, targets, names, classify=False):
         lib = self.lib
         lib.op_ir_compile.argtypes = [C.POINTER(Node), C.c_uint32, C.POINTER(Target), C.c_uint32, C.POINTER(C.c_void_p)]
         lib.op_ir_compile.restype = C.c_int
@@ -225,10 +225,12 @@ class Snapshot(glsl.Translator):
         data = (Node * len(self.ir))(*self.ir)
         outputs = (Target * len(targets))(*(Target(*t) for t in targets))
         binding = getattr(lib, '_op_binding', None)
-        native_program = None
+        native_program = affine = None
         if binding is not None:
             source, handle = binding.program_create(bytes(data), bytes(outputs), len(self.params), len(self.objects))
             native_program = ProgramInputs(binding, handle)
+            if classify:
+                affine = self._classify(binding, data, outputs)
         else:
             pointer = C.c_void_p()
             status = lib.op_ir_compile(data, len(data), outputs, len(outputs), C.byref(pointer))
@@ -238,7 +240,24 @@ class Snapshot(glsl.Translator):
                 source = C.string_at(pointer).decode()
             finally:
                 lib.op_ir_free(pointer)
-        return glsl.Program(source, self.samplers, self.params, self.objects, names, self.imports, (), True, native_program)
+        return glsl.Program(source, self.samplers, self.params, self.objects, names, self.imports, (), True,
+                            native_program, affine)
+
+    def _classify(self, binding, data, outputs):
+        """The component map of an output affine in the unit's backdrop, or None.
+
+        A spatial filter's input program is a sampler of its own: a filter that
+        reads the backdrop hides that dependency from the IR, so it disqualifies.
+        """
+        backdrop = next((int(s.name[4:]) for s in self.samplers if s.kind == 'backdrop'), None)
+        if backdrop is None or len(outputs) != 1:
+            return None
+        for sampler in self.samplers:
+            if sampler.source is not None and any(inner.kind in {'backdrop', 'grouped'}
+                                                  for program in glsl.programs(sampler.source)
+                                                  for inner in program.samplers):
+                return None
+        return binding.ir_backdrop_affine(bytes(data), bytes(outputs), backdrop)
 
     def translate(self):
         from ..evaluation.engine.formats import scalar_unit
@@ -248,7 +267,7 @@ class Snapshot(glsl.Translator):
             rgb = self._export(color, VALUE if scalar else VECTOR) if color else self.constant((0, 0, 0), VECTOR)
             a = self._export(alpha, VALUE) if alpha else self.constant(1, VALUE)
             targets.append((rgb, a, 2 if scalar else int(scalar_unit(self.unit.key))))
-        return self.compile(targets, names)
+        return self.compile(targets, names, classify=self.unit.key[0] == 'CHANNEL')
 
 
 def fixed_source(name, fallback):

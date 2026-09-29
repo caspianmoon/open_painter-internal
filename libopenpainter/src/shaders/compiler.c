@@ -8,6 +8,7 @@
 #include "catalog.inc"
 #include "blend.inc"
 #include "effects.inc"
+#include "ir_rules.h"
 #define MAX_TEXT (64u * 1024u * 1024u)
 typedef struct text {
     char *data;
@@ -87,31 +88,7 @@ static int inputs_valid(const op_ir_node_t *n, uint32_t index, unsigned count) {
             return 0;
     return 1;
 }
-static unsigned arity(uint32_t code) {
-    switch (code) {
-    case OP_IR_CONVERT:
-    case OP_IR_COMPONENT:
-    case OP_IR_IMAGE:
-    case OP_IR_IMAGE_COLOR:
-    case OP_IR_OBJECT:
-        return 1;
-    case OP_IR_MATH:
-    case OP_IR_COMBINE:
-        return 3;
-    case OP_IR_VECTOR_MATH:
-    case OP_IR_PROCEDURAL:
-        return 4;
-    case OP_IR_NORMAL_MAP:
-    case OP_IR_BLEND:
-        return 5;
-    case OP_IR_MASK_FOLD:
-        return 6;
-    case OP_IR_EFFECT:
-        return 8;
-    default:
-        return 0;
-    }
-}
+static unsigned arity(uint32_t code) { return op_ir_arity(code); }
 static int types_valid(const op_ir_node_t *all, const op_ir_node_t *n) {
     uint32_t type = n->type;
     uint32_t a = arity(n->opcode) > 0 ? all[n->inputs[0]].type : 0;

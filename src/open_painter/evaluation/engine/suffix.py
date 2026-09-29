@@ -1,0 +1,223 @@
+"""Affine suffix collapse: the layers above an edited layer as one pass.
+
+While one layer is edited (a slider drag, a brush stroke), every layer above it
+re-renders on each tick although only its backdrop changed. For the blend modes
+op_ir_backdrop_affine proves affine, such a run of layers maps its input x to
+``A * x + B`` per texel and component. C plans the runs (op_graph_suffix_runs):
+chains of affine units stale only through their backdrop, keyed by everything
+else they read. This module arms a run once (each member's own program with a
+constant backdrop of 0 and of 1 gives its slope and offset; a fixed pass composes
+them in full float) and afterwards materializes the run's top unit with one pass
+per tick. The top then holds its desired stamp, so the normal executor treats it
+as rendered. The result differs from sequential rendering only by rounding (it
+skips the per-layer half-float stores).
+
+Arming costs about three passes per member, so a run is armed when it repeats
+on consecutive evaluations; a one-off edit renders sequentially as before. Only
+evaluations that changed content plan runs: a forced re-render without edits
+stays sequential and bit-identical.
+Transforms are recomputable caches under their own budget and are dropped first
+under memory pressure.
+"""
+from collections import OrderedDict
+from dataclasses import dataclass
+
+from .. import metrics
+from .formats import scalar_unit, texture_bytes
+
+ENABLED = True
+MIN_LENGTH = 3                        # shorter runs are cheaper to render than to apply
+BUDGET_BYTES = 768 * 1024 * 1024      # armed transforms kept per texture set
+NONE = 255
+IDENTITY = (0, 1, 2, 3)
+
+
+def pack(source):
+    """Two bits per output component: which input component it reads."""
+    return sum((0 if c == NONE else c) << (2 * i) for i, c in enumerate(source))
+
+
+@dataclass
+class Transform:
+    a: object
+    b: object
+    fmt: str
+    n: int
+    source: tuple
+    bytes: int
+
+
+class SuffixCache:
+    def __init__(self):
+        self.entries = OrderedDict()   # run key -> Transform, least recently used first
+        self.seen = {}                 # run key -> serial of the evaluation that last planned it
+        self.serial = 0
+        self.active = None             # the entry being applied: never reclaimed under it
+
+    def begin(self):
+        self.serial += 1
+        # Only the previous evaluation's runs can arm now.
+        self.seen = {key: serial for key, serial in self.seen.items() if serial >= self.serial - 1}
+
+    def memory(self):
+        return sum(entry.bytes for entry in self.entries.values())
+
+    def clear(self):
+        from .runtime import device
+        for entry in self.entries.values():
+            _release(device(), entry)
+        self.entries.clear()
+        self.seen.clear()
+
+    def reclaim(self):
+        """Memory pressure: release every transform not being applied right now."""
+        from .runtime import device
+        for key in [key for key, entry in self.entries.items() if entry is not self.active]:
+            _release(device(), self.entries.pop(key))
+            metrics.count('engine_suffix_reclaims')
+
+    def collapse(self, engine, root, n, memo, epochs):
+        """Materialize every armed (or now armable) run under ``root``; returns runs applied."""
+        graph = engine._native_graph
+        # Only content edits collapse. A forced re-render (host stamps reset without
+        # any change) renders sequentially, so it reproduces canonical output.
+        if not ENABLED or graph is None or engine.profiling or not getattr(graph, 'last_patch_count', 0):
+            return 0
+        applied = 0
+        for top, source, key, members in graph.runs(engine, root):
+            if len(members) < MIN_LENGTH:
+                continue
+            entry = self.entries.get(key)
+            if entry is not None and entry.n != n:
+                _release_key(self, key)
+                entry = None
+            if entry is None:
+                armable = self.seen.get(key) == self.serial - 1
+                self.seen[key] = self.serial
+                if not armable:
+                    metrics.count('engine_suffix_deferred')
+                    continue
+                entry = self._arm(engine, members, n, memo, epochs)
+                if entry is None:
+                    continue
+                self.entries[key] = entry
+                self._trim(protected=key)
+            self.seen[key] = self.serial
+            self.entries.move_to_end(key)
+            self.active = entry
+            try:
+                self._apply(engine, top, source, members[0], entry, n, memo, epochs)
+            finally:
+                self.active = None
+            applied += 1
+        return applied
+
+    def _trim(self, protected):
+        from .runtime import device
+        total = self.memory()
+        for key in list(self.entries):
+            if total <= BUDGET_BYTES:
+                break
+            if key != protected:
+                total -= self.entries[key].bytes
+                _release(device(), self.entries.pop(key))
+
+    def _arm(self, engine, members, n, memo, epochs):
+        from .runtime import device
+        dev = device()
+        fmt = 'RG32F' if scalar_unit(members[0]) else 'RGBA32F'
+        zero, one = engine._constant(n, (0.0, 0.0, 0.0, 0.0)), engine._constant(n, (1.0, 1.0, 1.0, 1.0))
+        accumulate = dev.fixed('suffix.accumulate')
+        owned, a, b, source = [], one, zero, IDENTITY
+        passes = 0
+        try:
+            f0, f1 = dev.texture(n, fmt), dev.texture(n, fmt)
+            owned += [f0, f1]
+            for key in members:
+                state = engine._state(key)
+                program = state.program
+                position = engine.positions[key]
+                grouped_ref = position[1]
+                grouped = (engine._texture_of(grouped_ref, n, memo, epochs, scalar_unit(key))
+                           if grouped_ref is not None else None)
+                held = grouped_ref[1] if grouped_ref is not None and grouped_ref[0] == 'unit' else None
+                if held is not None:
+                    engine._in_use[held] += 1
+                try:
+                    uniforms = state.uniforms()
+                    for constant, target in ((zero, f0), (one, f1)):
+                        samplers = [(s.name, engine._bind(s, n, memo, epochs, constant, grouped, key))
+                                    for s in program.samplers]
+                        dev.draw(state.shader, [target], n, samplers, uniforms)
+                    new_a, new_b = dev.texture(n, fmt), dev.texture(n, fmt)
+                    owned += [new_a, new_b]
+                    dev.draw(accumulate, [new_a, new_b], n,
+                             [('op_f0', f0), ('op_f1', f1), ('op_a', a), ('op_b', b)],
+                             ints={'op_swizzle': pack(program.affine)})
+                    passes += 3
+                finally:
+                    if held is not None:
+                        engine._in_use[held] -= 1
+                        engine._settle(held, n)
+                for previous in (a, b):
+                    if previous is not zero and previous is not one:
+                        owned.remove(previous)
+                        dev.release(previous, n, fmt)
+                a, b = new_a, new_b
+                source = tuple(NONE if c == NONE else source[c] for c in program.affine)
+        except MemoryError:
+            for texture in owned:
+                dev.release(texture, n, fmt)
+            metrics.count('engine_suffix_arm_failures')
+            return None
+        except Exception:
+            for texture in owned:
+                dev.release(texture, n, fmt)
+            raise
+        for texture in (f0, f1):
+            owned.remove(texture)
+            dev.release(texture, n, fmt)
+        engine.stages['passes']['SUFFIX_ARM'] += passes
+        metrics.count('engine_suffix_arms')
+        metrics.count('engine_suffix_armed_units', len(members))
+        return Transform(a, b, fmt, n, source, 2 * texture_bytes(n, n, fmt))
+
+    def _apply(self, engine, top, source, bottom, entry, n, memo, epochs):
+        from .runtime import device
+        dev = device()
+        ref = ('unit', source) if source is not None else engine.positions[bottom][0]
+        x = engine._texture_of(ref, n, memo, epochs, scalar_unit(bottom))
+        state = engine._state(top)
+        if state.textures is None:
+            allocated = []
+            try:
+                for fmt in state.formats:
+                    allocated.append(dev.texture(n, fmt))
+            except Exception:
+                for texture, fmt in zip(allocated, state.formats):
+                    dev.release(texture, n, fmt)
+                raise
+            state.textures = allocated
+        # A failed submission may have overwritten the target: never a cache hit then.
+        state.stamp = None
+        dev.draw(dev.fixed('suffix.apply'), [state.textures[0]], n,
+                 [('op_source', x), ('op_a', entry.a), ('op_b', entry.b)],
+                 ints={'op_swizzle': pack(entry.source)})
+        state.stamp = engine._native_graph.stamps[top]
+        engine.rendered.append(top)
+        engine.stages['passes']['SUFFIX'] += 1
+        metrics.count('engine_suffix_applications')
+        if source is not None:
+            engine._settle(source, n)
+        if engine.graph.consumers.get(top):
+            engine._retain(top, state, n)
+
+
+def _release_key(cache, key):
+    from .runtime import device
+    _release(device(), cache.entries.pop(key))
+
+
+def _release(dev, entry):
+    dev.release(entry.a, entry.n, entry.fmt)
+    dev.release(entry.b, entry.n, entry.fmt)

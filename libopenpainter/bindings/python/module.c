@@ -515,6 +515,7 @@ static PyObject *program_uniforms(PyObject *self, PyObject *capsule) {
 #include "topology.inc"
 #include "channels.inc"
 #include "masks.inc"
+#include "composition.inc"
 
 static PyMethodDef methods[] = {
     {"mask_plan", mask_plan, METH_VARARGS, "Plan nested mask folds and isolated filter prefixes."},
@@ -541,6 +542,11 @@ static PyMethodDef methods[] = {
     {"graph_checkpoint", graph_checkpoint, METH_VARARGS,
      "Select the lowest changed layer checkpoint."},
     {"graph_plan", graph_plan, METH_VARARGS, "Plan one requested output."},
+    {"graph_compose", graph_compose, METH_VARARGS,
+     "Copy layer composition edges and affine classes."},
+    {"graph_runs", graph_runs, METH_VARARGS, "Plan affine suffix runs under one output."},
+    {"ir_backdrop_affine", ir_backdrop_affine, METH_VARARGS,
+     "Classify a program as affine in its backdrop."},
     {"graph_execute", graph_execute, METH_VARARGS,
      "Submit a root batch with dependency lifetime holds."},
     {"abi", abi, METH_NOARGS, "C ABI version."},

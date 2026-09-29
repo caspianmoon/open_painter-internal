@@ -268,6 +268,14 @@ class Device:
     def fixed(self, name):
         shader = self._fixed.get(name)
         if shader is None:
+            if name.startswith('suffix.'):
+                # Native-only kernels (no Python reference): suffix collapse runs on the C path.
+                from ...native_bridge.compiler import fixed_source
+                samplers, targets = {'suffix.accumulate': (['op_f0', 'op_f1', 'op_a', 'op_b'], 2),
+                                     'suffix.apply': (['op_source', 'op_a', 'op_b'], 1)}[name]
+                shader = self._fixed[name] = self._create(fixed_source(name, None), samplers,
+                                                          targets=targets, ints=('op_swizzle',))
+                return shader
             if name.startswith('mip_'):
                 from .publication_shaders import mip_batch_source
                 from ...native_bridge.compiler import fixed_source
@@ -316,6 +324,10 @@ class Device:
                 for engine in tuple(self.engines):
                     if getattr(engine, '_native_revisions', None) is not None:
                         engine._native_revisions.trim_spares()
+                        if native.admit(width, height, fmt):
+                            return
+                    if getattr(engine, '_suffix', None) is not None and engine._suffix.entries:
+                        engine._suffix.reclaim()
                         if native.admit(width, height, fmt):
                             return
                     if getattr(engine, '_evaluation_depth', 0):
@@ -795,6 +807,8 @@ class Engine:
         self._native_channels = None
         self._native_cache = None
         self._evaluation_depth = 0
+        from .suffix import SuffixCache
+        self._suffix = SuffixCache()    # armed affine runs above an edited layer
         device().engines.add(self)
 
     # ---- graph -----------------------------------------------------------------------
@@ -805,6 +819,7 @@ class Engine:
             raise RuntimeError("Cannot adopt a graph during native channel submission")
         n_before = self.graph.n if self.graph is not None else None
         self._clear_constant_renderer()
+        self._suffix.clear()   # run keys name nodes of the previous graph
         self.graph = graph
         self._native_stamps = None
         self._publication_programs.clear()
@@ -861,6 +876,7 @@ class Engine:
         if self._native_cache is not None:
             self._native_cache.close()
             self._native_cache = None
+        self._suffix.clear()
         self.retained.clear()
         self.keep.clear()
         self.published = {}
@@ -1463,6 +1479,7 @@ class Engine:
         if budget is not False:
             order.sort(key=lambda channel: (self.waiting.get(channel, now), CHANNELS.index(channel)))
         deferred, spent, uniform_writes = set(), 0.0, 0
+        self._suffix.begin()
         with self._evaluation_states(), dev.state():
             self._prepare_native(epochs)
             native_channels = self._native_stamps is not None and not pixels
@@ -1608,6 +1625,8 @@ class Engine:
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
+            if final[0] == 'unit':
+                self._suffix.collapse(self, final[1], n, memo, epochs)
             result = self._texture_of(final, n, memo, epochs)
             if self.profiling:
                 dev.finish()
@@ -1743,7 +1762,8 @@ class Engine:
         from ...painting.gpu_strokes import active_bytes
         active += active_bytes(self.set_id)
         retained += retained_bytes(self.set_id) + sum(texture_bytes(size, size, RGBA) for _, _, size in self.filter_states.values())
-        return dict(device().memory(), retained_bytes=retained, active_bytes=active, undo_bytes=memory(self.set_id))
+        return dict(device().memory(), retained_bytes=retained, active_bytes=active, undo_bytes=memory(self.set_id),
+                    suffix_bytes=self._suffix.memory())
 
     def profile(self, epochs=None):
         """Render and publish every channel again with each pass timed on the GPU

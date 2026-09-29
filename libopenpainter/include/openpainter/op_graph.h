@@ -48,6 +48,37 @@ op_status_t op_graph_execute(op_graph_t *graph, uint32_t root, const uint64_t *r
 op_status_t op_graph_checkpoint(const op_graph_t *graph, const uint32_t *order,
                                 const uint32_t *below, uint32_t count, const uint64_t *current,
                                 const uint64_t *desired, uint32_t *keep);
+
+/* Layer composition for affine suffix collapse. backdrop[i] is the node that i
+ * composes over and grouped[i] the child composite a folder blends (UINT32_MAX:
+ * none); each must be one of i's dependencies. affine[i] marks a node whose only
+ * output is a per-texel affine function of its backdrop (op_ir_backdrop_affine).
+ * Arrays are copied and cleared by op_graph_replace. Knowledge about nodes whose
+ * composition is unchanged survives a repeated call.
+ *
+ * With a composition, evaluation also derives each node's local stamp: its own
+ * revision and everything it reads except its backdrop. Execution records the
+ * local stamp each node was rendered with. */
+op_status_t op_graph_set_composition(op_graph_t *graph, const uint32_t *backdrop,
+                                     const uint32_t *grouped, const unsigned char *affine,
+                                     uint32_t count);
+/* A run is a chain top -> ... -> bottom of affine nodes, each composing over the
+ * next through its backdrop edge, that are stale only because that backdrop
+ * changed: their local stamps equal the ones they were last rendered with. The
+ * run's result is then an affine map of its input (the bottom's backdrop, or
+ * UINT32_MAX for the chain's constant start) whose coefficients depend only on
+ * the members' local stamps, which key identifies. members[first .. first+length)
+ * lists the run bottom-up. Runs are reported for the stale composition tree
+ * under root, top-down: apply them in reverse order. Only runs of two or more
+ * nodes are reported. Capacities of the node count always suffice. */
+typedef struct op_graph_run {
+    uint32_t top, bottom, input, length, first, reserved;
+    uint64_t key;
+} op_graph_run_t;
+op_status_t op_graph_suffix_runs(op_graph_t *graph, uint32_t root, const uint64_t *current,
+                                 const uint64_t *stamps, op_graph_run_t *runs,
+                                 uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
+                                 uint32_t member_capacity, uint32_t *member_count);
 #ifdef __cplusplus
 }
 #endif

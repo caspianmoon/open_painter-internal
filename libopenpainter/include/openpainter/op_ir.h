@@ -50,6 +50,16 @@ typedef struct op_ir_target {
  * returns a partially compiled program. Bounded to 262144 nodes and 64 MiB. */
 op_status_t op_ir_compile(const op_ir_node_t *nodes, uint32_t count, const op_ir_target_t *targets,
                           uint32_t target_count, char **source);
+/* Whether a single-target program's output is a per-texel, per-component affine
+ * function out[c] = a[c] * backdrop[source[c]] + b[c] of the FETCH sampler
+ * `backdrop`, with a and b independent of it. Only linear conversions, component
+ * access and opaque-backdrop blends in affine modes may lie on a backdrop path.
+ * source[c] is OP_IR_NO_COMPONENT when out[c] does not read the backdrop.
+ * *affine = 0 is a normal answer; failure statuses mean malformed IR. */
+#define OP_IR_NO_COMPONENT 0xffu
+op_status_t op_ir_backdrop_affine(const op_ir_node_t *nodes, uint32_t count,
+                                  const op_ir_target_t *targets, uint32_t target_count,
+                                  uint32_t backdrop, uint32_t *affine, uint8_t source[4]);
 const char *op_shader_source(const char *name); /* static immutable UTF-8, NULL if unknown */
 op_status_t op_ir_field(const char *kind, char **source);
 void op_ir_free(void *source);

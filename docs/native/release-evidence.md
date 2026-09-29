@@ -192,6 +192,15 @@ and stayed at exactly the same totals for runs 2–5. This is a managed-storage
 plateau, not a total renderer/driver-memory measurement. The counters also
 record allocation churn; no allocation-free steady-state claim is made.
 
+## Paired performance follow-up
+
+A subsequent [five-pair legacy/C comparison](paired-performance.md) used the
+unchanged final ABI 10 implementation. C was slower in four of five pairs for
+viewport feedback and receipt-to-draw latency, and in all five for evaluation
+call time. This release establishes integration and recovery behavior; it does
+not establish a performance improvement on the tested Metal workload. The paired
+report retains all runs, full-map parity and source/binary identities.
+
 ## Qualification boundaries
 
 The tested platform is the stock Blender build and M3 Pro listed above. Physical

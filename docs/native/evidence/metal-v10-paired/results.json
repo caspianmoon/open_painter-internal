@@ -1,0 +1,1297 @@
+{
+  "status": "PASS",
+  "run_id": "20260929T201205.195049Z",
+  "artifacts": {
+    "python_addon_sha256": "713eff9b7eb22e3f2413cdc0856bcd4e56923e9aa0ac676f364f7424d9b5ff05",
+    "python_file_count": 333,
+    "adapter_sha256": "4311d24aaeb2b2e8c909a0057cb699f297d05b89c49ea2127769bc14bb570eff",
+    "shader_bundle_sha256": "8012ffed99a7dce8239cd271273d1c9614e176e1cb80b75cd5fd9e7bcededbba",
+    "native_source_sha256": "1c119db4a250cb7574664f4349eeb5ab042debd5d991eacb090a851e5d43cb18",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "4d9428e90509a8d8f716186434d513c4b27825b2a4a529a0298de8ba8dbec300",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 241240,
+      "sha256": "836f6631260114d4a9d6b38d17f43529798b4770f3e7de78144b095529d34ce5"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+      "bytes": 209840,
+      "sha256": "f30fa66600d2f58bf46390095c5122964e861d0ed06aec5eac0f3b610425fa12"
+    },
+    "build_options_sha256": null
+  },
+  "environment": {
+    "os": {
+      "exit": 0,
+      "stdout": "ProductName:\t\tmacOS\nProductVersion:\t\t26.7.1\nBuildVersion:\t\t25G313",
+      "stderr": ""
+    },
+    "hardware": {
+      "exit": 0,
+      "stdout": "Apple M3 Pro",
+      "stderr": ""
+    },
+    "power": {
+      "exit": 0,
+      "stdout": "Battery Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           0\n tcpkeepalive         1\n disksleep            10\nAC Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         0\n womp                 1\n networkoversleep     0\n sleep                1\n tcpkeepalive         1\n disksleep            10",
+      "stderr": ""
+    },
+    "power_source": {
+      "exit": 0,
+      "stdout": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=7405667)\t100%; charged; 0:00 remaining present: true",
+      "stderr": ""
+    }
+  },
+  "pairs": [
+    {
+      "pair": 0,
+      "order": [
+        "legacy",
+        "native"
+      ],
+      "legacy": {
+        "report": "pair-0-legacy.json",
+        "sha256": "6d9608c8500740a083499ab7e7f2f52c955e652211e06d8dc8bee9c3b319d17e",
+        "system_load_start": [
+          11.2763671875,
+          11.181640625,
+          8.048828125
+        ],
+        "system_load_end": [
+          7.986328125,
+          10.30224609375,
+          8.0341796875
+        ],
+        "summary": {
+          "duration_s": 60.013386207981966,
+          "commands": 2520,
+          "displayed_revisions": 978,
+          "feedback_hz": 16.296364224652315,
+          "superseded": 1542,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1079,
+          "callback_ms": {
+            "p50": 0.5253120034467429,
+            "p95": 1.0689586633816353,
+            "p99": 1.589279039180836
+          },
+          "evaluation_ms": {
+            "p50": 3.6760000220965594,
+            "p95": 8.27331242035143,
+            "p99": 14.459594039944939
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 112.0,
+            "p95": 112.0,
+            "p99": 112.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 25.490707979770377,
+            "p95": 33.918435650411986,
+            "p99": 48.66194466769231
+          },
+          "displayed_state_age_ms": {
+            "p50": 40.95899994717911,
+            "p95": 90.65380826359615,
+            "p99": 121.34155396954155
+          },
+          "tracking_error": {
+            "p50": 0.012501069837852152,
+            "p95": 0.04037148778878568,
+            "p99": 0.05706933978194349
+          },
+          "ideal_tracking_error": {
+            "p50": 0.022510680882114276,
+            "p95": 0.05076615120521715,
+            "p99": 0.06783350373358112
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "memory_end": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 2539,
+          "shader_parameter_updates": 2539,
+          "shader_update_calls": 2547,
+          "engine_state_signature_checks": 26130,
+          "engine_state_cache_hits": 39880,
+          "engine_channel_publications": 7976,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "native": {
+        "report": "pair-0-native.json",
+        "sha256": "1902f1c93c8178b678a1d21f4d65d59d1accc1cea9e26b229f934a3fffbcea18",
+        "system_load_start": [
+          7.986328125,
+          10.30224609375,
+          8.0341796875
+        ],
+        "system_load_end": [
+          10.85791015625,
+          10.4052734375,
+          8.29345703125
+        ],
+        "summary": {
+          "duration_s": 60.000485833967105,
+          "commands": 1595,
+          "displayed_revisions": 578,
+          "feedback_hz": 9.633255330622443,
+          "superseded": 1017,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 2003,
+          "callback_ms": {
+            "p50": 0.5349160055629909,
+            "p95": 1.2022997892927374,
+            "p99": 1.9543765159323796
+          },
+          "evaluation_ms": {
+            "p50": 11.588604014832526,
+            "p95": 23.073414369719103,
+            "p99": 32.99402415112127
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 296.0,
+            "p95": 296.0,
+            "p99": 296.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 34.074458497343585,
+            "p95": 48.028368828818195,
+            "p99": 64.41069374792278
+          },
+          "displayed_state_age_ms": {
+            "p50": 69.59806301165372,
+            "p95": 219.51141903700736,
+            "p99": 2089.141205506164
+          },
+          "tracking_error": {
+            "p50": 0.017997265736240498,
+            "p95": 0.09604844169186469,
+            "p99": 0.3285588891787125
+          },
+          "ideal_tracking_error": {
+            "p50": 0.02503418703046173,
+            "p95": 0.10204665381631384,
+            "p99": 0.32873445206123453
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "memory_end": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1613,
+          "shader_parameter_updates": 1613,
+          "shader_update_calls": 1622,
+          "engine_state_signature_checks": 15730,
+          "native_graph_evaluations": 605,
+          "native_planned_units": 9680,
+          "engine_state_cache_hits": 28608,
+          "engine_texture_allocations": 74500,
+          "engine_texture_allocated_bytes": 153321367136,
+          "engine_pool_evictions": 74500,
+          "engine_channel_publications": 4768,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "full_pixel_max_errors": {
+        "BASE_COLOR": 0.0,
+        "ROUGHNESS": 0.0,
+        "METALLIC": 0.0,
+        "NORMAL": 0.0,
+        "HEIGHT": 0.0,
+        "AO": 0.0,
+        "EMISSION": 0.0,
+        "OPACITY": 0.0
+      }
+    },
+    {
+      "pair": 1,
+      "order": [
+        "native",
+        "legacy"
+      ],
+      "native": {
+        "report": "pair-1-native.json",
+        "sha256": "3e76d4b0073adac68bfed7cd714c3a262779f67f09231bb368b4ad8e40a1fd83",
+        "system_load_start": [
+          10.85791015625,
+          10.4052734375,
+          8.29345703125
+        ],
+        "system_load_end": [
+          7.48583984375,
+          9.70458984375,
+          8.2666015625
+        ],
+        "summary": {
+          "duration_s": 60.00072737497976,
+          "commands": 1923,
+          "displayed_revisions": 814,
+          "feedback_hz": 13.5665022010956,
+          "superseded": 1109,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1675,
+          "callback_ms": {
+            "p50": 0.5310830310918391,
+            "p95": 0.8514417160768061,
+            "p99": 1.3462152401916672
+          },
+          "evaluation_ms": {
+            "p50": 11.10824997886084,
+            "p95": 19.46543507510795,
+            "p99": 25.12851981271524
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 296.0,
+            "p95": 296.0,
+            "p99": 296.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 33.4787295141723,
+            "p95": 41.9757232419215,
+            "p99": 48.430807149852626
+          },
+          "displayed_state_age_ms": {
+            "p50": 54.12912499741651,
+            "p95": 136.71747973421589,
+            "p99": 154.66893982375043
+          },
+          "tracking_error": {
+            "p50": 0.014760345291198629,
+            "p95": 0.06229185908000345,
+            "p99": 0.08016387126329765
+          },
+          "ideal_tracking_error": {
+            "p50": 0.025809806684516712,
+            "p95": 0.07115925030093896,
+            "p99": 0.08951043370941922
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "memory_end": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1941,
+          "shader_parameter_updates": 1941,
+          "shader_update_calls": 1949,
+          "engine_state_signature_checks": 21840,
+          "native_graph_evaluations": 840,
+          "native_planned_units": 13440,
+          "engine_state_cache_hits": 39936,
+          "engine_texture_allocations": 104000,
+          "engine_texture_allocated_bytes": 214032512512,
+          "engine_pool_evictions": 104000,
+          "engine_channel_publications": 6656,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "legacy": {
+        "report": "pair-1-legacy.json",
+        "sha256": "e565a7cbc5c8f3f25ab4b534d39fb1870d399875b3931680cb2d201c07c18909",
+        "system_load_start": [
+          7.48583984375,
+          9.70458984375,
+          8.2666015625
+        ],
+        "system_load_end": [
+          6.6748046875,
+          9.00341796875,
+          8.14697265625
+        ],
+        "summary": {
+          "duration_s": 60.055676500021946,
+          "commands": 1596,
+          "displayed_revisions": 446,
+          "feedback_hz": 7.426442028337438,
+          "superseded": 1150,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 2003,
+          "callback_ms": {
+            "p50": 0.5591245135292411,
+            "p95": 1.3783750182483345,
+            "p99": 2.4292169720865764
+          },
+          "evaluation_ms": {
+            "p50": 4.3637295020744205,
+            "p95": 12.101729225832969,
+            "p99": 16.17482092988212
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 112.0,
+            "p95": 112.0,
+            "p99": 112.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 26.606874977005646,
+            "p95": 43.96313524921425,
+            "p99": 51.24333751155064
+          },
+          "displayed_state_age_ms": {
+            "p50": 58.95995796890929,
+            "p95": 2600.333040987607,
+            "p99": 6956.751474807964
+          },
+          "tracking_error": {
+            "p50": 0.019131694018224565,
+            "p95": 0.2716560670016478,
+            "p99": 0.6047602570418076
+          },
+          "ideal_tracking_error": {
+            "p50": 0.026042370606102483,
+            "p95": 0.2707128658012942,
+            "p99": 0.6042920602620848
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "memory_end": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1611,
+          "shader_parameter_updates": 1611,
+          "shader_update_calls": 1619,
+          "engine_state_signature_checks": 12194,
+          "engine_state_cache_hits": 18440,
+          "engine_channel_publications": 3688,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "full_pixel_max_errors": {
+        "BASE_COLOR": 0.0,
+        "ROUGHNESS": 0.0,
+        "METALLIC": 0.0,
+        "NORMAL": 0.0,
+        "HEIGHT": 0.0,
+        "AO": 0.0,
+        "EMISSION": 0.0,
+        "OPACITY": 0.0
+      }
+    },
+    {
+      "pair": 2,
+      "order": [
+        "legacy",
+        "native"
+      ],
+      "legacy": {
+        "report": "pair-2-legacy.json",
+        "sha256": "542a915d859c4c7d8226212a36638a2faae22aafa3c91a4624d8af55bb4cec90",
+        "system_load_start": [
+          7.10107421875,
+          9.052734375,
+          8.16943359375
+        ],
+        "system_load_end": [
+          10.736328125,
+          9.89599609375,
+          8.58984375
+        ],
+        "summary": {
+          "duration_s": 60.057745833997615,
+          "commands": 2370,
+          "displayed_revisions": 1016,
+          "feedback_hz": 16.917051845539973,
+          "superseded": 1354,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1230,
+          "callback_ms": {
+            "p50": 0.6025419861543924,
+            "p95": 1.3936150935478506,
+            "p99": 2.102546254754997
+          },
+          "evaluation_ms": {
+            "p50": 4.325999994762242,
+            "p95": 10.029916738858446,
+            "p99": 14.081031249952506
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 112.0,
+            "p95": 112.0,
+            "p99": 112.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 26.141292008105665,
+            "p95": 39.80758323450573,
+            "p99": 47.29735986620654
+          },
+          "displayed_state_age_ms": {
+            "p50": 41.61031250259839,
+            "p95": 89.42785426916089,
+            "p99": 112.9348098096671
+          },
+          "tracking_error": {
+            "p50": 0.011328510029729011,
+            "p95": 0.03948938215507579,
+            "p99": 0.05693482642014288
+          },
+          "ideal_tracking_error": {
+            "p50": 0.019566466995090293,
+            "p95": 0.04769613484875801,
+            "p99": 0.06458770410762411
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "memory_end": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 2389,
+          "shader_parameter_updates": 2389,
+          "shader_update_calls": 2397,
+          "engine_state_signature_checks": 27118,
+          "engine_state_cache_hits": 41400,
+          "engine_channel_publications": 8280,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "native": {
+        "report": "pair-2-native.json",
+        "sha256": "59f247f71d04296cbbfb7cb875b617096c0fb2f7771f9f57695f39a295765618",
+        "system_load_start": [
+          10.736328125,
+          9.89599609375,
+          8.58984375
+        ],
+        "system_load_end": [
+          8.78125,
+          9.46044921875,
+          8.55078125
+        ],
+        "summary": {
+          "duration_s": 60.043779083993286,
+          "commands": 1643,
+          "displayed_revisions": 712,
+          "feedback_hz": 11.85801444982346,
+          "superseded": 931,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1957,
+          "callback_ms": {
+            "p50": 0.577000027988106,
+            "p95": 1.3508628122508517,
+            "p99": 2.2467062494251806
+          },
+          "evaluation_ms": {
+            "p50": 12.711479503195733,
+            "p95": 33.839974703732864,
+            "p99": 48.166901583899744
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 296.0,
+            "p95": 296.0,
+            "p99": 296.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 35.56631249375641,
+            "p95": 63.25667295022865,
+            "p99": 90.89162726420906
+          },
+          "displayed_state_age_ms": {
+            "p50": 56.67583295144141,
+            "p95": 153.40226248954423,
+            "p99": 258.20245387149083
+          },
+          "tracking_error": {
+            "p50": 0.01586425531275315,
+            "p95": 0.06886914131943832,
+            "p99": 0.10520565605997492
+          },
+          "ideal_tracking_error": {
+            "p50": 0.027621934767362744,
+            "p95": 0.07836466159620084,
+            "p99": 0.12080176792072982
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "memory_end": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1661,
+          "shader_parameter_updates": 1661,
+          "shader_update_calls": 1670,
+          "engine_state_signature_checks": 19214,
+          "native_graph_evaluations": 739,
+          "native_planned_units": 11824,
+          "engine_state_cache_hits": 35040,
+          "engine_texture_allocations": 91250,
+          "engine_texture_allocated_bytes": 187792949680,
+          "engine_pool_evictions": 91250,
+          "engine_channel_publications": 5840,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "full_pixel_max_errors": {
+        "BASE_COLOR": 0.0,
+        "ROUGHNESS": 0.0,
+        "METALLIC": 0.0,
+        "NORMAL": 0.0,
+        "HEIGHT": 0.0,
+        "AO": 0.0,
+        "EMISSION": 0.0,
+        "OPACITY": 0.0
+      }
+    },
+    {
+      "pair": 3,
+      "order": [
+        "native",
+        "legacy"
+      ],
+      "native": {
+        "report": "pair-3-native.json",
+        "sha256": "e8afb047373664de8eec567c9ee3dad894cf2bce0364b7ef8933864fe17a46c7",
+        "system_load_start": [
+          8.78125,
+          9.46044921875,
+          8.55078125
+        ],
+        "system_load_end": [
+          7.4248046875,
+          8.9658203125,
+          8.45751953125
+        ],
+        "summary": {
+          "duration_s": 60.04571816697717,
+          "commands": 1947,
+          "displayed_revisions": 796,
+          "feedback_hz": 13.256565568696443,
+          "superseded": 1151,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1653,
+          "callback_ms": {
+            "p50": 0.5304999649524689,
+            "p95": 0.7697751105297347,
+            "p99": 1.1712059506680808
+          },
+          "evaluation_ms": {
+            "p50": 10.896437481278554,
+            "p95": 17.2962812212063,
+            "p99": 25.1357997040031
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 296.0,
+            "p95": 296.0,
+            "p99": 296.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 33.327395998639986,
+            "p95": 40.903937740949914,
+            "p99": 47.61389135092031
+          },
+          "displayed_state_age_ms": {
+            "p50": 54.074416984803975,
+            "p95": 136.32009548018686,
+            "p99": 154.47087386506607
+          },
+          "tracking_error": {
+            "p50": 0.015320941374968589,
+            "p95": 0.06005092864290119,
+            "p99": 0.07844786938185005
+          },
+          "ideal_tracking_error": {
+            "p50": 0.026952608520621424,
+            "p95": 0.06996531259195772,
+            "p99": 0.0888733380363542
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "memory_end": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1966,
+          "shader_parameter_updates": 1966,
+          "shader_update_calls": 1974,
+          "engine_state_signature_checks": 21398,
+          "native_graph_evaluations": 823,
+          "native_planned_units": 13168,
+          "engine_state_cache_hits": 39120,
+          "engine_texture_allocations": 101875,
+          "engine_texture_allocated_bytes": 209659252040,
+          "engine_pool_evictions": 101875,
+          "engine_channel_publications": 6520,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "legacy": {
+        "report": "pair-3-legacy.json",
+        "sha256": "b2963741e7e4f782faf49774567d1fe3908e7366ef86bd2fea0eb97f90473895",
+        "system_load_start": [
+          7.4248046875,
+          8.9658203125,
+          8.45751953125
+        ],
+        "system_load_end": [
+          6.01708984375,
+          7.92724609375,
+          8.09814453125
+        ],
+        "summary": {
+          "duration_s": 60.00615516700782,
+          "commands": 2566,
+          "displayed_revisions": 974,
+          "feedback_hz": 16.231668189524633,
+          "superseded": 1592,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1033,
+          "callback_ms": {
+            "p50": 0.5227499932516366,
+            "p95": 0.8003229886526242,
+            "p99": 1.19742443494033
+          },
+          "evaluation_ms": {
+            "p50": 3.5544165002647787,
+            "p95": 5.794739784323606,
+            "p99": 9.820521015208215
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 112.0,
+            "p95": 112.0,
+            "p99": 112.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 25.102729006903246,
+            "p95": 29.381922676111568,
+            "p99": 39.350405027507776
+          },
+          "displayed_state_age_ms": {
+            "p50": 39.558708493132144,
+            "p95": 88.67243991116993,
+            "p99": 121.04670498461928
+          },
+          "tracking_error": {
+            "p50": 0.01272148514375368,
+            "p95": 0.039620296357275535,
+            "p99": 0.05310302542866765
+          },
+          "ideal_tracking_error": {
+            "p50": 0.01878641221054403,
+            "p95": 0.046192897355393114,
+            "p99": 0.058996332773971254
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "memory_end": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 2585,
+          "shader_parameter_updates": 2585,
+          "shader_update_calls": 2593,
+          "engine_state_signature_checks": 26026,
+          "engine_state_cache_hits": 39720,
+          "engine_channel_publications": 7944,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "full_pixel_max_errors": {
+        "BASE_COLOR": 0.0,
+        "ROUGHNESS": 0.0,
+        "METALLIC": 0.0,
+        "NORMAL": 0.0,
+        "HEIGHT": 0.0,
+        "AO": 0.0,
+        "EMISSION": 0.0,
+        "OPACITY": 0.0
+      }
+    },
+    {
+      "pair": 4,
+      "order": [
+        "legacy",
+        "native"
+      ],
+      "legacy": {
+        "report": "pair-4-legacy.json",
+        "sha256": "ed1a2fd6e3837a116670d72b9b73538ebe71bdeb29c071a6c7786459e10e0fd3",
+        "system_load_start": [
+          6.095703125,
+          7.91162109375,
+          8.09130859375
+        ],
+        "system_load_end": [
+          11.080078125,
+          8.7890625,
+          8.38916015625
+        ],
+        "summary": {
+          "duration_s": 60.03134979202878,
+          "commands": 2407,
+          "displayed_revisions": 935,
+          "feedback_hz": 15.575195347750673,
+          "superseded": 1472,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 1193,
+          "callback_ms": {
+            "p50": 0.63308299286291,
+            "p95": 1.2253957975190128,
+            "p99": 1.5354555204976357
+          },
+          "evaluation_ms": {
+            "p50": 4.629125003702939,
+            "p95": 9.815025079296898,
+            "p99": 14.953451324254242
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 112.0,
+            "p95": 112.0,
+            "p99": 112.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 27.453499962575734,
+            "p95": 36.95605010143481,
+            "p99": 42.681755009107285
+          },
+          "displayed_state_age_ms": {
+            "p50": 44.911540986504406,
+            "p95": 103.9630839950405,
+            "p99": 121.90197521122171
+          },
+          "tracking_error": {
+            "p50": 0.012384947725339546,
+            "p95": 0.045298498255236574,
+            "p99": 0.058956186892265214
+          },
+          "ideal_tracking_error": {
+            "p50": 0.022769173718427294,
+            "p95": 0.0554960658279115,
+            "p99": 0.07032451389622255
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "memory_end": {
+          "leased_bytes": 234881024,
+          "pooled_bytes": 268435448
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 2425,
+          "shader_parameter_updates": 2425,
+          "shader_update_calls": 2434,
+          "engine_state_signature_checks": 25012,
+          "engine_state_cache_hits": 38120,
+          "engine_channel_publications": 7624,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "native": {
+        "report": "pair-4-native.json",
+        "sha256": "7745026a77262db58b6f2105ed6ebb6548ef22c923ac701ab6864bb4d104e39c",
+        "system_load_start": [
+          11.080078125,
+          8.7890625,
+          8.38916015625
+        ],
+        "system_load_end": [
+          25.8515625,
+          16.04296875,
+          11.35595703125
+        ],
+        "summary": {
+          "duration_s": 60.594064999953844,
+          "commands": 1138,
+          "displayed_revisions": 493,
+          "feedback_hz": 8.136110359989473,
+          "superseded": 645,
+          "accepted_undrawn": 0,
+          "missed_timer_slots": 2447,
+          "callback_ms": {
+            "p50": 0.7741664885543287,
+            "p95": 2.0644312695367253,
+            "p99": 12.97749525576364
+          },
+          "evaluation_ms": {
+            "p50": 19.30145896039903,
+            "p95": 43.79790019011125,
+            "p99": 71.95424598874516
+          },
+          "gpu_passes_per_evaluation": {
+            "p50": 296.0,
+            "p95": 296.0,
+            "p99": 296.0
+          },
+          "receipt_to_draw_ms": {
+            "p50": 42.686875036451966,
+            "p95": 82.10454162908715,
+            "p99": 213.47118527628464
+          },
+          "displayed_state_age_ms": {
+            "p50": 84.0223339619115,
+            "p95": 270.33204999752337,
+            "p99": 671.9715750333853
+          },
+          "tracking_error": {
+            "p50": 0.019291803906344995,
+            "p95": 0.10492182065204379,
+            "p99": 0.20871971875665754
+          },
+          "ideal_tracking_error": {
+            "p50": 0.03081613064823313,
+            "p95": 0.11576158666052852,
+            "p99": 0.23245880601720356
+          }
+        },
+        "memory_start": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "memory_end": {
+          "leased_bytes": 536870912,
+          "pooled_bytes": 503316456
+        },
+        "counters": {
+          "shader_parameter_bindings_updated": 1149,
+          "shader_parameter_updates": 1149,
+          "shader_update_calls": 1156,
+          "engine_state_signature_checks": 13260,
+          "native_graph_evaluations": 510,
+          "native_planned_units": 8160,
+          "engine_state_cache_hits": 24144,
+          "engine_texture_allocations": 62875,
+          "engine_texture_allocated_bytes": 129397059848,
+          "engine_pool_evictions": 62875,
+          "engine_channel_publications": 4024,
+          "shader_resource_requests": 0,
+          "shader_resource_publications": 0,
+          "shader_resource_written_bytes": 0,
+          "engine_program_compiles": 0,
+          "engine_graph_builds": 0
+        },
+        "viewport": [
+          2477,
+          1364
+        ],
+        "gpu": [
+          "Apple M3 Pro",
+          "Metal API",
+          "1.2"
+        ],
+        "blender": [
+          "5.2.1 LTS",
+          "9e2066aef7ef"
+        ],
+        "pixels_sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+      },
+      "full_pixel_max_errors": {
+        "BASE_COLOR": 0.0,
+        "ROUGHNESS": 0.0,
+        "METALLIC": 0.0,
+        "NORMAL": 0.0,
+        "HEIGHT": 0.0,
+        "AO": 0.0,
+        "EMISSION": 0.0,
+        "OPACITY": 0.0
+      }
+    }
+  ],
+  "worker_sha256": "29a3c8551a48f0e1058b78e929cb7f25be038ca4dace754ee032cb81478c9b51",
+  "runner_sha256": "ba101049c2b4bde3726f4a06c2e75935e638040d50da45e632e09675cc858eeb",
+  "baseline": "Current release with OP_NATIVE_ENGINE=0; not a historical release checkout",
+  "protocol": "Fresh process/profile per run; five AB/BA pairs; same 2K eight-channel material, viewport, 60Hz ideal opacity trajectory; no readback during timing",
+  "seconds": 60.0,
+  "pair_count": 5,
+  "warm_edit_seconds": 15,
+  "summary": {
+    "feedback_hz": {
+      "legacy_median": 16.231668189524633,
+      "native_median": 11.85801444982346,
+      "paired_native_minus_legacy": [
+        -6.663108894029872,
+        6.1400601727581625,
+        -5.059037395716514,
+        -2.9751026208281903,
+        -7.4390849877612
+      ],
+      "paired_percent_changes": [
+        -40.8870886915393,
+        82.67835592507468,
+        -29.904958865810194,
+        -18.32900097568665,
+        -47.762386420633455
+      ],
+      "median_paired_percent_change": -29.904958865810194,
+      "native_better_pairs": 1
+    },
+    "callback_p95_ms": {
+      "legacy_median": 1.2253957975190128,
+      "native_median": 1.2022997892927374,
+      "paired_native_minus_legacy": [
+        0.13334112591110214,
+        -0.5269333021715285,
+        -0.04275228129699893,
+        -0.030547878122889505,
+        0.8390354720177124
+      ],
+      "paired_percent_changes": [
+        12.473927241421979,
+        -38.22858766267873,
+        -3.0677251914774106,
+        -3.8169437284711893,
+        68.47056875145634
+      ],
+      "median_paired_percent_change": -3.0677251914774106,
+      "native_better_pairs": 3
+    },
+    "callback_p99_ms": {
+      "legacy_median": 1.589279039180836,
+      "native_median": 1.9543765159323796,
+      "paired_native_minus_legacy": [
+        0.3650974767515436,
+        -1.0830017318949092,
+        0.1441599946701837,
+        -0.026218484272249265,
+        11.442039735266006
+      ],
+      "paired_percent_changes": [
+        22.972521989576244,
+        -44.58233843824435,
+        6.856448192003373,
+        -2.1895731795013695,
+        745.1886155293955
+      ],
+      "median_paired_percent_change": 6.856448192003373,
+      "native_better_pairs": 2
+    },
+    "evaluation_p95_ms": {
+      "legacy_median": 9.815025079296898,
+      "native_median": 23.073414369719103,
+      "paired_native_minus_legacy": [
+        14.800101949367672,
+        7.363705849274982,
+        23.810057964874417,
+        11.501541436882693,
+        33.98287511081435
+      ],
+      "paired_percent_changes": [
+        178.88967800806194,
+        60.84837721832381,
+        237.39038503309007,
+        198.4824489962014,
+        346.2331969226993
+      ],
+      "median_paired_percent_change": 198.4824489962014,
+      "native_better_pairs": 0
+    },
+    "receipt_to_draw_p95_ms": {
+      "legacy_median": 36.95605010143481,
+      "native_median": 48.028368828818195,
+      "paired_native_minus_legacy": [
+        14.109933178406209,
+        -1.9874120072927468,
+        23.44908971572292,
+        11.522015064838346,
+        45.14849152765234
+      ],
+      "paired_percent_changes": [
+        41.599598884315945,
+        -4.520633016791653,
+        58.90608725876368,
+        39.21463953142219,
+        122.16806559069866
+      ],
+      "median_paired_percent_change": 41.599598884315945,
+      "native_better_pairs": 1
+    },
+    "receipt_to_draw_p99_ms": {
+      "legacy_median": 47.29735986620654,
+      "native_median": 64.41069374792278,
+      "paired_native_minus_legacy": [
+        15.748749080230468,
+        -2.812530361698016,
+        43.59426739800252,
+        8.263486323412536,
+        170.78943026717735
+      ],
+      "paired_percent_changes": [
+        32.36358346913002,
+        -5.48857763424182,
+        92.17061485317737,
+        20.999749094414575,
+        400.14622226929254
+      ],
+      "median_paired_percent_change": 32.36358346913002,
+      "native_better_pairs": 1
+    },
+    "displayed_state_age_p95_ms": {
+      "legacy_median": 90.65380826359615,
+      "native_median": 153.40226248954423,
+      "paired_native_minus_legacy": [
+        128.8576107734112,
+        -2463.615561253391,
+        63.97440822038334,
+        47.64765556901693,
+        166.36896600248286
+      ],
+      "paired_percent_changes": [
+        142.14252356473432,
+        -94.7423088666254,
+        71.53745188588836,
+        53.73445866240885,
+        160.02696304240013
+      ],
+      "median_paired_percent_change": 71.53745188588836,
+      "native_better_pairs": 1
+    },
+    "ideal_tracking_error_p95": {
+      "legacy_median": 0.05076615120521715,
+      "native_median": 0.07836466159620084,
+      "paired_native_minus_legacy": [
+        0.051280502611096686,
+        -0.19955361550035527,
+        0.03066852674744283,
+        0.023772415236564606,
+        0.06026552083261702
+      ],
+      "paired_percent_changes": [
+        101.0131778629432,
+        -73.71412323152364,
+        64.29981558189391,
+        51.46335605161847,
+        108.59422183095857
+      ],
+      "median_paired_percent_change": 64.29981558189391,
+      "native_better_pairs": 1
+    },
+    "received_commands": {
+      "legacy_median": 2407,
+      "native_median": 1643,
+      "paired_native_minus_legacy": [
+        -925,
+        327,
+        -727,
+        -619,
+        -1269
+      ],
+      "paired_percent_changes": [
+        -36.70634920634921,
+        20.48872180451127,
+        -30.675105485232066,
+        -24.12314886983632,
+        -52.7212297465725
+      ],
+      "median_paired_percent_change": -30.675105485232066,
+      "native_better_pairs": null
+    },
+    "superseded_fraction": {
+      "legacy_median": 0.611904761904762,
+      "native_median": 0.5767030681227249,
+      "paired_native_minus_legacy": [
+        0.02571279295417217,
+        -0.1438483103233904,
+        -0.00466163830186106,
+        -0.02925499229183659,
+        -0.044765815580362855
+      ],
+      "paired_percent_changes": [
+        4.202090677335524,
+        -19.963643763141835,
+        -0.815958846042153,
+        -4.715346119400299,
+        -7.320062371055258
+      ],
+      "median_paired_percent_change": -4.715346119400299,
+      "native_better_pairs": 4
+    }
+  }
+}

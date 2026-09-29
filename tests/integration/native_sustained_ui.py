@@ -27,9 +27,11 @@ from open_painter.core import layer_stack
 REPORT = Path(os.environ['OP_SUSTAINED_REPORT'])
 DURATION = float(os.environ.get('OP_SUSTAINED_SECONDS', '60'))
 RUNS = int(os.environ.get('OP_SUSTAINED_RUNS', '5'))
+EXPECTED = os.environ.get('OP_SUSTAINED_BACKEND', 'c17-host-metal')
+assert DURATION > 0 and RUNS > 0
 bpy.context.preferences.view.show_splash = False
 commands, draws, runs = [], [], []
-accepted = {}
+last_accepted = None
 active = None
 handler = observation = hook = None
 latest = None
@@ -38,12 +40,17 @@ original_evaluate = runtime.Engine.evaluate
 
 
 def evaluated(self, *args, **kwargs):
+    global last_accepted
     command = latest
+    started = time.perf_counter()
     result = original_evaluate(self, *args, **kwargs)
     if result and command is not None and self.set_id == ts.id:
-        revision = self._native_revisions.revision
-        command.update(accepted=time.perf_counter(), revision=revision)
-        accepted[revision] = command
+        # Common observation boundary: successful Engine.evaluate return. A
+        # legacy executor has no native revision object. Do not time only C.
+        command.update(accepted=time.perf_counter(), evaluation_ms=1000 * (time.perf_counter() - started),
+                       gpu_passes=self.report['passes'], published_channels=len(result),
+                       native_revision=self._native_revisions.revision if self._native_revisions else None)
+        last_accepted = command
     return result
 
 
@@ -51,15 +58,16 @@ def drawn():
     if active is None:
         return
     engine = shader_preview.session_engine(bpy.context.scene, ts)
-    if engine is None or engine._native_revisions is None:
+    if engine is None:
         return
-    command = accepted.get(engine._native_revisions.revision)
+    command = last_accepted
     now = time.perf_counter()
     if command is not None:
         command.setdefault('drawn', now)
         draws.append(dict(run=len(runs), time=now, command=command['id'],
                           state_age_ms=1000 * (now - command['receipt']),
-                          tracking_error=abs(control.opacity - command['value'])))
+                          tracking_error=abs(control.opacity - command['value']),
+                          ideal_tracking_error=abs(.5 + .35 * math.sin(min(DURATION, now-active['start']) * 1.7) - command['value'])))
 
 
 def percentile(values):
@@ -73,7 +81,30 @@ def finish(error=None):
         hook.stop()
     if observation is not None:
         observation.__exit__(None, None, None)
+    parity = None
+    if not error and os.environ.get('OP_SUSTAINED_PIXELS') == '1':
+        # Full output comparison after timing, with an identical authored value.
+        # Readback and compression never occur inside the measured interval.
+        try:
+            control.opacity = .37
+            for _ in range(300):
+                shader_preview.tick(bpy.context.scene, ts)
+                if shader_preview.current(bpy.context.scene, ts):
+                    break
+            else:
+                raise AssertionError('Parity endpoint never became current')
+            values = {out.channel: np.array(gpu.texture.from_image(out.image).read(), dtype=np.float32)
+                      for out in ts.outputs}
+            assert set(values) == set(CHANNELS)
+            assert np.ptp(values['BASE_COLOR']) > .05
+            target = REPORT.with_suffix('.pixels.npz')
+            np.savez_compressed(target, **values)
+            parity = dict(opacity=.37, channels=list(values), pixels=str(target))
+        except Exception:
+            error = traceback.format_exc()
     report = dict(status='FAIL' if error else 'PASS', error=error, runs=runs,
+                  parity=parity, expected_backend=EXPECTED,
+                  warm_edit_seconds=float(os.environ.get('OP_SUSTAINED_WARM_EDITS', '0')),
                   commands=commands, draws=draws, blender=bpy.app.version_string,
                   build=bpy.app.build_hash.decode(), backend=gpu.platform.backend_type_get(),
                   renderer=gpu.platform.renderer_get(), vendor=gpu.platform.vendor_get(),
@@ -112,11 +143,11 @@ def setup():
     handler = bpy.types.SpaceView3D.draw_handler_add(drawn, (), 'WINDOW', 'POST_PIXEL')
     hook = patch.object(runtime.Engine, 'evaluate', evaluated)
     hook.start()
-    warm_until = time.perf_counter() + 8
+    warm_until = time.perf_counter() + max(8, float(os.environ.get('OP_SUSTAINED_WARM_EDITS', '0')))
 
 
 def tick():
-    global active, latest, observation, warm_until
+    global active, latest, observation, warm_until, last_accepted
     try:
         now = time.perf_counter()
         assert now < deadline, 'Sustained qualification timed out'
@@ -127,20 +158,27 @@ def tick():
         assert not diagnostic.get('error'), diagnostic
         area.tag_redraw()
         if active is None:
+            if now < warm_until and os.environ.get('OP_SUSTAINED_WARM_EDITS'):
+                # Exercise actual publication/reuse before measuring, then leave
+                # one second at the same starting value for both executors.
+                control.opacity = (.68 if warm_until - now < 1 else
+                                   .5 + .35 * math.sin((warm_until-now) * 1.7))
             if now < warm_until or not shader_preview.current(bpy.context.scene, ts):
                 return .1
             engine = shader_preview.session_engine(bpy.context.scene, ts)
-            assert engine.report['execution_backend'] == 'c17-host-metal', engine.report
+            assert engine.report['execution_backend'] == EXPECTED, engine.report
             if len(runs) == RUNS:
                 observation.assert_no_raster()
                 assert not observation.metrics.counts['engine_program_compiles'], observation.report()
+                assert not observation.metrics.counts['engine_graph_builds'], observation.report()
                 finish()
                 return None
             # Captures happen between runs, outside latency measurements.
             bpy.ops.screen.screenshot(filepath=str(REPORT.with_name(f'{REPORT.stem}-{len(runs)}.png')))
             if observation is None:
                 observation = RasterObservation().__enter__()
-            active = dict(start=time.perf_counter(), first=len(commands), rebuilds=engine._native_graph.rebuilds,
+            last_accepted = None
+            active = dict(start=time.perf_counter(), first=len(commands), graph_identity=id(engine.graph),
                           memory_start=runtime.device().memory(), next_slot=0)
             return 1 / 60
         elapsed = now - active['start']
@@ -148,7 +186,7 @@ def tick():
             slot = int(elapsed * 60)
             if slot >= active['next_slot']:
                 command = dict(id=len(commands), run=len(runs), receipt=now, slot=slot,
-                               missed_slots=slot - active['next_slot'], value=.5 + .35 * math.sin(elapsed * 1.7))
+                               missed_slots=slot - active['next_slot'], value=.5 + .35 * math.sin(slot / 60 * 1.7))
                 active['next_slot'] = slot + 1
                 commands.append(command)
                 latest = command
@@ -160,7 +198,7 @@ def tick():
             assert elapsed < DURATION + 10, 'Final command never reached a viewport draw'
             return .02
         engine = shader_preview.session_engine(bpy.context.scene, ts)
-        assert engine._native_graph.rebuilds == active['rebuilds'], 'Numeric edit rebuilt topology'
+        assert id(engine.graph) == active['graph_identity'], 'Numeric edit replaced topology'
         entries = commands[active['first']:]
         displayed = [c for c in entries if 'drawn' in c]
         observed = [d for d in draws if d['run'] == len(runs)]
@@ -173,9 +211,12 @@ def tick():
             accepted_undrawn=sum(c['outcome']=='accepted_undrawn' for c in entries),
             missed_timer_slots=sum(c['missed_slots'] for c in entries),
             callback_ms=percentile([c['callback_ms'] for c in entries]),
+            evaluation_ms=percentile([c['evaluation_ms'] for c in entries if 'evaluation_ms' in c]),
+            gpu_passes_per_evaluation=percentile([c['gpu_passes'] for c in entries if 'gpu_passes' in c]),
             receipt_to_draw_ms=percentile([1000*(c['drawn']-c['receipt']) for c in displayed]),
             displayed_state_age_ms=percentile([d['state_age_ms'] for d in observed]),
-            tracking_error=percentile([d['tracking_error'] for d in observed])))
+            tracking_error=percentile([d['tracking_error'] for d in observed]),
+            ideal_tracking_error=percentile([d['ideal_tracking_error'] for d in observed])))
         runs.append(active)
         print('SUSTAINED_RUN', len(runs), active['summary'], flush=True)
         active = latest = None

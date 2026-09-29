@@ -69,6 +69,53 @@ class EngineGraph(Graph):
             self.link(value, node.inputs[field])
         return Signal(node.outputs['Color'], signal.alpha)
 
+    def _mask_plan(self, masks, start, stop, pre_filter, initial=False):
+        from .runtime import device
+        from ...native_bridge.lifecycle import execution_library
+        from ...native_bridge.masks import snapshot, plan
+        lib = execution_library(device().backend)
+        if lib is None:
+            return None
+        return plan(lib, snapshot(masks), start, stop, pre_filter, initial)
+
+    def _mask_walk(self, masks, start, stop, pre_filter, prefix):
+        plan = self._mask_plan(masks, start, stop, pre_filter)
+        if plan is None:
+            return super()._mask_walk(masks, start, stop, pre_filter, prefix)
+        prefix.extend(masks[index] for index in plan.walk)
+        return prefix
+
+    def _mask_chain(self, layer, masks, start, stop, pre_filter, result, prefix):
+        from itertools import chain
+        from ...native_bridge.masks import NONE, INITIAL, ONE
+        plan = self._mask_plan(masks, start, stop, pre_filter, result is not None)
+        if plan is None:
+            return super()._mask_chain(layer, masks, start, stop, pre_filter, result, prefix)
+        folded = []
+        def reference(index):
+            if index == NONE:
+                return None
+            if index == INITIAL:
+                return result
+            if index == ONE:
+                return 1.0
+            return folded[index]
+        for index, previous, value, begin, end in plan.steps:
+            mask = masks[index]
+            previous = reference(previous)
+            if value == NONE:
+                # Only a CPU filter boundary consumes this prefix. Keep ordinary
+                # sources O(1); the boundary freezes the iterator on demand.
+                source_prefix = chain(prefix if begin == NONE else (),
+                                      (masks[plan.walk[j]] for j in range(0 if begin == NONE else begin, end)))
+                with self.role(f'MaskSource:{layer.id}:{mask.id}'):
+                    value = self._mask_value(layer, mask, previous, source_prefix, pre_filter)
+            else:
+                value = reference(value)
+            folded.append(self._mask_fold(layer, mask, value, previous))
+        prefix.extend(masks[index] for index in plan.walk)
+        return reference(plan.result)
+
     def _mask_fold(self, layer, mask, value, result):
         node = self.node('OPMaskFold')
         node.first = result is None

@@ -1,0 +1,14 @@
+PIXEL_PUBLISH first build max 1e-06
+PIXEL_PUBLISH nothing left for a CPU sync: PASS
+PIXEL_PUBLISH after a budgeted edit max 0.0
+PIXEL_PUBLISH budget: PASS ['BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'NORMAL']
+PIXEL_PUBLISH a bake right after an edit max 0.0
+PIXEL_PUBLISH bake: PASS
+PIXEL_PUBLISH after a flush max 0.0
+PIXEL_PUBLISH flush: PASS
+PIXEL_PUBLISH report: PASS
+PIXEL_PUBLISH scalar precision, alpha and transfer size: PASS
+PIXEL_PUBLISH_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

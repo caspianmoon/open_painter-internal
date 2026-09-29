@@ -6,6 +6,7 @@
 #include "openpainter/op_geometry.h"
 #include "openpainter/op_graph.h"
 #include "openpainter/op_ir.h"
+#include "openpainter/op_mask.h"
 #include "openpainter/op_paint.h"
 #include "openpainter/op_program.h"
 #include "openpainter/op_revision.h"
@@ -513,8 +514,10 @@ static PyObject *program_uniforms(PyObject *self, PyObject *capsule) {
 #include "revisions.inc"
 #include "topology.inc"
 #include "channels.inc"
+#include "masks.inc"
 
 static PyMethodDef methods[] = {
+    {"mask_plan", mask_plan, METH_VARARGS, "Plan nested mask folds and isolated filter prefixes."},
     {"channels_create", channels_create, METH_NOARGS, "Create native channel state."},
     {"channels_close", channels_close, METH_O, "Close native channel state."},
     {"channels_reset", channels_reset, METH_O, "Invalidate accepted channel state."},

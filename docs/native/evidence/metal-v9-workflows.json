@@ -1,0 +1,82 @@
+{
+  "status": "PASS",
+  "run_id": "20260929T183140.050159Z",
+  "artifacts": {
+    "python_addon_sha256": "0a0a431677b4df824b99b20588d7119c22aacb2549c2ce98ba6086bb2796e496",
+    "python_file_count": 332,
+    "adapter_sha256": "4592f7eff7ac1524fd57600ec0ab7892cd8ce291f219a7428314d3a84e6ed292",
+    "shader_bundle_sha256": "962eb0b85254dcc51c0b1d642f0b2d8abf1598ddd0d7d7cf411a3fd1a85d01ff",
+    "native_source_sha256": "ecffe1a8afcb4b26ffb97d0a84a7de865a5b3ef92f5c8ea28df7cf007e5599f1",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "249f10ee99a0009d4627ed52cb090347fffd9921bb1cb1374991ba221e0602cc",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 241144,
+      "sha256": "00c5a42f73e34644c33fb0ca98b64634458f2ca17baa7b6e9410dd56997d7169"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+      "bytes": 209840,
+      "sha256": "c07ec4c7cfe36bc0e2cb2a155f45e5e1e4accae2b8855fc85580b4ea0f5962f2"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "evaluated_projection.py",
+      "exit": 0
+    },
+    {
+      "test": "multi_set_paint.py",
+      "exit": 0
+    },
+    {
+      "test": "stroke_surface_bounds.py",
+      "exit": 0
+    },
+    {
+      "test": "udim_workflow.py",
+      "exit": 0
+    },
+    {
+      "test": "udim_material.py",
+      "exit": 0
+    },
+    {
+      "test": "material_aging.py",
+      "exit": 0
+    },
+    {
+      "test": "material_director.py",
+      "exit": 0
+    },
+    {
+      "test": "material_surface_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "surface_filters.py",
+      "exit": 0
+    },
+    {
+      "test": "mask_groups.py",
+      "exit": 0
+    },
+    {
+      "test": "live_masks.py",
+      "exit": 0
+    },
+    {
+      "test": "mask_graphs.py",
+      "exit": 0
+    },
+    {
+      "test": "material_recipe_masks.py",
+      "exit": 0
+    },
+    {
+      "test": "projected_masks.py",
+      "exit": 0
+    }
+  ]
+}

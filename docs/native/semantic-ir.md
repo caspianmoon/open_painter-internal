@@ -1,4 +1,4 @@
-# Effect and mask IR contracts — ABI 8
+# Effect and mask IR contracts — ABI 9
 
 `op_ir_compile` accepts only typed, backward-referencing node indices. It never
 accepts shader expressions or host pointers. `OP_IR_EFFECT` returns VECTOR RGB;
@@ -45,3 +45,28 @@ field map in `evaluation/shader_effects.py` describes binding order; it contains
 no native formulas. The original Python formulas remain independent reference
 implementations. `native_effects.py` compares both executors and NumPy filters,
 and verifies live RNA binding reuse in a real Blender material.
+
+## Mask hierarchy plan
+
+`op_mask_plan_build` accepts at most 65,536 `{parent, flags}` records and an
+exclusive `[start, stop)` range. Parent indices refer to earlier GROUP entries;
+member runs must be contiguous. ENABLED is independent of the mutually exclusive
+GROUP, FILTER and ANCHOR flags. An ordinary source has none of those kind flags.
+Invalid ranges, flags or topology return no plan, including an invalid unused
+tail outside the requested range. Missing parents and duplicate nonempty recipe IDs are rejected by
+the host snapshot adapter before C receives the dense indices. Anonymous root
+entries remain supported by array position; empty IDs cannot be parent targets.
+
+The owned output contains active entry indices in preorder and folds in
+postorder. Fold references name earlier results or NONE, INITIAL and ONE
+sentinels. NONE preserves first-entry semantics, INITIAL names the imported
+continuation, and ONE is an empty group's source value. A source step also
+identifies its isolated prefix span. A NONE prefix start includes the caller's
+prior outer prefix; a numeric start includes only the current group's members.
+Prefixes that end inside a group close that group's partial result. Starting
+inside a group treats the selected range as an isolated run.
+
+`op_mask_plan_free` releases the complete output. No caller buffers are retained.
+The CPython method returns copied bytes after releasing the GIL for planning;
+the ctypes development adapter copies the output before freeing it. Blender
+resource lookup and reference-source binding remain host adapter responsibilities.

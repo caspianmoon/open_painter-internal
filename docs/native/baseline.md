@@ -65,7 +65,8 @@ comparison. Raw evidence is under `docs/native/evidence/`.
 
 P0 tooling and local fixtures implemented; target capture and full observability
 remain open; Windows work is deferred at the user's request. The corrected
-Metal mip probe passes. ABI 8 adds pointwise effect and mask-fold semantics
+Metal mip probe passes. ABI 9 adds native mask hierarchy and filter-prefix planning
+to ABI 8 pointwise effect and mask-fold semantics
 to ABI 7 channel selection/acceptance, ABI 6 UV topology/seams, ABI 5 blend kernels and batch
 submission/dependency lifetimes, and earlier shader/program, brush/geometry,
 cache, filter, revision and GPU eviction recovery ownership.

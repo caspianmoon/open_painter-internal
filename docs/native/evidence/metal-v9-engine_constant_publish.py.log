@@ -1,0 +1,10 @@
+CONSTANT_PUBLISH exact CPU/GPU pixels and mips: 512 False
+CONSTANT_PUBLISH exact CPU/GPU pixels and mips: 512 True
+CONSTANT_PUBLISH exact CPU/GPU pixels and mips: 1024 False
+CONSTANT_PUBLISH exact CPU/GPU pixels and mips: 1024 True
+CONSTANT_PUBLISH edits, fallback and resolution adoption: PASS
+CONSTANT_PUBLISH independent anchor caches and close: PASS
+CONSTANT_PUBLISH_PASS METAL
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

@@ -1,0 +1,47 @@
+test_account_errors_keep_a_running_turn_and_a_reviewed_draft (__main__.DirectorTests.test_account_errors_keep_a_running_turn_and_a_reviewed_draft) ... ok
+test_anchor_cycle_and_protected_shared_source (__main__.DirectorTests.test_anchor_cycle_and_protected_shared_source) ... ok
+test_blocking_tool_step_is_drawn_before_blender_runs_it (__main__.DirectorTests.test_blocking_tool_step_is_drawn_before_blender_runs_it) ... ok
+test_browsing_another_set_during_a_turn_keeps_tools_working (__main__.DirectorTests.test_browsing_another_set_during_a_turn_keeps_tools_working) ... ok
+test_catalog_creates_normal_layers_and_no_false_module_lineage (__main__.DirectorTests.test_catalog_creates_normal_layers_and_no_false_module_lineage) ... ok
+test_channel_lock_does_not_lock_other_channels (__main__.DirectorTests.test_channel_lock_does_not_lock_other_channels) ... ok
+test_conflict_aware_undo_keeps_manual_changes (__main__.DirectorTests.test_conflict_aware_undo_keeps_manual_changes) ... ok
+test_context_is_bounded_and_has_no_pixels_or_paths (__main__.DirectorTests.test_context_is_bounded_and_has_no_pixels_or_paths) ... ok
+test_explain_reply_reaches_followup_without_cross_material_history (__main__.DirectorTests.test_explain_reply_reaches_followup_without_cross_material_history) ... ok
+test_finished_instructions_leave_no_texture_cache_files (__main__.DirectorTests.test_finished_instructions_leave_no_texture_cache_files) ... ok
+test_folder_scope_and_folder_protection (__main__.DirectorTests.test_folder_scope_and_folder_protection) ... ok
+test_generated_texture_draft_commit_rollback_and_undo (__main__.DirectorTests.test_generated_texture_draft_commit_rollback_and_undo) ... ok
+test_idempotency_and_operation_id_collision (__main__.DirectorTests.test_idempotency_and_operation_id_collision) ... ok
+test_idle_connection_tick_does_not_redraw (__main__.DirectorTests.test_idle_connection_tick_does_not_redraw) ... ok
+test_invalid_replacement_clears_earlier_valid_draft (__main__.DirectorTests.test_invalid_replacement_clears_earlier_valid_draft) ... ok
+test_isolated_view_capture_keeps_the_artists_selection (__main__.DirectorTests.test_isolated_view_capture_keeps_the_artists_selection) ... ok
+test_large_map_preview_does_not_stall (__main__.DirectorTests.test_large_map_preview_does_not_stall) ... ok
+test_live_scene_mask_and_missing_bake (__main__.DirectorTests.test_live_scene_mask_and_missing_bake) ... ok
+test_map_previews_preserve_authored_pixels_and_use_correct_labels (__main__.DirectorTests.test_map_previews_preserve_authored_pixels_and_use_correct_labels) ... ok
+test_numeric_edit_updates_native_shader_without_raster (__main__.DirectorTests.test_numeric_edit_updates_native_shader_without_raster) ... ok
+test_paint_overlay_is_preserved_and_stays_above_new_content (__main__.DirectorTests.test_paint_overlay_is_preserved_and_stays_above_new_content) ... ok
+test_plan_cancel_and_explain_do_not_mutate (__main__.DirectorTests.test_plan_cancel_and_explain_do_not_mutate) ... ok
+test_progress_notes_stay_out_of_the_reply_and_close_the_log (__main__.DirectorTests.test_progress_notes_stay_out_of_the_reply_and_close_the_log) ... ok
+test_reports_name_removed_masks_and_filters (__main__.DirectorTests.test_reports_name_removed_masks_and_filters) ... ok
+test_rollback_restores_data_history_and_new_resources (__main__.DirectorTests.test_rollback_restores_data_history_and_new_resources) ... ok
+test_saving_between_draft_and_apply_keeps_the_digest (__main__.DirectorTests.test_saving_between_draft_and_apply_keeps_the_digest) ... ok
+test_scene_atomic_rollback_and_grouped_undo (__main__.DirectorTests.test_scene_atomic_rollback_and_grouped_undo) ... ok
+test_scene_inspection_captures_from_the_painter_area (__main__.DirectorTests.test_scene_inspection_captures_from_the_painter_area) ... ok
+test_scene_scope_requires_inspection_and_complete_create (__main__.DirectorTests.test_scene_scope_requires_inspection_and_complete_create) ... ok
+test_scene_stale_target_and_missing_undo_group_never_partially_apply (__main__.DirectorTests.test_scene_stale_target_and_missing_undo_group_never_partially_apply) ... ok
+test_stale_material_and_geometry_are_rejected (__main__.DirectorTests.test_stale_material_and_geometry_are_rejected) ... ok
+test_stale_material_at_completion_keeps_connection (__main__.DirectorTests.test_stale_material_at_completion_keeps_connection) ... ok
+test_structural_batch_refreshes_other_layers_scene_analysis (__main__.DirectorTests.test_structural_batch_refreshes_other_layers_scene_analysis) ... ok
+test_texture_budget_rejects_growth_before_mutation (__main__.DirectorTests.test_texture_budget_rejects_growth_before_mutation) ... ok
+test_undo_keeps_later_artist_layer_order (__main__.DirectorTests.test_undo_keeps_later_artist_layer_order) ... ok
+test_zz_receipts_survive_save_reopen (__main__.DirectorTests.test_zz_receipts_survive_save_reopen) ... 00:08.715  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/material-director.blend"
+ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 7.595s
+
+OK
+Info: Saved as "material-director.blend"
+MATERIAL_DIRECTOR_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

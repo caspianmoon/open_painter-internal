@@ -1,0 +1,34 @@
+{
+  "python_addon_sha256": "0a0a431677b4df824b99b20588d7119c22aacb2549c2ce98ba6086bb2796e496",
+  "python_file_count": 332,
+  "adapter_sha256": "4592f7eff7ac1524fd57600ec0ab7892cd8ce291f219a7428314d3a84e6ed292",
+  "shader_bundle_sha256": "962eb0b85254dcc51c0b1d642f0b2d8abf1598ddd0d7d7cf411a3fd1a85d01ff",
+  "native_source_sha256": "ecffe1a8afcb4b26ffb97d0a84a7de865a5b3ef92f5c8ea28df7cf007e5599f1",
+  "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+  "build_files_sha256": "249f10ee99a0009d4627ed52cb090347fffd9921bb1cb1374991ba221e0602cc",
+  "native_binary": {
+    "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+    "bytes": 241144,
+    "sha256": "00c5a42f73e34644c33fb0ca98b64634458f2ca17baa7b6e9410dd56997d7169"
+  },
+  "python_binding": {
+    "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+    "bytes": 209840,
+    "sha256": "c07ec4c7cfe36bc0e2cb2a155f45e5e1e4accae2b8855fc85580b4ea0f5962f2"
+  },
+  "build_options_sha256": "b87353419162d773618508673bbb8dcf728297cac47bf3230217685bf0852d3d",
+  "package": {
+    "path": "dist/open_painter-0.13.1-macos-arm64-native.zip",
+    "bytes": 127970873,
+    "sha256": "f2fa608b178a6b5e83759409e20d32420c1b188fdcf84af7de35401bc9cb81bc"
+  },
+  "native_manifest": {
+    "binding_sha256": "c07ec4c7cfe36bc0e2cb2a155f45e5e1e4accae2b8855fc85580b4ea0f5962f2",
+    "python_abi": "cp311-abi3",
+    "abi_version": 9,
+    "sha256": "00c5a42f73e34644c33fb0ca98b64634458f2ca17baa7b6e9410dd56997d7169",
+    "platform": "macos-arm64",
+    "execution": "c17-host-metal"
+  },
+  "package_matches_current_python": true
+}

@@ -16,7 +16,7 @@ from blender_test_profile import isolated_environment
 from collect_gate0_baseline import artifact_digests
 
 ROOT = Path(__file__).resolve().parents[1]
-TESTS = ('native_host_metal.py', 'native_blend.py', 'native_effects.py', 'native_geometry_projection.py', 'engine_parity.py', 'engine_procedurals.py',
+TESTS = ('native_host_metal.py', 'native_blend.py', 'native_effects.py', 'native_masks.py', 'native_geometry_projection.py', 'engine_parity.py', 'engine_procedurals.py',
          'gpu_strokes.py', 'engine_filters.py', 'engine_state_cache.py', 'shader_undo.py',
          'shader_lifecycle_edges.py', 'shader_adoption.py', 'engine_memory_soak.py',
          'save_during_evaluation.py', 'resolution_switch.py', 'stroke_parity.py',
@@ -72,7 +72,15 @@ def main():
 
     try:
         for name in args.tests:
-            run(name)
+            if name == 'live_masks.py':
+                # Timer-driven GUI tests can exit successfully without running
+                # at all in background mode. Require their fresh result report.
+                target = out / 'live-masks.json'
+                run(name, gui=True, extra={'OP_MASK_REPORT': str(target), 'OP_MASK_N': '512'})
+                data = json.loads(target.read_text())
+                assert data['status'] == 'PASS', data
+            else:
+                run(name)
         if args.gui:
             for name, variable, filename in (
                 ('shader_preview_ui.py', 'OP_SHADER_UI_REPORT', 'native-slider-ui.json'),

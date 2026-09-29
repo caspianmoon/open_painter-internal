@@ -1,0 +1,48 @@
+{
+  "status": "PASS",
+  "backend": "c17-host-metal",
+  "errors": {
+    "0": {
+      "BASE_COLOR": 0.0,
+      "ROUGHNESS": 0.0,
+      "METALLIC": 0.0,
+      "NORMAL": 0.0,
+      "HEIGHT": 0.0,
+      "AO": 0.0,
+      "EMISSION": 0.0,
+      "OPACITY": 0.0
+    },
+    "1": {
+      "BASE_COLOR": 0.0,
+      "ROUGHNESS": 0.0,
+      "METALLIC": 0.0,
+      "NORMAL": 0.0,
+      "HEIGHT": 0.0,
+      "AO": 0.0,
+      "EMISSION": 0.0,
+      "OPACITY": 0.0
+    }
+  },
+  "topology_rebuilds": 1,
+  "channels": [
+    "BASE_COLOR",
+    "ROUGHNESS",
+    "METALLIC",
+    "NORMAL",
+    "HEIGHT",
+    "AO",
+    "EMISSION",
+    "OPACITY"
+  ],
+  "native_batch_zero_budget": true,
+  "unit_draw_failure_recovery": true,
+  "native_channel_selection": true,
+  "channel_subset_and_target_changes": true,
+  "host_metadata_failure_recovery": true,
+  "accepted_revision_retirement_failure": true,
+  "original_object": "Cube",
+  "render_engine": "BLENDER_EEVEE",
+  "publication_rollback": true,
+  "image_eviction_recovery": true,
+  "compiled_binding": true
+}

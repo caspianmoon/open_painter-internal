@@ -1,4 +1,4 @@
-# Metal integration decision — ABI 8
+# Metal integration decision — ABI 9
 
 The implementation uses Blender's existing Metal device and public GPU API.
 C owns shader generation, typed program/parameter storage, dependency and layer

@@ -20,7 +20,7 @@ if(OP_SANITIZERS)
     -fsanitize=${OP_SANITIZER_SET} -fno-omit-frame-pointer)
   target_link_options(op_build_options INTERFACE -fsanitize=${OP_SANITIZER_SET})
 endif()
-set(OP_SOURCES src/graph/channels.c src/core/context.c src/core/document.c src/core/evaluate.c
+set(OP_SOURCES src/graph/mask.c src/graph/channels.c src/core/context.c src/core/document.c src/core/evaluate.c
                src/core/snapshot.c src/core/composite.c src/gpu/probe.c src/graph/graph.c src/graph/stack.c src/graph/filter.c src/graph/program.c src/gpu/pool.c src/gpu/revision.c src/gpu/cache.c
                src/shaders/fixed.c src/shaders/compiler.c src/geometry/geometry.c src/geometry/mesh.c src/geometry/padding.c src/geometry/seams.c src/geometry/topology.c src/paint/brush.c src/paint/reach.c)
 add_library(openpainter STATIC ${OP_SOURCES})
@@ -102,3 +102,5 @@ op_test(test_topology)
 op_test(test_channels)
 
 op_test(test_effects)
+
+op_test(test_masks)

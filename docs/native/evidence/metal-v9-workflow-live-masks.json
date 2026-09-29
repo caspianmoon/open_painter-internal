@@ -1,0 +1,1198 @@
+{
+  "status": "PASS",
+  "n": 512,
+  "blender": "5.2.1 LTS",
+  "build": "9e2066aef7ef",
+  "gpu_backend": "METAL",
+  "checks": [
+    {
+      "name": "RUST",
+      "cpu_s": 0.08306504099164158,
+      "gpu_submit_s": 0.0034282499691471457,
+      "gpu_complete_s": 0.00516383396461606,
+      "max_error": 7.152557373046875e-07,
+      "mean_error": 4.259960917352146e-08,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_source_generation": {
+            "calls": 1,
+            "wall_s": 0.0017086250009015203,
+            "cpu_s": 0.0013450000000001516,
+            "exclusive_wall_s": 0.0017086250009015203,
+            "exclusive_cpu_s": 0.0013450000000001516
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0033982910099439323,
+            "cpu_s": 0.0027679999999996596,
+            "exclusive_wall_s": 0.001689666009042412,
+            "exclusive_cpu_s": 0.001422999999999508
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 3,
+          "live_gpu_allocated_bytes": 2179072,
+          "live_gpu_uploads": 1,
+          "live_gpu_upload_bytes": 81920,
+          "live_gpu_passes": 3,
+          "live_gpu_scalar_sources": 1,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 466878464
+      }
+    },
+    {
+      "name": "CHIPS",
+      "cpu_s": 0.1753859159653075,
+      "gpu_submit_s": 0.0010150420130230486,
+      "gpu_complete_s": 0.002494417014531791,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 3.2878233469091356e-10,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_source_generation": {
+            "calls": 2,
+            "wall_s": 0.0005299589829519391,
+            "cpu_s": 0.0010229999999999961,
+            "exclusive_wall_s": 0.0005299589829519391,
+            "exclusive_cpu_s": 0.0010229999999999961
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0009901659796014428,
+            "cpu_s": 0.0015520000000002199,
+            "exclusive_wall_s": 0.0004602069966495037,
+            "exclusive_cpu_s": 0.0005290000000002237
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 5,
+          "live_gpu_allocated_bytes": 3309568,
+          "live_gpu_uploads": 2,
+          "live_gpu_upload_bytes": 163840,
+          "live_gpu_passes": 4,
+          "live_gpu_scalar_sources": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 469041152
+      }
+    },
+    {
+      "name": "SCRATCHES",
+      "cpu_s": 0.07274295797105879,
+      "gpu_submit_s": 0.0005044160061515868,
+      "gpu_complete_s": 0.001791665970813483,
+      "max_error": 2.86102294921875e-06,
+      "mean_error": 4.485510629592682e-09,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_source_generation": {
+            "calls": 1,
+            "wall_s": 0.000300041981972754,
+            "cpu_s": 0.0003530000000000477,
+            "exclusive_wall_s": 0.000300041981972754,
+            "exclusive_cpu_s": 0.0003530000000000477
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.000486791948787868,
+            "cpu_s": 0.0006930000000000547,
+            "exclusive_wall_s": 0.00018674996681511402,
+            "exclusive_cpu_s": 0.00034000000000000696
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 3,
+          "live_gpu_allocated_bytes": 2179072,
+          "live_gpu_uploads": 1,
+          "live_gpu_upload_bytes": 81920,
+          "live_gpu_passes": 3,
+          "live_gpu_scalar_sources": 1,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 471269376
+      }
+    },
+    {
+      "name": "CAVITY_DIRT",
+      "cpu_s": 0.07232566695893183,
+      "gpu_submit_s": 0.0005538330296985805,
+      "gpu_complete_s": 0.0014641250018030405,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 9.717524562802282e-09,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_source_generation": {
+            "calls": 1,
+            "wall_s": 0.00021820800611749291,
+            "cpu_s": 0.0004789999999998962,
+            "exclusive_wall_s": 0.00021820800611749291,
+            "exclusive_cpu_s": 0.0004789999999998962
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0005297499592415988,
+            "cpu_s": 0.000828000000000273,
+            "exclusive_wall_s": 0.00031154195312410593,
+            "exclusive_cpu_s": 0.0003490000000003768
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 3,
+          "live_gpu_allocated_bytes": 2179072,
+          "live_gpu_uploads": 1,
+          "live_gpu_upload_bytes": 81920,
+          "live_gpu_passes": 3,
+          "live_gpu_scalar_sources": 1,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 472399872
+      }
+    },
+    {
+      "name": "EDGE_WEAR",
+      "cpu_s": 0.09980354201979935,
+      "gpu_submit_s": 0.000542959023732692,
+      "gpu_complete_s": 0.0026323749916628003,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 8.117584382461018e-10,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.000498040986713022,
+            "cpu_s": 0.0007619999999999294,
+            "exclusive_wall_s": 0.000498040986713022,
+            "exclusive_cpu_s": 0.0007619999999999294
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 473530368
+      }
+    },
+    {
+      "name": "DIRT",
+      "cpu_s": 0.09834208397660404,
+      "gpu_submit_s": 0.0005099159898236394,
+      "gpu_complete_s": 0.0018070410005748272,
+      "max_error": 2.980232238769531e-07,
+      "mean_error": 8.479162261210149e-09,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0004853749996982515,
+            "cpu_s": 0.0007999999999999119,
+            "exclusive_wall_s": 0.0004853749996982515,
+            "exclusive_cpu_s": 0.0007999999999999119
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 474644480
+      }
+    },
+    {
+      "name": "sequential_levels_invert_strength",
+      "cpu_s": 0.3564737499691546,
+      "gpu_submit_s": 0.0006284579867497087,
+      "gpu_complete_s": 0.003032082982826978,
+      "max_error": 8.642673492431641e-07,
+      "mean_error": 2.662380893525551e-08,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0006030829972587526,
+            "cpu_s": 0.0009739999999998084,
+            "exclusive_wall_s": 0.0006030829972587526,
+            "exclusive_cpu_s": 0.0009739999999998084
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 2,
+          "live_gpu_allocated_bytes": 2097152,
+          "live_gpu_passes": 5,
+          "live_gpu_mask_operations": 4,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 475824128
+      }
+    },
+    {
+      "name": "disabled_unsupported_ignored",
+      "cpu_s": 0.12445025000488386,
+      "gpu_submit_s": 0.0006153329741209745,
+      "gpu_complete_s": 0.001786166976671666,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 8.117584382461018e-10,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0005887500010430813,
+            "cpu_s": 0.0007109999999999062,
+            "exclusive_wall_s": 0.0005887500010430813,
+            "exclusive_cpu_s": 0.0007109999999999062
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 478396416
+      }
+    },
+    {
+      "name": "flat_curvature_high_intensity",
+      "cpu_s": 0.1461411250056699,
+      "gpu_submit_s": 0.0008192919776774943,
+      "gpu_complete_s": 0.0026800420018844306,
+      "max_error": 0.0,
+      "mean_error": 0.0,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.000765124976169318,
+            "cpu_s": 0.0010270000000001112,
+            "exclusive_wall_s": 0.000765124976169318,
+            "exclusive_cpu_s": 0.0010270000000001112
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 479477760
+      }
+    },
+    {
+      "name": "optional_ao_absent",
+      "cpu_s": 0.0977842080174014,
+      "gpu_submit_s": 0.0007394999847747386,
+      "gpu_complete_s": 0.0023040829692035913,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 1.2446261798970681e-09,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0006915410049259663,
+            "cpu_s": 0.000856000000000634,
+            "exclusive_wall_s": 0.0006915410049259663,
+            "exclusive_cpu_s": 0.000856000000000634
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 481656832
+      }
+    },
+    {
+      "name": "uneven_map_manual_bilinear",
+      "cpu_s": 0.10540604201378301,
+      "gpu_submit_s": 0.0004894169978797436,
+      "gpu_complete_s": 0.0016054589650593698,
+      "max_error": 1.1920928955078125e-07,
+      "mean_error": 1.0913936421275139e-11,
+      "mismatched_pixels": 0,
+      "metrics": {
+        "phases": {
+          "source_generation": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "masking": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "filters": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "blending": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "geometry_signature": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_read": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "image_write": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "packing": {
+            "calls": 0,
+            "wall_s": 0.0,
+            "cpu_s": 0.0,
+            "exclusive_wall_s": 0.0,
+            "exclusive_cpu_s": 0.0
+          },
+          "live_gpu_mask_generation": {
+            "calls": 1,
+            "wall_s": 0.0004652079660445452,
+            "cpu_s": 0.0007440000000000779,
+            "exclusive_wall_s": 0.0004652079660445452,
+            "exclusive_cpu_s": 0.0007440000000000779
+          }
+        },
+        "counters": {
+          "live_gpu_allocations": 1,
+          "live_gpu_allocated_bytes": 1048576,
+          "live_gpu_passes": 2,
+          "live_gpu_mask_operations": 1,
+          "live_gpu_mask_stacks": 1
+        },
+        "distributions": {},
+        "last_observed_bytes": {},
+        "peak_observed_bytes": {},
+        "process_peak_rss_bytes": 482705408
+      }
+    }
+  ],
+  "unsupported_checks": 19,
+  "failures": [],
+  "fence": "Dependent GPU copy to reusable 1x1 RGBA32F texture, then readback",
+  "fence_requested_payload_bytes": 16,
+  "timing_limit": "Completion includes GPU queue synchronization and the fence copy/read; full-resolution parity readback is outside the timed interval.",
+  "worn_masks": [
+    {
+      "source": "GENERATOR",
+      "generator": "RUST",
+      "enabled": true,
+      "operation": "NORMAL",
+      "invert": false,
+      "black": 0.0,
+      "white": 1.0,
+      "strength": 1.0,
+      "amount": 0.14000000059604645,
+      "contrast": 3.0,
+      "noise_scale": 30.0,
+      "noise_strength": 0.3499999940395355,
+      "seed": 1238065626,
+      "projection": "UV",
+      "filtering": "BILINEAR",
+      "tiling": "REPEAT",
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "rotation": 0.0,
+      "offset": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "source": "GENERATOR",
+      "generator": "CHIPS",
+      "enabled": true,
+      "operation": "NORMAL",
+      "invert": true,
+      "black": 0.0,
+      "white": 1.0,
+      "strength": 1.0,
+      "amount": 0.2800000011920929,
+      "contrast": 1.25,
+      "noise_scale": 48.0,
+      "noise_strength": 0.3499999940395355,
+      "seed": 1238170355,
+      "projection": "UV",
+      "filtering": "BILINEAR",
+      "tiling": "REPEAT",
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "rotation": 0.0,
+      "offset": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "source": "GENERATOR",
+      "generator": "SCRATCHES",
+      "enabled": true,
+      "operation": "NORMAL",
+      "invert": false,
+      "black": 0.0,
+      "white": 1.0,
+      "strength": 1.0,
+      "amount": 0.14000000059604645,
+      "contrast": 3.0,
+      "noise_scale": 78.0,
+      "noise_strength": 0.3499999940395355,
+      "seed": 1238275084,
+      "projection": "UV",
+      "filtering": "BILINEAR",
+      "tiling": "REPEAT",
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "rotation": 0.0,
+      "offset": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "source": "GENERATOR",
+      "generator": "CAVITY_DIRT",
+      "enabled": true,
+      "operation": "NORMAL",
+      "invert": false,
+      "black": 0.0,
+      "white": 1.0,
+      "strength": 1.0,
+      "amount": 0.3100000023841858,
+      "contrast": 3.0,
+      "noise_scale": 30.0,
+      "noise_strength": 0.3499999940395355,
+      "seed": 1238379813,
+      "projection": "UV",
+      "filtering": "BILINEAR",
+      "tiling": "REPEAT",
+      "scale": [
+        1.0,
+        1.0
+      ],
+      "rotation": 0.0,
+      "offset": [
+        0.0,
+        0.0
+      ]
+    }
+  ]
+}

@@ -3,8 +3,8 @@
 The embedded library lives here because `native/` contains the separate
 standalone application. No standalone application files are changed.
 
-ABI 8 implements owned typed shader IR and parameter banks; the 71-family
-procedural compiler; all 28 blend modes; all 30 pointwise effects and mask folding; layer/folder composition; incremental dependency
+ABI 9 implements owned typed shader IR and parameter banks; the 71-family
+procedural compiler; all 28 blend modes; all 30 pointwise effects and mask folding; nested mask hierarchy/prefix planning; layer/folder composition; incremental dependency
 plans and native batch execution with dependency lifetime holds; accepted channel
 state, output change selection and atomic channel dispatch;
 GPU texture pooling and retained-cache policy; immutable material revisions;

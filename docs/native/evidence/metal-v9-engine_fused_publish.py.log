@@ -1,0 +1,9 @@
+FUSED_PUBLISH exact pixels/pass counts: False False 242 242
+FUSED_PUBLISH exact pixels/pass counts: False True 242 242
+FUSED_PUBLISH exact pixels/pass counts: True False 242 242
+FUSED_PUBLISH exact pixels/pass counts: True True 242 242
+FUSED_PUBLISH OUTPUT-anchor fallback: PASS
+FUSED_PUBLISH_PASS METAL
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

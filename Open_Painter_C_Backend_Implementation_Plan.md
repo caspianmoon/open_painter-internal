@@ -1,6 +1,6 @@
 # Open Painter: Embedded C Backend Implementation Plan
 
-**Status:** Implementation in progress on `feat/native-c-engine`. The embedded C17 backend is integrated with stock Blender on macOS Metal through ABI 8. See [current ownership and remaining work](docs/native/migration-status.md) and [executed validation](docs/native/release-evidence.md). The full migration is not yet complete. Windows/Vulkan work is deferred to the other machine; the specification below retains the original cross-platform scope.
+**Status:** Implementation in progress on `feat/native-c-engine`. The embedded C17 backend is integrated with stock Blender on macOS Metal through ABI 9. See [current ownership and remaining work](docs/native/migration-status.md) and [executed validation](docs/native/release-evidence.md). The full migration is not yet complete. Windows/Vulkan work is deferred to the other machine; the specification below retains the original cross-platform scope.
 
 **Prepared:** September 29, 2026.
 

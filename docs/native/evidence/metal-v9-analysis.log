@@ -1,0 +1,26 @@
+libopenpainter/src/core/composite.c
+libopenpainter/src/core/context.c
+libopenpainter/src/core/document.c
+libopenpainter/src/core/evaluate.c
+libopenpainter/src/core/snapshot.c
+libopenpainter/src/geometry/geometry.c
+libopenpainter/src/geometry/mesh.c
+libopenpainter/src/geometry/padding.c
+libopenpainter/src/geometry/seams.c
+libopenpainter/src/geometry/topology.c
+libopenpainter/src/gpu/cache.c
+libopenpainter/src/gpu/pool.c
+libopenpainter/src/gpu/probe.c
+libopenpainter/src/gpu/revision.c
+libopenpainter/src/graph/channels.c
+libopenpainter/src/graph/filter.c
+libopenpainter/src/graph/graph.c
+libopenpainter/src/graph/mask.c
+libopenpainter/src/graph/program.c
+libopenpainter/src/graph/stack.c
+libopenpainter/src/paint/brush.c
+libopenpainter/src/paint/reach.c
+libopenpainter/src/shaders/compiler.c
+libopenpainter/src/shaders/fixed.c
+libopenpainter/bindings/python/module.c
+PASS: 25 translation units, no diagnostics

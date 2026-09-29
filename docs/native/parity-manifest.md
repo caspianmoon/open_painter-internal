@@ -1,6 +1,6 @@
 # Parity manifest — native C backend (P0 inventory)
 
-Status: **inventory plus tested ABI 8 host-Metal integration**. Source of truth is the pinned implementation
+Status: **inventory plus tested ABI 9 host-Metal integration**. Source of truth is the pinned implementation
 (`5a55206`), not this document. Every row must name the test or fixture that
 proves it; rows without evidence are marked `UNPROVEN`.
 
@@ -76,7 +76,7 @@ blend IR and C shader generation for all 28 modes; it does not use that CPU slic
 Executed checks and their scope are recorded in `release-evidence.md`. An
 existing test listed here is not automatically a completed qualification gate.
 
-## Implemented ABI 8 ownership
+## Implemented ABI 9 ownership
 
 The old opaque-fill C document API remains a bounded reference fixture. Production
 materials use the C program, graph, stack, resource and revision APIs; they do not
@@ -88,6 +88,7 @@ use the fill fixture as a replacement material model.
 | Snapshot parsing/restore | Internal v4 with length/checksum validation; existing `.blend` recipe remains project truth |
 | All blends, masks, channel overrides | C owns all 28 blend formulas and alpha composition; masks/overrides enter through typed IR; `native_blend.py`, `engine_parity.py` |
 | Pointwise effects and mask folding | All 30 effect kernels and typed mask levels/invert/blend operation in C; independent CPU/legacy GPU comparisons and live binding checks in `native_effects.py`; validation in `test_effects.c` |
+| Nested mask groups and prefixes | C active-run traversal and postorder fold plan, filter-prefix isolation and continuation references; `test_masks.c`, `test_native_masks.py`, `native_masks.py` |
 | Nested isolated/passthrough folders | C stack composition/backdrop plan; `test_stack.c`, `engine_parity.py` |
 | Procedurals and references | 71-family C compiler, native DAG cycle rejection; `engine_procedurals.py`, `test_ir.c`, `test_graph.c` |
 | Filters and padding | C fixed shaders, filter pass/weight plans, exact gutter donors; `engine_filters.py`, `test_filter.c`, seeded padding comparisons |

@@ -1,4 +1,4 @@
-# Native migration ownership — ABI 8
+# Native migration ownership — ABI 9
 
 Metal is the active platform scope. Windows and Vulkan implementation and device
 qualification are deferred to the other machine. The independent standalone
@@ -11,6 +11,7 @@ application under `native/` is unchanged.
 | Program model | Owned typed IR, shader source, validated parameter banks and unique program/input revisions (`op_program.h`) | Copies socket values, image metadata and object transforms |
 | Compiler | Scalar/vector operations, implicit conversions, image alpha handling, packed channels, normal maps, imports, all 28 blend modes including coverage and normal composition, all 30 pointwise effects, mask levels/inversion/folding, 71 procedural families (`op_ir.h`) | Resolves persisted recipe bindings into numeric IR |
 | Composition | Ordered layers, nested isolated/passthrough folders, per-channel backdrops and grouped inputs (`op_stack.h`) | Snapshots included recipe units and stable keys |
+| Mask planning | Validated preorder hierarchy, active member selection, isolated nested groups, published-prefix clipping, continuation references and filter-prefix spans (`op_mask.h`) | Copies mask IDs/flags and binds native-selected source/fold steps |
 | Evaluation | Copied dependency DAG, atomic narrow revision patches, cycle rejection, dependency stamps, root plans, checkpoint selection, batch submission and last-consumer dependency holds (`op_graph.h`) | Binds host resources and submits each native-selected pass |
 | Channel evaluation | Accepted channel descriptors, exact constant comparison, native revision/target/configuration change selection, ordered dispatch and atomic batch acceptance (`op_channels.h`) | Snapshots root bindings and opaque target IDs; submits staged host work |
 | GPU submission | Compiled CPython host-GPU adapter validates feedback hazards, binds framebuffer/uniforms/samplers, submits draw and restores framebuffer context | Blender owns its Metal device and command queue |
@@ -58,6 +59,27 @@ Metal comparison covers 90 effect cases and 30 mask-fold cases, including exact
 threshold/rounding boundaries, disabled effects and degenerate normals. Eight
 production edits to matrix, bias, gamma, enabled, strength and mask controls
 reuse topology and compiled shaders and match the legacy executor.
+
+## Mask hierarchy planning
+
+C owns group traversal and fold ordering over a copied preorder mask snapshot.
+It skips disabled group subtrees and anchor entries, excludes filters for
+pre-filter requests, closes groups at published prefix boundaries and preserves
+the distinction between an empty run and an imported continuation. Filter prefix
+spans isolate each nested group from the outer stack. The host consumes these
+spans lazily only when a CPU filter boundary needs its recipe snapshot.
+
+The planner validates parent indices and contiguous group runs before returning
+any work. Its memory and traversal are linear in the input count, bounded at
+65,536 entries, and use no recursive C or Python traversal. This bound qualifies
+the planner; it is not a claim that the entire host compiler supports arbitrarily
+deep material graphs. The compiled binding copies input before releasing the GIL.
+
+Randomized comparisons exercise both binding paths against recursive recipe
+traversal. Production Metal checks compare nested groups, disabled groups,
+published/pre-filter references, reordering and a CPU filter boundary against
+the CPU evaluator and legacy GPU executor. Numeric edits reuse the compiled graph and shaders without replanning. The legacy group walker is blocked during native
+build checks to prove the new planner is actually used.
 
 ## Channel evaluation
 
@@ -132,7 +154,7 @@ boundaries. The original plan's sustained latency protocol, broad device-loss
 qualification and other-machine platforms are separate, unfinished gates.
 
 The main remaining code boundaries are `evaluation/shader_graph.py` (recipe,
-mask source/group traversal and effect-chain binding), `evaluation/engine/runtime.py` (source
+mask source binding, reference resolution and effect-chain binding), `evaluation/engine/runtime.py` (source
 binding, per-pass host dispatch and persistence adapters). `geometry/seams.py` copies
 evaluated mesh data and binds native topology/correspondence results. Native
 batch execution owns the dependency pass loop and its input lifetimes; the

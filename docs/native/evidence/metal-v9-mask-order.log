@@ -1,0 +1,4 @@
+NATIVE_MASKS_PASS {"native_plan_calls": 30, "cases": {"nested_prefixes": 0.00048828125, "numeric": 0.00048828125, "disabled_group": 0.00048828125, "pre_filter_prefix": 0.00048828125, "reordered_group": 0.00048828125, "cpu_filter_prefix": 0.00048828125}, "numeric_rebuilds": 0, "numeric_compiles": 0, "legacy_gpu_parity": true}
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

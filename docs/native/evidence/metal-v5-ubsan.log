@@ -1,0 +1,156 @@
+[  3%] Building C object CMakeFiles/openpainter_shared.dir/src/core/snapshot.c.o
+[  3%] Building C object CMakeFiles/openpainter_shared.dir/src/core/composite.c.o
+[  3%] Building C object CMakeFiles/openpainter_shared.dir/src/core/context.c.o
+[  4%] Building C object CMakeFiles/openpainter.dir/src/core/context.c.o
+[  5%] Building C object CMakeFiles/openpainter_shared.dir/src/core/evaluate.c.o
+[  6%] Building C object CMakeFiles/openpainter.dir/src/core/evaluate.c.o
+[  8%] Building C object CMakeFiles/openpainter_shared.dir/src/core/document.c.o
+[  9%] Building C object CMakeFiles/openpainter_shared.dir/src/gpu/probe.c.o
+[ 10%] Building C object CMakeFiles/openpainter.dir/src/core/document.c.o
+[ 11%] Building C object CMakeFiles/openpainter_shared.dir/src/gpu/pool.c.o
+[ 12%] Building C object CMakeFiles/openpainter.dir/src/core/snapshot.c.o
+[ 13%] Building C object CMakeFiles/openpainter.dir/src/graph/graph.c.o
+[ 15%] Building C object CMakeFiles/openpainter.dir/src/gpu/probe.c.o
+[ 17%] Building C object CMakeFiles/openpainter.dir/src/core/composite.c.o
+[ 17%] Building C object CMakeFiles/openpainter.dir/src/graph/program.c.o
+[ 18%] Building C object CMakeFiles/openpainter_shared.dir/src/gpu/cache.c.o
+[ 22%] Building C object CMakeFiles/openpainter.dir/src/gpu/pool.c.o
+[ 22%] Building C object CMakeFiles/openpainter_shared.dir/src/graph/stack.c.o
+[ 22%] Building C object CMakeFiles/openpainter_shared.dir/src/graph/filter.c.o
+[ 23%] Building C object CMakeFiles/openpainter_shared.dir/src/gpu/revision.c.o
+[ 24%] Building C object CMakeFiles/openpainter_shared.dir/src/shaders/fixed.c.o
+[ 25%] Building C object CMakeFiles/openpainter_shared.dir/src/shaders/compiler.c.o
+[ 26%] Building C object CMakeFiles/openpainter_shared.dir/src/graph/program.c.o
+[ 27%] Building C object CMakeFiles/openpainter.dir/src/graph/filter.c.o
+[ 29%] Building C object CMakeFiles/openpainter.dir/src/gpu/revision.c.o
+[ 30%] Building C object CMakeFiles/openpainter_shared.dir/src/graph/graph.c.o
+[ 31%] Building C object CMakeFiles/openpainter.dir/src/graph/stack.c.o
+[ 32%] Building C object CMakeFiles/openpainter.dir/src/shaders/compiler.c.o
+[ 33%] Building C object CMakeFiles/openpainter.dir/src/gpu/cache.c.o
+[ 36%] Building C object CMakeFiles/openpainter_shared.dir/src/geometry/geometry.c.o
+[ 36%] Building C object CMakeFiles/openpainter.dir/src/shaders/fixed.c.o
+[ 37%] Building C object CMakeFiles/openpainter_shared.dir/src/geometry/mesh.c.o
+[ 38%] Building C object CMakeFiles/openpainter.dir/src/geometry/mesh.c.o
+[ 39%] Building C object CMakeFiles/openpainter.dir/src/geometry/padding.c.o
+[ 40%] Building C object CMakeFiles/openpainter.dir/src/geometry/seams.c.o
+[ 41%] Building C object CMakeFiles/openpainter_shared.dir/src/geometry/seams.c.o
+[ 44%] Building C object CMakeFiles/openpainter.dir/src/paint/reach.c.o
+[ 44%] Building C object CMakeFiles/openpainter_shared.dir/src/paint/brush.c.o
+[ 45%] Building C object CMakeFiles/openpainter_shared.dir/src/paint/reach.c.o
+[ 46%] Building C object CMakeFiles/openpainter_shared.dir/src/geometry/padding.c.o
+[ 47%] Building C object CMakeFiles/openpainter.dir/src/geometry/geometry.c.o
+[ 48%] Building C object CMakeFiles/openpainter.dir/src/paint/brush.c.o
+[ 50%] Linking C static library libopenpainter.a
+[ 51%] Linking C shared library libopenpainter.dylib
+[ 51%] Built target openpainter
+[ 52%] Building C object CMakeFiles/test_lifetime.dir/tests/test_lifetime.c.o
+[ 53%] Building C object CMakeFiles/test_abi.dir/tests/test_abi.c.o
+[ 54%] Building C object CMakeFiles/test_cache.dir/tests/test_cache.c.o
+[ 56%] Building C object CMakeFiles/test_seams.dir/tests/test_seams.c.o
+[ 58%] Building C object CMakeFiles/test_blend.dir/tests/test_blend.c.o
+[ 58%] Building C object CMakeFiles/test_graph_execution.dir/tests/test_graph_execution.c.o
+[ 59%] Building C object CMakeFiles/test_program.dir/tests/test_program.c.o
+[ 60%] Building C object CMakeFiles/test_stack.dir/tests/test_stack.c.o
+[ 61%] Building C object CMakeFiles/test_pool.dir/tests/test_pool.c.o
+[ 62%] Building C object CMakeFiles/test_mesh.dir/tests/test_mesh.c.o
+[ 63%] Building C object CMakeFiles/test_revision.dir/tests/test_revision.c.o
+[ 65%] Building C object CMakeFiles/test_graph.dir/tests/test_graph.c.o
+[ 66%] Building C object CMakeFiles/test_filter.dir/tests/test_filter.c.o
+[ 67%] Building C object CMakeFiles/test_snapshot_validation.dir/tests/test_snapshot_validation.c.o
+[ 68%] Building C object CMakeFiles/test_ir.dir/tests/test_ir.c.o
+[ 69%] Building C object CMakeFiles/test_document.dir/tests/test_document.c.o
+[ 72%] Building C object CMakeFiles/test_composite.dir/tests/test_composite.c.o
+[ 73%] Building C object CMakeFiles/test_reach.dir/tests/test_reach.c.o
+[ 74%] Linking C executable test_cache
+[ 74%] Building C object CMakeFiles/test_publication.dir/tests/test_publication.c.o
+[ 75%] Building C object CMakeFiles/test_snapshot.dir/tests/test_snapshot.c.o
+[ 76%] Linking C executable test_revision
+[ 77%] Linking C executable test_abi
+[ 79%] Building C object CMakeFiles/test_paint.dir/tests/test_paint.c.o
+[ 80%] Linking C executable test_pool
+[ 81%] Linking C executable test_lifetime
+[ 82%] Linking C executable test_mesh
+[ 83%] Linking C executable test_filter
+[ 86%] Linking C executable test_seams
+[ 86%] Linking C executable test_ir
+[ 87%] Linking C executable test_snapshot_validation
+[ 87%] Built target openpainter_shared
+[ 88%] Linking C executable test_program
+[ 89%] Linking C executable test_stack
+[ 90%] Linking C executable test_document
+[ 91%] Linking C executable test_composite
+[ 93%] Linking C executable test_graph
+[ 94%] Linking C executable test_publication
+[ 95%] Linking C executable test_snapshot
+[ 95%] Built target test_cache
+[ 96%] Linking C executable test_graph_execution
+[ 96%] Built target test_abi
+[ 97%] Linking C executable test_paint
+[ 98%] Linking C executable test_reach
+[ 98%] Built target test_revision
+[ 98%] Built target test_seams
+[100%] Built target test_mesh
+[100%] Linking C executable test_blend
+[100%] Built target test_lifetime
+[100%] Built target test_pool
+[100%] Built target test_composite
+[100%] Built target test_filter
+[100%] Built target test_snapshot_validation
+[100%] Built target test_ir
+[100%] Built target test_program
+[100%] Built target test_snapshot
+[100%] Built target test_graph
+[100%] Built target test_document
+[100%] Built target test_stack
+[100%] Built target test_publication
+[100%] Built target test_graph_execution
+[100%] Built target test_reach
+[100%] Built target test_paint
+[100%] Built target test_blend
+Test project /tmp/openpainter-native-ubsan
+      Start  1: test_abi
+ 1/21 Test  #1: test_abi .........................   Passed    0.53 sec
+      Start  2: test_document
+ 2/21 Test  #2: test_document ....................   Passed    0.58 sec
+      Start  3: test_snapshot
+ 3/21 Test  #3: test_snapshot ....................   Passed    0.70 sec
+      Start  4: test_composite
+ 4/21 Test  #4: test_composite ...................   Passed    0.64 sec
+      Start  5: test_lifetime
+ 5/21 Test  #5: test_lifetime ....................   Passed    0.64 sec
+      Start  6: test_snapshot_validation
+ 6/21 Test  #6: test_snapshot_validation .........   Passed    0.65 sec
+      Start  7: test_graph
+ 7/21 Test  #7: test_graph .......................   Passed    0.64 sec
+      Start  8: test_pool
+ 8/21 Test  #8: test_pool ........................   Passed    0.64 sec
+      Start  9: test_ir
+ 9/21 Test  #9: test_ir ..........................   Passed    0.66 sec
+      Start 10: test_revision
+10/21 Test #10: test_revision ....................   Passed    0.65 sec
+      Start 11: test_cache
+11/21 Test #11: test_cache .......................   Passed    0.63 sec
+      Start 12: test_stack
+12/21 Test #12: test_stack .......................   Passed    0.65 sec
+      Start 13: test_filter
+13/21 Test #13: test_filter ......................   Passed    0.63 sec
+      Start 14: test_program
+14/21 Test #14: test_program .....................   Passed    0.66 sec
+      Start 15: test_paint
+15/21 Test #15: test_paint .......................   Passed    0.65 sec
+      Start 16: test_mesh
+16/21 Test #16: test_mesh ........................   Passed    0.72 sec
+      Start 17: test_reach
+17/21 Test #17: test_reach .......................   Passed    0.65 sec
+      Start 18: test_publication
+18/21 Test #18: test_publication .................   Passed    0.70 sec
+      Start 19: test_seams
+19/21 Test #19: test_seams .......................   Passed    0.63 sec
+      Start 20: test_blend
+20/21 Test #20: test_blend .......................   Passed    0.62 sec
+      Start 21: test_graph_execution
+21/21 Test #21: test_graph_execution .............   Passed    0.69 sec
+
+100% tests passed, 0 tests failed out of 21
+
+Total Test time (real) =  13.60 sec

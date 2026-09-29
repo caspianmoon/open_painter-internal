@@ -54,17 +54,22 @@ def tangents(ts, n, geometry_cache=None):
         for target in objects:
             uv = target["uv"][target["tri_loops"]].astype(np.float64)
             p = target["positions"][target["tri_vertices"]].astype(np.float64)
-            e = np.stack((p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)          # (T, 2, 3) world edges
-            f = np.stack((uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]), axis=1)       # (T, 2, 2) uv edges
-            det = f[:, 0, 0] * f[:, 1, 1] - f[:, 0, 1] * f[:, 1, 0]
-            inverse = np.zeros_like(f)
-            ok = np.abs(det) > 1e-14
-            inverse[ok, 0, 0] = f[ok, 1, 1] / det[ok]
-            inverse[ok, 1, 1] = f[ok, 0, 0] / det[ok]
-            inverse[ok, 0, 1] = -f[ok, 0, 1] / det[ok]
-            inverse[ok, 1, 0] = -f[ok, 1, 0] / det[ok]
-            frame = inverse @ e                                                     # (T, 2, 3): dP/du, dP/dv
-            frame /= np.maximum(np.linalg.norm(frame, axis=2, keepdims=True), 1e-12)
+            from ..native_bridge.lifecycle import active_library
+            if (lib := active_library()) is not None:
+                from ..native_bridge.geometry import frames
+                frame = frames(lib, p, uv)
+            else:
+                e = np.stack((p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)          # (T, 2, 3) world edges
+                f = np.stack((uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]), axis=1)       # (T, 2, 2) uv edges
+                det = f[:, 0, 0] * f[:, 1, 1] - f[:, 0, 1] * f[:, 1, 0]
+                inverse = np.zeros_like(f)
+                ok = np.abs(det) > 1e-14
+                inverse[ok, 0, 0] = f[ok, 1, 1] / det[ok]
+                inverse[ok, 1, 1] = f[ok, 0, 0] / det[ok]
+                inverse[ok, 0, 1] = -f[ok, 0, 1] / det[ok]
+                inverse[ok, 1, 0] = -f[ok, 1, 0] / det[ok]
+                frame = inverse @ e                                                     # (T, 2, 3): dP/du, dP/dv
+                frame /= np.maximum(np.linalg.norm(frame, axis=2, keepdims=True), 1e-12)
             rows, cols, tri, _ = rasterize(target["uv"][target["tri_loops"]], n)
             if not len(rows):
                 continue

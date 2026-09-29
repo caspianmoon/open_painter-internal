@@ -85,8 +85,9 @@ class History:
         self.trim(budget)
 
     def trim(self, budget):
-        while self.entries and self.bytes > max(0, budget):
-            _, patches = self.entries.popitem(last=False)
+        from ..native_bridge.cache import select_victims
+        for key in select_victims(self.entries, budget, lambda value: sum(patch.bytes for patch in value)):
+            patches = self.entries.pop(key)
             from ..evaluation import metrics
             metrics.count('stroke_undo_evictions')
             for patch in patches:

@@ -1,0 +1,12 @@
+Info: No active image found in material slot (0) for object "UDIM material"
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+UDIM_MATERIAL PASS: Cycles shader preview samples nonrepeating gradients in local coordinates on both tiles
+UDIM_MATERIAL PASS: one material gesture paints color and roughness on both tiles at the correct coordinates
+UDIM_MATERIAL PASS: regional rebake maps tile 1002 texels to its own face
+UDIM_MATERIAL PASS: geometry displacement samples the tile-local height ramp
+UDIM_MATERIAL PASS: atlas places both tiles into separate cells on a copy and preserves source UVs
+UDIM_MATERIAL_PASS 5
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

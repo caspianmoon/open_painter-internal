@@ -139,6 +139,9 @@ def program(name, source, samplers, ints=()):
     dev = runtime.device()
     key = 'filter_' + name
     if key not in dev._fixed:
+        if not name.startswith('field_'):
+            from ...native_bridge.compiler import fixed_source
+            source = fixed_source('filter.' + name, source)
         dev._fixed[key] = dev._create(source, samplers, parameter_slots=4, ints=ints)
     return dev._fixed[key]
 
@@ -155,12 +158,15 @@ def field_texture(effect, n, origin=(0, 0), global_size=None):
     from .procedural_glsl import canonical, function_name, library
     from ...painting.gpu_strokes import uniforms as raw_uniforms
     kind = canonical(effect.noise)
-    fn = function_name(kind)
-    code = library((kind,)) + r'''
-void main() {
-  vec2 uv = (gl_FragCoord.xy + op_params.p[1].xy) / op_params.p[1].z;
-  uint seed = uint(op_params.p[0].y) * 65536u + uint(op_params.p[0].z);
-''' + f'  op_out0 = vec4({fn}(uv, op_params.p[0].x, seed), {fn}(uv, op_params.p[0].x, seed + 37u), 0.0, 1.0);\n}}'
+    from ...native_bridge.compiler import field_source
+    code = field_source(kind)
+    if code is None:
+        fn = function_name(kind)
+        code = library((kind,)) + r'''
+    void main() {
+      vec2 uv = (gl_FragCoord.xy + op_params.p[1].xy) / op_params.p[1].z;
+      uint seed = uint(op_params.p[0].y) * 65536u + uint(op_params.p[0].z);
+    ''' + f'  op_out0 = vec4({fn}(uv, op_params.p[0].x, seed), {fn}(uv, op_params.p[0].x, seed + 37u), 0.0, 1.0);\n}}'
     shader = program('field_' + kind, code, [])
     values = [(effect.scale, (effect.seed >> 16) & 65535, effect.seed & 65535, 0),
               (*origin, global_size or n, 0), (0, 0, 0, 0), (n, n, 0, 0)]
@@ -189,27 +195,43 @@ def _apply_uv(source, effect, n, extent=None, origin=(0, 0), global_size=None, d
             target = buffers[1] if before is buffers[0] else buffers[0]
             dev.draw(shader, [target], n, [('op_source', before), *samplers], params, ints=ints)
             before = target
-        gaussian = kind in {'GAUSSIAN_BLUR', 'HIGH_PASS', 'SHARPEN', 'SMOOTH_MASK'}
-        if gaussian or kind == 'BLUR':
-            radius = max(float(effect.radius), 0)
-            half = min(int(np.ceil(radius * (3 if gaussian else 1))), 192)
-            x = np.arange(-half, half + 1, dtype=np.float32)
-            kernel = (np.exp(-(x * x) / (2 * radius * radius)) if gaussian and radius >= 1e-5 else np.ones_like(x))
-            kernel /= kernel.sum()
-            weights = dev.upload(kernel[None, :], 'R32F')
-            shader = program('axis', AXIS, ['op_source', 'op_weights', 'op_field'], ('op_axis', 'op_half'))
-            for axis in (0, 1):
-                draw(shader, [('op_weights', weights), ('op_field', source)], {'op_axis': axis, 'op_half': half})
-        elif kind in {'DILATE', 'ERODE', 'MORPHOLOGICAL_EXPAND', 'MORPHOLOGICAL_CONTRACT'}:
-            shader = program('morph', MORPH, ['op_source', 'op_field'], ('op_axis', 'op_half', 'op_max'))
-            for axis in (0, 1):
-                remaining, covered = min(max(int(np.ceil(effect.radius)), 0), 192), 0
-                while remaining:
-                    distance = min(remaining, covered * 2 + 1)
-                    draw(shader, [('op_field', source)], {'op_axis': axis, 'op_half': distance,
-                         'op_max': int(kind in {'DILATE', 'MORPHOLOGICAL_EXPAND'})})
-                    remaining -= distance
-                    covered += distance
+        from ...native_bridge.lifecycle import active_library
+        lib = active_library()
+        native_repeats = None
+        if lib is not None:
+            from ...native_bridge.filters import plan
+            coefficients, passes, native_repeats, _ = plan(lib, effect)
+            if len(coefficients):
+                weights = dev.upload(coefficients[None, :], 'R32F')
+            for operation, axis, distance, maximum in passes:
+                if operation == 0:
+                    shader = program('axis', AXIS, ['op_source', 'op_weights', 'op_field'], ('op_axis', 'op_half'))
+                    draw(shader, [('op_weights', weights), ('op_field', source)], {'op_axis': axis, 'op_half': distance})
+                else:
+                    shader = program('morph', MORPH, ['op_source', 'op_field'], ('op_axis', 'op_half', 'op_max'))
+                    draw(shader, [('op_field', source)], {'op_axis': axis, 'op_half': distance, 'op_max': maximum})
+        else:
+            gaussian = kind in {'GAUSSIAN_BLUR', 'HIGH_PASS', 'SHARPEN', 'SMOOTH_MASK'}
+            if gaussian or kind == 'BLUR':
+                radius = max(float(effect.radius), 0)
+                half = min(int(np.ceil(radius * (3 if gaussian else 1))), 192)
+                x = np.arange(-half, half + 1, dtype=np.float32)
+                kernel = (np.exp(-(x * x) / (2 * radius * radius)) if gaussian and radius >= 1e-5 else np.ones_like(x))
+                kernel /= kernel.sum()
+                weights = dev.upload(kernel[None, :], 'R32F')
+                shader = program('axis', AXIS, ['op_source', 'op_weights', 'op_field'], ('op_axis', 'op_half'))
+                for axis in (0, 1):
+                    draw(shader, [('op_weights', weights), ('op_field', source)], {'op_axis': axis, 'op_half': half})
+            elif kind in {'DILATE', 'ERODE', 'MORPHOLOGICAL_EXPAND', 'MORPHOLOGICAL_CONTRACT'}:
+                shader = program('morph', MORPH, ['op_source', 'op_field'], ('op_axis', 'op_half', 'op_max'))
+                for axis in (0, 1):
+                    remaining, covered = min(max(int(np.ceil(effect.radius)), 0), 192), 0
+                    while remaining:
+                        distance = min(remaining, covered * 2 + 1)
+                        draw(shader, [('op_field', source)], {'op_axis': axis, 'op_half': distance,
+                             'op_max': int(kind in {'DILATE', 'MORPHOLOGICAL_EXPAND'})})
+                        remaining -= distance
+                        covered += distance
         if kind in {'WARP', 'DIRECTIONAL_WARP', 'VECTOR_WARP', 'UV_DISTORTION', 'SLOPE_BLUR'}:
             field = field_texture(effect, n, origin, global_size)
         body = FETCH + r'''
@@ -223,7 +245,7 @@ void main() {
   vec3 value = vec3(0.0);
 ''' + BODIES[kind] + '\n  op_out0 = vec4(clamp(value, 0.0, 1.0), original.a);\n}\n'
         shader = program(kind, body, ['op_source', 'op_field', 'op_original', 'op_direction'], ('op_mode', 'op_surface_direction'))
-        repeats = min(max(effect.samples, 1), 32) if kind == 'SLOPE_BLUR' else 1
+        repeats = native_repeats if native_repeats is not None else (min(max(effect.samples, 1), 32) if kind == 'SLOPE_BLUR' else 1)
         for _ in range(repeats):
             draw(shader, [('op_field', field if field is not None else source), ('op_original', source),
                           ('op_direction', direction if direction is not None else source)],

@@ -1,0 +1,349 @@
+Start testing: Sep 29 20:01 +03
+----------------------------------------------------------
+1/22 Testing: test_abi
+1/22 Test: test_abi
+Command: "/tmp/openpainter-native-ubsan/test_abi"
+Directory: /tmp/openpainter-native-ubsan
+"test_abi" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_abi
+<end of output>
+Test time =   1.01 sec
+----------------------------------------------------------
+Test Passed.
+"test_abi" end time: Sep 29 20:01 +03
+"test_abi" time elapsed: 00:00:01
+----------------------------------------------------------
+
+2/22 Testing: test_document
+2/22 Test: test_document
+Command: "/tmp/openpainter-native-ubsan/test_document"
+Directory: /tmp/openpainter-native-ubsan
+"test_document" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_document
+<end of output>
+Test time =   0.36 sec
+----------------------------------------------------------
+Test Passed.
+"test_document" end time: Sep 29 20:01 +03
+"test_document" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/22 Testing: test_snapshot
+3/22 Test: test_snapshot
+Command: "/tmp/openpainter-native-ubsan/test_snapshot"
+Directory: /tmp/openpainter-native-ubsan
+"test_snapshot" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_snapshot
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"test_snapshot" end time: Sep 29 20:01 +03
+"test_snapshot" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/22 Testing: test_composite
+4/22 Test: test_composite
+Command: "/tmp/openpainter-native-ubsan/test_composite"
+Directory: /tmp/openpainter-native-ubsan
+"test_composite" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_composite
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_composite" end time: Sep 29 20:01 +03
+"test_composite" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/22 Testing: test_lifetime
+5/22 Test: test_lifetime
+Command: "/tmp/openpainter-native-ubsan/test_lifetime"
+Directory: /tmp/openpainter-native-ubsan
+"test_lifetime" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_lifetime
+<end of output>
+Test time =   0.35 sec
+----------------------------------------------------------
+Test Passed.
+"test_lifetime" end time: Sep 29 20:01 +03
+"test_lifetime" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/22 Testing: test_snapshot_validation
+6/22 Test: test_snapshot_validation
+Command: "/tmp/openpainter-native-ubsan/test_snapshot_validation"
+Directory: /tmp/openpainter-native-ubsan
+"test_snapshot_validation" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_snapshot_validation
+<end of output>
+Test time =   0.36 sec
+----------------------------------------------------------
+Test Passed.
+"test_snapshot_validation" end time: Sep 29 20:01 +03
+"test_snapshot_validation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/22 Testing: test_graph
+7/22 Test: test_graph
+Command: "/tmp/openpainter-native-ubsan/test_graph"
+Directory: /tmp/openpainter-native-ubsan
+"test_graph" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_graph
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_graph" end time: Sep 29 20:01 +03
+"test_graph" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/22 Testing: test_pool
+8/22 Test: test_pool
+Command: "/tmp/openpainter-native-ubsan/test_pool"
+Directory: /tmp/openpainter-native-ubsan
+"test_pool" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_pool
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_pool" end time: Sep 29 20:01 +03
+"test_pool" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/22 Testing: test_ir
+9/22 Test: test_ir
+Command: "/tmp/openpainter-native-ubsan/test_ir"
+Directory: /tmp/openpainter-native-ubsan
+"test_ir" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_ir
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_ir" end time: Sep 29 20:01 +03
+"test_ir" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/22 Testing: test_revision
+10/22 Test: test_revision
+Command: "/tmp/openpainter-native-ubsan/test_revision"
+Directory: /tmp/openpainter-native-ubsan
+"test_revision" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"test_revision" end time: Sep 29 20:01 +03
+"test_revision" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/22 Testing: test_cache
+11/22 Test: test_cache
+Command: "/tmp/openpainter-native-ubsan/test_cache"
+Directory: /tmp/openpainter-native-ubsan
+"test_cache" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_cache" end time: Sep 29 20:01 +03
+"test_cache" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/22 Testing: test_stack
+12/22 Test: test_stack
+Command: "/tmp/openpainter-native-ubsan/test_stack"
+Directory: /tmp/openpainter-native-ubsan
+"test_stack" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.34 sec
+----------------------------------------------------------
+Test Passed.
+"test_stack" end time: Sep 29 20:01 +03
+"test_stack" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/22 Testing: test_filter
+13/22 Test: test_filter
+Command: "/tmp/openpainter-native-ubsan/test_filter"
+Directory: /tmp/openpainter-native-ubsan
+"test_filter" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"test_filter" end time: Sep 29 20:01 +03
+"test_filter" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/22 Testing: test_program
+14/22 Test: test_program
+Command: "/tmp/openpainter-native-ubsan/test_program"
+Directory: /tmp/openpainter-native-ubsan
+"test_program" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_program" end time: Sep 29 20:01 +03
+"test_program" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/22 Testing: test_paint
+15/22 Test: test_paint
+Command: "/tmp/openpainter-native-ubsan/test_paint"
+Directory: /tmp/openpainter-native-ubsan
+"test_paint" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_paint" end time: Sep 29 20:01 +03
+"test_paint" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/22 Testing: test_mesh
+16/22 Test: test_mesh
+Command: "/tmp/openpainter-native-ubsan/test_mesh"
+Directory: /tmp/openpainter-native-ubsan
+"test_mesh" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_mesh
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_mesh" end time: Sep 29 20:01 +03
+"test_mesh" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/22 Testing: test_reach
+17/22 Test: test_reach
+Command: "/tmp/openpainter-native-ubsan/test_reach"
+Directory: /tmp/openpainter-native-ubsan
+"test_reach" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_reach
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_reach" end time: Sep 29 20:01 +03
+"test_reach" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/22 Testing: test_publication
+18/22 Test: test_publication
+Command: "/tmp/openpainter-native-ubsan/test_publication"
+Directory: /tmp/openpainter-native-ubsan
+"test_publication" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_publication
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_publication" end time: Sep 29 20:01 +03
+"test_publication" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/22 Testing: test_seams
+19/22 Test: test_seams
+Command: "/tmp/openpainter-native-ubsan/test_seams"
+Directory: /tmp/openpainter-native-ubsan
+"test_seams" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_seams
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"test_seams" end time: Sep 29 20:01 +03
+"test_seams" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/22 Testing: test_blend
+20/22 Test: test_blend
+Command: "/tmp/openpainter-native-ubsan/test_blend"
+Directory: /tmp/openpainter-native-ubsan
+"test_blend" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_blend
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_blend" end time: Sep 29 20:01 +03
+"test_blend" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/22 Testing: test_graph_execution
+21/22 Test: test_graph_execution
+Command: "/tmp/openpainter-native-ubsan/test_graph_execution"
+Directory: /tmp/openpainter-native-ubsan
+"test_graph_execution" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_graph_execution
+<end of output>
+Test time =   0.34 sec
+----------------------------------------------------------
+Test Passed.
+"test_graph_execution" end time: Sep 29 20:01 +03
+"test_graph_execution" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/22 Testing: test_topology
+22/22 Test: test_topology
+Command: "/tmp/openpainter-native-ubsan/test_topology"
+Directory: /tmp/openpainter-native-ubsan
+"test_topology" start time: Sep 29 20:01 +03
+Output:
+----------------------------------------------------------
+PASS test_topology
+<end of output>
+Test time =   0.47 sec
+----------------------------------------------------------
+Test Passed.
+"test_topology" end time: Sep 29 20:01 +03
+"test_topology" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Sep 29 20:01 +03

@@ -1,0 +1,7 @@
+UNIFORM_PUBLISH base pixels and all mip levels: PASS
+UNIFORM_PUBLISH mask edits, proof exit/reentry and save pixels: PASS
+UNIFORM_PUBLISH neutral NORMAL OUTPUT anchor consumer: PASS
+UNIFORM_PUBLISH_PASS METAL
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

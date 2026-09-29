@@ -1,0 +1,6 @@
+loaded /private/tmp/openpainter-native-build/libopenpainter.dylib
+abi=2 max_tex=8192 gpu=0
+coat revision=1 mask=0xff
+snapshot_bytes=348
+commits=2 cancels=0 evals=2 acq=6 rel=4
+NATIVE_CTYPES_SPIKE_PASS

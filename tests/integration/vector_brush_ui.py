@@ -12,9 +12,11 @@ import traceback
 from pathlib import Path
 
 import bpy
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
+sys.path.insert(0, str(ROOT / 'tests/integration'))
 import open_painter
 from open_painter.core import layer_stack as stack, texture_set_manager as sets
 from open_painter.evaluation import shader_preview
@@ -53,7 +55,8 @@ def steps():
     region = next(r for r in area.regions if r.type == 'WINDOW')
     with bpy.context.temp_override(window=window, area=area, region=region):
         bpy.ops.open_painter.open_editor()
-    ts = sets.create(scene, 'Canvas', 512); sets.assign(scene, ts, plane)
+    ts = sets.create(scene, 'Canvas', int(os.environ.get('OP_VECTOR_BRUSH_UI_SIZE', '512')))
+    sets.assign(scene, ts, plane)
     layer = stack.add(ts, 'PAINT', 'Marks')
     ts.active_layer = stack.index_of(ts, layer.id)
     space = area.spaces.active
@@ -73,14 +76,47 @@ def steps():
         bpy.ops.open_painter.vector_brush('INVOKE_DEFAULT')
     yield .3
     assert OP_OT_vector_brush._handler is not None, 'the overlay handler was not installed'
+    if os.environ.get('OP_EXPECT_NATIVE') == '1':
+        original_channels = {p.channel: p.enabled for p in layer.channels}
+        assert not layer.stroke_key
+        mouse('LEFTMOUSE', 'PRESS', cx, cy)
+        yield .3
+        active = OP_OT_vector_brush._active
+        assert active._gesture.preview.gpu is not None
+        assert active._gesture.preview.size == int(ts.resolution)
+        mouse('MOUSEMOVE', 'NOTHING', cx + 20, cy)
+        yield .1
+        mouse('ESC', 'PRESS', cx + 20, cy)
+        yield .3
+        assert not layer.stroke_key and not scene.open_painter.strokes
+        assert {p.channel: p.enabled for p in layer.channels} == original_channels
+        report['steps'].append('first-stroke cancellation restores the empty layer')
+        # Esc cancels the active gesture; exit the brush if it remains armed.
+        if OP_OT_vector_brush._handler is not None:
+            mouse('ESC', 'PRESS', cx + 20, cy)
+            yield .2
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            bpy.ops.open_painter.vector_brush('INVOKE_DEFAULT')
+        yield .3
     # Drag across the plane.
     x0, x1 = region.x + int(region.width * .35), region.x + int(region.width * .65)
     window.cursor_warp(x0, cy)
     mouse('MOUSEMOVE', 'NOTHING', x0, cy)
     yield .2
     mouse('LEFTMOUSE', 'PRESS', x0, cy)
+    if os.environ.get('OP_EXPECT_NATIVE') == '1':
+        from gpu_input_probe import bound_inputs, input_pixels
+        before = {c: input_pixels(i).copy() for c, i in bound_inputs(scene, ts, layer).items()}
+        report['changed_before_release'] = False
     for step in range(1, 25):
         mouse('MOUSEMOVE', 'NOTHING', x0 + (x1 - x0) * step / 24, cy + 3 * ((-1) ** step))
+        if os.environ.get('OP_EXPECT_NATIVE') == '1' and step % 4 == 0:
+            yield .08
+            assert OP_OT_vector_brush._active._gesture.preview.size == int(ts.resolution)
+            for channel, image in bound_inputs(scene, ts, layer).items():
+                data = input_pixels(image)
+                if channel not in before or not np.array_equal(data, before[channel]):
+                    report['changed_before_release'] = True
     yield .3
     mouse('LEFTMOUSE', 'RELEASE', x1, cy)
     yield .5
@@ -103,6 +139,15 @@ def steps():
     assert shader_preview.current(scene, ts) and not info['error'], info
     assert any(getattr(node, 'gpu_resource', None) is not None for node in shader_preview.ensure(scene, ts).nodes())
     report['steps'].append('stroke renders in the shader preview')
+    engine = shader_preview.session_engine(scene, ts)
+    report['execution_backend'] = engine.report.get('execution_backend')
+    report['resolution'] = int(ts.resolution)
+    if os.environ.get('OP_EXPECT_NATIVE') == '1':
+        assert report['execution_backend'] == 'c17-host-metal', report
+        assert report['changed_before_release'], report
+        project = REPORT.with_suffix('.blend')
+        bpy.ops.wm.save_as_mainfile(filepath=str(project))
+        report['project'] = str(project)
     shot = REPORT.with_suffix('.png')
     bpy.ops.screen.screenshot(filepath=str(shot))
     report['screenshot'] = str(shot)

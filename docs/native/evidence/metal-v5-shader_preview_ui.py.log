@@ -1,0 +1,7 @@
+2026-09-29 19:40:25.564 Blender[73862:12058450] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+NATIVE_UI_GEOMETRY {'window': (1512, 787), 'sidebar': (1920, 157, 561, 1260), 'viewport': (4, 157, 2477, 1364), 'ui_scale': 2.0, 'pixel_size': 2.0}
+NATIVE_MASK_CALIBRATION {'point': (2228, 1377), 'before': 0.07999999821186066, 'after': 0.16752734780311584}
+SHADER_PREVIEW_UI_PASS /Volumes/SSD/projects/open_painter/.blender-test/native/metal-integration/runs/20260929T163735.904067Z/native-slider-ui.json
+00:16.307  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+
+Blender quit

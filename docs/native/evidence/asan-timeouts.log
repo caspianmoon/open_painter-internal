@@ -1,0 +1,78 @@
+Start testing: Sep 29 15:20 +03
+----------------------------------------------------------
+1/5 Testing: test_abi
+1/5 Test: test_abi
+Command: "/tmp/openpainter-native-asan/test_abi"
+Directory: /tmp/openpainter-native-asan
+"test_abi" start time: Sep 29 15:20 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =  20.03 sec
+----------------------------------------------------------
+Test Failed.
+"test_abi" end time: Sep 29 15:21 +03
+"test_abi" time elapsed: 00:00:20
+----------------------------------------------------------
+
+2/5 Testing: test_document
+2/5 Test: test_document
+Command: "/tmp/openpainter-native-asan/test_document"
+Directory: /tmp/openpainter-native-asan
+"test_document" start time: Sep 29 15:21 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =  20.03 sec
+----------------------------------------------------------
+Test Failed.
+"test_document" end time: Sep 29 15:21 +03
+"test_document" time elapsed: 00:00:20
+----------------------------------------------------------
+
+3/5 Testing: test_snapshot
+3/5 Test: test_snapshot
+Command: "/tmp/openpainter-native-asan/test_snapshot"
+Directory: /tmp/openpainter-native-asan
+"test_snapshot" start time: Sep 29 15:21 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =  20.03 sec
+----------------------------------------------------------
+Test Failed.
+"test_snapshot" end time: Sep 29 15:21 +03
+"test_snapshot" time elapsed: 00:00:20
+----------------------------------------------------------
+
+4/5 Testing: test_composite
+4/5 Test: test_composite
+Command: "/tmp/openpainter-native-asan/test_composite"
+Directory: /tmp/openpainter-native-asan
+"test_composite" start time: Sep 29 15:21 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =  20.03 sec
+----------------------------------------------------------
+Test Failed.
+"test_composite" end time: Sep 29 15:22 +03
+"test_composite" time elapsed: 00:00:20
+----------------------------------------------------------
+
+5/5 Testing: test_lifetime
+5/5 Test: test_lifetime
+Command: "/tmp/openpainter-native-asan/test_lifetime"
+Directory: /tmp/openpainter-native-asan
+"test_lifetime" start time: Sep 29 15:22 +03
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =  20.04 sec
+----------------------------------------------------------
+Test Failed.
+"test_lifetime" end time: Sep 29 15:22 +03
+"test_lifetime" time elapsed: 00:00:20
+----------------------------------------------------------
+
+End testing: Sep 29 15:22 +03

@@ -1,8 +1,11 @@
 """Build a Blender extension ZIP with its manifest at archive root."""
 
 import argparse
+import hashlib
+import json
 import os
 from pathlib import Path
+import platform
 import re
 import tomllib
 from urllib.parse import urlsplit, urlunsplit
@@ -12,9 +15,32 @@ root = Path(__file__).resolve().parents[1]
 version = tomllib.loads((root / "blender_manifest.toml").read_text(encoding="utf-8"))["version"]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, help="Build a candidate without replacing a published archive")
+parser.add_argument("--native-library", type=Path,
+                    help="Bundle a tested library for this machine's platform and architecture")
 args = parser.parse_args()
 output = args.output or root / "dist" / f"open_painter-{version}.zip"
-output.parent.mkdir(exist_ok=True)
+output.parent.mkdir(parents=True, exist_ok=True)
+native = None
+if args.native_library:
+    native = args.native_library.resolve(strict=True)
+    # Building a package is a developer action. Check the actual binary ABI,
+    # rather than trusting a sidecar supplied with an arbitrary artifact.
+    import sys
+    sys.path.insert(0, str(root / 'src'))
+    from open_painter.native_bridge.loader import load_library
+    from open_painter.native_bridge.core import OP_ABI_VERSION
+    lib, _ = load_library(native)
+    for symbol in ('op_graph_create', 'op_graph_replace', 'op_graph_evaluate', 'op_graph_plan_root'):
+        getattr(lib, symbol)
+    systems = {'Darwin': 'macos', 'Windows': 'windows', 'Linux': 'linux'}
+    arches = {'arm64': 'arm64', 'aarch64': 'arm64', 'amd64': 'x64', 'x86_64': 'x64'}
+    package_platform = systems[platform.system()] + '-' + arches[platform.machine().lower()]
+    bundle_dir = Path('native_bridge/bin') / f'{platform.system().lower()}-{platform.machine().lower()}'
+    binding = native.parent / ('_native.pyd' if os.name == 'nt' else '_native.abi3.so')
+    if not binding.is_file():
+        raise RuntimeError('A native release requires the compiled CPython binding beside the library')
+    native_manifest = dict(binding_sha256=hashlib.sha256(binding.read_bytes()).hexdigest(), python_abi='cp311-abi3', abi_version=OP_ABI_VERSION, sha256=hashlib.sha256(native.read_bytes()).hexdigest(),
+                           platform=package_platform, execution='c17-host-metal')
 
 
 def write_file(archive, path, archive_name):
@@ -50,7 +76,17 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
             write_file(archive, path, path.relative_to(root / "src" / "open_painter"))
     for name in ("blender_manifest.toml", "LICENSE", "README.md", "ARCHITECTURE.md", "SMART_MATERIAL_FORMAT.md",
                  "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md", "PARITY.md", "docs/substance_parity.json"):
-        write_file(archive, root / name, Path(name))
+        if name == 'blender_manifest.toml' and native:
+            content = (root / name).read_text(encoding='utf-8')
+            content = content.replace('[permissions]', f'platforms = ["{package_platform}"]\n\n[permissions]')
+            archive.writestr(name, content)
+        else:
+            write_file(archive, root / name, Path(name))
+    if native:
+        archive.write(native, (bundle_dir / native.name).as_posix())
+        archive.write(binding, (bundle_dir / binding.name).as_posix())
+        archive.writestr((bundle_dir / (native.name + '.json')).as_posix(),
+                         json.dumps(native_manifest, indent=2) + '\n')
     # The user-facing guides and their images; validation reports, performance records and
     # research notes stay in the repository (0.12.2: a release package carries no development
     # artefacts).

@@ -129,6 +129,8 @@ def program(name, source, samplers, slots, ints):
     dev = runtime.device()
     key = 'stroke_' + name
     if key not in dev._fixed:
+        from ..native_bridge.compiler import fixed_source
+        source = fixed_source('paint.' + name, source)
         dev._fixed[key] = dev._create(source, samplers, slots, ints=ints)
     return dev._fixed[key]
 
@@ -354,6 +356,9 @@ class Canvas:
                 dev.discard(self.alpha)
             self.alpha = dev.upload(np.ones((1, 1), np.float32) if alpha is None else alpha, 'R32F')
             self.alpha_key = alpha
+        from ..native_bridge import paint
+        lib = paint.active_library()
+        batch = paint.uniforms(lib, samples, settings) if lib is not None else None
         shader = program('stamp', STAMP, ['op_position', 'op_normal', 'op_before', 'op_eligible', 'op_alpha'], 4, ('op_flow',))
         with dev.state():
             for index, sample in enumerate(samples):
@@ -371,17 +376,20 @@ class Canvas:
                 else:
                     eligible = dev.upload(allowed, 'R32F')
                 try:
-                    axis = sample[3:6] if settings['planar'] is None else np.asarray(settings['planar'], np.float32)
-                    axis = axis / max(float(np.linalg.norm(axis)), 1e-8)
-                    tangent = np.array(sample[10:13], copy=True)
-                    if settings['alpha_rotation'] != 'RAKE' or np.linalg.norm(tangent) < 1e-8:
-                        tangent = np.cross(sample[3:6], (0, 0, 1) if abs(sample[5]) < .9 else (1, 0, 0))
-                    tangent /= max(float(np.linalg.norm(tangent)), 1e-8)
-                    angle = settings['alpha_angle']
-                    tangent = tangent * np.cos(angle) + np.cross(sample[3:6], tangent) * np.sin(angle)
-                    bitangent = np.cross(sample[3:6], tangent)
-                    params = uniforms([(*sample[:3], sample[7]), (*axis, sample[6] * settings['flow']),
-                                       (*tangent, settings['hardness']), (*bitangent, settings['depth_limit'])])
+                    if batch is not None:
+                        params = uniforms(batch[index])
+                    else:
+                        axis = sample[3:6] if settings['planar'] is None else np.asarray(settings['planar'], np.float32)
+                        axis = axis / max(float(np.linalg.norm(axis)), 1e-8)
+                        tangent = np.array(sample[10:13], copy=True)
+                        if settings['alpha_rotation'] != 'RAKE' or np.linalg.norm(tangent) < 1e-8:
+                            tangent = np.cross(sample[3:6], (0, 0, 1) if abs(sample[5]) < .9 else (1, 0, 0))
+                        tangent /= max(float(np.linalg.norm(tangent)), 1e-8)
+                        angle = settings['alpha_angle']
+                        tangent = tangent * np.cos(angle) + np.cross(sample[3:6], tangent) * np.sin(angle)
+                        bitangent = np.cross(sample[3:6], tangent)
+                        params = uniforms([(*sample[:3], sample[7]), (*axis, sample[6] * settings['flow']),
+                                           (*tangent, settings['hardness']), (*bitangent, settings['depth_limit'])])
                     samplers = [('op_position', self.surface.position), ('op_normal', self.surface.normal),
                                 ('op_before', self.coverage), ('op_eligible', eligible), ('op_alpha', self.alpha)]
                     dev.draw(shader, [self.scratch], self.n, samplers, params,

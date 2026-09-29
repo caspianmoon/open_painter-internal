@@ -1,0 +1,8 @@
+test_full_multitarget_masks_chunk_boundaries_and_stale_anchors (test_native_reach.NativeReachTests.test_full_multitarget_masks_chunk_boundaries_and_stale_anchors) ... ok
+test_owned_snapshot_anchor_validation_and_nearest (test_native_reach.NativeReachTests.test_owned_snapshot_anchor_validation_and_nearest) ... ok
+test_target_selection_ties_and_empty_inputs (test_native_reach.NativeReachTests.test_target_selection_ties_and_empty_inputs) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.439s
+
+OK

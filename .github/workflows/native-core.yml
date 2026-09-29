@@ -1,0 +1,33 @@
+name: Native C core (not GPU qualification)
+on: [push, pull_request]
+jobs:
+  abi:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            library: build/native/libopenpainter.so
+          - os: macos-latest
+            library: build/native/libopenpainter.dylib
+          - os: windows-latest
+            library: build/native/Release/openpainter.dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: cmake -S libopenpainter -B build/native
+      - run: cmake --build build/native --config Release
+      - run: ctest --test-dir build/native -C Release --output-on-failure
+      - run: python scripts/native_ctypes_spike.py --lib "${{ matrix.library }}"
+      - run: python -m unittest discover -s tests/unit -p test_native_bridge.py -v
+        env:
+          OP_TEST_NATIVE_LIBRARY: ${{ matrix.library }}
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S libopenpainter -B build/native-asan -DOP_SANITIZERS=ON
+      - run: cmake --build build/native-asan
+      - run: ctest --test-dir build/native-asan --output-on-failure

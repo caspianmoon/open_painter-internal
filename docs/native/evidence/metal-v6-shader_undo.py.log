@@ -1,0 +1,7 @@
+SHADER_UNDO undo restores the published state: PASS
+SHADER_UNDO redo restores the published state: PASS
+SHADER_UNDO invalid range survives undo: PASS
+SHADER_UNDO_PASS {"material": "Worn Painted Metal", "units": 48, "nodes": 1248, "undo_ms": 192.5, "undo_build_ms": 39.1, "undo_evaluate_ms": 135.1, "result": "PASS"}
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

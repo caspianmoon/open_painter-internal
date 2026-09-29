@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "blender": "5.2.1 LTS",
+  "steps": [
+    "first-stroke cancellation restores the empty layer",
+    "drag records a stroke",
+    "esc finishes",
+    "stroke renders in the shader preview"
+  ],
+  "errors": [],
+  "changed_before_release": true,
+  "samples": 35,
+  "execution_backend": "c17-host-metal",
+  "resolution": 2048,
+  "project": "/Volumes/SSD/projects/open_painter/.blender-test/native/metal-integration/runs/20260929T163735.904067Z/native-brush-ui.blend",
+  "screenshot": "/Volumes/SSD/projects/open_painter/.blender-test/native/metal-integration/runs/20260929T163735.904067Z/native-brush-ui.png",
+  "elapsed_s": 9.36
+}

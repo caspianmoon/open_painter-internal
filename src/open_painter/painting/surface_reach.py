@@ -35,7 +35,14 @@ def prepare(target):
     target's object (all material slots, so a walk crosses a slot seam on one mesh), cached
     on the target dict."""
     cached = target.get('_reach')
-    if cached is not None:
+    from ..native_bridge.lifecycle import active_library
+    lib = active_library()
+    if cached is not None and (lib is None or 'native' in cached):
+        return cached
+    if lib is not None:
+        from ..native_bridge.reach import Reach
+        cached = Reach(lib, target).snapshot()
+        target['_reach'] = cached
         return cached
     positions = np.asarray(target['positions'], np.float64)
     tri_vertices = np.asarray(target['all_tri_vertices'], np.int64)
@@ -58,6 +65,10 @@ def prepare(target):
 def adjacency(tri_vertices):
     """CSR edge adjacency (indptr, indices) of triangles: neighbours share an edge (a
     non-manifold edge connects every triangle on it)."""
+    from ..native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ..native_bridge.geometry import adjacency as native_adjacency
+        return native_adjacency(lib, tri_vertices)
     tri_vertices = np.asarray(tri_vertices, np.int64)
     count = len(tri_vertices)
     if not count:
@@ -94,6 +105,9 @@ def adjacency(tri_vertices):
 
 def point_triangle_distance(points, corners):
     """Distance from each point (N, 3) to its triangle (N, 3, 3) (Ericson, vectorised)."""
+    from ..native_bridge import paint
+    if (lib := paint.active_library()) is not None:
+        return paint.distances(lib, points, corners)
     p = np.asarray(points, np.float64)
     a, b, c = (np.asarray(corners[:, i], np.float64) for i in range(3))
     ab, ac, ap = b - a, c - a, p - a
@@ -136,6 +150,9 @@ def point_triangle_distance(points, corners):
 def validate(reach, anchors, radii):
     """(triangle, sample) pairs whose anchor polygon still holds the anchor on this target,
     and which samples that resolved."""
+    from ..native_bridge.lifecycle import active_library
+    if 'native' in reach and active_library() is not None:
+        return reach['native'].pairs(anchors, radii)
     anchors = np.asarray(anchors, np.float32)
     count = len(anchors)
     resolved = np.zeros(count, bool)
@@ -165,6 +182,9 @@ def nearest(reach, anchors, axes, band, which):
     """For the samples ``which``: (triangle, distance) of the nearest triangle within the
     sample's depth band that faces its axis (-1, inf when none). A Python loop: only the rare
     anchors no target holds any more come here."""
+    from ..native_bridge.lifecycle import active_library
+    if 'native' in reach and active_library() is not None:
+        return reach['native'].nearest(anchors, axes, band, which)
     anchors = np.asarray(anchors, np.float32)
     triangles = np.full(len(anchors), -1, np.int64)
     distances = np.full(len(anchors), np.inf, np.float64)
@@ -192,6 +212,10 @@ def seeds(reach, anchors, axes, radii, band, fallback=None):
     the target nearest to them) — the nearest triangle within the sample's depth band that
     faces its axis. Returns (triangle index, sample index) pairs and the samples left
     without a seed."""
+    from ..native_bridge.lifecycle import active_library
+    if 'native' in reach and active_library() is not None:
+        triangles, samples, resolved = reach['native'].pairs(anchors, radii, axes, band, fallback)
+        return triangles, samples, np.flatnonzero(~resolved)
     anchors = np.asarray(anchors, np.float32)
     count = len(anchors)
     if not count:
@@ -279,6 +303,11 @@ class Sheets:
             normals, lo, hi = self.reach['normals'][self.candidates], self.reach['lo'][self.candidates], self.reach['hi'][self.candidates]
             axes = self.axes[start:stop]
             box_lo, box_hi = self.box_lo[start:stop], self.box_hi[start:stop]
+            from ..native_bridge import paint
+            if (lib := paint.active_library()) is not None:
+                visited = paint.walk(lib, indptr, indices, normals, lo, hi, axes, box_lo, box_hi, visited)
+                self._chunks[index] = visited
+                return visited
             while len(frontier_t):
                 degree = indptr[frontier_t + 1] - indptr[frontier_t]
                 if not degree.any():
@@ -389,19 +418,25 @@ def for_targets(entries, samples, anchors, planar=None, depth_limit=1.0):
     else:
         axes = samples[:, 3:6]
     usable = [target for target in entries if 'all_tri_vertices' in target]
-    resolved_anywhere = np.zeros(len(samples), bool)
-    for target in usable:
-        resolved_anywhere |= validate(prepare(target), anchors, radii)[2]
+    validations = [validate(prepare(target), anchors, radii)[2] for target in usable]
+    resolved_anywhere = np.any(validations, axis=0) if usable else np.zeros(len(samples), bool)
     # An anchor no target holds seeds on the one target nearest to it (within its band), so a
     # renumbered mesh keeps its strokes without handing them to a neighbouring surface as well.
     fallback = {id(target): np.zeros(len(samples), bool) for target in usable}
     unresolved = ~resolved_anywhere
     if unresolved.any() and usable:
         distances = np.stack([nearest(prepare(target), anchors, axes, band, unresolved)[1] for target in usable])
-        best = np.argmin(distances, axis=0)
-        found = np.isfinite(distances.min(axis=0))
-        for index, target in enumerate(usable):
-            fallback[id(target)] = unresolved & found & (best == index)
+        from ..native_bridge.lifecycle import active_library
+        if (lib := active_library()) is not None:
+            from ..native_bridge.reach import choose
+            choices = choose(lib, validations, distances)
+            for index, target in enumerate(usable):
+                fallback[id(target)] = choices[index]
+        else:
+            best = np.argmin(distances, axis=0)
+            found = np.isfinite(distances.min(axis=0))
+            for index, target in enumerate(usable):
+                fallback[id(target)] = unresolved & found & (best == index)
     return [Sheets(target, samples, anchors, planar, depth_limit, fallback=fallback[id(target)])
             if 'all_tri_vertices' in target else None for target in entries]
 

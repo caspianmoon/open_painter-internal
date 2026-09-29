@@ -6,6 +6,7 @@ import unittest
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'src'))
 suite=unittest.TestSuite()
+suite.addTests(unittest.defaultTestLoader.discover(str(root/'tests/unit'), pattern='test_native_*.py'))
 suite.addTests(unittest.defaultTestLoader.discover(str(root/'tests/unit'), pattern='test_blender_test_profile.py'))
 suite.addTests(unittest.defaultTestLoader.discover(str(root/'tests/unit'), pattern='test_benchmark_pairs.py'))
 suite.addTests(unittest.defaultTestLoader.discover(str(root/'tests/unit'), pattern='test_gpu_backend_contract.py'))

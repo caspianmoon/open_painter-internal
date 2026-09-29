@@ -2781,6 +2781,9 @@ class Graph(Math):
             pass
         unit.tree = None
 
+    def blend(self, backdrop, source, coverage, mode, channel):
+        return blend(self, backdrop, source, coverage, mode, channel)
+
     def _compile_channel(self, unit, layer, channel):
         """Blend one layer's channel over its backdrop inside the unit."""
         prop = channel_for(layer, channel)
@@ -2803,7 +2806,7 @@ class Graph(Math):
                     amount = self.math('MULTIPLY', amount, self.mask(layer))
             if cached:
                 content = self._layer_cache(layer, channel)
-                result = blend(self, backdrop, content, amount, mode, channel) if blends else backdrop
+                result = self.blend(backdrop, content, amount, mode, channel) if blends else backdrop
                 published = content
             elif layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
                 grouped = Signal(unit.input('Grouped', 'NodeSocketColor'),
@@ -2815,11 +2818,11 @@ class Graph(Math):
             elif layer.type == 'FOLDER':
                 child = Signal(unit.input('Grouped', 'NodeSocketColor'), unit.input('Grouped:Alpha', 'NodeSocketFloat'))
                 source = self._straight(child)
-                result = blend(self, backdrop, source, amount, mode, channel) if blends else backdrop
+                result = self.blend(backdrop, source, amount, mode, channel) if blends else backdrop
                 published = source
             else:
                 source = self.source(layer, channel)
-                result = blend(self, backdrop, source, amount, mode, channel)
+                result = self.blend(backdrop, source, amount, mode, channel)
         self._export('Out', result.color, 'NodeSocketColor')
         self._export('Out:Alpha', result.alpha, 'NodeSocketFloat')
         if layer.type == 'FOLDER' and getattr(layer, 'publish_group', False):

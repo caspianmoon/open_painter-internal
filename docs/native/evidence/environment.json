@@ -1,0 +1,35 @@
+{
+  "collector": "collect_gate0_baseline.py",
+  "measurement_note": "Environment + artifact identity only; not a latency measurement.",
+  "platform": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.2",
+  "blender_arg": "/Applications/Blender.app/Contents/MacOS/Blender",
+  "blender_version": "Blender 5.2.1 LTS",
+  "git": {
+    "commit": "5a552060988d0b43a7ef05f6e43da2aec481b323",
+    "branch": "feat/native-c-engine",
+    "status_short": "M scripts/benchmark_windows_viewport.py\n M scripts/run_pure_tests.py\n M src/open_painter/evaluation/engine/runtime.py\n M src/open_painter/registration.py\n?? .github/workflows/native-core.yml\n?? Open_Painter_C_Backend_Implementation_Plan.md\n?? docs/native/\n?? libopenpainter/\n?? scripts/check_blend_parity.py\n?? scripts/collect_gate0_baseline.py\n?? scripts/native_ctypes_spike.py\n?? scripts/native_fixtures.py\n?? scripts/probe_native_presentation.py\n?? src/open_painter/native_bridge/\n?? tests/unit/test_native_bridge.py"
+  },
+  "digests": {
+    "python_addon_sha256": "b6ae5661eb08dee36a67c813ca64a4e684fca6d515893370d70a0cedf4887ae7",
+    "python_file_count": 318,
+    "adapter_sha256": "7add70c99a90b27143d8474836c19e6d8b5d563b33ab63e0c36632684c1b2fe5",
+    "shader_bundle_sha256": "2dc8f764b0f512ee25f8e05e943a006fd8d17e23191801e5df586192f8b75e20",
+    "native_source_sha256": "eff4f963bc6aef49535333d22ab81557b26e16b5c90dc5c6d5880cf64e589be0",
+    "fixture_source_sha256": "68a9d0100049f71a4698976ca1cba4819d1f9b7febbe3b5456d1b706502e513a",
+    "build_files_sha256": "5f1b8960d778c6de20905158ad32353bb23ab615f7cd10f0cd9ae7acaa0db34f",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-build/libopenpainter.dylib",
+      "bytes": 52632,
+      "sha256": "7835557fcad6a8efbfc8b98a440ee53e6bc1a6cb4ce2beacc7d78e8758bea3bd"
+    },
+    "build_options_sha256": "c21411a6e2a1b3a498281e174d0459c3a848cc3710c4766603cc218f122cc383"
+  },
+  "installed_package_sha256": null,
+  "target_windows_reproduction": "unavailable on this host; no improvement claim",
+  "gate0_fields_still_manual": [
+    "GPU identity / driver / active backend (run inside Blender)",
+    "display refresh rate / power mode / viewport dimensions",
+    "paired baseline timings + visual recording"
+  ]
+}

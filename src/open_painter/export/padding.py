@@ -191,6 +191,10 @@ def _vertical_keys(covered, island, limit, r0, r1):
 def _banded(covered, island, limit):
     """Exact nearest donor within ``limit`` pixels: (donor index or -1, d² as int16) per texel.
     Processed in row bands: the whole-image state is the two result arrays."""
+    from ..native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ..native_bridge.geometry import padding_donors
+        return padding_donors(lib, covered, island, int(limit))
     n = covered.shape[0]
     limit = int(limit)
     donor = np.full((n, n), -1, np.int32)

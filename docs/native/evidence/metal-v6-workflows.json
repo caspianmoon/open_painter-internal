@@ -1,0 +1,62 @@
+{
+  "status": "PASS",
+  "run_id": "20260929T170553.131114Z",
+  "artifacts": {
+    "python_addon_sha256": "452881afc9572714fcb22da371b21522318880bec3377b860827de4cb98939ce",
+    "python_file_count": 330,
+    "adapter_sha256": "78602e5b80f8b446ae8e04a3a0c8cfb09de668209a8e52f4be0166be1c9e266a",
+    "shader_bundle_sha256": "bacc6a922c593619a1ff47ea45366b4c31b6feab50ed3c6492457950224f48d5",
+    "native_source_sha256": "591bad8550f8291d02338739d891c0b08fa363423571f452c0c2c31fdac21930",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "04ce52d409913e97a368175991787950f4bd36bd81efd7881e1546729b491710",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 224168,
+      "sha256": "5069dabe413b3b6131b3c4e2cde3aa8764098182ad598feeba7f25522440fc6f"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+      "bytes": 192528,
+      "sha256": "4d5aad79192163db02f18db356e8f08fe0b931d17cfe23b19d04051e047fc5c3"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "evaluated_projection.py",
+      "exit": 0
+    },
+    {
+      "test": "multi_set_paint.py",
+      "exit": 0
+    },
+    {
+      "test": "stroke_surface_bounds.py",
+      "exit": 0
+    },
+    {
+      "test": "udim_workflow.py",
+      "exit": 0
+    },
+    {
+      "test": "udim_material.py",
+      "exit": 0
+    },
+    {
+      "test": "material_aging.py",
+      "exit": 0
+    },
+    {
+      "test": "material_director.py",
+      "exit": 0
+    },
+    {
+      "test": "material_surface_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "surface_filters.py",
+      "exit": 0
+    }
+  ]
+}

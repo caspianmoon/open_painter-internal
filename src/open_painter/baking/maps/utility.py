@@ -43,6 +43,11 @@ def _islands(target):
     Vectorised: polygon loops come from foreach_get, shared edges pair up by
     sorted key, and joins run through an array union-find.
     """
+    from ...native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ...native_bridge.topology import from_target
+        topology = from_target(lib, target)
+        return topology.labels, topology.grouped_borders()
     mesh, uv = target["mesh"], target["uv"]
     count = len(mesh.polygons)
     material = np.empty(count, np.int32)

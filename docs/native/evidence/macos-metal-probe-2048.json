@@ -1,0 +1,104 @@
+{
+  "status": "FAIL",
+  "gate1_pass": false,
+  "route": "C",
+  "measurement": "background host GPU numerical probe; no viewport/display evidence",
+  "profile": {
+    "root": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75",
+    "configuration": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75/config",
+    "resource_overrides": {
+      "BLENDER_USER_RESOURCES": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75",
+      "BLENDER_USER_CONFIG": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75/config",
+      "BLENDER_USER_SCRIPTS": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75/scripts",
+      "BLENDER_USER_EXTENSIONS": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75/extensions",
+      "BLENDER_USER_DATAFILES": "/private/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-native-probe-ittjyp75/datafiles"
+    },
+    "configuration_verified": true
+  },
+  "size": 2048,
+  "blender": "5.2.1 LTS",
+  "build_hash": "9e2066aef7ef",
+  "artifacts": {
+    "python_addon_sha256": "b6ae5661eb08dee36a67c813ca64a4e684fca6d515893370d70a0cedf4887ae7",
+    "python_file_count": 318,
+    "adapter_sha256": "7add70c99a90b27143d8474836c19e6d8b5d563b33ab63e0c36632684c1b2fe5",
+    "shader_bundle_sha256": "2dc8f764b0f512ee25f8e05e943a006fd8d17e23191801e5df586192f8b75e20",
+    "native_source_sha256": "eff4f963bc6aef49535333d22ab81557b26e16b5c90dc5c6d5880cf64e589be0",
+    "fixture_source_sha256": "68a9d0100049f71a4698976ca1cba4819d1f9b7febbe3b5456d1b706502e513a",
+    "build_files_sha256": "5f1b8960d778c6de20905158ad32353bb23ab615f7cd10f0cd9ae7acaa0db34f",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-build/libopenpainter.dylib",
+      "bytes": 52632,
+      "sha256": "7835557fcad6a8efbfc8b98a440ee53e6bc1a6cb4ce2beacc7d78e8758bea3bd"
+    },
+    "build_options_sha256": null
+  },
+  "trace": [
+    {
+      "event_id": 1,
+      "generation": 1,
+      "revision": 2,
+      "channels": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "submit_start_ns": 302428642917375,
+      "submit_end_ns": 302429252012375,
+      "publication": "host_gpu_submitted",
+      "gpu_ready_ns": null,
+      "draw_ns": null,
+      "display_ns": null,
+      "interactive_readback_bytes": 0,
+      "image_pixel_write_bytes": 0
+    }
+  ],
+  "checks": [
+    {
+      "event": 1,
+      "channel": "BASE_COLOR",
+      "mip": 0,
+      "max_abs_error": 0.0002435445785522461
+    },
+    {
+      "event": 1,
+      "channel": "BASE_COLOR",
+      "mip": 1,
+      "max_abs_error": 0.07872194051742554
+    }
+  ],
+  "native_gpu_backend": false,
+  "visual_evidence": null,
+  "real_brush_stroke": false,
+  "diagnostic_shader_dab_only": true,
+  "backend": "METAL",
+  "renderer": "Metal API",
+  "vendor": "Apple M3 Pro",
+  "driver": "1.2",
+  "addon_native": {
+    "selected": "legacy",
+    "native_loaded": true,
+    "native_has_gpu": false,
+    "host_backend": null,
+    "qualified": false,
+    "reason": "Native viewport presentation is not qualified; existing engine retained",
+    "library": "/private/tmp/openpainter-native-build/libopenpainter.dylib"
+  },
+  "object": {
+    "name": "Cube",
+    "vertices": 8,
+    "uv_corners": 24,
+    "uv_map": "UVMap"
+  },
+  "diagnostic_readback_bytes": 83886080,
+  "error": "BASE_COLOR mip 1: error 0.07872194051742554",
+  "traceback": "Traceback (most recent call last):\n  File \"/Volumes/SSD/projects/open_painter/scripts/probe_native_presentation.py\", line 125, in worker\n    raise AssertionError(f'{CHANNELS[channel]} mip {level}: error {error}')\nAssertionError: BASE_COLOR mip 1: error 0.07872194051742554\n",
+  "native_closed_on_unregister": true,
+  "scene_engine_unchanged": true,
+  "selected_object_unchanged": true
+}

@@ -1,0 +1,95 @@
+{
+  "status": "PASS",
+  "run_id": "20260929T144551.609472Z",
+  "artifacts": {
+    "python_addon_sha256": "8171db1bb6acdc9dc4ca5965db67df4e15588d5f561f49c646ee132cfdfd0663",
+    "python_file_count": 327,
+    "adapter_sha256": "b9696dc8fcda17e1160b8f7080a2f0928e57c5a1fbe7164fa34a314bf750382c",
+    "shader_bundle_sha256": "b0bd90ab22d96d9f1b7b7ce4e86645f729add0ba1410da1a9b44962f888430fb",
+    "native_source_sha256": "c156f8675b99497a4e017a5e311c8d3b598a7d9a37081727177751edf8e40f37",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "9961769feabe7fb4b84fc4ba4b9b4704c403aaed9c022881fa97e3d2dab1fefd",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 206424,
+      "sha256": "3fbe65f978b8120a12eb74cd00b7ae5054d74034f4c395af8b00b09e609483f4"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+      "bytes": 174160,
+      "sha256": "35cb6ce40113fc5cfdd8345be2450eb5903311931e949d2483405283848b87e2"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "native_host_metal.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_procedurals.py",
+      "exit": 0
+    },
+    {
+      "test": "gpu_strokes.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_filters.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_state_cache.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_undo.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_lifecycle_edges.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_adoption.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_memory_soak.py",
+      "exit": 0
+    },
+    {
+      "test": "save_during_evaluation.py",
+      "exit": 0
+    },
+    {
+      "test": "resolution_switch.py",
+      "exit": 0
+    },
+    {
+      "test": "stroke_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_preview_ui.py",
+      "exit": 0
+    },
+    {
+      "test": "vector_brush_ui.py",
+      "exit": 0
+    },
+    {
+      "test": "native_paint_reopen.py",
+      "exit": 0
+    },
+    {
+      "test": "install_extension.py",
+      "exit": 0
+    }
+  ],
+  "package_sha256": "0731810fbed1b289519e25817c413133d8c6b3ce3bbbc8a8d561588ea35c971e"
+}

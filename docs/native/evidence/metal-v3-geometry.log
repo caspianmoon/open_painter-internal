@@ -1,0 +1,10 @@
+test_bounds_exact_queries_and_owned_snapshot (test_native_geometry.GeometryTests.test_bounds_exact_queries_and_owned_snapshot) ... ok
+test_mesh_nonmanifold_degenerate_and_large_vertex_ids (test_native_geometry.GeometryTests.test_mesh_nonmanifold_degenerate_and_large_vertex_ids) ... ok
+test_padding_matches_bruteforce_ties_and_banded_reference (test_native_geometry.GeometryTests.test_padding_matches_bruteforce_ties_and_banded_reference) ... ok
+test_tangent_and_interpolation_parity (test_native_geometry.GeometryTests.test_tangent_and_interpolation_parity) ... ok
+test_uv_overlap_clipping_and_barycentric_parity (test_native_geometry.GeometryTests.test_uv_overlap_clipping_and_barycentric_parity) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.229s
+
+OK

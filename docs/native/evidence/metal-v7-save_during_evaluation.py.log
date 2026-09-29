@@ -1,0 +1,12 @@
+00:01.703  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/packing-revision.blend"
+Open Painter: ERROR: Pack aa wood.png: Error: Unable to pack file, source path '/Volumes/SSD/projects/open_painter/.blender-test/aa wood.png' not found
+
+Open Painter: ERROR: Pack aa wood.png: Error: Unable to pack file, source path '/Volumes/SSD/projects/open_painter/.blender-test/aa wood.png' not found
+
+00:02.259  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/packing-failure.blend"
+Info: Saved as "packing-revision.blend"
+Info: Saved as "packing-failure.blend"
+SAVE_DURING_EVALUATION_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

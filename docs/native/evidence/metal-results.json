@@ -1,0 +1,77 @@
+{
+  "status": "PASS",
+  "artifacts": {
+    "python_addon_sha256": "3587762056e87ff48a91a1166af6ac76f1b406991a086ebd19c7eff445506735",
+    "python_file_count": 319,
+    "adapter_sha256": "4a236fb98d20b189c0ca56957b926a216ddbabafd8576c44eace9f4bb40a8226",
+    "shader_bundle_sha256": "2df96da398ac9638bdb408765b5e00ca7305cbc99f6d398f52d4e326fb9c019d",
+    "native_source_sha256": "da2c538f3f77f087edae82afb13f2e7663f5e2b341c9bb829a459a74f921146d",
+    "fixture_source_sha256": "68a9d0100049f71a4698976ca1cba4819d1f9b7febbe3b5456d1b706502e513a",
+    "build_files_sha256": "6859a444112f897312c935b03788ab99ea04f432a1d1c64fdfa2f625e980981a",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 52632,
+      "sha256": "9e285a4d108afcd3320a735d871c2839544a2457fd9ef1ca576efeaa5847a9b9"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "native_host_metal.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_procedurals.py",
+      "exit": 0
+    },
+    {
+      "test": "gpu_strokes.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_filters.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_state_cache.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_undo.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_lifecycle_edges.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_adoption.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_memory_soak.py",
+      "exit": 0
+    },
+    {
+      "test": "save_during_evaluation.py",
+      "exit": 0
+    },
+    {
+      "test": "resolution_switch.py",
+      "exit": 0
+    },
+    {
+      "test": "stroke_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "install_extension.py",
+      "exit": 0
+    }
+  ],
+  "package_sha256": "53fdb3efa2a0f548bad5a21e6282b7cbc4f85d921a58f397f59245cd277c41b5"
+}

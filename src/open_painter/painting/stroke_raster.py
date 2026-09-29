@@ -38,6 +38,9 @@ def resample(points, spacing):
     """Indices of ``points`` (S, 3) kept when consecutive kept points are >= spacing apart."""
     if not len(points):
         return np.zeros(0, np.int64)
+    from ..native_bridge import paint
+    if (lib := paint.active_library()) is not None:
+        return paint.resample(lib, points, spacing)
     kept = [0]
     last = points[0]
     for index in range(1, len(points)):
@@ -51,6 +54,9 @@ def bounds(samples, margin=0.0):
     """World AABB (min, max) of samples including their radii."""
     if not len(samples):
         return np.zeros(3, np.float32), np.zeros(3, np.float32)
+    from ..native_bridge import paint
+    if (lib := paint.active_library()) is not None:
+        return paint.bounds(lib, samples, margin)
     centres, radius = samples[:, :3], samples[:, 7:8]
     return (centres - radius).min(axis=0) - margin, (centres + radius).max(axis=0) + margin
 
@@ -70,6 +76,12 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
     given, answers which (texel, sample) pairs a stamp may paint at all (the surface
     reach of a SURFACE stroke, ``surface_reach.Sheets.mask``): pairs it refuses score 0.
     """
+    from ..native_bridge import paint
+    if (lib := paint.active_library()) is not None:
+        return paint.coverage(lib, positions, normals, samples,
+                              dict(hardness=hardness, flow=flow, accumulate=accumulate, planar=planar,
+                                   alpha_rotation=alpha_rotation, alpha_angle=alpha_angle, depth_limit=depth_limit),
+                              alpha_texture, eligible)
     positions = np.ascontiguousarray(positions, np.float32)
     normals = np.ascontiguousarray(normals, np.float32)
     count = len(positions)
@@ -191,6 +203,9 @@ def uv_window(corners, uv, lo, hi, margin=0.0):
     section of the plane lies inside the projected corners' hull). ``margin`` (UV units)
     widens the box: one texel of it keeps the neighbours of every marked texel rasterised,
     so the seam dilation sees the same coverage as an unclipped raster."""
+    from ..native_bridge import paint
+    if (lib := paint.active_library()) is not None:
+        return paint.uv_window(lib, corners, uv, lo, hi, margin)
     corners = np.asarray(corners, np.float64)
     p0, e1, e2 = corners[:, 0], corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]
     box = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])], np.float64)

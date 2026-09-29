@@ -1,0 +1,99 @@
+Start testing: Sep 29 15:37 +03
+----------------------------------------------------------
+1/6 Testing: test_abi
+1/6 Test: test_abi
+Command: "/tmp/openpainter-native-build/test_abi"
+Directory: /tmp/openpainter-native-build
+"test_abi" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_abi
+<end of output>
+Test time =   0.53 sec
+----------------------------------------------------------
+Test Passed.
+"test_abi" end time: Sep 29 15:37 +03
+"test_abi" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/6 Testing: test_document
+2/6 Test: test_document
+Command: "/tmp/openpainter-native-build/test_document"
+Directory: /tmp/openpainter-native-build
+"test_document" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_document
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"test_document" end time: Sep 29 15:37 +03
+"test_document" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/6 Testing: test_snapshot
+3/6 Test: test_snapshot
+Command: "/tmp/openpainter-native-build/test_snapshot"
+Directory: /tmp/openpainter-native-build
+"test_snapshot" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_snapshot
+<end of output>
+Test time =   0.62 sec
+----------------------------------------------------------
+Test Passed.
+"test_snapshot" end time: Sep 29 15:37 +03
+"test_snapshot" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/6 Testing: test_composite
+4/6 Test: test_composite
+Command: "/tmp/openpainter-native-build/test_composite"
+Directory: /tmp/openpainter-native-build
+"test_composite" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_composite
+<end of output>
+Test time =   0.62 sec
+----------------------------------------------------------
+Test Passed.
+"test_composite" end time: Sep 29 15:37 +03
+"test_composite" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/6 Testing: test_lifetime
+5/6 Test: test_lifetime
+Command: "/tmp/openpainter-native-build/test_lifetime"
+Directory: /tmp/openpainter-native-build
+"test_lifetime" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_lifetime
+<end of output>
+Test time =   0.62 sec
+----------------------------------------------------------
+Test Passed.
+"test_lifetime" end time: Sep 29 15:37 +03
+"test_lifetime" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/6 Testing: test_snapshot_validation
+6/6 Test: test_snapshot_validation
+Command: "/tmp/openpainter-native-build/test_snapshot_validation"
+Directory: /tmp/openpainter-native-build
+"test_snapshot_validation" start time: Sep 29 15:37 +03
+Output:
+----------------------------------------------------------
+PASS test_snapshot_validation
+<end of output>
+Test time =   0.63 sec
+----------------------------------------------------------
+Test Passed.
+"test_snapshot_validation" end time: Sep 29 15:37 +03
+"test_snapshot_validation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Sep 29 15:37 +03

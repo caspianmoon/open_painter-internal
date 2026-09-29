@@ -637,6 +637,14 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
             entry.update(error=str(exc), serial=ts.edit_serial)
             _publish_status(scene, ts, entry)
             return False
+    engine = entry.get('engine')
+    if engine is not None and getattr(engine, '_native_revisions', None) is not None:
+        try:
+            engine._native_revisions.restore_evicted()
+        except Exception as exc:
+            entry.update(error='GPU presentation recovery failed: ' + str(exc), serial=ts.edit_serial)
+            _publish_status(scene, ts, entry)
+            return False
     graph = entry['graph']
     if _pending(graph) and not painting:
         # Frozen while painting: no isolated-input steps until release.

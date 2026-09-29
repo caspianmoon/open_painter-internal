@@ -38,6 +38,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from blender_test_profile import assert_blender_profile, isolated_environment
 from benchmark_pairs import check_flag, measure_pairs, summarize_pairs
+from native_fixtures import FIXTURES, add_source
 
 STAGES = ("idle_engine_tick", "idle_scheduler_tick", "roughness", "mask_strength", "opacity", "republish")
 
@@ -47,8 +48,8 @@ def arguments():
     parser.add_argument("--blender", type=Path)
     parser.add_argument("--backend", choices=("vulkan", "opengl", "auto"), default="vulkan")
     parser.add_argument("--pixel-publish", choices=("auto", "force"), default="auto")
-    parser.add_argument("--fixture", choices=("masked", "plain"), default="masked",
-                        help="Two fills with a cellular mask, or spatially constant fills")
+    parser.add_argument("--fixture", choices=tuple(FIXTURES), default="masked",
+                        help="Versioned plain, cellular mask, image fill, or authored stroke fixture")
     parser.add_argument("--layers", type=int, default=2,
                         help="Total root fills; additional plain fills go beneath the edited coat (default: 2)")
     parser.add_argument("--source-root", type=Path, default=ROOT)
@@ -76,6 +77,8 @@ def arguments():
         parser.error("--require-same-gpu-work requires --paired-flag")
     if not 2 <= args.layers <= 128:
         parser.error("--layers must be between 2 and 128")
+    if args.fixture in {"image", "paint"} and args.layers != 2:
+        parser.error("Versioned image/paint fixtures require --layers 2")
     if args.repeat < 2 or args.idle_repeat < 2:
         parser.error("--repeat and --idle-repeat must be at least 2")
     if any(size not in (512, 1024, 2048, 4096) for size in [args.size, *args.sizes]):
@@ -205,6 +208,10 @@ def worker(args):
     from open_painter.evaluation import cache, metrics, shader_preview
     from open_painter.evaluation.engine import runtime
     from open_painter.utils.ids import new_id
+    # Gate 0 artifact identity (stdlib only; safe inside Blender). source_sha256
+    # below keeps its exact legacy semantics; artifact_digests extends it with
+    # the shader bundle, build files, and (absent until P1/P2) adapter hashes.
+    from collect_gate0_baseline import artifact_digests
     if args.paired_flag:
         check_flag(runtime, args.paired_flag)
 
@@ -212,9 +219,10 @@ def worker(args):
               "repeat": args.repeat, "idle_repeat": args.idle_repeat,
               "layers": args.layers,
               "source_root": str(args.source_root), "source_sha256": source_digest(args.source_root),
+              "artifact_digests": artifact_digests(args.source_root),
               "blender": bpy.app.version_string, "os": platform.platform(),
               "profile_isolation": profile,
-              "fixture": (("two_fills_cellular_mask_v1" if args.fixture == "masked" else "two_fills_plain_v1")
+              "fixture": (FIXTURES[args.fixture]
                           if args.layers == 2 else
                           f"root_fills_{args.layers}_{'cellular_coat_mask' if args.fixture == 'masked' else 'plain'}_v1"),
               "measurement_version": 3 if args.paired_flag else 2,
@@ -255,12 +263,17 @@ def worker(args):
         }
         open_painter.register()
         registered = True
+        from open_painter.native_bridge.loader import find_library
+        report['artifact_digests'] = artifact_digests(args.source_root, find_library())
         if bpy.app.timers.is_registered(cache.tick):
             bpy.app.timers.unregister(cache.tick)
         scene = bpy.context.scene
         bpy.ops.object.select_all(action="SELECT")
         bpy.ops.object.delete(use_global=False)
-        bpy.ops.mesh.primitive_plane_add(size=2)
+        if args.fixture in {"image", "paint"}:
+            bpy.ops.mesh.primitive_cube_add(size=2)
+        else:
+            bpy.ops.mesh.primitive_plane_add(size=2)
         ts = sets.create(scene, "Windows engine benchmark", args.size)
         sets.assign(scene, ts, bpy.context.object)
         base = stack.add(ts, "FILL", "Base")
@@ -291,6 +304,7 @@ def worker(args):
             mask.id, mask.source, mask.procedural = new_id(), "PROCEDURAL", "CELLULAR"
         else:
             coat.opacity = .6
+        add_source(args.fixture, scene, ts, coat, args.size)
         material_manager.repair(ts)
         bpy.context.view_layer.update()
         dev = runtime.device()
@@ -354,6 +368,11 @@ def worker(args):
                 result[channel] = {"sha256": hashlib.sha256(memoryview(values)).hexdigest(),
                                    "sum": float(values.sum(dtype=np.float64)),
                                    "minimum": float(values.min()), "maximum": float(values.max())}
+                if args.fixture in {"image", "paint"} and channel == "BASE_COLOR":
+                    red_range = float(np.ptp(values.reshape(args.size, args.size, 4)[..., 0]))
+                    result[channel]["spatial_red_range"] = red_range
+                    if red_range <= 1e-4:
+                        raise AssertionError(f"{args.fixture} did not produce nonuniform texels")
                 checked = perf_counter()
                 acquisition_ms += (acquired - mark) * 1000
                 read_ms += (read - acquired) * 1000
@@ -402,14 +421,23 @@ def worker(args):
                 # Own Python values before the next completion reuses the buffer.
                 return {channel: values[index].tolist() for index, channel in enumerate(CHANNELS)}
 
+        event_sequence = 0
+
         def measure(operation):
+            nonlocal event_sequence
+            event_sequence += 1
             passes, compiles = dev.passes, dev.compiles
             with metrics.Metrics() as observed:
                 started = perf_counter()
                 operation()
+                callback_finished = perf_counter()
                 result = ready()
                 prepared = perf_counter()
-            result.update(gpu_passes=dev.passes - passes, compiles=dev.compiles - compiles,
+            result.update(event_id=event_sequence, callback_received_s=started,
+                          callback_finished_s=callback_finished,
+                          callback_ms=(callback_finished - started) * 1000,
+                          accepted_recipe_serial=ts.edit_serial, display_presented_s=None,
+                          gpu_passes=dev.passes - passes, compiles=dev.compiles - compiles,
                           engine_counters=dict(observed.counts))
             fence_passes, fence_compiles = dev.passes, dev.compiles
             result["completion_pixels"] = complete()
@@ -495,6 +523,7 @@ def worker(args):
         report["summary"] = {key: summarize(value) for key, value in report["samples"].items()}
         report["final_pixels"] = previous_pixels
         report["memory"] = shader_preview.session_engine(scene, ts).memory()
+        report['execution_backend'] = shader_preview.session_engine(scene, ts).report.get('execution_backend')
         report["source_sha256_at_end"] = source_digest(args.source_root)
         if report["source_sha256"] != report["source_sha256_at_end"]:
             raise RuntimeError("Source changed during measurement; discard this run")

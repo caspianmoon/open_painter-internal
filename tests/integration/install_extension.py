@@ -64,6 +64,12 @@ def rendered(ts):
 material_manager.repair(ts)
 graph = shader_preview.ensure(bpy.context.scene, ts)
 assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
+if os.environ.get('OP_EXPECT_NATIVE') == '1':
+    info = shader_preview.diagnostics(bpy.context.scene, ts)
+    assert info['engine']['execution_backend'] == 'c17-host-metal', info
+    loader = importlib.import_module(module + '.native_bridge.loader')
+    assert loader.find_library().is_relative_to(Path(repo.directory).resolve())
+    print('INSTALLED_C17_HOST_METAL_PASS', loader.find_library())
 with Metrics() as observed:
     stack.channel_for(ts.layers[0], 'ROUGHNESS').value = .37
     assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)

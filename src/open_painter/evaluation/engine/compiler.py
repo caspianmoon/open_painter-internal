@@ -34,6 +34,18 @@ class BitsBinding(Binding):
 
 
 class EngineGraph(Graph):
+    def blend(self, backdrop, source, coverage, mode, channel):
+        # Keep semantic operations compact. Native translation owns the math;
+        # the diagnostic legacy translator expands the independent reference.
+        from numbers import Real
+        node = self.node('OPBlend')
+        node.operation = mode
+        node.opaque = isinstance(backdrop.alpha, Real) and backdrop.alpha == 1.0
+        for socket, value in zip(node.inputs, (backdrop.color, backdrop.alpha,
+                                               source.color, source.alpha, coverage)):
+            self.link(value, socket)
+        return Signal(node.outputs['Color'], node.outputs['Alpha'])
+
     def __init__(self, scene, ts):
         super().__init__(scene, ts, None)
         self.chains = {}

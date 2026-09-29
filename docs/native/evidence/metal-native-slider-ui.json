@@ -1,0 +1,1065 @@
+{
+  "result": "PASS",
+  "error": null,
+  "blender": "5.2.1 LTS",
+  "gpu_backend": "METAL",
+  "control": "Isolated native Blender sidebar slider, bound to the actual coating OP_Mask.black RNA",
+  "calibration": [
+    {
+      "point": [
+        2228,
+        1377
+      ],
+      "before": 0.07999999821186066,
+      "after": 0.16752734780311584
+    }
+  ],
+  "samples": [
+    {
+      "event_index": 0,
+      "observed_value": 0.36564552783966064,
+      "before_value": 0.30000001192092896,
+      "first_completed_frame_ms": 458.4232499473728,
+      "screenshot_save_ms": 221.1069160257466,
+      "screenshot_load_and_read_ms": 124.8704589670524,
+      "capture_started_after_event_ms": 112.44587495457381,
+      "material_mean_change": 0.01581975631415844,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.43333397479727864,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 37,
+        "bound_serial": 37,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 3,
+        "update_calls": 3,
+        "resource_steps": 0,
+        "evaluations": 4,
+        "engine": {
+          "evaluate_ms": 4.921042011119425,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.16237498493865132,
+              "CHANNEL": 0.2887081354856491
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.678750035353005,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    },
+    {
+      "event_index": 1,
+      "observed_value": 0.496936559677124,
+      "before_value": 0.36564552783966064,
+      "first_completed_frame_ms": 309.0394999599084,
+      "screenshot_save_ms": 207.74854195769876,
+      "screenshot_load_and_read_ms": 66.50195800466463,
+      "capture_started_after_event_ms": 34.788999997545034,
+      "material_mean_change": 0.043405961245298386,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.38004101952537894,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 38,
+        "bound_serial": 38,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 4,
+        "update_calls": 4,
+        "resource_steps": 0,
+        "evaluations": 5,
+        "engine": {
+          "evaluate_ms": 2.50025000423193,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.07750000804662704,
+              "CHANNEL": 0.20962406415492296
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.3751669903285801,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    },
+    {
+      "event_index": 2,
+      "observed_value": 0.43129104375839233,
+      "before_value": 0.496936559677124,
+      "first_completed_frame_ms": 292.23183396970853,
+      "screenshot_save_ms": 193.13441700069234,
+      "screenshot_load_and_read_ms": 64.27149998489767,
+      "capture_started_after_event_ms": 34.82591698411852,
+      "material_mean_change": 0.020708894357085228,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.38233300438150764,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 39,
+        "bound_serial": 39,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 5,
+        "update_calls": 5,
+        "resource_steps": 0,
+        "evaluations": 6,
+        "engine": {
+          "evaluate_ms": 2.3778750328347087,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.060999998822808266,
+              "CHANNEL": 0.20579301053658128
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.3990019797347486,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    },
+    {
+      "event_index": 3,
+      "observed_value": 0.23435449600219727,
+      "before_value": 0.43129104375839233,
+      "first_completed_frame_ms": 305.14354194747284,
+      "screenshot_save_ms": 203.40300002135336,
+      "screenshot_load_and_read_ms": 67.35699996352196,
+      "capture_started_after_event_ms": 34.38354196259752,
+      "material_mean_change": 0.050227709114551544,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.26754196733236313,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 40,
+        "bound_serial": 40,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 6,
+        "update_calls": 6,
+        "resource_steps": 0,
+        "evaluations": 7,
+        "engine": {
+          "evaluate_ms": 2.099874953273684,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.059416983276605606,
+              "CHANNEL": 0.1753740943968296
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.2613750877790153,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    },
+    {
+      "event_index": 4,
+      "observed_value": 0.36564552783966064,
+      "before_value": 0.23435449600219727,
+      "first_completed_frame_ms": 293.45612501492724,
+      "screenshot_save_ms": 190.86258398601785,
+      "screenshot_load_and_read_ms": 68.5171660152264,
+      "capture_started_after_event_ms": 34.07637501368299,
+      "material_mean_change": 0.026368258520960808,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.1258340198546648,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 41,
+        "bound_serial": 41,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 7,
+        "update_calls": 7,
+        "resource_steps": 0,
+        "evaluations": 8,
+        "engine": {
+          "evaluate_ms": 2.132041030563414,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.062207982409745455,
+              "CHANNEL": 0.17641799058765173
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.2552508269436657,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    },
+    {
+      "event_index": 5,
+      "observed_value": 0.30000001192092896,
+      "before_value": 0.36564552783966064,
+      "first_completed_frame_ms": 292.6307499874383,
+      "screenshot_save_ms": 190.00458298251033,
+      "screenshot_load_and_read_ms": 68.62412497866899,
+      "capture_started_after_event_ms": 34.002042026259005,
+      "material_mean_change": 0.013831960037350655,
+      "before_release": true,
+      "diagnostic": {
+        "parameter_changes": [
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "invalidated_nodes": [
+          "Final:BASE_COLOR",
+          "Final:HEIGHT",
+          "Final:METALLIC",
+          "Final:NORMAL",
+          "Final:ROUGHNESS",
+          "Parameter:open_painter.texture_sets[0].layers[1].masks[0].black"
+        ],
+        "affected_channels": [
+          "BASE_COLOR",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "updated_bindings": 1,
+        "raster_boundaries_queued": 0,
+        "texture_bake_triggered": false,
+        "cache_requests": 0,
+        "deferred": false,
+        "submission_ms": 0.1419169711880386,
+        "pending_resources": false,
+        "gpu_execution_scope": "Blender evaluates the material shader; per-node execution is not exposed",
+        "state": "SHADER",
+        "serial": 42,
+        "bound_serial": 42,
+        "error": "",
+        "attached": true,
+        "rebuild_pending": false,
+        "rebuild_scope": null,
+        "graph_builds": 1,
+        "graph_rehydrations": 0,
+        "binding_updates": 8,
+        "update_calls": 8,
+        "resource_steps": 0,
+        "evaluations": 9,
+        "engine": {
+          "evaluate_ms": 2.259458997286856,
+          "channels": [
+            "BASE_COLOR",
+            "HEIGHT",
+            "METALLIC",
+            "NORMAL",
+            "ROUGHNESS"
+          ],
+          "passes": 70,
+          "units_rendered": 10,
+          "programs": 7,
+          "compiles": 9,
+          "stages": {
+            "inputs_ms": 0.0,
+            "translate_ms": 0.0,
+            "compile_ms": 0.0,
+            "compiles": 0,
+            "render_ms": {
+              "MASK": 0.05524995503947139,
+              "CHANNEL": 0.18612394342198968
+            },
+            "passes": {
+              "MASK": 1,
+              "CHANNEL": 9
+            },
+            "publish_ms": 1.339250069577247,
+            "published": [
+              "BASE_COLOR",
+              "ROUGHNESS",
+              "METALLIC",
+              "NORMAL",
+              "HEIGHT"
+            ],
+            "publish_path": "framebuffer",
+            "units": {},
+            "profiled": false,
+            "deferred": []
+          },
+          "memory": {
+            "leased_bytes": 134217728,
+            "pooled_bytes": 234881016,
+            "retained_bytes": 33554432,
+            "active_bytes": 100663296,
+            "undo_bytes": 0
+          },
+          "execution_backend": "c17-host-metal",
+          "native_topology_rebuilds": 1
+        },
+        "frozen": false,
+        "held": false,
+        "deferred_owners": 0,
+        "cache_states": {}
+      }
+    }
+  ],
+  "instrumentation": {
+    "observed_calls": {},
+    "phases": {
+      "source_generation": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "masking": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "filters": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "blending": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "geometry": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "geometry_signature": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "image_read": {
+        "calls": 13,
+        "wall_s": 0.8066021259874105,
+        "cpu_s": 0.9316390000000023,
+        "exclusive_wall_s": 0.8066021259874105,
+        "exclusive_cpu_s": 0.9316390000000023
+      },
+      "image_write": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      },
+      "packing": {
+        "calls": 0,
+        "wall_s": 0.0,
+        "cpu_s": 0.0,
+        "exclusive_wall_s": 0.0,
+        "exclusive_cpu_s": 0.0
+      }
+    },
+    "counters": {
+      "image_read_bytes": 837851648,
+      "image_read_allocated_bytes": 837851648,
+      "shader_parameter_bindings_updated": 6,
+      "shader_parameter_updates": 6,
+      "shader_update_calls": 7,
+      "engine_state_signature_checks": 105,
+      "native_graph_evaluations": 7,
+      "native_planned_units": 69,
+      "engine_state_cache_hits": 162,
+      "engine_channel_publications": 30,
+      "shader_resource_requests": 0,
+      "shader_resource_publications": 0,
+      "shader_resource_written_bytes": 0
+    },
+    "distributions": {
+      "shader_submission_ms": {
+        "samples": 7,
+        "p50": 0.26754196733236313,
+        "p95": 0.4180336836725473,
+        "maximum": 0.43333397479727864
+      },
+      "shader_callback_seconds": {
+        "samples": 7,
+        "p50": 0.00047033303417265415,
+        "p95": 0.0006639123836066573,
+        "maximum": 0.0006973749841563404
+      },
+      "engine_evaluate_ms": {
+        "samples": 6,
+        "p50": 2.3186670150607824,
+        "p95": 4.315844009397551,
+        "maximum": 4.921042011119425
+      }
+    },
+    "last_observed_bytes": {},
+    "peak_observed_bytes": {},
+    "process_peak_rss_bytes": 1107132416
+  },
+  "enqueued_native_events": [
+    {
+      "type": "ESC",
+      "value": "PRESS",
+      "xy": [
+        24,
+        177
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303966.165566458
+    },
+    {
+      "type": "ESC",
+      "value": "RELEASE",
+      "xy": [
+        24,
+        177
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303966.165640958
+    },
+    {
+      "type": "ESC",
+      "value": "PRESS",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303970.224530458
+    },
+    {
+      "type": "ESC",
+      "value": "RELEASE",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303970.224586291
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303970.224598208
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "PRESS",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303970.571820458
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303970.927995708
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2288,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303971.291840791
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "RELEASE",
+      "xy": [
+        2288,
+        1377
+      ],
+      "phase": "SETUP",
+      "enqueued_seconds": 303971.648019208
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 303974.580174916
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "PRESS",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 303974.960293375
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 303975.323375708
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2278,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303975.679047875
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2338,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.2079565
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2308,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.591296416
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2218,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.958089333
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2278,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303977.341492041
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303977.707908083
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "RELEASE",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303978.008192833
+    }
+  ],
+  "measurement": "Event enqueue to first changed material in Blender's completed screen framebuffer capture. Includes dispatch, viewport scheduling, PNG capture and readback; not scanout or submission latency.",
+  "limitations": "Test panel isolates the same native RNA widget used in the product; full product-panel navigation is not tested. One material ROI and one mask control; not an arbitrary-stack frame-rate guarantee.",
+  "execution_backend": "c17-host-metal",
+  "material_roi": [
+    768,
+    423,
+    327,
+    517
+  ],
+  "baseline_jitter": 0.0007702536531724036,
+  "restoration_mean_error": 0.0007116671768017113,
+  "source_hashes": {
+    "Acceptance seeded scalar": "bfd39cd5fa1ab1429dc9da653dc24a3b070f214525e7ef8342ebc283686333f6",
+    "Acceptance curvature": "f02b515de206d38116de7e4de59eb8049fbcfd208cae2fa745936286dbaf5023"
+  },
+  "texture_set_resolution": "2048",
+  "fixture_source_sizes": {
+    "Acceptance seeded scalar": [
+      64,
+      64
+    ],
+    "Acceptance curvature": [
+      64,
+      64
+    ]
+  },
+  "drag_native_events": [
+    {
+      "type": "LEFTMOUSE",
+      "value": "PRESS",
+      "xy": [
+        2228,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 303974.960293375
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "BASELINE",
+      "enqueued_seconds": 303975.323375708
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2278,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303975.679047875
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2338,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.2079565
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2308,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.591296416
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2218,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303976.958089333
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2278,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303977.341492041
+    },
+    {
+      "type": "MOUSEMOVE",
+      "value": "NOTHING",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303977.707908083
+    },
+    {
+      "type": "LEFTMOUSE",
+      "value": "RELEASE",
+      "xy": [
+        2248,
+        1377
+      ],
+      "phase": "DRAG",
+      "enqueued_seconds": 303978.008192833
+    }
+  ]
+}

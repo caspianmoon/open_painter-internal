@@ -15,7 +15,7 @@ its chain, reusing retained SRC/MASK results whose stamps still match.
 """
 import os
 from collections import Counter, OrderedDict
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from time import perf_counter
 
@@ -43,6 +43,7 @@ FUSE_PIXEL_PUBLISH = True   # test/diagnostic opt-out; the normal publication pa
 FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured faster compact path
 CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one texel on Vulkan
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
+NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -158,6 +159,7 @@ class Device:
         self._pooled_bytes = 0
         self._pooled_ids = set()
         self._leases = {}  # id -> base-level bytes; metadata only, never keeps a texture alive
+        self._native_pool = None
         self.compiles = 0
         self.compile_seconds = 0.0
         self.passes = 0
@@ -169,6 +171,8 @@ class Device:
             self.max_samplers = int(gpu.capabilities.max_textures_frag_get())
         except Exception:
             self.max_samplers = 16
+        from ...native_bridge.lifecycle import execution_library
+        execution_library(self.backend)
 
     # ---- programs -----------------------------------------------------------------
 
@@ -178,7 +182,7 @@ class Device:
         shader = self.shaders.get(key)
         if shader is None:
             shader = self._create(program.library + program.source, [s.name for s in program.samplers],
-                                  program.parameter_slots, len(program.objects), len(program.targets), preamble=True)
+                                  program.parameter_slots, len(program.objects), len(program.targets), preamble=not program.native)
             self.shaders[key] = shader
         return shader
 
@@ -239,13 +243,37 @@ class Device:
                 'downsample': (DOWNSAMPLE, ['op_source'], (), 1),
                 'sample_pixels': (SAMPLE_PIXELS, ['op_source'], ('op_step',), 1),
                 'copy': (COPY, ['op_source'], (), 1)}[name]
+            from ...native_bridge.compiler import fixed_source
+            source = fixed_source('runtime.' + name, source)
             shader = self._fixed[name] = self._create(source, samplers, targets=targets, ints=ints)
         return shader
 
     # ---- textures -----------------------------------------------------------------
 
+    def _resource_pool(self):
+        pool = getattr(self, '_native_pool', None)
+        if pool is None and not self._leases and not self.pool:
+            from ...native_bridge.lifecycle import execution_library
+            lib = execution_library(getattr(self, 'backend', None))
+            if lib is not None and hasattr(lib, 'op_pool_create'):
+                from ...native_bridge.resources import NativePool
+                pool = self._native_pool = NativePool(lib, self)
+        if pool is not None:
+            pool.configure(POOL_BYTES, POOL_SPARES)
+        return pool
+
     def texture(self, n, fmt=RGBA):
         import gpu
+        native = self._resource_pool()
+        if native is not None:
+            texture = native.acquire(n, fmt)
+            if texture is not None:
+                return texture
+            texture = gpu.types.GPUTexture((n, n), format=fmt)
+            native.register(texture, n, n, fmt)
+            metrics.count('engine_texture_allocations')
+            metrics.count('engine_texture_allocated_bytes', texture_bytes(n, n, fmt))
+            return texture
         key = (n, fmt)
         free = self.pool.get(key)
         while free:
@@ -261,6 +289,10 @@ class Device:
         return texture
 
     def release(self, texture, n, fmt=RGBA):
+        native = self._resource_pool()
+        if native is not None:
+            native.release(texture, n, fmt)
+            return
         if texture is None or id(texture) in self._pooled_ids:
             return
         size = texture_bytes(n, n, fmt)
@@ -301,9 +333,16 @@ class Device:
 
     def discard(self, texture):
         """Forget an uploaded texture whose owner is dropping its last reference."""
+        native = getattr(self, '_native_pool', None)
+        if native is not None:
+            native.discard(texture)
+            return
         self._leases.pop(id(texture), None)
 
     def memory(self):
+        native = getattr(self, '_native_pool', None)
+        if native is not None:
+            return native.memory()
         return {'leased_bytes': sum(self._leases.values()),
                 'pooled_bytes': self._pooled_bytes}
 
@@ -311,8 +350,12 @@ class Device:
         import gpu
         array = np.ascontiguousarray(array, np.float32)
         h, w = array.shape[:2]
+        native = self._resource_pool()
         texture = gpu.types.GPUTexture((w, h), format=fmt, data=gpu.types.Buffer('FLOAT', array.size, array.ravel()))
-        self._leases[id(texture)] = texture_bytes(w, h, fmt)
+        if native is not None:
+            native.register(texture, w, h, fmt)
+        else:
+            self._leases[id(texture)] = texture_bytes(w, h, fmt)
         metrics.count('engine_texture_allocations')
         metrics.count('engine_texture_uploads')
         metrics.count('engine_texture_uploaded_bytes', array.nbytes)
@@ -321,6 +364,10 @@ class Device:
 
     def trim(self, spares=0):
         """Free pooled textures beyond ``spares`` per size and format (0: all of them)."""
+        native = self._resource_pool()
+        if native is not None:
+            native.trim(spares)
+            return
         spares = max(0, spares)
         for key, free in list(self.pool.items()):
             while len(free) > spares:
@@ -363,6 +410,14 @@ class Device:
         import gpu
         slots = [({'texture': texture, 'mip': mip} if mip and not isinstance(texture, dict) else texture)
                  for texture in targets]
+        from ...native_bridge.lifecycle import active_library
+        lib = active_library()
+        native = getattr(lib, '_op_binding', None) if lib is not None else None
+        if native is not None:
+            uniforms, block = self._interfaces[shader]
+            native.gpu_draw(shader, slots, size, samplers, ubo, ints, uniforms, block, self._batch(shader), region)
+            self.passes += 1
+            return
         attachments = [slot['texture'] if isinstance(slot, dict) else slot for slot in slots]
         if any(source is target for _, source in samplers for target in attachments):
             raise ValueError('A GPU pass cannot sample its render target')
@@ -527,6 +582,8 @@ def forget_device():
     global _device
     from ...painting.gpu_sources import clear
     clear()
+    if _device is not None and getattr(_device, '_native_pool', None) is not None:
+        _device._native_pool.close()
     _device = None
     Engine._constants.clear()
 
@@ -547,6 +604,17 @@ class UnitState:
         program = self.program
         if not program.params and not program.objects:
             return None
+        native = getattr(program, 'native_program', None)
+        if native is not None:
+            native.update(program)
+            data = native.data()
+            values = np.frombuffer(data, np.float32)
+            if self.ubo is None or self.ubo_data is None or len(self.ubo_data) != len(data):
+                self.ubo = gpu.types.GPUUniformBuf(gpu.types.Buffer('FLOAT', len(values), values))
+            elif self.ubo_data != data:
+                self.ubo.update(gpu.types.Buffer('FLOAT', len(values), values))
+            self.ubo_data = data
+            return self.ubo
         data = [float(socket.default_value) for socket in program.params]
         data += [0.0] * (max(1, program.parameter_slots) * 4 - len(data))
         for obj in program.objects:
@@ -648,14 +716,22 @@ class Engine:
         self.waiting = {}               # channel -> when its change was first held back (pixel budget)
         self.deferred = set()           # channels the last evaluation held back for the next
         self._state_cache = None        # only live inside one synchronous evaluation
+        self._native_graph = None
+        self._native_stamps = None
+        self._native_revisions = None
+        self._native_channels = None
+        self._native_cache = None
 
     # ---- graph -----------------------------------------------------------------------
 
     def adopt(self, graph):
         """Take a (re)built graph; states of units it adopted unchanged keep their programs and results."""
+        if self._native_channels is not None and self._native_channels.dispatching:
+            raise RuntimeError("Cannot adopt a graph during native channel submission")
         n_before = self.graph.n if self.graph is not None else None
         self._clear_constant_renderer()
         self.graph = graph
+        self._native_stamps = None
         self._publication_programs.clear()
         self._clear_filters()
         if n_before is not None and n_before != graph.n:
@@ -686,15 +762,30 @@ class Engine:
                 device().release(texture, n, fmt)
         state.textures = None
         self.retained.pop(key, None)
+        if self._native_cache is not None:
+            self._native_cache.remove(key)
 
     def close(self, n=None):
         """Release every unit's textures to the pool, under ``n`` (default: the graph's side): the
         resolution they were created at, or a later request would be handed a texture of another size."""
+        if self._native_channels is not None:
+            self._native_channels.close()
+            self._native_channels = None
         n = n if n is not None else (self.graph.n if self.graph is not None else None)
         for key, state in list(self.states.items()):
             self._free(key, state, n)
         self._clear_filters()
         self.states = {}
+        if self._native_graph is not None:
+            self._native_graph.close()
+            self._native_graph = None
+        self._native_stamps = None
+        if self._native_revisions is not None:
+            self._native_revisions.close()
+            self._native_revisions = None
+        if self._native_cache is not None:
+            self._native_cache.close()
+            self._native_cache = None
         self.retained.clear()
         self.keep.clear()
         self.published = {}
@@ -727,9 +818,10 @@ class Engine:
         # mask or source rebuilt under an adopted consumer (a mask's kind changed) must reach
         # the consumer's program, whose code and uniform sockets came from the old tree. The
         # tree itself is held (compared by identity), so a freed tree's id is never matched.
+        from ...native_bridge.lifecycle import active_library
         units = self.graph.units
         return (id(self.states[key].unit.tree), tuple((producer, units[producer].tree) for producer in self._inlined(key)),
-                self.precise, tuple((_alpha_signature(image), binding(node).mapping if binding(node) else None)
+                self.precise, bool(active_library()), tuple((_alpha_signature(image), binding(node).mapping if binding(node) else None)
                                     for node, image in self._images(key)))
 
     def _state(self, key):
@@ -816,10 +908,12 @@ class Engine:
         samplers = [s for p in programs for s in p.samplers]
         surface = (self._surface() if any(s.kind in GEOMETRY or
                    (s.kind == 'filter' and getattr(s.node.effect, 'space', 'UV') == 'SURFACE') for s in samplers) else None)
-        return (tuple(float(socket.default_value) for p in programs for socket in p.params),
+        numeric = tuple((p.native_program.update(p) if getattr(p, 'native_program', None) is not None
+                         else tuple(float(socket.default_value) for socket in p.params)) for p in programs)
+        return (numeric,
                 tuple((binding(s.node).stamp if binding(s.node) is not None else _image_identity(s.node.image, epochs))
                       for s in samplers if s.kind == 'image'),
-                tuple(_object_matrix(obj) for p in programs for obj in p.objects), surface,
+                tuple(_object_matrix(obj) for p in programs if getattr(p, 'native_program', None) is None for obj in p.objects), surface,
                 tuple(signature(s.node.effect) for s in samplers if s.kind == 'filter'))
 
     def _surface(self):
@@ -830,6 +924,9 @@ class Engine:
 
     def _stamp(self, key, memo, epochs, stack=()):
         if key in memo:
+            return memo[key]
+        if self._native_stamps is not None and key in self._native_stamps:
+            memo[key] = self._native_stamps[key]
             return memo[key]
         if key in stack:
             raise ValueError('Published inputs contain a reference cycle')
@@ -861,6 +958,10 @@ class Engine:
         if ref[0] == 'const':
             color = ref[1]
             return self._constant(n, (color[0], color[3], 0.0, 0.0) if packed else color)
+        if (self._native_stamps is not None and self._native_graph is not None
+                and not self._native_graph.dispatching and n == self.graph.n
+                and ref[1] in self._native_stamps):
+            return self._native_graph.render(self, ref[1], n, memo, epochs)[0]
         return self._render(ref[1], n, memo, epochs)[0]
 
     def _render(self, key, n, memo, epochs):
@@ -870,7 +971,12 @@ class Engine:
         if state.textures is not None and state.stamp == stamp:
             if key in self.retained:
                 self.retained.move_to_end(key)
+                if self._native_cache is not None:
+                    self._native_cache.touch(key)
             return state.textures
+        if (self._native_graph is not None and self._native_graph.dispatching
+                and self._native_graph.current_key != key):
+            raise RuntimeError('A native batch dependency lost residency before its consumer')
         program = state.program
         position = self.positions.get(key)
         # Inputs rendered for this draw stay resident until it has drawn: the retention
@@ -896,6 +1002,9 @@ class Engine:
                 state.textures = allocated
             drawn = perf_counter()
             uniforms = state.uniforms()
+            # A failed submission may already have overwritten this allocation.
+            # Its old revision must not become a cache hit after undo/retry.
+            state.stamp = None
             dev.draw(state.shader, state.textures, n, samplers, uniforms)
             elapsed = (perf_counter() - drawn) * 1000
             if self.profiling:
@@ -1073,25 +1182,47 @@ class Engine:
         return texture
 
     def _trim_filters(self, budget):
-        total = sum(texture_bytes(n, n, RGBA) for _, _, n in self.filter_states.values())
-        while self.filter_states and total > max(0, budget):
-            _, (_, texture, n) = self.filter_states.popitem(last=False)
+        from ...native_bridge.cache import select_victims
+        victims = select_victims(self.filter_states, budget, lambda value: texture_bytes(value[2], value[2], RGBA))
+        for key in victims:
+            _, texture, n = self.filter_states.pop(key)
             device().release(texture, n, RGBA)
-            total -= texture_bytes(n, n, RGBA)
             metrics.count('engine_filter_evictions')
 
     def _retain(self, key, state, n):
         self.retained[key] = sum(texture_bytes(n, n, fmt) for fmt in state.formats)
         self.retained.move_to_end(key)
+        if self._native_cache is not None and self._native_cache.handle:
+            self._native_cache.put(key, self.retained[key])
+        self._trim_retained(n, (key,))
+
+    def _trim_retained(self, n, protected=()):
         total = sum(self.retained.values())
         from ...painting.gpu_sources import trim
         trim(self.set_id, max(0, RETAIN_BYTES - total))
-        for victim in list(self.retained):
-            if total <= RETAIN_BYTES:
-                break
-            if victim == key or self._in_use[victim] > 0:
-                continue
-            total -= self.retained.pop(victim)
+        from ...native_bridge.lifecycle import active_library
+        lib = active_library()
+        if lib is not None:
+            if self._native_cache is None or not self._native_cache.handle:
+                from ...native_bridge.cache import Cache
+                self._native_cache = Cache(lib)
+                for name, size in self.retained.items():
+                    self._native_cache.put(name, size)
+            victims = self._native_cache.trim(RETAIN_BYTES, [*protected, *(k for k, uses in self._in_use.items() if uses > 0)])
+        else:
+            # A diagnostic legacy session can change residency independently.
+            if self._native_cache is not None:
+                self._native_cache.close()
+                self._native_cache = None
+            victims = []
+            for candidate in self.retained:
+                if total <= RETAIN_BYTES:
+                    break
+                if candidate not in protected and self._in_use[candidate] <= 0:
+                    victims.append(candidate)
+                    total -= self.retained[candidate]
+        for victim in victims:
+            self.retained.pop(victim, None)
             victim_state = self.states.get(victim)
             if victim_state is not None and victim_state.textures:
                 for texture, fmt in zip(victim_state.textures, victim_state.formats):
@@ -1114,13 +1245,18 @@ class Engine:
     def _checkpoints(self, channel, memo, epochs):
         """Keep the result just below the lowest changed unit of the chain: the next edit
         of the same layer re-renders from there upward only."""
-        order = self.orders.get(channel, ())
-        lowest = next((key for key in order if self.states[key].stamp != self._stamp(key, memo, epochs)), None)
         keep = {key for key in self.keep if key[2] != channel}
-        if lowest is not None:
-            below = self.positions[lowest][0]
-            if below is not None and below[0] == 'unit':
-                keep.add(below[1])
+        if self._native_stamps is not None and self._native_graph is not None:
+            checkpoint = self._native_graph.checkpoint(self, channel)
+            if checkpoint is not None:
+                keep.add(checkpoint)
+        else:
+            order = self.orders.get(channel, ())
+            lowest = next((key for key in order if self.states[key].stamp != self._stamp(key, memo, epochs)), None)
+            if lowest is not None:
+                below = self.positions[lowest][0]
+                if below is not None and below[0] == 'unit':
+                    keep.add(below[1])
         released = {key for key in self.keep if key[2] == channel} - keep
         self.keep = keep
         return released
@@ -1224,6 +1360,8 @@ class Engine:
         ``PIXEL_BUDGET_MS``; False: no limit), always at least one channel, the channels waiting
         longest first; the others stay in ``deferred`` for the next evaluation.
         """
+        if self._native_channels is not None and self._native_channels.dispatching:
+            raise RuntimeError("Cannot reenter native channel evaluation")
         graph = self.graph
         if graph is None:
             return set()
@@ -1249,83 +1387,94 @@ class Engine:
             order.sort(key=lambda channel: (self.waiting.get(channel, now), CHANNELS.index(channel)))
         deferred, spent, uniform_writes = set(), 0.0, 0
         with self._evaluation_states(), dev.state():
-            for channel in order:
-                image = (images or {}).get(channel) or _output_image(ts, channel)
-                if image is None:
-                    continue
-                uniform = self._uniform_output(ts, channel, image) if images is None else None
-                stamp = (('uniform', uniform, n, self.precise, image.get('open_painter_pixel_revision', 0))
-                         if uniform is not None else
-                         self._ref_stamp(self.finals[channel], memo, epochs))
-                pointer = image.as_pointer()
-                if self.published.get(channel) == stamp and self.images.get(channel) == pointer:
-                    self.waiting.pop(channel, None)
-                    continue
-                if budget is not False and written and spent >= budget:
-                    deferred.add(channel)   # published by a later evaluation (cache.tick keeps coming)
-                    self.waiting.setdefault(channel, now)
-                    continue
-                final = self.finals[channel]
-                fused = False
-                constant_publish_ms = 0.0
-                if uniform is None and images is None and self._constant_output(ts, channel, image):
-                    from .constant_outputs import ConstantRenderer
-                    if self._constant_renderer is None:
-                        self._constant_renderer = ConstantRenderer()
-                    uniform = self._constant_renderer.evaluate(self, channel, epochs)
-                    self.rendered.extend(self._constant_renderer.rendered)
-                    for stage in ('render_ms', 'passes'):
-                        self.stages[stage].update(self._constant_renderer.stages[stage])
-                    for stage in ('inputs_ms', 'translate_ms', 'compile_ms'):
-                        self.stages[stage] += self._constant_renderer.stages[stage]
-                    constant_publish_ms = self._constant_renderer.stages['publish_ms']
-                if uniform is None:
-                    released = self._checkpoints(channel, memo, epochs)
-                    for key in released:
-                        self._settle(key, n)
-                    result = self._fused_final(channel, n, memo, epochs)
-                    fused = result is not None
-                    if not fused:
-                        result = self._texture_of(final, n, memo, epochs)
-                if self.profiling:
-                    dev.finish()   # what was queued before is not publishing's
-                publishing, inputs = perf_counter(), self.stages['inputs_ms']
-                if uniform is not None:
-                    self._publish_uniform(image, channel, uniform, n)
-                    uniform_writes += 1
+            self._prepare_native(epochs)
+            native_channels = self._native_stamps is not None and not pixels
+            if not native_channels and self._native_channels is not None:
+                self._native_channels.close()
+                self._native_channels = None
+            with self._revision_transaction(dev, external_commit=native_channels):
+                if native_channels:
+                    written = self._evaluate_native_channels(order, ts, images, n, memo, epochs)
                 else:
-                    if fused:
-                        try:
-                            self._uniform_cpu.pop(channel, None)
-                            if tuple(image.size) != (n, n):
-                                raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
-                            image.pixels.foreach_set(dev.readback(result, n))
-                        finally:
-                            dev.release(result, n, RGBA if self.precise or channel == 'HEIGHT' else HALF)
-                    else:
-                        self._publish(image, channel, result, n)
-                # A later channel may fail. Already published GPU pixels must still
-                # be synchronized on save/export, even when this evaluation aborts.
-                if pixels or uniform is not None:
-                    self.dirty_cpu.discard(channel)
-                else:
-                    self.dirty_cpu.add(channel)
-                if self.profiling:
-                    dev.finish()
-                # The padding table it may build first counts as a CPU input, not as publishing;
-                # a profile's wait is not the GPU's time.
-                elapsed = constant_publish_ms + max(0.0, (perf_counter() - publishing) * 1000
-                              - (self.stages['inputs_ms'] - inputs)
-                              - (dev.wait_cost if self.profiling else 0.0))
-                self.stages['publish_ms'] += elapsed
-                spent += elapsed
-                self.stages['published'].append(channel)
-                self.waiting.pop(channel, None)
-                if uniform is None and final[0] == 'unit':
-                    self._settle(final[1], n)
-                self.published[channel] = stamp
-                self.images[channel] = pointer
-                written.add(channel)
+                    for channel in order:
+                        image = (images or {}).get(channel) or _output_image(ts, channel)
+                        if image is None:
+                            continue
+                        uniform = self._uniform_output(ts, channel, image) if images is None else None
+                        stamp = (('uniform', uniform, n, self.precise, image.get('open_painter_pixel_revision', 0))
+                                 if uniform is not None else
+                                 self._ref_stamp(self.finals[channel], memo, epochs))
+                        pointer = image.as_pointer()
+                        if self.published.get(channel) == stamp and self.images.get(channel) == pointer:
+                            self.waiting.pop(channel, None)
+                            continue
+                        if budget is not False and written and spent >= budget:
+                            deferred.add(channel)   # published by a later evaluation (cache.tick keeps coming)
+                            self.waiting.setdefault(channel, now)
+                            continue
+                        final = self.finals[channel]
+                        fused = False
+                        constant_publish_ms = 0.0
+                        if uniform is None and images is None and self._constant_output(ts, channel, image):
+                            from .constant_outputs import ConstantRenderer
+                            if self._constant_renderer is None:
+                                self._constant_renderer = ConstantRenderer()
+                            uniform = self._constant_renderer.evaluate(self, channel, epochs)
+                            self.rendered.extend(self._constant_renderer.rendered)
+                            for stage in ('render_ms', 'passes'):
+                                self.stages[stage].update(self._constant_renderer.stages[stage])
+                            for stage in ('inputs_ms', 'translate_ms', 'compile_ms'):
+                                self.stages[stage] += self._constant_renderer.stages[stage]
+                            constant_publish_ms = self._constant_renderer.stages['publish_ms']
+                        if uniform is None:
+                            released = self._checkpoints(channel, memo, epochs)
+                            for key in released:
+                                self._settle(key, n)
+                            result = self._fused_final(channel, n, memo, epochs)
+                            fused = result is not None
+                            if not fused:
+                                result = self._texture_of(final, n, memo, epochs)
+                        if self.profiling:
+                            dev.finish()   # what was queued before is not publishing's
+                        publishing, inputs = perf_counter(), self.stages['inputs_ms']
+                        if uniform is not None:
+                            self._publish_uniform(image, channel, uniform, n)
+                            uniform_writes += 1
+                        else:
+                            if fused:
+                                try:
+                                    self._uniform_cpu.pop(channel, None)
+                                    if tuple(image.size) != (n, n):
+                                        raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
+                                    image.pixels.foreach_set(dev.readback(result, n))
+                                    metrics.count('engine_image_pixel_writes')
+                                    metrics.count('engine_image_pixel_write_bytes', n * n * 16)
+                                finally:
+                                    dev.release(result, n, RGBA if self.precise or channel == 'HEIGHT' else HALF)
+                            else:
+                                self._publish(image, channel, result, n)
+                        # A later channel may fail. Already published GPU pixels must still
+                        # be synchronized on save/export, even when this evaluation aborts.
+                        if pixels or uniform is not None:
+                            self.dirty_cpu.discard(channel)
+                        else:
+                            self.dirty_cpu.add(channel)
+                        if self.profiling:
+                            dev.finish()
+                        # The padding table it may build first counts as a CPU input, not as publishing;
+                        # a profile's wait is not the GPU's time.
+                        elapsed = constant_publish_ms + max(0.0, (perf_counter() - publishing) * 1000
+                                      - (self.stages['inputs_ms'] - inputs)
+                                      - (dev.wait_cost if self.profiling else 0.0))
+                        self.stages['publish_ms'] += elapsed
+                        spent += elapsed
+                        self.stages['published'].append(channel)
+                        self.waiting.pop(channel, None)
+                        if uniform is None and final[0] == 'unit':
+                            self._settle(final[1], n)
+                        self.published[channel] = stamp
+                        self.images[channel] = pointer
+                        written.add(channel)
         self.deferred = deferred
         self._trim_filters(RETAIN_BYTES - sum(self.retained.values()))
         from ...painting.gpu_sources import trim as trim_strokes
@@ -1341,11 +1490,94 @@ class Engine:
         self.report = {'evaluate_ms': (perf_counter() - started) * 1000, 'channels': sorted(written),
                        'passes': dev.passes - passes, 'units_rendered': len(self.rendered),
                        'programs': len(dev.shaders), 'compiles': dev.compiles,
-                       'stages': self.stages, 'memory': self.memory()}
+                       'stages': self.stages, 'memory': self.memory(),
+                       'execution_backend': ('c17-host-metal' if self._native_stamps is not None else 'legacy'),
+                       'native_topology_rebuilds': self._native_graph.rebuilds if self._native_graph else 0,
+                       'native_channel_selection': native_channels,
+                       'material_revision': self._native_revisions.revision if self._native_revisions else None}
         if written:
             metrics.count('engine_channel_publications', len(written))
             metrics.sample('engine_evaluate_ms', self.report['evaluate_ms'])
         return written
+
+    def _evaluate_native_channels(self, order, ts, images, n, memo, epochs):
+        from ...native_bridge import lifecycle
+        from ...native_bridge.channels import NativeChannels, Request
+        dev = device()
+        if self._native_channels is None or not self._native_channels.handle:
+            self._native_channels = NativeChannels(self._native_graph.lib)
+            lifecycle.track(self._native_channels)
+        owner = self._native_channels
+        requests, targets = [], {}
+        for channel in dict.fromkeys(order):
+            image = (images or {}).get(channel) or _output_image(ts, channel)
+            if image is None:
+                continue
+            index = CHANNELS.index(channel)
+            final = self.finals[channel]
+            stamp = self._ref_stamp(final, memo, epochs)
+            requests.append(owner.request(index, image, final, stamp, n, self.precise,
+                                          self.pad, channel not in self.published))
+            targets[index] = channel, image, final, stamp
+            self.waiting.pop(channel, None)
+
+        written = set()
+        def submit(action, index):
+            if action == 1:
+                self._native_revisions.commit()
+                return
+            channel, image, final, stamp = targets[index]
+            for key in self._checkpoints(channel, memo, epochs):
+                self._settle(key, n)
+            result = self._texture_of(final, n, memo, epochs)
+            if self.profiling:
+                dev.finish()
+            started, inputs = perf_counter(), self.stages['inputs_ms']
+            self._publish(image, channel, result, n)
+            if self.profiling:
+                dev.finish()
+            self.stages['publish_ms'] += max(0.0, (perf_counter() - started) * 1000
+                - (self.stages['inputs_ms'] - inputs) - (dev.wait_cost if self.profiling else 0.0))
+            if final[0] == 'unit':
+                self._settle(final[1], n)
+            # Allocate/update host mirrors while publication is still staged.
+            # A Python allocation failure must occur before C accepts the batch.
+            self.published[channel] = stamp
+            self.images[channel] = image.as_pointer()
+            self.dirty_cpu.add(channel)
+            self.stages['published'].append(channel)
+            written.add(channel)
+
+        owner.execute((Request * len(requests))(*requests), submit)
+        return written
+
+    def _revision_transaction(self, dev, *, external_commit=False):
+        from ...native_bridge import lifecycle
+        lib = lifecycle.execution_library(dev.backend)
+        if lib is None or dev.pixel_publish:
+            return nullcontext()
+        if self._native_revisions is None or not self._native_revisions.handle:
+            from ...native_bridge.revisions import Revisions
+            self._native_revisions = Revisions(lib, dev)
+            lifecycle.track(self._native_revisions)
+        return self._native_revisions.transaction(self, external_commit=external_commit)
+
+    def _prepare_native(self, epochs):
+        from ...native_bridge import lifecycle
+        self._native_stamps = None
+        if not NATIVE_HOST_GRAPH:
+            return
+        lib = lifecycle.execution_library(device().backend)
+        if lib is None:
+            self._native_stamps = None
+            return
+        if self._native_graph is None or not self._native_graph.handle:
+            from ...native_bridge.graph import NativeGraph
+            self._native_graph = NativeGraph(lib)
+            lifecycle.track(self._native_graph)
+        self._native_stamps = self._native_graph.prepare(self, epochs)
+        metrics.count('native_graph_evaluations')
+        metrics.count('native_planned_units', len(self._native_graph.plan))
 
     def _constant_output(self, ts, channel, image):
         """Use original shaders at one texel only when the entire channel is spatially constant."""
@@ -1403,6 +1635,8 @@ class Engine:
             self._uniform_cpu[channel] = stamp
             metrics.count('engine_uniform_cpu_initializations')
             metrics.count('engine_uniform_cpu_bytes', n * n * 16)
+            metrics.count('engine_image_pixel_writes')
+            metrics.count('engine_image_pixel_write_bytes', n * n * 16)
             metrics.count('engine_uniform_publications')
             # foreach_set already invalidates the image texture and mip chain.
             # Let Blender upload them when sampled, like ordinary publication:
@@ -1460,6 +1694,7 @@ class Engine:
         self._in_use = Counter()
         self._surface_key = None
         with self._evaluation_states(), device().state():
+            self._prepare_native(epochs or {})
             texture = self._texture_of(self.finals[channel], n, memo, epochs or {})
             values = np.array(device().readback(texture, texture.width), np.float32).reshape(texture.height, texture.width, 4)
             if getattr(texture, 'format', '') in {'RG16F', 'RG32F'}:
@@ -1467,6 +1702,8 @@ class Engine:
             return np.broadcast_to(values, (n, n, 4)).copy() if values.shape[0] == 1 else values
 
     def _publish(self, image, channel, result, n):
+        if self._native_revisions is not None and self._native_revisions.submitting:
+            return self._native_revisions.stage(self, image, channel, result, n)
         import gpu
         dev = device()
         self._uniform_cpu.pop(channel, None)
@@ -1485,6 +1722,8 @@ class Engine:
                 # buffer; Blender rebuilds the image texture and mips on its next draw.
                 dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
                 image.pixels.foreach_set(dev.readback(chain, n))
+                metrics.count('engine_image_pixel_writes')
+                metrics.count('engine_image_pixel_write_bytes', n * n * 16)
                 return
             target = gpu.texture.from_image(image)
             # Finish, pad and write level 0 in one pass; each mip level in one more.
@@ -1517,11 +1756,17 @@ class Engine:
             # Reuse the same buffer as Vulkan publication: avoid another full-size
             # GPU read buffer and NumPy copy for every channel on save/export.
             image.pixels.foreach_set(device().readback(texture, n))
+            metrics.count('engine_image_pixel_writes')
+            metrics.count('engine_image_pixel_write_bytes', n * n * 16)
             self.dirty_cpu.discard(channel)
 
 
 def _positions(graph):
     """What each CHANNEL unit composes over, each channel's result, and the render order."""
+    from ...native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ...native_bridge.stack import positions
+        return positions(lib, graph)
     positions, finals, orders = {}, {}, {}
 
     def walk(steps, backdrop, order):
@@ -1556,4 +1801,7 @@ def _output_image(ts, channel):
 
 
 def write_pixels(image, values):
-    image.pixels.foreach_set(np.ascontiguousarray(values, np.float32).ravel())
+    pixels = np.ascontiguousarray(values, np.float32).ravel()
+    image.pixels.foreach_set(pixels)
+    metrics.count('engine_image_pixel_writes')
+    metrics.count('engine_image_pixel_write_bytes', pixels.nbytes)

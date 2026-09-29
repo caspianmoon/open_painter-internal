@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "artifacts": {
+    "python_addon_sha256": "fb2211203f64841ef6ff2fdd89805f712e865e8213bd83f5e0c5cf785b2bd971",
+    "python_file_count": 319,
+    "adapter_sha256": "4a236fb98d20b189c0ca56957b926a216ddbabafd8576c44eace9f4bb40a8226",
+    "shader_bundle_sha256": "2e503deb8d919b4c0455a7fe7100c5f704a40ff47e20895db3c4936ee905b929",
+    "native_source_sha256": "da2c538f3f77f087edae82afb13f2e7663f5e2b341c9bb829a459a74f921146d",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "6859a444112f897312c935b03788ab99ea04f432a1d1c64fdfa2f625e980981a",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 52632,
+      "sha256": "9e285a4d108afcd3320a735d871c2839544a2457fd9ef1ca576efeaa5847a9b9"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "native_host_metal.py",
+      "exit": 0
+    },
+    {
+      "test": "install_extension.py",
+      "exit": 0
+    }
+  ],
+  "package_sha256": "0691d4066ec2cd04a5bb479a1202bb5210888ceaf65b26cf31081da00eb34360"
+}

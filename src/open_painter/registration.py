@@ -162,6 +162,7 @@ def register():
     from .ui import vector_brush
     from .smart_materials import portable
     from .painting import brush_graph
+    from .native_bridge import lifecycle as native_lifecycle
     try:
         for cls in CLASSES:
             bpy.utils.register_class(cls)
@@ -176,7 +177,8 @@ def register():
         _cleanups.append(lambda: delattr(bpy.types.WindowManager, 'open_painter_director'))
         export_view.register()
         _cleanups.append(export_view.unregister)
-        for initialize, cleanup in ((cache.register,cache.unregister),
+        for initialize, cleanup in ((native_lifecycle.register,native_lifecycle.unregister),
+                                    (cache.register,cache.unregister),
                                     (lifecycle.register,lifecycle.unregister),
                                     (editor.register,editor.unregister),
                                     (graph_operators.register,graph_operators.unregister),

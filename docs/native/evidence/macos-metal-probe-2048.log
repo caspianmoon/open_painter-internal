@@ -1,0 +1,16 @@
+NATIVE_PRESENTATION_PROBE FAIL
+Traceback (most recent call last):
+  File "/Volumes/SSD/projects/open_painter/scripts/probe_native_presentation.py", line 187, in <module>
+    main()
+    ~~~~^^
+  File "/Volumes/SSD/projects/open_painter/scripts/probe_native_presentation.py", line 167, in main
+    worker(args)
+    ~~~~~~^^^^^^
+  File "/Volumes/SSD/projects/open_painter/scripts/probe_native_presentation.py", line 152, in worker
+    raise RuntimeError(report['error'])
+RuntimeError: BASE_COLOR mip 1: error 0.07872194051742554
+
+Error: script failed, file: '/Volumes/SSD/projects/open_painter/scripts/probe_native_presentation.py', exiting.
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

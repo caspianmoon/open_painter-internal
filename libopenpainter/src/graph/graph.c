@@ -1,0 +1,282 @@
+#include "openpainter/op_graph.h"
+#include <stdlib.h>
+#include <string.h>
+#define MAX_NODES 65536u
+#define MAX_EDGES 1048576u
+struct op_graph {
+    uint32_t count, edge_count;
+    int executing;
+    uint32_t *offsets, *edges, *order, *work;
+    uint64_t *own;
+    unsigned char *needed;
+};
+op_status_t op_graph_create(op_graph_t **out) {
+    if (!out)
+        return OP_INVALID_ARGUMENT;
+    *out = calloc(1, sizeof(op_graph_t));
+    return *out ? OP_OK : OP_RESOURCE_EXHAUSTED;
+}
+void op_graph_destroy(op_graph_t *g) {
+    if (!g || g->executing)
+        return;
+    free(g->offsets);
+    free(g->edges);
+    free(g->order);
+    free(g->work);
+    free(g->needed);
+    free(g->own);
+    free(g);
+}
+op_status_t op_graph_replace(op_graph_t *g, uint32_t count, const uint32_t *offsets,
+                             const uint32_t *edges, uint32_t edge_count) {
+    uint32_t *copy_offsets = NULL, *copy_edges = NULL, *order = NULL, *stack = NULL, *cursor = NULL;
+    unsigned char *mark = NULL;
+    uint64_t *own = NULL;
+    uint32_t used = 0;
+    op_status_t status = OP_RESOURCE_EXHAUSTED;
+    if (!g || !offsets || (edge_count && !edges) || count > MAX_NODES || edge_count > MAX_EDGES)
+        return OP_INVALID_ARGUMENT;
+    if (g->executing)
+        return OP_PENDING;
+    if (offsets[0] || offsets[count] != edge_count)
+        return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < count; i++)
+        if (offsets[i] > offsets[i + 1])
+            return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < edge_count; i++)
+        if (edges[i] >= count)
+            return OP_VALIDATION_FAILED;
+    copy_offsets = malloc(((size_t)count + 1) * sizeof(uint32_t));
+    copy_edges = malloc(((size_t)edge_count + 1) * sizeof(uint32_t));
+    order = malloc(((size_t)count + 1) * sizeof(uint32_t));
+    stack = malloc(((size_t)count + 1) * sizeof(uint32_t));
+    cursor = calloc((size_t)count + 1, sizeof(uint32_t));
+    mark = calloc((size_t)count + 1, 1);
+    own = calloc((size_t)count + 1, sizeof(uint64_t));
+    if (!copy_offsets || !copy_edges || !order || !stack || !cursor || !mark || !own)
+        goto done;
+    memcpy(copy_offsets, offsets, ((size_t)count + 1) * sizeof(uint32_t));
+    if (edge_count)
+        memcpy(copy_edges, edges, (size_t)edge_count * sizeof(uint32_t));
+    /* Iterative DFS: adversarial deep stacks cannot exhaust the C call stack. */
+    for (uint32_t root = 0; root < count; root++) {
+        uint32_t depth = 0;
+        if (mark[root])
+            continue;
+        stack[depth++] = root;
+        mark[root] = 1;
+        cursor[root] = offsets[root];
+        while (depth) {
+            uint32_t node = stack[depth - 1];
+            if (cursor[node] < offsets[node + 1]) {
+                uint32_t next = edges[cursor[node]++];
+                if (mark[next] == 1) {
+                    status = OP_VALIDATION_FAILED;
+                    goto done;
+                }
+                if (!mark[next]) {
+                    mark[next] = 1;
+                    cursor[next] = offsets[next];
+                    stack[depth++] = next;
+                }
+            } else {
+                order[used++] = node;
+                mark[node] = 2;
+                depth--;
+            }
+        }
+    }
+    free(g->offsets);
+    free(g->edges);
+    free(g->order);
+    free(g->work);
+    free(g->needed);
+    free(g->own);
+    g->own = own;
+    own = NULL;
+    g->work = stack;
+    g->needed = mark;
+    stack = NULL;
+    mark = NULL;
+    g->count = count;
+    g->edge_count = edge_count;
+    g->offsets = copy_offsets;
+    g->edges = copy_edges;
+    g->order = order;
+    copy_offsets = copy_edges = order = NULL;
+    status = OP_OK;
+done:
+    free(copy_offsets);
+    free(copy_edges);
+    free(order);
+    free(stack);
+    free(cursor);
+    free(mark);
+    free(own);
+    return status;
+}
+static uint64_t mix(uint64_t h, uint64_t v) {
+    v ^= v >> 30;
+    v *= UINT64_C(0xbf58476d1ce4e5b9);
+    v ^= v >> 27;
+    v *= UINT64_C(0x94d049bb133111eb);
+    v ^= v >> 31;
+    return (h ^ v) * UINT64_C(0x100000001b3);
+}
+op_status_t op_graph_evaluate(op_graph_t *g, const uint64_t *own, const uint64_t *resident,
+                              uint64_t *stamps, uint32_t *plan, uint32_t capacity,
+                              uint32_t *out_count) {
+    if (!g || !out_count || (g->count && (!own || !resident || !stamps || !plan)))
+        return OP_INVALID_ARGUMENT;
+    *out_count = 0;
+    if (capacity < g->count)
+        return OP_RESOURCE_EXHAUSTED;
+    for (uint32_t j = 0; j < g->count; j++) {
+        uint32_t i = g->order[j];
+        uint64_t stamp = mix(UINT64_C(0xcbf29ce484222325), own[i]);
+        for (uint32_t d = g->offsets[i]; d < g->offsets[i + 1]; d++)
+            stamp = mix(stamp, stamps[g->edges[d]]);
+        stamps[i] = stamp ? stamp : 1;
+        if (resident[i] != stamps[i])
+            plan[(*out_count)++] = i;
+    }
+    return OP_OK;
+}
+
+op_status_t op_graph_plan_root(op_graph_t *g, uint32_t root, const uint64_t *resident,
+                               const uint64_t *stamps, uint32_t *plan, uint32_t capacity,
+                               uint32_t *out_count) {
+    uint32_t depth = 0;
+    if (!g || root >= g->count || !resident || !stamps || !plan || !out_count)
+        return OP_INVALID_ARGUMENT;
+    *out_count = 0;
+    if (capacity < g->count)
+        return OP_RESOURCE_EXHAUSTED;
+    memset(g->needed, 0, g->count);
+    if (resident[root] == stamps[root])
+        return OP_OK;
+    g->needed[root] = 1;
+    g->work[depth++] = root;
+    while (depth) {
+        uint32_t node = g->work[--depth];
+        for (uint32_t d = g->offsets[node]; d < g->offsets[node + 1]; d++) {
+            uint32_t next = g->edges[d];
+            if (!g->needed[next] && resident[next] != stamps[next]) {
+                g->needed[next] = 1;
+                g->work[depth++] = next;
+            }
+        }
+    }
+    for (uint32_t j = 0; j < g->count; j++)
+        if (g->needed[g->order[j]])
+            plan[(*out_count)++] = g->order[j];
+    return OP_OK;
+}
+
+op_status_t op_graph_apply_patch(op_graph_t *g, const op_graph_patch_t *patch, uint32_t count) {
+    if (!g || count > MAX_NODES || (count && !patch))
+        return OP_INVALID_ARGUMENT;
+    if (g->executing)
+        return OP_PENDING;
+    for (uint32_t i = 0; i < count; i++)
+        if (patch[i].node >= g->count || patch[i].reserved)
+            return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < count; i++)
+        g->own[patch[i].node] = patch[i].value;
+    return OP_OK;
+}
+op_status_t op_graph_evaluate_current(op_graph_t *g, const uint64_t *resident, uint64_t *stamps,
+                                      uint32_t *plan, uint32_t capacity, uint32_t *out_count) {
+    if (!g)
+        return OP_INVALID_ARGUMENT;
+    return op_graph_evaluate(g, g->own, resident, stamps, plan, capacity, out_count);
+}
+
+op_status_t op_graph_checkpoint(const op_graph_t *g, const uint32_t *order, const uint32_t *below,
+                                uint32_t count, const uint64_t *current, const uint64_t *desired,
+                                uint32_t *keep) {
+    if (!g || !keep || count > g->count || (count && (!order || !below || !current || !desired)))
+        return OP_INVALID_ARGUMENT;
+    *keep = UINT32_MAX;
+    for (uint32_t i = 0; i < count; i++)
+        if (order[i] >= g->count || (below[i] != UINT32_MAX && below[i] >= g->count))
+            return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < count; i++)
+        if (current[order[i]] != desired[order[i]]) {
+            *keep = below[i];
+            break;
+        }
+    return OP_OK;
+}
+
+op_status_t op_graph_execute(op_graph_t *g, uint32_t root, const uint64_t *resident,
+                             const uint64_t *stamps, op_graph_submit_fn submit, void *user,
+                             uint32_t *rendered) {
+    if (!g || !resident || !stamps || !submit || !rendered || root >= g->count)
+        return OP_INVALID_ARGUMENT;
+    *rendered = 0;
+    if (g->executing)
+        return OP_PENDING;
+    for (uint32_t i = 0; i < g->count; i++)
+        if (!stamps[i])
+            return OP_VALIDATION_FAILED;
+    uint32_t *plan = malloc((size_t)g->count * sizeof(*plan));
+    uint32_t *uses = calloc(g->count, sizeof(*uses));
+    unsigned char *pinned = calloc(g->count, 1);
+    uint64_t *desired = malloc((size_t)g->count * sizeof(*desired));
+    op_status_t status = OP_RESOURCE_EXHAUSTED;
+    uint32_t count = 0;
+    if (!plan || !uses || !pinned || !desired)
+        goto done;
+    status = op_graph_plan_root(g, root, resident, stamps, plan, g->count, &count);
+    if (status)
+        goto done;
+    memcpy(desired, stamps, (size_t)g->count * sizeof(*desired));
+    /* Account for every edge consumed by the selected batch, including inputs
+     * already resident at its boundary. Duplicate edges count independently. */
+    uses[root] = 1;
+    for (uint32_t i = 0; i < count; i++)
+        for (uint32_t e = g->offsets[plan[i]]; e < g->offsets[plan[i] + 1]; e++)
+            uses[g->edges[e]]++;
+    g->executing = 1;
+    for (uint32_t i = 0; i < g->count; i++) {
+        if (!uses[i])
+            continue;
+        status = submit(user, OP_GRAPH_PIN, i, desired[i]);
+        if (status)
+            goto release;
+        pinned[i] = 1;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t node = plan[i];
+        status = submit(user, OP_GRAPH_RENDER, node, desired[node]);
+        if (status)
+            goto release;
+        (*rendered)++;
+        for (uint32_t e = g->offsets[node]; e < g->offsets[node + 1]; e++) {
+            uint32_t dependency = g->edges[e];
+            if (--uses[dependency] == 0) {
+                pinned[dependency] = 0;
+                status = submit(user, OP_GRAPH_UNPIN, dependency, desired[dependency]);
+                if (status)
+                    goto release;
+            }
+        }
+    }
+release:
+    /* Never stop cleanup after an error. Keep the original submission status. */
+    for (uint32_t i = g->count; i-- > 0;) {
+        if (pinned[i]) {
+            op_status_t cleanup = submit(user, OP_GRAPH_UNPIN, i, desired[i]);
+            if (!status)
+                status = cleanup;
+        }
+    }
+    g->executing = 0;
+done:
+    free(desired);
+    free(pinned);
+    free(uses);
+    free(plan);
+    return status;
+}

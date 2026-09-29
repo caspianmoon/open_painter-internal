@@ -1,0 +1,298 @@
+"""Real C scheduling, executor switching and restore against host Metal output."""
+import json
+import os
+from pathlib import Path
+import sys
+
+import bpy
+import gpu
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'src'))
+sys.path.insert(0, str(ROOT / 'scripts'))
+import open_painter
+from native_fixtures import add_source
+from open_painter.constants import CHANNELS
+from open_painter.core import layer_stack as stack, texture_set_manager as sets, material_manager
+from open_painter.evaluation import shader_preview
+from open_painter.native_bridge import lifecycle
+
+gpu.init()
+assert gpu.platform.backend_type_get() == 'METAL'
+open_painter.register()
+assert lifecycle.execution_library('METAL') is not None, lifecycle.diagnostics()
+scene = bpy.context.scene
+obj = bpy.context.object
+original_engine = scene.render.engine
+ts = sets.create(scene, 'C host Metal regression', 512)
+sets.assign(scene, ts, obj)
+base = stack.add(ts, 'FILL', 'Base')
+coat = stack.add(ts, 'FILL', 'Coat')
+for layer, value in ((base, .2), (coat, .8)):
+    for channel in CHANNELS:
+        prop = stack.channel_for(layer, channel)
+        prop.enabled = True
+        prop.value = value
+coat.opacity = .6
+add_source('image', scene, ts, coat, 512)
+add_source('paint', scene, ts, coat, 512)
+material_manager.repair(ts)
+
+
+def ready():
+    for _ in range(300):
+        shader_preview.tick(scene, ts)
+        info = shader_preview.diagnostics(scene, ts)
+        assert not info['error'], info
+        if shader_preview.current(scene, ts):
+            return shader_preview.session_engine(scene, ts)
+    raise AssertionError(info)
+
+
+def pixels():
+    return {output.channel: np.array(gpu.texture.from_image(output.image).read(), np.float32).copy()
+            for output in ts.outputs}
+
+
+try:
+    engine = ready()
+    assert engine.report['execution_backend'] == 'c17-host-metal', engine.report
+    first = pixels()
+    assert np.ptp(first['BASE_COLOR']) > .1
+    topology_builds = engine._native_graph.rebuilds
+    for value in (.3, .9, .6):
+        coat.opacity = value
+        engine = ready()
+        assert engine._native_graph.rebuilds == topology_builds
+        assert engine.report['stages']['compiles'] == 0, engine.report
+    restored = pixels()
+    for channel in CHANNELS:
+        np.testing.assert_array_equal(first[channel], restored[channel], err_msg=channel)
+
+    # Native channel state owns no-op selection, subset acceptance and host target changes.
+    assert engine.report['native_channel_selection']
+    # Direct calls use their own source-epoch snapshot; warm that snapshot once.
+    engine.evaluate(CHANNELS, budget=False)
+    revision = engine._native_revisions.revision
+    from open_painter.evaluation.engine import runtime
+    passes = runtime.device().passes
+    assert engine.evaluate(CHANNELS, budget=False) == set()
+    assert engine._native_revisions.revision == revision
+    from open_painter.evaluation.engine import runtime
+    assert runtime.device().passes == passes
+    coat.opacity = .42
+    engine.graph.update(check_structure=False)
+    assert engine.evaluate(['ROUGHNESS'], budget=False) == {'ROUGHNESS'}
+    partial = pixels()
+    for channel in CHANNELS:
+        if channel != 'ROUGHNESS':
+            np.testing.assert_array_equal(first[channel], partial[channel], err_msg='subset ' + channel)
+    assert engine._native_revisions.revision == revision + 1
+    remaining = engine.evaluate(CHANNELS, budget=False)
+    assert 'ROUGHNESS' not in remaining and 'BASE_COLOR' in remaining
+    assert engine._native_revisions.revision == revision + 2
+    coat.opacity = .6
+    engine = ready()
+    original = pixels()['ROUGHNESS']
+    replacement = bpy.data.images.new('Native alternate channel target', width=512, height=512, float_buffer=True)
+    replacement.colorspace_settings.name = 'Non-Color'
+    try:
+        assert engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False) == {'ROUGHNESS'}
+        np.testing.assert_array_equal(np.array(gpu.texture.from_image(replacement).read(), np.float32), original)
+        assert engine.evaluate(['ROUGHNESS'], budget=False) == {'ROUGHNESS'}
+    finally:
+        bpy.data.images.remove(replacement)
+
+    # Host metadata allocations occur while GPU output is still staged. An
+    # exception must leave native acceptance and visible images at the old state.
+    before_metadata = pixels()
+    revision = engine._native_revisions.revision
+    coat.opacity = .48
+    engine.graph.update(check_structure=False)
+    class FailingDirty(set):
+        calls = 0
+        def add(self, value):
+            self.calls += 1
+            if self.calls == 2:
+                raise MemoryError('injected host mirror allocation failure')
+            super().add(value)
+    engine.dirty_cpu = FailingDirty(engine.dirty_cpu)
+    try:
+        engine.evaluate(CHANNELS, budget=False)
+    except MemoryError as error:
+        assert 'host mirror' in str(error)
+    else:
+        raise AssertionError('Host metadata failure was not exercised')
+    assert engine._native_revisions.revision == revision
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(before_metadata[channel], actual, err_msg='metadata rollback ' + channel)
+    assert 'BASE_COLOR' in engine.evaluate(CHANNELS, budget=False)
+    assert engine._native_revisions.revision == revision + 1
+    coat.opacity = .6
+    engine = ready()
+
+    # Cleanup after acceptance can fail independently; do not roll back host
+    # bookkeeping or make C accept the same material revision a second time.
+    from unittest.mock import patch
+    stream = engine._native_revisions
+    revision = stream.revision
+    coat.opacity = .44
+    engine.graph.update(check_structure=False)
+    release_scratch = stream._release_scratch
+    def fail_retirement():
+        if stream._scratch and not stream.submitting and stream.revision > revision:
+            raise MemoryError('injected retirement failure')
+        release_scratch()
+    with patch.object(stream, '_release_scratch', side_effect=fail_retirement):
+        try:
+            engine.evaluate(CHANNELS, budget=False)
+        except MemoryError as error:
+            assert 'retirement' in str(error)
+        else:
+            raise AssertionError('Retirement failure was not exercised')
+    assert stream.revision == revision + 1 and stream._scratch
+    assert 'BASE_COLOR' in engine.dirty_cpu
+    assert engine.evaluate(CHANNELS, budget=False) == set()
+    assert stream.revision == revision + 1 and not stream._scratch
+    coat.opacity = .6
+    engine = ready()
+
+    # Native batches retain shared inputs until the last consumer, then enforce
+    # the budget even if the final pass itself is not a retained cache entry.
+    from unittest.mock import patch
+    from open_painter.evaluation.engine import runtime
+    with patch.object(runtime, 'RETAIN_BYTES', 0):
+        for value in (.45, .6):
+            coat.opacity = value
+            engine = ready()
+            assert not any(engine._in_use.values()), engine._in_use
+            assert sum(engine.retained.values()) == 0, engine.retained
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(first[channel], actual, err_msg=channel)
+
+    # Switch in the same session with resident textures from the other executor.
+    errors = {}
+    for enabled in ('0', '1'):
+        os.environ['OP_NATIVE_ENGINE'] = enabled
+        engine.published.clear()
+        engine.evaluate(CHANNELS, budget=False)
+        assert engine.report['execution_backend'] == ('legacy' if enabled == '0' else 'c17-host-metal')
+        actual = pixels()
+        errors[enabled] = {c: float(np.max(abs(actual[c] - first[c]))) for c in CHANNELS}
+        assert max(errors[enabled].values()) <= .002, errors
+
+    # A unit draw can fail after overwriting its old allocation. Reverting the
+    # parameter must render again, not reuse those pixels under the old stamp.
+    before_draw_failure = pixels()
+    coat.opacity = .37
+    engine.graph.update(check_structure=False)
+    original_draw = runtime.device().draw
+    failed_unit = []
+    def fail_unit(shader, targets, size, *args, **kwargs):
+        original_draw(shader, targets, size, *args, **kwargs)
+        if not failed_unit:
+            for operation in (lambda: engine.evaluate(CHANNELS), engine.close, lambda: engine.adopt(engine.graph)):
+                try:
+                    operation()
+                except RuntimeError:
+                    pass
+                else:
+                    raise AssertionError('Channel submission allowed destructive reentry')
+            for key, state in engine.states.items():
+                if state.textures and any(target is texture for target in targets for texture in state.textures):
+                    failed_unit.append(key)
+                    raise MemoryError('unit draw completed before failure')
+    with patch.object(runtime.device(), 'draw', side_effect=fail_unit):
+        try:
+            engine.evaluate(CHANNELS, budget=False)
+        except MemoryError as error:
+            assert 'unit draw completed' in str(error)
+        else:
+            raise AssertionError('unit failure was not injected')
+    assert failed_unit and engine.states[failed_unit[0]].stamp is None
+    assert not any(engine._in_use.values()), engine._in_use
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
+    coat.opacity = .6
+    engine.graph.update(check_structure=False)
+    engine.evaluate(CHANNELS, budget=False)
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
+
+    # Fail after the first complete channel has reached host image storage.
+    # Every channel and the accepted native revision must remain unchanged.
+    from unittest.mock import patch
+    from open_painter.evaluation.engine import runtime
+    before_failure = pixels()
+    revision = engine._native_revisions.revision
+    coat.opacity = .25
+    engine.graph.update(check_structure=False)
+    original_draw = runtime.device().draw
+    copies = [0]
+    def fail_once(shader, targets, size, *args, **kwargs):
+        if targets and isinstance(targets[0], dict) and targets[0].get('mip') == 0:
+            copies[0] += 1
+            if copies[0] == 2:
+                midway = pixels()
+                assert np.max(abs(midway['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01, 'The fault must interrupt a genuinely changed revision'
+                raise RuntimeError('injected publication failure')
+        return original_draw(shader, targets, size, *args, **kwargs)
+    with patch.object(runtime.device(), 'draw', side_effect=fail_once):
+        try:
+            engine.evaluate(CHANNELS, budget=False)
+        except RuntimeError as error:
+            assert 'injected publication failure' in str(error), error
+        else:
+            raise AssertionError('Publication fault was not exercised')
+    assert engine._native_revisions.revision == revision
+    for channel, values in pixels().items():
+        np.testing.assert_array_equal(values, before_failure[channel], err_msg='rollback ' + channel)
+    engine.evaluate(CHANNELS, budget=False)
+    assert engine._native_revisions.revision == revision + 1
+    assert np.max(abs(pixels()['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01
+    coat.opacity = .6
+    engine = ready()
+
+    # Blender can evict image-owned GPU storage while CPU pixels lag behind.
+    # Reconstruct it from the accepted native GPU revision, including mips.
+    before_eviction = pixels()
+    from open_painter.native_bridge.presentation import HostGPUProbe
+    mip_reader = HostGPUProbe(lifecycle._core, 512)
+    before_mips = {(output.channel, level): mip_reader.read_mip(gpu.texture.from_image(output.image), level, 512 >> level)
+                   for output in ts.outputs for level in range(1, 10)}
+    revision = engine._native_revisions.revision
+    for output in ts.outputs:
+        output.image.gl_free()
+    engine = ready()
+    for channel, values in pixels().items():
+        np.testing.assert_array_equal(values, before_eviction[channel], err_msg='eviction ' + channel)
+    assert engine._native_revisions.revision == revision
+    for output in ts.outputs:
+        for level in range(1, 10):
+            np.testing.assert_array_equal(mip_reader.read_mip(gpu.texture.from_image(output.image), level, 512 >> level),
+                                          before_mips[output.channel, level], err_msg=f'eviction mip {output.channel}:{level}')
+
+    old = engine._native_graph
+    lifecycle._restore()
+    assert not old.handle
+    engine.published.clear()
+    engine.evaluate(CHANNELS, budget=False)
+    assert engine._native_graph is not old and engine._native_graph.handle
+    for channel, values in pixels().items():
+        np.testing.assert_array_equal(first[channel], values, err_msg='restore ' + channel)
+    assert scene.render.engine == original_engine and bpy.context.object == obj
+    report = dict(status='PASS', backend='c17-host-metal', errors=errors,
+                  topology_rebuilds=topology_builds, channels=list(CHANNELS),
+                  native_batch_zero_budget=True, unit_draw_failure_recovery=True,
+                  native_channel_selection=True, channel_subset_and_target_changes=True, host_metadata_failure_recovery=True, accepted_revision_retirement_failure=True,
+                  original_object=obj.name, render_engine=original_engine, publication_rollback=True, image_eviction_recovery=True,
+                  compiled_binding=bool(getattr(lifecycle.active_library(), '_op_binding', None)))
+    path = Path(os.environ.get('OP_NATIVE_HOST_REPORT', str(ROOT / '.blender-test/native/metal-integration/native-host-metal.json')))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + '\n')
+    print('NATIVE_HOST_METAL_PASS', report)
+finally:
+    os.environ.pop('OP_NATIVE_ENGINE', None)
+    open_painter.unregister()
+    assert lifecycle.execution_library('METAL') is None

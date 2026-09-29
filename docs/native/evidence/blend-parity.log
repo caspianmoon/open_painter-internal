@@ -1,0 +1,2 @@
+cases=180 max_abs_diff=5.007e-08 worst=('NORMAL', (0.2, 0.7, 0.4), (1.0, 1.0, 1.0), 0.6) lib=/private/tmp/openpainter-native-build/libopenpainter.dylib
+BLEND_PARITY_PASS

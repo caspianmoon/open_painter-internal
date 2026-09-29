@@ -1,0 +1,1131 @@
+{
+  "status": "PASS",
+  "label": "current",
+  "size": 512,
+  "repeat": 2,
+  "idle_repeat": 2,
+  "layers": 2,
+  "source_root": "/Volumes/SSD/projects/open_painter",
+  "source_sha256": "fc5e1d7faee0fba77ed42f3af058acd64425d3675983eaa6621f38c26d83c37d",
+  "artifact_digests": {
+    "python_addon_sha256": "fc5e1d7faee0fba77ed42f3af058acd64425d3675983eaa6621f38c26d83c37d",
+    "python_file_count": 318,
+    "adapter_sha256": "3139abd1442a1954a2e2c7a1e0a19883b92582e35bc524ea8e6d9a8061bfb409",
+    "shader_bundle_sha256": "2dc8f764b0f512ee25f8e05e943a006fd8d17e23191801e5df586192f8b75e20",
+    "native_source_sha256": "49f01066111107c5fb1b86494fac8d1a3417de7361701c5cf3ec853d81518ea1",
+    "fixture_source_sha256": "68a9d0100049f71a4698976ca1cba4819d1f9b7febbe3b5456d1b706502e513a",
+    "build_files_sha256": "5f1b8960d778c6de20905158ad32353bb23ab615f7cd10f0cd9ae7acaa0db34f",
+    "native_binary": null,
+    "build_options_sha256": null
+  },
+  "blender": "5.2.1 LTS",
+  "os": "macOS-26.7.1-arm64-arm-64bit-Mach-O",
+  "profile_isolation": {
+    "root": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8",
+    "configuration": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8/config",
+    "resource_overrides": {
+      "BLENDER_USER_RESOURCES": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8",
+      "BLENDER_USER_CONFIG": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8/config",
+      "BLENDER_USER_SCRIPTS": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8/scripts",
+      "BLENDER_USER_EXTENSIONS": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8/extensions",
+      "BLENDER_USER_DATAFILES": "/Volumes/SSD/projects/open_painter/.blender-test/native/op-benchmark-315z3gm8/datafiles"
+    },
+    "configuration_verified": true
+  },
+  "fixture": "two_fills_cellular_mask_v1",
+  "measurement_version": 2,
+  "samples": {
+    "idle_engine_tick": [
+      {
+        "wall_ms": 0.015249999705702066,
+        "gpu_passes": 0,
+        "compiles": 0,
+        "engine_counters": {},
+        "units_rendered": 0,
+        "returned_interval": true
+      },
+      {
+        "wall_ms": 0.013458949979394674,
+        "gpu_passes": 0,
+        "compiles": 0,
+        "engine_counters": {},
+        "units_rendered": 0,
+        "returned_interval": true
+      }
+    ],
+    "idle_scheduler_tick": [
+      {
+        "wall_ms": 0.07387500954791903,
+        "gpu_passes": 0,
+        "compiles": 0,
+        "engine_counters": {},
+        "units_rendered": 0,
+        "returned_interval": 0.1
+      },
+      {
+        "wall_ms": 0.06191595457494259,
+        "gpu_passes": 0,
+        "compiles": 0,
+        "engine_counters": {},
+        "units_rendered": 0,
+        "returned_interval": 0.1
+      }
+    ],
+    "roughness": [
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 1.4537920360453427,
+        "units_rendered": 1,
+        "published": [
+          "ROUGHNESS"
+        ],
+        "event_id": 3,
+        "callback_received_s": 302174.218993958,
+        "callback_finished_s": 302174.219331875,
+        "callback_ms": 0.33791695022955537,
+        "accepted_recipe_serial": 14,
+        "display_presented_s": null,
+        "gpu_passes": 11,
+        "compiles": 0,
+        "engine_counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 3,
+          "engine_channel_publications": 1
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.3564453125,
+            0.32861328125,
+            0.357421875,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.529296875,
+            0.529296875,
+            0.529296875,
+            1.0
+          ],
+          "METALLIC": [
+            0.07672119140625,
+            0.07672119140625,
+            0.07672119140625,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 3.6949169589206576,
+        "prepare_ms": 1.8078329740092158,
+        "completion_ms": 1.8870839849114418,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      },
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 1.3618329539895058,
+        "units_rendered": 1,
+        "published": [
+          "ROUGHNESS"
+        ],
+        "event_id": 4,
+        "callback_received_s": 302174.222713208,
+        "callback_finished_s": 302174.223096833,
+        "callback_ms": 0.38362498162314296,
+        "accepted_recipe_serial": 15,
+        "display_presented_s": null,
+        "gpu_passes": 11,
+        "compiles": 0,
+        "engine_counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 3,
+          "engine_channel_publications": 1
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.3564453125,
+            0.32861328125,
+            0.357421875,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.470458984375,
+            0.470458984375,
+            0.470458984375,
+            1.0
+          ],
+          "METALLIC": [
+            0.07672119140625,
+            0.07672119140625,
+            0.07672119140625,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 3.8886669790372252,
+        "prepare_ms": 1.8022920121438801,
+        "completion_ms": 2.086374966893345,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      }
+    ],
+    "mask_strength": [
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 1.9910839619114995,
+        "units_rendered": 5,
+        "published": [
+          "BASE_COLOR",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "event_id": 6,
+        "callback_received_s": 302174.656818166,
+        "callback_finished_s": 302174.657110791,
+        "callback_ms": 0.29262498719617724,
+        "accepted_recipe_serial": 17,
+        "display_presented_s": null,
+        "gpu_passes": 45,
+        "compiles": 0,
+        "engine_counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 12,
+          "engine_channel_publications": 4
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.390625,
+            0.315673828125,
+            0.33154296875,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.4482421875,
+            0.4482421875,
+            0.4482421875,
+            1.0
+          ],
+          "METALLIC": [
+            0.1490478515625,
+            0.1490478515625,
+            0.1490478515625,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 5.21433399990201,
+        "prepare_ms": 2.2994589526206255,
+        "completion_ms": 2.9148750472813845,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      },
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 2.2747499751858413,
+        "units_rendered": 5,
+        "published": [
+          "BASE_COLOR",
+          "METALLIC",
+          "NORMAL",
+          "ROUGHNESS"
+        ],
+        "event_id": 7,
+        "callback_received_s": 302174.662053208,
+        "callback_finished_s": 302174.662412583,
+        "callback_ms": 0.3593750298023224,
+        "accepted_recipe_serial": 18,
+        "display_presented_s": null,
+        "gpu_passes": 45,
+        "compiles": 0,
+        "engine_counters": {
+          "shader_parameter_bindings_updated": 1,
+          "shader_parameter_updates": 1,
+          "shader_update_calls": 1,
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 12,
+          "engine_channel_publications": 4
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.5966796875,
+            0.238525390625,
+            0.1771240234375,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.31591796875,
+            0.31591796875,
+            0.31591796875,
+            1.0
+          ],
+          "METALLIC": [
+            0.5830078125,
+            0.5830078125,
+            0.5830078125,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 5.7544580195099115,
+        "prepare_ms": 2.651125018019229,
+        "completion_ms": 3.1033330014906824,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      }
+    ],
+    "republish": [
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 2.656833967193961,
+        "units_rendered": 8,
+        "published": [
+          "AO",
+          "BASE_COLOR",
+          "EMISSION",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "OPACITY",
+          "ROUGHNESS"
+        ],
+        "event_id": 9,
+        "callback_received_s": 302175.101169583,
+        "callback_finished_s": 302175.101182916,
+        "callback_ms": 0.013333046808838844,
+        "accepted_recipe_serial": 18,
+        "display_presented_s": null,
+        "gpu_passes": 88,
+        "compiles": 0,
+        "engine_counters": {
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 12,
+          "engine_channel_publications": 8
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.5966796875,
+            0.238525390625,
+            0.1771240234375,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.31591796875,
+            0.31591796875,
+            0.31591796875,
+            1.0
+          ],
+          "METALLIC": [
+            0.5830078125,
+            0.5830078125,
+            0.5830078125,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 8.046500035561621,
+        "prepare_ms": 2.687708009034395,
+        "completion_ms": 5.358792026527226,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      },
+      {
+        "ticks": 1,
+        "maximum_tick_ms": 2.8286249726079404,
+        "units_rendered": 8,
+        "published": [
+          "AO",
+          "BASE_COLOR",
+          "EMISSION",
+          "HEIGHT",
+          "METALLIC",
+          "NORMAL",
+          "OPACITY",
+          "ROUGHNESS"
+        ],
+        "event_id": 10,
+        "callback_received_s": 302175.109235625,
+        "callback_finished_s": 302175.109252541,
+        "callback_ms": 0.016915961168706417,
+        "accepted_recipe_serial": 18,
+        "display_presented_s": null,
+        "gpu_passes": 88,
+        "compiles": 0,
+        "engine_counters": {
+          "engine_state_signature_checks": 9,
+          "engine_state_cache_hits": 12,
+          "engine_channel_publications": 8
+        },
+        "completion_pixels": {
+          "BASE_COLOR": [
+            0.5966796875,
+            0.238525390625,
+            0.1771240234375,
+            1.0
+          ],
+          "ROUGHNESS": [
+            0.31591796875,
+            0.31591796875,
+            0.31591796875,
+            1.0
+          ],
+          "METALLIC": [
+            0.5830078125,
+            0.5830078125,
+            0.5830078125,
+            1.0
+          ],
+          "NORMAL": [
+            0.5,
+            0.5,
+            1.0,
+            1.0
+          ],
+          "HEIGHT": [
+            0.5,
+            0.5,
+            0.5,
+            1.0
+          ],
+          "AO": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "EMISSION": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "OPACITY": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "wall_ms": 8.71808297233656,
+        "prepare_ms": 2.8664160054177046,
+        "completion_ms": 5.851666966918856,
+        "completion_readbacks": 1,
+        "completion_readback_bytes": 128,
+        "completion_gpu_passes": 8,
+        "completion_compiles": 0
+      }
+    ]
+  },
+  "validation": {
+    "cold": {
+      "wall_ms": 430.16458296915516,
+      "texture_acquisition_ms": 0.11854199692606926,
+      "texture_read_ms": 13.808997988235205,
+      "numpy_view_ms": 0.14629290672019124,
+      "checksum_ms": 415.78887606738135,
+      "readbacks": 8,
+      "readback_bytes": 33554432,
+      "pixels": {
+        "BASE_COLOR": {
+          "sha256": "da7230987d258157582d136046923029aa85b679bb12f5c0ae03469e03e7b7ac",
+          "sum": 530764.8046264648,
+          "minimum": 0.0999755859375,
+          "maximum": 1.0
+        },
+        "ROUGHNESS": {
+          "sha256": "1b2c3fa2c256bf5fdf451019f731c5d32a3dd60c562fb7b9f7da5f888b6e5b20",
+          "sum": 577567.3229980469,
+          "minimum": 0.2998046875,
+          "maximum": 1.0
+        },
+        "METALLIC": {
+          "sha256": "2dc485f749bee38274c36855acba37b1f6f408251723d8a4213a5ec042b54eaf",
+          "sum": 572824.1549885869,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "NORMAL": {
+          "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "sum": 786432.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "HEIGHT": {
+          "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "sum": 655360.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "AO": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "EMISSION": {
+          "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "sum": 262144.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "OPACITY": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "idle": {
+      "wall_ms": 421.9536249875091,
+      "texture_acquisition_ms": 0.11666497448459268,
+      "texture_read_ms": 12.945376976858824,
+      "numpy_view_ms": 0.16570696607232094,
+      "checksum_ms": 408.4091681288555,
+      "readbacks": 8,
+      "readback_bytes": 33554432,
+      "pixels": {
+        "BASE_COLOR": {
+          "sha256": "da7230987d258157582d136046923029aa85b679bb12f5c0ae03469e03e7b7ac",
+          "sum": 530764.8046264648,
+          "minimum": 0.0999755859375,
+          "maximum": 1.0
+        },
+        "ROUGHNESS": {
+          "sha256": "1b2c3fa2c256bf5fdf451019f731c5d32a3dd60c562fb7b9f7da5f888b6e5b20",
+          "sum": 577567.3229980469,
+          "minimum": 0.2998046875,
+          "maximum": 1.0
+        },
+        "METALLIC": {
+          "sha256": "2dc485f749bee38274c36855acba37b1f6f408251723d8a4213a5ec042b54eaf",
+          "sum": 572824.1549885869,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "NORMAL": {
+          "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "sum": 786432.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "HEIGHT": {
+          "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "sum": 655360.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "AO": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "EMISSION": {
+          "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "sum": 262144.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "OPACITY": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "roughness": {
+      "wall_ms": 421.94516595918685,
+      "texture_acquisition_ms": 0.12749998131766915,
+      "texture_read_ms": 12.921374989673495,
+      "numpy_view_ms": 0.1430839765816927,
+      "checksum_ms": 408.41916599310935,
+      "readbacks": 8,
+      "readback_bytes": 33554432,
+      "pixels": {
+        "BASE_COLOR": {
+          "sha256": "da7230987d258157582d136046923029aa85b679bb12f5c0ae03469e03e7b7ac",
+          "sum": 530764.8046264648,
+          "minimum": 0.0999755859375,
+          "maximum": 1.0
+        },
+        "ROUGHNESS": {
+          "sha256": "036bc20e853f4e9dfe034b801eaa91bc58562ba583f1c7026878302b599e2a01",
+          "sum": 558142.8957519531,
+          "minimum": 0.25,
+          "maximum": 1.0
+        },
+        "METALLIC": {
+          "sha256": "2dc485f749bee38274c36855acba37b1f6f408251723d8a4213a5ec042b54eaf",
+          "sum": 572824.1549885869,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "NORMAL": {
+          "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "sum": 786432.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "HEIGHT": {
+          "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "sum": 655360.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "AO": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "EMISSION": {
+          "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "sum": 262144.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "OPACITY": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "mask_strength": {
+      "wall_ms": 422.46183403767645,
+      "texture_acquisition_ms": 0.10824901983141899,
+      "texture_read_ms": 15.86054207291454,
+      "numpy_view_ms": 0.1487070112489164,
+      "checksum_ms": 406.045377952978,
+      "readbacks": 8,
+      "readback_bytes": 33554432,
+      "pixels": {
+        "BASE_COLOR": {
+          "sha256": "117759823566d1826ebaabb2dca38f435356f2cd91144d389e9621a74b4a9b52",
+          "sum": 526166.0158081055,
+          "minimum": 0.0999755859375,
+          "maximum": 1.0
+        },
+        "ROUGHNESS": {
+          "sha256": "d1be3c98b01a347969a1bee0d0db499ff63d4e28721ee286c466ad46ae799a8a",
+          "sum": 488502.4287109375,
+          "minimum": 0.25,
+          "maximum": 1.0
+        },
+        "METALLIC": {
+          "sha256": "9618cbf5ffba143ea32f14b36e1acddcaf58107c751de8cde8507a92d299a36f",
+          "sum": 795589.38671875,
+          "minimum": 0.5595703125,
+          "maximum": 1.0
+        },
+        "NORMAL": {
+          "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "sum": 786432.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "HEIGHT": {
+          "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "sum": 655360.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "AO": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "EMISSION": {
+          "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "sum": 262144.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "OPACITY": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        }
+      }
+    },
+    "republish": {
+      "wall_ms": 414.75458297645673,
+      "texture_acquisition_ms": 0.13083306839689612,
+      "texture_read_ms": 10.664873872883618,
+      "numpy_view_ms": 0.14337495667859912,
+      "checksum_ms": 403.5250000888482,
+      "readbacks": 8,
+      "readback_bytes": 33554432,
+      "pixels": {
+        "BASE_COLOR": {
+          "sha256": "117759823566d1826ebaabb2dca38f435356f2cd91144d389e9621a74b4a9b52",
+          "sum": 526166.0158081055,
+          "minimum": 0.0999755859375,
+          "maximum": 1.0
+        },
+        "ROUGHNESS": {
+          "sha256": "d1be3c98b01a347969a1bee0d0db499ff63d4e28721ee286c466ad46ae799a8a",
+          "sum": 488502.4287109375,
+          "minimum": 0.25,
+          "maximum": 1.0
+        },
+        "METALLIC": {
+          "sha256": "9618cbf5ffba143ea32f14b36e1acddcaf58107c751de8cde8507a92d299a36f",
+          "sum": 795589.38671875,
+          "minimum": 0.5595703125,
+          "maximum": 1.0
+        },
+        "NORMAL": {
+          "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+          "sum": 786432.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "HEIGHT": {
+          "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+          "sum": 655360.0,
+          "minimum": 0.5,
+          "maximum": 1.0
+        },
+        "AO": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        },
+        "EMISSION": {
+          "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+          "sum": 262144.0,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "OPACITY": {
+          "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+          "sum": 1048576.0,
+          "minimum": 1.0,
+          "maximum": 1.0
+        }
+      }
+    }
+  },
+  "measurement": "engine evaluation then one sampled texel per image in an atlas and a single read; not viewport FPS",
+  "primary_metric": "prepare_ms (addon callback work); completion_ms includes image GPU upload and fences",
+  "readback_accounting": "engine metrics exclude benchmark completion and validation; both are reported",
+  "scheduler": "timer disabled; explicit callback timing excludes its requested sleep",
+  "backend": "METAL",
+  "renderer": "Metal API",
+  "vendor": "Apple M3 Pro",
+  "driver": "1.2",
+  "pixel_publish": false,
+  "pixel_publish_override": "auto",
+  "pixel_budget_ms": 20.0,
+  "precise_intermediates": false,
+  "publication_optimizations": {
+    "fused": true,
+    "fused_max_size": 1024,
+    "constant_fills": true
+  },
+  "cold": {
+    "ticks": 1,
+    "maximum_tick_ms": 129.97645797440782,
+    "units_rendered": 9,
+    "published": [
+      "AO",
+      "BASE_COLOR",
+      "EMISSION",
+      "HEIGHT",
+      "METALLIC",
+      "NORMAL",
+      "OPACITY",
+      "ROUGHNESS"
+    ],
+    "event_id": 1,
+    "callback_received_s": 302173.2258575,
+    "callback_finished_s": 302173.225857708,
+    "callback_ms": 0.0002080341801047325,
+    "accepted_recipe_serial": 12,
+    "display_presented_s": null,
+    "gpu_passes": 89,
+    "compiles": 7,
+    "engine_counters": {
+      "engine_graph_builds": 1,
+      "shader_runtime_builds": 1,
+      "engine_state_signature_checks": 9,
+      "engine_program_compiles": 7,
+      "engine_state_cache_hits": 12,
+      "engine_texture_allocations": 24,
+      "engine_texture_allocated_bytes": 13631480,
+      "engine_channel_publications": 8
+    },
+    "completion_pixels": {
+      "BASE_COLOR": [
+        0.3564453125,
+        0.32861328125,
+        0.357421875,
+        1.0
+      ],
+      "ROUGHNESS": [
+        0.476318359375,
+        0.476318359375,
+        0.476318359375,
+        1.0
+      ],
+      "METALLIC": [
+        0.07672119140625,
+        0.07672119140625,
+        0.07672119140625,
+        1.0
+      ],
+      "NORMAL": [
+        0.5,
+        0.5,
+        1.0,
+        1.0
+      ],
+      "HEIGHT": [
+        0.5,
+        0.5,
+        0.5,
+        1.0
+      ],
+      "AO": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "EMISSION": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "OPACITY": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "wall_ms": 133.27650004066527,
+    "prepare_ms": 130.02049998613074,
+    "completion_ms": 3.2560000545345247,
+    "completion_readbacks": 1,
+    "completion_readback_bytes": 128,
+    "completion_gpu_passes": 8,
+    "completion_compiles": 0
+  },
+  "idle_pixels_unchanged": true,
+  "summary": {
+    "idle_engine_tick": {
+      "samples": 2,
+      "wall_ms": {
+        "median": 0.01435447484254837,
+        "p95": 0.015249999705702066,
+        "maximum": 0.015249999705702066
+      }
+    },
+    "idle_scheduler_tick": {
+      "samples": 2,
+      "wall_ms": {
+        "median": 0.06789548206143081,
+        "p95": 0.07387500954791903,
+        "maximum": 0.07387500954791903
+      }
+    },
+    "roughness": {
+      "samples": 2,
+      "prepare_ms": {
+        "median": 1.805062493076548,
+        "p95": 1.8078329740092158,
+        "maximum": 1.8078329740092158
+      },
+      "maximum_tick_ms": {
+        "median": 1.4078124950174242,
+        "p95": 1.4537920360453427,
+        "maximum": 1.4537920360453427
+      },
+      "completion_ms": {
+        "median": 1.9867294759023935,
+        "p95": 2.086374966893345,
+        "maximum": 2.086374966893345
+      },
+      "wall_ms": {
+        "median": 3.7917919689789414,
+        "p95": 3.8886669790372252,
+        "maximum": 3.8886669790372252
+      }
+    },
+    "mask_strength": {
+      "samples": 2,
+      "prepare_ms": {
+        "median": 2.4752919853199273,
+        "p95": 2.651125018019229,
+        "maximum": 2.651125018019229
+      },
+      "maximum_tick_ms": {
+        "median": 2.1329169685486704,
+        "p95": 2.2747499751858413,
+        "maximum": 2.2747499751858413
+      },
+      "completion_ms": {
+        "median": 3.0091040243860334,
+        "p95": 3.1033330014906824,
+        "maximum": 3.1033330014906824
+      },
+      "wall_ms": {
+        "median": 5.484396009705961,
+        "p95": 5.7544580195099115,
+        "maximum": 5.7544580195099115
+      }
+    },
+    "republish": {
+      "samples": 2,
+      "prepare_ms": {
+        "median": 2.77706200722605,
+        "p95": 2.8664160054177046,
+        "maximum": 2.8664160054177046
+      },
+      "maximum_tick_ms": {
+        "median": 2.742729469900951,
+        "p95": 2.8286249726079404,
+        "maximum": 2.8286249726079404
+      },
+      "completion_ms": {
+        "median": 5.605229496723041,
+        "p95": 5.851666966918856,
+        "maximum": 5.851666966918856
+      },
+      "wall_ms": {
+        "median": 8.38229150394909,
+        "p95": 8.71808297233656,
+        "maximum": 8.71808297233656
+      }
+    }
+  },
+  "final_pixels": {
+    "BASE_COLOR": {
+      "sha256": "117759823566d1826ebaabb2dca38f435356f2cd91144d389e9621a74b4a9b52",
+      "sum": 526166.0158081055,
+      "minimum": 0.0999755859375,
+      "maximum": 1.0
+    },
+    "ROUGHNESS": {
+      "sha256": "d1be3c98b01a347969a1bee0d0db499ff63d4e28721ee286c466ad46ae799a8a",
+      "sum": 488502.4287109375,
+      "minimum": 0.25,
+      "maximum": 1.0
+    },
+    "METALLIC": {
+      "sha256": "9618cbf5ffba143ea32f14b36e1acddcaf58107c751de8cde8507a92d299a36f",
+      "sum": 795589.38671875,
+      "minimum": 0.5595703125,
+      "maximum": 1.0
+    },
+    "NORMAL": {
+      "sha256": "521e8cc77b6bfb20eeb6ec837f60fa1fe9fee769875be9b3f51401af1b23fdb3",
+      "sum": 786432.0,
+      "minimum": 0.5,
+      "maximum": 1.0
+    },
+    "HEIGHT": {
+      "sha256": "11b4c4ede34e6b02ed0a7daa6111933c98251e2b25e98354a292c1a8783e7ebf",
+      "sum": 655360.0,
+      "minimum": 0.5,
+      "maximum": 1.0
+    },
+    "AO": {
+      "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+      "sum": 1048576.0,
+      "minimum": 1.0,
+      "maximum": 1.0
+    },
+    "EMISSION": {
+      "sha256": "31507a408f8bc14d6d320471ad062e9b4af9cd1b94b449fa470438d22b647c83",
+      "sum": 262144.0,
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "OPACITY": {
+      "sha256": "e678838a4ec435fcfc028f3b3de044af1e44847e3b5d6e73ea19e21788531e2d",
+      "sum": 1048576.0,
+      "minimum": 1.0,
+      "maximum": 1.0
+    }
+  },
+  "memory": {
+    "leased_bytes": 1048576,
+    "pooled_bytes": 15728632,
+    "retained_bytes": 1048576,
+    "active_bytes": 0,
+    "undo_bytes": 0
+  },
+  "source_sha256_at_end": "fc5e1d7faee0fba77ed42f3af058acd64425d3675983eaa6621f38c26d83c37d"
+}

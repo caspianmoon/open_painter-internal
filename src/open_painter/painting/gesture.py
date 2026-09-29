@@ -177,6 +177,14 @@ def preview_size(n, channels):
     return size
 
 
+def _native_metal():
+    from ..native_bridge import lifecycle
+    if not lifecycle.diagnostics()['native_loaded']:
+        return False
+    from ..evaluation.engine.runtime import device
+    return lifecycle.execution_library(device().backend) is not None
+
+
 def _shrink(data, factor):
     """Point-sampled reduction: a preview, not a filter, so it costs a strided copy."""
     return np.ascontiguousarray(data[::factor, ::factor])
@@ -202,7 +210,7 @@ class Preview:
         from ..evaluation.shader_resources import RESOURCE
         self.scene, self.ts_id, self.layer_id = scene, ts.id, layer.id
         self.n = int(ts.resolution)
-        self.size = preview_size(self.n, len(channels))
+        self.size = self.n if _native_metal() else preview_size(self.n, len(channels))
         self.factor = max(1, self.n // self.size)
         self.entries = entries
         self.channels = list(channels)
@@ -597,6 +605,7 @@ class Gesture:
         self.previous = None    # the last re-projection since the last sample (point, normal, owner)
         self.hit_sets = set()
         self.preview, self.hold = None, None
+        self.prepared_source = None
         self.settings, self.geometry = None, None
         self.plane = (0.0, 0.0, 1.0)
         self.active = False
@@ -730,6 +739,18 @@ class Gesture:
         self.result, self.reason = None, ''
         self.plane = tuple(plane_normal) if (plane_normal is not None and settings.projection == 'PLANAR') else (0.0, 0.0, 1.0)
         self.settings = stroke_settings(settings, self.plane if settings.projection == 'PLANAR' else None)
+        if self.wants_preview and not self.key and self.new_source and _native_metal():
+            # An empty paint layer otherwise has no source binding until release.
+            # Prepare its empty runtime source before holding structural updates;
+            # cancellation restores the recipe, without creating a stroke record.
+            from .strokes import ensure_key
+            from ..core.layer_stack import channel_for
+            channels = [settings.channels] if isinstance(settings.channels, str) else sorted(settings.channels)
+            previous = {c: channel_for(layer, c).enabled for c in channels}
+            self.prepared_source = ensure_key(layer), previous
+            for channel in channels:
+                channel_for(layer, channel).enabled = True
+            shader_preview.ensure(self.scene, ts)
         self.geometry = geometry_signature(self.scope, self.scene.open_painter)
         self.hold = shader_preview.hold(self.scene, ts)
         if self.wants_preview and not self.key:
@@ -1001,6 +1022,16 @@ class Gesture:
             else:
                 self.preview.restore()
             self.preview = None
+        if self.prepared_source is not None:
+            if stroke is None:
+                ts = self._set()
+                layer = self._layer(ts) if ts is not None else None
+                if layer is not None and layer.stroke_key == self.prepared_source[0]:
+                    from ..core.layer_stack import channel_for
+                    layer.stroke_key = ''
+                    for channel, enabled in self.prepared_source[1].items():
+                        channel_for(layer, channel).enabled = enabled
+            self.prepared_source = None
         if self.hold is not None:
             shader_preview.release_hold(self.hold)
             self.hold = None

@@ -14,6 +14,13 @@ class TriangleBounds:
     def __init__(self, minimum, maximum):
         self.minimum, self.maximum = np.asarray(minimum), np.asarray(maximum)
         self.order = self.block_minimum = self.block_maximum = None
+        self.native = None
+        from ..native_bridge.lifecycle import active_library
+        lib = active_library()
+        if lib is not None and hasattr(lib, 'op_bounds_create'):
+            from ..native_bridge.geometry import Bounds
+            self.native = Bounds(lib, self.minimum, self.maximum)
+            return
         count = len(self.minimum)
         if count < MIN_TRIANGLES:
             return
@@ -39,6 +46,8 @@ class TriangleBounds:
     @property
     def extra_bytes(self):
         """Owned acceleration arrays; the caller already owns the input bounds."""
+        if self.native is not None:
+            return self.native.bytes
         return sum(array.nbytes for array in (self.order, self.block_minimum, self.block_maximum)
                    if array is not None)
 
@@ -47,6 +56,8 @@ class TriangleBounds:
 
     def query(self, low, high):
         """Original triangle indices intersecting the inclusive query box."""
+        if self.native is not None:
+            return self.native.query(low, high)
         if self.order is None:
             return self._scan(low, high)
         blocks = np.flatnonzero(np.all(self.block_minimum <= high, axis=1) &

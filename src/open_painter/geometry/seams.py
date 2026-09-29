@@ -97,6 +97,10 @@ class SeamMap:
 
     def uv_direction(self, world_direction):
         """(n, n, 2) unit UV-space direction (pixels) of a world direction on each texel's face."""
+        from ..native_bridge.lifecycle import active_library
+        if len(self.jacobians) and (lib := active_library()) is not None:
+            from ..native_bridge.geometry import directions
+            return directions(lib, self.triangle, self.jacobians, world_direction)
         direction = np.asarray(world_direction, np.float32)
         direction = direction / max(float(np.linalg.norm(direction)), 1e-12)
         field = np.zeros((self.n, self.n, 2), np.float32)
@@ -148,12 +152,22 @@ def build(ts, n, halo=DEFAULT_HALO):
             mesh, uv = target['mesh'], target['uv']
             tri_loops, tri_vertices = target['tri_loops'], target['tri_vertices']
             rows, cols, tri, _ = rasterize(uv[tri_loops], n)
-            from ..baking.maps.utility import _islands
-            labels, _ = _islands(target)
-            roots, island_of_face = np.unique(labels, return_inverse=True)
-            unassigned = int(len(roots) > 0 and roots[0] < 0)
-            island_of_face = np.where(labels >= 0, island_of_face.astype(np.int64) - unassigned + island_base, -1)
-            island_base += len(roots) - unassigned
+            from ..native_bridge.lifecycle import active_library
+            native_topology = None
+            target_island_base = island_base
+            if (lib := active_library()) is not None:
+                from ..native_bridge.topology import from_target
+                native_topology = from_target(lib, target, n, seams=True)
+                island_of_face = np.where(native_topology.islands >= 0,
+                                          native_topology.islands + island_base, -1)
+                island_base += native_topology.island_count
+            else:
+                from ..baking.maps.utility import _islands
+                labels, _ = _islands(target)
+                roots, island_of_face = np.unique(labels, return_inverse=True)
+                unassigned = int(len(roots) > 0 and roots[0] < 0)
+                island_of_face = np.where(labels >= 0, island_of_face.astype(np.int64) - unassigned + island_base, -1)
+                island_base += len(roots) - unassigned
             if len(rows):
                 seam.covered[rows, cols] = True
                 seam.triangle[rows, cols] = tri + triangle_base
@@ -161,18 +175,28 @@ def build(ts, n, halo=DEFAULT_HALO):
             # Tangent Jacobian per triangle: dUV(px)/dWorld on the triangle's plane.
             p = target['positions'][tri_vertices].astype(np.float64)
             t = uv[tri_loops].astype(np.float64) * n
-            e = np.stack((p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)           # (T, 2, 3)
-            f = np.stack((t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1)           # (T, 2, 2)
-            gram = e @ e.transpose(0, 2, 1)                                          # (T, 2, 2)
-            det = gram[:, 0, 0] * gram[:, 1, 1] - gram[:, 0, 1] * gram[:, 1, 0]
-            inverse = np.zeros_like(gram)
-            ok = np.abs(det) > 1e-18
-            inverse[ok, 0, 0] = gram[ok, 1, 1] / det[ok]
-            inverse[ok, 1, 1] = gram[ok, 0, 0] / det[ok]
-            inverse[ok, 0, 1] = -gram[ok, 0, 1] / det[ok]
-            inverse[ok, 1, 0] = -gram[ok, 1, 0] / det[ok]
-            jacobians.append((f.transpose(0, 2, 1) @ inverse @ e).astype(np.float32))   # (T, 2, 3)
+            from ..native_bridge.lifecycle import active_library
+            if (lib := active_library()) is not None:
+                from ..native_bridge.geometry import jacobians as native_jacobians
+                jacobians.append(native_jacobians(lib, p, uv[tri_loops], n))
+            else:
+                e = np.stack((p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]), axis=1)           # (T, 2, 3)
+                f = np.stack((t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]), axis=1)           # (T, 2, 2)
+                gram = e @ e.transpose(0, 2, 1)                                          # (T, 2, 2)
+                det = gram[:, 0, 0] * gram[:, 1, 1] - gram[:, 0, 1] * gram[:, 1, 0]
+                inverse = np.zeros_like(gram)
+                ok = np.abs(det) > 1e-18
+                inverse[ok, 0, 0] = gram[ok, 1, 1] / det[ok]
+                inverse[ok, 1, 1] = gram[ok, 0, 0] / det[ok]
+                inverse[ok, 0, 1] = -gram[ok, 0, 1] / det[ok]
+                inverse[ok, 1, 0] = -gram[ok, 1, 0] / det[ok]
+                jacobians.append((f.transpose(0, 2, 1) @ inverse @ e).astype(np.float32))   # (T, 2, 3)
             triangle_base += len(tri_loops)
+            if native_topology is not None:
+                seam.seam_edges += len(native_topology.sides) // 2
+                if (native_sides := native_topology.seam_sides(target_island_base)) is not None:
+                    sides.append(native_sides)
+                continue
             # Seam edges: shared 3D edges whose two sides carry different UVs.
             faces = np.unique(target['tri_polygons'])
             va, vb, polygon, la, lb = _edge_sides(mesh, uv, faces)
@@ -209,18 +233,31 @@ def build(ts, n, halo=DEFAULT_HALO):
     closest = None
     if sides:
         seam.sides = tuple(np.concatenate(items) for items in zip(*sides))
-        closest = _bands(seam.covered, n, halo, *seam.sides)
+        from ..native_bridge.lifecycle import active_library
+        if (lib := active_library()) is not None:
+            from ..native_bridge.seams import bands
+            result = bands(lib, seam.covered, n, halo, *seam.sides, with_nearest=True)
+            if result is not None:
+                closest, seam._nearest = result[:7], result[7]
+        else:
+            closest = _bands(seam.covered, n, halo, *seam.sides)
     if closest is not None:
         seam.rows, seam.cols, seam.source_x, seam.source_y, seam.depth, seam.normal, seam.island = closest
         # The globally closest seam of each texel, for whole-image padding (ties to the
         # lower island): the same depth-then-owner race as the per-island arenas.
-        linear = seam.rows * n + seam.cols
-        composite = (seam.depth.view(np.int32).astype(np.int64) << 32) | seam.island
-        race = np.full(n * n, np.iinfo(np.int64).max, np.int64)
-        np.minimum.at(race, linear, composite)
-        seam._nearest = race[linear] == composite
+        if not hasattr(seam, '_nearest'):
+            linear = seam.rows * n + seam.cols
+            composite = (seam.depth.view(np.int32).astype(np.int64) << 32) | seam.island
+            race = np.full(n * n, np.iinfo(np.int64).max, np.int64)
+            np.minimum.at(race, linear, composite)
+            seam._nearest = race[linear] == composite
     else:
         seam._nearest = np.zeros(0, bool)
+    from ..native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ..native_bridge.topology import island_bounds
+        seam.bounds = island_bounds(lib, seam.island_of, island_base)
+        return seam
     # Island bounds in one pass over the covered texels rather than one scan per island.
     rows, cols = np.nonzero(seam.island_of >= 0)
     if len(rows):
@@ -251,6 +288,10 @@ def _bands(covered, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, island):
     the overlapping bands of a dense mesh never pile up: memory is the arena and one
     grid chunk, and the winners are read back from the arena.
     """
+    from ..native_bridge.lifecycle import active_library
+    if (lib := active_library()) is not None:
+        from ..native_bridge.seams import bands
+        return bands(lib, covered, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, island)
     s0, s1, o0, o1 = (np.asarray(v, np.float32) for v in (s0, s1, o0, o1))
     edge, other_edge = s1 - s0, o1 - o0
     length, other_length = np.hypot(edge[:, 0], edge[:, 1]), np.hypot(other_edge[:, 0], other_edge[:, 1])

@@ -96,12 +96,19 @@ def execution_library(backend):
     """The public host Metal executor; other platforms retain their current path."""
     if backend != 'METAL' or os.environ.get('OP_NATIVE_ENGINE', '1') == '0':
         _report.update(selected='legacy', host_backend=backend,
+                       qualified=False, host_gpu=False,
                        reason='Host native scheduling is disabled or unavailable for this backend')
         return None
     if _library is None or not hasattr(_library, 'op_graph_evaluate'):
         return None
+    import bpy
+    import platform
+    qualified = (platform.machine() == 'arm64' and bpy.app.version == (5, 2, 1)
+                 and bpy.app.build_hash == b'9e2066aef7ef'
+                 and bool(getattr(_library, '_op_binding', None)))
     _report.update(selected='c17-host-metal', host_backend=backend,
                    host_gpu=True, fully_migrated=False,
+                   qualified=qualified, integration='embedded-host-gpu',
                    compiled_binding=bool(getattr(_library, '_op_binding', None)),
                    gpu_device_owner='Blender',
                    gpu_submission=('compiled-public-host-api' if getattr(_library, '_op_binding', None) else 'python-development-adapter'),

@@ -1,0 +1,5 @@
+/tmp/openpainter-native-release/libopenpainter.dylib:
+	@rpath/libopenpainter.dylib (compatibility version 0.0.0, current version 0.0.0)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)
+/tmp/openpainter-native-release/_native.abi3.so:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1356.0.0)

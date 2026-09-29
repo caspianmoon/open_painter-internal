@@ -1,6 +1,20 @@
 # Changes
 
-## Unreleased — GPU painting and authoring
+## 0.14.0 — Embedded C engine on Metal
+
+- Bundle the C17 engine and compiled public-GPU binding for macOS arm64. The
+  engine runs in stock Blender's Metal context and publishes coherent eight-channel
+  material revisions directly to the existing viewport images.
+- Move dependency execution, channel acceptance, layer/folder and nested-mask
+  planning, all blend modes, pointwise effects, procedural compilation, filter
+  plans, brush processing, geometry/topology and resource policies into C.
+- Bound managed textures across texture sets and shared shader reuse. Preserve
+  accepted output across allocation/submission failures and recover evicted
+  Blender image textures, including their mip levels.
+- Preserve existing recipes, undo, save/reload, export and workflow adapters.
+  Windows/Vulkan remains on the existing executor for its separate machine work.
+
+### GPU painting and authoring
 
 - Cache accounting uses actual texture formats; scalar GPU stages use RG16F and Height
   uses RG32F. Painting can sample owned GPU resources, update affected regions and

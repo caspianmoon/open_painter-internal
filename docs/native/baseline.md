@@ -61,15 +61,11 @@ are not the five sustained 60-second interaction runs required for performance
 qualification. They ran concurrently; their timings must not support a speedup
 comparison. Raw evidence is under `docs/native/evidence/`.
 
-## Gate status
+## Delivery evidence
 
-P0 tooling and local fixtures implemented; target capture and full observability
-remain open; Windows work is deferred at the user's request. The corrected
-Metal mip probe passes. ABI 9 adds native mask hierarchy and filter-prefix planning
-to ABI 8 pointwise effect and mask-fold semantics
-to ABI 7 channel selection/acceptance, ABI 6 UV topology/seams, ABI 5 blend kernels and batch
-submission/dependency lifetimes, and earlier shader/program, brush/geometry,
-cache, filter, revision and GPU eviction recovery ownership.
-Real-window slider and brush evidence is separate from latency qualification.
-The complete ownership and remaining orchestration inventory is in migration-status.md. See
-`bridge-decision.md` and `release-evidence.md`.
+This page preserves the initial baseline and its measurement limitations.
+The final macOS Metal delivery is 0.14.0 / ABI 10. Current native ownership,
+resource limits, safety checks, real-window input tests and sustained viewport
+measurements are recorded in [release evidence](release-evidence.md) and the
+[ownership contract](migration-status.md). Windows target capture and Vulkan
+qualification belong to the deferred other-machine work.

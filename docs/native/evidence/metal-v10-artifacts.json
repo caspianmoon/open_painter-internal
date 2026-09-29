@@ -1,0 +1,35 @@
+{
+  "python_addon_sha256": "713eff9b7eb22e3f2413cdc0856bcd4e56923e9aa0ac676f364f7424d9b5ff05",
+  "python_file_count": 333,
+  "adapter_sha256": "4311d24aaeb2b2e8c909a0057cb699f297d05b89c49ea2127769bc14bb570eff",
+  "shader_bundle_sha256": "8012ffed99a7dce8239cd271273d1c9614e176e1cb80b75cd5fd9e7bcededbba",
+  "native_source_sha256": "1c119db4a250cb7574664f4349eeb5ab042debd5d991eacb090a851e5d43cb18",
+  "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+  "build_files_sha256": "4d9428e90509a8d8f716186434d513c4b27825b2a4a529a0298de8ba8dbec300",
+  "native_binary": {
+    "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+    "bytes": 241240,
+    "sha256": "836f6631260114d4a9d6b38d17f43529798b4770f3e7de78144b095529d34ce5"
+  },
+  "python_binding": {
+    "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+    "bytes": 209840,
+    "sha256": "f30fa66600d2f58bf46390095c5122964e861d0ed06aec5eac0f3b610425fa12"
+  },
+  "build_options_sha256": "b87353419162d773618508673bbb8dcf728297cac47bf3230217685bf0852d3d",
+  "package": {
+    "path": "dist/open_painter-0.14.0-macos-arm64-native.zip",
+    "bytes": 127973716,
+    "sha256": "4a9efd5cd4483e0433a67f2ea44c079c30119a17474fcb7af4716376b8bd8c99"
+  },
+  "native_manifest": {
+    "binding_sha256": "f30fa66600d2f58bf46390095c5122964e861d0ed06aec5eac0f3b610425fa12",
+    "python_abi": "cp311-abi3",
+    "abi_version": 10,
+    "sha256": "836f6631260114d4a9d6b38d17f43529798b4770f3e7de78144b095529d34ce5",
+    "platform": "macos-arm64",
+    "execution": "c17-host-metal"
+  },
+  "package_matches_current_python": true,
+  "validation_note": "Functional suite began before correcting constants.VERSION from 0.13.1 to 0.14.0. The entire source difference was hash-verified as this one constant. The final rebuilt ZIP was installed and exercised separately; all workflow tests use the final source. Raw original and recheck results are preserved."
+}

@@ -1,0 +1,26 @@
+2026-09-29 22:07:50.319 Blender[23034:12362443] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+GPU_MASK RUST
+{"name": "RUST", "cpu_s": 0.0813792499830015, "gpu_submit_s": 0.003318833012599498, "gpu_complete_s": 0.005045875033829361, "max_error": 7.152557373046875e-07, "mean_error": 4.259960917352146e-08, "mismatched_pixels": 0}
+GPU_MASK CHIPS
+{"name": "CHIPS", "cpu_s": 0.17201908299466595, "gpu_submit_s": 0.000981207995209843, "gpu_complete_s": 0.0022547499975189567, "max_error": 1.1920928955078125e-07, "mean_error": 3.2878233469091356e-10, "mismatched_pixels": 0}
+GPU_MASK SCRATCHES
+{"name": "SCRATCHES", "cpu_s": 0.07382320903707296, "gpu_submit_s": 0.0006898750434629619, "gpu_complete_s": 0.00161725003272295, "max_error": 2.86102294921875e-06, "mean_error": 4.485510629592682e-09, "mismatched_pixels": 0}
+GPU_MASK CAVITY_DIRT
+{"name": "CAVITY_DIRT", "cpu_s": 0.07219879201147705, "gpu_submit_s": 0.0007072080043144524, "gpu_complete_s": 0.0020358749898150563, "max_error": 1.1920928955078125e-07, "mean_error": 9.717524562802282e-09, "mismatched_pixels": 0}
+GPU_MASK EDGE_WEAR
+{"name": "EDGE_WEAR", "cpu_s": 0.09395183395827189, "gpu_submit_s": 0.0009478750289417803, "gpu_complete_s": 0.002046208013780415, "max_error": 1.1920928955078125e-07, "mean_error": 8.117584382461018e-10, "mismatched_pixels": 0}
+GPU_MASK DIRT
+{"name": "DIRT", "cpu_s": 0.09361512499162927, "gpu_submit_s": 0.00047137500951066613, "gpu_complete_s": 0.001479417027439922, "max_error": 2.980232238769531e-07, "mean_error": 8.479162261210149e-09, "mismatched_pixels": 0}
+GPU_MASK sequential_levels_invert_strength
+{"name": "sequential_levels_invert_strength", "cpu_s": 0.3227628329768777, "gpu_submit_s": 0.0005339159979484975, "gpu_complete_s": 0.0018274580361321568, "max_error": 8.642673492431641e-07, "mean_error": 2.662380893525551e-08, "mismatched_pixels": 0}
+GPU_MASK disabled_unsupported_ignored
+{"name": "disabled_unsupported_ignored", "cpu_s": 0.09089783299714327, "gpu_submit_s": 0.00035195902455598116, "gpu_complete_s": 0.0012651249999180436, "max_error": 1.1920928955078125e-07, "mean_error": 8.117584382461018e-10, "mismatched_pixels": 0}
+GPU_MASK flat_curvature_high_intensity
+{"name": "flat_curvature_high_intensity", "cpu_s": 0.09195554204052314, "gpu_submit_s": 0.0004104999825358391, "gpu_complete_s": 0.0018194589647464454, "max_error": 0.0, "mean_error": 0.0, "mismatched_pixels": 0}
+GPU_MASK optional_ao_absent
+{"name": "optional_ao_absent", "cpu_s": 0.07071474997792393, "gpu_submit_s": 0.00032962497789412737, "gpu_complete_s": 0.001066333963535726, "max_error": 1.1920928955078125e-07, "mean_error": 1.2446261798970681e-09, "mismatched_pixels": 0}
+GPU_MASK uneven_map_manual_bilinear
+{"name": "uneven_map_manual_bilinear", "cpu_s": 0.09272766602225602, "gpu_submit_s": 0.00044174998765811324, "gpu_complete_s": 0.00146770803257823, "max_error": 1.1920928955078125e-07, "mean_error": 1.0913936421275139e-11, "mismatched_pixels": 0}
+00:04.019  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+
+Blender quit

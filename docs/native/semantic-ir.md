@@ -1,4 +1,4 @@
-# Effect and mask IR contracts — ABI 9
+# Effect and mask IR contracts — ABI 10
 
 `op_ir_compile` accepts only typed, backward-referencing node indices. It never
 accepts shader expressions or host pointers. `OP_IR_EFFECT` returns VECTOR RGB;

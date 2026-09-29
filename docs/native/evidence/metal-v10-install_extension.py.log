@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Volumes/SSD/projects/open_painter/tests/integration/install_extension.py", line 24, in <module>
+    assert importlib.import_module(module + ".constants").VERSION == version
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+INSTALL_REPO open_painter_test /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-metal-fuopnl6_/extensions ü/repository
+STATUS Installed "open_painter"
+
+Error: script failed, file: '/Volumes/SSD/projects/open_painter/tests/integration/install_extension.py', exiting.
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

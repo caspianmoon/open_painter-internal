@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
+import weakref
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -22,6 +23,7 @@ def failed_allocation(which=2):
     dev.pool, dev._leases = OrderedDict(), {}
     dev._pooled_bytes, dev._pooled_ids = 0, set()
     dev.max_samplers = 16
+    dev.engines = weakref.WeakSet()
     dev.draw = Mock()
     dev.fill = Mock()
     made = []

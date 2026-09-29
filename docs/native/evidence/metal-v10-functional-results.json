@@ -1,0 +1,132 @@
+{
+  "status": "FAIL",
+  "run_id": "20260929T185615.369475Z",
+  "artifacts": {
+    "python_addon_sha256": "e5edc992c263788907245326068c13a8ea2b71ecbfc1de3e2580c9380e02d38d",
+    "python_file_count": 333,
+    "adapter_sha256": "4311d24aaeb2b2e8c909a0057cb699f297d05b89c49ea2127769bc14bb570eff",
+    "shader_bundle_sha256": "8012ffed99a7dce8239cd271273d1c9614e176e1cb80b75cd5fd9e7bcededbba",
+    "native_source_sha256": "1c119db4a250cb7574664f4349eeb5ab042debd5d991eacb090a851e5d43cb18",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "4d9428e90509a8d8f716186434d513c4b27825b2a4a529a0298de8ba8dbec300",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-release/libopenpainter.dylib",
+      "bytes": 241240,
+      "sha256": "836f6631260114d4a9d6b38d17f43529798b4770f3e7de78144b095529d34ce5"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-release/_native.abi3.so",
+      "bytes": 209840,
+      "sha256": "f30fa66600d2f58bf46390095c5122964e861d0ed06aec5eac0f3b610425fa12"
+    },
+    "build_options_sha256": null
+  },
+  "tests": [
+    {
+      "test": "native_host_metal.py",
+      "exit": 0
+    },
+    {
+      "test": "native_blend.py",
+      "exit": 0
+    },
+    {
+      "test": "native_effects.py",
+      "exit": 0
+    },
+    {
+      "test": "native_masks.py",
+      "exit": 0
+    },
+    {
+      "test": "native_geometry_projection.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_procedurals.py",
+      "exit": 0
+    },
+    {
+      "test": "gpu_strokes.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_filters.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_state_cache.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_undo.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_lifecycle_edges.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_adoption.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_memory_soak.py",
+      "exit": 0
+    },
+    {
+      "test": "save_during_evaluation.py",
+      "exit": 0
+    },
+    {
+      "test": "resolution_switch.py",
+      "exit": 0
+    },
+    {
+      "test": "stroke_parity.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_pixel_publish.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_uniform_publish.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_constant_publish.py",
+      "exit": 0
+    },
+    {
+      "test": "engine_fused_publish.py",
+      "exit": 0
+    },
+    {
+      "test": "shader_preview_ui.py",
+      "exit": 0
+    },
+    {
+      "test": "vector_brush_ui.py",
+      "exit": 0
+    },
+    {
+      "test": "native_paint_reopen.py",
+      "exit": 0
+    },
+    {
+      "test": "native_sustained_ui.py",
+      "exit": 0
+    },
+    {
+      "test": "install_extension.py",
+      "exit": 1
+    }
+  ],
+  "package_sha256": "16dd421f19e8f826406154a24c903781bb31011fdbd3be86edfe51d3f4d77247",
+  "error": "install_extension.py failed; see /Volumes/SSD/projects/open_painter/.blender-test/native/metal-integration/runs/20260929T185615.369475Z/install_extension.py.log"
+}

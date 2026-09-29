@@ -1,0 +1,118 @@
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /private/tmp/openpainter-native-release
+[  2%] Building C object CMakeFiles/openpainter.dir/src/gpu/pool.c.o
+[  2%] Building C object CMakeFiles/openpainter_shared.dir/src/gpu/pool.c.o
+[  2%] Linking C shared library libopenpainter.dylib
+[  3%] Linking C static library libopenpainter.a
+[ 25%] Built target openpainter
+[ 26%] Linking C executable test_snapshot
+[ 27%] Linking C executable test_abi
+[ 28%] Linking C executable test_snapshot_validation
+[ 29%] Linking C executable test_channels
+[ 30%] Building C object CMakeFiles/test_pool.dir/tests/test_pool.c.o
+[ 31%] Linking C executable test_graph
+[ 32%] Linking C executable test_masks
+[ 33%] Linking C executable test_blend
+[ 34%] Linking C executable test_document
+[ 37%] Linking C executable test_cache
+[ 37%] Linking C executable test_ir
+[ 37%] Linking C shared module _native.abi3.so
+[ 38%] Linking C executable test_reach
+[ 39%] Linking C executable test_paint
+[ 40%] Linking C executable test_mesh
+[ 41%] Linking C executable test_seams
+[ 42%] Linking C executable test_publication
+[ 43%] Linking C executable test_lifetime
+[ 44%] Linking C executable test_topology
+[ 45%] Linking C executable test_effects
+[ 47%] Linking C executable test_graph_execution
+[ 48%] Linking C executable test_filter
+[ 48%] Linking C executable test_stack
+[ 49%] Linking C executable test_program
+[ 50%] Linking C executable test_revision
+[ 51%] Linking C executable test_composite
+[ 61%] Built target test_cache
+[ 75%] Built target openpainter_shared
+[ 76%] Built target test_graph
+[ 77%] Built target test_document
+[ 78%] Built target test_masks
+[ 79%] Built target test_snapshot_validation
+[ 80%] Built target test_seams
+[ 81%] Built target test_channels
+[ 82%] Built target test_paint
+[ 83%] Built target test_revision
+[ 84%] Built target test_lifetime
+[ 85%] Built target test_filter
+[ 86%] Built target test_topology
+[ 87%] Built target test_program
+[ 88%] Built target test_reach
+[ 89%] Built target test_graph_execution
+[ 90%] Built target test_blend
+[ 93%] Built target test_ir
+[ 93%] Built target openpainter_python
+[ 93%] Built target test_snapshot
+[ 95%] Linking C executable test_pool
+[ 96%] Built target test_publication
+[ 96%] Built target test_effects
+[ 98%] Built target test_mesh
+[ 98%] Built target test_composite
+[ 99%] Built target test_stack
+[100%] Built target test_abi
+[100%] Built target test_pool
+Test project /private/tmp/openpainter-native-release
+      Start  1: test_abi
+ 1/25 Test  #1: test_abi .........................   Passed    0.42 sec
+      Start  2: test_document
+ 2/25 Test  #2: test_document ....................   Passed    0.32 sec
+      Start  3: test_snapshot
+ 3/25 Test  #3: test_snapshot ....................   Passed    0.32 sec
+      Start  4: test_composite
+ 4/25 Test  #4: test_composite ...................   Passed    0.32 sec
+      Start  5: test_lifetime
+ 5/25 Test  #5: test_lifetime ....................   Passed    0.31 sec
+      Start  6: test_snapshot_validation
+ 6/25 Test  #6: test_snapshot_validation .........   Passed    0.33 sec
+      Start  7: test_graph
+ 7/25 Test  #7: test_graph .......................   Passed    0.34 sec
+      Start  8: test_pool
+ 8/25 Test  #8: test_pool ........................   Passed    0.33 sec
+      Start  9: test_ir
+ 9/25 Test  #9: test_ir ..........................   Passed    0.33 sec
+      Start 10: test_revision
+10/25 Test #10: test_revision ....................   Passed    0.32 sec
+      Start 11: test_cache
+11/25 Test #11: test_cache .......................   Passed    0.33 sec
+      Start 12: test_stack
+12/25 Test #12: test_stack .......................   Passed    0.31 sec
+      Start 13: test_filter
+13/25 Test #13: test_filter ......................   Passed    0.34 sec
+      Start 14: test_program
+14/25 Test #14: test_program .....................   Passed    0.32 sec
+      Start 15: test_paint
+15/25 Test #15: test_paint .......................   Passed    0.32 sec
+      Start 16: test_mesh
+16/25 Test #16: test_mesh ........................   Passed    0.34 sec
+      Start 17: test_reach
+17/25 Test #17: test_reach .......................   Passed    0.34 sec
+      Start 18: test_publication
+18/25 Test #18: test_publication .................   Passed    0.33 sec
+      Start 19: test_seams
+19/25 Test #19: test_seams .......................   Passed    0.35 sec
+      Start 20: test_blend
+20/25 Test #20: test_blend .......................   Passed    0.36 sec
+      Start 21: test_graph_execution
+21/25 Test #21: test_graph_execution .............   Passed    0.33 sec
+      Start 22: test_topology
+22/25 Test #22: test_topology ....................   Passed    0.33 sec
+      Start 23: test_channels
+23/25 Test #23: test_channels ....................   Passed    0.34 sec
+      Start 24: test_effects
+24/25 Test #24: test_effects .....................   Passed    0.32 sec
+      Start 25: test_masks
+25/25 Test #25: test_masks .......................   Passed    0.32 sec
+
+100% tests passed, 0 tests failed out of 25
+
+Total Test time (real) =   8.32 sec
+/private/tmp/openpainter-native-release/libopenpainter.dylib

@@ -1,4 +1,4 @@
-# Native migration ownership — ABI 9
+# Native migration ownership — ABI 10
 
 Metal is the active platform scope. Windows and Vulkan implementation and device
 qualification are deferred to the other machine. The independent standalone
@@ -15,7 +15,7 @@ application under `native/` is unchanged.
 | Evaluation | Copied dependency DAG, atomic narrow revision patches, cycle rejection, dependency stamps, root plans, checkpoint selection, batch submission and last-consumer dependency holds (`op_graph.h`) | Binds host resources and submits each native-selected pass |
 | Channel evaluation | Accepted channel descriptors, exact constant comparison, native revision/target/configuration change selection, ordered dispatch and atomic batch acceptance (`op_channels.h`) | Snapshots root bindings and opaque target IDs; submits staged host work |
 | GPU submission | Compiled CPython host-GPU adapter validates feedback hazards, binds framebuffer/uniforms/samplers, submits draw and restores framebuffer context | Blender owns its Metal device and command queue |
-| Resources | Texture reuse, leases, pool limits, LRU eviction and retained-result, filter and brush-history budgets (`op_pool.h`, `op_cache.h`) | Holds GPU API objects by opaque integer tokens |
+| Resources | Texture reuse, leases, global admission, pool limits, LRU eviction and retained-result, filter, shared-program and brush-history budgets (`op_pool.h`, `op_cache.h`) | Holds GPU API objects by opaque integer tokens |
 | Revisions | Bounded immutable eight-channel resource sets, checked leases, stage/commit/abort, preflight ordering, multichannel mip submission and exhaustive rollback (`op_revision.h`) | Prepares public GPU attachments and submits copy commands selected by C |
 | Filters | Filter shaders, procedural displacement fields, Gaussian/box coefficient generation, morphology pass plans and repeat bounds (`op_filter.h`) | Copies evaluated mesh loops and submits passes |
 | Brush | Batched stamp frames, pressure/flow/alpha coverage, bounds and resampling (`op_paint.h`) | Captures Blender input/rays and persists the existing stroke recipe |
@@ -136,26 +136,52 @@ Native frame leases describe resources ready for ordered host-queue consumption.
 They are not CPU readback completion fences. All asynchronous resource retirement
 is subject to Blender's public GPU ownership/queue contract.
 
-## Remaining boundaries and qualification
+## Release ownership boundary
 
-The Blender recipe frontend, image/source snapshot extraction,
-CPU compatibility boundaries, per-unit host binding and
-save/export adapters still contain Python logic. Some reference CPU inputs (for
-example legacy sine noise and unsupported custom shader groups) remain existing
-CPU source boundaries. They are not secretly counted as native GPU kernels.
-The old constant-fill C document API is a separate bounded reference fixture;
-it is not the production representation of arbitrary layered materials.
+The delivered integration uses the normalized recipe translator allowed by plan
+§8 and the workflow/persistence adapters described in §12. Blender's recipe
+frontend, image/source snapshots, per-unit GPU resource binding, save/export and
+CPU compatibility inputs remain host responsibilities. Legacy sine noise and
+unsupported custom shader groups retain their established CPU source boundary.
+The old constant-fill C document API is a bounded reference fixture; production
+layered materials use the native IR, stack, graph, channel and revision APIs.
 
-Consequently diagnostics retain `fully_migrated: false`; the table above records
-actual ownership instead of relabeling the entire existing runtime as C.
-Completing the original all-native ownership requirement still entails removing
-the remaining evaluation orchestration and feature semantics from those host
-boundaries. The original plan's sustained latency protocol, broad device-loss
-qualification and other-machine platforms are separate, unfinished gates.
+`fully_migrated: false` means the host adapter and compatibility code still
+contain Python; it does not describe the release's installation state. The
+`integration` diagnostic identifies `embedded-host-gpu`, and `qualified` checks
+the tested arm64 Blender build and compiled binding. Exact hardware coverage is
+recorded in the [supported matrix](supported-matrix.md). No independent Metal
+device, private Blender object layout, external texture import or user-managed
+process is required.
 
-The main remaining code boundaries are `evaluation/shader_graph.py` (recipe,
-mask source binding, reference resolution and effect-chain binding), `evaluation/engine/runtime.py` (source
-binding, per-pass host dispatch and persistence adapters). `geometry/seams.py` copies
-evaluated mesh data and binds native topology/correspondence results. Native
-batch execution owns the dependency pass loop and its input lifetimes; the
-native channel driver owns output selection, dispatch and acceptance.
+The recipe frontend is `evaluation/shader_graph.py`; host pass/resource binding
+is in `evaluation/engine/runtime.py`. Native batch execution owns dependency
+ordering and holds; the native channel driver owns output selection, dispatch
+and acceptance. Structural translation is separate from numeric parameter
+updates, which reuse topology and shader programs.
+
+## Managed resource limits
+
+ABI 10 admits all engine-owned texture allocations against one 4 GiB budget
+shared across texture sets. Free storage is capped at 512 MiB. Admission first
+retires pooled textures, then releases recomputable results in idle engines.
+Active evaluation holds, paint history and accepted revision resources remain
+owned. If they leave insufficient capacity, allocation fails before requesting a
+new GPU texture and the previous accepted material remains available. Reducing
+the cap never invalidates existing leases; subsequent returns retire excess
+storage. These are managed allocation limits, excluding Blender image storage,
+renderer allocations and driver overhead.
+
+Shared shader reuse has a 32 MiB source charge budget with a minimum 128 KiB per
+entry (at most 256 entries). Reflection metadata is separately capped at 256
+entries. Driver shader binary memory is not exposed by the public API, so these
+charges are not a VRAM measurement. Active unit owners may retain an evicted
+shader; its interface is reflected again on demand and it remains drawable.
+The native C LRU selects shared-cache victims. The legacy diagnostic path uses
+the same bounded policy in Python.
+
+Host registration failures roll back the newly created C lease, including a
+failure at any of the three metadata insertions. C tests cover cap reduction,
+active lease preservation and recovery. Metal regression tests draw after shader
+eviction, reject over-budget allocations before GPU allocation, reclaim idle
+results, preserve all eight accepted outputs and successfully evaluate again.

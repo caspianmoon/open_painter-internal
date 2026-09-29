@@ -14,6 +14,7 @@ channel whose chain stamp is unchanged is not rendered; a changed one re-renders
 its chain, reusing retained SRC/MASK results whose stamps still match.
 """
 import os
+import weakref
 from collections import Counter, OrderedDict
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
@@ -31,6 +32,8 @@ RGBA = 'RGBA32F'
 HALF = 'RGBA16F'   # display precision for every channel but Height (bump detail is sub-1/2048)
 SCALAR = 'R32F'
 RETAIN_BYTES = 512 * 1024 * 1024    # SRC/MASK results kept between evaluations, per texture set
+DEVICE_BYTES = 4 * 1024 * 1024 * 1024  # all managed textures across texture sets
+INTERFACE_ENTRIES = 256              # metadata cannot retain evicted shaders forever
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
 POOL_BYTES = 512 * 1024 * 1024         # global cap; fits a 4K float publication scratch plus compact stages
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
@@ -152,8 +155,11 @@ class Device:
         import gpu
         ensure_gpu()
         self.backend = gpu.platform.backend_type_get()
-        self.shaders = {}
-        self._interfaces = {}
+        from .program_cache import ProgramCache
+        self.shaders = ProgramCache()
+        self._interfaces = OrderedDict()
+        self.engines = weakref.WeakSet()
+        self._reclaiming = False
         self.batch = None
         self.pool = OrderedDict()
         self._pooled_bytes = 0
@@ -183,7 +189,9 @@ class Device:
         if shader is None:
             shader = self._create(program.library + program.source, [s.name for s in program.samplers],
                                   program.parameter_slots, len(program.objects), len(program.targets), preamble=not program.native)
-            self.shaders[key] = shader
+            for retired in self.shaders.put(key, shader, len(program.library.encode()) + len(program.source.encode())):
+                self._interfaces.pop(retired, None)
+                metrics.count('engine_shader_evictions')
         return shader
 
     def _create(self, source, samplers, parameter_slots=0, objects=0, targets=1, preamble=False, ints=()):
@@ -223,13 +231,34 @@ class Device:
         uniforms |= frozenset(name for name in samplers
                               if self.backend != 'OPENGL' or _has_uniform(shader, name))
         block = bool(parameter_slots or objects) and _has_uniform(shader, 'op_params', block=True)
-        self._interfaces[shader] = (uniforms, block)
+        self._remember_interface(shader, (uniforms, block))
         self.compiles += 1
         elapsed = perf_counter() - started
         self.compile_seconds += elapsed
         metrics.count('engine_program_compiles')
         metrics.sample('engine_program_compile_ms', elapsed * 1000)
         return shader
+
+    def _remember_interface(self, shader, interface):
+        self._interfaces[shader] = interface
+        self._interfaces.move_to_end(shader)
+        while len(self._interfaces) > INTERFACE_ENTRIES:
+            self._interfaces.popitem(last=False)
+        return interface
+
+    def _interface(self, shader, samplers, ubo, ints):
+        interface = self._interfaces.get(shader)
+        if interface is not None:
+            self._interfaces.move_to_end(shader)
+            return interface
+        # An active unit may outlive its shared cache entry. Reflect its public
+        # interface again instead of keeping every historical GPUShader alive.
+        names = ('op_inv_size', *(ints or {}))
+        uniforms = frozenset(name for name in names if _has_uniform(shader, name))
+        uniforms |= frozenset(name for name, _ in samplers
+                              if self.backend != 'OPENGL' or _has_uniform(shader, name))
+        return self._remember_interface(shader, (uniforms, ubo is not None and
+                                                 _has_uniform(shader, 'op_params', block=True)))
 
     def fixed(self, name):
         shader = self._fixed.get(name)
@@ -259,8 +288,29 @@ class Device:
                 from ...native_bridge.resources import NativePool
                 pool = self._native_pool = NativePool(lib, self)
         if pool is not None:
-            pool.configure(POOL_BYTES, POOL_SPARES)
+            pool.configure(POOL_BYTES, POOL_SPARES, DEVICE_BYTES)
         return pool
+
+    def _admit(self, native, width, height, fmt):
+        if native.admit(width, height, fmt):
+            return
+        # Recompute idle results if another set needs room. Active evaluations,
+        # paint history and accepted display revisions are never discarded here.
+        if not self._reclaiming:
+            self._reclaiming = True
+            try:
+                for engine in tuple(self.engines):
+                    if getattr(engine, '_evaluation_depth', 0):
+                        continue
+                    n = engine.graph.n if engine.graph is not None else None
+                    for key, state in engine.states.items():
+                        engine._free(key, state, n)
+                    engine._clear_filters()
+                    if native.admit(width, height, fmt):
+                        return
+            finally:
+                self._reclaiming = False
+        raise MemoryError('Open Painter managed texture budget exhausted; close an unused texture set or reduce its resolution.')
 
     def texture(self, n, fmt=RGBA):
         import gpu
@@ -269,6 +319,7 @@ class Device:
             texture = native.acquire(n, fmt)
             if texture is not None:
                 return texture
+            self._admit(native, n, n, fmt)
             texture = gpu.types.GPUTexture((n, n), format=fmt)
             native.register(texture, n, n, fmt)
             metrics.count('engine_texture_allocations')
@@ -351,6 +402,8 @@ class Device:
         array = np.ascontiguousarray(array, np.float32)
         h, w = array.shape[:2]
         native = self._resource_pool()
+        if native is not None:
+            self._admit(native, w, h, fmt)
         texture = gpu.types.GPUTexture((w, h), format=fmt, data=gpu.types.Buffer('FLOAT', array.size, array.ravel()))
         if native is not None:
             native.register(texture, w, h, fmt)
@@ -414,7 +467,7 @@ class Device:
         lib = active_library()
         native = getattr(lib, '_op_binding', None) if lib is not None else None
         if native is not None:
-            uniforms, block = self._interfaces[shader]
+            uniforms, block = self._interface(shader, samplers, ubo, ints)
             native.gpu_draw(shader, slots, size, samplers, ubo, ints, uniforms, block, self._batch(shader), region)
             self.passes += 1
             return
@@ -422,7 +475,7 @@ class Device:
         if any(source is target for _, source in samplers for target in attachments):
             raise ValueError('A GPU pass cannot sample its render target')
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=slots)
-        uniforms, block = self._interfaces[shader]
+        uniforms, block = self._interface(shader, samplers, ubo, ints)
         with framebuffer.bind():
             viewport = region if region is not None else (0, 0, size, size)
             gpu.state.viewport_set(*viewport)
@@ -582,6 +635,8 @@ def forget_device():
     global _device
     from ...painting.gpu_sources import clear
     clear()
+    if _device is not None:
+        _device.shaders.close()
     if _device is not None and getattr(_device, '_native_pool', None) is not None:
         _device._native_pool.close()
     _device = None
@@ -721,6 +776,8 @@ class Engine:
         self._native_revisions = None
         self._native_channels = None
         self._native_cache = None
+        self._evaluation_depth = 0
+        device().engines.add(self)
 
     # ---- graph -----------------------------------------------------------------------
 
@@ -873,11 +930,13 @@ class Engine:
         change ``inline``; cached entries from before that decision are rechecked.
         """
         previous = self._state_cache
+        self._evaluation_depth = getattr(self, '_evaluation_depth', 0) + 1
         self._state_cache = {} if CACHE_EVALUATION_STATES else None
         try:
             yield
         finally:
             self._state_cache = previous
+            self._evaluation_depth -= 1
 
     def _inlined(self, key):
         """The producers compiled into ``key``'s program, nearest first."""

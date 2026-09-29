@@ -1,0 +1,15 @@
+00:03.055  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/base_color_native.exr'
+00:03.347  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/base_color_exported.exr'
+00:03.505  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/base_color_cpu.exr'
+00:03.652  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/roughness_native.exr'
+00:03.876  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/roughness_exported.exr'
+00:04.113  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/roughness_cpu.exr'
+00:04.236  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/height_native.exr'
+00:04.455  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/height_exported.exr'
+00:04.684  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/height_cpu.exr'
+00:04.807  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/normal_relief_native.exr'
+00:04.929  render           | Saved: '/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/normal_relief_exported.exr'
+MATERIAL_SURFACE_EEVEE_CPU_EXPORT_PARITY_PASS {"engine": "BLENDER_EEVEE", "physical_period_m": 0.001, "resolution": 512, "samples_per_period": 32, "channels": {"BASE_COLOR": {"cpu_shader_mae": 5.431704266811721e-05, "cpu_shader_max": 0.000244140625, "raw_texel_mae": 0.00039981090230867267, "native_export_mae": 4.860538319917396e-05, "native_export_max": 0.000244140625, "exported_file": "/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/maps/Physical_weave_BaseColor.png"}, "ROUGHNESS": {"cpu_shader_mae": 0.00024365057470276952, "cpu_shader_max": 0.00048828125, "raw_texel_mae": 0.0020699359010905027, "native_export_mae": 0.00024171307450160384, "native_export_max": 0.00048828125, "exported_file": "/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/maps/Physical_weave_Roughness.png"}, "HEIGHT": {"cpu_shader_mae": 0.00017317576566711068, "cpu_shader_max": 0.00048828125, "raw_texel_mae": 0.00018090460798703134, "native_export_mae": 0.00017317576566711068, "native_export_max": 0.00048828125, "exported_file": "/Volumes/SSD/projects/open_painter/.blender-test/material-remedy-parity/maps/Physical_weave_Height.png"}}, "source": "actual_Eevee_renders_and_production_export", "normal_relief": {"native_export_mae": 0.003865655977278948, "native_export_max": 0.02978515625, "tolerance_mae": 0.02, "note": "Eevee screen derivatives and texture-space export derivatives differ at thread peaks"}}
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

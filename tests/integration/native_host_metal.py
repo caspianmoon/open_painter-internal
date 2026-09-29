@@ -70,6 +70,61 @@ try:
     for channel in CHANNELS:
         np.testing.assert_array_equal(first[channel], restored[channel], err_msg=channel)
 
+    # Shared cache eviction cannot destroy shaders still held by an active unit.
+    from open_painter.evaluation.engine import runtime
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    dev = runtime.device()
+    with patch.object(dev.shaders, 'budget', 128 * 1024), patch.object(runtime, 'INTERFACE_ENTRIES', 2):
+        shaders = []
+        for index in range(5):
+            program = SimpleNamespace(source=f'void main() {{ op_out0 = vec4({index}.0 / 8.0); }}',
+                                      library='', samplers=(), parameter_slots=0, objects=(),
+                                      targets=(0,), procedurals=(), native=True)
+            shaders.append(dev.shader(program))
+        assert len(dev.shaders) == 1 and len(dev._interfaces) <= 2
+        target = dev.texture(8)
+        try:
+            for index, shader in enumerate(shaders):
+                dev.draw(shader, [target], 8)
+                np.testing.assert_allclose(np.array(target.read()), index / 8, atol=1e-5)
+                assert len(dev._interfaces) <= 2
+        finally:
+            dev.release(target, 8)
+
+    # Reject before GPU allocation; preserve active work and all accepted outputs.
+    before_pressure = pixels()
+    revision = engine._native_revisions.revision
+    with patch.object(runtime, 'DEVICE_BYTES', 0), patch.object(gpu.types, 'GPUTexture', side_effect=AssertionError('allocated past budget')):
+        try:
+            with engine._evaluation_states():
+                dev.texture(64)
+        except MemoryError as error:
+            assert 'budget exhausted' in str(error)
+        else:
+            raise AssertionError('Memory admission failure was not exercised')
+    assert engine._native_revisions.revision == revision
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(before_pressure[channel], actual, err_msg='budget ' + channel)
+    # Idle result reclamation is allowed, while its accepted revision survives.
+    idle = runtime.Engine(scene, ts)
+    idle.graph = SimpleNamespace(n=128)
+    idle.states['pressure-fixture'] = SimpleNamespace(textures=[dev.texture(128)], formats=(runtime.RGBA,))
+    idle.retained['pressure-fixture'] = runtime.texture_bytes(128, 128, runtime.RGBA)
+    try:
+        with patch.object(runtime, 'DEVICE_BYTES', dev.memory()['leased_bytes']):
+            scratch = dev.texture(64)
+            assert not idle.retained and idle.states['pressure-fixture'].textures is None
+            dev.release(scratch, 64)
+    finally:
+        idle.close()
+    coat.opacity = .55
+    ready()
+    coat.opacity = .6
+    engine = ready()
+    for channel, actual in pixels().items():
+        np.testing.assert_array_equal(first[channel], actual, err_msg='budget retry ' + channel)
+
     # Native channel state owns no-op selection, subset acceptance and host target changes.
     assert engine.report['native_channel_selection']
     # Direct calls use their own source-epoch snapshot; warm that snapshot once.
@@ -283,6 +338,8 @@ try:
         np.testing.assert_array_equal(first[channel], values, err_msg='restore ' + channel)
     assert scene.render.engine == original_engine and bpy.context.object == obj
     report = dict(status='PASS', backend='c17-host-metal', errors=errors,
+                  managed_budget_failure_recovery=True, idle_cache_reclamation=True,
+                  live_shader_after_eviction=True,
                   topology_rebuilds=topology_builds, channels=list(CHANNELS),
                   native_batch_zero_budget=True, unit_draw_failure_recovery=True,
                   native_channel_selection=True, channel_subset_and_target_changes=True, host_metadata_failure_recovery=True, accepted_revision_retirement_failure=True,

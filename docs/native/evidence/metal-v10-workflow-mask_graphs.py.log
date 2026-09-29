@@ -1,0 +1,88 @@
+MASK_GRAPH {"case": "noise FBM", "max": 1.5497207641601562e-06, "p999": 9.5367431640625e-07, "large": 0.0, "mean": 0.7494293451309204}
+MASK_GRAPH {"case": "OPMGNoise VALUE", "max": 1.1920928955078125e-07, "p999": 5.960464477539063e-08, "large": 0.0, "mean": 0.7743651866912842}
+MASK_GRAPH {"case": "OPMGNoise RIDGED", "max": 4.887580871582031e-06, "p999": 3.0994415283203125e-06, "large": 0.0, "mean": 0.7609802484512329}
+MASK_GRAPH {"case": "OPMGNoise WARPED", "max": 2.205371856689453e-06, "p999": 1.1324882507324219e-06, "large": 0.0, "mean": 0.7660585641860962}
+MASK_GRAPH {"case": "OPMGCells VORONOI", "max": 0.33875054121017456, "p999": 0.0, "large": 3.814697265625e-06, "mean": 0.7583131790161133}
+MASK_GRAPH {"case": "OPMGCells WORLEY", "max": 2.384185791015625e-07, "p999": 1.7881393432617188e-07, "large": 0.0, "mean": 0.7170040607452393}
+MASK_GRAPH {"case": "OPMGPattern CHECKER", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.7404632568359375}
+MASK_GRAPH {"case": "OPMGPattern BRICK_PATTERN", "max": 5.960464477539063e-08, "p999": 5.960464477539063e-08, "large": 0.0, "mean": 0.9418387413024902}
+MASK_GRAPH {"case": "OPMGPattern RADIAL_GRADIENT", "max": 5.960464477539063e-08, "p999": 5.960464477539063e-08, "large": 0.0, "mean": 0.5209439992904663}
+MASK_GRAPH {"case": "OPMGSurface GRUNGE_MEDIUM", "max": 2.1457672119140625e-06, "p999": 1.1324882507324219e-06, "large": 0.0, "mean": 0.753577709197998}
+MASK_GRAPH {"case": "OPMGSurface SCRATCHES", "max": 2.2649765014648438e-06, "p999": 7.152557373046875e-07, "large": 0.0, "mean": 0.5099796056747437}
+MASK_GRAPH {"case": "OPMGSurface RUST_FLAKES", "max": 2.2172927856445312e-05, "p999": 7.62939453125e-06, "large": 0.0, "mean": 0.811826229095459}
+MASK_GRAPH {"case": "noise of the world position", "max": 1.2516975402832031e-06, "p999": 7.152557373046875e-07, "large": 0.0, "mean": 0.7446612119674683}
+MASK_GRAPH {"case": "noise of the world normal", "max": 5.960464477539063e-08, "p999": 5.960464477539063e-08, "large": 0.0, "mean": 0.7928057312965393}
+MASK_GRAPH {"case": "value", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.6850001215934753}
+MASK_GRAPH {"case": "mesh map curvature", "max": 0.0001176595687866211, "p999": 0.00010501500219106674, "large": 0.0, "mean": 0.6625000238418579}
+MASK_GRAPH {"case": "mesh map AO", "max": 4.881620407104492e-05, "p999": 4.881620407104492e-05, "large": 0.0, "mean": 0.8249998688697815}
+MASK_GRAPHS sources: PASS
+MASK_GRAPH {"case": "math ADD", "max": 7.152557373046875e-07, "p999": 3.5762786865234375e-07, "large": 0.0, "mean": 0.9990954399108887}
+MASK_GRAPH {"case": "math SUBTRACT", "max": 7.152557373046875e-07, "p999": 3.5762786865234375e-07, "large": 0.0, "mean": 0.5007328391075134}
+MASK_GRAPH {"case": "math MULTIPLY", "max": 6.556510925292969e-07, "p999": 4.76837158203125e-07, "large": 0.0, "mean": 0.6782652735710144}
+MASK_GRAPH {"case": "math DIVIDE", "max": 1.3709068298339844e-06, "p999": 9.5367431640625e-07, "large": 0.0, "mean": 0.8627598285675049}
+MASK_GRAPH {"case": "math POWER", "max": 8.344650268554688e-07, "p999": 5.960464477539062e-07, "large": 0.0, "mean": 0.8100000023841858}
+MASK_GRAPH {"case": "math MINIMUM", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.7539318799972534}
+MASK_GRAPH {"case": "math MAXIMUM", "max": 7.152557373046875e-07, "p999": 3.5762786865234375e-07, "large": 0.0, "mean": 0.8507329821586609}
+MASK_GRAPH {"case": "math LESS_THAN", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.9825344085693359}
+MASK_GRAPH {"case": "math GREATER_THAN", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.5174655914306641}
+MASK_GRAPH {"case": "math MODULO", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.742438793182373}
+MASK_GRAPH {"case": "math SNAP", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.5122259259223938}
+MASK_GRAPH {"case": "math ONE_MINUS", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.7453353404998779}
+MASK_GRAPH {"case": "math ABSOLUTE", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.7546646595001221}
+MASK_GRAPH {"case": "math SQRT", "max": 7.152557373046875e-07, "p999": 4.76837158203125e-07, "large": 0.0, "mean": 0.8543585538864136}
+MASK_GRAPH {"case": "math ROUND", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.7718925476074219}
+MASK_GRAPH {"case": "math FLOOR", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.5}
+MASK_GRAPH {"case": "math CEIL", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 1.0}
+MASK_GRAPH {"case": "math FRACT", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.7546646595001221}
+MASK_GRAPH {"case": "math SINE", "max": 8.344650268554688e-07, "p999": 5.364418029785156e-07, "large": 0.0, "mean": 0.7421844005584717}
+MASK_GRAPH {"case": "math COSINE", "max": 5.960464477539062e-07, "p999": 3.5762786865234375e-07, "large": 0.0, "mean": 0.9336015582084656}
+MASK_GRAPH {"case": "math SUBTRACT two sources, clamped", "max": 8.940696716308594e-07, "p999": 5.960464477539062e-07, "large": 0.0, "mean": 0.6284716129302979}
+MASK_GRAPH {"case": "mix MIX", "max": 3.5762786865234375e-07, "p999": 2.384185791015625e-07, "large": 0.0, "mean": 0.7315798997879028}
+MASK_GRAPH {"case": "mix MULTIPLY", "max": 7.152557373046875e-07, "p999": 4.76837158203125e-07, "large": 0.0, "mean": 0.6609422564506531}
+MASK_GRAPH {"case": "mix SCREEN", "max": 7.748603820800781e-07, "p999": 4.76837158203125e-07, "large": 0.0, "mean": 0.825302243232727}
+MASK_GRAPH {"case": "mix OVERLAY", "max": 1.3113021850585938e-06, "p999": 7.748603820800781e-07, "large": 0.0, "mean": 0.7375277280807495}
+MASK_GRAPH {"case": "mix ADD", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.8927051424980164}
+MASK_GRAPH {"case": "mix SUBTRACT", "max": 9.5367431640625e-07, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.6179934740066528}
+MASK_GRAPH {"case": "mix DIFFERENCE", "max": 9.5367431640625e-07, "p999": 5.960464477539062e-07, "large": 0.0, "mean": 0.6549965143203735}
+MASK_GRAPH {"case": "mix LIGHTEN", "max": 9.5367431640625e-07, "p999": 5.960464477539062e-07, "large": 0.0, "mean": 0.7760542035102844}
+MASK_GRAPH {"case": "mix DARKEN", "max": 8.344650268554688e-07, "p999": 5.364418029785156e-07, "large": 0.0, "mean": 0.7101902961730957}
+MASK_GRAPH {"case": "mix clamped", "max": 8.344650268554688e-07, "p999": 5.364418029785156e-07, "large": 0.0, "mean": 0.7101902961730957}
+MASK_GRAPH {"case": "ramp LINEAR", "max": 2.1457672119140625e-06, "p999": 1.430511474609375e-06, "large": 0.0, "mean": 0.8310198783874512}
+MASK_GRAPH {"case": "ramp EASE", "max": 3.039836883544922e-06, "p999": 1.9073486328125e-06, "large": 0.0, "mean": 0.8498294353485107}
+MASK_GRAPH {"case": "ramp CONSTANT", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.811970055103302}
+MASK_GRAPH {"case": "levels", "max": 4.5299530029296875e-06, "p999": 8.344650268554688e-07, "large": 0.0, "mean": 0.8030710220336914}
+MASK_GRAPH {"case": "mapping into a checker", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.7483844757080078}
+MASK_GRAPHS converters: PASS
+MASK_GRAPH {"case": "edit baseline", "max": 8.344650268554688e-07, "p999": 5.960464477539062e-07, "large": 0.0, "mean": 0.7291982173919678}
+MASK_GRAPH {"case": "after numeric edits", "max": 1.1920928955078125e-06, "p999": 6.556510925292969e-07, "large": 0.0, "mean": 0.6517486572265625}
+MASK_GRAPH {"case": "after an operation change", "max": 1.4901161193847656e-06, "p999": 8.344650268554688e-07, "large": 0.0, "mean": 0.8053956627845764}
+MASK_GRAPH {"case": "after a relink", "max": 1.9669532775878906e-06, "p999": 1.0132789611816406e-06, "large": 0.0, "mean": 0.7856646776199341}
+MASK_GRAPHS edits: PASS
+MASK_GRAPH {"case": "recovered", "max": 1.9669532775878906e-06, "p999": 1.0132789611816406e-06, "large": 0.0, "mean": 0.7856646776199341}
+MASK_GRAPHS invalid graph: PASS
+00:06.881  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/mask-graphs.blend"
+Info: Saved as "mask-graphs.blend"
+MASK_GRAPH {"case": "after reload", "max": 1.9669532775878906e-06, "p999": 1.0132789611816406e-06, "large": 0.0, "mean": 0.7856646776199341}
+MASK_GRAPHS persistence: PASS
+MASK_GRAPH {"case": "template NOISE_RAMP", "max": 3.039836883544922e-06, "p999": 1.7881393432617188e-06, "large": 0.0, "mean": 0.7441954612731934}
+MASK_GRAPH {"case": "template CELLULAR_RAMP", "max": 5.364418029785156e-07, "p999": 4.172325134277344e-07, "large": 0.0, "mean": 0.6982724666595459}
+MASK_GRAPH {"case": "template LAYERED_NOISE", "max": 6.67572021484375e-06, "p999": 3.933906555175781e-06, "large": 0.0, "mean": 0.7096588015556335}
+MASK_GRAPHS templates: PASS
+MASK_GRAPH {"case": "before a replacement", "max": 1.5497207641601562e-06, "p999": 9.5367431640625e-07, "large": 0.0, "mean": 0.7494293451309204}
+MASK_GRAPH {"case": "an identical node replaced", "max": 1.6689300537109375e-06, "p999": 1.0728836059570312e-06, "large": 0.0, "mean": 0.7753838896751404}
+MASK_GRAPH {"case": "ramp before new stops", "max": 1.6689300537109375e-06, "p999": 1.0728836059570312e-06, "large": 0.0, "mean": 0.7753838896751404}
+MASK_GRAPH {"case": "ramp after twelve new stops", "max": 1.3530254364013672e-05, "p999": 5.9604644775390625e-06, "large": 0.0, "mean": 0.7799375653266907}
+MASK_GRAPH {"case": "a new graph after a deletion", "max": 4.76837158203125e-07, "p999": 3.5762786865234375e-07, "large": 0.0, "mean": 0.7586179375648499}
+MASK_GRAPH {"case": "an unlinked Mask Output", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.7600001096725464}
+MASK_GRAPH {"case": "a replaced unlinked Mask Output", "max": 0.0, "p999": 0.0, "large": 0.0, "mean": 0.8400000929832458}
+MASK_GRAPHS removed nodes: PASS
+Open Painter: INFO: Bake staging device: GPU
+Open Painter: ERROR: Save shader input: bpy_prop_collection[index]: index 0 out of range, size 0
+00:08.183  blend            | Read blend: "/Volumes/SSD/projects/open_painter/.blender-test/mask-graphs-legacy.blend"
+Info: Saved as "mask-graphs-legacy.blend"
+MASK_GRAPH {"case": "a converted graph", "max": 5.4836273193359375e-06, "p999": 2.384185791015625e-06, "large": 0.0, "mean": 0.9362161159515381}
+MASK_GRAPHS one editor: PASS
+MASK_GRAPHS_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

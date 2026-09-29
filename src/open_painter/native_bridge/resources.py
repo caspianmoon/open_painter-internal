@@ -23,12 +23,15 @@ class NativePool:
         self.objects, self.tokens = {}, {}
         self.callback = EVENT(self._event)
         self.error = None
+        self._registering = False
         self.limits = None
         self.handle = C.c_void_p()
         signatures = {
             'create': [EVENT, C.c_void_p, C.POINTER(C.c_void_p)],
             'destroy': [C.c_void_p],
             'limits': [C.c_void_p, C.c_uint64, C.c_uint32],
+            'budget': [C.c_void_p, C.c_uint64],
+            'admit': [C.c_void_p, C.c_uint32, C.c_uint32, C.c_uint32],
             'register': [C.c_void_p, C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32, C.POINTER(C.c_uint64)],
             'acquire': [C.c_void_p, C.c_uint32, C.c_uint32, C.c_uint32, C.POINTER(C.c_uint64)],
             'release': [C.c_void_p, C.c_uint64], 'discard': [C.c_void_p, C.c_uint64],
@@ -45,17 +48,30 @@ class NativePool:
         if status:
             raise NativeError(status, 'Native resource operation rejected')
 
-    def configure(self, budget, spares):
-        limits = max(0, budget), max(0, spares)
+    def configure(self, budget, spares, total=None):
+        limits = max(0, budget), max(0, spares), total
         if limits != self.limits:
-            self.check(self.lib.op_pool_limits(self.handle, *limits))
+            self.check(self.lib.op_pool_limits(self.handle, *limits[:2]))
+            if total is not None:
+                self.check(self.lib.op_pool_budget(self.handle, max(0, total)))
             self.limits = limits
+
+    def admit(self, width, height, fmt):
+        from ..evaluation.engine.formats import FORMAT_BYTES
+        status = self.lib.op_pool_admit(self.handle, width, height, FORMAT_BYTES[fmt])
+        if status == 5:
+            return False
+        self.check(status)
+        return True
 
     def _event(self, _user, token, action):
         try:
             from ..evaluation import metrics
             dev = self.device
-            texture, width, height, fmt, size = self.objects[token]
+            data = self.objects.get(token)
+            if data is None and action == 0 and self._registering:
+                return  # rollback before the first host metadata insertion
+            texture, width, height, fmt, size = data
             identity = id(texture)
             if identity in dev._pooled_ids:
                 free = dev.pool[(width, fmt)]
@@ -67,7 +83,7 @@ class NativePool:
             dev._leases.pop(identity, None)
             if action == 0:
                 del self.objects[token]
-                del self.tokens[identity]
+                self.tokens.pop(identity, None)
                 metrics.count('engine_pool_evictions')
             elif action == 1:
                 dev._leases[identity] = size
@@ -83,12 +99,21 @@ class NativePool:
     def register(self, texture, width, height, fmt):
         from ..evaluation.engine.formats import FORMAT_BYTES, texture_bytes
         token = C.c_uint64()
-        self.check(self.lib.op_pool_register(self.handle, width, height, self.formats[fmt],
-                                            FORMAT_BYTES[fmt], C.byref(token)))
         size = texture_bytes(width, height, fmt)
-        self.objects[token.value] = texture, width, height, fmt, size
-        self.tokens[id(texture)] = token.value
-        self.device._leases[id(texture)] = size
+        record = texture, width, height, fmt, size
+        self._registering = True
+        try:
+            self.check(self.lib.op_pool_register(self.handle, width, height, self.formats[fmt],
+                                                FORMAT_BYTES[fmt], C.byref(token)))
+            try:
+                self.objects[token.value] = record
+                self.tokens[id(texture)] = token.value
+                self.device._leases[id(texture)] = size
+            except BaseException:
+                self.check(self.lib.op_pool_discard(self.handle, token))
+                raise
+        finally:
+            self._registering = False
 
     def acquire(self, n, fmt):
         token = C.c_uint64()

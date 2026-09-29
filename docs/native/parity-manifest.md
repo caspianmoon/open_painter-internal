@@ -1,6 +1,6 @@
 # Parity manifest — native C backend (P0 inventory)
 
-Status: **inventory plus tested ABI 9 host-Metal integration**. Source of truth is the pinned implementation
+Status: **inventory plus tested ABI 10 host-Metal integration**. Source of truth is the pinned implementation
 (`5a55206`), not this document. Every row must name the test or fixture that
 proves it; rows without evidence are marked `UNPROVEN`.
 
@@ -76,7 +76,7 @@ blend IR and C shader generation for all 28 modes; it does not use that CPU slic
 Executed checks and their scope are recorded in `release-evidence.md`. An
 existing test listed here is not automatically a completed qualification gate.
 
-## Implemented ABI 9 ownership
+## Implemented ABI 10 ownership
 
 The old opaque-fill C document API remains a bounded reference fixture. Production
 materials use the C program, graph, stack, resource and revision APIs; they do not
@@ -102,7 +102,7 @@ use the fill fixture as a replacement material model.
 | Workflow adapters | Evaluated projection, UDIM, multiple sets, aging, Material Director, material surface parity and surface-filter suites pass; some intentionally exercise CPU compatibility workflows |
 | Interactive Metal | Real-window 2K slider and brush fixtures, compiled public GPU API binding, clean extension install |
 
-See [migration status](migration-status.md) for the remaining Python ownership.
+See [migration status](migration-status.md) for the retained host ownership.
 Presence in this inventory does not imply full native ownership of every host
-adapter or completion of the original sustained performance/device matrix gates.
+adapter or qualification of untested devices. See the release report for sustained-run measurements.
 Historical ABI 2 scheduler evidence remains separately identified.

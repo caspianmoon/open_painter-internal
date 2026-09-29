@@ -16,6 +16,13 @@ typedef struct op_pool_memory {
 op_status_t op_pool_create(op_pool_event_fn event, void *user, op_pool_t **out);
 void op_pool_destroy(op_pool_t *pool);
 op_status_t op_pool_limits(op_pool_t *pool, uint64_t bytes, uint32_t spares);
+/* Global managed-texture cap (leased + pooled), shared by every texture set.
+ * Budget reduction cannot invalidate live leases. Admit evicts only free pool
+ * entries and must run before host allocation. Register checks again. Neither
+ * function reserves bytes across calls; submission is on one context thread. */
+op_status_t op_pool_budget(op_pool_t *pool, uint64_t bytes);
+op_status_t op_pool_admit(op_pool_t *pool, uint32_t width, uint32_t height,
+                          uint32_t bytes_per_pixel);
 op_status_t op_pool_register(op_pool_t *pool, uint32_t width, uint32_t height, uint32_t format,
                              uint32_t bytes_per_pixel, uint64_t *token);
 op_status_t op_pool_acquire(op_pool_t *pool, uint32_t width, uint32_t height, uint32_t format,

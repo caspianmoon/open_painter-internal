@@ -9,7 +9,7 @@ typedef struct entry {
 struct op_pool {
     entry *entries;
     uint32_t count, capacity, spares;
-    uint64_t clock, serial, limit;
+    uint64_t clock, serial, limit, budget;
     op_pool_memory_t memory;
     op_pool_event_fn event;
     void *user;
@@ -59,6 +59,7 @@ op_status_t op_pool_create(op_pool_event_fn event, void *user, op_pool_t **out) 
     *out = calloc(1, sizeof(op_pool_t));
     if (!*out)
         return OP_RESOURCE_EXHAUSTED;
+    (*out)->budget = UINT64_MAX;
     (*out)->event = event;
     (*out)->user = user;
     return OP_OK;
@@ -79,12 +80,36 @@ op_status_t op_pool_limits(op_pool_t *p, uint64_t bytes, uint32_t spares) {
     p->spares = spares;
     return op_pool_trim(p, spares);
 }
+op_status_t op_pool_budget(op_pool_t *p, uint64_t bytes) {
+    if (!p)
+        return OP_INVALID_ARGUMENT;
+    p->budget = bytes;
+    uint64_t available = bytes > p->memory.leased ? bytes - p->memory.leased : 0;
+    while (p->memory.pooled > available)
+        retire(p, oldest(p, NULL));
+    return OP_OK;
+}
+op_status_t op_pool_admit(op_pool_t *p, uint32_t w, uint32_t h, uint32_t bpp) {
+    if (!p || !w || !h || w > 32768 || h > 32768 || !bpp || bpp > 16)
+        return OP_INVALID_ARGUMENT;
+    uint64_t bytes = (uint64_t)w * h * bpp;
+    if (p->memory.leased > p->budget || bytes > p->budget - p->memory.leased)
+        return OP_RESOURCE_EXHAUSTED;
+    while (p->memory.pooled > p->budget - p->memory.leased - bytes)
+        retire(p, oldest(p, NULL));
+    return OP_OK;
+}
 op_status_t op_pool_register(op_pool_t *p, uint32_t w, uint32_t h, uint32_t format, uint32_t bpp,
                              uint64_t *token) {
     entry *e = NULL;
     if (!p || !token || !w || !h || w > 32768 || h > 32768 || !bpp || bpp > 16)
         return OP_INVALID_ARGUMENT;
     *token = 0;
+    if (p->serial == UINT64_MAX)
+        return OP_RESOURCE_EXHAUSTED;
+    op_status_t status = op_pool_admit(p, w, h, bpp);
+    if (status != OP_OK)
+        return status;
     for (uint32_t i = 0; i < p->count; i++)
         if (!p->entries[i].state) {
             e = &p->entries[i];
@@ -103,8 +128,6 @@ op_status_t op_pool_register(op_pool_t *p, uint32_t w, uint32_t h, uint32_t form
         }
         e = &p->entries[p->count++];
     }
-    if (p->serial == UINT64_MAX)
-        return OP_RESOURCE_EXHAUSTED;
     *e = (entry){++p->serial, (uint64_t)w * h * bpp, ++p->clock, w, h, format, 1};
     p->memory.leased += e->bytes;
     p->memory.allocations++;
@@ -154,6 +177,9 @@ op_status_t op_pool_release(op_pool_t *p, uint64_t token) {
     while (matching(p, e) > p->spares)
         retire(p, oldest(p, e));
     while (p->memory.pooled > p->limit)
+        retire(p, oldest(p, NULL));
+    uint64_t available = p->budget > p->memory.leased ? p->budget - p->memory.leased : 0;
+    while (p->memory.pooled > available)
         retire(p, oldest(p, NULL));
     return OP_OK;
 }

@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--lib', type=Path, required=True)
     parser.add_argument('--package', type=Path)
     parser.add_argument('--gui', action='store_true')
+    parser.add_argument('--sustained', action='store_true', help='Five 60-second real viewport RNA edit runs')
     parser.add_argument('--tests', nargs='+', default=TESTS)
     args = parser.parse_args()
     latest = ROOT / '.blender-test/native/metal-integration'
@@ -62,7 +63,7 @@ def main():
                 cmd += ['--', '-ApplePersistenceIgnoreState', 'YES']
             with (out / (name + '.log')).open('w') as log:
                 result = subprocess.run(cmd, cwd=ROOT, env=env, stdout=log,
-                                        stderr=subprocess.STDOUT, timeout=300)
+                                        stderr=subprocess.STDOUT, timeout=480 if name == 'native_sustained_ui.py' else 300)
             item = dict(test=name, exit=result.returncode)
             report['tests'].append(item)
             print(item, flush=True)
@@ -92,6 +93,11 @@ def main():
                 assert data.get('result', data.get('status')) == 'PASS', data
                 assert data['execution_backend'] == 'c17-host-metal', data
             run('native_paint_reopen.py')
+        if args.sustained:
+            target = out / 'native-sustained-ui.json'
+            run('native_sustained_ui.py', gui=True, extra={'OP_SUSTAINED_REPORT': str(target)})
+            data = json.loads(target.read_text())
+            assert data['status'] == 'PASS', data.get('error')
         if args.package:
             run('install_extension.py', package=True)
         report['status'] = 'PASS'

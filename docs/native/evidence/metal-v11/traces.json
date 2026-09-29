@@ -1,0 +1,52 @@
+[
+  {
+    "file": "pair-0-legacy.json.gz",
+    "raw_sha256": "35f2632407dde90045783a14a07d822c1553acd82b4ebc9d9b4a387da131b10d",
+    "gzip_sha256": "960f8b57c5b7c6f08a1ee373c314f85d335aabda17e08bda294b4a78b472167d"
+  },
+  {
+    "file": "pair-0-native.json.gz",
+    "raw_sha256": "4cde4e1654c320dae492ceae4a46464c87436c7a829143a75a3b7176bbbd21c7",
+    "gzip_sha256": "2b22984d01fc3bcf32eb6df220edc02a355d466797a753fe9e84b6a24d23096d"
+  },
+  {
+    "file": "pair-1-legacy.json.gz",
+    "raw_sha256": "36a35611360a5e9e0480b8a5aa7590d4a83489a733a91526d3b0dae63b839d82",
+    "gzip_sha256": "05e61c9147f36ccbe66f1bb6e9c91a8e35f390ef3a5e1abf787ab93ce74340b5"
+  },
+  {
+    "file": "pair-1-native.json.gz",
+    "raw_sha256": "33d040553a34b2355301837235d332fdf5cbf85fe87b5187ae2903de9fdbef46",
+    "gzip_sha256": "5a65b6087810444259df91e665705d3dcfe89c069afc4c607d63044914226e42"
+  },
+  {
+    "file": "pair-2-legacy.json.gz",
+    "raw_sha256": "d9f830bc655199a70667cd92b634fe30d862dcc6f35d4da78fdb726794894b48",
+    "gzip_sha256": "58b987d32a5c9003ba17182d6a73cf742ad98f273b73bf06015aebdd36496253"
+  },
+  {
+    "file": "pair-2-native.json.gz",
+    "raw_sha256": "e1cfbc16f26f48b1ac60e07ff2e53001ec26202a30e1e0c548a8a0433bdadf67",
+    "gzip_sha256": "fb10557ed5394e77d1d5ce34873cdd4f952e187dc210c0ed0f3bf69b6d07bab0"
+  },
+  {
+    "file": "pair-3-legacy.json.gz",
+    "raw_sha256": "6d408ec9c7544ed1c37a34ce59538975f69acecfa9642198d15137e41602492c",
+    "gzip_sha256": "f274465ef9559c56211147b90ff12e5e123153fd1cbc0746b4093a594ef512a7"
+  },
+  {
+    "file": "pair-3-native.json.gz",
+    "raw_sha256": "74c68a3077b4fc760d3ffbf36513b27dc87edbc83000f11c24b40b47a5f2ef32",
+    "gzip_sha256": "9ba6a9d936ace317cd829f87f9eca1a91cd8f9671c432b927b3a1bc9eb8b4f39"
+  },
+  {
+    "file": "pair-4-legacy.json.gz",
+    "raw_sha256": "78c5d071aa7e68b6d35ac3948403fc68407bb7470ead6e673e568dad5cd8bc09",
+    "gzip_sha256": "425c3979e48673615949d6c9e2dbf3f62fe406bda7b80fb078f7c6a2e208c289"
+  },
+  {
+    "file": "pair-4-native.json.gz",
+    "raw_sha256": "fe5d747299db94f1ba1a34e34b1c5502c4e5d0ac9a93f4c91275494c7eafed47",
+    "gzip_sha256": "b13e2e3404d997884193203e0c2d077523b43e62deea11f3e447911d4a8d096d"
+  }
+]

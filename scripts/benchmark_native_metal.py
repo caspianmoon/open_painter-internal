@@ -55,6 +55,8 @@ def main():
     parser.add_argument('--pairs', type=int, default=5)
     parser.add_argument('--seconds', type=float, default=60)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--require-no-warm-allocations', action='store_true',
+                        help='Fail if the optimized native executor allocates a texture during observation')
     args = parser.parse_args()
     if args.pairs < 1 or args.seconds <= 0:
         parser.error('Positive pair count and duration required')
@@ -71,7 +73,8 @@ def main():
                   worker_sha256=hashlib.sha256(WORKER.read_bytes()).hexdigest(),
                   runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   baseline='Current release with OP_NATIVE_ENGINE=0; not a historical release checkout',
-                  protocol='Fresh process/profile per run; five AB/BA pairs; same 2K eight-channel material, viewport, 60Hz ideal opacity trajectory; no readback during timing',
+                  protocol=f'Fresh process/profile per run; {args.pairs} AB/BA pairs; same 2K eight-channel material, viewport, 60Hz ideal opacity trajectory; no readback during timing',
+                  require_no_warm_allocations=args.require_no_warm_allocations,
                   seconds=args.seconds, pair_count=args.pairs, warm_edit_seconds=15)
     print('BENCHMARK_OUTPUT', str(out), flush=True)
 
@@ -103,8 +106,11 @@ def main():
         row = data['runs'][0]
         assert row['summary']['duration_s'] >= args.seconds
         assert row['summary']['displayed_revisions'] > 0
+        assert row['warm_evaluations'] >= data['minimum_warm_evaluations']
         counts = data['instrumentation']['counters']
         assert not counts.get('engine_program_compiles', 0) and not counts.get('engine_graph_builds', 0)
+        if mode == 'native' and args.require_no_warm_allocations:
+            assert not counts.get('engine_texture_allocations', 0), counts
         for channel in ('engine_image_pixel_writes', 'engine_texture_readbacks'):
             assert not counts.get(channel, 0), channel
         print('PAIRED_RUN', pair, mode, row['summary'], flush=True)

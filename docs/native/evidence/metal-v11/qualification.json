@@ -1,0 +1,883 @@
+{
+  "status": "PASS",
+  "artifacts": {
+    "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+    "python_file_count": 334,
+    "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+    "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+    "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+      "bytes": 241416,
+      "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+      "bytes": 210000,
+      "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+    },
+    "build_options_sha256": null
+  },
+  "package_sha256": "d97141e75c926f548939e6cf488834cd1614ccc673c9839cc5a656f8fd423990",
+  "python_checks": {
+    "total": 394,
+    "skipped": 5,
+    "log": "pure-tests.log"
+  },
+  "portable_c_checks": {
+    "total": 25,
+    "sanitizers": "address,undefined",
+    "log": "asan-ubsan.log"
+  },
+  "integration": [
+    {
+      "test": "diagnostics_scheduling.py",
+      "status": "PASS",
+      "source_run": "20260929T215726.749938Z",
+      "log": "diagnostics_scheduling.py.log.gz",
+      "raw_log_sha256": "adad3b3145c66d725905982fc9303b025bba37dcaf260cae99e64411bf761488",
+      "artifacts": {
+        "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+        "python_file_count": 334,
+        "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": true,
+      "same_final_binary": true
+    },
+    {
+      "test": "engine_constant_publish.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_constant_publish.py.log.gz",
+      "raw_log_sha256": "b29d4568a886599ec6f682b6d98dd61c9ad37ccc4e6eed66dfbde48f841f6105",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_filters.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_filters.py.log.gz",
+      "raw_log_sha256": "463bfa1d91151b2766057707ccf581ed8c3a4b4625c9feef3ea6cd4232a8b92c",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_fused_publish.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_fused_publish.py.log.gz",
+      "raw_log_sha256": "187ef06f4b2d441ab0dc112a859e465a06b2916ee6c5f43eee9b39c3712736ce",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_memory_soak.py",
+      "status": "PASS",
+      "source_run": "20260929T211728.096696Z",
+      "log": "engine_memory_soak.py.log.gz",
+      "raw_log_sha256": "5219432cef86e739ff9d295274a155741e8b3602eba1dd69c08ac8184ae28c8e",
+      "artifacts": {
+        "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+        "python_file_count": 334,
+        "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    },
+    {
+      "test": "engine_parity.py",
+      "status": "PASS",
+      "source_run": "20260929T211202.853591Z",
+      "log": "engine_parity.py.log.gz",
+      "raw_log_sha256": "b063ad279ae429de721fc30cb8c078dca7bd8df8094af77b2b18741d10aeacfe",
+      "artifacts": {
+        "python_addon_sha256": "f8243004bf290af456a569bc70c9f4744b0080265fa2cfda6843a566b4bac371",
+        "python_file_count": 334,
+        "adapter_sha256": "8a44db41ba68b66f47caac3b56c33deac3702e73dc872fc6ef5fb29724f70eae",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    },
+    {
+      "test": "engine_pixel_publish.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_pixel_publish.py.log.gz",
+      "raw_log_sha256": "6459550f7c36e5c72e0a48f72b01146a3953b17fea80f54bdd59263acfe8718a",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_procedurals.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_procedurals.py.log.gz",
+      "raw_log_sha256": "8e4bf09c013c980bab521750b5694946b08859612cd5eae4fb297407411990b0",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_state_cache.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_state_cache.py.log.gz",
+      "raw_log_sha256": "0b3b0afce85cc9f14ac5c6338ca7175b0d762c30f02f41f44e74546b204f7f12",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "engine_uniform_publish.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "engine_uniform_publish.py.log.gz",
+      "raw_log_sha256": "20318789bb9d15466f9aa41f9212364e51f6bc21e94faa5546a5b08b73384bf1",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "gpu_strokes.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "gpu_strokes.py.log.gz",
+      "raw_log_sha256": "ea89788e3f5dcc271bae3bc724f60ccbedf25844183b6696de93e37f76e55a4a",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "install_extension.py",
+      "status": "PASS",
+      "source_run": "20260929T215726.749938Z",
+      "log": "install_extension.py.log.gz",
+      "raw_log_sha256": "1d85a8bddb3cee19782b1e4f452dce8c756d62736fa01cb47c08cdd7492ab3cc",
+      "artifacts": {
+        "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+        "python_file_count": 334,
+        "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": true,
+      "same_final_binary": true
+    },
+    {
+      "test": "native_blend.py",
+      "status": "PASS",
+      "source_run": "20260929T215228.652068Z",
+      "log": "native_blend.py.log.gz",
+      "raw_log_sha256": "7efe03a68d757256b39532d26b2807b14dbdd238ba4000fbce85bc7e861944ec",
+      "artifacts": {
+        "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+        "python_file_count": 334,
+        "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": true,
+      "same_final_binary": true
+    },
+    {
+      "test": "native_effects.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "native_effects.py.log.gz",
+      "raw_log_sha256": "749114eef7084d050b8b396e0f5c1403f6f04915d284ee063ced87050947663d",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "native_geometry_projection.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "native_geometry_projection.py.log.gz",
+      "raw_log_sha256": "412c0a8dad5148c2818d61eec424fab8ff2770702975e7460c6a67446bde312e",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "native_host_metal.py",
+      "status": "PASS",
+      "source_run": "20260929T215228.652068Z",
+      "log": "native_host_metal.py.log.gz",
+      "raw_log_sha256": "952f65926a935ffbcaadb07dd7aa801156e5685ca5e73559ba296de83b15acc2",
+      "artifacts": {
+        "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+        "python_file_count": 334,
+        "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": true,
+      "same_final_binary": true
+    },
+    {
+      "test": "native_masks.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "native_masks.py.log.gz",
+      "raw_log_sha256": "e4fd52a17114474a47233c7f97c27c77f0361bdf39cf73344e86e6cf7d01d3b7",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "native_paint_reopen.py",
+      "status": "PASS",
+      "source_run": "20260929T211728.096696Z",
+      "log": "native_paint_reopen.py.log.gz",
+      "raw_log_sha256": "5c24fba094f80ad8faf93103790f3cf6477d59dea0d882c802f98914709bb06c",
+      "artifacts": {
+        "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+        "python_file_count": 334,
+        "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    },
+    {
+      "test": "native_publication_4k.py",
+      "status": "PASS",
+      "source_run": "20260929T211728.096696Z",
+      "log": "native_publication_4k.py.log.gz",
+      "raw_log_sha256": "eedc66d551e88d75cfa15c93483b1cca89b6170ad38ccd1df9d725e76f92ae4b",
+      "artifacts": {
+        "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+        "python_file_count": 334,
+        "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    },
+    {
+      "test": "native_publication_precision.py",
+      "status": "PASS",
+      "source_run": "20260929T215228.652068Z",
+      "log": "native_publication_precision.py.log.gz",
+      "raw_log_sha256": "159dbbe8a42b49d80f351878c4bcd94e28ffc5f1fc4dc33a97bb144d0a9ce360",
+      "artifacts": {
+        "python_addon_sha256": "ffffe31c7e1f7a467a75f9ef3b71d4d76d9ccaa800d9689cd72d7f872c9fb756",
+        "python_file_count": 334,
+        "adapter_sha256": "6d148d052d4ad412eeafa4b76cbee4521780cf15cbfe12e1d8cf68f0823548e2",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": true,
+      "same_final_binary": true
+    },
+    {
+      "test": "resolution_switch.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "resolution_switch.py.log.gz",
+      "raw_log_sha256": "6ba8fb4ebe0fc19faf06f0460f1bcd7b0f352823b0d78af118689025c9dd6e90",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "save_during_evaluation.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "save_during_evaluation.py.log.gz",
+      "raw_log_sha256": "5d46bf1a595660a073745e1daf3af73ddd9c65ac3496ba0d51f599f78a278bf6",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "shader_adoption.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "shader_adoption.py.log.gz",
+      "raw_log_sha256": "5aaff8fc85cde008472f5b5775882abc80b1b1df669bce40e311345e61e22ce0",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "shader_lifecycle_edges.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "shader_lifecycle_edges.py.log.gz",
+      "raw_log_sha256": "4a9b43d4cbf6465f5836b2b21ccd800ca0389e3554b14e4297cce70a7e55b9c9",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "shader_preview_ui.py",
+      "status": "PASS",
+      "source_run": "20260929T211728.096696Z",
+      "log": "shader_preview_ui.py.log.gz",
+      "raw_log_sha256": "28e87fc66bbddc743f08db6afc0fe561e85ccd2ccfd6212c22dbb1b21eb5fa79",
+      "artifacts": {
+        "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+        "python_file_count": 334,
+        "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    },
+    {
+      "test": "shader_undo.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "shader_undo.py.log.gz",
+      "raw_log_sha256": "c4c452066479a1f258535099938483a11ba04932213e5cc376c3299034d72841",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "stroke_parity.py",
+      "status": "PASS",
+      "source_run": "20260929T210038.606415Z",
+      "log": "stroke_parity.py.log.gz",
+      "raw_log_sha256": "d2e2f7ea81b06d4e74e94dc8f2f79bbe00e70577574e1d6b64680ab66d479d20",
+      "artifacts": {
+        "python_addon_sha256": "b7a3604ce3a06950d91dc0c2d6d6f8c9fa47a50e13612d7cafed36199bae3c6f",
+        "python_file_count": 334,
+        "adapter_sha256": "fc8a2ec625908f0fa9f12063854b89ec73563881fe962abc6d3512ccd679e8bf",
+        "shader_bundle_sha256": "64c7869358b79208fc9b9bc1ac3cd02809dc1adadc1362a6f8b3d10756205324",
+        "native_source_sha256": "9fe79f799496111d0c25314a85dd24d049d29ebdf757ae7efe351d12e9cd402a",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241400,
+          "sha256": "02dcb2f51cf97727f5d4f20725855329d9eb07b69f7d6cac73727757c59eef33"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 209984,
+          "sha256": "6803b853f575caa064a7b5a3d41d7e12ae69af3faf9e6489cf62bf234d39c4e7"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": false
+    },
+    {
+      "test": "vector_brush_ui.py",
+      "status": "PASS",
+      "source_run": "20260929T211728.096696Z",
+      "log": "vector_brush_ui.py.log.gz",
+      "raw_log_sha256": "4b2fa250b78e6757b15a8d71ed3c98b54a40fc544b935099dd2902ad7eee1df4",
+      "artifacts": {
+        "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+        "python_file_count": 334,
+        "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+        "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+        "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+        "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+        "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+        "native_binary": {
+          "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+          "bytes": 241416,
+          "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+        },
+        "python_binding": {
+          "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+          "bytes": 210000,
+          "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+        },
+        "build_options_sha256": null
+      },
+      "same_final_python": false,
+      "same_final_binary": true
+    }
+  ],
+  "environment_after": {
+    "power": {
+      "exit": 0,
+      "stdout": "AC Power:\n Sleep On Power Button 1\n lowpowermode         1\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         0\n womp                 1\n networkoversleep     0\n sleep                1\n tcpkeepalive         1\n disksleep            10",
+      "stderr": ""
+    },
+    "power_source": {
+      "exit": 0,
+      "stdout": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=7405667)\t100%; charged; 0:00 remaining present: true",
+      "stderr": ""
+    }
+  },
+  "viewport_candidate_artifacts": {
+    "python_addon_sha256": "a3bb21f5ba395063732d1cf5307ed09fa0df11d6892ae9029101d3cab0f165c6",
+    "python_file_count": 334,
+    "adapter_sha256": "111263b3f2137238d6390beb4e0bb62d9d6f3b6755218f6a65233fae8fedc4ed",
+    "shader_bundle_sha256": "6c81167d1fe5cabe44810b1726eea4ba5c1a2c37ad71aa1264e7508e9fc6761f",
+    "native_source_sha256": "4db3f098ad1ce449eae9cdefebde234332ce98c7829395f8063eb12373837eae",
+    "fixture_source_sha256": "ae2ac534ad7d29957d91facc8adc44f47189ca64a5c5f29bdcb862f2ccac1ca5",
+    "build_files_sha256": "6c1926c15e59e98bd5b328021cf87df1e57d905f61e00215e03dd20fa338ccaf",
+    "native_binary": {
+      "path": "/private/tmp/openpainter-native-perf/libopenpainter.dylib",
+      "bytes": 241416,
+      "sha256": "55639ef95afed8d5a89e54b75d79b6845560cdf63fd430b44f3235159ffb0e41"
+    },
+    "python_binding": {
+      "path": "/private/tmp/openpainter-native-perf/_native.abi3.so",
+      "bytes": 210000,
+      "sha256": "89caeaacb7cf9bcbe490c7228144346a1735ab44f51db69c3271dad00f12514c"
+    },
+    "build_options_sha256": null
+  },
+  "viewport_to_final": "viewport-to-final.patch: preserve explicit full-float intermediates. Default viewport fixture formats and pass counts are unchanged. Final-source completed-update benchmark and precision/mip checks are separate.",
+  "scope": "Latest passing check per suite; each row preserves its exact source/binary identity. Publication, explicit precision, blending and clean installation were rerun on final source. Memory, GUI, persistence and other feature checks retain their earlier source identities; they are not relabeled as final-artifact executions.",
+  "environment_note": "Read-only inspection during pair 2 observed 18 GiB RAM, 27505.12 MiB swap used out of 28672 MiB, 11 percent memory-pressure free, and substantial editor/browser/build/local-model activity. These processes and machine preferences were not modified. This is a confound, not a controlled attribution of latency. Per-run load is in results.json."
+}

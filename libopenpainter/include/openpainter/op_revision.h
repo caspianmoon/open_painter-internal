@@ -36,6 +36,12 @@ typedef op_status_t (*op_publication_submit_t)(void *user, uint32_t action, uint
 op_status_t op_revisions_publish(op_revisions_t *state, const op_publication_t *channels,
                                  uint32_t count, op_publication_submit_t submit, void *user,
                                  uint64_t *revision);
+/* Same preflight/acceptance contract, but WRITE is called once (index/level 0)
+ * for the entire prepared batch. The host may fuse compatible channel draws.
+ * A failed WRITE restores every mip of every prepared channel. */
+op_status_t op_revisions_publish_batched(op_revisions_t *state, const op_publication_t *channels,
+                                         uint32_t count, op_publication_submit_t submit, void *user,
+                                         uint64_t *revision);
 #ifdef __cplusplus
 }
 #endif

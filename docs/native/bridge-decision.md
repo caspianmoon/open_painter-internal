@@ -1,4 +1,4 @@
-# Metal integration decision — ABI 10
+# Metal integration decision — ABI 11
 
 The implementation uses Blender's existing Metal device and public GPU API.
 C owns shader generation, typed program/parameter storage, dependency and layer
@@ -31,10 +31,14 @@ See the exact [ownership map](migration-status.md).
 
 ## Publication and recovery
 
-Changed channels are staged into independent GPU textures. All allocations,
-shader compilation, mip preparation and attachment validation precede visible
-writes. The C transaction driver orders preflight, every channel/mip write and native
-commit without yielding; Python callbacks bind the public host resources. A recoverable submission failure restores
+Changed channel sources are pinned until publication finishes when they fit the
+retained-result allowance; larger source sets are staged sequentially. All allocations,
+shader compilation and attachment validation precede visible writes. The C
+transaction driver orders preflight, batched submission and native commit without
+yielding; Python callbacks bind the public host resources. Base finishing writes
+image and recovery storage together; mip generation groups up to three channels
+per draw. Accepted mip chains are retained rather than regenerated on each edit.
+A recoverable submission failure restores
 every mip of every touched image from GPU snapshots (continuing restoration
 after an individual failure) and leaves the accepted revision unchanged.
 The regression injects failure after a visibly changed first channel and checks

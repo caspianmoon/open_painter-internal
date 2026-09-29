@@ -55,6 +55,13 @@ def pixels():
             for output in ts.outputs}
 
 
+def mip_pixels():
+    from open_painter.native_bridge.presentation import HostGPUProbe
+    reader = HostGPUProbe(lifecycle._core, 512)
+    return {(output.channel, level): reader.read_mip(gpu.texture.from_image(output.image), level, 512 >> level)
+            for output in ts.outputs for level in range(1, 10)}
+
+
 try:
     engine = ready()
     assert engine.report['execution_backend'] == 'c17-host-metal', engine.report
@@ -69,6 +76,15 @@ try:
     restored = pixels()
     for channel in CHANNELS:
         np.testing.assert_array_equal(first[channel], restored[channel], err_msg=channel)
+
+    # Atomic publication has a stable working set: no GPU allocation after
+    # both reusable revision buffers and final channel results are warmed.
+    from unittest.mock import patch
+    with patch.object(gpu.types, 'GPUTexture', side_effect=AssertionError('warm texture allocation')):
+        for value in (.43, .57, .6):
+            coat.opacity = value
+            engine = ready()
+            assert not any(engine._in_use.values())
 
     # Shared cache eviction cannot destroy shaders still held by an active unit.
     from open_painter.evaluation.engine import runtime
@@ -112,7 +128,10 @@ try:
     idle.states['pressure-fixture'] = SimpleNamespace(textures=[dev.texture(128)], formats=(runtime.RGBA,))
     idle.retained['pressure-fixture'] = runtime.texture_bytes(128, 128, runtime.RGBA)
     try:
-        with patch.object(runtime, 'DEVICE_BYTES', dev.memory()['leased_bytes']):
+        # Select this idle victim explicitly; the live engine may now reclaim
+        # its reusable publication buffers before it needs to evict results.
+        with patch.object(runtime, 'DEVICE_BYTES', dev.memory()['leased_bytes']), \
+                patch.object(dev, 'engines', [idle]):
             scratch = dev.texture(64)
             assert not idle.retained and idle.states['pressure-fixture'].textures is None
             dev.release(scratch, 64)
@@ -153,6 +172,37 @@ try:
     replacement = bpy.data.images.new('Native alternate channel target', width=512, height=512, float_buffer=True)
     replacement.colorspace_settings.name = 'Non-Color'
     try:
+        # A target not owned by the revision stream can have arbitrary existing
+        # mip contents. Cold rollback must snapshot those exact levels rather
+        # than regenerate them from the base or reduce their precision.
+        from open_painter.native_bridge.presentation import HostGPUProbe
+        probe = HostGPUProbe(lifecycle._core, 512)
+        target = gpu.texture.from_image(replacement)
+        with dev.state():
+            for level in range(10):
+                fb = gpu.types.GPUFrameBuffer(color_slots=[{'texture': target, 'mip': level}])
+                with fb.bind():
+                    fb.clear(color=(level / 20, .123456789, .7654321, 1.))
+        before = [probe.read_mip(target, level, 512 >> level) for level in range(10)]
+        original_draw, failed = dev.draw, []
+        revision = engine._native_revisions.revision
+        def fail_cold_mip(shader, targets, size, *args, **kwargs):
+            original_draw(shader, targets, size, *args, **kwargs)
+            if (not failed and isinstance(targets[0], dict) and targets[0]['texture'] is target
+                    and targets[0]['mip'] == 4):
+                failed.append(True)
+                raise MemoryError('cold mip publication')
+        with patch.object(dev, 'draw', side_effect=fail_cold_mip):
+            try:
+                engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False)
+            except MemoryError as error:
+                assert 'cold mip publication' in str(error)
+            else:
+                raise AssertionError('Cold target failure was not exercised')
+        assert failed and engine._native_revisions.revision == revision
+        for level, values in enumerate(before):
+            np.testing.assert_array_equal(probe.read_mip(target, level, 512 >> level), values,
+                                          err_msg=f'cold target mip {level}')
         assert engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False) == {'ROUGHNESS'}
         np.testing.assert_array_equal(np.array(gpu.texture.from_image(replacement).read(), np.float32), original)
         assert engine.evaluate(['ROUGHNESS'], budget=False) == {'ROUGHNESS'}
@@ -194,22 +244,25 @@ try:
     revision = stream.revision
     coat.opacity = .44
     engine.graph.update(check_structure=False)
-    release_scratch = stream._release_scratch
+    collect = stream.collect
+    retirement_failed = []
     def fail_retirement():
-        if stream._scratch and not stream.submitting and stream.revision > revision:
+        if not retirement_failed and not stream.submitting and stream.revision > revision:
+            retirement_failed.append(True)
             raise MemoryError('injected retirement failure')
-        release_scratch()
-    with patch.object(stream, '_release_scratch', side_effect=fail_retirement):
+        collect()
+    with patch.object(stream, 'collect', side_effect=fail_retirement):
         try:
             engine.evaluate(CHANNELS, budget=False)
         except MemoryError as error:
             assert 'retirement' in str(error)
         else:
             raise AssertionError('Retirement failure was not exercised')
-    assert stream.revision == revision + 1 and stream._scratch
+    assert stream.revision == revision + 1 and retirement_failed
     assert 'BASE_COLOR' in engine.dirty_cpu
     assert engine.evaluate(CHANNELS, budget=False) == set()
     assert stream.revision == revision + 1 and not stream._scratch
+    assert len(stream.resources) == len(CHANNELS)
     coat.opacity = .6
     engine = ready()
 
@@ -280,6 +333,7 @@ try:
     from unittest.mock import patch
     from open_painter.evaluation.engine import runtime
     before_failure = pixels()
+    before_failure_mips = mip_pixels()
     revision = engine._native_revisions.revision
     coat.opacity = .25
     engine.graph.update(check_structure=False)
@@ -303,6 +357,8 @@ try:
     assert engine._native_revisions.revision == revision
     for channel, values in pixels().items():
         np.testing.assert_array_equal(values, before_failure[channel], err_msg='rollback ' + channel)
+    for key, values in mip_pixels().items():
+        np.testing.assert_array_equal(values, before_failure_mips[key], err_msg='mip rollback ' + str(key))
     engine.evaluate(CHANNELS, budget=False)
     assert engine._native_revisions.revision == revision + 1
     assert np.max(abs(pixels()['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01

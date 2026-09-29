@@ -1,5 +1,9 @@
 # Metal release evidence — Open Painter 0.14.0 / ABI 10
 
+The [0.14.1 / ABI 11 performance follow-up](metal-performance-0.14.1.md) documents
+the optimized publication path and its separate validation evidence. The results
+below remain the historical 0.14.0 qualification.
+
 The native implementation now owns shader IR/compiler and parameter banks,
 layer/folder and dependency plans, checkpoint selection, resource policies,
 brush/geometry kernels, filter plans and immutable material revisions. The

@@ -82,7 +82,8 @@ static op_status_t publication_submit(void *user, uint32_t action, uint32_t inde
 static PyObject *revisions_publish(PyObject *self, PyObject *args) {
     (void)self;
     PyObject *capsule, *records, *callback;
-    if (!PyArg_ParseTuple(args, "OOO", &capsule, &records, &callback))
+    int batched = 0;
+    if (!PyArg_ParseTuple(args, "OOO|p", &capsule, &records, &callback, &batched))
         return NULL;
     revisions_owner_t *owner = revisions_owner(capsule);
     if (!owner)
@@ -100,7 +101,8 @@ static PyObject *revisions_publish(PyObject *self, PyObject *args) {
     uint64_t revision = 0;
     owner->publishing = 1;
     op_status_t status =
-        op_revisions_publish(owner->state, channels, count, publication_submit, &ctx, &revision);
+        (batched ? op_revisions_publish_batched : op_revisions_publish)(
+            owner->state, channels, count, publication_submit, &ctx, &revision);
     owner->publishing = 0;
     free(channels);
     if (ctx.restore_type) {

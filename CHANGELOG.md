@@ -1,5 +1,16 @@
 # Changes
 
+## 0.14.1 — Metal editing performance
+
+- Reuse accepted mip chains and bounded channel results across edits. Remove
+  the previous revision's repeated mip generation and transient texture churn.
+- Finish directly into image and recovery storage, and generate mips for up to
+  three channels per draw. Preserve all-channel acceptance and exact rollback.
+- Coalesce preview timer wakes so rapid slider events keep an already scheduled
+  update; never unregister the timer while it is executing.
+- Bundle native ABI 11 with a batched publication transaction and fault coverage.
+  Full-resolution output and the existing memory admission limit are preserved.
+
 ## 0.14.0 — Embedded C engine on Metal
 
 - Bundle the C17 engine and compiled public-GPU binding for macOS arm64. The

@@ -89,20 +89,27 @@ static const char fixed_29[] =
 static const char fixed_30[] =
 "\nvoid main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy), 0); }\n";
 static const char fixed_31[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source, 0), q = p * 2;\n  op_out0 = (texelFetch(op_source, min(q, size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 0), size - 1), 0) +\n             texelFetch(op_source, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n}\n";
+"\nvoid main() {\n  op_out0 = textureLod(op_source, gl_FragCoord.xy / vec2(textureSize(op_source, op_level)), float(op_level));\n}\n";
 static const char fixed_32[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  vec3 rgb = texelFetch(op_source, p, 0).rgb;\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  op_out0 = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n}\n";
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source, 0), q = p * 2;\n  op_out0 = (texelFetch(op_source, min(q, size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 0), size - 1), 0) +\n             texelFetch(op_source, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n}\n";
 static const char fixed_33[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source, min(q, size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out0 = value;   /* the image, this level */\n  op_out1 = value;   /* the source of the next level */\n}\n";
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  vec3 rgb = texelFetch(op_source, p, 0).rgb;\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  op_out0 = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n}\n";
 static const char fixed_34[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  vec2 donor = texelFetch(op_donor, p, 0).xy;\n  op_out0 = texelFetch(op_source, (donor.x >= 0.0) ? ivec2(donor) : p, 0);\n}\n";
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source, min(q, size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out0 = value;   /* the image, this level */\n  op_out1 = value;   /* the source of the next level */\n}\n";
 static const char fixed_35[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  ivec2 q = p;\n  if (op_pad == 1) {\n    /* The exporter's seam padding: empty texels take their nearest island texel. */\n    vec2 donor = texelFetch(op_donor, p, 0).xy;\n    if (donor.x >= 0.0) { q = ivec2(donor); }\n  }\n  /* A channel no layer touches publishes its default: a one-texel constant. */\n  vec3 rgb = texelFetch(op_source, min(q, textureSize(op_source, 0) - 1), 0).rgb;\n  if (op_scalar == 1) { rgb = vec3(rgb.r); }\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  vec4 value = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n  op_out0 = value;   /* the image, level 0 */\n  op_out1 = value;   /* the source of its mip chain */\n}\n";
+"void main() {\n\n {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source_0, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source_0, min(q, size - 1), 0) + texelFetch(op_source_0, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source_0, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source_0, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out0 = value;   /* the image, this level */\n  op_out1 = value;   /* the source of the next level */\n}\n\n\n {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source_1, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source_1, min(q, size - 1), 0) + texelFetch(op_source_1, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source_1, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source_1, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out2 = value;   /* the image, this level */\n  op_out3 = value;   /* the source of the next level */\n}\n\n}\n";
 static const char fixed_36[] =
-"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  ivec2 q = p;\n  if (op_pad == 1) {\n    /* The exporter's seam padding: empty texels take their nearest island texel. */\n    vec2 donor = texelFetch(op_donor, p, 0).xy;\n    if (donor.x >= 0.0) { q = ivec2(donor); }\n  }\n  /* A channel no layer touches publishes its default: a one-texel constant. */\n  vec3 rgb = texelFetch(op_source, min(q, textureSize(op_source, 0) - 1), 0).rgb;\n  if (op_scalar == 1) { rgb = vec3(rgb.r); }\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  vec4 value = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n  op_out0 = value;   /* the image, level 0 */\n}\n";
+"void main() {\n\n {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source_0, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source_0, min(q, size - 1), 0) + texelFetch(op_source_0, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source_0, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source_0, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out0 = value;   /* the image, this level */\n  op_out1 = value;   /* the source of the next level */\n}\n\n\n {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize(op_source_1, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source_1, min(q, size - 1), 0) + texelFetch(op_source_1, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source_1, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source_1, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out2 = value;   /* the image, this level */\n  op_out3 = value;   /* the source of the next level */\n}\n\n\n {\n  ivec2 p = ivec2(gl_FragCoord.xy), size = textureSize"
+"(op_source_2, 0), q = p * 2;\n  vec4 value = (texelFetch(op_source_2, min(q, size - 1), 0) + texelFetch(op_source_2, min(q + ivec2(1, 0), size - 1), 0) +\n                texelFetch(op_source_2, min(q + ivec2(0, 1), size - 1), 0) + texelFetch(op_source_2, min(q + ivec2(1, 1), size - 1), 0)) * 0.25;\n  op_out4 = value;   /* the image, this level */\n  op_out5 = value;   /* the source of the next level */\n}\n\n}\n";
 static const char fixed_37[] =
-"\nvoid main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy) * op_step, 0); }\n";
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  vec2 donor = texelFetch(op_donor, p, 0).xy;\n  op_out0 = texelFetch(op_source, (donor.x >= 0.0) ? ivec2(donor) : p, 0);\n}\n";
 static const char fixed_38[] =
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  ivec2 q = p;\n  if (op_pad == 1) {\n    /* The exporter's seam padding: empty texels take their nearest island texel. */\n    vec2 donor = texelFetch(op_donor, p, 0).xy;\n    if (donor.x >= 0.0) { q = ivec2(donor); }\n  }\n  /* A channel no layer touches publishes its default: a one-texel constant. */\n  vec3 rgb = texelFetch(op_source, min(q, textureSize(op_source, 0) - 1), 0).rgb;\n  if (op_scalar == 1) { rgb = vec3(rgb.r); }\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  vec4 value = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n  op_out0 = value;   /* the image, level 0 */\n  op_out1 = value;   /* the source of its mip chain */\n}\n";
+static const char fixed_39[] =
+"\nvoid main() {\n  ivec2 p = ivec2(gl_FragCoord.xy);\n  ivec2 q = p;\n  if (op_pad == 1) {\n    /* The exporter's seam padding: empty texels take their nearest island texel. */\n    vec2 donor = texelFetch(op_donor, p, 0).xy;\n    if (donor.x >= 0.0) { q = ivec2(donor); }\n  }\n  /* A channel no layer touches publishes its default: a one-texel constant. */\n  vec3 rgb = texelFetch(op_source, min(q, textureSize(op_source, 0) - 1), 0).rgb;\n  if (op_scalar == 1) { rgb = vec3(rgb.r); }\n  if (op_mode == 1) {\n    /* Final:NORMAL of the material graph: Blender's safe normalize of (2c - 1), re-encoded. */\n    vec3 v = rgb * 2.0 - 1.0;\n    float l = dot(v, v);\n    v = (l > 0.0) ? v * inversesqrt(l) : v;\n    rgb = (v + 1.0) * 0.5;\n  }\n  vec4 value = vec4(clamp(rgb, 0.0, 1.0), 1.0);\n  op_out0 = value;   /* the image, level 0 */\n}\n";
+static const char fixed_40[] =
+"\nvoid main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy) * op_step, 0); }\n";
+static const char fixed_41[] =
 "void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }";
 static const struct { const char *name,*source; } fixed_shaders[] = {
 {"filter.BLUR",fixed_0},
@@ -136,12 +143,15 @@ static const struct { const char *name,*source; } fixed_shaders[] = {
 {"paint.region",fixed_28},
 {"paint.stamp",fixed_29},
 {"runtime.copy",fixed_30},
-{"runtime.downsample",fixed_31},
-{"runtime.finish",fixed_32},
-{"runtime.mip",fixed_33},
-{"runtime.pad",fixed_34},
-{"runtime.publish",fixed_35},
-{"runtime.publish_pixels",fixed_36},
-{"runtime.sample_pixels",fixed_37},
-{"runtime.vertex",fixed_38},
+{"runtime.copy_mip",fixed_31},
+{"runtime.downsample",fixed_32},
+{"runtime.finish",fixed_33},
+{"runtime.mip",fixed_34},
+{"runtime.mip_2",fixed_35},
+{"runtime.mip_3",fixed_36},
+{"runtime.pad",fixed_37},
+{"runtime.publish",fixed_38},
+{"runtime.publish_pixels",fixed_39},
+{"runtime.sample_pixels",fixed_40},
+{"runtime.vertex",fixed_41},
 {NULL,NULL}};

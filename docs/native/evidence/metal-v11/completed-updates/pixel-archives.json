@@ -1,0 +1,32 @@
+[
+  {
+    "file": "pair-0-baseline.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  },
+  {
+    "file": "pair-0-candidate.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  },
+  {
+    "file": "pair-1-baseline.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  },
+  {
+    "file": "pair-1-candidate.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  },
+  {
+    "file": "pair-2-baseline.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  },
+  {
+    "file": "pair-2-candidate.pixels.npz",
+    "bytes": 24781043,
+    "sha256": "4c88611f66c39b9bf482b474fe019fc230c413e1c856cb05ab7439f8912586e9"
+  }
+]

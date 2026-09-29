@@ -1,0 +1,12 @@
+--- viewport-candidate/revisions.py
++++ final/revisions.py
+@@ -104,7 +104,8 @@
+         donor = engine._donor(n) if engine.pad else None
+         # Recovery must preserve the actual image precision, including an
+         # explicit alternate target; MRT writes can otherwise round differently.
+-        fmt = 'RGBA32F' if gpu.texture.from_image(image).format == 'RGBA32F' else 'RGBA16F'
++        fmt = 'RGBA32F' if (engine.precise or channel == 'HEIGHT'
++                           or gpu.texture.from_image(image).format == 'RGBA32F') else 'RGBA16F'
+         chain = self._spares.pop(channel, [])
+         if chain and chain[0][1:] != (n, fmt):
+             self._release_chain(chain)

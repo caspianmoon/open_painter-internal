@@ -1,0 +1,113 @@
+[  2%] Building C object CMakeFiles/openpainter_shared.dir/src/shaders/fixed.c.o
+[  2%] Building C object CMakeFiles/openpainter.dir/src/shaders/fixed.c.o
+[  4%] Building C object CMakeFiles/openpainter_shared.dir/src/shaders/compiler.c.o
+[  4%] Building C object CMakeFiles/openpainter.dir/src/shaders/compiler.c.o
+[  5%] Linking C shared library libopenpainter.dylib
+[  6%] Linking C static library libopenpainter.a
+[ 28%] Built target openpainter
+[ 29%] Linking C executable test_composite
+[ 30%] Linking C executable test_snapshot
+[ 31%] Linking C executable test_lifetime
+[ 38%] Linking C executable test_ir
+[ 48%] Linking C executable test_snapshot_validation
+[ 49%] Linking C executable test_filter
+[ 51%] Linking C executable test_graph
+[ 51%] Linking C executable test_mesh
+[ 58%] Built target openpainter_shared
+[ 59%] Linking C executable test_revision
+[ 60%] Linking C executable test_stack
+[ 61%] Linking C executable test_program
+[ 62%] Linking C executable test_pool
+[ 65%] Linking C executable test_cache
+[ 65%] Linking C executable test_document
+[ 65%] Linking C executable test_reach
+[ 67%] Linking C executable test_abi
+[ 67%] Linking C executable test_blend
+[ 69%] Linking C executable test_effects
+[ 69%] Linking C executable test_masks
+[ 70%] Linking C executable test_publication
+[ 71%] Linking C executable test_paint
+[ 72%] Linking C executable test_seams
+[ 73%] Linking C executable test_channels
+[ 74%] Linking C executable test_graph_execution
+[ 75%] Linking C executable test_topology
+[ 76%] Built target test_effects
+[ 77%] Built target test_abi
+[ 78%] Built target test_program
+[ 79%] Built target test_document
+[ 80%] Built target test_filter
+[ 81%] Built target test_reach
+[ 82%] Built target test_snapshot
+[ 83%] Built target test_pool
+[ 84%] Built target test_cache
+[ 87%] Built target test_masks
+[ 87%] Built target test_blend
+[ 88%] Built target test_publication
+[ 88%] Built target test_paint
+[ 89%] Built target test_lifetime
+[ 90%] Built target test_ir
+[ 91%] Built target test_mesh
+[ 92%] Built target test_snapshot_validation
+[ 93%] Built target test_stack
+[ 94%] Built target test_graph
+[ 96%] Built target test_composite
+[ 96%] Built target test_revision
+[ 97%] Built target test_seams
+[ 98%] Built target test_channels
+[100%] Built target test_graph_execution
+[100%] Built target test_topology
+Test project /tmp/openpainter-native-perf-asan
+      Start  1: test_abi
+ 1/25 Test  #1: test_abi .........................   Passed    5.39 sec
+      Start  2: test_document
+ 2/25 Test  #2: test_document ....................   Passed    1.50 sec
+      Start  3: test_snapshot
+ 3/25 Test  #3: test_snapshot ....................   Passed    2.44 sec
+      Start  4: test_composite
+ 4/25 Test  #4: test_composite ...................   Passed    1.86 sec
+      Start  5: test_lifetime
+ 5/25 Test  #5: test_lifetime ....................   Passed    0.68 sec
+      Start  6: test_snapshot_validation
+ 6/25 Test  #6: test_snapshot_validation .........   Passed    0.56 sec
+      Start  7: test_graph
+ 7/25 Test  #7: test_graph .......................   Passed    0.70 sec
+      Start  8: test_pool
+ 8/25 Test  #8: test_pool ........................   Passed    0.46 sec
+      Start  9: test_ir
+ 9/25 Test  #9: test_ir ..........................   Passed    0.49 sec
+      Start 10: test_revision
+10/25 Test #10: test_revision ....................   Passed    1.68 sec
+      Start 11: test_cache
+11/25 Test #11: test_cache .......................   Passed    0.48 sec
+      Start 12: test_stack
+12/25 Test #12: test_stack .......................   Passed    0.42 sec
+      Start 13: test_filter
+13/25 Test #13: test_filter ......................   Passed    0.42 sec
+      Start 14: test_program
+14/25 Test #14: test_program .....................   Passed    0.52 sec
+      Start 15: test_paint
+15/25 Test #15: test_paint .......................   Passed    0.43 sec
+      Start 16: test_mesh
+16/25 Test #16: test_mesh ........................   Passed    0.41 sec
+      Start 17: test_reach
+17/25 Test #17: test_reach .......................   Passed    0.46 sec
+      Start 18: test_publication
+18/25 Test #18: test_publication .................   Passed    1.00 sec
+      Start 19: test_seams
+19/25 Test #19: test_seams .......................   Passed    0.48 sec
+      Start 20: test_blend
+20/25 Test #20: test_blend .......................   Passed    0.59 sec
+      Start 21: test_graph_execution
+21/25 Test #21: test_graph_execution .............   Passed    0.49 sec
+      Start 22: test_topology
+22/25 Test #22: test_topology ....................   Passed    0.79 sec
+      Start 23: test_channels
+23/25 Test #23: test_channels ....................   Passed    0.71 sec
+      Start 24: test_effects
+24/25 Test #24: test_effects .....................   Passed    0.63 sec
+      Start 25: test_masks
+25/25 Test #25: test_masks .......................   Passed    0.40 sec
+
+100% tests passed, 0 tests failed out of 25
+
+Total Test time (real) =  24.25 sec

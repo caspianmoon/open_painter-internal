@@ -34,6 +34,8 @@ IDLE_INTERVAL = 0.1
 ACTIVE_INTERVAL = 0.016
 FAULT_INTERVAL = 1.0   # the rate a persistently failing tick retries at
 FAULT_BACKOFF = 5      # consecutive failures before the timer slows to FAULT_INTERVAL
+_wake_pending = False
+_ticking = False
 
 
 def wake():
@@ -42,7 +44,15 @@ def wake():
     Only re-arms a registered timer: tests and explicit CPU workflows that
     unregistered it must not have it revived by a property callback.
     """
+    global _wake_pending
     if bpy.app.background or not bpy.app.timers.is_registered(tick):
+        return
+    # A stream of edits must not keep removing an already-due callback from
+    # Blender's timer queue. One wake covers every edit until the tick runs.
+    if _wake_pending:
+        return
+    _wake_pending = True
+    if _ticking:
         return
     bpy.app.timers.unregister(tick)
     bpy.app.timers.register(tick, first_interval=0.0, persistent=True)
@@ -260,20 +270,25 @@ def tick():
     the scheduler by hand (tests, the unregistered CPU workflow) still sees the
     raise: there is no timer to lose, and the caller wants the crash.
     """
-    global _fault_streak
+    global _fault_streak, _wake_pending, _ticking
+    _wake_pending = False
+    _ticking = True
     try:
         interval = _tick()
     except Exception as exc:
+        _wake_pending = False
         if not bpy.app.timers.is_registered(tick):
             raise
         _fault_streak += 1
         _report_fault(exc)
         return FAULT_INTERVAL if _fault_streak >= FAULT_BACKOFF else IDLE_INTERVAL
+    finally:
+        _ticking = False
     if _fault_streak:
         _fault_streak = 0
         _fault_seen.clear()   # a fault that returns after a recovery is a new episode
         _clear_faults()
-    return interval
+    return min(interval, ACTIVE_INTERVAL) if _wake_pending else interval
 
 
 def _report_fault(exc):
@@ -310,11 +325,12 @@ def _clear_faults():
 
 
 def _forget_faults():
-    global _fault_streak, _tick_scene
+    global _fault_streak, _tick_scene, _wake_pending, _ticking
     _faults.clear()
     _fault_seen.clear()
     _fault_streak = 0
     _tick_scene = None
+    _wake_pending = _ticking = False
 
 
 def _tick():

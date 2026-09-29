@@ -7,7 +7,7 @@
 | Linux / OpenGL | C CI configuration only; unrun locally | Existing executor |
 | Other macOS hardware/builds | Not qualified by these runs | Compatible libraries can load; broader validation remains open |
 
-The 0.14.0 macOS arm64 extension bundles its ABI 10 library, CPython limited-ABI module and SHA-256 manifest.
+The 0.14.1 macOS arm64 extension bundles its ABI 11 library, CPython limited-ABI module and SHA-256 manifest.
 It needs no compiler or environment variable on the artist's machine. A missing
 or incompatible library preserves the existing path; an explicit developer
 library path never searches elsewhere for a replacement. `OP_NATIVE_ENGINE=0`

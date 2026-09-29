@@ -126,6 +126,25 @@ class BindingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.binding.shader_source('unknown shader')
 
+    def test_batched_publication_restores_all_channels_after_partial_submission(self):
+        binding = self.binding
+        owner = binding.revisions_create()
+        records = bytes((Publication * 2)(Publication(10, 0, 4), Publication(11, 1, 4)))
+        events = []
+        def submit(action, index, level):
+            events.append((action, index, level))
+            if action == 1:
+                raise MemoryError('partial batch')
+        try:
+            with self.assertRaisesRegex(MemoryError, 'partial batch'):
+                binding.revisions_publish(owner, records, submit, True)
+            self.assertEqual(events, [(0, 0, 0), (0, 1, 0), (1, 0, 0)] +
+                             [(2, i, level) for i in range(2) for level in range(3)])
+            self.assertEqual(binding.revisions_references(owner, 10), 0)
+            self.assertEqual(binding.revisions_publish(owner, records, lambda *_: None, True), 1)
+        finally:
+            binding.revisions_close(owner)
+
     def test_publication_exception_rollback_reentry_and_closed_owner(self):
         binding = self.binding
         owner = binding.revisions_create()

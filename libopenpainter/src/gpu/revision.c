@@ -136,9 +136,9 @@ uint32_t op_revisions_references(const op_revisions_t *s, uint64_t token) {
     return count;
 }
 
-op_status_t op_revisions_publish(op_revisions_t *s, const op_publication_t *channels,
+static op_status_t publish(op_revisions_t *s, const op_publication_t *channels,
                                  uint32_t count, op_publication_submit_t submit, void *user,
-                                 uint64_t *revision) {
+                                 uint64_t *revision, int batched) {
     if (!s || !channels || !count || count > 8 || !submit || !revision)
         return OP_INVALID_ARGUMENT;
     op_publication_t snapshot[8];
@@ -166,7 +166,15 @@ op_status_t op_revisions_publish(op_revisions_t *s, const op_publication_t *chan
         if (status)
             goto failed;
     }
-    for (uint32_t i = 0; i < count; i++) {
+    if (batched) {
+        /* One host submission may touch every prepared channel. Mark all of
+         * them before calling it so even a partially submitted batch restores
+         * every mip of every output on failure. */
+        touched = count;
+        status = submit(user, OP_PUBLICATION_WRITE, 0, 0);
+        if (status)
+            goto failed;
+    } else for (uint32_t i = 0; i < count; i++) {
         touched = i + 1; /* Failed submissions can already have changed storage. */
         for (uint32_t level = 0; level < levels[i]; level++) {
             status = submit(user, OP_PUBLICATION_WRITE, i, level);
@@ -185,4 +193,16 @@ failed:
                 status = OP_DEVICE_LOSS;
     op_revisions_abort(s);
     return status;
+}
+
+op_status_t op_revisions_publish(op_revisions_t *s, const op_publication_t *channels,
+                                uint32_t count, op_publication_submit_t submit, void *user,
+                                uint64_t *revision) {
+    return publish(s, channels, count, submit, user, revision, 0);
+}
+
+op_status_t op_revisions_publish_batched(op_revisions_t *s, const op_publication_t *channels,
+                                        uint32_t count, op_publication_submit_t submit, void *user,
+                                        uint64_t *revision) {
+    return publish(s, channels, count, submit, user, revision, 1);
 }

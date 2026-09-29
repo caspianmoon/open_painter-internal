@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 typedef struct host {
-    unsigned calls, fail_at, restore_fail, prepared, restores;
+    unsigned calls, fail_at, restore_fail, prepared, restores, batched;
     unsigned values[2][3];
 } host_t;
 static op_status_t submit(void *user, uint32_t action, uint32_t index, uint32_t level) {
@@ -13,6 +13,16 @@ static op_status_t submit(void *user, uint32_t action, uint32_t index, uint32_t 
         h->restores++;
         h->values[index][level] = 10 + index;
         return h->restore_fail && h->restores == 1 ? OP_DEVICE_LOSS : OP_OK;
+    }
+    if (action == OP_PUBLICATION_WRITE && h->batched) {
+        assert(index == 0 && level == 0 && h->prepared == 2);
+        for (unsigned i = 0; i < 2; i++)
+            for (unsigned m = 0; m < 3; m++) {
+                h->values[i][m] = 20 + i;
+                if (++h->calls == h->fail_at)
+                    return OP_RESOURCE_EXHAUSTED;
+            }
+        return OP_OK;
     }
     h->calls++;
     if (action == OP_PUBLICATION_PREPARE) {
@@ -25,13 +35,18 @@ static op_status_t submit(void *user, uint32_t action, uint32_t index, uint32_t 
     return h->calls == h->fail_at ? OP_RESOURCE_EXHAUSTED : OP_OK;
 }
 int main(void) {
+    for (unsigned batched = 0; batched < 2; batched++)
     for (unsigned fail = 0; fail <= 8; fail++) {
+        op_status_t (*publish)(op_revisions_t *, const op_publication_t *, uint32_t,
+                               op_publication_submit_t, void *, uint64_t *) =
+            batched ? op_revisions_publish_batched : op_revisions_publish;
         op_revisions_t *s;
         assert(op_revisions_create(&s) == OP_OK);
         op_publication_t channels[] = {{10, 0, 4}, {11, 1, 4}};
         host_t host = {0};
+        host.batched = batched;
         uint64_t revision = 0;
-        assert(op_revisions_publish(s, channels, 2, submit, &host, &revision) == OP_OK &&
+        assert(publish(s, channels, 2, submit, &host, &revision) == OP_OK &&
                revision == 1);
         for (unsigned i = 0; i < 2; i++)
             for (unsigned m = 0; m < 3; m++)
@@ -40,7 +55,7 @@ int main(void) {
         channels[1].resource = 21;
         host.calls = host.prepared = 0;
         host.fail_at = fail;
-        op_status_t status = op_revisions_publish(s, channels, 2, submit, &host, &revision);
+        op_status_t status = publish(s, channels, 2, submit, &host, &revision);
         assert(status == (fail ? OP_RESOURCE_EXHAUSTED : OP_OK));
         op_gpu_frame_t frame;
         assert(op_revisions_acquire(s, &frame) == OP_OK);
@@ -52,7 +67,7 @@ int main(void) {
         assert(op_revisions_release(s, &frame) == OP_OK);
         if (fail) {
             host.calls = host.prepared = host.fail_at = 0;
-            assert(op_revisions_publish(s, channels, 2, submit, &host, &revision) == OP_OK &&
+            assert(publish(s, channels, 2, submit, &host, &revision) == OP_OK &&
                    revision == 2);
         }
         op_revisions_destroy(s);

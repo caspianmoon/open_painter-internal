@@ -37,13 +37,21 @@ handler = observation = hook = None
 latest = None
 deadline = time.perf_counter() + RUNS * (DURATION + 15) + 90
 original_evaluate = runtime.Engine.evaluate
+warm_evaluations = 0
+MIN_WARM_EVALUATIONS = 16
 
 
 def evaluated(self, *args, **kwargs):
-    global last_accepted
+    global last_accepted, warm_evaluations, warm_until
     command = latest
     started = time.perf_counter()
     result = original_evaluate(self, *args, **kwargs)
+    if result and active is None and self.set_id == ts.id:
+        if warm_evaluations == 0:
+            # Start warmup after initial resource/shader setup has completed;
+            # a busy desktop can consume the old setup-relative wall interval.
+            warm_until = time.perf_counter() + max(8, float(os.environ.get('OP_SUSTAINED_WARM_EDITS', '0')))
+        warm_evaluations += 1
     if result and command is not None and self.set_id == ts.id:
         # Common observation boundary: successful Engine.evaluate return. A
         # legacy executor has no native revision object. Do not time only C.
@@ -105,6 +113,7 @@ def finish(error=None):
     report = dict(status='FAIL' if error else 'PASS', error=error, runs=runs,
                   parity=parity, expected_backend=EXPECTED,
                   warm_edit_seconds=float(os.environ.get('OP_SUSTAINED_WARM_EDITS', '0')),
+                  minimum_warm_evaluations=MIN_WARM_EVALUATIONS,
                   commands=commands, draws=draws, blender=bpy.app.version_string,
                   build=bpy.app.build_hash.decode(), backend=gpu.platform.backend_type_get(),
                   renderer=gpu.platform.renderer_get(), vendor=gpu.platform.vendor_get(),
@@ -147,7 +156,7 @@ def setup():
 
 
 def tick():
-    global active, latest, observation, warm_until, last_accepted
+    global active, latest, observation, warm_until, last_accepted, warm_evaluations
     try:
         now = time.perf_counter()
         assert now < deadline, 'Sustained qualification timed out'
@@ -158,7 +167,11 @@ def tick():
         assert not diagnostic.get('error'), diagnostic
         area.tag_redraw()
         if active is None:
-            if now < warm_until and os.environ.get('OP_SUSTAINED_WARM_EDITS'):
+            needs_edits = bool(os.environ.get('OP_SUSTAINED_WARM_EDITS')) and warm_evaluations < MIN_WARM_EVALUATIONS
+            if needs_edits:
+                warm_until = max(warm_until, now + 1)
+                control.opacity = .5 + .35 * math.sin(now * 1.7)
+            elif now < warm_until and os.environ.get('OP_SUSTAINED_WARM_EDITS'):
                 # Exercise actual publication/reuse before measuring, then leave
                 # one second at the same starting value for both executors.
                 control.opacity = (.68 if warm_until - now < 1 else
@@ -179,7 +192,7 @@ def tick():
                 observation = RasterObservation().__enter__()
             last_accepted = None
             active = dict(start=time.perf_counter(), first=len(commands), graph_identity=id(engine.graph),
-                          memory_start=runtime.device().memory(), next_slot=0)
+                          memory_start=runtime.device().memory(), next_slot=0, warm_evaluations=warm_evaluations)
             return 1 / 60
         elapsed = now - active['start']
         if elapsed < DURATION:
@@ -220,6 +233,7 @@ def tick():
         runs.append(active)
         print('SUSTAINED_RUN', len(runs), active['summary'], flush=True)
         active = latest = None
+        warm_evaluations = 0
         warm_until = now + 3
         return .1
     except Exception:

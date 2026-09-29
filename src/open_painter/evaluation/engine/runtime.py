@@ -119,6 +119,11 @@ void main() {
 COPY = r'''
 void main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy), 0); }
 '''
+COPY_MIP = r'''
+void main() {
+  op_out0 = textureLod(op_source, gl_FragCoord.xy / vec2(textureSize(op_source, op_level)), float(op_level));
+}
+'''
 SAMPLE_PIXELS = r'''
 void main() { op_out0 = texelFetch(op_source, ivec2(gl_FragCoord.xy) * op_step, 0); }
 '''
@@ -263,6 +268,14 @@ class Device:
     def fixed(self, name):
         shader = self._fixed.get(name)
         if shader is None:
+            if name.startswith('mip_'):
+                from .publication_shaders import mip_batch_source
+                from ...native_bridge.compiler import fixed_source
+                count = int(name[4:])
+                source = fixed_source('runtime.' + name, mip_batch_source(MIP, count))
+                shader = self._fixed[name] = self._create(source,
+                    [f'op_source_{i}' for i in range(count)], targets=2 * count)
+                return shader
             source, samplers, ints, targets = {
                 'publish': (PUBLISH, ['op_source', 'op_donor'], ('op_mode', 'op_pad', 'op_scalar'), 2),
                 'publish_pixels': (PUBLISH_PIXELS, ['op_source', 'op_donor'], ('op_mode', 'op_pad', 'op_scalar'), 1),
@@ -271,7 +284,8 @@ class Device:
                 'pad': (PAD, ['op_source', 'op_donor'], (), 1),
                 'downsample': (DOWNSAMPLE, ['op_source'], (), 1),
                 'sample_pixels': (SAMPLE_PIXELS, ['op_source'], ('op_step',), 1),
-                'copy': (COPY, ['op_source'], (), 1)}[name]
+                'copy': (COPY, ['op_source'], (), 1),
+                'copy_mip': (COPY_MIP, ['op_source'], ('op_level',), 1)}[name]
             from ...native_bridge.compiler import fixed_source
             source = fixed_source('runtime.' + name, source)
             shader = self._fixed[name] = self._create(source, samplers, targets=targets, ints=ints)
@@ -300,6 +314,10 @@ class Device:
             self._reclaiming = True
             try:
                 for engine in tuple(self.engines):
+                    if getattr(engine, '_native_revisions', None) is not None:
+                        engine._native_revisions.trim_spares()
+                        if native.admit(width, height, fmt):
+                            return
                     if getattr(engine, '_evaluation_depth', 0):
                         continue
                     n = engine.graph.n if engine.graph is not None else None
@@ -1183,7 +1201,7 @@ class Engine:
 
     def _settle(self, key, n):
         """Release a CHANNEL result its consumer has drawn with, unless it is kept."""
-        if key in self.keep or self.graph.consumers.get(key) or self._in_use[key] > 0:
+        if key in self.keep or key in self.retained or self.graph.consumers.get(key) or self._in_use[key] > 0:
             return
         state = self.states.get(key)
         if state is not None and state.textures:
@@ -1583,7 +1601,9 @@ class Engine:
         written = set()
         def submit(action, index):
             if action == 1:
+                started = perf_counter()
                 self._native_revisions.commit()
+                self.stages['publish_ms'] += (perf_counter() - started) * 1000
                 return
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):

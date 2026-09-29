@@ -1,4 +1,4 @@
-# Native migration ownership — ABI 10
+# Native migration ownership — ABI 11
 
 Metal is the active platform scope. Windows and Vulkan implementation and device
 qualification are deferred to the other machine. The independent standalone
@@ -16,7 +16,7 @@ application under `native/` is unchanged.
 | Channel evaluation | Accepted channel descriptors, exact constant comparison, native revision/target/configuration change selection, ordered dispatch and atomic batch acceptance (`op_channels.h`) | Snapshots root bindings and opaque target IDs; submits staged host work |
 | GPU submission | Compiled CPython host-GPU adapter validates feedback hazards, binds framebuffer/uniforms/samplers, submits draw and restores framebuffer context | Blender owns its Metal device and command queue |
 | Resources | Texture reuse, leases, global admission, pool limits, LRU eviction and retained-result, filter, shared-program and brush-history budgets (`op_pool.h`, `op_cache.h`) | Holds GPU API objects by opaque integer tokens |
-| Revisions | Bounded immutable eight-channel resource sets, checked leases, stage/commit/abort, preflight ordering, multichannel mip submission and exhaustive rollback (`op_revision.h`) | Prepares public GPU attachments and submits copy commands selected by C |
+| Revisions | Bounded immutable eight-channel resource sets, checked leases, stage/commit/abort, preflight ordering, batched publication and exhaustive rollback (`op_revision.h`) | Prepares public GPU attachments and submits grouped channel mip draws inside C's transaction |
 | Filters | Filter shaders, procedural displacement fields, Gaussian/box coefficient generation, morphology pass plans and repeat bounds (`op_filter.h`) | Copies evaluated mesh loops and submits passes |
 | Brush | Batched stamp frames, pressure/flow/alpha coverage, bounds and resampling (`op_paint.h`) | Captures Blender input/rays and persists the existing stroke recipe |
 | Geometry | Owned bounds index, UV rasterization/interpolation, tangent frames, edge adjacency, closest-triangle distance, UV clipping windows, exact padding donors, owned surface/anchor resolution, cross-target selection, UV island connectivity and stable IDs, border extraction, seam pairing/centroids, closest-seam bands/selection, island bounds, projection Jacobians and surface reach walk (`op_geometry.h`, `op_paint.h`, `op_reach.h`, `op_seam.h`, `op_topology.h`) | Extracts evaluated Blender mesh/UV/selection snapshots |
@@ -122,9 +122,14 @@ interactive Metal publication never uses that boundary.
 
 The C publication driver stages all changed outputs first. A compiled capsule owns
 the revision stream and rejects close/reentrant publication during callbacks. Resource allocation, shader
-compilation and mip preparation precede visible writes. Publication runs on one
-host context thread without yielding. A recoverable copy failure restores every
-touched channel from GPU snapshots and does not commit the native revision.
+compilation and mip allocation precede visible writes. ABI 11 permits one batched
+WRITE after all channels prepare; C marks every channel touched before submission.
+The host fuses publication and recovery writes and groups three channels' mip
+generation per draw. Accepted mip chains survive for recovery, while one spare
+chain per channel and final source results are reused. Spare chains are reclaimed
+under device pressure; final sources use the existing retained-cache budget.
+Publication runs on one host context thread without yielding. A recoverable
+failure restores every touched mip and does not commit the native revision.
 Context/device loss that also prevents restoration is an explicit evaluation
 error; it cannot be represented as a successfully displayed revision.
 
@@ -162,9 +167,10 @@ updates, which reuse topology and shader programs.
 
 ## Managed resource limits
 
-ABI 10 admits all engine-owned texture allocations against one 4 GiB budget
+ABI 11 retains admission of all engine-owned texture allocations against one 4 GiB budget
 shared across texture sets. Free storage is capped at 512 MiB. Admission first
-retires pooled textures, then releases recomputable results in idle engines.
+retires pooled textures and unreferenced revision spares, then releases
+recomputable results in idle engines.
 Active evaluation holds, paint history and accepted revision resources remain
 owned. If they leave insufficient capacity, allocation fails before requesting a
 new GPU texture and the previous accepted material remains available. Reducing

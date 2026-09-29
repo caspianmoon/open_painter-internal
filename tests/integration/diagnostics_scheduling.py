@@ -117,6 +117,32 @@ with patch.object(cache, 'painting_active', return_value=True):
     assert status.of(bpy.context, ts).state == 'Paused'
 shader_preview._deferred.pop(key)
 
+# Sustained numeric edits must not continually remove the already-due timer.
+# No real UI timer is modified by this host scheduling contract test.
+from unittest.mock import Mock
+timers = SimpleNamespace(is_registered=Mock(return_value=True), unregister=Mock(), register=Mock())
+with patch.object(cache, 'bpy', SimpleNamespace(app=SimpleNamespace(background=False, timers=timers))):
+    cache._forget_faults()
+    for _ in range(100):
+        cache.wake()
+    assert timers.register.call_count == timers.unregister.call_count == 1
+    with patch.object(cache, '_tick', return_value=cache.IDLE_INTERVAL):
+        assert cache.tick() == cache.IDLE_INTERVAL
+    cache.wake()
+    assert timers.register.call_count == 2
+    def wake_inside_tick():
+        cache.wake()
+        cache.wake()
+        return cache.IDLE_INTERVAL
+    with patch.object(cache, '_tick', side_effect=wake_inside_tick):
+        assert cache.tick() == cache.ACTIVE_INTERVAL
+    assert timers.register.call_count == 2, 'Never unregister the executing callback'
+    timers.is_registered.return_value = False
+    cache._forget_faults()
+    cache.wake()
+    assert not cache._wake_pending and timers.register.call_count == 2
+cache._forget_faults()
+
 shader_preview._sessions.pop(key)  # the metadata-only engine owns no GPU resources
 open_painter.unregister()
 print('DIAGNOSTICS_SCHEDULING_PASS', flush=True)

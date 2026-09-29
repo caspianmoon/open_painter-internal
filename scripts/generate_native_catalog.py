@@ -59,6 +59,9 @@ for relative, prefix in [('evaluation/engine/runtime.py', 'runtime'),
                 fixed[prefix + '.' + name.id.lower()] = node.value.value
 fixed['paint.region'] = fixed.pop('paint.copy_region')
 fixed['runtime.publish_pixels'] = fixed['runtime.publish'].replace('  op_out1 = value;   /* the source of its mip chain */\n', '')
+from open_painter.evaluation.engine.publication_shaders import mip_batch_source
+for count in (2, 3):
+    fixed[f'runtime.mip_{count}'] = mip_batch_source(fixed['runtime.mip'], count)
 # Resolve the reference's literal shader concatenations without importing its
 # NumPy/GPU modules. These expressions are repository-owned build inputs.
 filter_tree = ast.parse((ROOT / 'src/open_painter/evaluation/engine/filters.py').read_text())

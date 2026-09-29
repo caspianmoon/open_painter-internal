@@ -16,7 +16,7 @@ from blender_test_profile import isolated_environment
 from collect_gate0_baseline import artifact_digests
 
 ROOT = Path(__file__).resolve().parents[1]
-TESTS = ('native_host_metal.py', 'native_blend.py', 'native_geometry_projection.py', 'engine_parity.py', 'engine_procedurals.py',
+TESTS = ('native_host_metal.py', 'native_blend.py', 'native_effects.py', 'native_geometry_projection.py', 'engine_parity.py', 'engine_procedurals.py',
          'gpu_strokes.py', 'engine_filters.py', 'engine_state_cache.py', 'shader_undo.py',
          'shader_lifecycle_edges.py', 'shader_adoption.py', 'engine_memory_soak.py',
          'save_during_evaluation.py', 'resolution_switch.py', 'stroke_parity.py',

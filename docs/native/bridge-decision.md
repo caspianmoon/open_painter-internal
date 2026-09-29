@@ -1,8 +1,8 @@
-# Metal integration decision — ABI 7
+# Metal integration decision — ABI 8
 
 The implementation uses Blender's existing Metal device and public GPU API.
 C owns shader generation, typed program/parameter storage, dependency and layer
-plans, batch execution/dependency holds, channel selection and acceptance, all blend math, brush/geometry kernels, UV topology and seam connectivity,
+plans, batch execution/dependency holds, channel selection and acceptance, all blend math, pointwise effects and mask folding, brush/geometry kernels, UV topology and seam connectivity,
 resource policies and immutable material revisions.
 A compiled CPython limited-ABI adapter submits GPU draws on Blender's context
 thread. EEVEE samples the ordinary output images on the original object.

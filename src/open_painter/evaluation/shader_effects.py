@@ -24,6 +24,28 @@ POINTWISE = frozenset({
 })
 
 
+# Portable semantic input order. Vector entries only pack RNA scalars; formulas
+# and effect dispatch belong to the native compiler.
+EFFECT_FIELDS = {
+    **{k: ('black', 'white', 'gamma', 'output_black', 'output_white')
+       for k in ('LEVELS', 'ROUGHNESS_REMAP', 'METALLIC_REMAP', 'HEIGHT_REMAP')},
+    'GAMMA': ('gamma',), 'INVERT': (), 'CLAMP': ('black', 'white'),
+    'BRIGHTNESS_CONTRAST': ('amount', 'contrast'), 'ROUGHNESS_CONTRAST': ('contrast',),
+    'THRESHOLD': ('amount',), 'HISTOGRAM_SCAN': ('amount', 'softness', 'contrast'),
+    'HISTOGRAM_RANGE': ('black', 'white', 'softness', 'contrast'),
+    'POSTERIZE': ('steps',), 'QUANTIZE': ('steps',), 'AO_STRENGTH': ('amount',),
+    'NORMAL_STRENGTH': ('amount',), 'NORMAL_INVERT_Y': (),
+    'NORMAL_COMBINE': ('detail', 'amount'),
+    **{k: ('hue', 'saturation', 'lightness') for k in ('HSL', 'HSV', 'HUE_SHIFT', 'SATURATION')},
+    'COLOR_BALANCE': ('color',), 'GRADIENT_MAP': ('color', 'color2'),
+    'COLORIZE': ('color', 'amount'), 'TINT': ('color', 'amount'),
+    'TEMPERATURE': ('amount',), 'DESATURATE': (),
+    'REPLACE_COLOR': ('color', 'color2', 'softness'),
+    'CHANNEL_MIXER': ('row0', 'row1', 'row2', 'bias'),
+}
+EFFECT_VECTORS = frozenset({'detail', 'color', 'color2', 'row0', 'row1', 'row2', 'bias'})
+
+
 def effect_key(kind):
     key = str(kind).strip().upper().replace("-", "_").replace(" / ", "_").replace(" ", "_")
     return {"GRAYSCALE": "DESATURATE", "HSL_ADJUSTMENT": "HSL"}.get(key, key)
@@ -102,6 +124,13 @@ def apply_effect(b, signal, effect):
         if hasattr(b, 'spatial_effect'):
             return b.spatial_effect(signal, effect)
         raise UnsupportedEffect(f"{effect.kind} requires a spatial raster boundary")
+    if hasattr(b, 'pointwise_effect'):
+        if (key in {'LEVELS', 'ROUGHNESS_REMAP', 'METALLIC_REMAP', 'HEIGHT_REMAP'}
+                and effect.enabled and effect.strength > 0 and effect.white <= effect.black):
+            raise ValueError("White level must be greater than black level")
+        if key == 'NORMAL_COMBINE' and not effect.image and effect.enabled and effect.strength > 0:
+            raise ValueError("Normal Combine needs a detail normal texture.")
+        return b.pointwise_effect(signal, effect)
     m = b.math
     values = {}
 

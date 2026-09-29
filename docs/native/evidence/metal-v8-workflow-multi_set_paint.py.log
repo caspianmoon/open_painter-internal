@@ -1,0 +1,14 @@
+MULTI_SET_PAINT begin: PASS
+MULTI_SET_PAINT stroke: emulated in background
+MULTI_SET_PAINT stroke marks both sets: PASS
+MULTI_SET_PAINT finish: PASS
+MULTI_SET_PAINT reuse: PASS
+MULTI_SET_PAINT retarget: PASS
+MULTI_SET_PAINT live: PASS
+MULTI_SET_PAINT legacy key: PASS
+/Volumes/SSD/projects/open_painter/tests/integration/multi_set_paint.py:212: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  foreign = bpy.data.materials.new('Render'); foreign.use_nodes = True
+MULTI_SET_PAINT_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

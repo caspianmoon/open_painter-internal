@@ -211,6 +211,18 @@ def _blend(node):
     node.opaque = False
 
 
+def _effect(node):
+    node.outputs._add(Socket(node, 'Color', VECTOR, True))
+    node.operation = 'INVERT'
+
+
+def _mask_fold(node):
+    for name in ('Previous', 'Value', 'Black', 'White', 'Invert', 'Strength'):
+        node.inputs._add(Socket(node, name, VALUE, False))
+    node.outputs._add(Socket(node, 'Value', VALUE, True))
+    node.operation, node.first = 'NORMAL', False
+
+
 def _spatial_filter(node):
     node.inputs._add(Socket(node, 'Color', RGBA, False))
     node.inputs._add(Socket(node, 'Alpha', VALUE, False, 1.0))
@@ -224,7 +236,7 @@ TEMPLATES = {
     'ShaderNodeTexImage': _image, 'ShaderNodeNewGeometry': _geometry, 'ShaderNodeTexCoord': _coordinates,
     'ShaderNodeNormalMap': _normal_map, 'ShaderNodeUVMap': _uv_map, 'ShaderNodeGroup': _group,
     'NodeGroupInput': _group_io, 'NodeGroupOutput': _group_io, 'OPProcedural': _procedural,
-    'OPSpatialFilter': _spatial_filter, 'OPBlend': _blend,
+    'OPSpatialFilter': _spatial_filter, 'OPBlend': _blend, 'OPEffect': _effect, 'OPMaskFold': _mask_fold,
 }
 # Blender's node.type strings, for code that inspects built trees.
 TYPES = {'ShaderNodeMath': 'MATH', 'ShaderNodeVectorMath': 'VECT_MATH', 'ShaderNodeCombineXYZ': 'COMBXYZ',
@@ -234,6 +246,8 @@ TYPES = {'ShaderNodeMath': 'MATH', 'ShaderNodeVectorMath': 'VECT_MATH', 'ShaderN
          'NodeGroupInput': 'GROUP_INPUT', 'NodeGroupOutput': 'GROUP_OUTPUT', 'OPProcedural': 'OP_PROCEDURAL'}
 TYPES['OPSpatialFilter'] = 'OP_SPATIAL_FILTER'
 TYPES['OPBlend'] = 'OP_BLEND'
+TYPES['OPEffect'] = 'OP_EFFECT'
+TYPES['OPMaskFold'] = 'OP_MASK_FOLD'
 
 
 class Node:

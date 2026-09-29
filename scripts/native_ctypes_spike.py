@@ -44,7 +44,7 @@ def main():
     print(f"loaded {found}")
     with NativeCore(lib) as core:
         caps = core.capabilities()
-        assert caps.abi_version == 7 and caps.has_gpu == 0, caps
+        assert caps.abi_version == 8 and caps.has_gpu == 0, caps
         print(f"abi={caps.abi_version} max_tex={caps.max_texture_size} gpu={caps.has_gpu}")
 
         doc = core.document_create(1)

@@ -1,0 +1,6 @@
+2026-09-29 20:56:02.146 Blender[1592:12223127] ApplePersistenceIgnoreState: Existing state will not be touched. New state will be written to /var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/org.blenderfoundation.blender.savedState
+Info: Saved as "native-brush-ui.blend"
+VECTOR_BRUSH_UI_PASS /Volumes/SSD/projects/open_painter/.blender-test/native/metal-integration/runs/20260929T175150.716312Z/native-brush-ui.json
+00:11.851  blend            | Saved session recovery to "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/quit.blend"
+
+Blender quit

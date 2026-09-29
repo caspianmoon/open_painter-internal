@@ -7,6 +7,7 @@
 
 #include "catalog.inc"
 #include "blend.inc"
+#include "effects.inc"
 #define MAX_TEXT (64u * 1024u * 1024u)
 typedef struct text {
     char *data;
@@ -103,6 +104,10 @@ static unsigned arity(uint32_t code) {
     case OP_IR_NORMAL_MAP:
     case OP_IR_BLEND:
         return 5;
+    case OP_IR_MASK_FOLD:
+        return 6;
+    case OP_IR_EFFECT:
+        return 8;
     default:
         return 0;
     }
@@ -151,6 +156,27 @@ static int types_valid(const op_ir_node_t *all, const op_ir_node_t *n) {
         return type == OP_IR_COLOR && a == OP_IR_VECTOR && n->aux[0] <= 1 &&
                all[n->inputs[1]].type == OP_IR_FLOAT && all[n->inputs[2]].type == OP_IR_VECTOR &&
                all[n->inputs[3]].type == OP_IR_FLOAT && all[n->inputs[4]].type == OP_IR_FLOAT;
+    case OP_IR_MASK_FOLD:
+        if (type != OP_IR_FLOAT || n->aux[0] > 1)
+            return 0;
+        for (unsigned j = 0; j < 6; j++)
+            if (all[n->inputs[j]].type != OP_IR_FLOAT)
+                return 0;
+        return 1;
+    case OP_IR_EFFECT: {
+        if (type != OP_IR_VECTOR || a != OP_IR_VECTOR)
+            return 0;
+        int k = effect_find(n->operation);
+        if (k < 0)
+            return 1; /* emit reports unsupported */
+        const effect_spec_t *spec = effect_specs + k;
+        for (unsigned j = 0; j < spec->count; j++)
+            if (all[n->inputs[1 + j]].type !=
+                ((spec->vectors & (1u << j)) ? OP_IR_VECTOR : OP_IR_FLOAT))
+                return 0;
+        return all[n->inputs[1 + spec->count]].type == OP_IR_FLOAT &&
+               all[n->inputs[2 + spec->count]].type == OP_IR_FLOAT;
+    }
     case OP_IR_NORMAL_MAP:
         if (type != OP_IR_VECTOR || a != OP_IR_VECTOR || all[n->inputs[1]].type != OP_IR_FLOAT)
             return 0;
@@ -298,6 +324,32 @@ static op_status_t node(text *b, const op_ir_node_t *nodes, uint32_t i) {
              n->aux[0] ? "true" : "false");
         break;
     }
+    case OP_IR_EFFECT: {
+        int k = effect_find(n->operation);
+        if (k < 0)
+            return OP_UNSUPPORTED;
+        const effect_spec_t *spec = effect_specs + k;
+        emit(b, "op_effect(v%u", a);
+        for (unsigned j = 0; j < 5; j++) {
+            if (j < spec->count)
+                emit(b, ", vec3(v%u)", n->inputs[1 + j]);
+            else
+                append(b, ", vec3(0.0)");
+        }
+        emit(b, ", v%u, v%u, %d)", n->inputs[1 + spec->count], n->inputs[2 + spec->count], k);
+        break;
+    }
+    case OP_IR_MASK_FOLD: {
+        const char *modes[] = {"NORMAL", "MULTIPLY", "MAX", "MIN", "ADD", NULL};
+        unsigned k = 0;
+        while (modes[k] && strcmp(modes[k], n->operation))
+            k++;
+        if (!modes[k])
+            return OP_UNSUPPORTED;
+        emit(b, "op_mask_fold(v%u, v%u, v%u, v%u, v%u, v%u, %u, %s)", a, d, c, s, n->inputs[4],
+             n->inputs[5], k, n->aux[0] ? "true" : "false");
+        break;
+    }
     case OP_IR_UV:
         append(b, "vec3(op_uv, 0.0)");
         break;
@@ -311,7 +363,7 @@ op_status_t op_ir_compile(const op_ir_node_t *nodes, uint32_t count, const op_ir
                           uint32_t target_count, char **source) {
     text b = {0};
     uint64_t dependencies = 0;
-    int has_blend = 0;
+    int has_blend = 0, has_effect = 0;
     unsigned char kinds[sizeof(catalog) / sizeof(catalog[0])] = {0};
     op_status_t status = OP_OK;
     if (!source)
@@ -319,8 +371,10 @@ op_status_t op_ir_compile(const op_ir_node_t *nodes, uint32_t count, const op_ir
     *source = NULL;
     if (!nodes || !count || count > 262144 || !targets || !target_count || target_count > 8)
         return OP_INVALID_ARGUMENT;
-    for (uint32_t i = 0; i < count; i++)
+    for (uint32_t i = 0; i < count; i++) {
         has_blend |= nodes[i].opcode == OP_IR_BLEND;
+        has_effect |= nodes[i].opcode == OP_IR_EFFECT || nodes[i].opcode == OP_IR_MASK_FOLD;
+    }
     for (uint32_t i = 0; i < count; i++)
         if (nodes[i].opcode == OP_IR_PROCEDURAL) {
             if (!memchr(nodes[i].operation, 0, 64))
@@ -339,9 +393,12 @@ op_status_t op_ir_compile(const op_ir_node_t *nodes, uint32_t count, const op_ir
     for (unsigned i = 0; catalog[i].name; i++)
         if (kinds[i])
             append(&b, catalog[i].source);
-    if (has_blend)
+    if (has_blend || has_effect)
         for (unsigned i = 0; blend_source[i]; i++)
             append(&b, blend_source[i]);
+    if (has_effect)
+        for (unsigned i = 0; effect_source[i]; i++)
+            append(&b, effect_source[i]);
     append(&b, "void main() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n  vec2 op_uv = "
                "(vec2(op_texel) + 0.5) * op_inv_size;\n");
     for (uint32_t i = 0; i < count; i++) {

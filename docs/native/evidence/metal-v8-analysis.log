@@ -1,0 +1,25 @@
+libopenpainter/src/core/composite.c: exit 0
+libopenpainter/src/core/context.c: exit 0
+libopenpainter/src/core/document.c: exit 0
+libopenpainter/src/core/evaluate.c: exit 0
+libopenpainter/src/core/snapshot.c: exit 0
+libopenpainter/src/geometry/geometry.c: exit 0
+libopenpainter/src/geometry/mesh.c: exit 0
+libopenpainter/src/geometry/padding.c: exit 0
+libopenpainter/src/geometry/seams.c: exit 0
+libopenpainter/src/geometry/topology.c: exit 0
+libopenpainter/src/gpu/cache.c: exit 0
+libopenpainter/src/gpu/pool.c: exit 0
+libopenpainter/src/gpu/probe.c: exit 0
+libopenpainter/src/gpu/revision.c: exit 0
+libopenpainter/src/graph/channels.c: exit 0
+libopenpainter/src/graph/filter.c: exit 0
+libopenpainter/src/graph/graph.c: exit 0
+libopenpainter/src/graph/program.c: exit 0
+libopenpainter/src/graph/stack.c: exit 0
+libopenpainter/src/paint/brush.c: exit 0
+libopenpainter/src/paint/reach.c: exit 0
+libopenpainter/src/shaders/compiler.c: exit 0
+libopenpainter/src/shaders/fixed.c: exit 0
+libopenpainter/bindings/python/module.c: exit 0
+24 translation units: no diagnostics

@@ -46,6 +46,43 @@ class EngineGraph(Graph):
             self.link(value, socket)
         return Signal(node.outputs['Color'], node.outputs['Alpha'])
 
+    def pointwise_effect(self, signal, effect):
+        from ..shader_effects import effect_key, EFFECT_FIELDS, EFFECT_VECTORS
+        key = effect_key(effect.kind)
+        node = self.node('OPEffect')
+        node.operation = key
+        entries = [('source', headless.VECTOR, signal.color)]
+        for field in (*EFFECT_FIELDS[key], 'strength', 'enabled'):
+            kind = headless.VECTOR if field in EFFECT_VECTORS else headless.VALUE
+            if field == 'detail':
+                value = self.effect_image(effect) if effect.image else (.5, .5, 1.)
+            elif field.startswith('row'):
+                row = int(field[-1])
+                value = self.combine(*(self.param(effect, 'matrix', row * 3 + j) for j in range(3)))
+            elif kind == headless.VECTOR:
+                value = self.combine(*(self.param(effect, field, j) for j in range(3)))
+            else:
+                value = self.param(effect, field)
+            entries.append((field, kind, value))
+        for field, kind, value in entries:
+            node.inputs._add(headless.Socket(node, field, kind, False))
+            self.link(value, node.inputs[field])
+        return Signal(node.outputs['Color'], signal.alpha)
+
+    def _mask_fold(self, layer, mask, value, result):
+        node = self.node('OPMaskFold')
+        node.first = result is None
+        node.operation = ('NORMAL' if mask.source == 'FILTER' else
+                          mask.operation if mask.operation in {'NORMAL', 'MULTIPLY', 'MAX', 'MIN'} else 'ADD')
+        self.link(1.0 if result is None else result, node.inputs['Previous'])
+        self.link(value, node.inputs['Value'])
+        with self.role(f'MaskLevels:{layer.id}:{mask.id}'):
+            for field in ('black', 'white', 'invert'):
+                self.link(self.param(mask, field), node.inputs[field.title()])
+        with self.role(f'MaskMix:{layer.id}:{mask.id}'):
+            self.link(self.param(mask, 'strength'), node.inputs['Strength'])
+        return node.outputs['Value']
+
     def __init__(self, scene, ts):
         super().__init__(scene, ts, None)
         self.chains = {}

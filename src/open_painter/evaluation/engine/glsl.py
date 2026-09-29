@@ -316,6 +316,51 @@ class Translator:
             expression, kind = self.output(value) if is_socket(value) else (constant(value, socket.type), socket.type)
             self._set(socket, convert(expression, kind, socket.type))
 
+    def _node_OPEffect(self, node):
+        from types import SimpleNamespace
+        from ..shader_math import Math, Signal
+        from ..shader_effects import apply_effect
+        from .headless import Tree
+        tree = Tree('Legacy effect reference')
+        self.__dict__.setdefault('_semantic_trees', []).append(tree)
+        builder = Math(tree)
+        values = {s.name: s.links[0].from_socket if s.links else s.default_value for s in node.inputs}
+        def param(_effect, field, index=None):
+            if field == 'matrix':
+                return builder.separate(values['row' + str(index // 3)])[index % 3]
+            # The reference eagerly builds unused histogram intermediates.
+            # Only these dead inputs are absent from the semantic signature.
+            if field not in values and ((node.operation == 'HISTOGRAM_RANGE' and field == 'amount')
+                    or (node.operation == 'THRESHOLD' and field in {'softness', 'contrast'})):
+                return 0.0
+            value = values[field]
+            return builder.separate(value)[index] if index is not None else value
+        builder.param = param
+        builder.effect_image = lambda _effect: values['detail']
+        effect = SimpleNamespace(kind=node.operation, enabled=False, strength=0,
+                                 image=node.operation == 'NORMAL_COMBINE')
+        result = apply_effect(builder, Signal(values['source']), effect)
+        expression, kind = self.output(result.color)
+        self._set(node.outputs['Color'], convert(expression, kind, VECTOR), VECTOR)
+
+    def _node_OPMaskFold(self, node):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from ..shader_math import Math
+        from ..shader_graph import Graph
+        from .headless import Tree
+        tree = Tree('Legacy mask reference')
+        self.__dict__.setdefault('_semantic_trees', []).append(tree)
+        builder = Math(tree)
+        values = {s.name.lower(): s.links[0].from_socket if s.links else s.default_value for s in node.inputs}
+        builder.param = lambda _owner, field: values[field]
+        builder.role = lambda _role: nullcontext()
+        builder.scalar_mix = lambda a, b, t: Graph.scalar_mix(builder, a, b, t)
+        mask = SimpleNamespace(id='reference', source='FILL', operation=node.operation)
+        result = Graph._mask_fold(builder, SimpleNamespace(id='reference'), mask,
+                                  values['value'], None if node.first else values['previous'])
+        self._set(node.outputs['Value'], self.output(result)[0], VALUE)
+
     def _node_ShaderNodeMath(self, node):
         template = MATH.get(node.operation)
         if template is None:

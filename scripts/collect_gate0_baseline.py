@@ -75,7 +75,8 @@ def artifact_digests(root, native_library=None, build_cache=None):
         "shader_bundle_sha256": digest_paths(root, SHADER_SOURCES +
                                                [Path("libopenpainter/src/gpu/probe.c"), Path("libopenpainter/src/shaders/catalog.inc"),
                                                 Path("libopenpainter/src/shaders/fixed.inc"),
-                                                Path("libopenpainter/src/shaders/blend.inc")]),
+                                                Path("libopenpainter/src/shaders/blend.inc"),
+                                                Path("libopenpainter/src/shaders/effects.inc")]),
         "native_source_sha256": digest_paths(root, native_sources),
         "fixture_source_sha256": digest_paths(root, [Path("scripts/native_fixtures.py"),
                                                      Path("scripts/benchmark_windows_viewport.py")]),

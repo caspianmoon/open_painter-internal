@@ -100,3 +100,5 @@ op_test(test_graph_execution)
 op_test(test_topology)
 
 op_test(test_channels)
+
+op_test(test_effects)

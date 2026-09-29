@@ -1,4 +1,4 @@
-# Native migration ownership — ABI 7
+# Native migration ownership — ABI 8
 
 Metal is the active platform scope. Windows and Vulkan implementation and device
 qualification are deferred to the other machine. The independent standalone
@@ -9,7 +9,7 @@ application under `native/` is unchanged.
 | Area | Portable native implementation | Blender boundary |
 | --- | --- | --- |
 | Program model | Owned typed IR, shader source, validated parameter banks and unique program/input revisions (`op_program.h`) | Copies socket values, image metadata and object transforms |
-| Compiler | Scalar/vector operations, implicit conversions, image alpha handling, packed channels, normal maps, imports, all 28 blend modes including coverage and normal composition, 71 procedural families (`op_ir.h`) | Resolves persisted recipe bindings into numeric IR |
+| Compiler | Scalar/vector operations, implicit conversions, image alpha handling, packed channels, normal maps, imports, all 28 blend modes including coverage and normal composition, all 30 pointwise effects, mask levels/inversion/folding, 71 procedural families (`op_ir.h`) | Resolves persisted recipe bindings into numeric IR |
 | Composition | Ordered layers, nested isolated/passthrough folders, per-channel backdrops and grouped inputs (`op_stack.h`) | Snapshots included recipe units and stable keys |
 | Evaluation | Copied dependency DAG, atomic narrow revision patches, cycle rejection, dependency stamps, root plans, checkpoint selection, batch submission and last-consumer dependency holds (`op_graph.h`) | Binds host resources and submits each native-selected pass |
 | Channel evaluation | Accepted channel descriptors, exact constant comparison, native revision/target/configuration change selection, ordered dispatch and atomic batch acceptance (`op_channels.h`) | Snapshots root bindings and opaque target IDs; submits staged host work |
@@ -42,6 +42,22 @@ close and nested execution are rejected during submission. Versioned graph
 capsule tags reject older module layouts before accessing their payload. Host rendering rejects
 an unexpected missing dependency rather than falling into recursive evaluation.
 The retained-cache budget is re-applied after transient batch holds are released.
+
+## Effect and mask semantics
+
+Pointwise effects enter the native compiler as one typed operation over RGB;
+alpha is preserved by the caller. C owns all 30 formulas, effect opacity, enabled
+state, tie-to-even quantization, hue conversions and normal handling. Python
+copies named scalar parameters and packs vector/matrix inputs. Mask entries
+also use one native operation for levels, inversion, strength and first-entry
+or subsequent blending. Input types, ordering and operation names are validated
+before shader source is returned. See [semantic IR contracts](semantic-ir.md).
+
+The legacy translator expands independent Python formulas for diagnosis. The
+Metal comparison covers 90 effect cases and 30 mask-fold cases, including exact
+threshold/rounding boundaries, disabled effects and degenerate normals. Eight
+production edits to matrix, bias, gamma, enabled, strength and mask controls
+reuse topology and compiled shaders and match the legacy executor.
 
 ## Channel evaluation
 
@@ -116,7 +132,7 @@ boundaries. The original plan's sustained latency protocol, broad device-loss
 qualification and other-machine platforms are separate, unfinished gates.
 
 The main remaining code boundaries are `evaluation/shader_graph.py` (recipe,
-mask and effect graph construction), `evaluation/engine/runtime.py` (source
+mask source/group traversal and effect-chain binding), `evaluation/engine/runtime.py` (source
 binding, per-pass host dispatch and persistence adapters). `geometry/seams.py` copies
 evaluated mesh data and binds native topology/correspondence results. Native
 batch execution owns the dependency pass loop and its input lifetimes; the

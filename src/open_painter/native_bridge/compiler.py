@@ -11,7 +11,7 @@ from ..evaluation.engine import glsl
 from ..evaluation.engine.headless import VALUE, VECTOR, RGBA
 
 TYPES = {VALUE: 1, VECTOR: 2, RGBA: 3}
-CONSTANT, PARAMETER, CONVERT, MATH, VECTOR_MATH, COMBINE, COMPONENT, IMAGE, IMAGE_COLOR, GEOMETRY, OBJECT, NORMAL_MAP, PROCEDURAL, FETCH, UV, BLEND = range(1, 17)
+CONSTANT, PARAMETER, CONVERT, MATH, VECTOR_MATH, COMBINE, COMPONENT, IMAGE, IMAGE_COLOR, GEOMETRY, OBJECT, NORMAL_MAP, PROCEDURAL, FETCH, UV, BLEND, EFFECT, MASK_FOLD = range(1, 19)
 
 
 class Node(C.Structure):
@@ -78,6 +78,14 @@ class Snapshot(glsl.Translator):
         result = self.add(BLEND, RGBA, inputs, (bool(node.opaque),), operation=node.operation)
         self._set(node.outputs['Color'], self.convert(result, RGBA, VECTOR), VECTOR)
         self._set(node.outputs['Alpha'], self.add(COMPONENT, VALUE, (result,), (3,)), VALUE)
+
+    def _node_OPEffect(self, node):
+        inputs = tuple(self.input(s) for s in node.inputs)
+        self._set(node.outputs['Color'], self.add(EFFECT, VECTOR, inputs, operation=node.operation), VECTOR)
+
+    def _node_OPMaskFold(self, node):
+        inputs = tuple(self.input(s, VALUE) for s in node.inputs)
+        self._set(node.outputs['Value'], self.add(MASK_FOLD, VALUE, inputs, (bool(node.first),), operation=node.operation), VALUE)
 
     def _node_ShaderNodeMath(self, node):
         inputs = tuple(self.input(s, VALUE) for s in node.inputs)

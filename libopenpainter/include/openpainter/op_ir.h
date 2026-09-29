@@ -27,7 +27,15 @@ enum {
      * backdrop alpha FLOAT, straight source VECTOR, source alpha FLOAT,
      * coverage FLOAT. operation names the blend mode; aux[0] selects the
      * opaque-backdrop specialization (backdrop alpha must then be 1). */
-    OP_IR_BLEND
+    OP_IR_BLEND,
+    /* VECTOR result; input 0 is source RGB, followed by operation-specific
+     * typed parameters and FLOAT strength/enabled. Unused slots reference any
+     * earlier node. Alpha remains the caller's unchanged input. Parameter contracts are listed in
+     * effect_specs in effects.inc. */
+    OP_IR_EFFECT,
+    /* FLOAT previous, value, black, white, invert, strength; operation is
+     * NORMAL/MULTIPLY/MAX/MIN/ADD. aux[0] identifies the first mask entry. */
+    OP_IR_MASK_FOLD
 };
 typedef struct op_ir_node {
     uint32_t opcode, type, inputs[8], aux[4];

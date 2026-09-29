@@ -1,0 +1,22 @@
+UDIM PASS: tile discovery and local evaluated UVs preserve source UVs and original material
+UDIM PASS: new groups share recipes and Make Independent preserves tile authoring
+UDIM PASS: tile 1001 and 1002 evaluate independent PBR pixels
+UDIM PASS: utility baking reaches tile 1002
+Open Painter: INFO: Bake staging device: CPU
+Open Painter: INFO: Baking NORMAL for Two tiles from 0 source(s)
+Info: Baking map saved to internal image, save it externally or pack it
+Info: Baking map saved to internal image, save it externally or pack it
+UDIM PASS: Cycles normal bake on tile 1002 leaves source UVs intact
+UDIM PASS: planned and published tile-numbered exports contain distinct pixels
+00:02.968  blend            | Read blend: "/var/folders/wt/kmqn52wn0sqg2wyhrt23db200000gn/T/op-udim-acceptance-0gbo_g_d/udim.blend"
+Info: Saved as "udim.blend"
+UDIM PASS: save and reopen preserve tile identity, layers and packed images
+UDIM PASS: finishing a restored paint session restores the original active UV map
+UDIM PASS: removing one tile restores only its original material assignment
+UDIM PASS: invalid UV layouts are rejected before mutation
+UDIM PASS: failed creation rolls back sets, material slots and face routing
+UDIM PASS: sparse second-row tiles group multiple objects independently of material names
+UDIM_WORKFLOW_PASS 12
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

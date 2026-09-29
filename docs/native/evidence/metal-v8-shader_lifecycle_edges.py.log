@@ -1,0 +1,12 @@
+LIFECYCLE_EDGE undo during pending job: PASS
+LIFECYCLE_EDGE undo during CPU job: PASS
+LIFECYCLE_EDGE full scene copy: PASS
+LIFECYCLE_EDGE linked scene copy: PASS
+LIFECYCLE_EDGE status line: PASS
+LIFECYCLE_EDGE batch after structural edit: PASS
+LIFECYCLE_EDGE relocated texture sets: PASS
+LIFECYCLE_EDGE failed replacement build: PASS
+SHADER_LIFECYCLE_EDGES_PASS
+Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 01:35:57)
+
+Blender quit

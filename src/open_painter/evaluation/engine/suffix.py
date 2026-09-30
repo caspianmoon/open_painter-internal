@@ -132,15 +132,30 @@ class SuffixCache:
     def _arm(self, engine, members, n, memo, epochs):
         from .runtime import device
         dev = device()
-        fmt = 'RG32F' if scalar_unit(members[0]) else 'RGBA32F'
+        scalar = scalar_unit(members[0])
+        work = 'RG32F' if scalar else 'RGBA32F'
+        # Slopes and their products accumulate in full float. At display precision
+        # the finished transform is stored in half floats, like every intermediate
+        # of sequential rendering; Height and precise sets keep full float.
+        compact = not engine.precise and members[0][2] != 'HEIGHT'
+        final = ('RG16F' if scalar else 'RGBA16F') if compact else work
         zero, one = engine._constant(n, (0.0, 0.0, 0.0, 0.0)), engine._constant(n, (1.0, 1.0, 1.0, 1.0))
         accumulate = dev.fixed('suffix.accumulate')
-        owned, a, b, source = [], one, zero, IDENTITY
-        passes = 0
+        owned = {}   # id -> (texture, format): everything arming holds until it succeeds
+
+        def allocate(fmt):
+            texture = dev.texture(n, fmt)
+            owned[id(texture)] = texture, fmt
+            return texture
+
+        def release(texture):
+            _, fmt = owned.pop(id(texture))
+            dev.release(texture, n, fmt)
+
+        a, b, source, passes = one, zero, IDENTITY, 0
         try:
-            f0, f1 = dev.texture(n, fmt), dev.texture(n, fmt)
-            owned += [f0, f1]
-            for key in members:
+            f0, f1 = allocate(work), allocate(work)
+            for index, key in enumerate(members):
                 state = engine._state(key)
                 program = state.program
                 position = engine.positions[key]
@@ -156,8 +171,8 @@ class SuffixCache:
                         samplers = [(s.name, engine._bind(s, n, memo, epochs, constant, grouped, key))
                                     for s in program.samplers]
                         dev.draw(state.shader, [target], n, samplers, uniforms)
-                    new_a, new_b = dev.texture(n, fmt), dev.texture(n, fmt)
-                    owned += [new_a, new_b]
+                    fmt = final if index == len(members) - 1 else work
+                    new_a, new_b = allocate(fmt), allocate(fmt)
                     dev.draw(accumulate, [new_a, new_b], n,
                              [('op_f0', f0), ('op_f1', f1), ('op_a', a), ('op_b', b)],
                              ints={'op_swizzle': pack(program.affine)})
@@ -168,26 +183,24 @@ class SuffixCache:
                         engine._settle(held, n)
                 for previous in (a, b):
                     if previous is not zero and previous is not one:
-                        owned.remove(previous)
-                        dev.release(previous, n, fmt)
+                        release(previous)
                 a, b = new_a, new_b
                 source = tuple(NONE if c == NONE else source[c] for c in program.affine)
         except MemoryError:
-            for texture in owned:
+            for texture, fmt in owned.values():
                 dev.release(texture, n, fmt)
             metrics.count('engine_suffix_arm_failures')
             return None
         except Exception:
-            for texture in owned:
+            for texture, fmt in owned.values():
                 dev.release(texture, n, fmt)
             raise
-        for texture in (f0, f1):
-            owned.remove(texture)
-            dev.release(texture, n, fmt)
+        release(f0)
+        release(f1)
         engine.stages['passes']['SUFFIX_ARM'] += passes
         metrics.count('engine_suffix_arms')
         metrics.count('engine_suffix_armed_units', len(members))
-        return Transform(a, b, fmt, n, source, 2 * texture_bytes(n, n, fmt))
+        return Transform(a, b, final, n, source, 2 * texture_bytes(n, n, final))
 
     def _apply(self, engine, top, source, bottom, entry, n, memo, epochs):
         from .runtime import device

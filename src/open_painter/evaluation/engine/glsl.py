@@ -224,13 +224,23 @@ def target_of(unit, export):
     raise Unsupported(f'Unit {unit.key} has no export {export}')
 
 
+def _tree_units(graph):
+    """The unit of each tree (by id), kept on the graph while its units stand: every program
+    translated used to index all ~1,750 units of a deep stack again."""
+    key = (getattr(graph, '_units_token', None), len(graph.units))
+    cached = getattr(graph, '_tree_units', None)
+    if cached is None or cached[0] != key:
+        cached = (key, {id(item.tree): item for item in graph.units.values() if item.tree is not None})
+        graph._tree_units = cached
+    return cached[1]
+
+
 class Translator:
     """Walks a unit tree from its group output; emits one GLSL variable per node output."""
 
     def __init__(self, graph, unit, inline=frozenset()):
         self.graph, self.unit = graph, unit
         self.inline = inline          # producer units compiled into this program instead of sampled
-        self.trees = {id(item.tree): item for item in graph.units.values() if item.tree is not None}
         self.lines = []
         self.memo = {}           # output socket id -> (expression, type)
         self.samplers = []
@@ -295,6 +305,14 @@ class Translator:
 
     def _set(self, socket, expression, kind=None):
         self.memo[id(socket)] = (expression, kind or socket.type)
+
+    def _tree_unit(self, tree):
+        """The unit compiling ``tree`` (an inlined producer's), else this program's own."""
+        found = _tree_units(self.graph).get(id(tree))
+        if found is not None and found.tree is not tree:
+            self.graph._tree_units = None   # an id reused since the index was taken
+            found = _tree_units(self.graph).get(id(tree))
+        return found if found is not None and found.tree is tree else self.unit
 
     # ---- nodes -----------------------------------------------------------------------
 
@@ -505,7 +523,7 @@ class Translator:
                 else:
                     self._set(socket, f'{fetch}.rgb', VECTOR)
             else:
-                self._set_import(socket, self.trees.get(id(node.id_data), self.unit))
+                self._set_import(socket, self._tree_unit(node.id_data))
 
     def _set_import(self, socket, unit):
         entry = next(((key, export) for key, export, input_name in unit.imports if input_name == socket.name), None)

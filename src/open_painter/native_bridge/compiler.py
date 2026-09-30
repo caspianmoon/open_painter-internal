@@ -5,6 +5,7 @@ contains no shader expressions, math implementation or procedural shader code.
 The existing compiler remains the independent legacy/export reference.
 """
 import ctypes as C
+import struct
 
 from .core import NativeError
 from ..evaluation.engine import glsl
@@ -23,19 +24,35 @@ class Target(C.Structure):
     _fields_ = [('color', C.c_uint32), ('alpha', C.c_uint32), ('layout', C.c_uint32)]
 
 
+# ``Node`` as packed bytes: one pack per IR node instead of four ctypes objects (a smart material
+# builds some 2,000). Indices wrap to 32 bits as the ctypes fields did.
+_NODE = struct.Struct('<II8I4I4d64s')
+assert _NODE.size == C.sizeof(Node)
+
+
 class Snapshot(glsl.Translator):
     def __init__(self, lib, graph, unit, inline=frozenset()):
         super().__init__(graph, unit, inline)
         self.lib = lib
-        self.ir = []
+        self._ir, self.count = bytearray(), 0   # packed ``Node`` records
         self.visiting = set()
 
+    @property
+    def ir(self):
+        """The IR so far, as ``Node`` records."""
+        return (Node * self.count).from_buffer_copy(self._ir)
+
     def add(self, opcode, kind, inputs=(), aux=(), values=(), operation=''):
-        if len(operation.encode()) >= 64:
+        name = operation.encode()
+        if len(name) >= 64:
             raise glsl.Unsupported('Native IR operation name exceeds 63 bytes')
-        result = len(self.ir)
-        self.ir.append(Node(opcode, TYPES[kind], (C.c_uint32 * 8)(*inputs),
-                            (C.c_uint32 * 4)(*aux), (C.c_double * 4)(*values), operation.encode()))
+        if len(inputs) > 8 or len(aux) > 4 or len(values) > 4:
+            raise ValueError('Native IR node has too many inputs')
+        result = self.count
+        self._ir += _NODE.pack(opcode, TYPES[kind], *[index & 0xffffffff for index in inputs], *(0,) * (8 - len(inputs)),
+                              *[item & 0xffffffff for item in aux], *(0,) * (4 - len(aux)),
+                              *[float(value) for value in values], *(0.0,) * (4 - len(values)), name)
+        self.count += 1
         return result
 
     def constant(self, value, kind):
@@ -186,7 +203,7 @@ class Snapshot(glsl.Translator):
                         rgb = self.convert(fetch, RGBA, VECTOR)
                     self._set(socket, self.convert(rgb, VECTOR, socket.type), socket.type)
             else:
-                self._set_import(socket, self.trees.get(id(node.id_data), self.unit))
+                self._set_import(socket, self._tree_unit(node.id_data))
 
     def _set_import(self, socket, unit):
         from ..evaluation.engine.formats import scalar_unit
@@ -222,7 +239,7 @@ class Snapshot(glsl.Translator):
         lib.op_ir_compile.argtypes = [C.POINTER(Node), C.c_uint32, C.POINTER(Target), C.c_uint32, C.POINTER(C.c_void_p)]
         lib.op_ir_compile.restype = C.c_int
         lib.op_ir_free.argtypes, lib.op_ir_free.restype = [C.c_void_p], None
-        data = (Node * len(self.ir))(*self.ir)
+        data = self.ir
         outputs = (Target * len(targets))(*(Target(*t) for t in targets))
         binding = getattr(lib, '_op_binding', None)
         native_program = affine = None

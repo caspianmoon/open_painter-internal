@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import shutil
 import tempfile
 
@@ -16,7 +17,9 @@ from blender_test_profile import isolated_environment
 from collect_gate0_baseline import artifact_digests
 
 ROOT = Path(__file__).resolve().parents[1]
-TESTS = ('native_host_metal.py', 'native_publication_4k.py', 'native_publication_precision.py', 'native_blend.py', 'native_effects.py', 'native_masks.py', 'native_geometry_projection.py', 'native_suffix.py', 'engine_parity.py', 'engine_procedurals.py',
+# Suites that legitimately need more than the default cap (4K publication targets).
+MEMORY_CAPS_GB = {'native_publication_4k.py': 7.0, 'resolution_switch.py': 6.0}
+TESTS = ('native_host_metal.py', 'native_publication_4k.py', 'native_publication_precision.py', 'native_blend.py', 'native_effects.py', 'native_masks.py', 'native_geometry_projection.py', 'native_suffix.py', 'graph_path_index.py', 'engine_parity.py', 'engine_procedurals.py',
          'gpu_strokes.py', 'engine_filters.py', 'engine_state_cache.py', 'shader_undo.py',
          'shader_lifecycle_edges.py', 'shader_adoption.py', 'engine_memory_soak.py',
          'save_during_evaluation.py', 'resolution_switch.py', 'stroke_parity.py',
@@ -32,6 +35,8 @@ def main():
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('--sustained', action='store_true', help='Five 60-second real viewport RNA edit runs')
     parser.add_argument('--tests', nargs='+', default=TESTS)
+    parser.add_argument('--cap-gb', type=float, default=4.0,
+                        help='Kill a test whose Blender memory footprint passes this (scripts/run_guarded.py)')
     args = parser.parse_args()
     latest = ROOT / '.blender-test/native/metal-integration'
     run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
@@ -56,14 +61,18 @@ def main():
                 env['OP_LIBOPENPAINTER_PATH'] = str(args.lib.resolve())
             env.pop('OP_NATIVE_ENGINE', None)
             env.update(extra or {})
-            cmd = [args.blender, '--factory-startup', '--python-exit-code', '1']
+            # Every Blender runs under the memory guard: a runaway test must not take the machine down.
+            cap = max(args.cap_gb, MEMORY_CAPS_GB.get(name, 0.0))
+            cmd = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(cap),
+                   '--reserve-gb', '1', '--wait-seconds', '120', '--',
+                   args.blender, '--factory-startup', '--python-exit-code', '1']
             cmd += ['--enable-event-simulate'] if gui else ['--background']
             cmd += ['--python', str(ROOT / 'tests/integration' / name)]
             if gui:
                 cmd += ['--', '-ApplePersistenceIgnoreState', 'YES']
             with (out / (name + '.log')).open('w') as log:
                 result = subprocess.run(cmd, cwd=ROOT, env=env, stdout=log,
-                                        stderr=subprocess.STDOUT, timeout=480 if name == 'native_sustained_ui.py' else 300)
+                                        stderr=subprocess.STDOUT, timeout=120 + (480 if name == 'native_sustained_ui.py' else 300))
             item = dict(test=name, exit=result.returncode)
             report['tests'].append(item)
             print(item, flush=True)

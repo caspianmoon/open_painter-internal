@@ -10,6 +10,9 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_RES      texture resolution (default 2048)
     OP_DEEP_SAMPLES  timed edits per case (default 24)
     OP_DEEP_PROFILE  1: add a cProfile summary of each case's Python time
+    OP_DEEP_FRAMES   0: skip the window-manager frame emulation (see Frame)
+    OP_DEEP_STRUCTURAL 0: skip structural edits (add, remove, blend mode, visibility,
+                     smart material), each timed from the edit until the set is current
 """
 import cProfile
 import io
@@ -42,6 +45,11 @@ TARGET = int(os.environ.get('OP_DEEP_LAYERS', '200'))
 RES = int(os.environ.get('OP_DEEP_RES', '2048'))
 SAMPLES = int(os.environ.get('OP_DEEP_SAMPLES', '24'))
 PROFILE = os.environ.get('OP_DEEP_PROFILE') == '1'
+STRUCTURAL = os.environ.get('OP_DEEP_STRUCTURAL', '1') == '1'
+TRACE = os.environ.get('OP_DEEP_TRACE') == '1'
+FRAMES = os.environ.get('OP_DEEP_FRAMES', '1') == '1'
+TRACEMALLOC = os.environ.get('OP_DEEP_TRACEMALLOC') == '1'
+ONLY = set(filter(None, os.environ.get('OP_DEEP_ONLY', '').split(',')))   # case names to run; empty: all
 MAPS = ('CURVATURE', 'AO', 'WORLD_NORMAL', 'POSITION', 'NORMAL', 'MEAN_CURVATURE',
         'BEVEL_MASK', 'BEVEL_NORMAL')
 
@@ -90,6 +98,144 @@ def fence():
     runtime.device().finish()
 
 
+class Frame:
+    """One iteration of Blender's window-manager loop, which background Blender never runs.
+
+    The UI wraps event handling (timers included) in GPU_render_begin/end, which
+    drains Metal's autorelease pool, and every draw update calls GPU_render_step
+    and frees unused image textures, releasing Metal's deferred frees. Without
+    it, a long background benchmark retains every GPU object it released. Test
+    instrumentation only; the add-on never calls these internal functions.
+    """
+    _calls = None
+    snapshot = None
+
+    def __init__(self):
+        if Frame._calls is None and FRAMES:
+            import ctypes
+            host = ctypes.CDLL(None)
+            step = getattr(host, '_ZN7blender15GPU_render_stepEb')
+            step.argtypes = [ctypes.c_bool]
+            Frame._calls = (getattr(host, '_ZN7blender16GPU_render_beginEv'), step,
+                            getattr(host, '_ZN7blender34BKE_image_free_unused_gpu_texturesEv'),
+                            getattr(host, '_ZN7blender14GPU_render_endEv'))
+
+    def __enter__(self):
+        if FRAMES:
+            Frame._calls[0]()
+        return self
+
+    def __exit__(self, *exc):
+        if FRAMES:
+            begin, step, free_unused, end = Frame._calls
+            step(False)
+            free_unused()
+            end()
+
+
+def footprint_mib():
+    """This process's physical footprint (Activity Monitor's Memory; GPU memory included on Apple silicon)."""
+    import ctypes
+    try:
+        libproc = ctypes.CDLL('/usr/lib/libproc.dylib')
+    except OSError:
+        return None
+    buffer = (ctypes.c_uint8 * 256)()
+    if libproc.proc_pid_rusage(os.getpid(), 2, buffer) != 0:
+        return None
+    return int.from_bytes(bytes(buffer[72:80]), 'little') // (1024 * 1024)
+
+
+def settle(scene, ts, started):
+    """Tick until the set is current; milliseconds from ``started`` and the ticks it took."""
+    for ticks in range(1, 2001):
+        with Frame():
+            shader_preview.tick(scene, ts)
+        if TRACE and TRACEMALLOC and ticks % 2 == 0:
+            import tracemalloc
+            snapshot = tracemalloc.take_snapshot()
+            if Frame.snapshot is not None:
+                for stat in snapshot.compare_to(Frame.snapshot, 'lineno')[:6]:
+                    print('DEEP_STACK_TRACE malloc', str(stat)[:220], flush=True)
+            Frame.snapshot = snapshot
+        if TRACE:
+            engine = shader_preview.session_engine(scene, ts)
+            loaded = [image for image in bpy.data.images if image.has_data]
+            print('DEEP_STACK_TRACE tick', ticks, 'footprint', footprint_mib(), 'MiB images', len(bpy.data.images),
+                  'loaded', len(loaded), sum(i.size[0] * i.size[1] * i.channels * (4 if i.is_float else 1)
+                                             for i in loaded) // 2 ** 20, 'MiB engine',
+                  {k: v // 2 ** 20 for k, v in engine.memory().items() if isinstance(v, int)} if engine else None,
+                  flush=True)
+        info = shader_preview.diagnostics(scene, ts, details=False)
+        assert not info.get('error'), info
+        if shader_preview.current(scene, ts) and not info.get('pending_resources'):
+            fence()
+            return (perf_counter() - started) * 1000, ticks
+    raise AssertionError('The set did not settle')
+
+
+def run_structural(scene, ts, repeats=3):
+    """Structural edits on the deep stack, each timed from the edit until the set is current."""
+    rows = {}
+
+    def record(name, action):
+        if ONLY and name not in ONLY:
+            return
+        durations, ticks = [], []
+        for index in range(repeats):
+            started = perf_counter()
+            with Frame():
+                action(index)
+            if TRACE:
+                print('DEEP_STACK_TRACE', name, index, 'edited, footprint', footprint_mib(), 'MiB', flush=True)
+            elapsed, count = settle(scene, ts, started)
+            durations.append(elapsed)
+            ticks.append(count)
+        rows[name] = dict(median_ms=float(np.median(durations)), samples_ms=durations, ticks=ticks,
+                          footprint_mib=footprint_mib())
+        print('DEEP_STACK_STRUCTURAL', name, f"median {rows[name]['median_ms']:.0f} ms", 'ticks', ticks,
+              'footprint', rows[name]['footprint_mib'], 'MiB', flush=True)
+
+    leaves = [layer.id for layer in ts.layers if layer.type != 'FOLDER']
+    middle = leaves[len(leaves) // 2]
+
+    def layer(identifier):
+        return next(item for item in ts.layers if item.id == identifier)
+
+    def add_fill(index):
+        ts.active_layer = len(ts.layers) - 1
+        added = stack.add(ts, 'FILL', f'Structural fill {index}')
+        stack.channel_for(added, 'BASE_COLOR').color = (.3, .2 + index * .1, .6, 1)
+        stack.invalidate(ts)
+    record('add_fill_top', add_fill)
+
+    def remove_fill(index):
+        stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
+                                                  if item.name.startswith('Structural fill'))))
+        stack.invalidate(ts)
+    record('remove_layer', remove_fill)
+
+    def blend(index):
+        layer(middle).blend_mode = ('MULTIPLY', 'NORMAL', 'SCREEN')[index % 3]
+    record('blend_mode_middle', blend)
+
+    def visibility(index):
+        target = layer(middle)
+        target.visible = not target.visible
+    record('visibility_middle', visibility)
+
+    names = sorted(CATALOG)
+
+    def apply_material(index):
+        if TRACEMALLOC and index == 0:
+            import tracemalloc
+            tracemalloc.start(8)
+        ts.active_layer = len(ts.layers) - 1
+        composer.apply(ts, names[(index * 7) % len(names)], seed=100 + index)
+    record('apply_smart_material', apply_material)
+    return rows
+
+
 def main():
     gpu.init()
     open_painter.register()
@@ -108,8 +254,9 @@ def main():
         with Metrics() as cold_metrics:
             if cold_profiler:
                 cold_profiler.enable()
-            shader_preview.flush(scene, ts, pixels=False)
-            fence()
+            with Frame():
+                shader_preview.flush(scene, ts, pixels=False)
+                fence()
             if cold_profiler:
                 cold_profiler.disable()
         cold_s = perf_counter() - started
@@ -123,7 +270,9 @@ def main():
             text = io.StringIO()
             pstats.Stats(cold_profiler, stream=text).sort_stats('cumulative').print_stats(60)
             cold['profile'] = text.getvalue()
-        print('DEEP_STACK_COLD', f'{cold_s:.2f}s', cold['passes'], cold['units'], cold['backend'], flush=True)
+        cold['footprint_mib'] = footprint_mib()
+        print('DEEP_STACK_COLD', f'{cold_s:.2f}s', cold['passes'], cold['units'], cold['backend'],
+              'footprint', cold['footprint_mib'], 'MiB', flush=True)
 
         top_level = [layer for layer in ts.layers if not layer.parent_id]
         leaves = [layer for layer in ts.layers if layer.type != 'FOLDER']
@@ -139,18 +288,21 @@ def main():
             cases['middle_mask_amount'] = (lambda: next(l for l in ts.layers if l.id == masked.id).masks[0], 'amount')
         results = {}
         for name, (target, attribute) in cases.items():
+            if ONLY and name not in ONLY:
+                continue
             owner = target()
             base = float(getattr(owner, attribute))
 
             def edit(i):
                 # Distinct consecutive values inside (0.3, 0.9): every edit changes the unit.
                 value = .6 + .3 * math.sin(i * .9 + .3)
-                begin = perf_counter()
-                setattr(target(), attribute, value)
-                shader_preview.tick(scene, ts)
-                assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
-                fence()
-                return (perf_counter() - begin) * 1000
+                with Frame():
+                    begin = perf_counter()
+                    setattr(target(), attribute, value)
+                    shader_preview.tick(scene, ts)
+                    assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
+                    fence()
+                    return (perf_counter() - begin) * 1000
             for i in range(4):
                 edit(i)
             profiler = cProfile.Profile() if PROFILE else None
@@ -167,7 +319,8 @@ def main():
                        evaluate_ms=engine.report.get('evaluate_ms'),
                        stages={k: stage[k] for k in ('inputs_ms', 'translate_ms', 'compile_ms', 'publish_ms')},
                        render_ms=dict(stage['render_ms']), pass_kinds=dict(stage['passes']),
-                       counters=dict(metrics.counts))
+                       counters=dict(metrics.counts), footprint_mib=footprint_mib(),
+                       engine_memory_mib={k: v // 2 ** 20 for k, v in engine.memory().items() if isinstance(v, int)})
             if profiler:
                 text = io.StringIO()
                 pstats.Stats(profiler, stream=text).sort_stats('cumulative').print_stats(45)
@@ -179,10 +332,13 @@ def main():
             setattr(target(), attribute, base)
             shader_preview.tick(scene, ts)
             print('DEEP_STACK_CASE', name, f"median {row['median_ms']:.1f} ms p95 {row['p95_ms']:.1f} ms",
-                  'passes', row['passes'], 'units', row['units_rendered'], flush=True)
+                  'passes', row['passes'], 'units', row['units_rendered'], 'footprint', row['footprint_mib'], 'MiB',
+                  'engine', row['engine_memory_mib'], flush=True)
+        structural = run_structural(scene, ts) if STRUCTURAL else {}
         data = dict(status='PASS', version=VERSION, blender=bpy.app.version_string,
                     backend=gpu.platform.backend_type_get(), resolution=RES, counts=counts,
                     applied=applied, authoring_seconds=authoring_s, cold=cold, cases=results,
+                    structural=structural,
                     library=os.environ.get('OP_LIBOPENPAINTER_PATH'),
                     native_engine=os.environ.get('OP_NATIVE_ENGINE'))
         REPORT.parent.mkdir(parents=True, exist_ok=True)

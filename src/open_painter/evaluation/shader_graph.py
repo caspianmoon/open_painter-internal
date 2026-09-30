@@ -556,6 +556,7 @@ class Unit:
     owner_pointers: tuple = ()                            # RNA addresses captured by this unit
     build_ms: float = 0.0
     warnings: list = field(default_factory=list)          # what compiling it reported (a stub's error)
+    holds_layer: bool = True   # a binding or closure of it refers to its layer's struct (``_follow_moved_layer``)
 
     def input(self, name, socket_type):
         if name not in self.inputs:
@@ -3169,6 +3170,9 @@ class Graph(Math):
         layer, old = self._layer(key[1]), before[at]
         if layer is None or layer.as_pointer() != current[at]:
             return False
+        if not unit.holds_layer:
+            unit.owner_pointers = current   # nothing it holds refers to the struct that moved
+            return True
         new_pointer, seen = current[at], set()
         rebound, moved = {}, []
         for identifier, binding in unit.bindings.items():
@@ -3259,6 +3263,9 @@ class Graph(Math):
             # stub is replaced, and the error surfaced, when the layer is shown.
             unit = self._compile(key, layer, stub=str(error))
         unit.owner_pointers = self._unit_owners(key)
+        pointer = layer.as_pointer() if layer is not None else None
+        unit.holds_layer = bool(unit.resource_bindings or unit.cache_bindings or unit.image_bindings) or any(
+            binding.owner.as_pointer() == pointer for binding in unit.bindings.values())
         unit.signature = self._unit_signature(key, stub=unit.flags.get('stub'))
         unit.build_ms = (perf_counter() - started) * 1000
         unit.tree['op_flags'] = json.dumps(unit.flags)

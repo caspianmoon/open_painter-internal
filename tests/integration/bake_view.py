@@ -52,10 +52,7 @@ def run(context):
     assert "painter_bake_cycles" not in text, "no Cycles sampling without a Cycles map"
     assert "targets alone" in text
     settings.curvature = True
-    assert not bake_view.uses_cycles(settings), "geometric curvature needs no Cycles sampling"
-    settings.curvature_method = 'CYCLES_BEVEL'
-    assert bake_view.uses_cycles(settings), "Cycles curvature exposes its sampling controls"
-    settings.curvature_method = 'GEOMETRIC'
+    assert bake_view.uses_cycles(settings), "the Curvature edge set is a Cycles Bevel bake: its sampling shows"
     settings.curvature = False
     settings.selected_to_active = True
     settings.normal = True
@@ -71,7 +68,7 @@ def run(context):
     text = maps.text
     for name in ("Ambient Occlusion", "Curvature (edge set)", "Mean Curvature (signed)", "Bevel Normal", "Thickness"):
         assert name in text, name
-    assert "Geometric or Cycles Bevel, four reaches" in text and "Evaluated target, radius" in text, "curvature methods stay distinct"
+    assert "Cycles Bevel node, four reaches" in text and "Evaluated target, radius" in text, "curvature methods stay distinct"
     assert "mean_curvature_distance" in text and "ao_distance" in text and "thickness_samples" in text
     assert states(context, ts) == {kind: "Missing" for kind in states(context, ts)}
     assert "No layer reads a mesh map yet" in text

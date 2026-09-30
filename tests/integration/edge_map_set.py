@@ -19,10 +19,12 @@ open_painter.register()
 scene = bpy.context.scene
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete(use_global=False)
+# Hard edges: the Cycles Bevel reaches measure how far the normal turns within their radius,
+# so a rim rounded wider than the thinnest reach (the geometric method's old fixture, a
+# 12 cm five-segment bevel) reads faint at every reach. A right-angle edge reads strongly
+# at each, the band widening with the reach.
 bpy.ops.mesh.primitive_cube_add(size=2)
 cube = bpy.context.object
-bevel = cube.modifiers.new('rims', 'BEVEL')
-bevel.width, bevel.segments = .12, 5
 bpy.ops.object.mode_set(mode='EDIT')
 bpy.ops.mesh.select_all(action='SELECT')
 bpy.ops.uv.smart_project(angle_limit=1.15, island_margin=.02)

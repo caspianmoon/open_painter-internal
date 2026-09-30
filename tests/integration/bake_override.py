@@ -83,7 +83,6 @@ def fake_reach(context, target, kind, radius):
     image = images.create('temporary reach', 32)
     produced.append(image.name)
     return image
-ts.bake.curvature_method = 'CYCLES_BEVEL'
 with patch.object(curvature, 'bake_curvature_reach', side_effect=fake_reach):
     job = curvature_steps(bpy.context, ts)
     next(job)

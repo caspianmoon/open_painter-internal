@@ -1,4 +1,5 @@
-"""Opt-in Cycles Bevel edge maps: real shader bake, method switching and flat control."""
+"""Curvature is the Cycles Bevel edge set: the reference shader graph, a real bake that
+leaves flat interiors dark, and maps from before the edge set reading as stale."""
 import sys
 from pathlib import Path
 
@@ -21,8 +22,7 @@ ts.bake.device = 'CPU'
 ts.bake.samples = 8
 ts.bake.mean_curvature_distance = .025
 sets.assign(scene, ts, bpy.context.object)
-assert ts.bake.curvature_method == 'GEOMETRIC'
-ts.bake.curvature_method = 'CYCLES_BEVEL'
+assert METHOD == 'CYCLES_BEVEL', 'Curvature is baked by the Cycles Bevel shader only'
 material = bpy.data.materials.new('Reference graph')
 material.use_nodes = True
 curvature_graph(material, .025)
@@ -35,12 +35,13 @@ image = bake_curvature(ts)
 values = images.pixels(image)[..., 0]
 assert np.isfinite(values).all() and values.max() > .5, float(values.max())
 assert np.count_nonzero(values > .01) < values.size * .2, 'flat face interiors acquired wear'
-assert image['open_painter_curvature_method'] == 'CYCLES_BEVEL'
+assert image['open_painter_curvature_method'] == METHOD
 register_map(ts, 'CURVATURE', image)
 entry = next(m for m in ts.baked_maps if m.kind == 'CURVATURE')
 assert status(ts, entry) == 'Ready'
-ts.bake.curvature_method = 'GEOMETRIC'
+# A map baked before the edge set (another method's stamp) reads as stale, and an
+# edge-driven recipe asks for it to be replaced.
+image['open_painter_curvature_method'] = 'GEOMETRIC_CREASES_V2'
 assert status(ts, entry).startswith('Stale') and stale_curvature(ts) is not None
-assert METHOD == 'GEOMETRIC_CREASES_V2'
 open_painter.unregister()
 print('CURVATURE_CYCLES_PASS', flush=True)

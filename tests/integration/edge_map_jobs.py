@@ -32,7 +32,6 @@ filler = sets.create(scene, 'Filler', 512)
 ts = sets.create(scene, 'Edge jobs', 512)
 sets.assign(scene, ts, cube)
 ts.bake.device = 'CPU'
-ts.bake.curvature_method = 'CYCLES_BEVEL'
 SET_ID = ts.id
 
 

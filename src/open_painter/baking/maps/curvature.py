@@ -181,10 +181,17 @@ def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
     """
     base = float(ts.bake.mean_curvature_distance)
     radii = {kind: base * EDGE_RADIUS_FACTORS[kind] for kind in kinds}
+    # A texture set added or removed between steps reallocates the collection under ``ts``:
+    # each step finds the set again by id instead of touching the freed struct.
+    scene, set_id = ts.id_data, ts.id
+
+    def current():
+        return next(item for item in scene.open_painter.texture_sets if item.id == set_id)
     yield 0.02
     result = {}
     try:
         for position, kind in enumerate(kinds):
+            ts = current()
             result[kind] = bake_curvature_reach(context, ts, kind, radii[kind])
             yield 0.15 + 0.83 * (position + 1) / len(kinds)
     except BaseException:
@@ -193,8 +200,13 @@ def curvature_steps(context, ts, kinds=EDGE_MAP_KINDS):
         # registers, so they would otherwise persist in the file. A rebake
         # writes into the live map, whose pixels the baker already restored:
         # never remove what the set still binds.
-        from ..core.image_manager import live_bake_pointers
-        live = live_bake_pointers(ts)
+        from ...core.image_manager import live_bake_pointers
+        try:
+            live = live_bake_pointers(current())
+        except StopIteration:
+            live = set()   # the set itself was removed mid-job: nothing binds the reaches
+        except ReferenceError:
+            live = set()   # a memfile undo mid-job replaced the scene
         for image in result.values():
             try:
                 if image.as_pointer() in live:

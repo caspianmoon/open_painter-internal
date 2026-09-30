@@ -39,7 +39,7 @@ def _changed(self, context, structural):
             owned.as_pointer() == pointer and (owned.decal_inline or owned.decal_object is not None
                                                or owned.decal_object_name)):
         # A decal layer's own numeric fields are its projection frame, which the geometry key reads.
-        from ..evaluation.dependencies import numeric_edit
+        from ..evaluation.structure_memo import numeric_edit
         numeric_edit(ts, serial)
     from ..evaluation.references import dependent_channels
     affected = ({prop.channel for prop in owned.channels if prop.enabled}

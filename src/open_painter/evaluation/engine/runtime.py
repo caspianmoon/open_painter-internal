@@ -1623,7 +1623,7 @@ class Engine:
         self.report = {'evaluate_ms': (perf_counter() - started) * 1000, 'channels': sorted(written),
                        'passes': dev.passes - passes, 'units_rendered': len(self.rendered),
                        'programs': len(dev.shaders), 'compiles': dev.compiles,
-                       'stages': self.stages, 'memory': self.memory(),
+                       'stages': self.stages,
                        'execution_backend': ('c17-host-metal' if self._native_stamps is not None else 'legacy'),
                        'native_topology_rebuilds': self._native_graph.rebuilds if self._native_graph else 0,
                        'native_channel_selection': native_channels,

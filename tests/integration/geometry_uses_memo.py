@@ -1,7 +1,9 @@
-"""Whether a set reads its geometry, and its geometry key, are memoised per structure.
+"""Answers only a structural edit changes are memoised per structure: whether a set reads
+its geometry, its geometry key, where its readers sit.
 
-The scheduler asks on every tick. A numeric drag (opacity, values, effect strength) keeps
-both answers without walking the stack; every edit that can change them is still seen.
+The scheduler and every property callback ask. A numeric drag (opacity, values, effect
+strength) keeps the answers without walking the stack; every edit that can change them is
+still seen.
 """
 import sys
 from pathlib import Path
@@ -52,6 +54,15 @@ def uses():
     return dependencies.uses_geometry(ts)
 
 
+def agree():
+    """The per-structure reader index answers what a walk over the stack does."""
+    from open_painter.painting import decals
+    ids = lambda items: [item.as_pointer() for item in items]
+    assert ids(dependencies.decal_layers(ts)) == ids(decals.layers_of(ts))
+    assert ids(dependencies._live_readers(ts)) == ids(dependencies.live_fields(ts))
+    assert ids(dependencies._mesh_readers(ts)) == ids(dependencies.mesh_masks(ts))
+
+
 def drag(check):
     """Numeric edits of a layer, a channel, an effect and a mask, as a drag's ticks."""
     effect = stack.channel_for(layer(4), 'ROUGHNESS').effects
@@ -94,8 +105,10 @@ assert not uses()
 mask = layer(5).masks.add()
 mask.source = 'MESH'
 assert uses(), 'a mesh mask reads the scene structure'
+agree()
 mask.enabled = False
 assert not uses()
+agree()
 mask.enabled = True
 assert uses()
 
@@ -120,6 +133,16 @@ mask.node_group = None
 mask.source = 'PAINT'
 assert not uses() and not dependencies.uses_placement(ts)
 
+# A replay's edits skip their callbacks and move no serial until it ends: answered afresh.
+assert not uses()
+with stack.replay(ts):
+    stack.channel_for(layer(1), 'BASE_COLOR').projection = 'TRIPLANAR'
+    assert uses() and dependencies.uses_placement(ts), 'a replay hid its own triplanar edit'
+assert uses()
+with stack.replay(ts):
+    stack.channel_for(layer(1), 'BASE_COLOR').projection = 'UV'
+assert not uses()
+
 # A units switch whose derived texture values stay put moves no edit serial: still seen.
 serial = ts.edit_serial
 flat = stack.channel_for(layer(0), 'METALLIC')
@@ -140,16 +163,62 @@ bpy.ops.object.empty_add(type='IMAGE', location=(0, 0, 2))
 empty = bpy.context.object
 layer(2).decal_object = empty
 assert uses(), 'a decal reads where the object stands'
+agree()
 key = dependencies.geometry_key(scene, ts)
 layer(2).decal_depth = .5
 assert dependencies.geometry_key(scene, ts) != key, 'a decal depth edit kept the geometry key'
 key = dependencies.geometry_key(scene, ts)
 layer(3).opacity = .7
 assert dependencies.geometry_key(scene, ts) == key
-layer(2).decal_object = None
+# A renamed Empty reaches the name mirror; a deleted one is nulled without a callback.
+empty.name = 'Memo decal renamed'
+dependencies.refresh_names(ts)
+assert layer(2).decal_object_name == 'Memo decal renamed'
+bpy.data.objects.remove(empty)
+assert layer(2).decal_object is None
+agree()
 layer(2).decal_object_name = ''
+agree()
 stack.invalidate(ts)
 assert not uses()
+
+# A live scene field is indexed like a walk finds it.
+live = layer(4).masks.add()
+live.source = 'SCENE'
+live.influence.mode = 'LIVE'
+assert uses() and dependencies.uses_placement(ts)
+agree()
+live.source = 'PAINT'
+assert not uses()
+agree()
+
+# Property callbacks ask which channels read the edited layer; a stack with no reader answers
+# without a walk, and a numeric drag keeps the answer.
+from open_painter.evaluation import anchors, references
+walks_before = [0]
+_consumed = anchors.consumed
+
+
+def consumed(item):
+    walks_before[0] += 1
+    return _consumed(item)
+
+
+anchors.consumed = consumed
+assert references.dependent_channels(ts, layer(1).id) == set()
+reader = layer(3).masks.add()
+reader.source = 'REFERENCE'
+reader.reference_layer = layer(1).id
+expected = {p.channel for p in layer(3).channels if p.enabled}
+assert references.dependent_channels(ts, layer(1).id) == expected
+before = walks_before[0]
+for step in range(4):
+    layer(1).opacity = .2 + .1 * step
+    assert references.dependent_channels(ts, layer(1).id) == expected
+assert walks_before[0] == before, 'a numeric drag re-walked the stack for readers'
+reader.source = 'PAINT'
+assert references.dependent_channels(ts, layer(1).id) == set()
+anchors.consumed = _consumed
 
 # Adding a layer, and undo or load, start over.
 before = walks[0]

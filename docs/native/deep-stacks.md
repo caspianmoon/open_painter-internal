@@ -149,6 +149,24 @@ scratch textures of the channel's layout while it runs.
   - A units switch can leave every derived value, and so the serial, unchanged;
     it bumps a per-set generation instead.
   - A Mask Graph's own nodes are read on each call.
+  - While a replay is open, its edits have neither callbacks nor a serial, so
+    both are computed afresh.
+- **Reader index.** The same memo holds where the stack's live-field masks, mesh
+  masks and decal layers sit. The scheduler's refresh and the geometry key read
+  them through it instead of walking the stack. The refresh covers name mirrors,
+  decal images and Shift+D copies of decal Empties. Each indexed item is checked
+  again on use, since Blender nulls a deleted Empty without a callback. If the
+  layer count moved under an unchanged serial, the stack is walked afresh.
+- **Reference readers.** Every property callback asks which channels read the
+  edited layer (`references.dependent_channels`). The layers holding a reference
+  mask, an anchored channel or a generator's detail input are indexed per
+  structure. A stack with none answers without building the anchor registry or
+  walking the stack. That walk was 3 ms of every 3.7 ms callback at 124
+  smart-material layers.
+- **Sampled images.** Headless nodes count every image or GPU resource
+  assignment. While that count stands still, the image scan reads each distinct
+  image once, not each of the set's image nodes (about 690 in a 200-layer
+  smart-material stack, over about 32 images).
 - **Structure passes.** Each structure pass (a plan, a structural signature, a
   build) memoizes, on its plan:
   - the per-layer answers that only structural edits change: children,
@@ -252,6 +270,28 @@ the same updates, and mesh masks of kind MATERIAL key on material names. The
 per-set memo makes both calls, and the geometry key's rebuild, independent of the
 number of layers.
 
+### The rest of the frame
+
+A whole-process sample of Blender during a drag under 204 smart-material layers
+(before the reader index) splits the main thread like this:
+
+| Work | Share |
+| --- | ---: |
+| Viewport and UI drawing | 23% |
+| Waiting for the next Metal drawable | 16% |
+| Depsgraph: copying the Scene into its evaluated copy | 19% |
+| The scheduler tick (engine evaluation and publication) | 17% |
+| The slider's RNA update callback | 18% |
+
+The Scene copy is Blender's, and it grows with the stack. After every edit of a
+Python-defined property owned by the Scene, `rna_property_update` tags the
+Scene for copy-on-evaluation. The next depsgraph evaluation then duplicates and
+frees the Scene's system properties, which hold the whole Open Painter project.
+That was about 5 ms per edit at 204 layers. Python properties cannot opt out
+(`PROP_NO_DEG_UPDATE` is not exposed). Only storage that the depsgraph never
+evaluates would avoid it: a datablock no scene references, or an ID type without
+copy-on-evaluation.
+
 ## Test and benchmark memory
 
 A 200-layer 2K benchmark run exhausted the development machine. Background
@@ -287,3 +327,6 @@ Machines with 16 GB or more keep the previous limits.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
 - **Structural edits.** Structural edits and cold builds still rebuild more
   host state than they change.
+- **Scene copies.** Each edit re-copies the project's properties into the
+  evaluated Scene (see "The rest of the frame"). Removing that means moving the
+  project's storage off the Scene, a data-model migration.

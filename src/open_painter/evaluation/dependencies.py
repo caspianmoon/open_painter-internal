@@ -11,6 +11,8 @@ import numpy as np
 from bpy.app.handlers import persistent
 from .resource_keys import datablock_key, key_for
 from .metrics import measured
+from . import structure_memo
+from .structure_memo import memoised
 
 _mesh_epochs = {}
 _object_epochs = {}   # object pointer -> the counter value of its last evaluated-geometry update
@@ -20,48 +22,28 @@ _known = {}
 _candidates = set()
 _image_epochs = {}   # image pointer -> counter value of its last reported update
 _image_counter = [0]
-# A uniform edit moves the set's edit serial but nothing the geometry reads: (set pointer, id)
-# -> (edit serial, the serial it stands for). A drag's run of them maps back to the serial
-# before it, so the per-set answers keyed on ``_token`` stay current through the drag.
-_numeric = {}
-_generations = {}   # (set pointer, id) -> edits of geometry inputs that move no edit serial
-_uses = {}   # (set pointer, id) -> (token, whether anything but auto edge rebakes reads the geometry)
-_placed = {}   # (set pointer, id) -> (token, whether the stack reads placement, or has Mask Graphs that may)
+
+_uses = structure_memo.store()   # whether anything but auto edge rebakes reads the geometry
+_placed = structure_memo.store()   # (whether the stack reads placement, whether it has Mask Graphs)
+_readers = structure_memo.store()   # where the stack's geometry readers sit: ``_reader_walk``
 
 
-def _set_key(ts):
-    return ts.as_pointer(), ts.id
+def _is_live(mask):
+    return (mask.source == 'SCENE' and mask.influence.mode == 'LIVE') \
+        or (mask.source == 'GENERATOR' and getattr(mask, 'edge_source', 'BAKED') == 'LIVE')
 
 
-def numeric_edit(ts, before):
-    """A uniform edit moved the set's edit serial from ``before``. The caller vouches that it
-    changed no input of ``uses_geometry`` or ``geometry_key``: decal frames are numeric edits
-    that do, so their layers never come here."""
-    key = _set_key(ts)
-    held = _numeric.get(key)
-    _numeric[key] = (ts.edit_serial, held[1] if held is not None and held[0] == before else before)
+def _is_mesh(mask):
+    return mask.source == 'MESH' and mask.enabled
 
 
-def geometry_edit(ts):
-    """An input of ``uses_geometry`` may have changed without moving the edit serial: a units
-    switch whose derived texture values stayed put, or a layer added under a restored serial."""
-    key = _set_key(ts)
-    _generations[key] = _generations.get(key, 0) + 1
-
-
-def _token(ts):
-    """The set's edit serial as the geometry sees it, with its generation."""
-    key = _set_key(ts)
-    held = _numeric.get(key)
-    return (held[1] if held is not None and held[0] == ts.edit_serial else ts.edit_serial,
-            _generations.get(key, 0))
+def _is_decal(layer):
+    return layer.type == 'FILL' and (layer.decal_object is not None or bool(layer.decal_object_name))
 
 
 def live_fields(ts):
     """Masks whose scene field is analysed live: LIVE scene masks and live-edge generators."""
-    return [m for l in ts.layers for m in l.masks
-            if (m.source == 'SCENE' and m.influence.mode == 'LIVE')
-            or (m.source == 'GENERATOR' and getattr(m, 'edge_source', 'BAKED') == 'LIVE')]
+    return [m for l in ts.layers for m in l.masks if _is_live(m)]
 
 
 def uses_strokes(ts):
@@ -71,12 +53,72 @@ def uses_strokes(ts):
 
 def mesh_masks(ts):
     """Mesh masks (0.9.2) whose coverage follows the scene structure."""
-    return [m for l in ts.layers for m in l.masks if m.source == 'MESH' and m.enabled]
+    return [m for l in ts.layers for m in l.masks if _is_mesh(m)]
 
 
 def graph_masks(ts):
     """Custom Graph masks (0.9.3): the CPU reference bakes the group over the assigned meshes."""
     return [m for l in ts.layers for m in l.masks if m.source == 'GRAPH' and m.enabled and m.node_group]
+
+
+def _reader_walk(ts):
+    """Where the stack's geometry readers sit: (layer count, live-field masks, mesh masks of
+    any state, decal layers, layers holding a decal object) as stack positions."""
+    live, mesh, decal, held = [], [], [], []
+    for li, layer in enumerate(ts.layers):
+        if layer.decal_object is not None:
+            held.append(li)
+        if _is_decal(layer):
+            decal.append(li)
+        for mi, mask in enumerate(layer.masks):
+            if _is_live(mask):
+                live.append((li, mi))
+            if mask.source == 'MESH':
+                mesh.append((li, mi))
+    return len(ts.layers), tuple(live), tuple(mesh), tuple(decal), tuple(held)
+
+
+def _readers_of(ts, part, predicate, walk):
+    """One kind of reader, from the per-structure index instead of a walk over the stack.
+    Each is checked again: Blender nulls a deleted Empty without a callback, and a lost
+    decal pointer clears its name mirror. A stack whose length moved under an unchanged
+    serial is walked afresh (``walk``)."""
+    readers = memoised(_readers, ts, lambda: _reader_walk(ts))
+    layers = ts.layers
+    if readers[0] != len(layers):
+        return walk(ts)
+    found = []
+    try:
+        for at in readers[part]:
+            item = layers[at] if isinstance(at, int) else layers[at[0]].masks[at[1]]
+            if predicate(item):
+                found.append(item)
+    except IndexError:
+        return walk(ts)
+    return found
+
+
+def decal_layers(ts):
+    """``decals.layers_of`` from the per-structure index."""
+    from ..painting import decals
+    return _readers_of(ts, 3, _is_decal, decals.layers_of)
+
+
+def _live_readers(ts):
+    return _readers_of(ts, 1, _is_live, live_fields)
+
+
+def _mesh_readers(ts):
+    return _readers_of(ts, 2, _is_mesh, mesh_masks)
+
+
+def _named_readers(ts):
+    """(layers holding a decal object, mesh masks of any state): the name mirrors."""
+    held = _readers_of(ts, 4, lambda layer: layer.decal_object is not None,
+                       lambda ts: [layer for layer in ts.layers if layer.decal_object is not None])
+    mesh = _readers_of(ts, 2, lambda mask: mask.source == 'MESH',
+                       lambda ts: [m for layer in ts.layers for m in layer.masks if m.source == 'MESH'])
+    return held, mesh
 
 
 def uses_surface_effects(ts):
@@ -101,30 +143,32 @@ def uses_placement(ts):
 
     The walk over the stack is memoised per structure. A Mask Graph's own nodes are read
     each time: editing them moves no serial of the set."""
-    key, token = _set_key(ts), _token(ts)
-    cached = _placed.get(key)
-    if cached is None or cached[0] != token:
-        from ..painting import decals
-        placed = any(p.projection == 'TRIPLANAR' or getattr(p, 'material_mapping_version', 0) == 1
-                     for l in ts.layers for p in (*l.channels, *l.masks)) \
-            or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts))
-        cached = _placed[key] = (token, placed, placed or bool(graph_masks(ts)))
-    if cached[1] or not cached[2]:
-        return cached[1]
+    placed, graphs = memoised(_placed, ts, lambda: _placement_walk(ts))
+    if placed or not graphs:
+        return placed
     from .custom_graph import reads_placement
     return any(reads_placement(m.node_group) for m in graph_masks(ts))
+
+
+def _placement_walk(ts):
+    """(whether the stack reads placement, whether it has Mask Graphs that may)."""
+    from ..painting import decals
+    placed = any(p.projection == 'TRIPLANAR' or getattr(p, 'material_mapping_version', 0) == 1
+                 for l in ts.layers for p in (*l.channels, *l.masks)) \
+        or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts))
+    return placed, bool(graph_masks(ts))
 
 
 def uses_geometry(ts):
     """Whether anything on the set reads the assigned geometry. The walk over every channel,
     effect and mask is memoised per structure: the scheduler asks on each tick of a drag."""
-    key, token = _set_key(ts), _token(ts)
-    cached = _uses.get(key)
-    if cached is None or cached[0] != token:
-        from . import physical
-        cached = _uses[key] = (token, uses_placement(ts) or bool(mesh_masks(ts)) or bool(graph_masks(ts))
-                               or uses_surface_effects(ts) or physical.uses(ts))
-    return cached[1] or bool(ts.bake.auto_edge_rebake)
+    return memoised(_uses, ts, lambda: _geometry_walk(ts)) or bool(ts.bake.auto_edge_rebake)
+
+
+def _geometry_walk(ts):
+    from . import physical
+    return uses_placement(ts) or bool(mesh_masks(ts)) or bool(graph_masks(ts)) \
+        or uses_surface_effects(ts) or physical.uses(ts)
 
 
 @measured('geometry_signature')
@@ -442,7 +486,7 @@ def _key_token(scene, ts):
     # assigned meshes' own epochs come along: ``on_depsgraph`` moves them with the counter,
     # but a stroke reported through ``mesh_epoch`` alone (as the suites simulate) must not
     # be served the key of the mesh before it.
-    return (_epoch, _token(ts), scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
+    return (_epoch, structure_memo.token(ts), scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
             getattr(ts, 'udim_tile', 0), getattr(ts, 'udim_source_uv', ''),
             tuple((ref.object.as_pointer() if ref.object is not None else None, ref.slot_index,
                    _mesh_epochs.get(ref.object.data.as_pointer(), 0)
@@ -474,11 +518,11 @@ def geometry_key(scene, ts):
         objects.append((datablock_key(obj), datablock_key(mesh), ref.slot_index, placement_key(obj, placed),
                         mesh_signature(mesh), modifier_signature(obj), mesh_inputs(obj)))
     from ..geometry.influencers import signature
-    fields = tuple(signature(ts, m.influence) for m in live_fields(ts))
+    fields = tuple(signature(ts, m.influence) for m in _live_readers(ts))
     from .mesh_masks import signature as mesh_mask_signature
-    selectors = tuple(mesh_mask_signature(ts, m) for m in mesh_masks(ts))
+    selectors = tuple(mesh_mask_signature(ts, m) for m in _mesh_readers(ts))
     from ..painting import decals
-    frames = tuple(decals.signature(layer) for layer in decals.layers_of(ts))
+    frames = tuple(decals.signature(layer) for layer in decal_layers(ts))
     time = (scene.frame_current, scene.frame_subframe) if animated(ts) else None
     key = (int(ts.resolution), time, tuple(objects), fields, selectors, frames)
     if getattr(ts, 'udim_tile', 0):
@@ -546,18 +590,17 @@ def refresh_names(ts):
     for ref in ts.assignments:
         if ref.object is not None and ref.object_name != ref.object.name:
             ref.object_name = ref.object.name
-    for layer in ts.layers:
+    held, mesh = _named_readers(ts)
+    for layer in held:
         obj = layer.decal_object
         if obj is not None and layer.decal_object_name != obj.name:
             layer.decal_object_name = obj.name
-        for mask in layer.masks:
-            if mask.source != 'MESH':
-                continue
-            selector = mask.mesh
-            for name in ('object', 'collection', 'material'):
-                value = getattr(selector, name)
-                if value is not None and getattr(selector, name + '_name') != value.name:
-                    setattr(selector, name + '_name', value.name)
+    for mask in mesh:
+        selector = mask.mesh
+        for name in ('object', 'collection', 'material'):
+            value = getattr(selector, name)
+            if value is not None and getattr(selector, name + '_name') != value.name:
+                setattr(selector, name + '_name', value.name)
 
 
 def refresh(scene):
@@ -567,12 +610,12 @@ def refresh(scene):
     from ..core.layer_stack import invalidate
     from . import field_jobs
     from ..painting import decals
-    decals.adopt_duplicates(scene)
+    decals.adopt_duplicates(scene, layers=decal_layers)
     from ..aging import engine as aging_engine
     aging_engine.follow_animation(scene)   # a keyframed age re-drives its folder (0.10.0)
     for ts in scene.open_painter.texture_sets:
         refresh_names(ts)
-        decals.show_images(ts)   # the picture's aspect is part of the frame (0.9.7): swap it before keying
+        decals.show_images(ts, decal_layers(ts))   # the picture's aspect is part of the frame (0.9.7): swap it before keying
         key = key_for(scene, ts)
         if key in _known and uses_geometry(ts):
             current = geometry_key(scene, ts)
@@ -597,7 +640,7 @@ def refresh(scene):
                 ts.edit_serial += 1
                 for output in ts.outputs:
                     output.dirty = True
-                for layer in decals.layers_of(ts):
+                for layer in decal_layers(ts):
                     notify(layer, structural=False)
                 continue
             targets_changed = current[:3] != previous[:3]   # resolution, time, objects
@@ -703,7 +746,8 @@ def clear():
     from . import mesh_masks
     from ..painting import decals
     _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
-    _image_epochs.clear(); _numeric.clear(); _generations.clear(); _uses.clear(); _placed.clear()
+    _image_epochs.clear()
+    structure_memo.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
     decals.forget()      # which Empties this session's layers held: another file's layers start over
@@ -715,10 +759,7 @@ def prune(live):
         _known.pop(key, None)
     for key in [k for k in _keys if k[:2] not in live]:
         _keys.pop(key, None)
-    ids = {key[1] for key in live}
-    for values in (_numeric, _generations, _uses, _placed):
-        for key in [k for k in values if k[1] not in ids]:
-            values.pop(key, None)
+    structure_memo.prune({key[1] for key in live})
     meshes = {m.as_pointer() for m in bpy.data.meshes}
     for values in (_mesh_epochs, _mesh_fingerprints):
         for key in set(values)-meshes:

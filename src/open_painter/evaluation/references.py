@@ -14,6 +14,8 @@ are rejected: publish the folder composite instead.
 """
 import numpy as np
 
+from . import structure_memo
+
 LUMA = np.array((.2126, .7152, .0722), np.float32)
 COMPOSITION = frozenset({'OUT', 'BELOW', 'GROUP'})
 
@@ -170,9 +172,32 @@ def warnings(ts):
     return graph(ts)[2]
 
 
+_READERS = structure_memo.store()   # layer positions holding an item that reads another layer
+
+
+def _reader_layers(ts):
+    """The layers holding an item that reads another layer: a reference mask, an anchored
+    channel or a generator's detail input. Every field that makes one is structural, so
+    the positions are memoised per structure; each property callback asks."""
+    from .anchors import consumed
+
+    def walk():
+        return len(ts.layers), tuple(position for position, layer in enumerate(ts.layers)
+                                     if any(m.source == 'REFERENCE' or consumed(m) for m in layer.masks)
+                                     or any(consumed(p) for p in layer.channels))
+    count, positions = structure_memo.memoised(_READERS, ts, walk)
+    layers = ts.layers
+    if count != len(layers):
+        return list(layers)   # the stack moved under an unchanged serial: every layer may read
+    return [layers[position] for position in positions]
+
+
 def dependent_channels(ts, source_layer, source_channel=None):
     """Transitive consumers of a changed source, restricted by enabled channels."""
     from .anchors import index, consumed_channels, channel_of, contributors, COMPOSITE_KINDS
+    readers = _reader_layers(ts)
+    if not readers:
+        return set()
     registry = index(ts)
     composite_sources = {}
 
@@ -198,7 +223,7 @@ def dependent_channels(ts, source_layer, source_channel=None):
         if (identifier,channel) in seen:
             continue
         seen.add((identifier,channel))
-        for layer in ts.layers:
+        for layer in readers:
             if any(m.enabled and ((m.source == 'REFERENCE' and not m.reference_anchor and m.reference_layer == identifier
                                    and (channel is None or m.reference_channel == channel))
                                   or reads(m, identifier, channel)) for m in layer.masks):

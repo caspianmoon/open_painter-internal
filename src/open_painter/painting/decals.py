@@ -230,8 +230,8 @@ def sync_axes(layer):
     return moved
 
 
-def show_images(ts):
-    for layer in layers_of(ts):
+def show_images(ts, layers=None):
+    for layer in layers_of(ts) if layers is None else layers:
         show_image(layer)
 
 
@@ -275,15 +275,19 @@ def release(layer):
     return True
 
 
-def adopt_duplicates(scene):
-    """A duplicated decal Empty (Shift+D) becomes its own layer, a copy of the original's."""
+def adopt_duplicates(scene, layers=layers_of):
+    """A duplicated decal Empty (Shift+D) becomes its own layer, a copy of the original's.
+    ``layers`` lists a set's decal layers (``layers_of``, or the scheduler's memoised one)."""
     project = scene.open_painter
     created = []
+    marked = [obj for obj in scene.objects if obj.type == 'EMPTY' and obj.get(MARKER)]
+    if not marked:
+        return created
     for ts in project.texture_sets:
-        by_object = {layer.decal_object.as_pointer(): layer for layer in layers_of(ts) if layer.decal_object is not None}
-        for obj in scene.objects:
+        by_object = {layer.decal_object.as_pointer(): layer for layer in layers(ts) if layer.decal_object is not None}
+        for obj in marked:
             source_id = obj.get(MARKER)
-            if not source_id or obj.type != 'EMPTY' or obj.as_pointer() in by_object:
+            if not source_id or obj.as_pointer() in by_object:
                 continue
             source = next((layer for layer in ts.layers if layer.id == source_id), None)
             if source is None or source.decal_object == obj:

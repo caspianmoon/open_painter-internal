@@ -84,6 +84,9 @@ class NativeGraph:
         self.current = self.resident = None   # native-order mirrors of unit stamps (Slot)
         self.programs = {}                    # key -> the program its own stamp was taken from
         self.image_nodes = []                 # [node, unit keys, last identity]
+        self.image_groups = None              # [image, last identity, entries] per distinct image, or None
+        self.resource_entries = []            # entries whose node samples a GPU resource
+        self.assigned = None                  # headless.assignments when the groups were taken
         self.volatile = frozenset()           # units whose object matrices or filters are read every time
         self.surface_units = frozenset()
         self.surface = None
@@ -229,6 +232,7 @@ class NativeGraph:
                     elif sampler.kind in GEOMETRY:
                         surface.add(key)
         self.image_nodes = [[node, tuple(units), _MISSING] for node, units in nodes.values()]
+        self.image_groups = None
         self._scan_images(epochs)
         self.volatile, self.surface_units = frozenset(volatile), frozenset(surface)
         self.surface = engine._surface() if surface else None
@@ -252,14 +256,34 @@ class NativeGraph:
                                     bytes((U32 * len(below))(*below)))
 
     def _scan_images(self, epochs):
-        """Units whose sampled images changed identity; each image is inspected once."""
+        """Units whose sampled images changed identity; each image is inspected once. While no
+        headless node was assigned an image or a GPU resource since the last full scan, the
+        nodes still sample what they did: only the distinct images and resources are read."""
+        from ..evaluation.engine import headless
         from ..evaluation.engine.runtime import _image_identity
-        changed, memo = set(), {}
+        changed = set()
+        if self.image_groups is not None and self.assigned == headless.assignments[0]:
+            for entry in self.resource_entries:
+                identity = entry[0].gpu_resource.stamp
+                if identity != entry[2]:
+                    entry[2] = identity
+                    changed.update(entry[1])
+            for group in self.image_groups:
+                identity = _image_identity(group[0], epochs)
+                if identity != group[1]:
+                    group[1] = identity
+                    for entry in group[2]:
+                        entry[2] = identity
+                        changed.update(entry[1])
+            return changed
+        memo, groups, resources, grouped = {}, {}, [], True
         for entry in self.image_nodes:
             node = entry[0]
+            grouped = grouped and isinstance(node, headless.Node)
             resource = getattr(node, 'gpu_resource', None)
             if resource is not None:
                 identity = resource.stamp
+                resources.append(entry)
             else:
                 image = node.image
                 identity = None
@@ -272,9 +296,15 @@ class NativeGraph:
                         identity = memo.get(pointer, _MISSING)
                         if identity is _MISSING:
                             identity = memo[pointer] = _image_identity(image, epochs)
+                            groups[pointer] = [image, identity, []]
+                        groups[pointer][2].append(entry)
             if identity != entry[2]:
                 entry[2] = identity
                 changed.update(entry[1])
+        # Only headless nodes report their assignments; a real node is scanned every time.
+        self.image_groups = list(groups.values()) if grouped else None
+        self.resource_entries = resources
+        self.assigned = headless.assignments[0]
         return changed
 
     def _dirty(self, engine, epochs, touched):

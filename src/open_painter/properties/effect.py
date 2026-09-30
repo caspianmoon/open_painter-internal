@@ -37,7 +37,7 @@ def _changed(self, context, structural):
                 serial = ts.edit_serial
                 ts.edit_serial += 1
                 if not structural:
-                    from ..evaluation.dependencies import numeric_edit
+                    from ..evaluation.structure_memo import numeric_edit
                     numeric_edit(ts, serial)
                 if channel is not None:
                     channel.dirty = True

@@ -125,6 +125,9 @@ def _value(node):
 # Images bound by headless Image Texture nodes. Blender counts no user for them, so code
 # that asks whether a node still binds an image (shader_resources.bound) asks here too.
 _image_refs = Counter()
+# Every image or GPU resource assignment on a headless node. While it stands still, every
+# node samples what it did: a scan of the sampled images reads only the distinct images.
+assignments = [0]
 
 
 def _image_pointer(image):
@@ -300,6 +303,16 @@ class Node:
         if key is not None:
             _image_refs[key] += 1
         self._image, self._image_key = value, key
+        assignments[0] += 1
+
+    @property
+    def gpu_resource(self):
+        return self.__dict__.get('_gpu_resource')
+
+    @gpu_resource.setter
+    def gpu_resource(self, value):
+        self.__dict__['_gpu_resource'] = value
+        assignments[0] += 1
 
     def release_image(self):
         """Stop binding the image (the unit is discarded)."""

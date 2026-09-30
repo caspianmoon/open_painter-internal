@@ -13,7 +13,7 @@ the measured window. This is event queue to POST_PIXEL, not OS input or scanout.
     OP_DRAG_STACK    fill (default): OP_DRAG_LAYERS plain fills; smart: smart materials from the
                      catalog until the set has at least OP_DRAG_LAYERS more layers
     OP_DRAG_GEOMETRY 1: add a triplanar layer, so the set reads its geometry
-    OP_DRAG_PROFILE  1: cProfile the scheduler ticks of the drag into the report
+    OP_DRAG_PROFILE  1: cProfile the scheduler ticks and the slider's callback into the report
     OP_DRAG_DEPSGRAPH 1: count depsgraph updates by datablock and flags during the drag
 """
 import json
@@ -253,6 +253,20 @@ def setup():
             if measuring:
                 ticks.append((started, time.perf_counter()))
     cache._tick = traced_tick
+    if PROFILE:
+        # The slider's own RNA callback runs outside the scheduler tick: profile it too.
+        from open_painter.properties import layer as layer_properties
+        original_changed = layer_properties._changed
+
+        def profiled_changed(*args, **kwargs):
+            if measuring and profiler is not None:
+                profiler.enable()
+            try:
+                return original_changed(*args, **kwargs)
+            finally:
+                if profiler is not None:
+                    profiler.disable()
+        layer_properties._changed = profiled_changed
     later(wait_ready, .5)
 
 
@@ -326,6 +340,7 @@ def start_drag():
         profiler = cProfile.Profile()
     measuring = True
     drag_start = time.perf_counter()
+    print('DRAG_CADENCE_START', os.getpid(), flush=True)   # a whole-process sampler can attach here
     later(move, 1 / 120)
 
 

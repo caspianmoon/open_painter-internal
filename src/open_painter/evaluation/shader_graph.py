@@ -4278,14 +4278,14 @@ class Graph(Math):
         # patch that kept the reach only collects the replaced units' effects again.
         reach = getattr(self, '_reach_token', None) or getattr(self, '_structure', None)
         units = getattr(self, '_units_token', None)
-        visibility = tuple(layer.visible for layer in self.ts.layers)
+        visibility = frozenset(layer.id for layer in self.ts.layers if not layer.visible)   # the hidden layers
         cached = getattr(self, '_live_cache', None)
+        pending, self._live_seeds = getattr(self, '_live_seeds', None), None
         if cached is not None and cached[0] is reach and cached[2] == visibility:
             if cached[1] is units and cached[3] == len(self.units):
                 return cached[5]
             if all(key in self.units for key in cached[4]):
                 return self._collect_live(reach, units, visibility, cached[4])
-        live, work = set(), []
         shown = {}   # layer id -> effective visibility, each layer read once
 
         def visible(identifier):
@@ -4295,16 +4295,51 @@ class Graph(Math):
                 shown[identifier] = layer is not None and layer.visible and (
                     not layer.parent_id or visible(layer.parent_id))
             return shown[identifier]
-        for key in self.units:
-            if key[0] == 'CHANNEL' and visible(key[1]):
-                work.append(key)
-        while work:
-            key = work.pop()
-            if key in live or key not in self.units:
-                continue
-            live.add(key)
-            work.extend(producer for producer, _, _ in self.units[key].imports)
+        live = None
+        if (pending is not None and cached is not None and pending[0] is cached and cached[2] == visibility
+                and getattr(self, 'consumers', None) is not None):
+            live = self._live_after_patch(cached[4], pending[1], pending[2], visible)
+        if live is None or VERIFY_STRUCTURE:
+            found, work = set(), [key for key in self.units if key[0] == 'CHANNEL' and visible(key[1])]
+            while work:
+                key = work.pop()
+                if key in found or key not in self.units:
+                    continue
+                found.add(key)
+                work.extend(producer for producer, _, _ in self.units[key].imports)
+            if live is not None and live != found:
+                raise AssertionError(f'Patched live units differ: {sorted(map(str, live ^ found))[:6]}')
+            live = found
         return self._collect_live(reach, units, visibility, live)
+
+    def _live_after_patch(self, before, fresh, seeds, visible):
+        """The live units after a patch, from those before it: only the units that came, went or
+        were replaced, the producers they import or imported, and the producers of a unit whose
+        liveness changed can change theirs. None when the walk does not settle (a cycle)."""
+        units, consumers = self.units, self.consumers
+        live = {key for key in before if key in units}
+        work, expanded = list(fresh | seeds), set()
+        budget = 4 * len(units) + len(work)
+        while work:
+            budget -= 1
+            if budget < 0:
+                return None
+            key = work.pop()
+            unit = units.get(key)
+            if unit is None:
+                continue
+            now = (key[0] == 'CHANNEL' and visible(key[1])) or any(
+                consumer in live for consumer in consumers.get(key, ()))
+            if now != (key in live):
+                if now:
+                    live.add(key)
+                else:
+                    live.discard(key)
+                work.extend(producer for producer, _, _ in unit.imports)
+            elif key in fresh and key not in expanded:
+                expanded.add(key)   # a replaced unit may import other producers now
+                work.extend(producer for producer, _, _ in unit.imports)
+        return live
 
     def _collect_live(self, reach, units, visibility, live):
         effects = {}

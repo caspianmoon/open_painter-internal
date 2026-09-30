@@ -421,6 +421,7 @@ class EngineGraph(Graph):
 
     def _patch(self, reconcile, hierarchy_issues):
         started = perf_counter()
+        live_before = getattr(self, '_live_cache', None)
         taken = self.scope_plan(self.ts, signature=True)
         if taken is None:
             plan = self.plan(self._structure_plan, self._dirty_layers)
@@ -528,6 +529,9 @@ class EngineGraph(Graph):
             self.resources.used = self._used_resources()   # what the discarded units queued is dropped
             raise
         fresh = [key for key in self.units if key not in kept]
+        # What validation's liveness walk starts from (``_live_after_patch``).
+        self._live_seeds = (live_before, set(fresh), set(retired) | {
+            producer for unit in retired.values() for producer, _, _ in unit.imports})
         if self.unit_changes is not None:
             self.unit_changes.update(fresh)
             self.unit_changes.update(retired)

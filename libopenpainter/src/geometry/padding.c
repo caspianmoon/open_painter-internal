@@ -24,36 +24,63 @@ op_status_t op_padding_donors(const uint8_t *covered, const int32_t *islands, ui
     if (band > size)
         band = size;
     uint64_t *keys = malloc((size_t)band * size * sizeof(*keys));
-    if (!keys)
+    uint32_t *nearest = malloc((size_t)size * sizeof(*nearest));
+    int32_t *sources = malloc((size_t)size * sizeof(*sources));
+    if (!keys || !nearest || !sources) {
+        free(keys);
+        free(nearest);
+        free(sources);
         return OP_RESOURCE_EXHAUSTED;
+    }
     for (uint32_t first = 0; first < size; first += band) {
         uint32_t last = first + band < size ? first + band : size;
         uint32_t low = first > limit ? first - limit : 0;
         uint32_t high = last + limit < size ? last + limit : size;
-        for (uint32_t col = 0; col < size; col++) {
-            int32_t source = -1;
-            for (uint32_t row = low; row < last; row++) {
-                if (covered[(uint64_t)row * size + col])
-                    source = (int32_t)row;
+        /* Each column's nearest covered row above and below, swept row by row (the same
+         * per-column scan as down each column, but reading the arrays in memory order). */
+        for (uint32_t col = 0; col < size; col++)
+            sources[col] = -1;
+        for (uint32_t row = low; row < last; row++) {
+            const uint8_t *line = covered + (uint64_t)row * size;
+            uint64_t *key = keys + (uint64_t)(row - first) * size;
+            for (uint32_t col = 0; col < size; col++) {
+                if (line[col])
+                    sources[col] = (int32_t)row;
                 if (row >= first)
-                    keys[(uint64_t)(row - first) * size + col] =
-                        donor_key(islands, size, row, col, source, limit);
+                    key[col] = donor_key(islands, size, row, col, sources[col], limit);
             }
-            source = (int32_t)size;
-            for (uint32_t end = high; end > first;) {
-                uint32_t row = --end;
-                if (covered[(uint64_t)row * size + col])
-                    source = (int32_t)row;
+        }
+        for (uint32_t col = 0; col < size; col++)
+            sources[col] = (int32_t)size;
+        for (uint32_t end = high; end > first;) {
+            uint32_t row = --end;
+            const uint8_t *line = covered + (uint64_t)row * size;
+            uint64_t *key = keys + (uint64_t)(row - first) * size;
+            for (uint32_t col = 0; col < size; col++) {
+                if (line[col])
+                    sources[col] = (int32_t)row;
                 if (row < last) {
-                    uint64_t *key = keys + (uint64_t)(row - first) * size + col;
-                    uint64_t candidate = donor_key(islands, size, row, col, source, limit);
-                    if (candidate < *key)
-                        *key = candidate;
+                    uint64_t candidate = donor_key(islands, size, row, col, sources[col], limit);
+                    if (candidate < key[col])
+                        key[col] = candidate;
                 }
             }
         }
         for (uint32_t row = first; row < last; row++) {
             const uint64_t *source = keys + (uint64_t)(row - first) * size;
+            /* Columns to the nearest one with a donor in reach vertically: the columns closer
+             * than it offer none (their keys are INF), and past the limit there is none. */
+            uint32_t gap = UINT32_MAX;
+            for (uint32_t col = 0; col < size; col++) {
+                gap = source[col] < INF ? 0 : gap == UINT32_MAX ? gap : gap + 1;
+                nearest[col] = gap;
+            }
+            gap = UINT32_MAX;
+            for (uint32_t col = size; col-- > 0;) {
+                gap = source[col] < INF ? 0 : gap == UINT32_MAX ? gap : gap + 1;
+                if (gap < nearest[col])
+                    nearest[col] = gap;
+            }
             for (uint32_t col = 0; col < size; col++) {
                 uint64_t index = (uint64_t)row * size + col;
                 if (covered[index]) {
@@ -62,7 +89,11 @@ op_status_t op_padding_donors(const uint8_t *covered, const int32_t *islands, ui
                     continue;
                 }
                 uint64_t best = source[col];
-                for (uint32_t dx = 1; dx <= limit; dx++) {
+                /* A donor dx columns away is at least dx^2 away: once that exceeds the best
+                 * distance found, no farther column can win or tie (ties break on the island
+                 * and index bits, so a candidate at an equal distance is still compared). */
+                for (uint32_t dx = nearest[col] > 1 ? nearest[col] : 1;
+                     dx <= limit && (uint64_t)dx * dx <= best >> 46; dx++) {
                     uint64_t shift = (uint64_t)(dx * dx) << 46;
                     if (col >= dx && source[col - dx] + shift < best)
                         best = source[col - dx] + shift;
@@ -77,5 +108,7 @@ op_status_t op_padding_donors(const uint8_t *covered, const int32_t *islands, ui
         }
     }
     free(keys);
+    free(nearest);
+    free(sources);
     return OP_OK;
 }

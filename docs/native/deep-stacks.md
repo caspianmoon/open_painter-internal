@@ -390,6 +390,19 @@ With the stack in the store, an edit of a layer property plus the depsgraph
 update takes 0.06 ms at 312 layers (`tests/integration/layer_store.py`). The
 synthetic benchmark measured 19.9 ms with 150,000 properties on the Scene.
 
+The drag in the product's editor over 204 smart-material layers (1K), as in "The
+product's sidebar":
+
+| Build | Revisions/s | Change → draw p50 | p95 | Depsgraph share of main thread |
+| --- | ---: | ---: | ---: | ---: |
+| `9fd1db2` | 25.8 | 28.4 ms | 30.5 ms | — |
+| Before stores (`6d05fd1`) | 34.0 | 21.3 ms | 31.2 ms | 18% |
+| Layer stores | 40.5 | 15.6 ms | 20.8 ms | 0.1% |
+
+Every delivered change was drawn. The main thread is now mostly Blender's
+drawing, about half, including 18% waiting for the next drawable. The scheduler
+tick is 20%, the sidebar and shelf layout 16%, and the slider's callback 4%.
+
 Layer properties can no longer be keyframed: a Palette holds no animation data.
 Blender refuses the keyframe with a message. Before, the keyframe landed on the
 Scene, but the engine never followed layer animation.

@@ -200,9 +200,10 @@ def run_structural(scene, ts, repeats=3):
     def record(name, action, selected=None):
         if ONLY and name not in ONLY:
             return
-        durations, ticks = [], []
+        durations, ticks, callbacks, stage_rows = [], [], [], []
         profiler = cProfile.Profile() if PROFILE else None
         from open_painter.evaluation import dependencies
+        from open_painter.evaluation.cache import key_for
         for index in range(repeats):
             if selected is not None:
                 # The UI edits the selected layer, whose runs idle arming prepared.
@@ -211,11 +212,14 @@ def run_structural(scene, ts, repeats=3):
                 with Frame():
                     while engine.prearm(selected, dependencies.image_epochs()):
                         pass
+            entry = shader_preview._sessions.get(key_for(scene, ts), {})
+            seen = len(entry.get('history', ()))
             started = perf_counter()
             if profiler:
                 profiler.enable()
             with Frame():
                 action(index)
+            callbacks.append((perf_counter() - started) * 1000)
             if TRACE:
                 print('DEEP_STACK_TRACE', name, index, 'edited, footprint', footprint_mib(), 'MiB', flush=True)
             elapsed, count = settle(scene, ts, started)
@@ -223,14 +227,22 @@ def run_structural(scene, ts, repeats=3):
                 profiler.disable()
             durations.append(elapsed)
             ticks.append(count)
+            # Stage rows this edit produced (the history holds the last few evaluations).
+            entry = shader_preview._sessions.get(key_for(scene, ts), {})
+            produced = list(entry.get('history', ()))[seen:] if len(entry.get('history', ())) > seen else []
+            stage_rows.append({stage: round(sum(row[stage] for row in produced), 2) for stage in
+                               ('build', 'update', 'inputs', 'translate', 'compile', 'render', 'publish',
+                                'rebuilt', 'reused')})
         rows[name] = dict(median_ms=float(np.median(durations)), samples_ms=durations, ticks=ticks,
-                          footprint_mib=footprint_mib())
+                          footprint_mib=footprint_mib(), callback_ms=callbacks, stages=stage_rows)
         if profiler:
             text = io.StringIO()
             pstats.Stats(profiler, stream=text).sort_stats('cumulative').print_stats(50)
             rows[name]['profile'] = text.getvalue()
+            profiler.dump_stats(str(REPORT) + f'.{name}.prof')   # raw data, for callers and callees
         print('DEEP_STACK_STRUCTURAL', name, f"median {rows[name]['median_ms']:.0f} ms", 'ticks', ticks,
-              'footprint', rows[name]['footprint_mib'], 'MiB', flush=True)
+              'footprint', rows[name]['footprint_mib'], 'MiB', 'callback ms', [round(c) for c in callbacks],
+              'stages', stage_rows[-1] if stage_rows else None, flush=True)
 
     leaves = [layer.id for layer in ts.layers if layer.type != 'FOLDER']
     middle = leaves[len(leaves) // 2]
@@ -250,6 +262,24 @@ def run_structural(scene, ts, repeats=3):
                                                   if item.name.startswith('Structural fill'))))
         stack.invalidate(ts)
     record('remove_layer', remove_fill)
+
+    def add_fill_middle(index):
+        # As the artist adds one: above the selected layer, mid-stack.
+        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == middle)
+        added = stack.add(ts, 'FILL', f'Middle fill {index}')
+        stack.channel_for(added, 'BASE_COLOR').color = (.2, .3 + index * .1, .5, 1)
+        stack.invalidate(ts)
+    record('add_fill_middle', add_fill_middle)
+
+    def remove_middle(index):
+        stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
+                                                  if item.name.startswith('Middle fill'))))
+        stack.invalidate(ts)
+    record('remove_middle', remove_middle)
+
+    def move_middle(index):
+        stack.move(ts, stack.index_of(ts, middle), 1 if index % 2 == 0 else -1)
+    record('move_middle', move_middle)
 
     def blend(index):
         layer(middle).blend_mode = ('MULTIPLY', 'NORMAL', 'SCREEN')[index % 3]

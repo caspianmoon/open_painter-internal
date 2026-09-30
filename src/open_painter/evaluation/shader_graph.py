@@ -205,6 +205,16 @@ def _adoptable_unit(ts_id, key_repr, instance):
 UNKNOWN_UNIT = object()   # a binding registered without its unit: every unit counts as touched
 
 
+def _plan_token(ts):
+    """What a plan of the stack holds for: its structure (numeric edits carried) and length.
+    None while a replay is open, whose edits move no serial until it ends."""
+    from ..core.layer_stack import replaying
+    if replaying():
+        return None
+    from .structure_memo import token
+    return token(ts), len(ts.layers)
+
+
 def path_index(ts):
     """RNA paths of a texture set's structs by address, exactly as ``path_from_id``
     spells them, in one pass over the set."""
@@ -2981,7 +2991,11 @@ class Graph(Math):
         started = perf_counter()
         self._paths = None   # collection positions may have moved since the last build
         self._reused, self._warnings, self._adopted = [], [], []
-        plan = self.plan()
+        plan = reuse.scope_plan(self.ts) if reuse is not None else None
+        if plan is None:
+            plan = self.plan()
+        else:
+            self._plan, self._anchors = plan, None
         self._previous = reuse if (reuse is not None and reuse.units
                                    and global_signature(reuse.ts) == global_signature(self.ts)) else None
         if self._previous is not None:
@@ -3376,6 +3390,15 @@ class Graph(Math):
         unit = self.units.get(key)
         return unit.flags.get('stub') if unit is not None else None
 
+    def scope_plan(self, ts):
+        """The plan ``rebuild_scope`` made, taken once, while nothing structural changed since:
+        each structural edit is checked by its callback and then rebuilt on the next tick."""
+        held = getattr(self, '_scope_plan', None)
+        self._scope_plan = None
+        if held is None or held[0] is None or held[0] != _plan_token(ts):
+            return None
+        return held[1]
+
     def matches_structure(self):
         try:
             return self._structure == self.structural_signature()
@@ -3389,6 +3412,8 @@ class Graph(Math):
             current = self.structural_signature()
         except ValueError:
             return 'global'
+        # The rebuild this answer triggers need not plan the stack again (``scope_plan``).
+        self._scope_plan = (_plan_token(self.ts), self._plan)
         if current == self._structure:
             return None
         if current[0] != self._structure[0]:

@@ -305,8 +305,13 @@ class EngineGraph(Graph):
     def _chain(self, parent, channel, ancestors):
         """CHANNEL units of ``parent``'s children, bottom to top, as ``Graph._wire`` links them."""
         steps = []
-        for layer in self.ts.layers:
-            if layer.parent_id != parent or not self._included(layer):
+        # The plan indexes each parent's children in stack order: a walk over the whole
+        # stack per folder and channel made this quadratic in folders.
+        children = getattr(getattr(self, '_plan', None), 'children', None)
+        layers = (children.get(parent, ()) if children is not None
+                  else [layer for layer in self.ts.layers if layer.parent_id == parent])
+        for layer in layers:
+            if not self._included(layer):
                 continue
             if layer.id in ancestors:
                 raise ValueError('Layer hierarchy contains a cycle')
@@ -349,16 +354,21 @@ class EngineGraph(Graph):
 
         for steps in self.chains.values():
             chain(steps, None)
-        reach = {}
+        reach, visiting = {}, set()
 
-        def channels(key, seen=frozenset()):
-            if key in reach:
-                return reach[key]
-            if key in seen:
-                return set()
+        def channels(key):
+            # Memoised depth-first walk. Chains are as deep as the stack: copying the
+            # path at every step made this quadratic in it.
+            found = reach.get(key)
+            if found is not None:
+                return found
+            if key in visiting:
+                return set()   # a cycle (reported by the compiler): contributes nothing more
+            visiting.add(key)
             found = {key[2]} if key[0] == 'CHANNEL' else set()
             for reader in readers.get(key, ()):
-                found |= channels(reader, seen | {key})
+                found |= channels(reader)
+            visiting.discard(key)
             reach[key] = found
             return found
 
@@ -366,10 +376,8 @@ class EngineGraph(Graph):
         self.channels = {'Final:' + channel: channel for channel in CHANNELS}
         for key, unit in self.units.items():
             targets = {'Final:' + channel for channel in channels(key)}
-            for node in unit.tree.nodes:
-                role = node.get('op_dependency')
-                if role:
-                    self.reverse[role] |= targets
+            for role in _dependency_roles(unit):
+                self.reverse[role] |= targets
 
     # ---- lifetime ------------------------------------------------------------------
 
@@ -408,3 +416,15 @@ class EngineGraph(Graph):
         # Only node membership is cached. Resource replacement, image identity
         # and color/alpha metadata must be read afresh by the runtime.
         return [(node, node.image) for node in unit.tree.nodes.image_nodes]
+
+
+def _dependency_roles(unit):
+    """The dependency roles of a unit's nodes. An adopted unit keeps its tree, so the roles
+    are read once per tree (and again should its node count change), not on every build."""
+    tree = unit.tree
+    count = len(tree.nodes)
+    cached = getattr(unit, '_roles', None)
+    if cached is None or cached[0] is not tree or cached[1] != count:
+        roles = tuple(role for role in (node.get('op_dependency') for node in tree.nodes) if role)
+        cached = unit._roles = (tree, count, roles)
+    return cached[2]

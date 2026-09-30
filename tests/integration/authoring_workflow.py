@@ -73,7 +73,13 @@ with patch.object(gesture, 'PREVIEW_LIMIT', 128), metrics.Metrics() as observed:
     ready()
     if not runtime.device().pixel_publish:
         assert not observed.counts.get('engine_texture_readbacks'), observed.report()
-    assert observed.counts.get('stroke_gpu_replays') == 3, observed.report()
+    if gesture._native_metal():
+        # Native Metal previews at full resolution (gesture.Canvas): no bound, the finished
+        # stroke's GPU result is adopted as it is.
+        assert observed.counts.get('stroke_gpu_adoptions') == 3, observed.report()
+        assert not observed.counts.get('stroke_gpu_replays'), observed.report()
+    else:
+        assert observed.counts.get('stroke_gpu_replays') == 3, observed.report()
 print('BOUNDED_GPU_PREVIEW_PASS', flush=True)
 count = len(scene.open_painter.strokes)
 stroke((0, .3), (.3, .3), cancel=True)

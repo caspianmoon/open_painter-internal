@@ -13,7 +13,41 @@ struct op_graph {
     uint32_t *backdrop, *grouped, *pending;
     unsigned char *affine, *state;
     uint64_t *local, *rendered;
+    /* The composition a topology replaced, until the next one is set: what op_graph_set_composition_from
+     * carries over to the nodes it maps back to their previous indices. */
+    uint32_t previous_count;
+    uint32_t *previous_backdrop, *previous_grouped;
+    unsigned char *previous_affine;
+    uint64_t *previous_local, *previous_rendered;
 };
+static void clear_previous(op_graph_t *g) {
+    free(g->previous_backdrop);
+    free(g->previous_grouped);
+    free(g->previous_affine);
+    free(g->previous_local);
+    free(g->previous_rendered);
+    g->previous_backdrop = g->previous_grouped = NULL;
+    g->previous_affine = NULL;
+    g->previous_local = g->previous_rendered = NULL;
+    g->previous_count = 0;
+}
+static void clear_composition(op_graph_t *g);
+/* A topology replaces the composition; what it knew is kept for op_graph_set_composition_from. */
+static void stash_composition(op_graph_t *g) {
+    clear_previous(g);
+    if (g->rendered && g->local && g->backdrop && g->grouped && g->affine) {
+        g->previous_count = g->count;
+        g->previous_backdrop = g->backdrop;
+        g->previous_grouped = g->grouped;
+        g->previous_affine = g->affine;
+        g->previous_local = g->local;
+        g->previous_rendered = g->rendered;
+        g->backdrop = g->grouped = NULL;
+        g->affine = NULL;
+        g->local = g->rendered = NULL;
+    }
+    clear_composition(g);
+}
 static void clear_composition(op_graph_t *g) {
     free(g->backdrop);
     free(g->grouped);
@@ -42,6 +76,7 @@ void op_graph_destroy(op_graph_t *g) {
     free(g->needed);
     free(g->own);
     clear_composition(g);
+    clear_previous(g);
     free(g);
 }
 op_status_t op_graph_replace(op_graph_t *g, uint32_t count, const uint32_t *offsets,
@@ -109,7 +144,7 @@ op_status_t op_graph_replace(op_graph_t *g, uint32_t count, const uint32_t *offs
     free(g->work);
     free(g->needed);
     free(g->own);
-    clear_composition(g);
+    stash_composition(g);
     g->own = own;
     own = NULL;
     g->work = stack;
@@ -322,9 +357,8 @@ static int has_edge(const op_graph_t *g, uint32_t node, uint32_t target) {
     return 0;
 }
 
-op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
-                                     const uint32_t *grouped, const unsigned char *affine,
-                                     uint32_t count) {
+static op_status_t set_composition(op_graph_t *g, const uint32_t *backdrop, const uint32_t *grouped,
+                                   const unsigned char *affine, uint32_t count, const uint32_t *previous) {
     if (!g || (count && (!backdrop || !grouped || !affine)))
         return OP_INVALID_ARGUMENT;
     if (g->executing)
@@ -343,7 +377,16 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
     uint32_t *pending = malloc((2 * n + 1) * sizeof(*pending));
     unsigned char *a = malloc(n), *state = calloc(n, 1);
     uint64_t *local = calloc(n, sizeof(*local)), *rendered = calloc(n, sizeof(*rendered));
-    if (!b || !p || !pending || !a || !state || !local || !rendered) {
+    /* Before: the composition this one follows (the one a topology replaced, else the current). */
+    int stashed = g->previous_rendered != NULL;
+    uint32_t before = stashed ? g->previous_count : (g->rendered ? g->count : 0);
+    const uint32_t *before_backdrop = stashed ? g->previous_backdrop : g->backdrop;
+    const uint32_t *before_grouped = stashed ? g->previous_grouped : g->grouped;
+    const unsigned char *before_affine = stashed ? g->previous_affine : g->affine;
+    const uint64_t *before_local = stashed ? g->previous_local : g->local;
+    const uint64_t *before_rendered = stashed ? g->previous_rendered : g->rendered;
+    uint32_t *moved = previous && before ? malloc((size_t)before * sizeof(*moved)) : NULL;
+    if (!b || !p || !pending || !a || !state || !local || !rendered || (previous && before && !moved)) {
         free(b);
         free(p);
         free(pending);
@@ -351,6 +394,7 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
         free(state);
         free(local);
         free(rendered);
+        free(moved);
         return OP_RESOURCE_EXHAUSTED;
     }
     if (count) {
@@ -359,14 +403,37 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
         for (uint32_t i = 0; i < count; i++)
             a[i] = affine[i] ? 1 : 0;
     }
-    /* Preserve what is already known about a node whose composition did not change. */
-    if (g->rendered)
+    if (previous && before) {
+        /* Nodes mapped back to their previous indices keep what was known about them while
+         * their composition (backdrop, child composite, affinity) maps onto the same nodes. */
+        for (uint32_t k = 0; k < before; k++)
+            moved[k] = UINT32_MAX;
+        for (uint32_t i = 0; i < count; i++)
+            if (previous[i] < before)
+                moved[previous[i]] = i;
+        for (uint32_t i = 0; i < count; i++) {
+            uint32_t k = previous[i];
+            if (k >= before)
+                continue;
+            uint32_t was_b = before_backdrop[k], was_p = before_grouped[k];
+            uint32_t now_b = was_b == UINT32_MAX ? UINT32_MAX : (was_b < before ? moved[was_b] : UINT32_MAX - 1);
+            uint32_t now_p = was_p == UINT32_MAX ? UINT32_MAX : (was_p < before ? moved[was_p] : UINT32_MAX - 1);
+            if (now_b == b[i] && now_p == p[i] && before_affine[k] == a[i]) {
+                local[i] = before_local[k];
+                rendered[i] = before_rendered[k];
+            }
+        }
+    } else if (!previous && !stashed && g->rendered) {
+        /* Preserve what is already known about a node whose composition did not change. */
         for (uint32_t i = 0; i < count; i++)
             if (g->backdrop[i] == b[i] && g->grouped[i] == p[i] && g->affine[i] == a[i]) {
                 local[i] = g->local[i];
                 rendered[i] = g->rendered[i];
             }
+    }
+    free(moved);
     clear_composition(g);
+    clear_previous(g);
     g->backdrop = b;
     g->grouped = p;
     g->pending = pending;
@@ -375,6 +442,20 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
     g->local = local;
     g->rendered = rendered;
     return OP_OK;
+}
+
+op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
+                                     const uint32_t *grouped, const unsigned char *affine,
+                                     uint32_t count) {
+    return set_composition(g, backdrop, grouped, affine, count, NULL);
+}
+
+op_status_t op_graph_set_composition_from(op_graph_t *g, const uint32_t *backdrop,
+                                          const uint32_t *grouped, const unsigned char *affine,
+                                          uint32_t count, const uint32_t *previous) {
+    if (count && !previous)
+        return OP_INVALID_ARGUMENT;
+    return set_composition(g, backdrop, grouped, affine, count, previous);
 }
 
 /* Run walk shared by the planner and edit prediction. stale[v] bit 0: the node

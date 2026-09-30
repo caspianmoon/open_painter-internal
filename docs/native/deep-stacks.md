@@ -1,4 +1,4 @@
-# Deep stacks: suffix collapse and incremental evaluation (ABI 12)
+# Deep stacks: suffix collapse and incremental evaluation (ABI 13)
 
 The native Metal path made each GPU pass cheaper, but two costs still grew with
 the stack.
@@ -575,6 +575,20 @@ Further trims on the same path:
 - A smart material's replay names the layers it created (`replay(created_only=True)`),
   so the structure check after it plans those alone.
 
+**Armed runs across a new topology (ABI 13).** A suffix run member must have been
+rendered with its current local stamp (`rendered[v] == local[v]`). `op_graph_replace`
+used to free that record with the composition, and `op_graph_set_composition` kept
+it only for nodes at the same index. Every layer added, removed or moved (and every
+smart material) therefore lost all armed runs, and the layers above the edit
+rendered one by one: adding a fill inside the bottom material of a small stack
+rendered 88 units, 84 of them unchanged. Now `op_graph_replace` keeps the previous
+composition, and `op_graph_set_composition_from` takes each node's previous index
+(the native graph passes them). A node whose backdrop, child composite and
+affinity map onto the same nodes keeps what C knew, so the run armed for an edit
+is planned under the same key: 37 units rendered, three channels collapsed. At
+200 layers, moving a layer went from 87 to 63 ms and applying a smart material
+from 196 to 130 ms. `test_suffix.c` checks that the key survives an insertion.
+
 200 layers at 1K, idle arming on:
 
 | Edit | Before | After |
@@ -583,8 +597,8 @@ Further trims on the same path:
 | Adding a fill in the middle | 325 ms | 59 ms |
 | Removing the top layer | 220 ms | 59 ms |
 | Removing a middle layer | 237 ms | 66 ms |
-| Moving a middle layer | 222 ms | 90 ms (17 ms of it renders the layers above: no armed run matches the new order) |
-| Applying a smart material (after the first) | 365 ms | 199 ms |
+| Moving a middle layer | 222 ms | 63 ms |
+| Applying a smart material (after the first) | 365 ms | 130 ms |
 
 ### Garbage collection
 
@@ -658,9 +672,7 @@ Machines with 16 GB or more keep the previous limits.
   layers above it (about 1,000 at 200 layers) to follow it to its new address,
   and a new topology still replaces the native graph's C topology and walks every
   unit's description. Units that address their layer by id, and a C graph that
-  inserts and removes nodes, would make these proportional to the edit. Moving a
-  layer renders the layers above it sequentially once: no armed suffix run
-  matches the new order.
+  inserts and removes nodes, would make these proportional to the edit.
 - **Whole-stack passes left in a patched edit.** The plan still carries every
   memo into a new plan and sorts every signature. The layer callback walks all
   readers again after a structural edit (`references._reader_layers`), and the

@@ -242,11 +242,13 @@ def run_structural(scene, ts, repeats=3):
         from open_painter.evaluation.cache import key_for
         for index in range(repeats):
             if selected is not None:
-                # The UI edits the selected layer, whose runs idle arming prepared.
-                ts.active_layer = next(i for i, l in enumerate(ts.layers) if l.id == selected)
+                # The UI edits the selected layer (adds above it, removes it), whose runs and
+                # spine idle arming prepared.
+                identifier = selected() if callable(selected) else selected
+                ts.active_layer = next(i for i, l in enumerate(ts.layers) if l.id == identifier)
                 engine = shader_preview.session_engine(scene, ts)
                 with Frame():
-                    while engine.prearm(selected, dependencies.image_epochs()):
+                    while engine.prearm(identifier, dependencies.image_epochs()):
                         pass
             # The pause between two edits: the idle timer freezes what the last one kept.
             gc_policy.settle(now=monotonic() + gc_policy.SETTLE_DELAY)
@@ -305,28 +307,32 @@ def run_structural(scene, ts, repeats=3):
         ts.active_layer = len(ts.layers) - 1
         added = stack.add(ts, 'FILL', f'Structural fill {index}')
         stack.channel_for(added, 'BASE_COLOR').color = (.3, .2 + index * .1, .6, 1)
-    record('add_fill_top', add_fill)
+    def top():
+        return ts.layers[len(ts.layers) - 1].id
+    record('add_fill_top', add_fill, top)
 
     def remove_fill(index):
         stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
                                                   if item.name.startswith('Structural fill'))))
-    record('remove_layer', remove_fill)
+    record('remove_layer', remove_fill,
+           lambda: next(item.id for item in ts.layers if item.name.startswith('Structural fill')))
 
     def add_fill_middle(index):
         # As the artist adds one: above the selected layer, mid-stack.
         ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == middle)
         added = stack.add(ts, 'FILL', f'Middle fill {index}')
         stack.channel_for(added, 'BASE_COLOR').color = (.2, .3 + index * .1, .5, 1)
-    record('add_fill_middle', add_fill_middle)
+    record('add_fill_middle', add_fill_middle, middle)
 
     def remove_middle(index):
         stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
                                                   if item.name.startswith('Middle fill'))))
-    record('remove_middle', remove_middle)
+    record('remove_middle', remove_middle,
+           lambda: next(item.id for item in ts.layers if item.name.startswith('Middle fill')))
 
     def move_middle(index):
         stack.move(ts, stack.index_of(ts, middle), 1 if index % 2 == 0 else -1)
-    record('move_middle', move_middle)
+    record('move_middle', move_middle, middle)
 
     def blend(index):
         layer(middle).blend_mode = ('MULTIPLY', 'NORMAL', 'SCREEN')[index % 3]
@@ -345,7 +351,7 @@ def run_structural(scene, ts, repeats=3):
             tracemalloc.start(8)
         ts.active_layer = len(ts.layers) - 1
         composer.apply(ts, names[(index * 7) % len(names)], seed=100 + index)
-    record('apply_smart_material', apply_material)
+    record('apply_smart_material', apply_material, top)
     return rows
 
 

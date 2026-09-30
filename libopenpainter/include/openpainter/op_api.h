@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-#define OP_ABI_VERSION 12u
+#define OP_ABI_VERSION 13u
 
 /* Channel indices follow src/open_painter/constants.py CHANNELS order. */
 #define OP_CHANNEL_BASE_COLOR 0u

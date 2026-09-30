@@ -243,7 +243,11 @@ class NativeGraph:
                 self.topology = topology
                 self.composition = None   # replacing the topology clears it in C
                 self.rebuilds += 1
-            self._compose(engine, keys, indices, {key: states[key].program for key in keys})
+            # After a new topology, each unit's previous index: C keeps what it knew about a unit
+            # whose composition is unchanged (its armed suffix runs keep working).
+            before = previous[3] if replaced and previous is not None else None
+            self._compose(engine, keys, indices, {key: states[key].program for key in keys},
+                          None if before is None else [before.get(key, NONE) for key in keys])
             self.description = (graph, engine.inline, keys, indices, constants,
                                 tuple((key, states[key].program) for key in keys), context)
             scanned = self._index(engine, keys, indices, states, epochs, identities)
@@ -521,8 +525,9 @@ class NativeGraph:
             raise AssertionError(f'Incremental restamp missed {len(missed)} units ({self.path}): {missed[:8]} '
                                  f'(program described, own sent before): {detail}')
 
-    def _compose(self, engine, keys, indices, programs):
-        """Layer composition for C's affine suffix runs: what each unit composes over."""
+    def _compose(self, engine, keys, indices, programs, previous=None):
+        """Layer composition for C's affine suffix runs: what each unit composes over.
+        ``previous``: each unit's index before a new topology (NONE for a new unit)."""
         if self.binding is None:
             return
         backdrop, grouped, affine = [], [], bytearray()
@@ -533,8 +538,13 @@ class NativeGraph:
             affine.append(int(key[0] == 'CHANNEL' and programs[key].affine is not None))
         composition = (tuple(backdrop), tuple(grouped), bytes(affine))
         if composition != self.composition:
-            self.binding.graph_compose(self.handle, bytes((U32 * len(keys))(*backdrop)),
-                                       bytes((U32 * len(keys))(*grouped)), bytes(affine))
+            if previous is None:
+                self.binding.graph_compose(self.handle, bytes((U32 * len(keys))(*backdrop)),
+                                           bytes((U32 * len(keys))(*grouped)), bytes(affine))
+            else:
+                self.binding.graph_compose(self.handle, bytes((U32 * len(keys))(*backdrop)),
+                                           bytes((U32 * len(keys))(*grouped)), bytes(affine),
+                                           bytes((U32 * len(keys))(*previous)))
             self.composition = composition
 
     def runs(self, engine, root):

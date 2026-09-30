@@ -245,6 +245,112 @@ int main(void) {
     for (uint32_t i = 0; i < p.run_count; i++)
         assert(p.runs[i].key == predicted.runs[i].key);
     op_graph_destroy(g);
+
+    /* A layer inserted below layer 8 of the first chain: a new topology in which every old node
+     * sits two indices later (the new source and layer come first). Layers 9..11 compose as
+     * before; with their previous indices they keep what was known about them, so the run an
+     * edit of layer 8 was armed with is still planned, under the same key. */
+    {
+        enum { OLD = 12, NEW = 14, SHIFT = 2 };
+        uint32_t o_offsets[OLD + 1], o_edges[32], n_offsets[NEW + 1], n_edges[40];
+        uint32_t o_back[OLD], o_group[OLD], n_back[NEW], n_group[NEW], previous[NEW];
+        unsigned char o_aff[OLD], n_aff[NEW];
+        e = 0;
+        for (uint32_t i = 0; i < OLD; i++) {
+            o_offsets[i] = e;
+            o_back[i] = o_group[i] = NONE;
+            o_aff[i] = 0;
+            if (i >= C) {
+                if (i > C)
+                    o_edges[e++] = o_back[i] = i - 1;
+                o_edges[e++] = S + (i - C);
+                o_aff[i] = 1;
+            }
+        }
+        o_offsets[OLD] = e;
+        assert(op_graph_create(&g) == OP_OK);
+        assert(op_graph_replace(g, OLD, o_offsets, o_edges, e) == OP_OK);
+        for (uint32_t i = 0; i < OLD; i++)
+            set_own(g, i, 100 + i);
+        assert(op_graph_set_composition(g, o_back, o_group, o_aff, OLD) == OP_OK);
+        host before = {{0}, NULL};
+        uint64_t old_stamps[N];
+        evaluate(g, OLD, &before, old_stamps);
+        render(g, 11, &before);
+        plan armed;
+        assert(op_graph_edit_runs(g, 11, 8, NULL, NULL, armed.runs, N, &armed.run_count, armed.members, N,
+                                  &armed.member_count) == OP_OK);
+        assert(armed.run_count == 1 && armed.runs[0].input == 8 && armed.runs[0].length == 3);
+        /* New nodes: 0 the inserted layer's source, 1 the inserted layer over old 7. */
+        uint32_t ne = 0;
+        for (uint32_t i = 0; i < NEW; i++) {
+            n_offsets[i] = ne;
+            n_back[i] = n_group[i] = NONE;
+            n_aff[i] = 0;
+            previous[i] = i >= SHIFT ? i - SHIFT : NONE;
+            if (i == 1) {
+                n_edges[ne++] = n_back[i] = 7 + SHIFT;
+                n_edges[ne++] = 0;
+                n_aff[i] = 1;
+            } else if (i >= SHIFT) {
+                uint32_t k = i - SHIFT;
+                for (uint32_t d = o_offsets[k]; d < o_offsets[k + 1]; d++) {
+                    uint32_t target = o_edges[d] + SHIFT;
+                    if (k == 8 && o_edges[d] == 7)
+                        target = 1;   /* layer 8 now composes over the inserted layer */
+                    n_edges[ne++] = target;
+                    if (o_back[k] == o_edges[d])
+                        n_back[i] = target;
+                }
+                n_aff[i] = o_aff[k];
+            }
+        }
+        n_offsets[NEW] = ne;
+        host after = {{0}, NULL};
+        uint64_t new_stamps[N];
+        for (uint32_t i = SHIFT; i < NEW; i++)
+            after.resident[i] = before.resident[i - SHIFT];
+        /* Without the previous indices nothing is known after the replace: no run. */
+        assert(op_graph_replace(g, NEW, n_offsets, n_edges, ne) == OP_OK);
+        for (uint32_t i = 0; i < NEW; i++)
+            set_own(g, i, i >= SHIFT ? 100 + i - SHIFT : 300 + i);
+        assert(op_graph_set_composition(g, n_back, n_group, n_aff, NEW) == OP_OK);
+        evaluate(g, NEW, &after, new_stamps);
+        runs_of(g, 11 + SHIFT, &after, &p);
+        assert(p.run_count == 0);
+        /* With them, layers 9..11 are one run over layer 8, under the key armed before. */
+        assert(op_graph_replace(g, NEW, n_offsets, n_edges, ne) == OP_OK);
+        for (uint32_t i = 0; i < NEW; i++)
+            set_own(g, i, i >= SHIFT ? 100 + i - SHIFT : 300 + i);
+        assert(op_graph_set_composition(g, n_back, n_group, n_aff, NEW) == OP_OK);   /* rendered: lost again */
+        assert(op_graph_replace(g, NEW, n_offsets, n_edges, ne) == OP_OK);
+        for (uint32_t i = 0; i < NEW; i++)
+            set_own(g, i, i >= SHIFT ? 100 + i - SHIFT : 300 + i);
+        assert(op_graph_set_composition_from(g, n_back, n_group, n_aff, NEW, NULL) == OP_INVALID_ARGUMENT);
+        op_graph_destroy(g);
+
+        /* Once more from the rendered chain, with previous indices this time. */
+        assert(op_graph_create(&g) == OP_OK);
+        assert(op_graph_replace(g, OLD, o_offsets, o_edges, e) == OP_OK);
+        for (uint32_t i = 0; i < OLD; i++)
+            set_own(g, i, 100 + i);
+        assert(op_graph_set_composition(g, o_back, o_group, o_aff, OLD) == OP_OK);
+        memset(&before, 0, sizeof(before));
+        evaluate(g, OLD, &before, old_stamps);
+        render(g, 11, &before);
+        assert(op_graph_replace(g, NEW, n_offsets, n_edges, ne) == OP_OK);
+        for (uint32_t i = 0; i < NEW; i++)
+            set_own(g, i, i >= SHIFT ? 100 + i - SHIFT : 300 + i);
+        assert(op_graph_set_composition_from(g, n_back, n_group, n_aff, NEW, previous) == OP_OK);
+        memset(&after, 0, sizeof(after));
+        for (uint32_t i = SHIFT; i < NEW; i++)
+            after.resident[i] = before.resident[i - SHIFT];
+        evaluate(g, NEW, &after, new_stamps);
+        runs_of(g, 11 + SHIFT, &after, &p);
+        assert(p.run_count == 1 && p.runs[0].input == 8 + SHIFT && p.runs[0].length == 3);
+        assert(p.runs[0].key == armed.runs[0].key);
+        op_graph_destroy(g);
+    }
     puts("PASS test_suffix");
     return 0;
 }

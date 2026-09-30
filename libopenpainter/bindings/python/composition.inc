@@ -27,9 +27,9 @@ static PyObject *ir_backdrop_affine(PyObject *self, PyObject *args) {
 }
 static PyObject *graph_compose(PyObject *self, PyObject *args) {
     (void)self;
-    PyObject *capsule, *backdrop, *grouped, *affine;
-    uint32_t b, p, a;
-    if (!PyArg_ParseTuple(args, "OOOO", &capsule, &backdrop, &grouped, &affine))
+    PyObject *capsule, *backdrop, *grouped, *affine, *previous = NULL;
+    uint32_t b, p, a, v = 0;
+    if (!PyArg_ParseTuple(args, "OOOO|O", &capsule, &backdrop, &grouped, &affine, &previous))
         return NULL;
     graph_owner *g = graph_get(capsule);
     if (!g)
@@ -48,12 +48,25 @@ static PyObject *graph_compose(PyObject *self, PyObject *args) {
         free(group);
         return NULL;
     }
-    op_status_t status = (b != g->count || p != g->count || a != g->count)
+    /* previous[i]: node i's index before the topology changed (op_graph_set_composition_from). */
+    uint32_t *before = NULL;
+    if (previous && previous != Py_None) {
+        before = copy_buffer(previous, 4, 65536, &v);
+        if (!before) {
+            free(back);
+            free(group);
+            free(flags);
+            return NULL;
+        }
+    }
+    op_status_t status = (b != g->count || p != g->count || a != g->count || (before && v != g->count))
                              ? OP_VALIDATION_FAILED
-                             : op_graph_set_composition(g->graph, back, group, flags, b);
+                         : before ? op_graph_set_composition_from(g->graph, back, group, flags, b, before)
+                                  : op_graph_set_composition(g->graph, back, group, flags, b);
     free(back);
     free(group);
     free(flags);
+    free(before);
     if (fail(status))
         return NULL;
     Py_RETURN_NONE;

@@ -54,7 +54,8 @@ op_status_t op_graph_checkpoint(const op_graph_t *graph, const uint32_t *order,
  * none); each must be one of i's dependencies. affine[i] marks a node whose only
  * output is a per-texel affine function of its backdrop (op_ir_backdrop_affine).
  * Arrays are copied and cleared by op_graph_replace. Knowledge about nodes whose
- * composition is unchanged survives a repeated call.
+ * composition is unchanged survives a repeated call, and a topology change through
+ * op_graph_set_composition_from.
  *
  * With a composition, evaluation also derives each node's local stamp: its own
  * revision and everything it reads except its backdrop. Execution records the
@@ -62,6 +63,13 @@ op_status_t op_graph_checkpoint(const op_graph_t *graph, const uint32_t *order,
 op_status_t op_graph_set_composition(op_graph_t *graph, const uint32_t *backdrop,
                                      const uint32_t *grouped, const unsigned char *affine,
                                      uint32_t count);
+/* op_graph_set_composition after a topology change: previous[i] is node i's index before
+ * op_graph_replace (UINT32_MAX: a new node). A node whose composition maps onto the same
+ * nodes keeps its local and rendered stamps, so an affine run armed before a layer was
+ * added, removed or moved elsewhere is still planned (ABI 13). */
+op_status_t op_graph_set_composition_from(op_graph_t *graph, const uint32_t *backdrop,
+                                          const uint32_t *grouped, const unsigned char *affine,
+                                          uint32_t count, const uint32_t *previous);
 /* The first node of a channel's render order whose current stamp differs from
  * its desired one (UINT32_MAX: none). */
 op_status_t op_graph_lowest_changed(const op_graph_t *graph, const uint32_t *order, uint32_t count,

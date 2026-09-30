@@ -305,13 +305,11 @@ def run_structural(scene, ts, repeats=3):
         ts.active_layer = len(ts.layers) - 1
         added = stack.add(ts, 'FILL', f'Structural fill {index}')
         stack.channel_for(added, 'BASE_COLOR').color = (.3, .2 + index * .1, .6, 1)
-        stack.invalidate(ts)
     record('add_fill_top', add_fill)
 
     def remove_fill(index):
         stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
                                                   if item.name.startswith('Structural fill'))))
-        stack.invalidate(ts)
     record('remove_layer', remove_fill)
 
     def add_fill_middle(index):
@@ -319,13 +317,11 @@ def run_structural(scene, ts, repeats=3):
         ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == middle)
         added = stack.add(ts, 'FILL', f'Middle fill {index}')
         stack.channel_for(added, 'BASE_COLOR').color = (.2, .3 + index * .1, .5, 1)
-        stack.invalidate(ts)
     record('add_fill_middle', add_fill_middle)
 
     def remove_middle(index):
         stack.remove(ts, stack.index_of(ts, next(item.id for item in ts.layers
                                                   if item.name.startswith('Middle fill'))))
-        stack.invalidate(ts)
     record('remove_middle', remove_middle)
 
     def move_middle(index):

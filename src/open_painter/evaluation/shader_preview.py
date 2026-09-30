@@ -48,6 +48,27 @@ def _touch(entry, identifiers):
         graph.touch_layers(identifiers)
 
 
+def _known(entry, ts):
+    """Every edit up to the set's serial reached the session (a callback or a named
+    invalidation). A serial bump nobody reported leaves this behind: the next structure
+    check then plans every layer."""
+    if entry is not None and entry.get('known') == ts.edit_serial - 1:
+        entry['known'] = ts.edit_serial
+
+
+def _unknown_edits(entry, ts):
+    if entry.get('known') != ts.edit_serial:
+        _touch(entry, None)
+
+
+def invalidated(ts, identifiers):
+    """``layer_stack.invalidate`` naming the layers it changed."""
+    entry = _sessions.get(key_for(ts.id_data, ts))
+    if entry is not None:
+        _touch(entry, identifiers)
+        _known(entry, ts)
+
+
 @contextmanager
 def authoring_batch(ts):
     """Coalesce a bounded authoring transaction; ordinary slider edits stay immediate."""
@@ -312,7 +333,7 @@ def _record(entry, ts, result):
         entry['diagnostics'] = result
     graph = entry.get('graph')
     error = graph.resource_error() if graph is not None else ''
-    entry.update(serial=ts.edit_serial, error=error, rebuild=False)
+    entry.update(serial=ts.edit_serial, known=ts.edit_serial, error=error, rebuild=False)
 
 
 def _log(ts, event, report):
@@ -396,7 +417,7 @@ def ensure(scene, ts):
             _release(scene, ts, entry)
         if entry and entry.get('graph') and _alive(entry, ts):
             if (entry.get('serial') != ts.edit_serial or entry.get('recheck')) and not entry.get('rebuild'):
-                _touch(entry, None)   # an edit no callback reported (the set was invalidated)
+                _unknown_edits(entry, ts)   # an edit no callback reported (the set was invalidated)
                 _update(scene, ts, entry)
             if entry.get('rebuild') and _patch(scene, ts, entry):
                 return entry['graph']
@@ -461,6 +482,7 @@ def _patch(scene, ts, entry):
             or entry.get('rebuild_scope') == 'global'):
         return False
     reconcile = bool(entry.get('dropped') or entry.get('recheck'))
+    _unknown_edits(entry, ts)
     try:
         report = graph.patch(reconcile=reconcile)
     except Exception as exc:
@@ -529,6 +551,7 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         entry = _sessions.get(key)
         if entry and entry.get('graph') is not None and (structural or entry['graph']._stubs):
             _touch(entry, None if layer is None else (layer.id,))
+        _known(entry, ts)
         if key in _batches:
             _batches[key]['structural'] |= structural
             continue

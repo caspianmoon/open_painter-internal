@@ -523,7 +523,48 @@ Blend mode of a middle layer, 200 layers at 1K, idle arming on as in the product
 | Native prepare | 24–42 ms | 7–17 ms (includes translating the 4 new programs) |
 | Total | 224–286 ms | 38–50 ms |
 
-Adding, removing or moving a layer still rebuilds.
+### Adding, removing and moving layers
+
+A layer added, removed or moved shifts the layer structs above it in the stack's
+array, and a growing array can move all of them. Each unit captured its layer's
+struct, so the patch used to decline and the graph was rebuilt.
+
+- **Plan.** Layers added, removed, or whose order among the others changed are
+  edited layers for the incremental plan (`_reordered`). A change touching more
+  than a quarter of the stack plans every layer.
+- **Patch.** Each plan records where every layer's struct is. Units of a layer
+  that moved since the previous plan are unbound, followed to the new address
+  (`_follow_moved_layer`, as adoption does) and bound again; the patch only
+  declines when the set or its baked maps moved. The reverse map is assembled
+  again only for units that came, went, were replaced or reach other channels
+  (`_reverse_changed`). CPU inputs are reconciled only when an edited or moved
+  layer owns them.
+- **Callbacks.** `layer_stack.add` keeps its callbacks quiet while the new layer is
+  set up (they looked up their owner and notified the session about 25 times,
+  and each missed owner rebuilt the project's owner index) and notifies the
+  session once. An owner the index misses is found through its RNA path
+  (`owners._by_path`) and only its layer is indexed again. `layer_stack.remove`,
+  `move`, `remove_tree`, `move_above`, `place` and `parent` invalidate with the
+  layers they changed. The session counts a serial bump as known only when a
+  callback or such an invalidation reported it; any other bump plans every layer.
+- **Native graph.** A new topology clears C's own stamps. Units whose program,
+  constants, images and uniforms are unchanged resend their previous stamp
+  instead of recomputing it.
+
+`OP_VERIFY_STRUCTURE=1` also compares every patched dependency map with one
+mapped from scratch. `structural_patch.py` inserts, removes and moves layers, and
+adds layers until the array grows.
+
+200 layers at 1K, idle arming on:
+
+| Edit | Before | After |
+| --- | ---: | ---: |
+| Adding a fill on top | 306 ms | 93 ms |
+| Adding a fill in the middle | 325 ms | 110 ms |
+| Removing the top layer | 220 ms | 73 ms |
+| Removing a middle layer | 237 ms | 86 ms |
+| Moving a middle layer | 222 ms | 93 ms |
+| Applying a smart material (after the first) | 365 ms | 255 ms |
 
 ### Garbage collection
 
@@ -588,9 +629,12 @@ Machines with 16 GB or more keep the previous limits.
 - **CPU boundaries.** Metric material mapping with images or procedural detail,
   mesh masks and generators still rasterize on the CPU at full resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
-- **Layer order.** Adding, removing or moving a layer shifts the layer structs
-  above it, so the patch declines and the graph is rebuilt, adopting units
-  whose layer moved (about 200–300 ms at 200 layers).
+- **Layer order.** A layer inserted mid-stack still follows every unit of the
+  layers above it to their new addresses (about 1,000 units at 200 layers, some
+  25 ms), and a new topology makes the native graph describe and index every
+  unit again (about 25 ms). Units that do not capture their layer's struct, and
+  a native graph that inserts and removes nodes, would make these proportional
+  to the edit.
 - **Whole-stack passes left in a patched edit.** The plan still carries every
   memo into a new plan and sorts every signature. The layer callback walks all
   readers again after a structural edit (`references._reader_layers`), and the

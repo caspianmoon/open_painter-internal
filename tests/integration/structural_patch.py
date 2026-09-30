@@ -179,9 +179,27 @@ def structural_and_numeric():
 check('numeric edit while pending', structural_and_numeric)
 
 
+# Layers added, removed and moved shift the layer structs above them in their array: the
+# units of those layers are followed to their new addresses, not recompiled.
 def insert():
     current().active_layer = next(i for i, item in enumerate(current().layers) if item.id == ids[4])
-    stack.add(current(), 'FILL', 'Inserted')
-    stack.invalidate(current())
-check('layer inserted', insert, patched=False)
+    stack.channel_for(stack.add(current(), 'FILL', 'Inserted'), 'BASE_COLOR').color = (.9, .1, .1, 1)
+check('layer inserted', insert, reprogram=False)
+layer(ids[9]).opacity = .3   # a moved layer's bindings still answer
+settle()
+check('layer removed', lambda: stack.remove(current(), stack.index_of(current(), next(
+    item.id for item in current().layers if item.name == 'Inserted'))), reprogram=False)
+check('layer moved', lambda: stack.move(current(), stack.index_of(current(), ids[3]), 3), reprogram=False)
+
+
+def burst():
+    # Enough layers that the array grows: every layer struct moves.
+    for index in range(12):
+        current().active_layer = 2
+        stack.add(current(), 'FILL', f'Burst {index}').opacity = .2
+check('layers added until the array grew', burst, reprogram=False, limit=120)
+layer(ids[1]).opacity = .45
+stack.channel_for(layer(ids[2]), 'ROUGHNESS').value = .75
+settle()
+check('a structural edit after the growth', lambda: setattr(layer(ids[5]), 'blend_mode', 'OVERLAY'))
 print('STRUCTURAL_PATCH_OK', flush=True)

@@ -22,9 +22,15 @@ FILL_DEFAULT_CHANNELS = frozenset({"BASE_COLOR", "ROUGHNESS", "METALLIC", "NORMA
 _replays = 0
 
 
-def invalidate(ts) -> None:
+def invalidate(ts, layers=None) -> None:
+    """Mark the set changed. ``layers``: the only layers whose structure changed (an add,
+    remove or move of these), so the engine's next structure check plans them and what
+    they reach instead of every layer; None when anything may have changed."""
     ts.dirty = True
     ts.edit_serial += 1
+    if layers is not None:
+        from ..evaluation.shader_preview import invalidated
+        invalidated(ts, layers)
     for out in ts.outputs:
         out.dirty = True
     for i, layer in enumerate(ts.layers):
@@ -37,18 +43,25 @@ def invalidate(ts) -> None:
 def add(ts, kind="FILL", name=None, parent_id=""):
     # Initializing RNA defaults fires change callbacks. An empty paint layer or
     # folder has no visual contribution, so preserve the existing output state.
+    # The callbacks stay quiet while the layer is set up (each one would look up
+    # its owner and notify the session); one notification below covers them.
+    global _replays
     position = min(len(ts.layers), max(0, ts.active_layer + 1))
     was_dirty, serial = ts.dirty, ts.edit_serial
     output_dirty = {out.channel: out.dirty for out in ts.outputs}
-    layer = ts.layers.add()
-    layer.id, layer.type = new_id(), kind
-    layer.name = name or {"FILL": "Fill Layer", "PAINT": "Paint Layer", "FOLDER": "Folder"}[kind]
-    ensure_channels(layer)
-    layer.parent_id = parent_id
-    identifier = layer.id
-    ts.layers.move(len(ts.layers) - 1, position)
-    for i, item in enumerate(ts.layers):
-        item.order = i
+    _replays += 1
+    try:
+        layer = ts.layers.add()
+        layer.id, layer.type = new_id(), kind
+        layer.name = name or {"FILL": "Fill Layer", "PAINT": "Paint Layer", "FOLDER": "Folder"}[kind]
+        ensure_channels(layer)
+        layer.parent_id = parent_id
+        identifier = layer.id
+        ts.layers.move(len(ts.layers) - 1, position)
+        for i, item in enumerate(ts.layers):
+            item.order = i
+    finally:
+        _replays -= 1
     ts.active_layer = position
     layer = next(item for item in ts.layers if item.id == identifier)
     affected = (
@@ -63,6 +76,9 @@ def add(ts, kind="FILL", name=None, parent_id=""):
         out.dirty = output_dirty.get(out.channel, False) or out.channel in affected
     from .shared_stacks import publish
     publish(ts)
+    if not replaying():
+        from ..evaluation.shader_preview import notify
+        notify(layer, structural=True)   # the new layer, for the session's next structure check
     return layer
 
 
@@ -98,7 +114,7 @@ def parent(ts, layer, folder_id: str) -> None:
             raise ValueError("Parent folder is missing.")
         cursor = folder.parent_id
     layer.parent_id = folder_id
-    invalidate(ts)
+    invalidate(ts, (layer.id,))
 
 
 def release_image(image) -> None:
@@ -132,6 +148,7 @@ def release_images(layer) -> None:
 
 def remove(ts, index: int) -> None:
     layer = ts.layers[index]
+    identifier = layer.id
     for child in ts.layers:
         if child.parent_id == layer.id:
             child.parent_id = layer.parent_id
@@ -142,14 +159,15 @@ def remove(ts, index: int) -> None:
     release_images(layer)
     ts.layers.remove(index)
     ts.active_layer = min(index, len(ts.layers) - 1)
-    invalidate(ts)
+    invalidate(ts, (identifier,))
 
 
 def move(ts, index: int, direction: int) -> None:
     target = max(0, min(len(ts.layers) - 1, index + direction))
+    identifier = ts.layers[index].id
     ts.layers.move(index, target)
     ts.active_layer = target
-    invalidate(ts)
+    invalidate(ts, (identifier,))
 
 
 def snapshot(source) -> dict:
@@ -468,7 +486,7 @@ def remove_tree(ts, identifier):
             release_images(ts.layers[i])
             ts.layers.remove(i)
     ts.active_layer = min(ts.active_layer, max(0, len(ts.layers) - 1))
-    invalidate(ts)
+    invalidate(ts, identifiers)
 
 
 def move_above(ts, identifiers, target_id):
@@ -481,7 +499,7 @@ def move_above(ts, identifiers, target_id):
         target = next(i for i, item in enumerate(ts.layers) if item.id == anchor)
         ts.layers.move(source, target if source < target else target + 1)
         anchor = identifier
-    invalidate(ts)
+    invalidate(ts, roots)
 
 
 def index_of(ts, identifier):
@@ -556,7 +574,7 @@ def place(ts, identifier, target):
             ts.layers.move(source, anchor if source < anchor else anchor + 1)
         else:
             ts.layers.move(source, anchor - 1 if source < anchor else anchor)
-    invalidate(ts)
+    invalidate(ts, (identifier,))
     ts.active_layer = index_of(ts, identifier)
     return ts.active_layer
 

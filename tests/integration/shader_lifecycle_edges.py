@@ -261,7 +261,9 @@ def failing_build(self, reuse=None):
     return original_build(self, reuse=reuse)
 
 
-with patch.object(Graph, 'build', failing_build):
+from open_painter.evaluation.engine.compiler import EngineGraph
+# A layer added is patched into the session's graph; declined here, it is rebuilt.
+with patch.object(Graph, 'build', failing_build), patch.object(EngineGraph, 'patch', lambda self, **_: None):
     extra = stack.add(third, 'FILL', 'Extra')
     extra_id = extra.id
     for _ in range(3):
@@ -278,5 +280,30 @@ assert len(attempts) == 2, attempts
 graph = shader_preview.ensure(scene, third)
 assert any(key[1] == extra_id for key in graph.units) and graph.matches_structure()
 print('LIFECYCLE_EDGE failed replacement build: PASS', flush=True)
+
+# --- A patch whose compile fails puts its graph back; the rebuild then applies the edit (0.14).
+original_compile = Graph._compile
+failures = []
+
+
+def failing_compile(self, key, layer, stub=None, bypass=False):
+    if not failures:
+        failures.append(key)
+        raise ValueError('simulated unit failure')
+    return original_compile(self, key, layer, stub=stub, bypass=bypass)
+
+
+graph = shader_preview.ensure(scene, third)
+kept = {key: unit.tree for key, unit in graph.units.items()}
+with patch.object(Graph, '_compile', failing_compile):
+    next(l for l in third.layers if l.id == extra_id).blend_mode = 'MULTIPLY'
+    info = ready(scene, third)
+assert failures, 'the patch compiled nothing'
+rebuilt = shader_preview.ensure(scene, third)
+assert rebuilt is not graph and rebuilt.matches_structure(), 'the failed patch was not rebuilt'
+# The rebuild adopted what the failed patch put back: every unit of another layer, intact.
+assert all(rebuilt.units[key].tree is tree for key, tree in kept.items() if key[1] != extra_id), \
+    'the failed patch changed its graph'
+print('LIFECYCLE_EDGE failed patch: PASS', flush=True)
 print('SHADER_LIFECYCLE_EDGES_PASS', flush=True)
 open_painter.unregister()

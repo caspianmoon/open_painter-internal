@@ -320,12 +320,10 @@ class EngineGraph(Graph):
                 'warnings': list(references) + mesh_warnings(self.ts) + self._build_warnings()}
 
     def _stack_layout(self):
-        """What a patch needs where the build left it: every layer struct (adding, removing or
-        moving a layer shifts the ones above it) and the set and its baked maps, which every
-        unit captures."""
+        """What a patch needs where the build left it: the set and its baked maps, which every
+        unit captures. Layers that moved in their array are followed (``_patch``)."""
         ts = self.ts
-        return (tuple(layer.as_pointer() for layer in ts.layers),
-                tuple(item.as_pointer() for item in (ts, *ts.baked_maps)))
+        return tuple(item.as_pointer() for item in (ts, *ts.baked_maps))
 
     # ---- structural edits in place ---------------------------------------------------
 
@@ -382,12 +380,31 @@ class EngineGraph(Graph):
         previous = dict(before[2])
         stale = {key for key in self.units
                  if key not in signatures or previous.get(key) != signatures[key]}
-        # Only a layer an edit reached (``plan.affected``) can have had its collections moved.
+        # Only a layer an edit reached (``plan.affected``) can have had its collections moved;
+        # a layer whose own struct moved (a layer added, removed or moved below it, or the
+        # array grown) is followed where it went.
         reached = plan.affected
+        before_plan = self._structure_plan
+        moved = ({identifier for identifier, pointer in plan.pointers.items()
+                  if before_plan.pointers.get(identifier, pointer) != pointer}
+                 if before_plan is not None and getattr(before_plan, 'pointers', None) is not None else None)
+        follow = {}
         for key, unit in self.units.items():
-            if (key not in stale and (reached is None or key[1] in reached)
-                    and (unit.tree is None or unit.owner_pointers != self._unit_owners(key))):
+            if key in stale:
+                continue
+            if unit.tree is None:
                 stale.add(key)
+            elif reached is None or key[1] in reached or moved is None or key[1] in moved:
+                owners = self._unit_owners(key)
+                if unit.owner_pointers != owners:
+                    follow[key] = owners
+        if follow:
+            followed = [self.units[key] for key in follow]
+            self._unbind_units(followed)   # registered again under the layers' new addresses
+            for key, owners in follow.items():
+                if not self._follow_moved_layer(self.units[key], key, owners):
+                    stale.add(key)
+            self._rebind_units(followed)
         removed = _removed_graph_units(self.bindings.values() if reached is None else
                                        [binding for key, unit in self.units.items() if key[1] in reached
                                         for binding in unit.bindings.values()])
@@ -398,8 +415,9 @@ class EngineGraph(Graph):
         retired = {key: self.units.pop(key) for key in stale}
         self._unbind_units(retired.values())
         kept = set(self.units)
-        # Collections of the edited layers may have moved; every other layer's stay where they were.
-        self._refresh_paths(plan, reached)
+        # Collections of the edited layers may have moved, and moved layers sit at another
+        # index; every other layer's structs stay where they were.
+        self._refresh_paths(plan, None if reached is None or moved is None else reached | moved)
         self._reused = []
         try:
             for key in plan.order:
@@ -432,7 +450,10 @@ class EngineGraph(Graph):
         for unit in self.units.values():
             self._compiled_effects.update(unit.compiled_effects)
         if current[1] != before[1] or not self._reverse_units(retired, fresh):
-            self._reverse_map()
+            if not self._reverse_changed(retired):
+                self._reverse_map()
+        if VERIFY_STRUCTURE:
+            self._verify_reverse()
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         if all(self._stub(key) == stubs.get(key) for key in fresh):
             self._structure = current   # each recompiled unit signs as ``current`` assumed
@@ -448,8 +469,17 @@ class EngineGraph(Graph):
                 binding.owners = {o.as_pointer() for o in binding.owner_factory()}
         self.validate_parameters()
         # Inputs a structural edit re-identifies (an anchor's prefix, a cached subtree) are
-        # reconciled as a rebuild does; uniforms only when edits were dropped meanwhile.
-        corrections = self.update(check_structure=False, values=reconcile)
+        # reconciled as a rebuild does, those an edited or moved layer owns; uniforms only when
+        # edits were dropped meanwhile.
+        owned = None
+        path_owners = getattr(self, '_path_owners', None) if self._paths is not None else None
+        if not reconcile and reached is not None and moved is not None and path_owners is not None:
+            owned = set()
+            for identifier in reached | moved:
+                owned.update(path_owners.get(identifier, ()))
+            for key in fresh:
+                owned.update(self.units[key].owner_pointers)
+        corrections = self.update(check_structure=False, values=reconcile, owners=owned)
         for key in (self.units if reconcile else fresh):
             for binding in self.units[key].cache_bindings:
                 self._reconcile_cache(binding)
@@ -558,11 +588,31 @@ class EngineGraph(Graph):
         its children — transitively, so a layer under a published folder reaches the
         channels of that folder's anchor consumers.
         """
-        self.consumers = defaultdict(set)
+        self.consumers, targets = self._reach_targets()
+        self.reverse = defaultdict(set)
+        self.channels = {'Final:' + channel: channel for channel in CHANNELS}
+        self._targets, self._role_units = targets, defaultdict(set)
+        self._reach_token = object()         # what reads what changed (``_live_effects``)
+        for key, unit in self.units.items():
+            for role in _dependency_roles(unit):
+                self.reverse[role] |= targets[key]
+                self._role_units[role].add(key)
+        self._index_importers()
+
+    def _index_importers(self):
+        self._importers = defaultdict(set)   # producer -> units importing it (a socket or a literal)
+        for key, unit in self.units.items():
+            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
+                self._importers[producer_key].add(key)
+
+    def _reach_targets(self):
+        """(consumers, targets): the units importing each unit, and the ``Final:<channel>``
+        roles each unit's result reaches."""
+        consumers = defaultdict(set)
         for key, unit in self.units.items():
             for producer_key, _, _ in unit.imports:
-                self.consumers[producer_key].add(key)
-        readers = defaultdict(set, {key: set(found) for key, found in self.consumers.items()})
+                consumers[producer_key].add(key)
+        readers = defaultdict(set, {key: set(found) for key, found in consumers.items()})
 
         def chain(steps, below):
             for step in steps:
@@ -595,18 +645,57 @@ class EngineGraph(Graph):
             reach[key] = found
             return found
 
-        self.reverse = defaultdict(set)
-        self.channels = {'Final:' + channel: channel for channel in CHANNELS}
-        self._targets, self._role_units = {}, defaultdict(set)
-        self._importers = defaultdict(set)   # producer -> units importing it (a socket or a literal)
-        self._reach_token = object()         # what reads what changed (``_live_effects``)
-        for key, unit in self.units.items():
-            targets = self._targets[key] = frozenset('Final:' + channel for channel in channels(key))
+        return consumers, {key: frozenset('Final:' + channel for channel in channels(key)) for key in self.units}
+
+    def _verify_reverse(self):
+        """OP_VERIFY_STRUCTURE: the patched dependency map must equal one mapped from scratch."""
+        def plain(table):
+            return {key: set(value) for key, value in table.items() if value}
+        found = (plain(self.reverse), plain(self.consumers), dict(self._targets), plain(self._importers))
+        self._reverse_map()
+        expected = (plain(self.reverse), plain(self.consumers), dict(self._targets), plain(self._importers))
+        for name, mine, full in zip(('reverse', 'consumers', 'targets', 'importers'), found, expected):
+            if mine != full:
+                differ = sorted(str(key) for key in mine.keys() | full.keys() if mine.get(key) != full.get(key))
+                raise AssertionError(f'Patched {name} differ from a full map: {differ[:6]}')
+
+    def _reverse_changed(self, retired):
+        """``_reverse_map`` after a patch that changed which units exist or what reads what (a
+        layer added, removed or moved): reach is walked again for every unit (memoised), roles
+        are assembled again only for the units that came, went, were replaced or reach other
+        channels now. False when there is no map to update."""
+        before = getattr(self, '_targets', None)
+        if before is None:
+            return False
+        self.consumers, targets = self._reach_targets()
+        roles = set()
+        for key, unit in retired.items():
             for role in _dependency_roles(unit):
-                self.reverse[role] |= targets
-                self._role_units[role].add(key)
-            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
-                self._importers[producer_key].add(key)
+                self._role_units[role].discard(key)
+                roles.add(role)
+        changed = False
+        for key, unit in self.units.items():
+            replaced = key in retired
+            if replaced or before.get(key) != targets[key]:
+                changed = changed or not replaced or before.get(key) != targets[key]
+                for role in _dependency_roles(unit):
+                    self._role_units[role].add(key)
+                    roles.add(role)
+        changed = changed or any(key not in self.units for key in retired)
+        self._targets = targets
+        for role in roles:
+            found = set()
+            for key in self._role_units.get(role, ()):
+                found |= targets[key]
+            if found:
+                self.reverse[role] = found
+            else:
+                self.reverse.pop(role, None)
+                self._role_units.pop(role, None)
+        if changed:
+            self._reach_token = object()
+        self._index_importers()
+        return True
 
     def _reverse_units(self, retired, fresh):
         """``_reverse_map`` after a patch that replaced units without changing what reads them:

@@ -700,7 +700,7 @@ class Graph(Math):
         collections where they were (``_path``)."""
         paths, owners = self._paths, getattr(self, '_path_owners', None)
         if paths is None or owners is None or identifiers is None:
-            self._paths = None
+            self._paths = self._path_owners = None
             return
         for identifier in identifiers:
             for pointer in owners.pop(identifier, ()):
@@ -2015,11 +2015,12 @@ class Graph(Math):
         whose layers were added, removed or reordered, plans every layer.
         """
         stack_layers = list(self.ts.layers)
-        layers, children, ids = {}, {}, []
+        layers, children, ids, pointers = {}, {}, [], {}
         for layer in stack_layers:
             identifier = layer.id
             ids.append(identifier)
             layers[identifier] = layer
+            pointers[identifier] = layer.as_pointer()   # where each layer's struct is now
             children.setdefault(layer.parent_id, []).append(layer)
         ids = tuple(ids)
         # A collection edited without a callback (the operators invalidate the set, a script
@@ -2033,6 +2034,7 @@ class Graph(Math):
             affected = self._reach(previous, layers, children, set(dirty) | moved | reordered)
         while True:
             plan = self._plan_from(previous, affected, layers, children, ids, prints)
+            plan.pointers = pointers
             if affected is None:
                 break
             # A re-planned layer that reads another now: that one is reached too.
@@ -3105,14 +3107,15 @@ class Graph(Math):
         self._reused.append(key)
         return unit
 
-    def _follow_moved_layer(self, unit, key):
+    def _follow_moved_layer(self, unit, key, current=None):
         """An unchanged unit whose layer struct moved in the stack's array: a layer inserted,
         removed or moved below it, or the array grown. Only the layer group moves; its channels,
         masks and effects keep arrays of their own. Re-pointing what the unit captured of the old
         struct adopts it instead of recompiling it (an insert mid-stack moved every layer above).
         False, recompiling it, unless the layer is the only owner that moved and nothing still
         holds the old struct afterwards."""
-        current, before = self._unit_owners(key), unit.owner_pointers
+        current = self._unit_owners(key) if current is None else current
+        before = unit.owner_pointers
         at = len(self._plan.base_owners)
         if (len(current) != len(before) or current[:at] != before[:at]
                 or current[at + 1:] != before[at + 1:]):
@@ -3881,14 +3884,15 @@ class Graph(Math):
         changed.extend(key for key in before if key not in after)
         return changed or 'wiring'
 
-    def update(self, owner=None, check_structure=True, resources=True, values=True):
+    def update(self, owner=None, check_structure=True, resources=True, values=True, owners=None):
         """Write changed bindings; ``check_structure`` is False for numeric-only edits.
 
         ``resources=False`` is the stroke-time path (freeze while painting): image
         bindings are refreshed so the canvas shows, but no structural walk,
         boundary re-identification or cache reconciliation happens until release.
         ``values=False`` reads no uniform and no image field: a patch whose kept units
-        saw every edit reconciles only inputs a structural edit can re-identify.
+        saw every edit reconciles only inputs a structural edit can re-identify, and with
+        ``owners`` (addresses) only the inputs one of those owns.
         """
         started = perf_counter()
         if resources and (check_structure or self._stubs):
@@ -3934,6 +3938,8 @@ class Graph(Math):
             removed = self._placeholder_removed(binding)
             if pointer is not None and pointer not in binding.owners and not removed:
                 continue
+            if owners is not None and owners.isdisjoint(binding.owners) and not removed:
+                continue
             signature = binding.identity()
             if signature != binding.signature:
                 queued += self._request(binding, signature)
@@ -3954,6 +3960,8 @@ class Graph(Math):
             if not resources:
                 break
             if pointer is not None and pointer not in binding.owners:
+                continue
+            if owners is not None and owners.isdisjoint(binding.owners) and not binding.stale:
                 continue
             signature = binding.identity()
             if signature != binding.signature or binding.stale:

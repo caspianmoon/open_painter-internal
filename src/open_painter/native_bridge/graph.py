@@ -130,6 +130,7 @@ class NativeGraph:
         valid = (cached is not None and cached[0] is graph and cached[1] is engine.inline
                  and cached[6] == context)
         dirty = states = reprogrammed = None
+        resend = ()   # unchanged units whose own stamps a new topology cleared in C
         if valid and patched is not None:
             # A patch replaced these units in the same graph (or only moved the wiring): while
             # the topology holds, only they are described again.
@@ -179,6 +180,7 @@ class NativeGraph:
                 offsets.append(len(edges))
             topology = keys, tuple(offsets), tuple(edges)
             replaced = topology != self.topology
+            kept_own = dict(self.own)   # a new topology clears C's own stamps; unchanged units resend theirs
             if replaced:
                 a, b = (U32 * len(offsets))(*offsets), (U32 * len(edges))(*edges)
                 if self.binding is not None:
@@ -194,7 +196,7 @@ class NativeGraph:
                                 tuple((key, states[key].program) for key in keys), context)
             scanned = self._index(engine, keys, indices, states, epochs, identities)
             dirty = keys
-            if INCREMENTAL and not replaced and previous is not None and self.own and touched is not None:
+            if INCREMENTAL and previous is not None and kept_own and touched is not None:
                 constants_before = previous[4]
                 changed = {key for key in keys if states[key].program is not previous_programs.get(key)
                            or constants_before.get(key) != constants[key]}
@@ -206,8 +208,16 @@ class NativeGraph:
                     if owner in indices:
                         changed.add(owner)
                 dirty = changed
+                if replaced:
+                    # C lost every own stamp with the old topology: an unchanged unit's is the
+                    # one it had (a new unit has none, and counts as changed above).
+                    resend = [(key, kept_own[key]) for key in keys if key not in changed and key in kept_own]
+                    dirty |= {key for key in keys if key not in changed and key not in kept_own}
         count = len(keys)
         changes = []
+        for key, value in resend:
+            changes.append(Patch(indices[key], 0, value))
+            self.own[key] = value
         for key in dirty:
             value = hash((key, engine._own_stamp(states[key], epochs), constants[key])) & MASK
             if self.own.get(key) != value:

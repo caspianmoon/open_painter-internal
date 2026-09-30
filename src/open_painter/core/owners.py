@@ -4,9 +4,12 @@ Property callbacks run on every slider step; scanning every layer, channel, effe
 and mask of every set for the edited struct made each step linear in the stack.
 The index stores positions and ids, never RNA references: a collection
 reallocation (adding or removing a layer) invalidates Python struct references.
-Every hit is verified against the struct's current members, and a failed
-verification rebuilds the scene's index once.
+Every hit is verified against the struct's current members. A miss (a layer added, or
+the layers above an insertion shifted) is resolved through the struct's own RNA path,
+which names its layer, and that layer alone is indexed again; only a struct the path
+does not place rebuilds the scene's index.
 """
+import re
 
 _index = {}   # scene address -> {struct address: (set position, set id, layer position or None, layer id)}
 
@@ -74,8 +77,47 @@ def locate(owner):
         found = _resolve(project, pointer, entry)
         if found is not None:
             return found
+    found = _by_path(scene, project, owner, pointer)
+    if found is not None:
+        return found
     entry = _build(scene).get(pointer)
     return _resolve(project, pointer, entry) if entry is not None else None
+
+
+_LAYER = re.compile(r'\.layers\[(\d+)\]')
+
+
+def _by_path(scene, project, owner, pointer):
+    """A struct of a layer store the index missed: its layer from its RNA path (Blender finds
+    that in C), verified, and that layer's members indexed again."""
+    from .layer_store import ATTRIBUTE, owner as store_owner
+    import bpy
+    palette = owner.id_data
+    if not isinstance(palette, bpy.types.Palette):
+        return None
+    try:
+        path = owner.path_from_id()
+    except ValueError:
+        return None
+    match = _LAYER.match(path, len(ATTRIBUTE)) if path.startswith(ATTRIBUTE + '.') else None
+    ts = store_owner(palette)[1]
+    if match is None or ts is None:
+        return None
+    position = int(match.group(1))
+    layers = ts.layers
+    if position >= len(layers):
+        return None
+    layer = layers[position]
+    entries = _index.setdefault(scene.as_pointer(), {})
+    s = next((i for i, item in enumerate(project.texture_sets) if item.as_pointer() == ts.as_pointer()), None)
+    if s is None:
+        return None
+    found = False
+    for item in members(layer):
+        address = item.as_pointer()
+        entries[address] = (s, ts.id, position, layer.id)
+        found = found or address == pointer
+    return (ts, layer) if found else None
 
 
 def clear():

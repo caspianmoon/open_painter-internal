@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 import pstats
 import sys
-from time import perf_counter
+from time import monotonic, perf_counter
 
 import bpy
 import gpu
@@ -34,7 +34,7 @@ import open_painter
 from open_painter.constants import CHANNELS, VERSION
 from open_painter.core import image_manager as images, layer_stack as stack
 from open_painter.core import texture_set_manager as sets
-from open_painter.evaluation import shader_preview
+from open_painter.evaluation import gc_policy, shader_preview
 from open_painter.evaluation.engine import runtime
 from open_painter.evaluation.metrics import Metrics
 from open_painter.smart_materials import composer
@@ -77,6 +77,16 @@ def time_phases():
     timed(native_channels.NativeChannels, 'execute', 'native execute')
     timed(runtime.Engine, 'evaluate', 'evaluate (all)')
     timed(shader_preview, 'tick', 'tick (all)')
+    import gc
+    collecting = {}
+
+    def collection(phase, info):
+        if phase == 'start':
+            collecting['started'] = perf_counter()
+            return
+        label = f"gc gen{info['generation']}"
+        phase_totals[label] = phase_totals.get(label, 0.0) + (perf_counter() - collecting['started']) * 1000
+    gc.callbacks.append(collection)
 MAPS = ('CURVATURE', 'AO', 'WORLD_NORMAL', 'POSITION', 'NORMAL', 'MEAN_CURVATURE',
         'BEVEL_MASK', 'BEVEL_NORMAL')
 
@@ -238,6 +248,8 @@ def run_structural(scene, ts, repeats=3):
                 with Frame():
                     while engine.prearm(selected, dependencies.image_epochs()):
                         pass
+            # The pause between two edits: the idle timer freezes what the last one kept.
+            gc_policy.settle(now=monotonic() + gc_policy.SETTLE_DELAY)
             entry = shader_preview._sessions.get(key_for(scene, ts), {})
             seen = len(entry.get('history', ()))
             phase_totals.clear()
@@ -258,7 +270,8 @@ def run_structural(scene, ts, repeats=3):
             entry = shader_preview._sessions.get(key_for(scene, ts), {})
             produced = list(entry.get('history', ()))[seen:] if len(entry.get('history', ())) > seen else []
             if PHASES:
-                print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms',
+                import gc
+                print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms', 'frozen', gc.get_freeze_count(),
                       {label: round(ms, 1) for label, ms in sorted(phase_totals.items())}, flush=True)
             stage_rows.append({stage: round(sum(row[stage] for row in produced), 2) for stage in
                                ('build', 'update', 'inputs', 'translate', 'compile', 'render', 'publish',
@@ -373,6 +386,15 @@ def main():
         print('DEEP_STACK_IMAGES', cold['images'], flush=True)
         print('DEEP_STACK_COLD', f'{cold_s:.2f}s', cold['passes'], cold['units'], cold['backend'],
               'footprint', cold['footprint_mib'], 'MiB', flush=True)
+        if PHASES:
+            # What a full garbage collection has to traverse.
+            import gc
+            from collections import Counter
+            tracked = gc.get_objects()
+            kinds = Counter(type(item).__qualname__ for item in tracked)
+            print('DEEP_STACK_GC_OBJECTS', len(tracked), 'frozen', gc.get_freeze_count(), kinds.most_common(25),
+                  flush=True)
+            del tracked
 
         top_level = [layer for layer in ts.layers if not layer.parent_id]
         leaves = [layer for layer in ts.layers if layer.type != 'FOLDER']

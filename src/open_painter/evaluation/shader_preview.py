@@ -425,8 +425,9 @@ def ensure(scene, ts):
         for retired in _retiring.pop(key, ()):
             retired.unbind()   # the leaves the rebuilt graph still needs are bound by it now
         metrics.count('shader_runtime_builds')
-        from . import profile
+        from . import gc_policy, profile
         profile.record_graph(scene, ts, candidate)
+        gc_policy.allocated()   # frozen once edits pause, so collections stop walking it
         return candidate
     finally:
         _busy.discard(key)
@@ -526,6 +527,8 @@ def _evaluate(scene, ts, entry, budget=None):
         return set()
     entry['dirty'] = bool(engine.deferred)
     entry['evaluated_at'] = perf_counter()
+    from . import gc_policy
+    gc_policy.evaluated()
     if engine.deferred:
         from . import cache
         cache.wake()
@@ -666,6 +669,8 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
         _evaluate(scene, ts, entry)
     elif not painting and not _pending(graph):
         _prearm(ts, entry)
+        from . import gc_policy
+        gc_policy.settle()
     _publish_status(scene, ts, entry)
     return current(scene, ts)
 

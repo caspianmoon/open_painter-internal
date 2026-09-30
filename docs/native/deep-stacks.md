@@ -456,6 +456,36 @@ three):
 | Removing the top layer | 134 ms | 93 ms |
 | The first smart-material apply | 1.6–2.0 s | 0.95 s |
 
+### Garbage collection
+
+A 200-layer project holds about 627,000 Python objects the cyclic garbage
+collector tracks. About 500,000 of them belong to the headless node trees of the
+compiled units (nodes, sockets, links and their lists). CPython runs a full
+collection once a quarter as many objects as the last one kept have survived
+since. A structural edit allocates enough for that to happen every few edits, and
+the collection walks all 627,000 objects: 311 ms in the middle of whichever edit
+tipped it. Profiles charged it to whatever function was allocating at the time
+(the reference graph, 87 ms "self time" that is 4.5 ms in isolation).
+
+`evaluation/gc_policy.py` keeps it off the edit path:
+
+- **Settle.** 0.3 s after an evaluation that followed a graph build, the idle
+  tick collects what is not frozen and freezes what survived (`gc.freeze`). That
+  is only what was allocated since the last settle, so it costs a few
+  milliseconds. Later collections walk only newer objects.
+- **Frozen objects still die.** Reference counting frees a frozen object as soon
+  as nothing uses it. Across 24 structural edits at 200 layers the frozen count
+  stayed flat (about 624,000), so replaced graphs are not kept alive.
+- **Sweep.** A reference cycle among frozen objects waits for `sweep`. A file
+  load and an undo run it (every session is dropped then). An idle spell of 30 s
+  runs it once the frozen set has grown by a quarter, and by at least 100,000
+  objects, since the last sweep.
+
+`native_deep_stack.py` settles between edits the way the idle timer does, and
+with `OP_DEEP_PHASES=1` reports collection time per generation. At 200 layers,
+the 311 ms full collections are gone; younger collections still cost 5–10 ms per
+structural edit.
+
 ## Test and benchmark memory
 
 A 200-layer 2K benchmark run exhausted the development machine. Background

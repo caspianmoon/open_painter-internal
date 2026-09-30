@@ -599,6 +599,8 @@ def _reset_runtime(*, forget_corrections):
     _forget_faults()
     from . import physical
     physical.forget()
+    from . import gc_policy
+    gc_policy.release()   # every session just went: frozen cycles among them are collected now
 
 
 def _migrate_angles(project):
@@ -885,6 +887,8 @@ def unregister():
     forget_corrections()
     from ..geometry.seams import clear as clear_seams
     clear_seams()
+    from . import gc_policy
+    gc_policy.release()
 
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):

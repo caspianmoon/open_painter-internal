@@ -1,0 +1,68 @@
+"""Keep Python's cyclic garbage collector off the edit path.
+
+A 200-layer project holds some 600,000 tracked Python objects, most of them the
+headless node trees of its compiled units. A full collection walks every one of
+them (about 300 ms on an M3 Pro) and CPython starts one whenever a quarter as many
+objects as the last one kept have survived since: every few structural edits, in
+the middle of whichever edit tipped it.
+
+Once edits pause, ``settle`` collects what is not frozen (only what was allocated
+since the last settle, so a few milliseconds) and freezes what survived
+(``gc.freeze``). Collections then walk only newer objects. Frozen objects are still
+freed by reference counting the moment nothing uses them; only a reference cycle
+among them waits, for ``sweep``, which runs when a file loads and after a long idle
+spell in which the frozen set grew. bpy-free: tests/unit drive it directly.
+"""
+import gc
+from time import monotonic
+
+SETTLE_DELAY = 0.3        # seconds since the last evaluation before survivors are frozen
+SWEEP_IDLE = 30.0         # seconds without an evaluation before frozen garbage is swept
+SWEEP_GROWTH = 1.25       # ... once the frozen set grew by a quarter since the last sweep
+SWEEP_MINIMUM = 100_000   # ... and by at least this many objects
+
+_state = {'pending': False, 'swept': 0, 'active': monotonic(), 'frozen': False}
+
+
+def allocated():
+    """A graph was built: the next settle freezes what it keeps."""
+    _state['pending'] = True
+    _state['active'] = monotonic()
+
+
+def evaluated():
+    _state['active'] = monotonic()
+
+
+def settle(now=None):
+    """Called on idle ticks. Returns 'settled', 'swept' or None."""
+    now = monotonic() if now is None else now
+    idle = now - _state['active']
+    if _state['pending'] and idle >= SETTLE_DELAY:
+        _state['pending'] = False
+        gc.collect()   # the frozen objects are not walked: only what is new since the last settle
+        gc.freeze()
+        _state['frozen'] = True
+        return 'settled'
+    frozen = gc.get_freeze_count()
+    if (_state['frozen'] and idle >= SWEEP_IDLE
+            and frozen > max(_state['swept'] * SWEEP_GROWTH, _state['swept'] + SWEEP_MINIMUM)):
+        sweep()
+        return 'swept'
+    return None
+
+
+def sweep():
+    """Collect everything, frozen or not, and freeze what survives."""
+    gc.unfreeze()
+    gc.collect()
+    gc.freeze()
+    _state.update(swept=gc.get_freeze_count(), frozen=True, pending=False)
+
+
+def release():
+    """Hand every frozen object back to normal collection (file load, unregister)."""
+    if _state['frozen']:
+        gc.unfreeze()
+        gc.collect()
+    _state.update(swept=0, frozen=False, pending=False, active=monotonic())

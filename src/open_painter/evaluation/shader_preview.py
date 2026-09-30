@@ -38,6 +38,14 @@ def authoring_structure_changed(scene):
     for key, state in _batches.items():
         if key[0] == scene.as_pointer():
             state['structural'] = True
+            _touch(_sessions.get(key), None)
+
+
+def _touch(entry, identifiers):
+    """The layers a structural edit reached, for the graph's next structure check (None: any)."""
+    graph = entry.get('graph') if entry else None
+    if graph is not None and hasattr(graph, 'touch_layers'):
+        graph.touch_layers(identifiers)
 
 
 @contextmanager
@@ -339,6 +347,7 @@ def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
     from .shader_graph import RebuildRequired
     if resources and entry.pop('recheck', False):
         check_structure, owner = True, None   # edits were dropped while held: re-read everything
+        _touch(entry, None)
     started = perf_counter()
     try:
         result = entry['graph'].update(owner, check_structure=check_structure, resources=resources)
@@ -387,6 +396,7 @@ def ensure(scene, ts):
             _release(scene, ts, entry)
         if entry and entry.get('graph') and _alive(entry, ts):
             if (entry.get('serial') != ts.edit_serial or entry.get('recheck')) and not entry.get('rebuild'):
+                _touch(entry, None)   # an edit no callback reported (the set was invalidated)
                 _update(scene, ts, entry)
             if entry.get('rebuild') and _patch(scene, ts, entry):
                 return entry['graph']
@@ -454,6 +464,9 @@ def _patch(scene, ts, entry):
     try:
         report = graph.patch(reconcile=reconcile)
     except Exception as exc:
+        from .shader_graph import VERIFY_STRUCTURE
+        if VERIFY_STRUCTURE and isinstance(exc, AssertionError):
+            raise   # a verified patch disagreed with a full check
         logger.debug('Engine patch of %s fell back to a rebuild: %s', ts.name, exc)
         return False
     if report is None:
@@ -513,6 +526,9 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         if not requested(ts):
             continue
         key = key_for(scene, ts)
+        entry = _sessions.get(key)
+        if entry and entry.get('graph') is not None and (structural or entry['graph']._stubs):
+            _touch(entry, None if layer is None else (layer.id,))
         if key in _batches:
             _batches[key]['structural'] |= structural
             continue

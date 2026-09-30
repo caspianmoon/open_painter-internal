@@ -321,20 +321,27 @@ assert ts.edit_serial != serial
 axes = np.asarray(layer_of().decal_axes).reshape(3, 3)
 assert abs(axes[0, 0] - math.cos(math.radians(45))) < 1e-4 and abs(axes[0, 1] - math.sin(math.radians(45))) < 1e-4
 ready(scene, ts)
-builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
+builds = revisions(shader_preview.diagnostics(scene, ts))
 empty.rotation_euler = Euler((0., 0., 0.))
 bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer())
 dependencies.refresh(scene)
 ready(scene, ts)
-assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds, 'a drag is a numeric update, not a rebuild'
+assert revisions(shader_preview.diagnostics(scene, ts)) == builds, 'a drag is a numeric update, not a rebuild'
 # The display size is a compiled constant: changing it restructures the session.
 empty.empty_display_size = 2.
 bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer())
 dependencies.refresh(scene)
 ready(scene, ts)
-assert shader_preview.diagnostics(scene, ts)['graph_builds'] > builds or shader_preview.diagnostics(scene, ts)['rebuild_pending']
+assert revisions(shader_preview.diagnostics(scene, ts)) > builds or shader_preview.diagnostics(scene, ts)['rebuild_pending']
 empty.empty_display_size = 1.
 bpy.context.view_layer.update()
 dependencies._candidates.add(scene.as_pointer())

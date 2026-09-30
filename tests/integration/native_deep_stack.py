@@ -253,6 +253,9 @@ def run_structural(scene, ts, repeats=3):
             entry = shader_preview._sessions.get(key_for(scene, ts), {})
             seen = len(entry.get('history', ()))
             phase_totals.clear()
+            counted = Metrics() if PHASES else None
+            if counted is not None:
+                counted.__enter__()
             started = perf_counter()
             if profiler:
                 profiler.enable()
@@ -264,6 +267,11 @@ def run_structural(scene, ts, repeats=3):
             elapsed, count = settle(scene, ts, started)
             if profiler:
                 profiler.disable()
+            if counted is not None:
+                counted.__exit__(None, None, None)
+                print('DEEP_STACK_COUNTS', name, index, {k: v for k, v in sorted(counted.counts.items())
+                                                         if 'suffix' in k or 'pass' in k or 'patch' in k
+                                                         or 'build' in k}, flush=True)
             durations.append(elapsed)
             ticks.append(count)
             # Stage rows this edit produced (the history holds the last few evaluations).

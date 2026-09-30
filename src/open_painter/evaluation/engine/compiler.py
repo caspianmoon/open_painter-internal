@@ -17,7 +17,8 @@ from time import perf_counter
 
 from ...constants import CHANNELS
 from .. import metrics
-from ..shader_graph import Binding, Graph, _removed_graph_units, _same_literal, _sampler_limit
+from ..shader_graph import (VERIFY_STRUCTURE, Binding, Graph, _removed_graph_units, _same_literal,
+                            _sampler_limit)
 from ..shader_math import Signal
 from . import headless
 
@@ -276,6 +277,7 @@ class EngineGraph(Graph):
         self.chains = {channel: self._chain('', channel, frozenset()) for channel in CHANNELS}
         self._reverse_map()
         self._structure = self.structural_signature(plan)
+        self._settled(plan)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self._layout = self._stack_layout()
         self.validate_parameters()
@@ -290,15 +292,24 @@ class EngineGraph(Graph):
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
         self._adopted = []
 
-    def _report(self, started, corrections, rebuilt, unit_nodes, unit_build_ms, patched=False):
-        from ...core.validation import warnings
+    def _report(self, started, corrections, rebuilt, unit_nodes, unit_build_ms, patched=False, nodes=None,
+                references=None):
+        """``references``: the reference warnings, when no reference changed since they were read."""
+        from ..references import warnings as reference_warnings
+        from ..mesh_masks import warnings as mesh_warnings
         queued = sum(key in self.resources.used for key in self.resources.queue)
+        if references is None:
+            references = reference_warnings(self.ts)
+        self._reference_warnings = references
+        nodes = self.node_count if nodes is None else nodes
+        self._tally = (nodes, unit_nodes, unit_build_ms)
         return {'parameter_changes': corrections.get('parameter_changes', []),
                 'invalidated_nodes': corrections.get('invalidated_nodes', []), 'affected_channels': list(CHANNELS),
                 'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': queued,
                 'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
                 'build_ms': (perf_counter() - started) * 1000,
-                'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
+                'shader_nodes': nodes, 'units': len(self.units),
+                'unit_nodes': unit_nodes,
                 'largest_unit': max(unit_nodes.values(), default=0),
                 'reused_units': len(self.units) - rebuilt, 'rebuilt_units': rebuilt, 'patched': patched,
                 # Counted when explicit diagnostics ask (a walk over every node of every unit).
@@ -306,7 +317,7 @@ class EngineGraph(Graph):
                 'pending_resources': self.pending_resources,
                 'unit_build_ms': unit_build_ms,
                 'cache_states': self.cache_states(),
-                'warnings': list(warnings(self.ts)) + self._build_warnings()}
+                'warnings': list(references) + mesh_warnings(self.ts) + self._build_warnings()}
 
     def _stack_layout(self):
         """What a patch needs where the build left it: every layer struct (adding, removing or
@@ -344,35 +355,51 @@ class EngineGraph(Graph):
                 validate_udim(ts)
             except ValueError:
                 return None
-            if hierarchy_issues(ts):
-                return None
-            return self._patch(reconcile)
+            return self._patch(reconcile, hierarchy_issues)
 
-    def _patch(self, reconcile):
+    def _patch(self, reconcile, hierarchy_issues):
         started = perf_counter()
-        plan = self.scope_plan(self.ts)
-        if plan is None:
-            plan = self.plan()
+        taken = self.scope_plan(self.ts, signature=True)
+        if taken is None:
+            plan = self.plan(self._structure_plan, self._dirty_layers)
+            current = self.structural_signature(plan)
         else:
-            self._plan, self._anchors = plan, None
-        before, current = self._structure, self.structural_signature(plan)
+            (plan, current), self._anchors = taken, None
+            self._plan = plan
+        # A reference cycle, a folder's mask referenced, a parent gone: only an edit of a layer
+        # taking part in references, or of a layer's parent or kind, can make one.
+        references = self._references_reached(plan)
+        if references or VERIFY_STRUCTURE:
+            problems = hierarchy_issues(self.ts)
+            if problems and not references:
+                raise AssertionError(f'A patch that reached no reference found issues: {problems}')
+            if problems:
+                return None
+        before = self._structure
         if current[0] != before[0]:
             return None
         signatures = dict(current[2])
         previous = dict(before[2])
         stale = {key for key in self.units
                  if key not in signatures or previous.get(key) != signatures[key]}
+        # Only a layer an edit reached (``plan.affected``) can have had its collections moved.
+        reached = plan.affected
         for key, unit in self.units.items():
-            if key not in stale and (unit.tree is None or unit.owner_pointers != self._unit_owners(key)):
+            if (key not in stale and (reached is None or key[1] in reached)
+                    and (unit.tree is None or unit.owner_pointers != self._unit_owners(key))):
                 stale.add(key)
-        removed = _removed_graph_units(self.bindings.values())
+        removed = _removed_graph_units(self.bindings.values() if reached is None else
+                                       [binding for key, unit in self.units.items() if key[1] in reached
+                                        for binding in unit.bindings.values()])
         if removed == 'global':
             return None
         stale.update(key for key in removed if key in self.units)
+        stubs = {key: self._stub(key) for key in stale if key in signatures}   # what ``current`` signed
         retired = {key: self.units.pop(key) for key in stale}
         self._unbind_units(retired.values())
         kept = set(self.units)
-        self._paths = None   # collections of the edited layers may have moved
+        # Collections of the edited layers may have moved; every other layer's stay where they were.
+        self._refresh_paths(plan, reached)
         self._reused = []
         try:
             for key in plan.order:
@@ -393,6 +420,9 @@ class EngineGraph(Graph):
             self.resources.used = self._used_resources()   # what the discarded units queued is dropped
             raise
         fresh = [key for key in self.units if key not in kept]
+        self._units_token = object()
+        nodes, unit_nodes, unit_build_ms = self._tally   # what the last build or patch counted
+        nodes -= sum(unit.node_count for unit in retired.values())
         for unit in retired.values():
             self._free_tree(unit.tree)
         self.resources.used = self._used_resources()
@@ -401,18 +431,21 @@ class EngineGraph(Graph):
         self._compiled_effects = {}
         for unit in self.units.values():
             self._compiled_effects.update(unit.compiled_effects)
-        self._reverse_map()
-        self._structure = self.structural_signature(plan)
+        if current[1] != before[1] or not self._reverse_units(retired, fresh):
+            self._reverse_map()
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
+        if all(self._stub(key) == stubs.get(key) for key in fresh):
+            self._structure = current   # each recompiled unit signs as ``current`` assumed
+        else:
+            self._structure = self.structural_signature(plan)
+        self._settled(plan)
         if self.touched is not None:
             self.touched.update(fresh)
-        for key in kept:
+        for binding in (*self.resource_bindings, *self.cache_bindings):
             # As adoption does: an input a kept closure resolves through the live graph (an
             # anchor another layer publishes) may have moved or gained owners.
-            unit = self.units[key]
-            for binding in (*unit.resource_bindings, *unit.cache_bindings):
-                if binding.owner_factory is not None:
-                    binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+            if binding.owner_factory is not None:
+                binding.owners = {o.as_pointer() for o in binding.owner_factory()}
         self.validate_parameters()
         # Inputs a structural edit re-identifies (an anchor's prefix, a cached subtree) are
         # reconciled as a rebuild does; uniforms only when edits were dropped meanwhile.
@@ -420,15 +453,16 @@ class EngineGraph(Graph):
         for key in (self.units if reconcile else fresh):
             for binding in self.units[key].cache_bindings:
                 self._reconcile_cache(binding)
-        unit_nodes = dict(self._last.get('unit_nodes') or {})
-        unit_build_ms = dict(self._last.get('unit_build_ms') or {})
+        unit_nodes, unit_build_ms = dict(unit_nodes), dict(unit_build_ms)
         for key in retired:
             unit_nodes.pop(repr(key), None)
             unit_build_ms.pop(repr(key), None)
         for key in fresh:
             unit_nodes[repr(key)] = self.units[key].node_count
             unit_build_ms[repr(key)] = self.units[key].build_ms
-        self._last = self._report(started, corrections, len(fresh), unit_nodes, unit_build_ms, patched=True)
+        self._last = self._report(started, corrections, len(fresh), unit_nodes, unit_build_ms, patched=True,
+                                  nodes=nodes + sum(self.units[key].node_count for key in fresh),
+                                  references=None if references else self._reference_warnings)
         self._last['patched_units'] = sorted(fresh)
         self._last['retired_units'] = sorted(retired)
         metrics.count('engine_graph_patches')
@@ -436,17 +470,40 @@ class EngineGraph(Graph):
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
         return self._last
 
+    def _references_reached(self, plan):
+        """Whether the layers an incremental plan re-planned take part in references: they read
+        or publish an anchor or a layer, now or before, or their parent or kind changed."""
+        previous = self._structure_plan
+        if plan.affected is None or previous is None or getattr(self, '_reference_warnings', None) is None:
+            return True
+        named = self._links(previous)[3]
+        for identifier in plan.affected:
+            now, before = plan.facts.get(identifier), previous.facts.get(identifier)
+            if now is None or before is None or now[0] or before[0] or len(now[1]) > 2 or len(before[1]) > 2:
+                return True   # reads something, or publishes an anchor beyond its two composites
+            if any(named.get(handle) for handle in (*now[1], ('layer', identifier))):
+                return True   # something reads it
+            if (previous.wired.get(identifier) or (None,) * 3)[1:3] != (plan.wired.get(identifier) or (None,) * 3)[1:3]:
+                return True   # its kind or parent changed
+        return False
+
     def _recompile_importers(self, kept, retired):
         """Kept units that import a recompiled one: each is recompiled too unless the
         exports it was linked against (a socket by name, a baked literal) are unchanged."""
-        importers = defaultdict(set)
-        for key in kept:
-            unit = self.units[key]
-            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
-                importers[producer_key].add(key)
-        work = [key for key in self.units if key not in kept]
+        importers = getattr(self, '_importers', None)
+        if importers is None:
+            importers = defaultdict(set)
+            for key in kept:
+                unit = self.units[key]
+                for producer_key, _, _ in (*unit.imports, *unit.const_imports):
+                    importers[producer_key].add(key)
+        work, seen = [key for key in self.units if key not in kept], set()
         while work:
-            for consumer in importers.pop(work.pop(), ()):
+            producer = work.pop()
+            if producer in seen:
+                continue
+            seen.add(producer)
+            for consumer in list(importers.get(producer, ())):
                 unit = self.units.get(consumer)
                 if consumer not in kept or unit is None or self._imports_match(unit):
                     continue
@@ -540,10 +597,52 @@ class EngineGraph(Graph):
 
         self.reverse = defaultdict(set)
         self.channels = {'Final:' + channel: channel for channel in CHANNELS}
+        self._targets, self._role_units = {}, defaultdict(set)
+        self._importers = defaultdict(set)   # producer -> units importing it (a socket or a literal)
+        self._reach_token = object()         # what reads what changed (``_live_effects``)
         for key, unit in self.units.items():
-            targets = {'Final:' + channel for channel in channels(key)}
+            targets = self._targets[key] = frozenset('Final:' + channel for channel in channels(key))
             for role in _dependency_roles(unit):
                 self.reverse[role] |= targets
+                self._role_units[role].add(key)
+            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
+                self._importers[producer_key].add(key)
+
+    def _reverse_units(self, retired, fresh):
+        """``_reverse_map`` after a patch that replaced units without changing what reads them:
+        the same keys, each importing the same producers, and the same chains. Only the roles of
+        the replaced units change; what each unit reaches does not. False: map everything."""
+        targets = getattr(self, '_targets', None)
+        if targets is None or set(fresh) != set(retired):
+            return False
+        for key in fresh:
+            if ({producer for producer, _, _ in self.units[key].imports}
+                    != {producer for producer, _, _ in retired[key].imports}):
+                return False
+        roles = set()
+        for key, unit in retired.items():
+            for role in _dependency_roles(unit):
+                self._role_units[role].discard(key)
+                roles.add(role)
+            for producer_key, _, _ in unit.const_imports:
+                self._importers[producer_key].discard(key)
+        for key in fresh:
+            unit = self.units[key]
+            for role in _dependency_roles(unit):
+                self._role_units[role].add(key)
+                roles.add(role)
+            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
+                self._importers[producer_key].add(key)
+        for role in roles:
+            found = set()
+            for key in self._role_units[role]:
+                found |= targets[key]
+            if found:
+                self.reverse[role] = found
+            else:
+                self.reverse.pop(role, None)
+                self._role_units.pop(role, None)
+        return True
 
     # ---- lifetime ------------------------------------------------------------------
 

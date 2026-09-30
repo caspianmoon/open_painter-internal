@@ -847,6 +847,7 @@ class Engine:
         self._native_cache = None
         self._evaluation_depth = 0
         self.replaced = None            # units a patch replaced, until the native graph takes them
+        self._chains = None             # the graph chains ``positions`` were derived from
         from .suffix import SuffixCache
         self._suffix = SuffixCache()    # armed affine runs above an edited layer
         device().engines.add(self)
@@ -887,7 +888,10 @@ class Engine:
                 self._retire_state(key, state, n_before, patched)
                 replaced.add(key)
         self.states = live
-        self.positions, self.finals, self.orders = _positions(graph)
+        if not patched or graph.chains is not self._chains:
+            # Positions follow the chains alone: a patch that kept them keeps these.
+            self.positions, self.finals, self.orders = _positions(graph)
+            self._chains = graph.chains
         # A content or mask unit read by one unit only is compiled into that unit: one pass
         # and one full-resolution texture less for every layer channel. An unchanged set keeps
         # its identity, which the native graph's description is checked against.

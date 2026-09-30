@@ -5,6 +5,13 @@ import bpy
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 import open_painter
 from open_painter.core import layer_stack as stack, texture_set_manager as sets
+
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 open_painter.register()
 ts = sets.create(bpy.context.scene, 'Layer drop', 512)
 
@@ -128,7 +135,7 @@ def ready():
 
 
 material_manager.repair(ts)
-builds = ready()['graph_builds']
+builds = revisions(ready())
 saved = stack.arrangement(ts)
 dragged = by_name('Middle').id
 key = shader_preview.hold(scene, ts)
@@ -141,15 +148,15 @@ try:
             for _ in range(3):
                 shader_preview.tick(scene, ts)
             info = shader_preview.diagnostics(scene, ts)
-            assert info['held'] and info['graph_builds'] == builds, (crossed, info)
+            assert info['held'] and revisions(info) == builds, (crossed, info)
     stack.place(ts, dragged, stack.drop_targets(ts, dragged)[0][0])
     assert crossed > 4 and stack.arrangement(ts) != saved
 finally:
     shader_preview.release_hold(key)
 assert not shader_preview.diagnostics(scene, ts)['held']
 info = ready()
-assert info['graph_builds'] == builds + 1, (builds, info)
-builds = info['graph_builds']
+assert revisions(info) == builds + 1, (builds, info)
+builds = revisions(info)
 key = shader_preview.hold(scene, ts)
 try:
     stack.place(ts, dragged, stack.drop_targets(ts, dragged)[1][0])
@@ -160,7 +167,7 @@ try:
 finally:
     shader_preview.release_hold(key)
 info = ready()
-assert info['graph_builds'] == builds + 1, (builds, info)
+assert revisions(info) == builds + 1, (builds, info)
 shader_preview.release_hold(key)   # releasing twice, or an ended hold, is harmless
 
 # A modal the window manager cancels (its window closed, a file loaded) never
@@ -168,7 +175,7 @@ shader_preview.release_hold(key)   # releasing twice, or an ended hold, is harml
 # flag exactly as ``finish`` does, and puts the undropped layer back.
 from types import SimpleNamespace
 from open_painter.ui import native
-builds = info['graph_builds']
+builds = revisions(info)
 lost = SimpleNamespace(hold=shader_preview.hold(scene, ts), dragging=True, saved=stack.arrangement(ts),
                        layer_id=dragged)   # a modal's state in the background, where no modal can run
 lost.release = lambda context: native.OP_OT_native_layer_drag.release(lost, context)
@@ -183,19 +190,20 @@ assert not native._drag['active']
 assert not shader_preview.diagnostics(scene, ts)['held']
 assert stack.arrangement(ts) == lost.saved and stack.active(ts).id == dragged
 info = ready()   # current again: the stack ended as the shader was built, so no rebuild
-assert info['graph_builds'] == builds and info['serial'] == info['bound_serial'], (builds, info)
+assert revisions(info) == builds and info['serial'] == info['bound_serial'], (builds, info)
 
 # And a hold nobody renews for HOLD_SECONDS (a modal lost without even a
 # cancel) is released by the tick itself, with a warning, so the session is
 # current again instead of sitting on its last shader forever.
 import logging
-builds = info['graph_builds']
+
+builds = revisions(info)
 key = shader_preview.hold(scene, ts)
 stack.place(ts, dragged, stack.drop_targets(ts, dragged)[1][0])
 for _ in range(3):
     shader_preview.tick(scene, ts)
 info = shader_preview.diagnostics(scene, ts)
-assert info['held'] and info['graph_builds'] == builds and shader_preview.held(scene, ts), info
+assert info['held'] and revisions(info) == builds and shader_preview.held(scene, ts), info
 shader_preview.renew_hold(key)
 bound = shader_preview.HOLD_SECONDS
 shader_preview.HOLD_SECONDS = .2
@@ -213,7 +221,7 @@ try:
     finally:
         logging.getLogger('open_painter').removeHandler(catcher)
     assert not info['held'] and not shader_preview.held(scene, ts), info
-    assert info['graph_builds'] == builds + 1, (builds, info)
+    assert revisions(info) == builds + 1, (builds, info)
     assert any('hold' in message and 'releasing' in message for message in warnings), warnings
     assert len(warnings) == 1, warnings   # released once; the next tick finds no hold to warn about
 finally:

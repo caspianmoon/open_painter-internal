@@ -456,6 +456,75 @@ three):
 | Removing the top layer | 134 ms | 93 ms |
 | The first smart-material apply | 1.6–2.0 s | 0.95 s |
 
+### Patching the graph in place
+
+At 200 layers the graph holds about 1,750 units, and a blend mode or a mask edit
+changes 4 to 20 of them. A rebuild still compiled a new graph and adopted every
+unchanged unit into it one by one, the engine replaced its whole state table and
+the native graph described every unit again.
+
+- **`EngineGraph.patch`.** The session's own graph recompiles only its stale
+  units: a changed signature, owners that moved (a collection of the layer was
+  reallocated), a Mask Graph item that went away, or an importer whose producer's
+  exports changed shape. Retired units hand their bindings back
+  (`_unbind_units`); a compile that fails puts everything back and the rebuild
+  runs as before. Inputs a structural edit can re-identify (an anchor another
+  layer's CPU input reads, a cached subtree) are reconciled as adoption did;
+  uniforms and image fields are read again only when edits were dropped while
+  the rebuild was pending. The patch declines, changing nothing, when layers
+  were added, removed or reordered, or the set's globals, resolution or baked
+  maps changed.
+- **Engine.** `Engine.adopt` of its own graph frees only the replaced states,
+  their filter results and publication variants, keeps the inline set's identity
+  and the positions (they follow the chains alone), and tells the native graph
+  which units it replaced.
+- **Native graph.** While the topology holds, `NativeGraph._reprogram` describes
+  and indexes only the replaced programs and the units their inlined producers
+  compile into.
+
+### Incremental structure checks
+
+The callback's structure check planned all 200 layers and signed all 1,750
+units. Now each graph keeps the plan its structure was made from and the layers
+structurally edited since (`touch_layers`, fed by `notify`). The next plan
+carries over every answer of the layers no edit can have reached (`Graph._reach`):
+
+- the edited layer and its descendants (skip, cache and backdrop contexts come
+  from above), and its ancestors on their own (a folder's wiring and cache state
+  see their subtree);
+- layers reading it or read by it, both through the keys their units imported
+  and through what authoring names (`_layer_links`: anchor ids, reference
+  layers, composite anchors), resolved or not. A reader of a disabled channel's
+  anchor imports nothing, yet re-enabling the channel changes it;
+- every reader of an OUTPUT or GROUP anchor: what it resolves to depends on the
+  target's siblings;
+- anything a re-planned layer reads now, until nothing more is reached.
+
+A layer whose collection sizes differ from the previous plan is edited too (a
+script edited a collection without a callback). Any layer order change, an
+invalidated set or an edit whose layer is unknown plans every layer.
+`OP_VERIFY_STRUCTURE=1` compares every incremental plan with a full one
+(wiring, order, keys, contexts, every signature). It also runs the reference
+check a patch skipped, because no re-planned layer takes part in references.
+It found the disabled-anchor case above.
+
+`tests/integration/structural_patch.py` applies fifteen structural edits,
+checks that each patched the session's graph, and compares the result with a
+rebuild from scratch. Every incremental restamp is verified too.
+
+Blend mode of a middle layer, 200 layers at 1K, idle arming on as in the product
+(`OP_PREARM=1`):
+
+| Stage | Before | After |
+| --- | ---: | ---: |
+| Callback structure check | 37–47 ms | 8–10 ms |
+| Graph rebuild or patch | 65–95 ms | about 8 ms |
+| Engine adopt | 3–4 ms | under 1 ms |
+| Native prepare | 24–42 ms | 7–17 ms (includes translating the 4 new programs) |
+| Total | 224–286 ms | 38–50 ms |
+
+Adding, removing or moving a layer still rebuilds.
+
 ### Garbage collection
 
 A 200-layer project holds about 627,000 Python objects the cyclic garbage
@@ -519,9 +588,12 @@ Machines with 16 GB or more keep the previous limits.
 - **CPU boundaries.** Metric material mapping with images or procedural detail,
   mesh masks and generators still rasterize on the CPU at full resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
-- **Structural edits.** A structural edit still re-signs every unit to find the
-  changed ones, and still adopts every unchanged unit into a new graph. That is
-  about 90 ms at 101 layers. Recompiling only the changed units in place needs
-  per-layer invalidation of unit signatures, because folders, ancestors,
-  anchors and references reach across layers.
+- **Layer order.** Adding, removing or moving a layer shifts the layer structs
+  above it, so the patch declines and the graph is rebuilt, adopting units
+  whose layer moved (about 200–300 ms at 200 layers).
+- **Whole-stack passes left in a patched edit.** The plan still carries every
+  memo into a new plan and sorts every signature. The layer callback walks all
+  readers again after a structural edit (`references._reader_layers`), and the
+  native graph rescans every image node after compiling new units. Each costs 1
+  to 3 ms at 200 layers.
 

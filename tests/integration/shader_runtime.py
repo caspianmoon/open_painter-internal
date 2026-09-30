@@ -171,9 +171,11 @@ assert graph.node_identities() == identities
 source.visible = True
 shader_preview.tick(scene, ts)
 assert shader_preview.current(scene, ts)
+patches = shader_preview.diagnostics(scene, ts)['graph_patches']
 source.blend_mode = 'MULTIPLY'
-replacement = shader_preview.ensure(scene, ts)
-assert replacement is not graph and not shader_preview.current(scene, ts)
+replacement = shader_preview.ensure(scene, ts)   # recompiled in place (EngineGraph.patch), not yet rendered
+assert replacement is graph and not shader_preview.current(scene, ts)
+assert shader_preview.diagnostics(scene, ts)['graph_patches'] == patches + 1
 assert shader_preview.diagnostics(scene, ts)['attached'] and links(ts.material) == attached
 ready(scene, ts)
 surface = next(node for node in ts.material.node_tree.nodes if node.get('role') == 'Surface')

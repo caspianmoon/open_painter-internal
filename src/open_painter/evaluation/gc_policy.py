@@ -14,7 +14,10 @@ among them waits, for ``sweep``, which runs when a file loads and after a long i
 spell in which the frozen set grew. bpy-free: tests/unit drive it directly.
 """
 import gc
+import os
 from time import monotonic
+
+ENABLED = os.environ.get('OP_GC_FREEZE') != '0'   # 0: leave collection to CPython (comparisons)
 
 SETTLE_DELAY = 0.3        # seconds since the last evaluation before survivors are frozen
 SWEEP_IDLE = 30.0         # seconds without an evaluation before frozen garbage is swept
@@ -36,6 +39,8 @@ def evaluated():
 
 def settle(now=None):
     """Called on idle ticks. Returns 'settled', 'swept' or None."""
+    if not ENABLED:
+        return None
     now = monotonic() if now is None else now
     idle = now - _state['active']
     if _state['pending'] and idle >= SETTLE_DELAY:

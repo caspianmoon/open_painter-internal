@@ -18,6 +18,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 import json
+import os
 import re
 from time import perf_counter
 from types import SimpleNamespace
@@ -277,28 +278,36 @@ def _plan_token(ts):
     return token(ts), len(ts.layers)
 
 
-def path_index(ts):
+def path_index(ts, owners=None):
     """RNA paths of a texture set's structs by address, exactly as ``path_from_id``
-    spells them, in one pass over the set."""
+    spells them, in one pass over the set. ``owners``: filled with each layer's addresses."""
     base = ts.path_from_id()
     paths = {ts.as_pointer(): base, ts.bake.as_pointer(): base + '.bake'}
     for index, entry in enumerate(ts.baked_maps):
         paths[entry.as_pointer()] = f'{base}.baked_maps[{index}]'
     for index, layer in enumerate(ts.layers):
-        path = f'{base}.layers[{index}]'
-        paths[layer.as_pointer()] = path
-        for c, prop in enumerate(layer.channels):
-            channel = f'{path}.channels[{c}]'
-            paths[prop.as_pointer()] = channel
-            for e, effect in enumerate(prop.effects):
-                paths[effect.as_pointer()] = f'{channel}.effects[{e}]'
-        for m, mask in enumerate(layer.masks):
-            item = f'{path}.masks[{m}]'
-            paths[mask.as_pointer()] = item
-            for name in ('effect', 'influence', 'mesh'):
-                paths[getattr(mask, name).as_pointer()] = f'{item}.{name}'
-        for r, row in enumerate(layer.cache):
-            paths[row.as_pointer()] = f'{path}.cache[{r}]'
+        found = _layer_paths(f'{base}.layers[{index}]', layer)
+        paths.update(found)
+        if owners is not None:
+            owners[layer.id] = tuple(found)
+    return paths
+
+
+def _layer_paths(path, layer):
+    """``path_index`` of one layer's structs."""
+    paths = {layer.as_pointer(): path}
+    for c, prop in enumerate(layer.channels):
+        channel = f'{path}.channels[{c}]'
+        paths[prop.as_pointer()] = channel
+        for e, effect in enumerate(prop.effects):
+            paths[effect.as_pointer()] = f'{channel}.effects[{e}]'
+    for m, mask in enumerate(layer.masks):
+        item = f'{path}.masks[{m}]'
+        paths[mask.as_pointer()] = item
+        for name in ('effect', 'influence', 'mesh'):
+            paths[getattr(mask, name).as_pointer()] = f'{item}.{name}'
+    for r, row in enumerate(layer.cache):
+        paths[row.as_pointer()] = f'{path}.cache[{r}]'
     return paths
 
 
@@ -342,6 +351,10 @@ class ResourceBinding:
                                  # regenerated in place even while a gesture preview stands on the node
 
 
+# Diagnostics: compare every incremental plan with a full one (``Graph._verify_plan``).
+VERIFY_STRUCTURE = os.environ.get('OP_VERIFY_STRUCTURE') == '1'
+
+
 def _removed_graph_units(bindings):
     """Units with a Mask Graph binding whose node, socket, ramp stop or tree is gone. Reading
     it would dereference freed memory (no callback reaches us when a tree is deleted or
@@ -360,6 +373,63 @@ def _removed_graph_units(bindings):
             if unit not in removed:
                 removed.append(unit)
     return removed
+
+
+def _reordered(before, after):
+    """Layers added, removed, or whose order among the others changed, from ``before`` to
+    ``after`` (layer ids in stack order); None when that is more than a quarter of the stack,
+    for which planning every layer costs no more."""
+    if before == after:
+        return set()
+    kept_before, kept_after = set(before), set(after)
+    changed = (kept_before ^ kept_after)
+    common_before = [identifier for identifier in before if identifier in kept_after]
+    common_after = [identifier for identifier in after if identifier in kept_before]
+    if common_before != common_after:
+        differ = [k for k, (a, b) in enumerate(zip(common_before, common_after)) if a != b]
+        changed.update(common_before[differ[0]:differ[-1] + 1])
+        changed.update(common_after[differ[0]:differ[-1] + 1])
+    return changed if len(changed) * 4 <= max(len(after), 1) else None
+
+
+def _collection_print(layer):
+    """Sizes of a layer's collections: they differ when one was added to or removed from."""
+    return (len(layer.masks), len(layer.cache), tuple(len(prop.effects) for prop in layer.channels))
+
+
+def _layer_links(layer):
+    """(what the layer reads, what it publishes), by the handles authoring names them with:
+    anchor ids its channels and masks consume and ``('layer', id)`` for a reference to a
+    layer's own stages; the anchor ids of its effects and masks and its composite anchors.
+    A link holds whether or not it resolves right now (a disabled channel reads as a constant)."""
+    from .anchors import consumed_channels, group_id, output_id
+    reads, owns = set(), {output_id(layer.id), group_id(layer.id)}
+    for prop in layer.channels:
+        reads.update(identifier for identifier, _ in consumed_channels(prop))
+        owns.update(effect.id for effect in prop.effects if effect.kind == 'ANCHOR' and effect.id)
+    for mask in layer.masks:
+        reads.update(identifier for identifier, _ in consumed_channels(mask))
+        if mask.source == 'REFERENCE' and mask.reference_layer and not mask.reference_anchor:
+            reads.add(('layer', mask.reference_layer))
+        if mask.source == 'ANCHOR' and mask.id:
+            owns.add(mask.id)
+    return frozenset(reads), frozenset(owns)
+
+
+def _link_target(handle, owners):
+    """The layer a read handle names (``_layer_links``), or None."""
+    from .anchors import GROUP_SUFFIX, OUTPUT_SUFFIX
+    if isinstance(handle, tuple):
+        return handle[1]
+    for suffix in (OUTPUT_SUFFIX, GROUP_SUFFIX):
+        if handle.endswith(suffix):
+            return handle[:-len(suffix)]
+    return owners.get(handle)
+
+
+def _composite_handle(handle):
+    from .anchors import GROUP_SUFFIX, OUTPUT_SUFFIX
+    return isinstance(handle, str) and handle.endswith((OUTPUT_SUFFIX, GROUP_SUFFIX))
 
 
 def _previous_strokes_leaf(n, key, channel, base_key, stamp):
@@ -502,6 +572,8 @@ class Graph(Math):
         self._building = set()
         self._building_units = set()
         self._structure = None
+        self._structure_plan = None   # the plan ``_structure`` was made from
+        self._dirty_layers = set()    # layers structurally edited since; None: any of them
         self._last = {}
         self._anchors = None
         self._plan = None
@@ -615,12 +687,33 @@ class Graph(Math):
         """
         paths = self._paths
         if paths is None:
-            paths = self._paths = path_index(self.ts)
+            self._path_owners = {}
+            paths = self._paths = path_index(self.ts, self._path_owners)
         path = paths.get(owner.as_pointer())
         if path is not None:
             return path
         from ..core.layer_store import scene_path
         return scene_path(owner)
+
+    def _refresh_paths(self, plan, identifiers):
+        """Index again the structs of these layers only: a patch leaves every other layer's
+        collections where they were (``_path``)."""
+        paths, owners = self._paths, getattr(self, '_path_owners', None)
+        if paths is None or owners is None or identifiers is None:
+            self._paths = None
+            return
+        for identifier in identifiers:
+            for pointer in owners.pop(identifier, ()):
+                paths.pop(pointer, None)
+        base = self.ts.path_from_id()
+        positions = {identifier: index for index, identifier in enumerate(plan.ids)}
+        for identifier in identifiers:
+            layer = plan.layers.get(identifier)
+            if layer is None:
+                continue
+            found = _layer_paths(f'{base}.layers[{positions[identifier]}]', layer)
+            paths.update(found)
+            owners[identifier] = tuple(found)
 
     def _owner_key(self, owner):
         """Stable identity of an RNA item: ids rather than collection indices."""
@@ -1600,7 +1693,10 @@ class Graph(Math):
         table = getattr(plan, 'consumed', None) if plan is not None else None
         if table is None:
             table = {}
-            for item in self.ts.layers:
+            readers = getattr(plan, 'composite_readers', None)
+            items = (self.ts.layers if readers is None else
+                     [plan.layers[identifier] for identifier in readers if identifier in plan.layers])
+            for item in items:
                 for source in (*item.channels, *item.masks):
                     for identifier, requested in consumed_channels(source):
                         anchor = self.anchors.get(identifier)
@@ -1614,12 +1710,30 @@ class Graph(Math):
         return channels
 
     def _subtree_consumed(self, folder):
-        from ..core.layer_stack import descendants
+        """Channels consumers read from the folder's or any descendant's composite anchors."""
+        plan = self._plan
+        memo = getattr(plan, 'subtree_consumed', None)
+        if memo is not None and folder.id in memo:
+            return memo[folder.id]
         channels = set(self._composite_consumed(folder))
-        inside = descendants(self.ts, folder.id)
-        for layer in self.ts.layers:
-            if layer.id in inside:
-                channels |= self._composite_consumed(layer)
+        if getattr(plan, 'composite_readers', True):   # nothing reads a composite: no descendant adds any
+            children = getattr(plan, 'children', None)
+            if children is None:
+                from ..core.layer_stack import descendants
+                inside = descendants(self.ts, folder.id)
+                for layer in self.ts.layers:
+                    if layer.id in inside:
+                        channels |= self._composite_consumed(layer)
+            else:
+                work, seen = [folder.id], {folder.id}
+                while work:
+                    for layer in children.get(work.pop(), ()):
+                        if layer.id not in seen:
+                            seen.add(layer.id)
+                            channels |= self._composite_consumed(layer)
+                            work.append(layer.id)
+        if memo is not None:
+            memo[folder.id] = channels
         return channels
 
     def _source_key(self, layer, channel, count=None):
@@ -1710,7 +1824,17 @@ class Graph(Math):
                                 0 if mask.reference_stage == 'PRE_FILTER' else None)
 
     def _reference_keys(self, key):
-        """Unit keys a unit imports: its layer mask, its content and published stages."""
+        """Unit keys a unit imports: its layer mask, its content and published stages
+        (memoized per plan; an incremental plan carries those of layers no edit reached)."""
+        memo = getattr(self._plan, 'refs', None)
+        if memo is None:
+            return tuple(self._reference_keys_uncached(key))
+        found = memo.get(key)
+        if found is None:
+            found = memo[key] = tuple(self._reference_keys_uncached(key))
+        return found
+
+    def _reference_keys_uncached(self, key):
         layer = self._layer(key[1])
         if layer is None:
             return []
@@ -1806,7 +1930,7 @@ class Graph(Math):
                 # (or the published folder it sits in) live, composed over the
                 # isolated folder's empty backdrop only.
                 self._warn(f'Anchor consumers read "{consumed.name}" inside cached folder '
-                           f'"{cursor.name}": compiled without its backdrop')
+                           f'"{cursor.name}": compiled without its backdrop', layer.id)
                 return False
             if consumed is None and self._composite_consumed(cursor):
                 consumed = cursor
@@ -1815,16 +1939,19 @@ class Graph(Math):
             cursor = self._layer(cursor.parent_id) if cursor.parent_id else None
         return False
 
-    def _warn(self, message):
-        """A warning of the plan's walk, kept with the plan (see ``_build_warnings``)."""
-        found = getattr(self._plan, 'warnings', None)
-        found = self._warnings if found is None else found
+    def _warn(self, message, layer_id):
+        """A warning of the plan's walk about ``layer_id``, kept with the plan (an incremental
+        plan carries it with the layer's other answers; see ``_build_warnings``)."""
+        warned = getattr(self._plan, 'warned', None)
+        found = self._warnings if warned is None else warned.setdefault(layer_id, [])
         if message not in found:
             found.append(message)
 
     def _build_warnings(self):
         """What the plan's walk and the compiled units reported, then anything else."""
-        found = list(getattr(self._plan, 'warnings', ()))
+        found = []
+        for messages in getattr(self._plan, 'warned', {}).values():
+            found.extend(message for message in messages if message not in found)
         for unit in self.units.values():
             found.extend(message for message in unit.warnings if message not in found)
         found.extend(message for message in self._warnings if message not in found)
@@ -1839,7 +1966,7 @@ class Graph(Math):
             # A passthrough composite depends on its backdrop: no backdrop-
             # independent image exists for it.
             self._warn(f'Passthrough folder "{layer.name}" cannot be cached; set it to Isolated '
-                       'or cache its children')
+                       'or cache its children', layer.id)
             return 'LIVE'
         return mode
 
@@ -1878,18 +2005,69 @@ class Graph(Math):
     def _cache_row(layer, channel):
         return next((row for row in layer.cache if row.channel == channel), None)
 
-    def plan(self):
-        """Resolve the unit set, wiring and opacity contexts from authoring data."""
-        layers = {l.id: l for l in self.ts.layers}
-        children = {}
-        for layer in self.ts.layers:
+    def plan(self, previous=None, dirty=None):
+        """Resolve the unit set, wiring and opacity contexts from authoring data.
+
+        ``previous`` is the plan the graph's structure was made from and ``dirty`` the layers
+        structurally edited since (``touch_layers``). The answers of every layer no edit can
+        have reached (``_reach``) are carried over from it instead of read again: a blend
+        mode at 200 layers re-plans a handful of layers, not every one. None, or a stack
+        whose layers were added, removed or reordered, plans every layer.
+        """
+        stack_layers = list(self.ts.layers)
+        layers, children, ids = {}, {}, []
+        for layer in stack_layers:
+            identifier = layer.id
+            ids.append(identifier)
+            layers[identifier] = layer
             children.setdefault(layer.parent_id, []).append(layer)
+        ids = tuple(ids)
+        # A collection edited without a callback (the operators invalidate the set, a script
+        # may not): its layer's collection sizes differ, and it is planned again.
+        prints = {identifier: _collection_print(layer) for identifier, layer in layers.items()}
+        affected = None
+        reordered = (_reordered(previous.ids, ids) if previous is not None and dirty is not None
+                     and getattr(previous, 'ids', None) is not None else None)
+        if reordered is not None:
+            moved = {identifier for identifier, value in prints.items() if previous.prints.get(identifier) != value}
+            affected = self._reach(previous, layers, children, set(dirty) | moved | reordered)
+        while True:
+            plan = self._plan_from(previous, affected, layers, children, ids, prints)
+            if affected is None:
+                break
+            # A re-planned layer that reads another now: that one is reached too.
+            targets = {ref[1] for key in plan.keys if key[1] in affected for ref in plan.refs[key]} - affected
+            if not targets:
+                break
+            affected = self._reach(previous, layers, children, affected | targets)
+        if VERIFY_STRUCTURE and affected is not None:
+            self._verify_plan(plan)
+        return plan
+
+    def _plan_from(self, previous, affected, layers, children, ids, prints):
         # Per-plan memos: answers that only structural edits change, and a new plan
         # is made for every structural edit. channels holds RNA references and is
         # dropped whenever update() refreshes the layers (a collection may move).
         plan = SimpleNamespace(layers=layers, keys=set(), opaque={}, wiring=[], order=[], children=children,
                                skipped={}, touched={}, channels={}, signatures={}, base_owners=None,
-                               warnings=[])
+                               ids=ids, prints=prints, wired={}, refs={}, warned={}, subtree_consumed={},
+                               composite_readers=None, affected=affected, links=None, facts=None)
+        if affected is None:
+            plan.facts = {identifier: _layer_links(layer) for identifier, layer in layers.items()}
+        else:
+            def kept(identifier):
+                return identifier not in affected
+            plan.wired = {i: entry for i, entry in previous.wired.items() if kept(i)}
+            plan.skipped = {i: value for i, value in previous.skipped.items() if kept(i)}
+            plan.touched = {key: value for key, value in previous.touched.items() if kept(key[0])}
+            plan.refs = {key: refs for key, refs in previous.refs.items() if kept(key[1])}
+            plan.signatures = {entry: value for entry, value in previous.signatures.items() if kept(entry[0][1])}
+            plan.warned = {i: list(found) for i, found in previous.warned.items() if kept(i)}
+            plan.subtree_consumed = {i: value for i, value in previous.subtree_consumed.items() if kept(i)}
+            plan.facts = {i: value for i, value in previous.facts.items() if kept(i) and i in layers}
+            plan.facts.update((i, _layer_links(layers[i])) for i in affected if i in layers)
+        plan.composite_readers = {identifier for identifier, (reads, _) in plan.facts.items()
+                                  if any(_composite_handle(handle) for handle in reads)}
         self._plan = plan
         self._anchors = None
 
@@ -1897,15 +2075,19 @@ class Graph(Math):
             for layer in children.get(parent, ()):
                 if not self._included(layer):
                     continue
-                if layer.id in ancestors:
+                identifier = layer.id
+                if identifier in ancestors:
                     raise ValueError('Layer hierarchy contains a cycle')
-                plan.opaque[layer.id] = opaque
-                touched = tuple(channel for channel in CHANNELS if self._wired(layer, channel))
-                plan.wiring.append((layer.id, layer.type, parent, layer.group_mode, touched))
-                for channel in touched:
-                    plan.order.append(('CHANNEL', layer.id, channel))
-                if layer.type == 'FOLDER':
-                    walk(layer.id, opaque and layer.group_mode == 'PASSTHROUGH', ancestors | {layer.id})
+                plan.opaque[identifier] = opaque
+                entry = plan.wired.get(identifier)
+                if entry is None:
+                    touched = tuple(channel for channel in CHANNELS if self._wired(layer, channel))
+                    entry = plan.wired[identifier] = (identifier, layer.type, parent, layer.group_mode, touched)
+                plan.wiring.append(entry)
+                for channel in entry[4]:
+                    plan.order.append(('CHANNEL', identifier, channel))
+                if entry[1] == 'FOLDER':
+                    walk(identifier, opaque and entry[3] == 'PASSTHROUGH', ancestors | {identifier})
 
         walk('', True, frozenset())
         work = list(plan.order)
@@ -1916,6 +2098,90 @@ class Graph(Math):
             plan.keys.add(key)
             work.extend(self._reference_keys(key))
         return plan
+
+    @staticmethod
+    def _links(plan):
+        """(readers, targets, owners, named): which layers each layer reads, by what its units
+        import and by what authoring names (``_layer_links``), the reverse, each anchor's layer,
+        and the layers naming each handle (resolved or not)."""
+        if plan.links is None:
+            readers, targets, named = defaultdict(set), defaultdict(set), defaultdict(set)
+            owners = {handle: identifier for identifier, (_, owns) in plan.facts.items() for handle in owns}
+            for key, refs in plan.refs.items():
+                for ref in refs:
+                    if ref[1] != key[1]:
+                        readers[ref[1]].add(key[1])
+                        targets[key[1]].add(ref[1])
+            for identifier, (reads, _) in plan.facts.items():
+                for handle in reads:
+                    named[handle].add(identifier)
+                    target = _link_target(handle, owners)
+                    if target is not None and target != identifier:
+                        readers[target].add(identifier)
+                        targets[identifier].add(target)
+            plan.links = (readers, targets, owners, named)
+        return plan.links
+
+    def _reach(self, previous, layers, children, seeds):
+        """Layers whose answers an edit of ``seeds`` can change: each one and its descendants
+        (skip, cache and backdrop contexts come from above), its ancestors alone (a folder's
+        wiring and cache state see their subtree), the layers reading it or read by it, by what
+        their units imported and by what authoring names, and every reader of a composite anchor
+        (what it resolves to depends on the target's siblings), until nothing more is reached."""
+        readers, targets, owners, named = self._links(previous)
+        reached, below = set(), set()
+        work = [(identifier, True) for identifier in seeds]
+        work.extend((identifier, True) for identifier in previous.composite_readers)
+        while work:
+            identifier, down = work.pop()
+            if identifier in reached and (not down or identifier in below):
+                continue
+            reached.add(identifier)
+            layer = layers.get(identifier)
+            for parent in (layer.parent_id if layer is not None else '',
+                           previous.wired[identifier][2] if identifier in previous.wired else ''):
+                if parent:
+                    work.append((parent, False))
+            work.extend((reader, True) for reader in readers.get(identifier, ()))
+            if not down:
+                continue
+            below.add(identifier)
+            work.extend((child.id, True) for child in children.get(identifier, ()))
+            work.extend((target, True) for target in targets.get(identifier, ()))
+            if layer is not None:
+                # What it names now: a reference or anchor added since reaches its layer too.
+                reads, owns = _layer_links(layer)
+                for handle in reads:
+                    target = _link_target(handle, owners)
+                    if target is not None:
+                        work.append((target, True))
+                for handle in owns:
+                    if handle in owners:
+                        work.append((owners[handle], True))
+                    work.extend((reader, True) for reader in named.get(handle, ()))   # named before it existed
+        return reached
+
+    def _verify_plan(self, plan):
+        """OP_VERIFY_STRUCTURE: an incremental plan must equal a full plan of the same stack."""
+        anchors = self._anchors
+        full = self.plan()
+        expected = {key: self._unit_signature(key, stub=self._stub(key)) for key in full.keys}
+        self._plan, self._anchors = plan, anchors
+        found = {key: self._unit_signature(key, stub=self._stub(key)) for key in plan.keys}
+        problems = [name for name in ('wiring', 'order', 'keys', 'opaque')
+                    if getattr(full, name) != getattr(plan, name)]
+        differ = sorted(key for key in expected.keys() | found.keys() if expected.get(key) != found.get(key))
+        if problems or differ:
+            layers = sorted({key[1] for key in differ} | set(plan.affected))[:8]
+            previous = self._structure_plan
+            links = ({identifier: (sorted(self._links(previous)[0].get(identifier, ())),
+                                   sorted(self._links(previous)[1].get(identifier, ()))) for identifier in layers}
+                     if previous is not None else None)
+            raise AssertionError(f'Incremental plan differs from a full plan: {problems} '
+                                 f'{differ[:6]} (reached {sorted(plan.affected)[:12]}; readers and targets '
+                                 f'in the previous plan: {links}; its references: '
+                                 f'{ {k: v for k, v in previous.refs.items() if k[1] in layers} if previous else None}; '
+                                 f'now: { {k: v for k, v in plan.refs.items() if k[1] in layers} })')
 
     def _unit_signature(self, key, stub=None):
         """The structure a unit compiles from; memoized per plan (each structural edit plans anew)."""
@@ -3247,6 +3513,7 @@ class Graph(Math):
         self.outputs = {channel: self.instance.outputs[channel] for channel in CHANNELS}
         self._reverse_map()
         self._structure = self.structural_signature()
+        self._settled(self._plan)
         self.tree['op_signature'] = repr(self._structure)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
@@ -3356,6 +3623,7 @@ class Graph(Math):
             self.channels['Final:' + channel] = channel
         self._reverse_map()
         self._structure = self.structural_signature()
+        self._settled(self._plan)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.resources.used = self._used_resources()
         for binding in self.cache_bindings:
@@ -3558,21 +3826,23 @@ class Graph(Math):
     def structural_signature(self, plan=None):
         """``plan``: the plan this build was made from (nothing edited the stack since)."""
         plan = plan if plan is not None else self.plan()
-        units = tuple(sorted((key, self._unit_signature(key, stub=self._stub(key))) for key in plan.keys))
+        stubs = {key: unit.flags['stub'] for key, unit in self.units.items() if unit.flags.get('stub')}
+        units = tuple(sorted((key, self._unit_signature(key, stub=stubs.get(key))) for key in plan.keys))
         return (global_signature(self.ts), tuple(plan.wiring), units)
 
     def _stub(self, key):
         unit = self.units.get(key)
         return unit.flags.get('stub') if unit is not None else None
 
-    def scope_plan(self, ts):
+    def scope_plan(self, ts, signature=False):
         """The plan ``rebuild_scope`` made, taken once, while nothing structural changed since:
-        each structural edit is checked by its callback and then rebuilt on the next tick."""
+        each structural edit is checked by its callback and then rebuilt on the next tick.
+        ``signature``: (plan, the structural signature it checked), or None."""
         held = getattr(self, '_scope_plan', None)
         self._scope_plan = None
         if held is None or held[0] is None or held[0] != _plan_token(ts):
             return None
-        return held[1]
+        return (held[1], held[2]) if signature else held[1]
 
     def matches_structure(self):
         try:
@@ -3581,15 +3851,28 @@ class Graph(Math):
             # An invalid hierarchy is reported by the rebuild, with its message.
             return False
 
+    def touch_layers(self, identifiers):
+        """Layers an edit reached, for the next structure check (``plan``); None: unknown."""
+        if identifiers is None:
+            self._dirty_layers = None
+        elif self._dirty_layers is not None:
+            self._dirty_layers.update(identifiers)
+
+    def _settled(self, plan):
+        """``plan`` is what the graph's structure now matches."""
+        self._structure_plan, self._dirty_layers = plan, set()
+
     def rebuild_scope(self):
         """'global', or the unit keys whose structure no longer matches; None when current."""
         try:
-            current = self.structural_signature()
+            plan = self.plan(self._structure_plan, self._dirty_layers)
+            current = self.structural_signature(plan)
         except ValueError:
             return 'global'
         # The rebuild this answer triggers need not plan the stack again (``scope_plan``).
-        self._scope_plan = (_plan_token(self.ts), self._plan)
+        self._scope_plan = (_plan_token(self.ts), self._plan, current)
         if current == self._structure:
+            self._settled(plan)
             return None
         if current[0] != self._structure[0]:
             return 'global'
@@ -3856,18 +4139,30 @@ class Graph(Math):
         """Effects reachable from visible layers; hidden-only content is not validated."""
         if not self.units:
             return list(self._compiled_effects.values())
-        # Liveness changes only with the compiled units or layer visibility (a uniform
-        # edit): validation on every slider step must not walk every unit again.
-        structure = getattr(self, '_structure', None)
+        # Liveness changes only with what reads what (the reach map) or layer visibility (a
+        # uniform edit): validation on every slider step must not walk every unit again. A
+        # patch that kept the reach only collects the replaced units' effects again.
+        reach = getattr(self, '_reach_token', None) or getattr(self, '_structure', None)
+        units = getattr(self, '_units_token', None)
         visibility = tuple(layer.visible for layer in self.ts.layers)
         cached = getattr(self, '_live_cache', None)
-        if (cached is not None and cached[0] is structure and cached[1] == len(self.units)
-                and cached[2] == visibility):
-            return cached[3]
+        if cached is not None and cached[0] is reach and cached[2] == visibility:
+            if cached[1] is units and cached[3] == len(self.units):
+                return cached[5]
+            if all(key in self.units for key in cached[4]):
+                return self._collect_live(reach, units, visibility, cached[4])
         live, work = set(), []
-        for key, unit in self.units.items():
-            layer = self._layer(key[1])
-            if key[0] == 'CHANNEL' and layer is not None and self._visible(layer):
+        shown = {}   # layer id -> effective visibility, each layer read once
+
+        def visible(identifier):
+            if identifier not in shown:
+                layer = self._layer(identifier)
+                shown[identifier] = True   # a parent cycle ends the walk, as in ``_visible``
+                shown[identifier] = layer is not None and layer.visible and (
+                    not layer.parent_id or visible(layer.parent_id))
+            return shown[identifier]
+        for key in self.units:
+            if key[0] == 'CHANNEL' and visible(key[1]):
                 work.append(key)
         while work:
             key = work.pop()
@@ -3875,11 +4170,14 @@ class Graph(Math):
                 continue
             live.add(key)
             work.extend(producer for producer, _, _ in self.units[key].imports)
+        return self._collect_live(reach, units, visibility, live)
+
+    def _collect_live(self, reach, units, visibility, live):
         effects = {}
         for key in live:
             effects.update(self.units[key].compiled_effects)
         result = list(effects.values())
-        self._live_cache = (structure, len(self.units), visibility, result)
+        self._live_cache = (reach, units, visibility, len(self.units), live, result)
         return result
 
 

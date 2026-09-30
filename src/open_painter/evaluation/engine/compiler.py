@@ -476,7 +476,7 @@ class EngineGraph(Graph):
                     # Only its layer's struct moved: every other owner it captured is where it was.
                     before_owners = unit.owner_pointers
                     owners = before_owners[:at] + (plan.pointers[key[1]],) + before_owners[at + 1:]
-                    if unit.resource_bindings or unit.cache_bindings or unit.image_bindings:
+                    if unit.captures_layer:
                         follow[key] = owners   # closures may hold the old struct
                     else:
                         unit.owner_pointers = owners   # its bindings followed with the layer's

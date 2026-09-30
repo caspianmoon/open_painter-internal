@@ -304,6 +304,7 @@ class Node:
             _image_refs[key] += 1
         self._image, self._image_key = value, key
         assignments[0] += 1
+        self._image_assigned = assignments[0]
 
     @property
     def gpu_resource(self):
@@ -313,6 +314,7 @@ class Node:
     def gpu_resource(self, value):
         self.__dict__['_gpu_resource'] = value
         assignments[0] += 1
+        self.__dict__['_image_assigned'] = assignments[0]
 
     def release_image(self):
         """Stop binding the image (the unit is discarded)."""

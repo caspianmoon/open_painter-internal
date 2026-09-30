@@ -97,7 +97,7 @@ def time_phases():
                             (native_graph.NativeGraph, '_scan_images'), (runtime.Engine, '_state'),
                             (runtime, '_positions'), (native_graph.NativeGraph, '_redescribe'),
                             (native_graph.NativeGraph, '_reindex'), (native_graph.NativeGraph, '_send_topology'),
-                            (native_graph.NativeGraph, '_orders'), (compiler.EngineGraph, '_report'),
+                            (native_graph.NativeGraph, '_orders'), (native_graph.NativeGraph, '_regroup'), (compiler.EngineGraph, '_report'),
                             (compiler.EngineGraph, 'structural_signature'), (shader_graph.Graph, 'rebuild_scope'),
                             (compiler.EngineGraph, '_references_reached'), (shader_graph.Graph, '_live_effects'),
                             (shader_graph.Graph, '_used_resources'), (compiler.EngineGraph, '_recompile_importers'),

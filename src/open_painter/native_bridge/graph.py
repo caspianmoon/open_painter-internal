@@ -642,7 +642,7 @@ class NativeGraph:
         from ..evaluation.engine import headless
         from ..evaluation.engine.runtime import _image_identity
         changed = set()
-        if self.image_groups is not None and self.assigned == headless.assignments[0]:
+        if self._groups_hold(self.image_nodes):
             for entry in self.resource_entries:
                 identity = entry[0].gpu_resource.stamp
                 if identity != entry[2]:
@@ -687,6 +687,90 @@ class NativeGraph:
         self.assigned = headless.assignments[0]
         return changed
 
+    def _groups_hold(self, entries):
+        """Whether the image groups still describe what ``entries`` sample: none of their nodes
+        was assigned an image or a GPU resource since the groups were taken (assignments to
+        nodes the index does not hold, a unit compiled meanwhile, do not count)."""
+        from ..evaluation.engine import headless
+        if self.image_groups is None:
+            return False
+        now = headless.assignments[0]
+        if self.assigned != now:
+            taken = self.assigned
+            if any(getattr(entry[0], '_image_assigned', 0) > taken for entry in entries):
+                return False
+            self.assigned = now
+        return True
+
+    def _regroup(self, epochs, before):
+        """``_scan_images`` after the index changed (``before``: the entries it held). While the
+        groups still hold for the entries that stayed, only entries new to the index are read,
+        and an entry no unit samples any more leaves its group."""
+        from ..evaluation.engine import headless
+        from ..evaluation.engine.runtime import _image_identity
+        known = {id(entry) for entry in before}
+        if not self._groups_hold([entry for entry in self.image_nodes if id(entry) in known]):
+            self.image_groups = None
+            return self._scan_images(epochs)
+        fresh = [entry for entry in self.image_nodes if id(entry) not in known]
+        if any(not isinstance(entry[0], headless.Node) for entry in fresh):
+            self.image_groups = None
+            return self._scan_images(epochs)   # a real node is scanned every time
+        live = {id(entry) for entry in self.image_nodes}
+        groups = []
+        for group in self.image_groups:
+            group[2] = [entry for entry in group[2] if id(entry) in live]
+            if group[2]:
+                groups.append(group)
+        self.resource_entries = [entry for entry in self.resource_entries if id(entry) in live]
+        by_pointer, changed = {}, set()
+        if fresh:
+            for group in groups:
+                try:
+                    by_pointer[group[0].as_pointer()] = group
+                except ReferenceError:
+                    pass
+        for entry in fresh:
+            node = entry[0]
+            resource = getattr(node, 'gpu_resource', None)
+            identity = None
+            if resource is not None:
+                identity = resource.stamp
+                self.resource_entries.append(entry)
+            elif node.image is not None:
+                image = node.image
+                try:
+                    pointer = image.as_pointer()
+                except ReferenceError:
+                    pointer = None
+                if pointer is not None:
+                    group = by_pointer.get(pointer)
+                    if group is None:
+                        group = by_pointer[pointer] = [image, _image_identity(image, epochs), []]
+                        groups.append(group)
+                    identity = group[1]   # the next scan compares it with the image's current one
+                    group[2].append(entry)
+            if identity != entry[2]:
+                entry[2] = identity
+                changed.update(entry[1])
+        self.image_groups = groups
+        self.assigned = headless.assignments[0]
+        if VERIFY:
+            self._verify_groups()
+        return changed
+
+    def _verify_groups(self):
+        """OP_VERIFY_INCREMENTAL: regrouped images are what a complete scan groups."""
+        expected = {}
+        for entry in self.image_nodes:
+            node = entry[0]
+            if getattr(node, 'gpu_resource', None) is None and node.image is not None:
+                expected.setdefault(node.image.as_pointer(), set()).add(id(entry))
+        found = {group[0].as_pointer(): {id(entry) for entry in group[2]} for group in self.image_groups}
+        resources = {id(entry) for entry in self.image_nodes if getattr(entry[0], 'gpu_resource', None) is not None}
+        if found != expected or {id(entry) for entry in self.resource_entries} != resources:
+            raise AssertionError('Regrouped image entries differ from a complete scan')
+
     def _verify_description(self, engine, states, imports_of):
         """OP_VERIFY_INCREMENTAL: a reused program and its imports must be what ``_state`` gives."""
         from ..evaluation.engine import glsl
@@ -726,9 +810,8 @@ class NativeGraph:
                     entry = entries[id(node)] = [node, (), _MISSING]
                 if key not in entry[1]:
                     entry[1] = (*entry[1], key)
-        self.image_nodes = [entry for entry in entries.values() if entry[1]]
-        self.image_groups = None
-        scanned = self._scan_images(epochs)
+        before, self.image_nodes = self.image_nodes, [entry for entry in entries.values() if entry[1]]
+        scanned = self._regroup(epochs, before)
         self.volatile, self.surface_units = frozenset(volatile), frozenset(surface)
         if surface and self.surface is None:
             self.surface = engine._surface()

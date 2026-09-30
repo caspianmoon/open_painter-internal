@@ -243,8 +243,9 @@ def _repoint(value, old, new, seen):
     return value
 
 
-def _captures(value, old, seen):
-    """Whether ``value`` still captures an RNA struct at address ``old`` (``_repoint``'s reach)."""
+def _captures(value, old, seen, unfilled=False):
+    """Whether ``value`` still captures an RNA struct at address ``old`` (``_repoint``'s reach).
+    ``unfilled``: what a closure cell not filled yet answers (it may hold the struct later)."""
     import types
     if isinstance(value, bpy.types.bpy_struct):
         try:
@@ -252,19 +253,21 @@ def _captures(value, old, seen):
         except ReferenceError:
             return False
     if isinstance(value, (tuple, list)):
-        return any(_captures(item, old, seen) for item in value)
+        return any(_captures(item, old, seen, unfilled) for item in value)
     if isinstance(value, dict):
-        return any(_captures(item, old, seen) for item in value.values())
+        return any(_captures(item, old, seen, unfilled) for item in value.values())
     if isinstance(value, types.FunctionType) and id(value) not in seen:
         seen.add(id(value))
         for cell in value.__closure__ or ():
             try:
                 content = cell.cell_contents
             except ValueError:
+                if unfilled:
+                    return True
                 continue
-            if _captures(content, old, seen):
+            if _captures(content, old, seen, unfilled):
                 return True
-        return any(_captures(item, old, seen) for item in value.__defaults__ or ())
+        return any(_captures(item, old, seen, unfilled) for item in value.__defaults__ or ())
     return False
 
 
@@ -579,6 +582,7 @@ class Unit:
     build_ms: float = 0.0
     warnings: list = field(default_factory=list)          # what compiling it reported (a stub's error)
     holds_layer: bool = True   # a binding or closure of it refers to its layer's struct (``_follow_moved_layer``)
+    captures_layer: bool = True   # a resource, cache or image closure may hold its layer's struct (``_patch``)
 
     def input(self, name, socket_type):
         if name not in self.inputs:
@@ -3311,6 +3315,11 @@ class Graph(Math):
         pointer = layer.as_pointer() if layer is not None else None
         unit.holds_layer = bool(unit.resource_bindings or unit.cache_bindings or unit.image_bindings) or any(
             binding.owner.as_pointer() == pointer for binding in unit.bindings.values())
+        # An image getter closes over the channel, mask or effect it reads, which stay where they
+        # are when the layer's struct moves; resource and cache closures are followed regardless.
+        seen = set()
+        unit.captures_layer = bool(unit.resource_bindings or unit.cache_bindings) or any(
+            entry[0] == pointer or _captures(entry[2], pointer, seen, unfilled=True) for entry in unit.image_bindings)
         unit.signature = self._unit_signature(key, stub=unit.flags.get('stub'))
         unit.build_ms = (perf_counter() - started) * 1000
         unit.tree['op_flags'] = json.dumps(unit.flags)

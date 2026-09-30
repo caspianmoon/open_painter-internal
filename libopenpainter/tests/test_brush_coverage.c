@@ -128,8 +128,15 @@ int main(void) {
         }
         float lo[3], hi[3];
         op_brush_bounds(samples, count, 0, lo, hi);
+        /* Half the trials scan a raster over the bounds, as a UV rasterizer hands texels over:
+         * neighbours share grid cells (the vectorized path); the others scatter them. */
+        uint32_t columns = 1 + (uint32_t)sqrtf((float)texels);
         for (uint32_t i = 0; i < texels; i++) {
             float x = uniform(lo[0] - .1f, hi[0] + .1f), y = uniform(lo[1] - .1f, hi[1] + .1f);
+            if (trial % 4 >= 2) {
+                x = lo[0] - .05f + (hi[0] - lo[0] + .1f) * (float)(i % columns) / (float)columns;
+                y = lo[1] - .05f + (hi[1] - lo[1] + .1f) * (float)(i / columns) / (float)columns;
+            }
             p[3 * i] = x;
             p[3 * i + 1] = y;
             p[3 * i + 2] = .05f * sinf(x * 5) + uniform(-radius, radius) * (trial % 2);

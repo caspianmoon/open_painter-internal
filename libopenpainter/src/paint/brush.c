@@ -2,6 +2,10 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_COVERAGE)
+#include <arm_neon.h>
+#define OP_NEON_COVERAGE 1   /* build with -DOP_SCALAR_COVERAGE to compare */
+#endif
 #define MAX_COUNT 33554432u
 static float dot(const float *a, const float *b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 static void cross(const float *a, const float *b, float *c) {
@@ -213,6 +217,52 @@ static int grid_build(stamp_grid_t *g, const float *s, uint32_t count, float axi
     return 1;
 }
 
+#ifdef OP_NEON_COVERAGE
+/* stamp_alpha for four texels (i .. i + 3) that share a grid cell, without a brush alpha: the
+ * scalar operations lane by lane, in the same order (no fused multiply-add: the library builds
+ * with -ffp-contract=off), IEEE division and square root, and minNum/maxNum as fminf/fmaxf do.
+ * A lane that fails a test contributes exactly 0, as in the scalar loop. */
+static void coverage4(const float *p, const float *n, uint32_t i, const float *s, const unsigned char *list,
+                      uint32_t first, uint32_t last, uint32_t count, float axis[][3],
+                      const op_brush_settings_t *b, float soft, float limit, const uint8_t *eligible,
+                      float *out) {
+    float32x4x3_t pos = vld3q_f32(p + 3 * (uint64_t)i), nor = vld3q_f32(n + 3 * (uint64_t)i);
+    const float32x4_t one = vdupq_n_f32(1), zero = vdupq_n_f32(0), threshold = vdupq_n_f32(.05f);
+    const float32x4_t softness = vdupq_n_f32(soft), flow = vdupq_n_f32(b->flow);
+    float32x4_t value = b->accumulate ? one : zero;
+    for (uint32_t e = first; e < last; e++) {
+        uint32_t k = list[e];
+        const float *q = s + 13 * k;
+        const float32x4_t a0 = vdupq_n_f32(axis[k][0]), a1 = vdupq_n_f32(axis[k][1]), a2 = vdupq_n_f32(axis[k][2]);
+        float32x4_t r0 = vsubq_f32(pos.val[0], vdupq_n_f32(q[0])), r1 = vsubq_f32(pos.val[1], vdupq_n_f32(q[1])),
+                    r2 = vsubq_f32(pos.val[2], vdupq_n_f32(q[2]));
+        float32x4_t depth = vaddq_f32(vaddq_f32(vmulq_f32(r0, a0), vmulq_f32(r1, a1)), vmulq_f32(r2, a2));
+        float radius = fmaxf(q[7], 1e-8f);
+        float32x4_t l0 = vsubq_f32(r0, vmulq_f32(depth, a0)), l1 = vsubq_f32(r1, vmulq_f32(depth, a1)),
+                    l2 = vsubq_f32(r2, vmulq_f32(depth, a2));
+        float32x4_t lateral = vaddq_f32(vaddq_f32(vmulq_f32(l0, l0), vmulq_f32(l1, l1)), vmulq_f32(l2, l2));
+        float32x4_t radial = vdivq_f32(vsqrtq_f32(lateral), vdupq_n_f32(radius));
+        float32x4_t facing = vaddq_f32(vaddq_f32(vmulq_f32(nor.val[0], a0), vmulq_f32(nor.val[1], a1)),
+                                       vmulq_f32(nor.val[2], a2));
+        uint32x4_t mask = vandq_u32(vandq_u32(vcgtq_f32(facing, threshold), vcltq_f32(radial, one)),
+                                    vcltq_f32(vabsq_f32(depth), vdupq_n_f32(radius * limit)));
+        if (eligible) {
+            const uint8_t *row = eligible + (uint64_t)i * count + k;
+            uint32_t allowed[4] = {row[0] ? ~0u : 0, row[count] ? ~0u : 0, row[2 * (uint64_t)count] ? ~0u : 0,
+                                   row[3 * (uint64_t)count] ? ~0u : 0};
+            mask = vandq_u32(mask, vld1q_u32(allowed));
+        }
+        if (!vmaxvq_u32(mask))
+            continue;   /* no lane reached: value * (1 - 0) and fmaxf(value, 0) change nothing */
+        float32x4_t a = vminnmq_f32(vmaxnmq_f32(vdivq_f32(vsubq_f32(one, radial), softness), zero), one);
+        a = vmulq_f32(vmulq_f32(a, vdupq_n_f32(q[6])), flow);
+        a = vbslq_f32(mask, a, zero);
+        value = b->accumulate ? vmulq_f32(value, vsubq_f32(one, a)) : vmaxnmq_f32(value, a);
+    }
+    vst1q_f32(out + i, b->accumulate ? vsubq_f32(one, value) : value);
+}
+#endif
+
 op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, const float *s,
                               uint32_t count, const op_brush_settings_t *b, const float *alpha,
                               uint32_t width, uint32_t height, const uint8_t *eligible,
@@ -234,6 +284,31 @@ op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, c
     int binned = count > 4 && grid_build(&grid, s, count, axis, limit, lo, hi);
     op_status_t status = OP_OK;
     for (uint32_t i = 0; i < texels; i++) {
+#ifdef OP_NEON_COVERAGE
+        if (binned && !alpha && i + 4 <= texels) {
+            /* Four texels inside the stroke's bounds and in one cell: one pass over its stamps. */
+            uint64_t cell = 0;
+            int same = 1;
+            for (uint32_t l = 0; l < 4 && same; l++) {
+                const float *x = p + 3 * (uint64_t)(i + l);
+                for (int j = 0; j < 3; j++)
+                    if (x[j] < lo[j] || x[j] > hi[j])
+                        same = 0;
+                uint64_t c = ((uint64_t)grid_cell(&grid, 2, x[2]) * grid.dims[1] + grid_cell(&grid, 1, x[1])) *
+                                 grid.dims[0] + grid_cell(&grid, 0, x[0]);
+                if (!l)
+                    cell = c;
+                else if (c != cell)
+                    same = 0;
+            }
+            if (same) {
+                coverage4(p, n, i, s, grid.stamps, grid.start[cell], grid.start[cell + 1], count, axis, b, soft,
+                          limit, eligible, out);
+                i += 3;
+                continue;
+            }
+        }
+#endif
         float value = b->accumulate ? 1 : 0;
         int inside = 1;
         for (int j = 0; j < 3; j++)

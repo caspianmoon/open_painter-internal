@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'src'))
 import open_painter
 from open_painter.ui.dock import lifecycle
-from open_painter.ui.layer_list import OP_UL_layers
+from open_painter.ui.native import OP_UL_native_layers
 from open_painter.core import layer_stack
 
 result = root / '.blender-test/native_regions_result.txt'
@@ -41,10 +41,9 @@ def keys():
 
 
 def setup():
+    # The dock synchronizes native regions on a timer but draws nothing over them.
     assert not lifecycle._handlers
-    assert not bpy.app.timers.is_registered(lifecycle.tick)
     assert not hasattr(bpy.types, 'OP_EditorType')
-    assert not hasattr(bpy.types, 'OP_OT_close_editor')
     bpy.ops.open_painter.open_editor()
     assert len(bpy.context.screen.areas) == initial and area.type == 'VIEW_3D'
     area.spaces.active.show_region_toolbar = True
@@ -52,12 +51,13 @@ def setup():
     bpy.ops.open_painter.texture_set(action='ADD')
     ts = bpy.context.scene.open_painter.texture_sets[0]
     ts.resolution = '512'
-    folder = layer_stack.add(ts, 'FOLDER')
-    child = layer_stack.add(ts, 'FILL', parent_id=folder.id)
-    flags, order = OP_UL_layers.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ts, 'layers')
+    folder_id = layer_stack.add(ts, 'FOLDER').id
+    layer_stack.add(ts, 'FILL', parent_id=folder_id)
+    # The hierarchical native list; resolved afresh after adds (a collection may move).
+    flags, order = OP_UL_native_layers.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ts, 'layers')
     assert order[0] < order[1] and flags == [1,1]
-    folder.expanded = False
-    flags, order = OP_UL_layers.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ts, 'layers')
+    next(item for item in ts.layers if item.id == folder_id).expanded = False
+    flags, order = OP_UL_native_layers.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ts, 'layers')
     assert flags == [1,0]
     later(toggle)
 
@@ -76,16 +76,20 @@ def hidden():
 
 
 def restored():
+    global workspace_name
     assert area.spaces.active.show_region_toolbar and area.spaces.active.show_region_ui
+    workspace_name = bpy.context.workspace.name
     bpy.ops.open_painter.workspace()
     later(workspace)
 
 
 def workspace():
-    assert bpy.context.workspace.name == 'Open Painter'
+    # The compatibility operator opens Painter in this area: no workspace switch, no new area.
+    from open_painter.ui import editor
+    assert bpy.context.workspace.name == workspace_name
     assert len(bpy.context.screen.areas) == initial
-    assert any(a.type == 'VIEW_3D' for a in bpy.context.screen.areas)
-    result.write_text('PASS: native toolbar/sidebar T/N, no overlay draw handlers or modal capture, no fake editor/Close operator, nested/collapsible native layer list, native workspace')
+    assert editor.is_area(area)
+    result.write_text('PASS: native toolbar/sidebar T/N, no overlay draw handlers or modal capture, nested/collapsible native layer list, Painter in place of a workspace switch')
     print(result.read_text())
     bpy.ops.wm.quit_blender()
 

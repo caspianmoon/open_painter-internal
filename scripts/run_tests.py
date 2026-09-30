@@ -212,6 +212,14 @@ if args.gui or args.gui_only:
                    cwd=root, env=env, check=True)
     if not stroke_result.read_text().startswith('PASS:'):
         raise RuntimeError(stroke_result.read_text())
+    regions_result = root / '.blender-test/native_regions_result.txt'
+    regions_result.unlink(missing_ok=True)
+    subprocess.run([*BLENDER, '--factory-startup', '--enable-event-simulate', '--python',
+                    str(root / 'tests/integration/native_regions_ui.py'),
+                    *(['--','-ApplePersistenceIgnoreState','YES'] if os.sys.platform == 'darwin' else [])],
+                   cwd=root, env=env, check=True)
+    if not regions_result.read_text().startswith('PASS:'):
+        raise RuntimeError(regions_result.read_text())
 if args.gpu_only:
     for filename, report_name, variable, success_key, success_value in (
         ('live_gpu_math.py', 'live-gpu-math.json', 'OP_LIVE_MATH_REPORT', 'passed', True),

@@ -659,6 +659,60 @@ layer, which idle arming prepares. A patch after a named invalidation (the stack
 remove, move, place) reads values again only for edits dropped while it was
 pending: a catch-up update with no owner used to make it read all ~6,600 bindings.
 
+### Making a patch proportional to its edit
+
+Section timings (`OP_DEEP_PHASES=1 OP_DEEP_SECTIONS=1`, which wraps the patch and
+native planning sections with wall-clock timers) showed about a dozen passes over
+every unit left in each structural edit. Most of them now visit only what the edit
+changed:
+
+- **Adoption.** `EngineGraph.unit_changes` logs the units each patch added,
+  replaced or removed. `Engine.adopt` of the patched graph retires and creates
+  states for those alone, and updates the inline set from the producers they import
+  now or imported before. `OP_VERIFY_STRUCTURE` compares the result with a full
+  adoption.
+- **Moved layers.** Binding keys name a layer by id (`_owner_token`) instead of by
+  address. A layer whose struct moved therefore moves all its bindings in one step:
+  a new owner struct and one `owner_bindings` entry. A unit decides once, when it
+  compiles, whether any of its closures hold its layer's struct (`captures_layer`;
+  image getters close over their channel, mask or effect). A unit whose closures
+  don't only takes its new owner tuple. `OP_VERIFY_STRUCTURE` checks every binding
+  is listed under its owner's current address.
+- **Paths.** The path index spells a layer's structs from a shared index cell, so a
+  moved layer updates its cell and its own address instead of indexing its ~30
+  structs again. `graph_path_index.py` checks the spelled paths after an insert and
+  a move.
+- **Batches.** `authoring_batch` records the owners of the edits it coalesces. A
+  smart material's replay made the patch read all ~7,000 bindings and 745 image
+  fields again; it now reads the replay's owners, in one narrowed update rather
+  than one update per owner. The patch no longer validates effects twice.
+- **Liveness.** Validation walked every unit from each visible channel after any
+  edit that changed what reads what. A patch now seeds the walk with the units that
+  came, went or were replaced and the producers they import or imported
+  (`_live_after_patch`). The cache is keyed by the hidden layers, so adding a layer
+  no longer invalidates it.
+- **Image groups.** Headless nodes stamp when they are assigned an image or a GPU
+  resource. The native image groups hold while none of the indexed nodes changed, so
+  a reindex reads only the entries new to it. Units compiled meanwhile no longer
+  force a full rescan. `OP_VERIFY_INCREMENTAL` compares the groups with a complete
+  scan.
+- **Translation.** A program's translator no longer indexes every unit's tree (the
+  index is kept on the graph while its units stand). Native IR nodes are packed
+  with `struct` instead of ctypes objects.
+
+200 layers at 1K, idle arming on, medians of five. These runs shared the machine
+with a busy virtual machine, so they swing by up to a third:
+
+| Edit | After stable indices | Now |
+| --- | ---: | ---: |
+| Adding a fill on top | 51 ms | 30–41 ms |
+| Adding a fill in the middle | 44 ms | 30–36 ms |
+| Removing the top layer | 30 ms | 26–27 ms |
+| Removing a middle layer | 39 ms | 25–34 ms |
+| Moving a middle layer | 34 ms | 24–26 ms |
+| Blend mode of a middle layer | 28 ms | 26–30 ms (a first Metal compile of a blend variant adds 10–15 ms) |
+| Applying a smart material (after the first) | 102 ms | 83–93 ms |
+
 ### Garbage collection
 
 A 200-layer project holds about 627,000 Python objects the cyclic garbage
@@ -688,6 +742,37 @@ tipped it. Profiles charged it to whatever function was allocating at the time
 with `OP_DEEP_PHASES=1` reports collection time per generation. At 200 layers,
 the 311 ms full collections are gone; younger collections still cost 5–10 ms per
 structural edit.
+
+## CPU kernels
+
+Profiles of the structural paths show arithmetic in C taking microseconds. The time
+there is Python bookkeeping, which assembly cannot speed up. The CPU kernels that do
+spend their time computing were reworked, and each keeps its previous version as a
+reference its C test must match exactly.
+
+- **Brush coverage (`op_brush_coverage`).** This kernel builds vector-stroke layer
+  rasters, paints without the GPU path, and runs smudge and resolved dabs. It
+  tested every texel inside a stroke's bounds against all of its up to 256
+  stamps. Stamps are now listed, in stamp order, in the cells of a uniform grid
+  their reach overlaps. The reach is `radius * (1 + depth limit * |axis|)`, plus
+  rounding margins, and cells are found by a monotonic map. A pair the grid skips
+  is therefore one that contributed exactly nothing, and FLOW multiplies in the
+  same order.
+
+  On arm64, four texels in one cell go through the cell's stamps as NEON float32x4
+  lanes. The lanes perform the scalar operations in the same order: no fused
+  multiply-add (the library builds with `-ffp-contract=off`), IEEE division and
+  square root, and minNum/maxNum for fminf/fmaxf.
+  `test_brush_coverage` requires bit-identical output over about 500M random
+  texel-stamp pairs, half of them in raster order. A fused dot product fails it.
+  For 1M texels × 256 stamps: 384 ms before, 35 ms with the grid, 16 ms with NEON.
+  `-DOP_SCALAR_COVERAGE` builds the scalar path.
+- **Export padding (`op_padding_donors`).** The horizontal pass stops once dx²
+  exceeds the best distance found; a candidate at an equal distance is still
+  compared, so island and index ties break as before. It also starts at the
+  nearest column with any donor in reach. The vertical pass runs its per-column
+  scan row by row, in memory order. `test_padding` requires identical donors and
+  distances over 120 random layouts. 4K with 24 islands: 710 → 140 ms.
 
 ## Test and benchmark memory
 
@@ -727,14 +812,19 @@ Machines with 16 GB or more keep the previous limits.
   micro details and the legacy Noise source still rasterize on the CPU at full
   resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
-- **Layer order.** A layer inserted mid-stack still visits every unit of the
-  layers above it (about 1,000 at 200 layers) to update its owner tuple, though
-  units holding nothing of the layer's struct skip the re-pointing. C still takes
-  the whole topology on every change (built at C speed). Units that address their
-  layer by id would make the first proportional to the edit.
-- **Whole-stack passes left in a patched edit.** The plan still carries every
-  memo into a new plan and sorts every signature. The layer callback walks all
-  readers again after a structural edit (`references._reader_layers`), and the
-  native graph rescans every image node after compiling new units. Each costs 1
-  to 3 ms at 200 layers.
+- **Layer order.** A layer inserted mid-stack still updates the owner tuple of
+  every unit of the layers above it (about 1,000 at 200 layers), though its bindings
+  move once per layer. C still takes the whole topology on every change (built at C
+  speed).
+- **Whole-stack passes left in a patched edit.** Each costs 1 to 3 ms at 200
+  layers:
+  - the plan (about 3.5 ms in the callback's structure check): memo copies, the key
+    closure and each layer's collection fingerprint;
+  - the reach walk in `_reverse_changed`;
+  - the chains and positions;
+  - collecting live effects;
+  - the report's warnings.
+- **Smart materials.** Translating the new units' programs (about 0.3 ms each, the
+  IR walk) and compiling their trees still dominate a repeated apply. Units with
+  equal signatures produce identical IR, which a program cache could reuse.
 

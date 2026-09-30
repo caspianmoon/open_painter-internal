@@ -31,11 +31,28 @@ from .resources import binding
 RGBA = 'RGBA32F'
 HALF = 'RGBA16F'   # display precision for every channel but Height (bump detail is sub-1/2048)
 SCALAR = 'R32F'
-RETAIN_BYTES = 512 * 1024 * 1024    # SRC/MASK results kept between evaluations, per texture set
-DEVICE_BYTES = 4 * 1024 * 1024 * 1024  # all managed textures across texture sets
+MIB, GIB = 1024 ** 2, 1024 ** 3
+
+
+def physical_memory():
+    try:
+        return os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+    except (ValueError, OSError, AttributeError):
+        return 16 * GIB
+
+
+def memory_share(fraction, low, high):
+    """A budget scaled to the machine: 8 GB machines keep room for Blender and the rest of the
+    system; 16 GB and larger ones get the full budget."""
+    return int(min(high, max(low, physical_memory() * fraction)))
+
+
+RETAIN_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)   # SRC/MASK results kept between evaluations, per set
+DEVICE_BYTES = memory_share(1 / 4, 1536 * MIB, 4 * GIB)     # all managed textures across texture sets
 INTERFACE_ENTRIES = 256              # metadata cannot retain evicted shaders forever
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
-POOL_BYTES = 512 * 1024 * 1024         # global cap; fits a 4K float publication scratch plus compact stages
+# Global cap on free textures; on 16 GB+ it fits a 4K float publication scratch plus compact stages.
+POOL_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
 # Publication through the images' pixel buffers: None follows the backend (Vulkan), True/False
 # force it (tests run the Vulkan path on Metal). On Vulkan Blender's image textures are storage,

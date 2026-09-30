@@ -27,7 +27,14 @@ from .formats import scalar_unit, texture_bytes
 
 ENABLED = True
 MIN_LENGTH = 3                        # shorter runs are cheaper to render than to apply
-BUDGET_BYTES = 768 * 1024 * 1024      # armed transforms kept per texture set
+
+
+def _budget():
+    from .runtime import MIB, memory_share
+    return memory_share(1 / 32, 128 * MIB, 512 * MIB)
+
+
+BUDGET_BYTES = _budget()              # armed transforms kept per texture set
 NONE = 255
 IDENTITY = (0, 1, 2, 3)
 

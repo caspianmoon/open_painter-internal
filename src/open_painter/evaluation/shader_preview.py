@@ -378,7 +378,7 @@ def _inputs(entry):
         stage['inputs_ms'] += (perf_counter() - started) * 1000
 
 
-def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
+def _update(scene, ts, entry, owner=None, check_structure=True, resources=True, values_known=False):
     from .shader_graph import RebuildRequired
     if resources and entry.pop('recheck', False):
         check_structure, owner = True, None   # edits were dropped while held: re-read everything
@@ -388,7 +388,7 @@ def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
         result = entry['graph'].update(owner, check_structure=check_structure, resources=resources)
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
-        if owner is None:
+        if owner is None and not values_known:
             entry['dropped'] = True   # edits nobody named (a batch, a recheck): the patch reads every value
         metrics.count('shader_topology_invalidations')
         from . import cache
@@ -433,8 +433,9 @@ def ensure(scene, ts):
             _release(scene, ts, entry)
         if entry and entry.get('graph') and _alive(entry, ts):
             if (entry.get('serial') != ts.edit_serial or entry.get('recheck')) and not entry.get('rebuild'):
+                known = entry.get('known') == ts.edit_serial   # every edit was reported, its values applied
                 _unknown_edits(entry, ts)   # an edit no callback reported (the set was invalidated)
-                _update(scene, ts, entry)
+                _update(scene, ts, entry, values_known=known)
             if entry.get('rebuild') and _patch(scene, ts, entry):
                 return entry['graph']
             if not entry.get('rebuild'):
@@ -567,8 +568,8 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         entry = _sessions.get(key)
         if entry and entry.get('graph') is not None and (structural or entry['graph']._stubs):
             _touch(entry, None if layer is None else (layer.id,))
-        _known(entry, ts)
         if key in _batches:
+            _known(entry, ts)   # the batch's end reads every value
             _batches[key]['structural'] |= structural
             continue
         if key in _holds:
@@ -577,6 +578,7 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         if key in _busy or not entry or not entry.get('graph') or not _alive(entry, ts):
             continue
         _busy.add(key)
+        _known(entry, ts)   # applied below, or recorded for the pending patch
         try:
             if entry.get('rebuild'):
                 _drop(entry, owner, layer)

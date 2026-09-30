@@ -56,6 +56,9 @@ def add(ts, kind="FILL", name=None, parent_id=""):
     )
     ts.dirty = was_dirty or bool(affected)
     ts.edit_serial = serial + bool(affected)
+    # The restored serial may be one the new channels' numeric callbacks just passed through.
+    from ..evaluation.dependencies import geometry_edit
+    geometry_edit(ts)
     for out in ts.outputs:
         out.dirty = output_dirty.get(out.channel, False) or out.channel in affected
     from .shared_stacks import publish

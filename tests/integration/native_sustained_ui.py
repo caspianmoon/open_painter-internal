@@ -28,6 +28,12 @@ REPORT = Path(os.environ['OP_SUSTAINED_REPORT'])
 DURATION = float(os.environ.get('OP_SUSTAINED_SECONDS', '60'))
 RUNS = int(os.environ.get('OP_SUSTAINED_RUNS', '5'))
 EXPECTED = os.environ.get('OP_SUSTAINED_BACKEND', 'c17-host-metal')
+# Frame breakdown: viewport draw spans (PRE_VIEW to POST_PIXEL), scheduler ticks and
+# engine evaluations, so cadence can be attributed rather than only counted.
+TRACE = os.environ.get('OP_SUSTAINED_TRACE') == '1'
+RESOLUTION = int(os.environ.get('OP_SUSTAINED_RES', '2048'))
+trace = dict(views=[], ticks=[], evaluations=[])
+view_handler = None
 assert DURATION > 0 and RUNS > 0
 bpy.context.preferences.view.show_splash = False
 commands, draws, runs = [], [], []
@@ -46,6 +52,8 @@ def evaluated(self, *args, **kwargs):
     command = latest
     started = time.perf_counter()
     result = original_evaluate(self, *args, **kwargs)
+    if TRACE and active is not None:
+        trace['evaluations'].append((started, time.perf_counter(), len(result or ()), self.report.get('passes')))
     if result and active is None and self.set_id == ts.id:
         if warm_evaluations == 0:
             # Start warmup after initial resource/shader setup has completed;
@@ -62,7 +70,14 @@ def evaluated(self, *args, **kwargs):
     return result
 
 
+def view_started():
+    if TRACE and active is not None:
+        trace['views'].append([time.perf_counter(), None])
+
+
 def drawn():
+    if TRACE and active is not None and trace['views'] and trace['views'][-1][1] is None:
+        trace['views'][-1][1] = time.perf_counter()
     if active is None:
         return
     engine = shader_preview.session_engine(bpy.context.scene, ts)
@@ -85,6 +100,8 @@ def percentile(values):
 def finish(error=None):
     if handler is not None:
         bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+    if view_handler is not None:
+        bpy.types.SpaceView3D.draw_handler_remove(view_handler, 'WINDOW')
     if hook is not None:
         hook.stop()
     if observation is not None:
@@ -119,23 +136,40 @@ def finish(error=None):
                   renderer=gpu.platform.renderer_get(), vendor=gpu.platform.vendor_get(),
                   driver=gpu.platform.version_get(), viewport=[area.width, area.height],
                   render_engine=bpy.context.scene.render.engine, shading=area.spaces.active.shading.type,
-                  execution_backend=shader_preview.session_engine(bpy.context.scene, ts).report.get('execution_backend'), resolution=2048,
+                  execution_backend=shader_preview.session_engine(bpy.context.scene, ts).report.get('execution_backend'), resolution=RESOLUTION,
                   measurement='Scripted RNA receipt to accepted revision and viewport POST_PIXEL draw; not OS input, GPU fence or scanout.',
                   instrumentation=observation.report() if observation else {},
-                  note='No screenshots or readbacks inside timed runs. All commands and superseded states retained; missed timer slots are not delivered input events.')
+                  note='No screenshots or readbacks inside timed runs. All commands and superseded states retained; missed timer slots are not delivered input events.',
+                  trace=summarize_trace() if TRACE else None)
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=2) + '\n')
     print('NATIVE_SUSTAINED_' + report['status'], error or [r['summary'] for r in runs], flush=True)
     bpy.ops.wm.quit_blender()
 
 
+def summarize_trace():
+    def spans(rows):
+        return [1000 * (row[1] - row[0]) for row in rows if row[1] is not None]
+    views = [row for row in trace['views'] if row[1] is not None]
+    seconds = sum(run['summary']['duration_s'] for run in runs) or 1.0
+    gaps = [1000 * (b[0] - a[1]) for a, b in zip(views, views[1:])]
+    return dict(view_draws_per_s=len(views) / seconds, view_draw_ms=percentile(spans(views)),
+                gap_between_draws_ms=percentile(gaps),
+                ticks_per_s=len(trace['ticks']) / seconds, tick_ms=percentile(spans(trace['ticks'])),
+                evaluations_per_s=len(trace['evaluations']) / seconds,
+                evaluation_ms=percentile(spans(trace['evaluations'])),
+                passes_per_evaluation=percentile([row[3] for row in trace['evaluations'] if row[3] is not None]),
+                busy_share=dict(view=sum(spans(views)) / 1000 / seconds,
+                                ticks=sum(spans(trace['ticks'])) / 1000 / seconds))
+
+
 def setup():
-    global ts, control, area, handler, hook, warm_until
+    global ts, control, area, handler, hook, warm_until, view_handler
     open_painter.register()
     area = max((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'), key=lambda a: a.width * a.height)
     region = next(r for r in area.regions if r.type == 'WINDOW')
     with bpy.context.temp_override(area=area, region=region):
-        ts, _, ids, _ = fixture(bpy.context.scene, resolution=2048)
+        ts, _, ids, _ = fixture(bpy.context.scene, resolution=RESOLUTION)
         control = next(layer for layer in ts.layers if layer.id == ids['coat'])
         for layer in ts.layers:
             for channel in CHANNELS:
@@ -150,6 +184,19 @@ def setup():
         space.region_3d.view_location = (0, 0, 0)
         space.region_3d.view_distance = 3
     handler = bpy.types.SpaceView3D.draw_handler_add(drawn, (), 'WINDOW', 'POST_PIXEL')
+    if TRACE:
+        view_handler = bpy.types.SpaceView3D.draw_handler_add(view_started, (), 'WINDOW', 'PRE_VIEW')
+        from open_painter.evaluation import cache
+        original_tick = cache._tick
+
+        def traced_tick():
+            started = time.perf_counter()
+            try:
+                return original_tick()
+            finally:
+                if active is not None:
+                    trace['ticks'].append((started, time.perf_counter()))
+        cache._tick = traced_tick
     hook = patch.object(runtime.Engine, 'evaluate', evaluated)
     hook.start()
     warm_until = time.perf_counter() + max(8, float(os.environ.get('OP_SUSTAINED_WARM_EDITS', '0')))
@@ -232,6 +279,8 @@ def tick():
             ideal_tracking_error=percentile([d['ideal_tracking_error'] for d in observed])))
         runs.append(active)
         print('SUSTAINED_RUN', len(runs), active['summary'], flush=True)
+        if TRACE:
+            print('SUSTAINED_TRACE', json.dumps(summarize_trace()), flush=True)
         active = latest = None
         warm_evaluations = 0
         warm_until = now + 3

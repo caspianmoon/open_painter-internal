@@ -92,7 +92,11 @@ def _changed(self, context, structural):
     previous_dirty = {output.channel: output.dirty for output in ts.outputs}
     layer.dirty = True
     ts.dirty = True
+    serial = ts.edit_serial
     ts.edit_serial += 1
+    if not structural:
+        from ..evaluation.dependencies import numeric_edit
+        numeric_edit(ts, serial)
     from ..evaluation.references import dependent_channels
     affected = dependent_channels(ts,layer.id,self.channel) | {self.channel}
     for output in ts.outputs:
@@ -122,6 +126,8 @@ def physical_changed(self, context):
     ts = owning_set(self)
     if ts is not None:
         physical.sync_owner(self, ts)
+        from ..evaluation.dependencies import geometry_edit
+        geometry_edit(ts)   # the units switch decides whether the set reads the geometry
 
 
 class OP_Channel(bpy.types.PropertyGroup):

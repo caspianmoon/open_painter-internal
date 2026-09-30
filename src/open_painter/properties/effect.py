@@ -34,7 +34,11 @@ def _changed(self, context, structural):
                 previous_dirty = {output.channel: output.dirty for output in ts.outputs}
                 layer.dirty = True
                 ts.dirty = True
+                serial = ts.edit_serial
                 ts.edit_serial += 1
+                if not structural:
+                    from ..evaluation.dependencies import numeric_edit
+                    numeric_edit(ts, serial)
                 if channel is not None:
                     channel.dirty = True
                 from ..evaluation.references import dependent_channels

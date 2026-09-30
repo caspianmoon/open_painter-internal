@@ -33,7 +33,14 @@ def _changed(self, context, structural):
         return
     previous_dirty = {output.channel: output.dirty for output in ts.outputs}
     ts.dirty = True
+    serial = ts.edit_serial
     ts.edit_serial += 1
+    if not structural and owned is not None and not (
+            owned.as_pointer() == pointer and (owned.decal_inline or owned.decal_object is not None
+                                               or owned.decal_object_name)):
+        # A decal layer's own numeric fields are its projection frame, which the geometry key reads.
+        from ..evaluation.dependencies import numeric_edit
+        numeric_edit(ts, serial)
     from ..evaluation.references import dependent_channels
     affected = ({prop.channel for prop in owned.channels if prop.enabled}
                 | dependent_channels(ts, owned.id) if owned else

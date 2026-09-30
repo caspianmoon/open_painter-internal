@@ -101,6 +101,16 @@ def main():
                 data = json.loads(target.read_text())
                 assert data.get('result', data.get('status')) == 'PASS', data
                 assert data['execution_backend'] == 'c17-host-metal', data
+            # A real drag over 200 layers: every value change is evaluated, and every evaluation drawn.
+            target = out / 'native-drag-cadence.json'
+            target.unlink(missing_ok=True)
+            run('native_drag_cadence.py', gui=True, extra={'OP_DRAG_REPORT': str(target), 'OP_DRAG_RES': '1024',
+                                                           'OP_DRAG_LAYERS': '200', 'OP_DRAG_SECONDS': '8'})
+            data = json.loads(target.read_text())
+            assert data['status'] == 'PASS', data.get('error')
+            summary = data['summary']
+            assert summary['undrawn_evaluations'] == 0, summary
+            assert summary['evaluations_per_s'] >= .95 * summary['value_changes_per_s'], summary
             run('native_paint_reopen.py')
         if args.sustained:
             target = out / 'native-sustained-ui.json'

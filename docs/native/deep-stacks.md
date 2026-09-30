@@ -139,6 +139,16 @@ scratch textures of the channel's layout while it runs.
 - **Graph builds.** A build asks RNA for struct paths through one index built
   per build (`shader_graph.path_index`). `path_from_id` searches collections
   linearly, which made builds quadratic in the stack size.
+- **Geometry readers.** Whether a set reads its assigned geometry
+  (`dependencies.uses_geometry`), and the structural part of whether it reads
+  placement, are memoised per set on its edit serial. Numeric callbacks of layers,
+  masks, channels and effects map their serial bump back to the serial before it
+  (`numeric_edit`), so a drag keeps both answers. The exceptions:
+  - A decal layer's own numeric fields are its projection frame, so they are not
+    carried.
+  - A units switch can leave every derived value, and so the serial, unchanged;
+    it bumps a per-set generation instead.
+  - A Mask Graph's own nodes are read on each call.
 - **Structure passes.** Each structure pass (a plan, a structural signature, a
   build) memoizes, on its plan:
   - the per-layer answers that only structural edits change: children,
@@ -199,6 +209,49 @@ steps CPU resources over about 50 ticks. The cold build takes 2.4–3.0 s.
 The 2K structural and cold figures above were not re-measured after the path
 index: see below.
 
+## Real viewport cadence
+
+`tests/integration/native_drag_cadence.py` drags the product's opacity slider in a
+real Blender window (`--enable-event-simulate`). It queues mouse moves at 120 Hz;
+Blender delivered about 45 value changes per second. It counts value changes,
+evaluations and POST_PIXEL draws, and measures from the first value change a
+revision includes to its first draw. That is event queue to POST_PIXEL, not OS
+input or scanout.
+
+An earlier timer-driven run (`native_sustained_ui.py`) showed 12–16 drawn
+revisions per second. That was the timer's phase against the draw loop. In a real
+drag, every value change is evaluated and drawn in the same frame.
+
+1K, M3 Pro. Before is `9fd1db2`:
+
+| Stack | Revisions/s | Tick p50 | Evaluation p50 | Change → draw p50 |
+| --- | ---: | ---: | ---: | ---: |
+| Fixture (3 layers), before | 44.0 | 3.1 ms | 2.2 ms | 9.0 ms |
+| +100 fills, before | 41.7 | 9.0 ms | 5.2 ms | 16.0 ms |
+| +200 fills, before | 30.2 | 15.2 ms | 8.4 ms | 23.8 ms |
+| +200 fills, after | 44.9 | 3.9 ms | 2.7 ms | 12.1 ms |
+| +200 fills and a triplanar layer, before | 35.8 | 9.4 ms | 4.1 ms | 18.2 ms |
+| +200 fills and a triplanar layer, after | 44.7 | 4.3 ms | 2.7 ms | 12.5 ms |
+
+A repeat of the 200-fill pair on the same machine state gave 30.7/s, 15.1 ms and
+8.4 ms before, and 44.9/s, 3.9 ms and 2.7 ms after.
+
+At 200 layers, most of each scheduler tick before the change was two Python walks
+over every channel, effect and mask (`uses_geometry`):
+- one from `dependencies.refresh`;
+- one from the engine's surface key, for the padding donor.
+
+When nothing on the set reads geometry, each walk runs all six of its checks to
+the end. A set that does read geometry stops at the first check that finds a
+reader, but then rebuilds its geometry key.
+
+The scheduler asks for both on every tick. Publishing the channel images causes
+shading updates of the material, mesh and object, and the depsgraph handler
+counts those as relevant. That is deliberate: a material rename produces exactly
+the same updates, and mesh masks of kind MATERIAL key on material names. The
+per-set memo makes both calls, and the geometry key's rebuild, independent of the
+number of layers.
+
 ## Test and benchmark memory
 
 A 200-layer 2K benchmark run exhausted the development machine. Background
@@ -218,7 +271,8 @@ texture it ever used.
 - **Heavy suites.** `native_publication_4k.py` needs more than 7 GiB and
   `resolution_switch.py` more than 4 GiB. `mask_groups.py` and
   `artist_file_edits.py` also exceed 5 GiB; the latter only with the local
-  artist file present. All four exceed these limits at the pre-change commit
+  artist file present. `auto_edge_rebake.py` passes 4.5 GiB within seconds of
+  its first Cycles bake. All five exceed these limits at the pre-change commit
   too, so this is not a regression. They were not run for this change on the
   18 GB machine while other work was using its memory.
 

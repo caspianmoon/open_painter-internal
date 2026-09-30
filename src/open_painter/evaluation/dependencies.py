@@ -20,6 +20,41 @@ _known = {}
 _candidates = set()
 _image_epochs = {}   # image pointer -> counter value of its last reported update
 _image_counter = [0]
+# A uniform edit moves the set's edit serial but nothing the geometry reads: (set pointer, id)
+# -> (edit serial, the serial it stands for). A drag's run of them maps back to the serial
+# before it, so the per-set answers keyed on ``_token`` stay current through the drag.
+_numeric = {}
+_generations = {}   # (set pointer, id) -> edits of geometry inputs that move no edit serial
+_uses = {}   # (set pointer, id) -> (token, whether anything but auto edge rebakes reads the geometry)
+_placed = {}   # (set pointer, id) -> (token, whether the stack reads placement, or has Mask Graphs that may)
+
+
+def _set_key(ts):
+    return ts.as_pointer(), ts.id
+
+
+def numeric_edit(ts, before):
+    """A uniform edit moved the set's edit serial from ``before``. The caller vouches that it
+    changed no input of ``uses_geometry`` or ``geometry_key``: decal frames are numeric edits
+    that do, so their layers never come here."""
+    key = _set_key(ts)
+    held = _numeric.get(key)
+    _numeric[key] = (ts.edit_serial, held[1] if held is not None and held[0] == before else before)
+
+
+def geometry_edit(ts):
+    """An input of ``uses_geometry`` may have changed without moving the edit serial: a units
+    switch whose derived texture values stayed put, or a layer added under a restored serial."""
+    key = _set_key(ts)
+    _generations[key] = _generations.get(key, 0) + 1
+
+
+def _token(ts):
+    """The set's edit serial as the geometry sees it, with its generation."""
+    key = _set_key(ts)
+    held = _numeric.get(key)
+    return (held[1] if held is not None and held[0] == ts.edit_serial else ts.edit_serial,
+            _generations.get(key, 0))
 
 
 def live_fields(ts):
@@ -62,19 +97,34 @@ def uses_placement(ts):
     and decals (authored in world space), live scene fields, custom graphs with a Position
     or Normal input. Physical sizes, seam maps, edge rebakes and mesh masks see the surface
     alone: a normal-direction mask reads the objects' orientation, which its own selector
-    signature carries (``mesh_masks._orientation``), so a drag leaves the set's key alone."""
-    from ..painting import decals
+    signature carries (``mesh_masks._orientation``), so a drag leaves the set's key alone.
+
+    The walk over the stack is memoised per structure. A Mask Graph's own nodes are read
+    each time: editing them moves no serial of the set."""
+    key, token = _set_key(ts), _token(ts)
+    cached = _placed.get(key)
+    if cached is None or cached[0] != token:
+        from ..painting import decals
+        placed = any(p.projection == 'TRIPLANAR' or getattr(p, 'material_mapping_version', 0) == 1
+                     for l in ts.layers for p in (*l.channels, *l.masks)) \
+            or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts))
+        cached = _placed[key] = (token, placed, placed or bool(graph_masks(ts)))
+    if cached[1] or not cached[2]:
+        return cached[1]
     from .custom_graph import reads_placement
-    return any(p.projection == 'TRIPLANAR' or getattr(p, 'material_mapping_version', 0) == 1
-               for l in ts.layers for p in (*l.channels, *l.masks)) \
-        or bool(live_fields(ts)) or uses_strokes(ts) or bool(decals.layers_of(ts)) \
-        or any(reads_placement(m.node_group) for m in graph_masks(ts))
+    return any(reads_placement(m.node_group) for m in graph_masks(ts))
 
 
 def uses_geometry(ts):
-    from . import physical
-    return uses_placement(ts) or bool(ts.bake.auto_edge_rebake) or bool(mesh_masks(ts)) \
-        or bool(graph_masks(ts)) or uses_surface_effects(ts) or physical.uses(ts)
+    """Whether anything on the set reads the assigned geometry. The walk over every channel,
+    effect and mask is memoised per structure: the scheduler asks on each tick of a drag."""
+    key, token = _set_key(ts), _token(ts)
+    cached = _uses.get(key)
+    if cached is None or cached[0] != token:
+        from . import physical
+        cached = _uses[key] = (token, uses_placement(ts) or bool(mesh_masks(ts)) or bool(graph_masks(ts))
+                               or uses_surface_effects(ts) or physical.uses(ts))
+    return cached[1] or bool(ts.bake.auto_edge_rebake)
 
 
 @measured('geometry_signature')
@@ -392,7 +442,7 @@ def _key_token(scene, ts):
     # assigned meshes' own epochs come along: ``on_depsgraph`` moves them with the counter,
     # but a stroke reported through ``mesh_epoch`` alone (as the suites simulate) must not
     # be served the key of the mesh before it.
-    return (_epoch, ts.edit_serial, scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
+    return (_epoch, _token(ts), scene.frame_current, scene.frame_subframe, bool(ts.bake.auto_edge_rebake),
             getattr(ts, 'udim_tile', 0), getattr(ts, 'udim_source_uv', ''),
             tuple((ref.object.as_pointer() if ref.object is not None else None, ref.slot_index,
                    _mesh_epochs.get(ref.object.data.as_pointer(), 0)
@@ -653,7 +703,7 @@ def clear():
     from . import mesh_masks
     from ..painting import decals
     _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
-    _image_epochs.clear()
+    _image_epochs.clear(); _numeric.clear(); _generations.clear(); _uses.clear(); _placed.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
     decals.forget()      # which Empties this session's layers held: another file's layers start over
@@ -665,6 +715,10 @@ def prune(live):
         _known.pop(key, None)
     for key in [k for k in _keys if k[:2] not in live]:
         _keys.pop(key, None)
+    ids = {key[1] for key in live}
+    for values in (_numeric, _generations, _uses, _placed):
+        for key in [k for k in values if k[1] not in ids]:
+            values.pop(key, None)
     meshes = {m.as_pointer() for m in bpy.data.meshes}
     for values in (_mesh_epochs, _mesh_fingerprints):
         for key in set(values)-meshes:

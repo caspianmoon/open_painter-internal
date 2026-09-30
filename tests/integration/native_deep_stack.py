@@ -197,12 +197,20 @@ def run_structural(scene, ts, repeats=3):
     """Structural edits on the deep stack, each timed from the edit until the set is current."""
     rows = {}
 
-    def record(name, action):
+    def record(name, action, selected=None):
         if ONLY and name not in ONLY:
             return
         durations, ticks = [], []
         profiler = cProfile.Profile() if PROFILE else None
+        from open_painter.evaluation import dependencies
         for index in range(repeats):
+            if selected is not None:
+                # The UI edits the selected layer, whose runs idle arming prepared.
+                ts.active_layer = next(i for i, l in enumerate(ts.layers) if l.id == selected)
+                engine = shader_preview.session_engine(scene, ts)
+                with Frame():
+                    while engine.prearm(selected, dependencies.image_epochs()):
+                        pass
             started = perf_counter()
             if profiler:
                 profiler.enable()
@@ -245,12 +253,12 @@ def run_structural(scene, ts, repeats=3):
 
     def blend(index):
         layer(middle).blend_mode = ('MULTIPLY', 'NORMAL', 'SCREEN')[index % 3]
-    record('blend_mode_middle', blend)
+    record('blend_mode_middle', blend, middle)
 
     def visibility(index):
         target = layer(middle)
         target.visible = not target.visible
-    record('visibility_middle', visibility)
+    record('visibility_middle', visibility, middle)
 
     names = sorted(CATALOG)
 

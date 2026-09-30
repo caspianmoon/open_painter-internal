@@ -251,6 +251,29 @@ def main():
                                 error=error)
         print('SUFFIX_PREARM', json.dumps(report['prearm']), flush=True)
         assert error <= 2e-5, report['prearm']
+
+        # A structural edit below an armed layer rebuilds the graph but keeps the
+        # members of the runs above it: their transforms are reused, not re-armed.
+        target = ids['below_overlay']
+        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == target)
+        while engine.prearm(target, dependencies.image_epochs()):
+            pass
+        armed = set(engine._suffix.entries)
+        layer('base')().blend_mode = 'MULTIPLY'
+        shader_preview.flush(scene, ts, pixels=False)
+        assert armed <= set(engine._suffix.entries), 'a rebuild discarded armed transforms'
+        with Metrics() as metrics:
+            layer('below_overlay')().opacity = .33
+            with Capture(engine) as rebuilt:
+                shader_preview.tick(scene, ts)
+        counts = dict(metrics.counts)
+        truth = sequential(scene, ts)
+        error = max(difference(rebuilt, truth).values())
+        report['rebuild_reuse'] = dict(applications=counts.get('engine_suffix_applications', 0),
+                                       arms=counts.get('engine_suffix_arms', 0), error=error)
+        print('SUFFIX_REBUILD_REUSE', json.dumps(report['rebuild_reuse']), flush=True)
+        assert report['rebuild_reuse']['applications'] and not report['rebuild_reuse']['arms'], report['rebuild_reuse']
+        assert error <= 2e-5, report['rebuild_reuse']
         report['status'] = 'PASS'
         print('NATIVE_SUFFIX_PASS', flush=True)
     finally:

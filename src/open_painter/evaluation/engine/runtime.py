@@ -858,7 +858,8 @@ class Engine:
             raise RuntimeError("Cannot adopt a graph during native channel submission")
         n_before = self.graph.n if self.graph is not None else None
         self._clear_constant_renderer()
-        self._suffix.clear()   # run keys name nodes of the previous graph
+        # Suffix transforms survive: run keys identify members by content, not by
+        # position in the graph (a resolution change closes them below).
         self.graph = graph
         self._native_stamps = None
         self._publication_programs.clear()

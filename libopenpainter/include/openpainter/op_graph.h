@@ -78,7 +78,8 @@ op_status_t op_graph_spine(const op_graph_t *graph, uint32_t node, uint32_t *kee
  * changed: their local stamps equal the ones they were last rendered with. The
  * run's result is then an affine map of its input (the bottom's backdrop, or
  * UINT32_MAX for the chain's constant start) whose coefficients depend only on
- * the members' local stamps, which key identifies. members[first .. first+length)
+ * the members' local stamps, which key identifies. Keys do not depend on node
+ * indices, so they survive topology changes that keep a run's members. members[first .. first+length)
  * lists the run bottom-up. Runs are reported for the stale composition tree
  * under root, top-down: apply them in reverse order. Only runs of two or more
  * nodes are reported. Capacities of the node count always suffice. */

@@ -36,7 +36,9 @@ run change, one pass reproduces the run's result from its input.
   below a channel's root. It reports maximal chains of affine nodes that are
   stale only because their backdrop changed, meaning their local stamps equal
   the ones they were rendered with. Each run's key is derived from its members'
-  local stamps.
+  local stamps only, not from node indices. An armed transform therefore
+  survives graph rebuilds that keep its members, such as a structural edit
+  elsewhere in the stack.
 
 ### What the host does
 
@@ -137,6 +139,14 @@ scratch textures of the channel's layout while it runs.
 - **Graph builds.** A build asks RNA for struct paths through one index built
   per build (`shader_graph.path_index`). `path_from_id` searches collections
   linearly, which made builds quadratic in the stack size.
+- **Structure passes.** Each structure pass (a plan, a structural signature, a
+  build) memoizes, on its plan:
+  - the per-layer answers that only structural edits change: children,
+    skipped, touched and the channel lookup;
+  - unit signatures;
+  - the set-wide owner addresses.
+
+  A build's final signature reuses the plan it was built from.
 
 ## Measured results
 
@@ -170,13 +180,21 @@ each drag, as it does in the UI while the layer is selected:
 | Bottom leaf roughness | 19.4 / 23.3 ms | 8.2 / 5.5 ms |
 | Mask black level | 43.6 / 51.7 ms | 9.0 / 8.6 ms |
 
-101 layers, 1K, from each structural edit until the set is current:
+101 layers, 1K, from each structural edit until the set is current. The edited
+layer is selected, as in the UI, and idle arming is on. These are medians of
+three edits on a shared machine, so they vary by about ±50 ms between runs.
 
-- Adding a top fill: 277 ms.
-- Changing a middle layer's blend mode: 222 ms.
-- Applying a smart material: 1.35 s → 0.53 s with the replay transaction.
-- Authoring the 101-layer stack: 9.5 s → 3.0 s.
-- Cold build: 2.4–3.0 s.
+| Edit | Before | After |
+| --- | ---: | ---: |
+| Adding a top fill | 277 ms | 251 ms |
+| Removing a layer | 160 ms | 144 ms |
+| Changing a middle layer's blend mode | 222 ms | 182 ms |
+| Toggling a middle layer's visibility | 42 ms | 11 ms |
+| Applying a smart material | 1,350 ms | 241 ms |
+| Authoring the 101-layer stack | 9.5 s | 3.0 s |
+
+The smart-material apply is also noisier than the rest: its first application
+steps CPU resources over about 50 ticks. The cold build takes 2.4–3.0 s.
 
 The 2K structural and cold figures above were not re-measured after the path
 index: see below.

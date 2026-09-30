@@ -275,7 +275,7 @@ class EngineGraph(Graph):
         self.resources.used = self._used_resources()
         self.chains = {channel: self._chain('', channel, frozenset()) for channel in CHANNELS}
         self._reverse_map()
-        self._structure = self.structural_signature()
+        self._structure = self.structural_signature(plan)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         self.validate_parameters()
         corrections = self.update(check_structure=False) if self._reused else {}

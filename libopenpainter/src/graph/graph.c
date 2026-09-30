@@ -408,7 +408,10 @@ static op_status_t plan_runs(op_graph_t *g, uint32_t root, const unsigned char *
         if (length >= 2) {
             if (*run_count >= run_capacity)
                 return OP_RESOURCE_EXHAUSTED;
-            uint64_t key = mix(mix(UINT64_C(0x9e3779b97f4a7c15), u), v);
+            /* The members' local stamps alone: they carry each member's identity and
+             * everything it reads, and nothing about node indices, so an armed
+             * transform stays valid across topology changes that keep its members. */
+            uint64_t key = mix(UINT64_C(0x9e3779b97f4a7c15), length);
             for (uint32_t i = 0; i < length / 2; i++) {
                 uint32_t t = members[start + i];
                 members[start + i] = members[start + length - 1 - i];
@@ -416,7 +419,7 @@ static op_status_t plan_runs(op_graph_t *g, uint32_t root, const unsigned char *
             }
             for (uint32_t i = start; i < start + length; i++) {
                 g->needed[members[i]] = 1;
-                key = mix(mix(key, members[i]), g->local[members[i]]);
+                key = mix(key, g->local[members[i]]);
             }
             op_graph_run_t *run = &runs[(*run_count)++];
             run->top = u;

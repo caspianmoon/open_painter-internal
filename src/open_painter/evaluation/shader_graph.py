@@ -1484,11 +1484,27 @@ class Graph(Math):
     def _mode(layer, prop):
         return prop.blend_mode if prop and prop.blend_mode != 'INHERIT' else layer.blend_mode
 
+    def _channel(self, layer, channel):
+        """channel_for, memoized per plan (RNA references: dropped with the plan's layers)."""
+        memo = getattr(self._plan, 'channels', None)
+        if memo is None:
+            return channel_for(layer, channel)
+        key = (layer.id, channel)
+        prop = memo.get(key, memo)
+        if prop is memo:
+            prop = memo[key] = channel_for(layer, channel)
+        return prop
+
     def _touched(self, layer, channel):
-        prop = channel_for(layer, channel)
-        if prop and not prop.enabled:
-            return False
-        return self._mode(layer, prop) != 'DISABLE'
+        memo = getattr(self._plan, 'touched', None)
+        key = (layer.id, channel)
+        if memo is not None and key in memo:
+            return memo[key]
+        prop = self._channel(layer, channel)
+        touched = not (prop and not prop.enabled) and self._mode(layer, prop) != 'DISABLE'
+        if memo is not None:
+            memo[key] = touched
+        return touched
 
     def _wired(self, layer, channel):
         """The layer's channel unit is in the chain: it blends, or it is a folder
@@ -1631,7 +1647,7 @@ class Graph(Math):
             if layer.type != 'FOLDER' and not cached:
                 refs.append(self._source_key(layer, key[2]))
         elif key[0] == 'SRC':
-            prop = channel_for(layer, key[2])
+            prop = self._channel(layer, key[2])
             if layer.type == 'FILL' and prop is not None and prop.anchor:
                 refs.append(self._anchor_key(prop.anchor, prop.anchor_channel or key[2]))
         elif key[0] == 'MASK':
@@ -1693,6 +1709,15 @@ class Graph(Math):
     def _skipped(self, layer):
         """The layer compiles as a pass-through: it or an ancestor is bypassed,
         or an ancestor is cached (its subtree is sampled from the cache image)."""
+        memo = getattr(self._plan, 'skipped', None)
+        if memo is not None:
+            skipped = memo.get(layer.id)
+            if skipped is None:
+                skipped = memo[layer.id] = self._skipped_walk(layer)
+            return skipped
+        return self._skipped_walk(layer)
+
+    def _skipped_walk(self, layer):
         seen, cursor, own, consumed = set(), layer, True, None
         while cursor is not None and cursor.id not in seen:
             if getattr(cursor, 'bypass', False):
@@ -1747,10 +1772,12 @@ class Graph(Math):
     def _subtree_touches(self, folder, channel):
         """Whether any descendant contributes to ``channel`` (visibility aside: it is a uniform)."""
         stack, seen = [folder.id], set()
+        children = getattr(self._plan, 'children', None)
         while stack:
             parent = stack.pop()
-            for layer in self.ts.layers:
-                if layer.parent_id != parent or layer.id in seen:
+            for layer in (children.get(parent, ()) if children is not None
+                          else [l for l in self.ts.layers if l.parent_id == parent]):
+                if layer.id in seen:
                     continue
                 seen.add(layer.id)
                 if layer.type == 'FOLDER':
@@ -1766,13 +1793,20 @@ class Graph(Math):
     def plan(self):
         """Resolve the unit set, wiring and opacity contexts from authoring data."""
         layers = {l.id: l for l in self.ts.layers}
-        plan = SimpleNamespace(layers=layers, keys=set(), opaque={}, wiring=[], order=[])
+        children = {}
+        for layer in self.ts.layers:
+            children.setdefault(layer.parent_id, []).append(layer)
+        # Per-plan memos: answers that only structural edits change, and a new plan
+        # is made for every structural edit. channels holds RNA references and is
+        # dropped whenever update() refreshes the layers (a collection may move).
+        plan = SimpleNamespace(layers=layers, keys=set(), opaque={}, wiring=[], order=[], children=children,
+                               skipped={}, touched={}, channels={}, signatures={}, base_owners=None)
         self._plan = plan
         self._anchors = None
 
         def walk(parent, opaque, ancestors):
-            for layer in self.ts.layers:
-                if layer.parent_id != parent or not self._included(layer):
+            for layer in children.get(parent, ()):
+                if not self._included(layer):
                     continue
                 if layer.id in ancestors:
                     raise ValueError('Layer hierarchy contains a cycle')
@@ -1795,12 +1829,22 @@ class Graph(Math):
         return plan
 
     def _unit_signature(self, key, stub=None):
+        """The structure a unit compiles from; memoized per plan (each structural edit plans anew)."""
+        memo = getattr(self._plan, 'signatures', None)
+        if memo is None:
+            return self._unit_signature_uncached(key, stub)
+        entry = (key, stub)
+        if entry not in memo:
+            memo[entry] = self._unit_signature_uncached(key, stub)
+        return memo[entry]
+
+    def _unit_signature_uncached(self, key, stub=None):
         layer = self._layer(key[1])
         if layer is None:
             return None
         refs = tuple(self._reference_keys(key))
         if key[0] == 'CHANNEL':
-            prop = channel_for(layer, key[2])
+            prop = self._channel(layer, key[2])
             signature = (layer.type, self._mode(layer, prop), layer.group_mode, self._plan.opaque.get(layer.id), refs,
                          bool(getattr(layer, 'publish_group', False)) if layer.type == 'FOLDER' else None,
                          'skip' if self._skipped(layer) else self._cache_effective(layer, key[2]),
@@ -1810,7 +1854,7 @@ class Graph(Math):
                 return ('stub', self._visible(layer), signature, self._source_signature(layer, key[2]))
             return signature
         if key[0] == 'SRC':
-            prop = channel_for(layer, key[2])
+            prop = self._channel(layer, key[2])
             decal = None
             if prop is not None and prop.projection == 'DECAL':
                 from ..painting import decals
@@ -2587,10 +2631,17 @@ class Graph(Math):
 
     def _unit_owners(self, key):
         """RNA items whose addresses this unit's bindings and closures capture."""
+        plan = self._plan
+        base = getattr(plan, 'base_owners', None)
+        if base is None:
+            # The set and its baked maps are owners of every unit: address them once per plan.
+            base = tuple(item.as_pointer() for item in (self.ts, *self.ts.baked_maps))
+            if plan is not None:
+                plan.base_owners = base
         layer = self._layer(key[1])
-        owners = [self.ts, *self.ts.baked_maps, layer]
+        owners = [layer]
         if key[0] == 'CHANNEL':
-            prop = channel_for(layer, key[2])
+            prop = self._channel(layer, key[2])
             if prop is not None:
                 owners.append(prop)
             if self._cache_effective(layer, key[2]) != 'LIVE':
@@ -2598,7 +2649,7 @@ class Graph(Math):
                 if row is not None:
                     owners.append(row)
         elif key[0] == 'SRC':
-            prop = channel_for(layer, key[2])
+            prop = self._channel(layer, key[2])
             owners.append(prop)
             owners.extend(list(prop.effects)[:key[3]])
         elif key[0] == 'GRAPH':
@@ -2622,7 +2673,7 @@ class Graph(Math):
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
             for mask in masks[:stop]:
                 owners.extend((mask, mask.effect, mask.influence, mask.mesh))
-        return tuple(item.as_pointer() for item in owners)
+        return base + tuple(item.as_pointer() for item in owners)
 
     def _adopt(self, previous, key):
         """Move an unchanged unit out of the previous graph instead of recompiling."""
@@ -3310,8 +3361,9 @@ class Graph(Math):
         return len({(node.image.as_pointer(), node.interpolation, node.extension)
                     for node in self.nodes() if node.bl_idname == 'ShaderNodeTexImage' and node.image})
 
-    def structural_signature(self):
-        plan = self.plan()
+    def structural_signature(self, plan=None):
+        """``plan``: the plan this build was made from (nothing edited the stack since)."""
+        plan = plan if plan is not None else self.plan()
         units = tuple(sorted((key, self._unit_signature(key, stub=self._stub(key))) for key in plan.keys))
         return (global_signature(self.ts), tuple(plan.wiring), units)
 
@@ -3358,6 +3410,7 @@ class Graph(Math):
             # A collection add() may have moved the layer structs since the last
             # plan; the numeric path reads them without re-planning.
             self._plan.layers = {l.id: l for l in self.ts.layers}
+            self._plan.channels = {}
         if resources:
             self.validate_parameters()
         pointer = owner.as_pointer() if owner is not None and owner != self.ts else None

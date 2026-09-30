@@ -51,6 +51,32 @@ FIRST = os.environ.get('OP_DEEP_FIRST') == '1'   # time the first ticks of each 
 FRAMES = os.environ.get('OP_DEEP_FRAMES', '1') == '1'
 TRACEMALLOC = os.environ.get('OP_DEEP_TRACEMALLOC') == '1'
 ONLY = set(filter(None, os.environ.get('OP_DEEP_ONLY', '').split(',')))   # case names to run; empty: all
+PHASES = os.environ.get('OP_DEEP_PHASES') == '1'   # real-time totals of the main phases of each edit
+phase_totals = {}
+
+
+def time_phases():
+    """Wrap the phases of an edit with wall-clock counters (no profiler overhead)."""
+    from open_painter.evaluation import shader_graph
+    from open_painter.native_bridge import graph as native_graph, channels as native_channels
+
+    def timed(owner, name, label):
+        original = getattr(owner, name)
+
+        def wrapper(*args, **kwargs):
+            started = perf_counter()
+            try:
+                return original(*args, **kwargs)
+            finally:
+                phase_totals[label] = phase_totals.get(label, 0.0) + (perf_counter() - started) * 1000
+        setattr(owner, name, wrapper)
+    timed(shader_preview, '_update', 'structure check (callback)')
+    timed(shader_graph.Graph, 'build', 'build')
+    timed(runtime.Engine, 'adopt', 'engine adopt')
+    timed(native_graph.NativeGraph, 'prepare', 'native prepare')
+    timed(native_channels.NativeChannels, 'execute', 'native execute')
+    timed(runtime.Engine, 'evaluate', 'evaluate (all)')
+    timed(shader_preview, 'tick', 'tick (all)')
 MAPS = ('CURVATURE', 'AO', 'WORLD_NORMAL', 'POSITION', 'NORMAL', 'MEAN_CURVATURE',
         'BEVEL_MASK', 'BEVEL_NORMAL')
 
@@ -214,6 +240,7 @@ def run_structural(scene, ts, repeats=3):
                         pass
             entry = shader_preview._sessions.get(key_for(scene, ts), {})
             seen = len(entry.get('history', ()))
+            phase_totals.clear()
             started = perf_counter()
             if profiler:
                 profiler.enable()
@@ -230,6 +257,9 @@ def run_structural(scene, ts, repeats=3):
             # Stage rows this edit produced (the history holds the last few evaluations).
             entry = shader_preview._sessions.get(key_for(scene, ts), {})
             produced = list(entry.get('history', ()))[seen:] if len(entry.get('history', ())) > seen else []
+            if PHASES:
+                print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms',
+                      {label: round(ms, 1) for label, ms in sorted(phase_totals.items())}, flush=True)
             stage_rows.append({stage: round(sum(row[stage] for row in produced), 2) for stage in
                                ('build', 'update', 'inputs', 'translate', 'compile', 'render', 'publish',
                                 'rebuilt', 'reused')})
@@ -305,6 +335,8 @@ def run_structural(scene, ts, repeats=3):
 def main():
     gpu.init()
     open_painter.register()
+    if PHASES:
+        time_phases()
     scene = bpy.context.scene
     try:
         started = perf_counter()

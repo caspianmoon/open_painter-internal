@@ -478,9 +478,9 @@ the native graph described every unit again.
   their filter results and publication variants, keeps the inline set's identity
   and the positions (they follow the chains alone), and tells the native graph
   which units it replaced.
-- **Native graph.** While the topology holds, `NativeGraph._reprogram` describes
-  and indexes only the replaced programs and the units their inlined producers
-  compile into.
+- **Native graph.** `NativeGraph._redescribe` describes and indexes only the
+  replaced programs, the units their inlined producers compile into, and what a
+  new topology changed (see "Stable native indices" below).
 
 ### Incremental structure checks
 
@@ -600,6 +600,59 @@ from 196 to 130 ms. `test_suffix.c` checks that the key survives an insertion.
 | Moving a middle layer | 222 ms | 38 ms |
 | Applying a smart material (after the first) | 365 ms | 112 ms |
 
+**Stable native indices.** The native graph numbered units in key order, so a unit
+added or removed shifted the index of about half of them. Every topology change
+then rebuilt every row of C's topology, every composition entry, every unit's
+stamp slot and the whole image index, and walked every unit's description: 12 to
+16 ms at 200 layers.
+
+- **Indices stay.** A unit keeps its index while a channel reaches it; a new unit
+  takes a free slot, and the arrays grow with headroom (`HEADROOM`, or an eighth).
+  Rows, composition and own stamps are kept as index-space arrays. C still takes
+  the whole topology, built from the rows at C speed (`array` and `itertools`).
+  `op_graph_set_composition_from` then maps each kept unit to its own index and a
+  reassigned slot to none.
+- **Only what changed is described.** `_redescribe` describes the units a patch
+  replaced, the units whose composition moved, and the consumers and former owners
+  of producers whose inlining flipped. Reads are reference counted: a unit read for
+  the first time is described, and a unit no channel reaches any more is released.
+  A unit that was replaced, yet is still read, falls back to a complete
+  description. Kept units resend their own stamps in one buffer.
+- **Checks.** `OP_VERIFY_INCREMENTAL=1` compares each incremental description with
+  a complete walk: units, reads, composition, programs, rows, reference counts and
+  free slots. `tests/unit/test_native_graph_description.py` (Blender's Python)
+  drives `prepare` through 660 steps of random structural edits with a fake engine that
+  inlines as the real one does. It compares stamps, plans, rows and composition
+  by unit key with a graph described from scratch, over both the binding and the
+  ctypes route. `structural_patch.py` now requires every patched edit, layers
+  added, removed and moved included, to avoid a complete description.
+
+Three whole-stack passes of the patch also became cheaper:
+
+- The chains come from the plan's wiring (`compiler._chains`), not from
+  `_included` and `_wired` per layer and channel.
+- Reach is a channel bitmask, with one shared frozenset per mask. Consumers and
+  importers are kept up to date by adding and removing the units that changed.
+- `native_bridge.stack.positions` packs the layer/folder nodes into an `array` and
+  reads C's plan back through a memoryview instead of ctypes structs (7.6 to
+  1.1 ms for 1,600 steps). `tests/unit/test_native_stack_plan.py` compares it with
+  the host walk.
+
+200 layers at 1K, idle arming on, medians of five:
+
+| Edit | Before | After |
+| --- | ---: | ---: |
+| Adding a fill on top | 44–48 ms | 51 ms |
+| Adding a fill in the middle | 57–58 ms | 44 ms |
+| Removing the top layer | 39 ms | 30 ms |
+| Removing a middle layer | 52–61 ms | 39 ms |
+| Moving a middle layer | 38–50 ms | 34 ms |
+| Blend mode of a middle layer | 34 ms | 28 ms |
+| Applying a smart material (after the first) | 112–122 ms | 102 ms |
+
+Native prepare went from 12–16 ms to 4–7 ms for these edits. Adding on top did not
+improve: its first sample still pays a Metal compile.
+
 The benchmark selects, and idle-arms, the layer each edit starts from: the one an
 insertion goes above, the one removed or moved. In the UI that is the selected
 layer, which idle arming prepares. A patch after a named invalidation (the stack's
@@ -675,10 +728,10 @@ Machines with 16 GB or more keep the previous limits.
   resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
 - **Layer order.** A layer inserted mid-stack still visits every unit of the
-  layers above it (about 1,000 at 200 layers) to follow it to its new address,
-  and a new topology still replaces the native graph's C topology and walks every
-  unit's description. Units that address their layer by id, and a C graph that
-  inserts and removes nodes, would make these proportional to the edit.
+  layers above it (about 1,000 at 200 layers) to update its owner tuple, though
+  units holding nothing of the layer's struct skip the re-pointing. C still takes
+  the whole topology on every change (built at C speed). Units that address their
+  layer by id would make the first proportional to the edit.
 - **Whole-stack passes left in a patched edit.** The plan still carries every
   memo into a new plan and sorts every signature. The layer callback walks all
   readers again after a structural edit (`references._reader_layers`), and the

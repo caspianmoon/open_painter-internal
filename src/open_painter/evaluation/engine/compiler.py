@@ -305,7 +305,7 @@ class EngineGraph(Graph):
         for key in plan.order:
             self.compile_unit(key)
         self.resources.used = self._used_resources()
-        self.chains = {channel: self._chain('', channel, frozenset()) for channel in CHANNELS}
+        self.chains = _chains(plan)
         self._reverse_map()
         self._structure = self.structural_signature(plan)
         self._settled(plan)
@@ -455,7 +455,11 @@ class EngineGraph(Graph):
                 if key[1] in moved:
                     # Only its layer's struct moved: every other owner it captured is where it was.
                     before_owners = unit.owner_pointers
-                    follow[key] = before_owners[:at] + (plan.pointers[key[1]],) + before_owners[at + 1:]
+                    owners = before_owners[:at] + (plan.pointers[key[1]],) + before_owners[at + 1:]
+                    if unit.holds_layer:
+                        follow[key] = owners
+                    else:
+                        unit.owner_pointers = owners   # nothing it holds refers to the struct that moved
             else:
                 owners = self._unit_owners(key)
                 if unit.owner_pointers != owners:
@@ -511,12 +515,12 @@ class EngineGraph(Graph):
             self._free_tree(unit.tree)
         self.resources.used = self._used_resources()
         if current[1] != before[1]:
-            self.chains = {channel: self._chain('', channel, frozenset()) for channel in CHANNELS}
+            self.chains = _chains(plan)
         self._compiled_effects = {}
         for unit in self.units.values():
             self._compiled_effects.update(unit.compiled_effects)
         if current[1] != before[1] or not self._reverse_units(retired, fresh):
-            if not self._reverse_changed(retired):
+            if not self._reverse_changed(retired, fresh):
                 self._reverse_map()
         if VERIFY_STRUCTURE:
             self._verify_reverse()
@@ -648,29 +652,6 @@ class EngineGraph(Graph):
                 return False
         return True
 
-    def _chain(self, parent, channel, ancestors):
-        """CHANNEL units of ``parent``'s children, bottom to top, as ``Graph._wire`` links them."""
-        steps = []
-        # The plan indexes each parent's children in stack order: a walk over the whole
-        # stack per folder and channel made this quadratic in folders.
-        children = getattr(getattr(self, '_plan', None), 'children', None)
-        layers = (children.get(parent, ()) if children is not None
-                  else [layer for layer in self.ts.layers if layer.parent_id == parent])
-        for layer in layers:
-            if not self._included(layer):
-                continue
-            if layer.id in ancestors:
-                raise ValueError('Layer hierarchy contains a cycle')
-            if not self._wired(layer, channel):
-                continue
-            key = ('CHANNEL', layer.id, channel)
-            step = {'key': key}
-            if layer.type == 'FOLDER':
-                step['children'] = self._chain(layer.id, channel, ancestors | {layer.id})
-                step['passthrough'] = layer.group_mode == 'PASSTHROUGH'
-            steps.append(step)
-        return steps
-
     def _reverse_map(self):
         """Which output channels each dependency role reaches, at unit granularity.
 
@@ -681,7 +662,8 @@ class EngineGraph(Graph):
         its children — transitively, so a layer under a published folder reaches the
         channels of that folder's anchor consumers.
         """
-        self.consumers, targets = self._reach_targets()
+        self._index_importers()
+        targets = self._reach_targets()
         self.reverse = defaultdict(set)
         self.channels = {'Final:' + channel: channel for channel in CHANNELS}
         self._targets, self._role_units = targets, defaultdict(set)
@@ -690,31 +672,43 @@ class EngineGraph(Graph):
             for role in _dependency_roles(unit):
                 self.reverse[role] |= targets[key]
                 self._role_units[role].add(key)
-        self._index_importers()
 
     def _index_importers(self):
-        self._importers = defaultdict(set)   # producer -> units importing it (a socket or a literal)
+        """``consumers``: the units importing each unit's sockets; ``_importers``: those importing
+        a socket or a literal of it."""
+        self.consumers, self._importers = defaultdict(set), defaultdict(set)
         for key, unit in self.units.items():
-            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
-                self._importers[producer_key].add(key)
+            self._imported(key, unit, True)
+
+    def _imported(self, key, unit, add):
+        """Index (``add``) or forget a unit's imports; a producer no unit imports is dropped."""
+        tables = [(self.consumers, unit.imports), (self._importers, unit.imports),
+                  (self._importers, unit.const_imports)]
+        for table, imports in tables:
+            for producer_key, _, _ in imports:
+                if add:
+                    table[producer_key].add(key)
+                else:
+                    found = table.get(producer_key)
+                    if found is not None:
+                        found.discard(key)
+                        if not found:
+                            del table[producer_key]
 
     def _reach_targets(self):
-        """(consumers, targets): the units importing each unit, and the ``Final:<channel>``
-        roles each unit's result reaches."""
-        consumers = defaultdict(set)
-        for key, unit in self.units.items():
-            for producer_key, _, _ in unit.imports:
-                consumers[producer_key].add(key)
-        readers = defaultdict(set, {key: set(found) for key, found in consumers.items()})
+        """The ``Final:<channel>`` roles each unit's result reaches, through ``consumers`` and
+        the chains. Reach is a mask of channel bits; each distinct mask is one shared frozenset."""
+        consumers = self.consumers
+        above = {}   # the chain readers of a unit: the step composed over it, the folder over its last child
 
         def chain(steps, below):
             for step in steps:
                 if below is not None:
-                    readers[below].add(step['key'])
+                    above.setdefault(below, []).append(step['key'])
                 if 'children' in step:
                     last = chain(step['children'], below if step['passthrough'] else None)
                     if last is not None:
-                        readers[last].add(step['key'])
+                        above.setdefault(last, []).append(step['key'])
                 below = step['key']
             return below
 
@@ -729,16 +723,18 @@ class EngineGraph(Graph):
             if found is not None:
                 return found
             if key in visiting:
-                return set()   # a cycle (reported by the compiler): contributes nothing more
+                return 0   # a cycle (reported by the compiler): contributes nothing more
             visiting.add(key)
-            found = {key[2]} if key[0] == 'CHANNEL' else set()
-            for reader in readers.get(key, ()):
+            found = _CHANNEL_BITS[key[2]] if key[0] == 'CHANNEL' else 0
+            for reader in consumers.get(key, ()):
+                found |= channels(reader)
+            for reader in above.get(key, ()):
                 found |= channels(reader)
             visiting.discard(key)
             reach[key] = found
             return found
 
-        return consumers, {key: frozenset('Final:' + channel for channel in channels(key)) for key in self.units}
+        return {key: _finals(channels(key)) for key in self.units}
 
     def _verify_reverse(self):
         """OP_VERIFY_STRUCTURE: the patched dependency map must equal one mapped from scratch."""
@@ -752,15 +748,20 @@ class EngineGraph(Graph):
                 differ = sorted(str(key) for key in mine.keys() | full.keys() if mine.get(key) != full.get(key))
                 raise AssertionError(f'Patched {name} differ from a full map: {differ[:6]}')
 
-    def _reverse_changed(self, retired):
+    def _reverse_changed(self, retired, fresh):
         """``_reverse_map`` after a patch that changed which units exist or what reads what (a
-        layer added, removed or moved): reach is walked again for every unit (memoised), roles
-        are assembled again only for the units that came, went, were replaced or reach other
+        layer added, removed or moved): the importers of the units that came, went or were
+        replaced are indexed again, reach is walked again for every unit (memoised), roles are
+        assembled again only for the units that came, went, were replaced or reach other
         channels now. False when there is no map to update."""
         before = getattr(self, '_targets', None)
-        if before is None:
+        if before is None or getattr(self, '_importers', None) is None:
             return False
-        self.consumers, targets = self._reach_targets()
+        for key, unit in retired.items():
+            self._imported(key, unit, False)
+        for key in fresh:
+            self._imported(key, self.units[key], True)
+        targets = self._reach_targets()
         roles = set()
         for key, unit in retired.items():
             for role in _dependency_roles(unit):
@@ -769,8 +770,9 @@ class EngineGraph(Graph):
         changed = False
         for key, unit in self.units.items():
             replaced = key in retired
-            if replaced or before.get(key) != targets[key]:
-                changed = changed or not replaced or before.get(key) != targets[key]
+            reach, was = targets[key], before.get(key)
+            if replaced or (reach is not was and reach != was):
+                changed = changed or not replaced or reach != was
                 for role in _dependency_roles(unit):
                     self._role_units[role].add(key)
                     roles.add(role)
@@ -787,7 +789,6 @@ class EngineGraph(Graph):
                 self._role_units.pop(role, None)
         if changed:
             self._reach_token = object()
-        self._index_importers()
         return True
 
     def _reverse_units(self, retired, fresh):
@@ -863,6 +864,39 @@ class EngineGraph(Graph):
         # Only node membership is cached. Resource replacement, image identity
         # and color/alpha metadata must be read afresh by the runtime.
         return [(node, node.image) for node in unit.tree.nodes.image_nodes]
+
+
+_CHANNEL_BITS = {channel: 1 << index for index, channel in enumerate(CHANNELS)}
+_FINALS = {}   # channel mask -> the frozenset of its ``Final:<channel>`` roles
+
+
+def _finals(mask):
+    found = _FINALS.get(mask)
+    if found is None:
+        found = _FINALS[mask] = frozenset('Final:' + channel for channel, bit in _CHANNEL_BITS.items() if mask & bit)
+    return found
+
+
+def _chains(plan):
+    """CHANNEL units of each parent's children, bottom to top, as ``Graph._wire`` links them:
+    per channel, from the plan's wiring (stack order, a folder's wired channels included)."""
+    children = defaultdict(list)
+    for entry in plan.wiring:
+        children[entry[2]].append(entry)
+
+    def chain(parent, channel):
+        steps = []
+        for identifier, kind, _, mode, wired in children.get(parent, ()):
+            if channel not in wired:
+                continue
+            step = {'key': ('CHANNEL', identifier, channel)}
+            if kind == 'FOLDER':
+                step['children'] = chain(identifier, channel)
+                step['passthrough'] = mode == 'PASSTHROUGH'
+            steps.append(step)
+        return steps
+
+    return {channel: chain('', channel) for channel in CHANNELS}
 
 
 class _Address:

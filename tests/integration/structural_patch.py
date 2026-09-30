@@ -97,9 +97,10 @@ def described():
     return (native.described, native.reprogrammed) if native is not None else None
 
 
-def check(label, edit, patched=True, reprogram=True, limit=12):
+def check(label, edit, patched=True, limit=12):
     """Apply ``edit``; the session patches its graph (or rebuilds), and renders what a
-    session built from scratch renders."""
+    session built from scratch renders. A patch describes to the native graph only what it
+    changed, layers added, removed and moved included (every other unit keeps its index)."""
     graph, engine = session()['graph'], session()['engine']
     before = described()
     edit()
@@ -110,7 +111,7 @@ def check(label, edit, patched=True, reprogram=True, limit=12):
         assert after is graph and session()['engine'] is engine, (label, 'rebuilt instead of patched')
         assert report.get('patched'), (label, report.get('patched'))
         assert report['rebuilt_units'] < limit, (label, report['rebuilt_units'], report.get('patched_units'))
-        if before is not None and reprogram:
+        if before is not None:
             now = described()
             assert now[0] == before[0] and now[1] > before[1], (label, 'described every unit again', before, now)
     else:
@@ -137,38 +138,35 @@ def add_mask():
     mask.id = new_id()
     mask.source = 'NOISE'
     mask.invert = True
-check('mask added', add_mask, reprogram=False)   # the new mask unit may change what is inlined
+check('mask added', add_mask)   # the new mask unit may change what is inlined: its consumers are described again
 
 
 def remove_mask():
     layer(ids[3]).masks.remove(1)
     stack.invalidate(current())   # a collection edit has no callback: the operators invalidate
-check('mask removed', remove_mask, reprogram=False)
-check('mask retyped', lambda: setattr(layer(ids[6]).masks[0], 'source', 'NOISE'), reprogram=False)
+check('mask removed', remove_mask)
+check('mask retyped', lambda: setattr(layer(ids[6]).masks[0], 'source', 'NOISE'))
 
 
 def add_effect():
     effect = stack.channel_for(layer(ids[6]), 'ROUGHNESS').effects.add()
     effect.kind = 'LEVELS'
     effect.output_black, effect.output_white = .2, .6
-check('effect added', add_effect, reprogram=False)
-check('channel off', lambda: setattr(stack.channel_for(layer(ids[7]), 'ROUGHNESS'), 'enabled', False),
-      reprogram=False)
-check('channel on', lambda: setattr(stack.channel_for(layer(ids[7]), 'ROUGHNESS'), 'enabled', True),
-      reprogram=False)
+check('effect added', add_effect)
+check('channel off', lambda: setattr(stack.channel_for(layer(ids[7]), 'ROUGHNESS'), 'enabled', False))
+check('channel on', lambda: setattr(stack.channel_for(layer(ids[7]), 'ROUGHNESS'), 'enabled', True))
 # The folder's channels and its children's (their backdrop is no longer opaque).
-check('folder passthrough', lambda: setattr(layer(folder_id), 'group_mode', 'PASSTHROUGH'), reprogram=False,
-      limit=24)
-check('bypass', lambda: setattr(layer(ids[2]), 'bypass', True), reprogram=False)
-check('bypass off', lambda: setattr(layer(ids[2]), 'bypass', False), reprogram=False)
+check('folder passthrough', lambda: setattr(layer(folder_id), 'group_mode', 'PASSTHROUGH'), limit=24)
+check('bypass', lambda: setattr(layer(ids[2]), 'bypass', True))
+check('bypass off', lambda: setattr(layer(ids[2]), 'bypass', False))
 
 
 def reference():
     mask = layer(ids[8]).masks.add()
     mask.id = new_id()
     mask.source, mask.reference_layer, mask.reference_channel = 'REFERENCE', ids[1], 'MASK'
-check('reference added', reference, reprogram=False)
-check('referenced mask retyped', lambda: setattr(layer(ids[1]).masks[0], 'source', 'GENERATOR'), reprogram=False)
+check('reference added', reference)
+check('referenced mask retyped', lambda: setattr(layer(ids[1]).masks[0], 'source', 'GENERATOR'))
 
 
 def structural_and_numeric():
@@ -184,12 +182,12 @@ check('numeric edit while pending', structural_and_numeric)
 def insert():
     current().active_layer = next(i for i, item in enumerate(current().layers) if item.id == ids[4])
     stack.channel_for(stack.add(current(), 'FILL', 'Inserted'), 'BASE_COLOR').color = (.9, .1, .1, 1)
-check('layer inserted', insert, reprogram=False)
+check('layer inserted', insert)
 layer(ids[9]).opacity = .3   # a moved layer's bindings still answer
 settle()
 check('layer removed', lambda: stack.remove(current(), stack.index_of(current(), next(
-    item.id for item in current().layers if item.name == 'Inserted'))), reprogram=False)
-check('layer moved', lambda: stack.move(current(), stack.index_of(current(), ids[3]), 3), reprogram=False)
+    item.id for item in current().layers if item.name == 'Inserted'))))
+check('layer moved', lambda: stack.move(current(), stack.index_of(current(), ids[3]), 3))
 
 
 def insert_and_edit_above():
@@ -199,7 +197,7 @@ def insert_and_edit_above():
     stack.add(current(), 'FILL', 'Second insert')
     layer(ids[7]).opacity = .15
     stack.channel_for(layer(ids[8]), 'BASE_COLOR').color = (.1, .9, .3, 1)
-check('insert, then edits of moved layers', insert_and_edit_above, reprogram=False)
+check('insert, then edits of moved layers', insert_and_edit_above)
 
 
 def burst():
@@ -207,7 +205,7 @@ def burst():
     for index in range(12):
         current().active_layer = 2
         stack.add(current(), 'FILL', f'Burst {index}').opacity = .2
-check('layers added until the array grew', burst, reprogram=False, limit=120)
+check('layers added until the array grew', burst, limit=120)
 layer(ids[1]).opacity = .45
 stack.channel_for(layer(ids[2]), 'ROUGHNESS').value = .75
 settle()

@@ -13,6 +13,9 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_FRAMES   0: skip the window-manager frame emulation (see Frame)
     OP_DEEP_STRUCTURAL 0: skip structural edits (add, remove, blend mode, visibility,
                      smart material), each timed from the edit until the set is current
+    OP_DEEP_PHASES   1: print wall-clock totals of the main phases of each edit
+    OP_DEEP_SECTIONS 1: with OP_DEEP_PHASES, also the sections of patching and native planning
+    OP_DEEP_REPEATS  samples per structural edit (default 3)
 """
 import cProfile
 import io
@@ -62,13 +65,17 @@ def time_phases():
 
     def timed(owner, name, label):
         original = getattr(owner, name)
+        depth = [0]   # a recursive phase counts its outermost call only
 
         def wrapper(*args, **kwargs):
+            depth[0] += 1
             started = perf_counter()
             try:
                 return original(*args, **kwargs)
             finally:
-                phase_totals[label] = phase_totals.get(label, 0.0) + (perf_counter() - started) * 1000
+                depth[0] -= 1
+                if not depth[0]:
+                    phase_totals[label] = phase_totals.get(label, 0.0) + (perf_counter() - started) * 1000
         setattr(owner, name, wrapper)
     timed(shader_preview, '_update', 'structure check (callback)')
     timed(shader_graph.Graph, 'build', 'build')
@@ -77,6 +84,19 @@ def time_phases():
     timed(native_channels.NativeChannels, 'execute', 'native execute')
     timed(runtime.Engine, 'evaluate', 'evaluate (all)')
     timed(shader_preview, 'tick', 'tick (all)')
+    if os.environ.get('OP_DEEP_SECTIONS') == '1':
+        # The sections of a structural edit (nested in the phases above).
+        from open_painter.evaluation.engine import compiler
+        for owner, name in ((compiler.EngineGraph, 'patch'), (shader_graph.Graph, 'plan'),
+                            (shader_graph.Graph, '_follow_moved_layer'), (shader_graph.Graph, '_refresh_paths'),
+                            (shader_graph.Graph, 'compile_unit'), (compiler.EngineGraph, '_reverse_changed'),
+                            (compiler.EngineGraph, '_chain'), (compiler.EngineGraph, '_reach_targets'),
+                            (compiler.EngineGraph, '_index_importers'), (shader_graph.Graph, 'update'),
+                            (shader_graph.Graph, 'validate_parameters'), (shader_graph.Graph, '_unbind_units'),
+                            (native_graph.NativeGraph, '_index'), (native_graph.NativeGraph, '_compose'),
+                            (native_graph.NativeGraph, '_scan_images'), (runtime.Engine, '_state'),
+                            (runtime, '_positions')):
+            timed(owner, name, f"{owner.__name__.rpartition('.')[2]}.{name}")
     import gc
     collecting = {}
 
@@ -229,7 +249,7 @@ def settle(scene, ts, started):
     raise AssertionError('The set did not settle')
 
 
-def run_structural(scene, ts, repeats=3):
+def run_structural(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
     """Structural edits on the deep stack, each timed from the edit until the set is current."""
     rows = {}
 

@@ -517,11 +517,11 @@ Blend mode of a middle layer, 200 layers at 1K, idle arming on as in the product
 
 | Stage | Before | After |
 | --- | ---: | ---: |
-| Callback structure check | 37–47 ms | 8–10 ms |
+| Callback structure check | 37–47 ms | 5–8 ms |
 | Graph rebuild or patch | 65–95 ms | about 8 ms |
-| Engine adopt | 3–4 ms | under 1 ms |
-| Native prepare | 24–42 ms | 7–17 ms (includes translating the 4 new programs) |
-| Total | 224–286 ms | 38–50 ms |
+| Engine adopt | 3–4 ms | 1–4 ms |
+| Native prepare | 24–42 ms | 9–19 ms (translating the 4 new programs; a blend variant not compiled yet adds its Metal compile) |
+| Total | 224–286 ms | 35 ms with the variant compiled, up to 57 ms without |
 
 ### Adding, removing and moving layers
 
@@ -579,12 +579,12 @@ Further trims on the same path:
 
 | Edit | Before | After |
 | --- | ---: | ---: |
-| Adding a fill on top | 306 ms | 93 ms |
-| Adding a fill in the middle | 325 ms | 110 ms |
-| Removing the top layer | 220 ms | 73 ms |
-| Removing a middle layer | 237 ms | 86 ms |
-| Moving a middle layer | 222 ms | 93 ms |
-| Applying a smart material (after the first) | 365 ms | 255 ms |
+| Adding a fill on top | 306 ms | 48 ms |
+| Adding a fill in the middle | 325 ms | 59 ms |
+| Removing the top layer | 220 ms | 59 ms |
+| Removing a middle layer | 237 ms | 66 ms |
+| Moving a middle layer | 222 ms | 90 ms (17 ms of it renders the layers above: no armed run matches the new order) |
+| Applying a smart material (after the first) | 365 ms | 199 ms |
 
 ### Garbage collection
 
@@ -646,15 +646,21 @@ Machines with 16 GB or more keep the previous limits.
 
 ## Open work
 
-- **CPU boundaries.** Metric material mapping with images or procedural detail,
-  mesh masks and generators still rasterize on the CPU at full resolution.
+- **CPU boundaries.** Generator masks run in the units' GPU programs; since 0.14
+  so do the Drips streak field and Runoff trails (both catalog fields of the baked
+  position, with GLSL ports of the integer hash). A first smart-material apply at
+  200 layers went from 955 ms over 43 ticks to 480 ms in one tick. Metric material
+  mapping with images or procedural detail, mesh masks, scene fields, anchored
+  micro details and the legacy Noise source still rasterize on the CPU at full
+  resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
-- **Layer order.** A layer inserted mid-stack still follows every unit of the
-  layers above it to their new addresses (about 1,000 units at 200 layers, some
-  25 ms), and a new topology makes the native graph describe and index every
-  unit again (about 25 ms). Units that do not capture their layer's struct, and
-  a native graph that inserts and removes nodes, would make these proportional
-  to the edit.
+- **Layer order.** A layer inserted mid-stack still visits every unit of the
+  layers above it (about 1,000 at 200 layers) to follow it to its new address,
+  and a new topology still replaces the native graph's C topology and walks every
+  unit's description. Units that address their layer by id, and a C graph that
+  inserts and removes nodes, would make these proportional to the edit. Moving a
+  layer renders the layers above it sequentially once: no armed suffix run
+  matches the new order.
 - **Whole-stack passes left in a patched edit.** The plan still carries every
   memo into a new plan and sorts every signature. The layer callback walks all
   readers again after a structural edit (`references._reader_layers`), and the

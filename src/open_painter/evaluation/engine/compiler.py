@@ -259,10 +259,41 @@ class EngineGraph(Graph):
             return value
         return super()._mask_source_boundary(layer, mask, rehydrate)
 
+    def _drips(self, mask, rehydrate=None):
+        """A Drips mask's streak field in the unit's GPU program: the catalog's integer-hash
+        streaks at (x + 0.731 y, z) of the baked position, as the CPU raster evaluated them
+        (``Graph._drips``), with scale and seed as uniforms. A full-resolution CPU raster per
+        mask, rastered again for every seed or scale, made applying a smart material wait."""
+        from .procedural_glsl import supported
+        if rehydrate is not None or not supported('GRUNGE_STREAKS'):
+            return super()._drips(mask, rehydrate)
+        x, y, z = self.separate(self.mesh_map('POSITION').color)
+        coordinate = self.combine(self.math('ADD', x, self.math('MULTIPLY', y, .731)), z, 0.)
+        with self.role('SourceField:' + self._path(mask) + ':DRIPS'):
+            return self._procedural('GRUNGE_STREAKS', coordinate, self.param(mask, 'noise_scale'),
+                                    self.seed_param(mask, 'seed'))
+
+    def _runoff(self, mask):
+        """A Runoff mask in the unit's GPU program, as ``generators.base`` evaluates it: the
+        catalog's trails at (x + 0.731 y, z) of the baked position, weighted by the cavity."""
+        amount, contrast = self.param(mask, 'amount'), self.param(mask, 'contrast')
+        x, y, z = self.separate(self.mesh_map('POSITION').color)
+        coordinate = self.combine(self.math('ADD', x, self.math('MULTIPLY', y, .731)), z, 0.)
+        with self.role('SourceField:' + self._path(mask) + ':RUNOFF'):
+            trails = self._procedural('RUNOFF_TRAILS', coordinate, self.param(mask, 'noise_scale'),
+                                      self.seed_param(mask, 'seed'))
+        cavity = self.clamp(self.math('SUBTRACT', 1, self.separate(self.mesh_map('AO').color)[0]))
+        value = self.math('MULTIPLY', self.math('MULTIPLY', trails, self.math('MULTIPLY', amount, 2)), contrast)
+        return self.clamp(self.math('MULTIPLY', value, self.math('ADD', .3, self.math('MULTIPLY', .7, cavity))))
+
     def generator(self, mask, layer=None):
         # The material graph rasterised baked-edge Edge Wear and Chips on the CPU only to stay
         # under Metal's per-material sampler limit; a unit program has its own samplers.
         kind = 'NOISE' if mask.source == 'NOISE' else mask.generator
+        if kind == 'RUNOFF':
+            from .procedural_glsl import supported
+            if supported('RUNOFF_TRAILS'):
+                return self._runoff(mask)   # the material graph rasters the whole mask on the CPU
         if kind in {'EDGE_WEAR', 'CHIPS'} and getattr(mask, 'edge_source', 'BAKED') == 'BAKED':
             return super().generator(mask, None)
         return super().generator(mask, layer)

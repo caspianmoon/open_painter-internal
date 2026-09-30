@@ -160,6 +160,23 @@ def main():
     info = ready(scene, large)
     assert info['reused_units'] > 0 and info['rebuilt_units'] < info['units'], info
     entry['mask_kind'] = compare('large mask kind changed', scene, large)
+    # Drips streaks and Runoff trails are fields of the baked position, evaluated in the unit's
+    # GPU program (the material graph rasters them on the CPU).
+    weathered_id = stack.add(large, 'FILL', 'Weathered').id
+    weathered = next(item for item in large.layers if item.id == weathered_id)
+    stack.channel_for(weathered, 'BASE_COLOR').color = (.25, .12, .05, 1)
+    for generator, scale, seed in (('DRIPS', 3.5, 91), ('RUNOFF', 2.25, 417)):
+        mask = weathered.masks.add()
+        mask.id, mask.name, mask.source, mask.generator = new_id(), generator.title(), 'GENERATOR', generator
+        mask.noise_scale, mask.seed, mask.amount, mask.operation = scale, seed, .6, 'MAX'
+    invalidate(large)
+    info = ready(scene, large)
+    graph = shader_preview.ensure(scene, large)
+    weathered = next(item for item in large.layers if item.id == weathered_id)
+    masks = {mask.as_pointer() for mask in weathered.masks}
+    assert not any(masks & set(b.owners) for b in graph.resource_bindings), \
+        'a Drips or Runoff field was rastered on the CPU'
+    entry['weathering'] = compare('large drips and runoff', scene, large)
     # Display precision (the default): half-float intermediates except Height.
     engine = shader_preview.session_engine(scene, large)
     engine.precise = False

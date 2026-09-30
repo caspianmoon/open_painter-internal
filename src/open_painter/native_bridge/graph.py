@@ -133,6 +133,9 @@ class NativeGraph:
             # A program recompiled on a signature change may read other inputs.
             valid = cached[1] is engine.inline and all(states[key].program is self.programs[key] for key in dirty)
         if not valid:
+            # A rebuilt graph that kept the topology restamps only what can have changed.
+            previous_programs, previous, previous_surface = self.programs, cached, self.surface
+            identities = {id(entry[0]): entry[2] for entry in self.image_nodes}
             roots = [ref[1] for ref in engine.finals.values() if ref and ref[0] == 'unit']
             while True:
                 inline = engine.inline
@@ -160,7 +163,8 @@ class NativeGraph:
                 edges.extend(indices[k] for k in deps[key])
                 offsets.append(len(edges))
             topology = keys, tuple(offsets), tuple(edges)
-            if topology != self.topology:
+            replaced = topology != self.topology
+            if replaced:
                 a, b = (U32 * len(offsets))(*offsets), (U32 * len(edges))(*edges)
                 if self.binding is not None:
                     self.binding.graph_replace(self.handle, bytes(a), bytes(b))
@@ -173,8 +177,20 @@ class NativeGraph:
             self._compose(engine, keys, indices, states)
             self.description = (graph, engine.inline, keys, indices, constants,
                                 tuple((key, states[key].program) for key in keys), context)
-            self._index(engine, keys, indices, states, epochs)
+            scanned = self._index(engine, keys, indices, states, epochs, identities)
             dirty = keys
+            if INCREMENTAL and not replaced and previous is not None and self.own and touched is not None:
+                constants_before = previous[4]
+                changed = {key for key in keys if states[key].program is not previous_programs.get(key)
+                           or constants_before.get(key) != constants[key]}
+                changed |= scanned | self.volatile
+                if self.surface_units and self.surface != previous_surface:
+                    changed |= self.surface_units
+                for unit in touched:
+                    owner = self.inline_owner.get(unit, unit)
+                    if owner in indices:
+                        changed.add(owner)
+                dirty = changed
         count = len(keys)
         changes = []
         for key in dirty:
@@ -207,7 +223,7 @@ class NativeGraph:
         self.evaluations += 1
         return self.stamps
 
-    def _index(self, engine, keys, indices, states, epochs):
+    def _index(self, engine, keys, indices, states, epochs, identities=None):
         """What can change a unit's own stamp without a new description: its uniforms
         (reported by update()), the images it samples, object matrices, filters and
         the surface. Also mirrors every unit's stamp into native-order arrays."""
@@ -231,9 +247,12 @@ class NativeGraph:
                             surface.add(key)
                     elif sampler.kind in GEOMETRY:
                         surface.add(key)
-        self.image_nodes = [[node, tuple(units), _MISSING] for node, units in nodes.values()]
+        # A node the previous index held keeps its last identity: the scan then reports only
+        # the units whose images really changed (a rebuild adopts most nodes unchanged).
+        identities = identities or {}
+        self.image_nodes = [[node, tuple(units), identities.get(id(node), _MISSING)] for node, units in nodes.values()]
         self.image_groups = None
-        self._scan_images(epochs)
+        scanned = self._scan_images(epochs)
         self.volatile, self.surface_units = frozenset(volatile), frozenset(surface)
         self.surface = engine._surface() if surface else None
         count = len(keys)
@@ -254,6 +273,7 @@ class NativeGraph:
                 below.append(indices[ref[1]] if ref is not None and ref[0] == 'unit' else NONE)
             self.orders[channel] = (bytes((U32 * len(order))(*(indices[key] for key in order))),
                                     bytes((U32 * len(below))(*below)))
+        return scanned
 
     def _scan_images(self, epochs):
         """Units whose sampled images changed identity; each image is inspected once. While no

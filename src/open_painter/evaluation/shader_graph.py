@@ -205,6 +205,68 @@ def _adoptable_unit(ts_id, key_repr, instance):
 UNKNOWN_UNIT = object()   # a binding registered without its unit: every unit counts as touched
 
 
+def _repoint(value, old, new, seen):
+    """``value`` with every captured RNA struct at address ``old`` replaced by ``new``. A
+    function's closure cells and defaults are rewritten in place (nested functions too), lists
+    and dict values changed in place, tuples rebuilt. Addresses are compared, never read through
+    the stale struct."""
+    import types
+    if isinstance(value, bpy.types.bpy_struct):
+        try:
+            return new if value.as_pointer() == old else value
+        except ReferenceError:
+            return value
+    if isinstance(value, tuple):
+        items = tuple(_repoint(item, old, new, seen) for item in value)
+        return items if any(a is not b for a, b in zip(items, value)) else value
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            value[index] = _repoint(item, old, new, seen)
+        return value
+    if isinstance(value, dict):
+        for name, item in list(value.items()):
+            value[name] = _repoint(item, old, new, seen)
+        return value
+    if isinstance(value, types.FunctionType) and id(value) not in seen:
+        seen.add(id(value))
+        for cell in value.__closure__ or ():
+            try:
+                content = cell.cell_contents
+            except ValueError:
+                continue   # a cell not filled yet
+            replaced = _repoint(content, old, new, seen)
+            if replaced is not content:
+                cell.cell_contents = replaced
+        if value.__defaults__:
+            value.__defaults__ = tuple(_repoint(item, old, new, seen) for item in value.__defaults__)
+    return value
+
+
+def _captures(value, old, seen):
+    """Whether ``value`` still captures an RNA struct at address ``old`` (``_repoint``'s reach)."""
+    import types
+    if isinstance(value, bpy.types.bpy_struct):
+        try:
+            return value.as_pointer() == old
+        except ReferenceError:
+            return False
+    if isinstance(value, (tuple, list)):
+        return any(_captures(item, old, seen) for item in value)
+    if isinstance(value, dict):
+        return any(_captures(item, old, seen) for item in value.values())
+    if isinstance(value, types.FunctionType) and id(value) not in seen:
+        seen.add(id(value))
+        for cell in value.__closure__ or ():
+            try:
+                content = cell.cell_contents
+            except ValueError:
+                continue
+            if _captures(content, old, seen):
+                return True
+        return any(_captures(item, old, seen) for item in value.__defaults__ or ())
+    return False
+
+
 def _plan_token(ts):
     """What a plan of the stack holds for: its structure (numeric edits carried) and length.
     None while a replay is open, whose edits move no serial until it ends."""
@@ -2705,7 +2767,7 @@ class Graph(Math):
                 return None
             # Collection reallocation moves PropertyGroups; captured references
             # are only valid while every owner still lives at its old address.
-            if unit.owner_pointers != self._unit_owners(key):
+            if unit.owner_pointers != self._unit_owners(key) and not self._follow_moved_layer(unit, key):
                 return None
             if _removed_graph_units(unit.bindings.values()):
                 return None   # a Mask Graph binding lost its node: compile afresh, never refresh it
@@ -2763,6 +2825,50 @@ class Graph(Math):
         self.units[key] = unit
         self._reused.append(key)
         return unit
+
+    def _follow_moved_layer(self, unit, key):
+        """An unchanged unit whose layer struct moved in the stack's array: a layer inserted,
+        removed or moved below it, or the array grown. Only the layer group moves; its channels,
+        masks and effects keep arrays of their own. Re-pointing what the unit captured of the old
+        struct adopts it instead of recompiling it (an insert mid-stack moved every layer above).
+        False, recompiling it, unless the layer is the only owner that moved and nothing still
+        holds the old struct afterwards."""
+        current, before = self._unit_owners(key), unit.owner_pointers
+        at = len(self._plan.base_owners)
+        if (len(current) != len(before) or current[:at] != before[:at]
+                or current[at + 1:] != before[at + 1:]):
+            return False
+        layer, old = self._layer(key[1]), before[at]
+        if layer is None or layer.as_pointer() != current[at]:
+            return False
+        new_pointer, seen = current[at], set()
+        rebound = {}
+        for identifier, binding in unit.bindings.items():
+            if binding.owner.as_pointer() == old:
+                binding.owner = layer
+                if isinstance(identifier, tuple) and len(identifier) > 1 and identifier[1] == old:
+                    identifier = (identifier[0], new_pointer, *identifier[2:])
+            rebound[identifier] = binding
+        unit.bindings = rebound
+        for binding in (*unit.resource_bindings, *unit.cache_bindings):
+            for name in ('identity', 'factory', 'owner_factory'):
+                _repoint(getattr(binding, name, None), old, layer, seen)
+            if old in binding.owners:
+                binding.owners = (set(binding.owners) - {old}) | {new_pointer}
+        entries = []
+        for pointer, role, getter, node, image in unit.image_bindings:
+            _repoint(getter, old, layer, seen)
+            entries.append((new_pointer if pointer == old else pointer, role, getter, node, image))
+        unit.image_bindings = entries
+        checked = set()
+        if (any(binding.owner.as_pointer() == old for binding in unit.bindings.values())
+                or any(_captures(getattr(binding, name, None), old, checked)
+                       for binding in (*unit.resource_bindings, *unit.cache_bindings)
+                       for name in ('identity', 'factory', 'owner_factory'))
+                or any(_captures(entry[2], old, checked) for entry in unit.image_bindings)):
+            return False
+        unit.owner_pointers = current
+        return True
 
     def _rollback_adoption(self):
         """A failed build hands adopted units back to the graph they came from."""
@@ -3009,6 +3115,11 @@ class Graph(Math):
             raise
         finally:
             self._previous = None
+        if reuse is not None:
+            # Uniform edits the previous graph wrote and nobody restamped yet: the adopted
+            # units carry the written values, so this build's own pass finds nothing new.
+            held = getattr(reuse, 'touched', set())
+            self.touched = None if held is None or self.touched is None else self.touched | held
         return self
 
     def _build(self, plan, started):

@@ -270,6 +270,42 @@ the same updates, and mesh masks of kind MATERIAL key on material names. The
 per-set memo makes both calls, and the geometry key's rebuild, independent of the
 number of layers.
 
+### The product's sidebar
+
+Every RNA edit also sends a window notifier, so each frame of a drag redraws the
+sidebar. In the product's editor area (`editor.mount`, the Painter tab), the
+layer list repeated two whole-stack jobs on every redraw:
+- Its filter walked the hierarchy.
+- The row badges rebuilt every layer's profile row, including the cache state of
+  each layer from a full diagnostics read.
+
+At 200 layers that was 3.6 ms per redraw, profiled.
+
+- **List filter.** It is now memoised per structure and folder expansion.
+  Expanding a folder has no callback, so the key reads each folder's flag.
+- **Badges.** They read the recorded profile table only, and only once Profile
+  Layers has run. Their key is the table and the stack's structure.
+- **Cache icons.** Only a visible cached row asks for its state, from cache
+  states read once per redraw.
+
+The area's asset shelf is laid out again on each redraw too, and Blender polls
+every asset through the shelf's Python `asset_poll`. For each library asset the
+poll built its `full_library_path` and read its tags; that was a quarter of the
+main thread. Both answers are fixed for an asset until the shelf or the library
+refreshes, so `shelf_library.library_facts` remembers them per asset.
+
+The product's editor area over 200 fills, 1K, with the same drag. Before is
+`9fd1db2`:
+
+| Build | Revisions/s | Tick p50 | Change → draw p50 | p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Before | 23.2 | 15.1 ms | 33.6 ms | 37.2 ms |
+| Memos, indexes, list filter and badges | 39.4 | 3.1 ms | 19.1 ms | 20.7 ms |
+| And remembered shelf facts | 44.9 | 3.2 ms | 14.5 ms | 16.2 ms |
+
+At 44.9 revisions/s, every value change the window delivered was drawn (45.0/s,
+60 draws/s).
+
 ### The rest of the frame
 
 A whole-process sample of Blender during a drag under 204 smart-material layers

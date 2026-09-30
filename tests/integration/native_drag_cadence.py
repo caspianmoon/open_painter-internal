@@ -12,8 +12,12 @@ the measured window. This is event queue to POST_PIXEL, not OS input or scanout.
     OP_DRAG_LAYERS   extra fill layers above the fixture (default 0)
     OP_DRAG_STACK    fill (default): OP_DRAG_LAYERS plain fills; smart: smart materials from the
                      catalog until the set has at least OP_DRAG_LAYERS more layers
+    OP_DRAG_UI       isolated (default): the slider alone in its own sidebar tab; product: the
+                     area mounted as the product's editor, the slider first in its Painter tab
+                     and every product panel drawn below it
     OP_DRAG_GEOMETRY 1: add a triplanar layer, so the set reads its geometry
-    OP_DRAG_PROFILE  1: cProfile the scheduler ticks and the slider's callback into the report
+    OP_DRAG_PROFILE  1: cProfile the scheduler ticks, the slider's callback and (product UI) the
+                     sidebar's panels and lists into the report
     OP_DRAG_DEPSGRAPH 1: count depsgraph updates by datablock and flags during the drag
 """
 import json
@@ -42,6 +46,9 @@ DEPSGRAPH = os.environ.get('OP_DRAG_DEPSGRAPH') == '1'   # count depsgraph updat
 GEOMETRY = os.environ.get('OP_DRAG_GEOMETRY') == '1'   # one triplanar layer: the set reads its geometry
 STACK = os.environ.get('OP_DRAG_STACK', 'fill')
 assert STACK in {'fill', 'smart'}, STACK
+UI = os.environ.get('OP_DRAG_UI', 'isolated')
+assert UI in {'isolated', 'product'}, UI
+CATEGORY = 'Painter' if UI == 'product' else 'Drag Cadence'
 profiler = None
 updates = {}
 bpy.context.preferences.view.show_splash = False
@@ -58,9 +65,10 @@ class OP_PT_drag_cadence(bpy.types.Panel):
     """The product's native RNA slider, isolated so event coordinates are reliable."""
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Drag Cadence'
+    bl_category = CATEGORY
     bl_label = 'Drag cadence'
     bl_options = {'HIDE_HEADER'}
+    bl_order = -1000   # first in the tab: calibration presses near its top
 
     @classmethod
     def poll(cls, context):
@@ -164,8 +172,10 @@ def finish(error=None, summary=None):
         pstats.Stats(profiler, stream=stream).sort_stats('tottime').print_stats(40)
         stream.write('\n==== cumulative\n')
         pstats.Stats(profiler, stream=stream).sort_stats('cumulative').print_stats(45)
+        stream.write('\n==== sidebar\n')
+        pstats.Stats(profiler, stream=stream).sort_stats('cumulative').print_stats('open_painter/ui/', 30)
         profile_text = stream.getvalue()
-    report = dict(status='FAIL' if error else 'PASS', error=error, summary=summary, profile=profile_text,
+    report = dict(status='FAIL' if error else 'PASS', error=error, summary=summary, profile=profile_text, ui=UI,
                   depsgraph_updates=updates or None,
                   resolution=RESOLUTION, layers=len(ts.layers) if ts is not None else None,
                   blender=bpy.app.version_string, viewport=[region.width, region.height] if region else None,
@@ -174,6 +184,35 @@ def finish(error=None, summary=None):
     REPORT.write_text(json.dumps(report, indent=2) + '\n')
     print('DRAG_CADENCE_' + report['status'], json.dumps(summary) if summary else error, flush=True)
     bpy.ops.wm.quit_blender()
+
+
+_depth = [0]
+
+
+def profiled(function):
+    """``function`` under the drag's profiler; nested calls keep the outer enable."""
+    def wrapper(*args, **kwargs):
+        active = measuring and profiler is not None and _depth[0] == 0
+        _depth[0] += 1
+        if active:
+            profiler.enable()
+        try:
+            return function(*args, **kwargs)
+        finally:
+            _depth[0] -= 1
+            if active:
+                profiler.disable()
+    return wrapper
+
+
+def profiled_method(function):
+    """``profiled`` with the method's own parameters: Blender calls a panel's or a list's
+    method with as many arguments as its signature names."""
+    code = function.__code__
+    names = ', '.join(code.co_varnames[:code.co_argcount])
+    namespace = {'call': profiled(function)}
+    exec(f'def method({names}):\n    return call({names})\n', namespace)
+    return namespace['method']
 
 
 def smart_stack(ts, target):
@@ -235,38 +274,40 @@ def setup():
         space.region_3d.view_rotation = Quaternion((1, 0, 0, 0))
         space.region_3d.view_location = (0, 0, 0)
         space.region_3d.view_distance = 3
+    if UI == 'product':
+        # The area as the product opens it: its Painter panels, toolbar, asset shelf and
+        # material shading.
+        from open_painter.ui import editor
+        editor.mount(window, area)
     handler = bpy.types.SpaceView3D.draw_handler_add(drawn, (), 'WINDOW', 'POST_PIXEL')
     if DEPSGRAPH:
         bpy.app.handlers.depsgraph_update_post.append(counted)
     from open_painter.evaluation import cache
     original_tick = cache._tick
 
+    ticked = profiled(original_tick)
+
     def traced_tick():
         started = time.perf_counter()
-        if measuring and profiler is not None:
-            profiler.enable()
         try:
-            return original_tick()
+            return ticked()
         finally:
-            if profiler is not None:
-                profiler.disable()
             if measuring:
                 ticks.append((started, time.perf_counter()))
     cache._tick = traced_tick
     if PROFILE:
         # The slider's own RNA callback runs outside the scheduler tick: profile it too.
         from open_painter.properties import layer as layer_properties
-        original_changed = layer_properties._changed
-
-        def profiled_changed(*args, **kwargs):
-            if measuring and profiler is not None:
-                profiler.enable()
-            try:
-                return original_changed(*args, **kwargs)
-            finally:
-                if profiler is not None:
-                    profiler.disable()
-        layer_properties._changed = profiled_changed
+        layer_properties._changed = profiled(layer_properties._changed)
+        if UI == 'product':
+            # Every edit redraws the sidebar: the product panels and the layer list too.
+            for panel in bpy.types.Panel.__subclasses__():
+                if getattr(panel, 'bl_category', '') == CATEGORY and panel is not OP_PT_drag_cadence:
+                    panel.draw = profiled_method(panel.draw)
+            for ui_list in bpy.types.UIList.__subclasses__():
+                for name in ('filter_items', 'draw_item'):
+                    if name in ui_list.__dict__:
+                        setattr(ui_list, name, profiled_method(ui_list.__dict__[name]))
     later(wait_ready, .5)
 
 
@@ -278,7 +319,7 @@ def wait_ready():
         return
     sidebar = next(r for r in area.regions if r.type == 'UI' and r.width > 20)
     with bpy.context.temp_override(window=window, area=area, region=sidebar):
-        sidebar.active_panel_category = 'Drag Cadence'
+        sidebar.active_panel_category = CATEGORY
     scale = bpy.context.preferences.system.ui_scale
     candidates = [(sidebar.x + int(sidebar.width * fraction), sidebar.y + sidebar.height - int(offset * scale))
                   for offset in (20, 30, 40, 50, 60) for fraction in (.55, .72)]

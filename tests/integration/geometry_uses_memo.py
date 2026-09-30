@@ -220,6 +220,38 @@ reader.source = 'PAINT'
 assert references.dependent_channels(ts, layer(1).id) == set()
 anchors.consumed = _consumed
 
+# The layer list filters on every redraw: per structure and folder expansion (no callback).
+from types import SimpleNamespace
+from open_painter.ui.native import OP_UL_native_layers
+
+
+def list_agrees():
+    flags, order = OP_UL_native_layers.filter_items(SimpleNamespace(bitflag_filter_item=1), bpy.context, ts, 'layers')
+    rows = stack.visible_rows(ts)
+    visible = {index for index, _ in rows}
+    ordered = [index for index, _ in rows] + [index for index in range(len(ts.layers)) if index not in visible]
+    assert flags == [1 if index in visible else 0 for index in range(len(ts.layers))], (flags, rows)
+    assert order == [ordered.index(index) for index in range(len(ts.layers))], (order, ordered)
+
+
+list_agrees()
+layer(2).opacity = .45
+list_agrees()
+folder_id = stack.add(ts, 'FOLDER', 'Memo folder').id
+stack.add(ts, 'FILL', 'Memo child', parent_id=folder_id)
+list_agrees()
+folder = lambda: next(item for item in ts.layers if item.id == folder_id)
+serial = ts.edit_serial
+folder().expanded = False
+assert ts.edit_serial == serial, 'the fixture meant a collapse that moves no serial'
+list_agrees()
+folder().expanded = True
+list_agrees()
+stack.parent(ts, layer(1), folder_id)
+list_agrees()
+stack.remove(ts, next(index for index, item in enumerate(ts.layers) if item.name == 'Memo child'))
+list_agrees()
+
 # Adding a layer, and undo or load, start over.
 before = walks[0]
 stack.add(ts, 'PAINT', 'Paint')

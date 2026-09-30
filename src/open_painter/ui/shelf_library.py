@@ -113,6 +113,31 @@ def is_library_asset(asset):
     return Path(path).name == LIBRARY_FILE
 
 
+_facts = {}   # (asset pointer, name) -> (in the shelf library, its category)
+
+
+def library_facts(asset):
+    """(``is_library_asset``, ``category_of``) of an asset, remembered until the shelf or the
+    library refreshes. The Painter shelf polls every asset on each layout, and each edit of
+    a drag lays it out again: building hundreds of library paths and reading their tags
+    per frame was a quarter of a frame."""
+    pointer = getattr(asset, "as_pointer", None)
+    key = (pointer(), asset.name) if pointer is not None else None
+    facts = _facts.get(key) if key is not None else None
+    if facts is None:
+        if len(_facts) > 20000:
+            _facts.clear()   # asset lists rebuilt many times over: start again
+        library = is_library_asset(asset)
+        facts = (library, category_of(asset) if library else None)
+        if key is not None:
+            _facts[key] = facts
+    return facts
+
+
+def forget_facts():
+    _facts.clear()
+
+
 def key_for_name(name):
     """Catalog key of a library image name (for activations that carry only the identifier)."""
     data = manifest() or {}
@@ -193,6 +218,7 @@ def ensure(background=None):
     jobs) builds in place. Returns True when the library is ready now.
     """
     global _process
+    forget_facts()
     if not isinstance(bpy.data, bpy.types.BlendData):
         # Registration at startup keeps bpy.data restricted (a headless render, an extension
         # enabled from the command line): build once the session is up, when timers run.
@@ -242,6 +268,7 @@ def _poll_build():
 
 
 def refresh_shelves():
+    forget_facts()
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             if area.type != "VIEW_3D":

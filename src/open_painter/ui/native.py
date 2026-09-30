@@ -10,6 +10,7 @@ from ..constants import BLEND_ITEMS
 from ..core import layer_stack
 from ..core.layer_stack import active, channel_for, visible_rows
 from ..core.project_manager import active_set, require_set
+from ..evaluation import structure_memo
 from . import editor, selection
 from .dock import assets, state
 from .operators import SafeOperator
@@ -77,6 +78,7 @@ def prepare_assets(*, refresh_sources=False):
     from ..smart_materials.catalog import CATALOG
     from ..constants import VERSION
     from . import shelf_library
+    shelf_library.forget_facts()   # a loaded file lists its assets anew
     handles = {image.get(ASSET_KEY): image for image in bpy.data.images if ASSET_KEY in image}
     entries = catalog()
     for entry in entries:
@@ -433,9 +435,10 @@ class VIEW3D_AST_open_painter(bpy.types.AssetShelf):
         if handle is None:
             # The built-in catalog comes from the shelf library; every other
             # library the artist registered stays out of the Painter shelf.
-            if not shelf_library.is_library_asset(asset):
+            library, asset_category = shelf_library.library_facts(asset)
+            if not library:
                 return False
-            return category == "ALL" or shelf_library.category_of(asset) == category
+            return category == "ALL" or asset_category == category
         if ASSET_KEY not in handle:
             return False
         return category == "ALL" or handle.get(categories.ASSET_CATEGORY_KEY) == category
@@ -956,37 +959,84 @@ def draw_generator_controls(layout, ts, layer):
         box.prop(mask, "contrast", slider=True)
 
 
-_profile_cache = {}
+_profile_cache = {}   # (scene pointer, set id) -> (stamp, badge rows by id, total)
+_cache_states = {}   # (scene pointer, set id) -> the shader session's cache states, read once per redraw
 
 
 def _profile_rows(scene, ts):
-    """(rows by id, total) of the set's profile, rebuilt once per redraw pass."""
+    """(badge rows by id, total cost) of the set's recorded profile: empty until Profile
+    Layers ran. Only the recorded costs feed a badge, so the rows follow the table and the
+    stack's structure; a numeric drag leaves them alone."""
     from ..evaluation import profile
+    from ..evaluation.structure_memo import token
+    table = profile.table(scene, ts)
+    if not table['cpu']:
+        return {}, 0.0
     key = (scene.as_pointer(), ts.id)
+    stamp = (token(ts), len(ts.layers), table['sampled_at'], id(table['compile']), len(table['compile']),
+             sum(table['boundary'].values()))
     entry = _profile_cache.get(key)
-    serial = (ts.edit_serial, len(ts.layers), profile.table(scene, ts)['sampled_at'])
-    if entry is None or entry[0] != serial:
-        rows = {row['layer_id']: row for row in profile.rows(scene, ts)}
-        entry = _profile_cache[key] = (serial, rows, sum(row['cost_ms'] for row in rows.values()))
+    if entry is None or entry[0] != stamp:
+        rows = {}
+        for layer in ts.layers:
+            cpu = table['cpu'].get(layer.id, {})
+            row = rows[layer.id] = {'profiled': bool(cpu), 'boundary_ms': table['boundary'].get(layer.id, 0.0)}
+            row['cost_ms'] = (table['compile'].get(layer.id, {}).get('compile_ms', 0.0) + row['boundary_ms']
+                              + cpu.get('cpu_ms', 0.0))
+        entry = _profile_cache[key] = (stamp, rows, sum(row['cost_ms'] for row in rows.values()))
     return entry[1], entry[2]
+
+
+def _cache_state(scene, ts, layer):
+    """A cached layer's state for its row icon; the cache states are read once per redraw."""
+    from ..evaluation import profile, shader_preview
+    key = (scene.as_pointer(), ts.id)
+    states = _cache_states.get(key)
+    if states is None:
+        states = _cache_states[key] = (shader_preview.diagnostics(scene, ts).get('cache_states', {})
+                                       if shader_preview.requested(ts) else {})
+    return profile.state(scene, ts, layer, states)
+
+
+_list_filters = structure_memo.store()   # (token, count, expansion) -> the list's filter
+_list_folders = structure_memo.store()   # (layer count, folder positions)
+
+
+def _list_filter(ts, bitflag):
+    """(flags, order, depths) of the layer list, per structure and folder expansion (which
+    has no callback). Every redraw filters, and a drag redraws the sidebar each frame."""
+    from ..core.layer_stack import replaying
+    layers = ts.layers
+    count = len(layers)
+    folders = structure_memo.memoised(_list_folders, ts, lambda: (len(ts.layers), tuple(
+        index for index, layer in enumerate(ts.layers) if layer.type == "FOLDER")))
+    expansion = (tuple(layers[index].expanded for index in folders[1]) if folders[0] == count
+                 and all(index < count for index in folders[1]) else None)
+    stamp = (structure_memo.token(ts), count, expansion)
+    key = (ts.as_pointer(), ts.id)
+    cached = _list_filters.get(key)
+    if expansion is not None and cached is not None and cached[0] == stamp and not replaying():
+        return cached[1]
+    rows = visible_rows(ts)
+    visible = {index for index, _ in rows}
+    ordered = [index for index, _ in rows] + [index for index in range(count) if index not in visible]
+    ranks = {index: rank for rank, index in enumerate(ordered)}
+    result = ([bitflag if index in visible else 0 for index in range(count)],
+              [ranks[index] for index in range(count)], dict(rows))
+    if expansion is not None:
+        _list_filters[key] = (stamp, result)
+    return result
 
 
 class OP_UL_native_layers(bpy.types.UIList):
     def filter_items(self, context, data, propname):
-        rows = visible_rows(data)
+        flags, order, depths = _list_filter(data, self.bitflag_filter_item)
         # filter_items runs once per redraw before the items draw; keep the
         # depths so draw_item does not walk the hierarchy again per row.
-        _row_depths[data.as_pointer()] = dict(rows)
-        _profile_cache.pop((context.scene.as_pointer(), data.id), None)
-        visible = {index for index, _ in rows}
-        ordered = [index for index, _ in rows] + [
-            i for i in range(len(data.layers)) if i not in visible
-        ]
-        ranks = {index: rank for rank, index in enumerate(ordered)}
-        return (
-            [self.bitflag_filter_item if i in visible else 0 for i in range(len(data.layers))],
-            [ranks[i] for i in range(len(data.layers))],
-        )
+        _row_depths[data.as_pointer()] = depths
+        # A cached layer's state can move without an edit (its bake finishing).
+        _cache_states.pop((context.scene.as_pointer(), data.id), None)
+        return list(flags), list(order)
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         layer = item
@@ -1013,8 +1063,7 @@ class OP_UL_native_layers(bpy.types.UIList):
         from .performance import badge, CACHE_ICONS
         scene = context.scene
         profile_rows = _profile_rows(scene, data)
-        profile_row = profile_rows[0].get(layer.id)
-        mark = badge(scene, data, layer, profile_rows[0], profile_rows[1])
+        mark = badge(scene, data, layer, profile_rows[0], profile_rows[1]) if profile_rows[0] else None
         if layer.bypass or not compact or mark:
             # Preview-only bypass, distinct from the artistic eye.
             row.prop(layer, "bypass", text="",
@@ -1049,10 +1098,10 @@ class OP_UL_native_layers(bpy.types.UIList):
         if any(m.source == "ANCHOR" for m in layer.masks) or any(
                 e.kind == "ANCHOR" for p in layer.channels for e in p.effects):
             row.label(text="", icon="ANCHOR_CENTER")
-        # The row's state is the one the profile table already holds; asking
-        # the shader session again per cached row scans the stack per binding.
-        icon = (CACHE_ICONS.get(profile_row["state"], "FILE_CACHE")
-                if profile_row is not None and layer.cache_mode != "LIVE" else None)
+        # Only a cached row asks for its state; the session's cache states are
+        # read once per redraw, not per row.
+        icon = (CACHE_ICONS.get(_cache_state(scene, data, layer), "FILE_CACHE")
+                if layer.cache_mode != "LIVE" else None)
         if icon:
             row.label(text="", icon=icon)
         if mark:

@@ -104,6 +104,115 @@ op_status_t op_brush_resample(const float *p, uint32_t count, float spacing, uin
     }
     return OP_OK;
 }
+/* One stamp's contribution to one texel (the loop body of op_brush_coverage). Returns 0, or -1
+ * for a brush alpha lookup that is not finite. */
+static int stamp_alpha(const float *p, const float *n, uint32_t i, const float *q, uint32_t k,
+                       uint32_t count, const float *axis, const float *t, const float *bt,
+                       const op_brush_settings_t *b, float soft, float limit, const float *alpha,
+                       uint32_t width, uint32_t height, const uint8_t *eligible, float *out) {
+    float rel[3], lat[3];
+    for (int j = 0; j < 3; j++)
+        rel[j] = p[i * 3 + j] - q[j];
+    float depth = dot(rel, axis), radius = fmaxf(q[7], 1e-8f);
+    for (int j = 0; j < 3; j++)
+        lat[j] = rel[j] - depth * axis[j];
+    float radial = sqrtf(dot(lat, lat)) / radius, a = 0;
+    if (dot(n + 3 * i, axis) > .05f && radial < 1 && fabsf(depth) < radius * limit &&
+        (!eligible || eligible[(uint64_t)i * count + k])) {
+        a = fminf(fmaxf((1 - radial) / soft, 0), 1) * q[6] * b->flow;
+        if (alpha) {
+            float u = dot(lat, t) / radius * .5f + .5f, v = dot(lat, bt) / radius * .5f + .5f;
+            if (!isfinite(u) || !isfinite(v))
+                return -1;
+            uint32_t x = (uint32_t)fminf(fmaxf(u * width, 0), (float)(width - 1)),
+                     y = (uint32_t)fminf(fmaxf(v * height, 0), (float)(height - 1));
+            a *= alpha[(uint64_t)y * width + x];
+        }
+    }
+    *out = a;
+    return 0;
+}
+
+/* The stamps that can reach each texel: a uniform grid over the stroke's bounds, each stamp
+ * listed, in stamp order, in the cells its reach overlaps. A stamp contributes only where
+ * |lat| < radius and |depth| < radius * limit, so nowhere farther than radius * (1 + limit *
+ * |axis|) from its centre; the reach adds a relative and an absolute margin for rounding, and
+ * cells are found by a monotonic map, so a pair the grid skips is one that contributes exactly
+ * nothing. FLOW multiplies in the same order as a loop over every stamp. */
+#define GRID_AXIS 64u
+typedef struct {
+    float lo[3], cell[3];
+    uint32_t dims[3];
+    uint32_t *start;       /* per cell, into stamps; cells + 1 entries */
+    unsigned char *stamps; /* stamp indices (count <= 256) */
+} stamp_grid_t;
+
+static uint32_t grid_cell(const stamp_grid_t *g, int j, float x) {
+    float f = (x - g->lo[j]) / g->cell[j];
+    if (!(f > 0))
+        return 0;
+    return f >= (float)g->dims[j] ? g->dims[j] - 1 : (uint32_t)f;
+}
+
+static int grid_build(stamp_grid_t *g, const float *s, uint32_t count, float axis[][3], float limit,
+                      const float lo[3], const float hi[3]) {
+    float reach[256], widest = 0, scale = 0;
+    for (int j = 0; j < 3; j++)
+        scale = fmaxf(scale, fmaxf(fabsf(lo[j]), fabsf(hi[j])));
+    for (uint32_t k = 0; k < count; k++) {
+        float radius = fmaxf(s[13 * k + 7], 1e-8f), length = sqrtf(dot(axis[k], axis[k]));
+        reach[k] = radius * (1 + limit * length) * 1.001f + scale * 1e-6f;
+        widest = fmaxf(widest, reach[k]);
+    }
+    uint64_t cells = 1;
+    for (int j = 0; j < 3; j++) {
+        float extent = hi[j] - lo[j];
+        g->lo[j] = lo[j];
+        g->cell[j] = fmaxf(fmaxf(widest, extent / GRID_AXIS), 1e-30f);
+        float d = floorf(extent / g->cell[j]) + 1;
+        g->dims[j] = d >= GRID_AXIS ? GRID_AXIS : d < 1 ? 1 : (uint32_t)d;
+        cells *= g->dims[j];
+    }
+    uint32_t range[256][6];
+    uint64_t entries = 0;
+    for (uint32_t k = 0; k < count; k++) {
+        uint64_t n = 1;
+        for (int j = 0; j < 3; j++) {
+            range[k][2 * j] = grid_cell(g, j, s[13 * k + j] - reach[k]);
+            range[k][2 * j + 1] = grid_cell(g, j, s[13 * k + j] + reach[k]);
+            n *= range[k][2 * j + 1] - range[k][2 * j] + 1;
+        }
+        entries += n;
+    }
+    g->start = calloc(cells + 1, sizeof(uint32_t));
+    g->stamps = malloc(entries ? entries : 1);
+    if (!g->start || !g->stamps) {
+        free(g->start);
+        free(g->stamps);
+        return 0;
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        for (uint32_t k = 0; k < count; k++)
+            for (uint32_t z = range[k][4]; z <= range[k][5]; z++)
+                for (uint32_t y = range[k][2]; y <= range[k][3]; y++)
+                    for (uint32_t x = range[k][0]; x <= range[k][1]; x++) {
+                        uint64_t c = ((uint64_t)z * g->dims[1] + y) * g->dims[0] + x;
+                        if (pass)
+                            g->stamps[g->start[c]++] = (unsigned char)k;
+                        else
+                            g->start[c + 1]++;
+                    }
+        if (!pass)
+            for (uint64_t c = 0; c < cells; c++)
+                g->start[c + 1] += g->start[c];
+    }
+    /* The fill advanced each cell's start to the next cell's: shift them back. */
+    for (uint64_t c = cells; c > 0; c--)
+        g->start[c] = g->start[c - 1];
+    g->start[0] = 0;
+    return 1;
+}
+
 op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, const float *s,
                               uint32_t count, const op_brush_settings_t *b, const float *alpha,
                               uint32_t width, uint32_t height, const uint8_t *eligible,
@@ -121,42 +230,44 @@ op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, c
         frame(s + k * 13, b, t[k], bt[k]);
     }
     float soft = fmaxf(1 - b->hardness, 1e-5f), limit = fmaxf(b->depth_limit, 1e-3f);
+    stamp_grid_t grid = {0};
+    int binned = count > 4 && grid_build(&grid, s, count, axis, limit, lo, hi);
+    op_status_t status = OP_OK;
     for (uint32_t i = 0; i < texels; i++) {
         float value = b->accumulate ? 1 : 0;
         int inside = 1;
         for (int j = 0; j < 3; j++)
             if (p[i * 3 + j] < lo[j] || p[i * 3 + j] > hi[j])
                 inside = 0;
-        for (uint32_t k = 0; inside && k < count; k++) {
-            const float *q = s + 13 * k;
-            float rel[3], lat[3];
-            for (int j = 0; j < 3; j++)
-                rel[j] = p[i * 3 + j] - q[j];
-            float depth = dot(rel, axis[k]), radius = fmaxf(q[7], 1e-8f);
-            for (int j = 0; j < 3; j++)
-                lat[j] = rel[j] - depth * axis[k][j];
-            float radial = sqrtf(dot(lat, lat)) / radius, a = 0;
-            if (dot(n + 3 * i, axis[k]) > .05f && radial < 1 && fabsf(depth) < radius * limit &&
-                (!eligible || eligible[(uint64_t)i * count + k])) {
-                a = fminf(fmaxf((1 - radial) / soft, 0), 1) * q[6] * b->flow;
-                if (alpha) {
-                    float u = dot(lat, t[k]) / radius * .5f + .5f,
-                          v = dot(lat, bt[k]) / radius * .5f + .5f;
-                    if (!isfinite(u) || !isfinite(v))
-                        return OP_INVALID_ARGUMENT;
-                    uint32_t x = (uint32_t)fminf(fmaxf(u * width, 0), (float)(width - 1)),
-                             y = (uint32_t)fminf(fmaxf(v * height, 0), (float)(height - 1));
-                    a *= alpha[(uint64_t)y * width + x];
-                }
+        if (inside) {
+            uint32_t first = 0, last = count;
+            if (binned) {
+                uint64_t c = ((uint64_t)grid_cell(&grid, 2, p[i * 3 + 2]) * grid.dims[1] +
+                              grid_cell(&grid, 1, p[i * 3 + 1])) * grid.dims[0] +
+                             grid_cell(&grid, 0, p[i * 3]);
+                first = grid.start[c];
+                last = grid.start[c + 1];
             }
-            if (b->accumulate)
-                value *= 1 - a;
-            else
-                value = fmaxf(value, a);
+            for (uint32_t e = first; e < last; e++) {
+                uint32_t k = binned ? grid.stamps[e] : e;
+                float a;
+                if (stamp_alpha(p, n, i, s + 13 * k, k, count, axis[k], t[k], bt[k], b, soft, limit,
+                                alpha, width, height, eligible, &a)) {
+                    status = OP_INVALID_ARGUMENT;
+                    goto done;
+                }
+                if (b->accumulate)
+                    value *= 1 - a;
+                else
+                    value = fmaxf(value, a);
+            }
         }
         out[i] = b->accumulate ? 1 - value : value;
     }
-    return OP_OK;
+done:
+    free(grid.start);
+    free(grid.stamps);
+    return status;
 }
 op_status_t op_surface_walk(uint32_t triangles, uint32_t samples, const uint64_t *offsets,
                             const uint32_t *neighbors, uint64_t edges, const float *normals,

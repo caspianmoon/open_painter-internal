@@ -4,11 +4,14 @@ A large Blender benchmark once took a development machine down (2026-09-30), so
 heavy runs should go through this guard. It:
 
 - refuses to start while available memory (free, inactive, speculative and
-  purgeable pages) is below the cap plus a reserve;
+  purgeable pages) is below ``--start-gb`` (waiting up to ``--wait-seconds``);
 - takes an exclusive lock, so two guarded runs never overlap;
 - polls the physical footprint of the process tree every 0.2 s. On Apple
   silicon that includes GPU allocations; RSS does not. When the tree passes
   the cap, it kills the tree with SIGKILL;
+- checks available system memory every second. When it falls below
+  ``--floor-gb``, it also kills the tree, whatever its own size: other
+  applications may be growing too;
 - prints the peak footprint and the first time each whole gigabyte was reached.
 
 Usage::
@@ -84,7 +87,10 @@ def available():
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--cap-gb', type=float, default=6.0, help='Kill the run above this footprint')
-    parser.add_argument('--reserve-gb', type=float, default=2.0, help='Extra memory required free before starting')
+    parser.add_argument('--start-gb', type=float, default=3.0, help='Available memory required to start')
+    parser.add_argument('--floor-gb', type=float, default=1.0,
+                        help='Kill the run when available system memory falls below this')
+    parser.add_argument('--reserve-gb', type=float, default=None, help=argparse.SUPPRESS)  # accepted, unused
     parser.add_argument('--wait-seconds', type=float, default=0.0,
                         help='Wait this long for enough available memory before refusing')
     parser.add_argument('--report', type=Path, help='Write the peak and timeline as JSON')
@@ -104,16 +110,16 @@ def main():
         return 75
     free = available()
     deadline = time.monotonic() + args.wait_seconds
-    while free < cap + args.reserve_gb * GIB and time.monotonic() < deadline:
+    while free < args.start_gb * GIB and time.monotonic() < deadline:
         time.sleep(5)
         free = available()
-    if free < cap + args.reserve_gb * GIB:
-        print(f'GUARD_REFUSED only {free / GIB:.1f} GiB available; need {args.cap_gb + args.reserve_gb:.1f}', flush=True)
+    if free < args.start_gb * GIB:
+        print(f'GUARD_REFUSED only {free / GIB:.1f} GiB available; need {args.start_gb:.1f}', flush=True)
         return 75
     process = subprocess.Popen(command, start_new_session=True)
-    started, peak, marks, killed = time.monotonic(), 0, {}, False
+    started, peak, marks, killed, reason = time.monotonic(), 0, {}, False, ''
     members = [process.pid]
-    polls = 0
+    polls, lowest = 0, free
     while process.poll() is None:
         if polls % 10 == 0:
             members = tree(process.pid)   # children are rare; refresh every two seconds
@@ -123,7 +129,14 @@ def main():
         mark = used // GIB
         if mark and mark not in marks:
             marks[int(mark)] = round(time.monotonic() - started, 1)
+        if polls % 5 == 0:
+            system = available()
+            lowest = min(lowest, system)
+            if system < args.floor_gb * GIB:
+                reason = f'available system memory fell to {system / GIB:.1f} GiB'
         if used > cap:
+            reason = f'footprint passed {args.cap_gb} GiB'
+        if reason:
             for pid in reversed(tree(process.pid)):
                 try:
                     os.kill(pid, signal.SIGKILL)
@@ -136,9 +149,10 @@ def main():
     code = 137 if killed else process.returncode
     summary = dict(peak_gib=round(peak / GIB, 2), cap_gib=args.cap_gb, killed=killed, exit=code,
                    seconds=round(time.monotonic() - started, 1), gib_reached_at_s=marks,
-                   available_gib_at_start=round(free / GIB, 1))
+                   available_gib_at_start=round(free / GIB, 1), lowest_available_gib=round(lowest / GIB, 1),
+                   reason=reason)
     if killed:
-        print(f'GUARD_KILLED footprint passed {args.cap_gb} GiB', flush=True)
+        print(f'GUARD_KILLED {reason}', flush=True)
     print('GUARD_SUMMARY', json.dumps(summary), flush=True)
     if args.report:
         args.report.write_text(json.dumps(summary, indent=2) + '\n')

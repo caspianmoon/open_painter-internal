@@ -1,6 +1,6 @@
 """Run acceptance phases in isolated Blender processes, abort on any failure."""
 
-import argparse, atexit, json, os, subprocess
+import argparse, atexit, json, os, subprocess, sys
 from pathlib import Path
 
 from blender_test_profile import isolated_environment
@@ -16,7 +16,13 @@ parser.add_argument("--gui-start-at", help="Resume GUI regressions at this filen
 parser.add_argument("--gpu-only", action="store_true", help="Run real-window live GPU math and workflow regressions")
 parser.add_argument("--package", type=Path, help="Validate and install this candidate ZIP in isolated resources")
 parser.add_argument("--user-resources", type=Path, help="Isolated Blender profile (defaults to .blender-test/user)")
+parser.add_argument("--cap-gb", type=float, default=4.0,
+                    help="Kill a Blender process whose memory footprint passes this (scripts/run_guarded.py)")
 args = parser.parse_args()
+# Every Blender launch goes through the memory guard: one runaway phase must not
+# take the machine down. The guard waits for free memory and serializes runs.
+BLENDER = [sys.executable, str(root / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
+           '--start-gb', '3', '--wait-seconds', '120', '--', args.blender]
 # Tests never install into or save the artist's preference directory.
 env = isolated_environment(args.user_resources or root / ".blender-test" / "user")
 profile_guard = (
@@ -24,7 +30,7 @@ profile_guard = (
     f'sys.path.insert(0, {str(root / "scripts")!r}); '
     'from blender_test_profile import assert_blender_profile; '
     f'assert_blender_profile(bpy, {env["BLENDER_USER_RESOURCES"]!r})')
-subprocess.run([args.blender, '--background', '--factory-startup', '--python-exit-code', '1',
+subprocess.run([*BLENDER, '--background', '--factory-startup', '--python-exit-code', '1',
                 '--python-expr', profile_guard], cwd=root, env=env, check=True)
 # Historical phases generate these bundled fixtures; do not leave the checkout edited.
 originals = {p: p.read_bytes() for p in [root / 'examples/phase01.blend', root / 'examples/bake_cube.blend', root / 'docs/native-painter.png'] if p.exists()}
@@ -34,8 +40,8 @@ def restore_fixtures():
         path.write_bytes(content)
 if args.package:
     env['OPEN_PAINTER_TEST_ZIP'] = str(args.package.resolve())
-    subprocess.run([args.blender, '--background', '--factory-startup', '--command', 'extension', 'validate', str(args.package.resolve())], cwd=root, env=env, check=True)
-    subprocess.run([args.blender, '--background', '--factory-startup', '--python-exit-code', '1', '--python', str(root / 'tests/integration/install_extension.py')], cwd=root, env=env, check=True)
+    subprocess.run([*BLENDER, '--background', '--factory-startup', '--command', 'extension', 'validate', str(args.package.resolve())], cwd=root, env=env, check=True)
+    subprocess.run([*BLENDER, '--background', '--factory-startup', '--python-exit-code', '1', '--python', str(root / 'tests/integration/install_extension.py')], cwd=root, env=env, check=True)
 
 failures = []
 if not args.gui_only and not args.gpu_only:
@@ -53,7 +59,7 @@ if not args.gui_only and not args.gpu_only:
         print(f"Running {test.name}", flush=True)
         completed = subprocess.run(
             [
-                args.blender,
+                *BLENDER,
                 "--background",
                 "--factory-startup",
                 "--python-exit-code",
@@ -73,7 +79,7 @@ if not args.gui_only and not args.gpu_only:
     # --build/--record modes); without it the check is reported as skipped, never as passed.
     if (root / ".blender-test/quality/compat-0.12.2.blend").exists() and (root / ".blender-test/quality/compat-0.12.2.json").exists():
         print("Running compatibility_contract.py", flush=True)
-        completed = subprocess.run([args.blender, "--background", "--factory-startup", "--python-exit-code", "1", "--python",
+        completed = subprocess.run([*BLENDER, "--background", "--factory-startup", "--python-exit-code", "1", "--python",
                                     str(root / "tests/integration/compatibility_contract.py")], cwd=root, env=env, check=not args.keep_going)
         if completed.returncode:
             failures.append("compatibility_contract.py")
@@ -81,7 +87,7 @@ if not args.gui_only and not args.gpu_only:
         print("SKIPPED compatibility_contract.py: no 0.12.2 reference file (build it with --build/--record)", flush=True)
     subprocess.run(
         [
-            args.blender,
+            *BLENDER,
             "--background",
             "--factory-startup",
             "--python-exit-code",
@@ -101,7 +107,7 @@ if args.gui or args.gui_only:
             gui_started = filename == args.gui_start_at
         if not gui_started:
             continue
-        subprocess.run([args.blender, "--factory-startup", "--python",
+        subprocess.run([*BLENDER, "--factory-startup", "--python",
                         str(root / "tests/integration" / filename)], cwd=root, env=env, check=True)
     for filename, result_name in [
         ("authoring_ui.py", "authoring-upgrade/authoring-ui.json"),
@@ -141,7 +147,7 @@ if args.gui or args.gui_only:
         result_path.unlink(missing_ok=True)
         subprocess.run(
             [
-                args.blender,
+                *BLENDER,
                 "--factory-startup",
                 "--enable-event-simulate",
                 "--python",
@@ -200,7 +206,7 @@ if args.gui or args.gui_only:
             raise RuntimeError(result)
     stroke_result = root / '.blender-test/gui_result.txt'
     stroke_result.unlink(missing_ok=True)
-    subprocess.run([args.blender, '--factory-startup', '--enable-event-simulate', '--python',
+    subprocess.run([*BLENDER, '--factory-startup', '--enable-event-simulate', '--python',
                     str(root / 'tests/integration/gui_workflow.py'),
                     *(['--','-ApplePersistenceIgnoreState','YES'] if os.sys.platform == 'darwin' else [])],
                    cwd=root, env=env, check=True)
@@ -217,7 +223,7 @@ if args.gpu_only:
     ):
         result_path = root / '.blender-test' / report_name
         result_path.unlink(missing_ok=True)
-        subprocess.run([args.blender, '--factory-startup', '--python',
+        subprocess.run([*BLENDER, '--factory-startup', '--python',
                         str(root / 'tests/integration' / filename),
                         *(['--', '-ApplePersistenceIgnoreState', 'YES'] if os.sys.platform == 'darwin' else [])],
                        cwd=root, env=dict(env, **{variable: str(result_path)}), check=True)

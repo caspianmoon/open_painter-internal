@@ -64,7 +64,7 @@ def main():
             # Every Blender runs under the memory guard: a runaway test must not take the machine down.
             cap = max(args.cap_gb, MEMORY_CAPS_GB.get(name, 0.0))
             cmd = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(cap),
-                   '--reserve-gb', '1', '--wait-seconds', '120', '--',
+                   '--start-gb', '3', '--wait-seconds', '120', '--',
                    args.blender, '--factory-startup', '--python-exit-code', '1']
             cmd += ['--enable-event-simulate'] if gui else ['--background']
             cmd += ['--python', str(ROOT / 'tests/integration' / name)]

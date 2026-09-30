@@ -133,6 +133,24 @@ class Frame:
             end()
 
 
+def image_breakdown(ts):
+    """CPU bytes of loaded images by role (each also has a GPU copy once sampled)."""
+    outputs = {out.image.as_pointer() for out in ts.outputs if out.image}
+    baked = {entry.image.as_pointer() for entry in ts.baked_maps if entry.image}
+    rows = {}
+    for image in bpy.data.images:
+        if not image.has_data:
+            continue
+        pointer = image.as_pointer()
+        role = ('output' if pointer in outputs else 'baked' if pointer in baked
+                else 'leaf' if image.get('open_painter_shader_resource') else
+                'bundled' if image.get('open_painter_generated_source') else 'other')
+        size = image.size[0] * image.size[1] * image.channels * (4 if image.is_float else 1)
+        count, total = rows.get(role, (0, 0))
+        rows[role] = (count + 1, total + size)
+    return {role: dict(count=count, mib=total // 2 ** 20) for role, (count, total) in rows.items()}
+
+
 def footprint_mib():
     """This process's physical footprint (Activity Monitor's Memory; GPU memory included on Apple silicon)."""
     import ctypes
@@ -182,17 +200,26 @@ def run_structural(scene, ts, repeats=3):
         if ONLY and name not in ONLY:
             return
         durations, ticks = [], []
+        profiler = cProfile.Profile() if PROFILE else None
         for index in range(repeats):
             started = perf_counter()
+            if profiler:
+                profiler.enable()
             with Frame():
                 action(index)
             if TRACE:
                 print('DEEP_STACK_TRACE', name, index, 'edited, footprint', footprint_mib(), 'MiB', flush=True)
             elapsed, count = settle(scene, ts, started)
+            if profiler:
+                profiler.disable()
             durations.append(elapsed)
             ticks.append(count)
         rows[name] = dict(median_ms=float(np.median(durations)), samples_ms=durations, ticks=ticks,
                           footprint_mib=footprint_mib())
+        if profiler:
+            text = io.StringIO()
+            pstats.Stats(profiler, stream=text).sort_stats('cumulative').print_stats(50)
+            rows[name]['profile'] = text.getvalue()
         print('DEEP_STACK_STRUCTURAL', name, f"median {rows[name]['median_ms']:.0f} ms", 'ticks', ticks,
               'footprint', rows[name]['footprint_mib'], 'MiB', flush=True)
 
@@ -271,6 +298,8 @@ def main():
             pstats.Stats(cold_profiler, stream=text).sort_stats('cumulative').print_stats(60)
             cold['profile'] = text.getvalue()
         cold['footprint_mib'] = footprint_mib()
+        cold['images'] = image_breakdown(ts)
+        print('DEEP_STACK_IMAGES', cold['images'], flush=True)
         print('DEEP_STACK_COLD', f'{cold_s:.2f}s', cold['passes'], cold['units'], cold['backend'],
               'footprint', cold['footprint_mib'], 'MiB', flush=True)
 

@@ -90,12 +90,18 @@ def time_phases():
         for owner, name in ((compiler.EngineGraph, 'patch'), (shader_graph.Graph, 'plan'),
                             (shader_graph.Graph, '_follow_moved_layer'), (shader_graph.Graph, '_refresh_paths'),
                             (shader_graph.Graph, 'compile_unit'), (compiler.EngineGraph, '_reverse_changed'),
-                            (compiler.EngineGraph, '_chain'), (compiler.EngineGraph, '_reach_targets'),
+                            (compiler, '_chains'), (compiler.EngineGraph, '_reach_targets'),
                             (compiler.EngineGraph, '_index_importers'), (shader_graph.Graph, 'update'),
                             (shader_graph.Graph, 'validate_parameters'), (shader_graph.Graph, '_unbind_units'),
                             (native_graph.NativeGraph, '_index'), (native_graph.NativeGraph, '_compose'),
                             (native_graph.NativeGraph, '_scan_images'), (runtime.Engine, '_state'),
-                            (runtime, '_positions')):
+                            (runtime, '_positions'), (native_graph.NativeGraph, '_redescribe'),
+                            (native_graph.NativeGraph, '_reindex'), (native_graph.NativeGraph, '_send_topology'),
+                            (native_graph.NativeGraph, '_orders'), (compiler.EngineGraph, '_report'),
+                            (compiler.EngineGraph, 'structural_signature'), (shader_graph.Graph, 'rebuild_scope'),
+                            (compiler.EngineGraph, '_references_reached'), (shader_graph.Graph, '_live_effects'),
+                            (shader_graph.Graph, '_used_resources'), (compiler.EngineGraph, '_recompile_importers'),
+                            (shader_graph.Graph, 'cache_states'), (shader_graph.Graph, '_build_warnings')):
             timed(owner, name, f"{owner.__name__.rpartition('.')[2]}.{name}")
     import gc
     collecting = {}

@@ -64,6 +64,7 @@ FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured 
 CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one texel on Vulkan
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
+VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -874,37 +875,77 @@ class Engine:
             self._clear_filters()
         if n_before is not None and n_before != graph.n:
             self.close(n_before)   # the textures were rendered at the previous resolution
-        live, replaced = {}, set()
-        for key, unit in graph.units.items():
-            state = self.states.get(key)
-            if state is None or state.unit is not unit:
-                if state is not None:
+        take = getattr(graph, 'take_unit_changes', None)
+        changes = take() if take is not None else None
+        replaced = set()
+        if not patched or changes is None or n_before != graph.n:
+            live = {}
+            for key, unit in graph.units.items():
+                state = self.states.get(key)
+                if state is None or state.unit is not unit:
+                    if state is not None:
+                        self._retire_state(key, state, n_before, patched)
+                    state = UnitState(unit)
+                    replaced.add(key)
+                live[key] = state
+            for key, state in self.states.items():
+                if key not in live:
                     self._retire_state(key, state, n_before, patched)
-                state = UnitState(unit)
+                    replaced.add(key)
+            self.states = live
+            # A content or mask unit read by one unit only is compiled into that unit: one pass
+            # and one full-resolution texture less for every layer channel.
+            inline = frozenset(key for key in graph.units if key[0] in {'SRC', 'MASK'}
+                               and len(graph.consumers.get(key, ())) == 1)
+        else:
+            # Patches since the last adoption changed only these units: the others keep their
+            # states, and only the producers the changed units import (now or before) can have
+            # gained or lost a consumer.
+            imported = set()
+            for key in changes:
+                unit, state = graph.units.get(key), self.states.get(key)
+                if state is not None and state.unit is unit:
+                    continue
+                if state is not None:
+                    imported.update(producer for producer, _, _ in state.unit.imports)
+                    self._retire_state(key, state, n_before, patched)
+                    del self.states[key]
+                if unit is not None:
+                    imported.update(producer for producer, _, _ in unit.imports)
+                    self.states[key] = UnitState(unit)
                 replaced.add(key)
-            live[key] = state
-        for key, state in self.states.items():
-            if key not in live:
-                self._retire_state(key, state, n_before, patched)
-                replaced.add(key)
-        self.states = live
+            inline = set(self.inline)
+            for key in imported | replaced:
+                if key in graph.units and key[0] in {'SRC', 'MASK'} and len(graph.consumers.get(key, ())) == 1:
+                    inline.add(key)
+                else:
+                    inline.discard(key)
+            if VERIFY_ADOPTION:
+                self._verify_adoption(graph, inline)
         if not patched or graph.chains is not self._chains:
             # Positions follow the chains alone: a patch that kept them keeps these.
             self.positions, self.finals, self.orders = _positions(graph)
             self._chains = graph.chains
-        # A content or mask unit read by one unit only is compiled into that unit: one pass
-        # and one full-resolution texture less for every layer channel. An unchanged set keeps
-        # its identity, which the native graph's description is checked against.
-        inline = frozenset(key for key in graph.units if key[0] in {'SRC', 'MASK'}
-                           and len(graph.consumers.get(key, ())) == 1)
+        # An unchanged inline set keeps its identity, which the native graph's description is
+        # checked against.
         if inline != self.inline:
-            self.inline = inline
-        self.keep &= set(live)
+            self.inline = frozenset(inline)
+        self.keep.intersection_update(self.states)
         if patched:
             self.replaced = replaced if self.replaced is None else self.replaced | replaced
         else:
             self.replaced = None
             self.published.clear()   # a rebuilt graph re-derives every chain stamp
+
+    def _verify_adoption(self, graph, inline):
+        """OP_VERIFY_STRUCTURE: an adoption of the patched units only must leave what a full one does."""
+        stale = sorted(str(key) for key in graph.units.keys() ^ self.states.keys())
+        stale += sorted(str(key) for key, unit in graph.units.items()
+                        if key in self.states and self.states[key].unit is not unit)
+        full = {key for key in graph.units if key[0] in {'SRC', 'MASK'} and len(graph.consumers.get(key, ())) == 1}
+        if stale or set(inline) != full:
+            raise AssertionError(f'Incremental adoption differs: states {stale[:6]}, '
+                                 f'inline {sorted(map(str, set(inline) ^ full))[:6]}')
 
     def take_replaced(self):
         """Units a patch replaced since the native graph last looked; None after a rebuild."""

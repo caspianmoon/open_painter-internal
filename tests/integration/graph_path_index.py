@@ -45,6 +45,48 @@ try:
     from open_painter.core.layer_store import scene_path
     for struct in structs:
         assert paths[struct.as_pointer()] == scene_path(struct), (paths[struct.as_pointer()], scene_path(struct))
+
+    # A patch keeps the index of a layer that only moved in the array: its structs follow its
+    # index cell, its own address is keyed again (``Graph._refresh_paths``).
+    from types import SimpleNamespace
+    from open_painter.evaluation.shader_graph import Graph
+
+    def every_struct():
+        found = [ts, ts.bake, *ts.baked_maps]
+        for layer in ts.layers:
+            found.append(layer)
+            for prop in layer.channels:
+                found.extend((prop, *prop.effects))
+            for mask in layer.masks:
+                found.extend((mask, mask.effect, mask.influence, mask.mesh))
+            found.extend(layer.cache)
+        return found
+
+    graph = Graph.__new__(Graph)
+    graph._head, graph._paths = [graph], None   # the live graph is itself (``Graph._live``)
+    graph.ts = ts
+    for struct in every_struct():
+        assert graph._path(struct) == scene_path(struct)
+
+    def moved_since(before):
+        now = {layer.id: layer.as_pointer() for layer in ts.layers}
+        plan = SimpleNamespace(ids=tuple(layer.id for layer in ts.layers), pointers=now,
+                               layers={layer.id: layer for layer in ts.layers})
+        return plan, {identifier for identifier, pointer in now.items() if before.get(identifier) != pointer}
+
+    for edit in ('insert', 'move'):
+        before = {layer.id: layer.as_pointer() for layer in ts.layers}
+        if edit == 'insert':
+            ts.active_layer = 1
+            inserted = stack.add(ts, 'FILL', 'Inserted').id
+        else:
+            stack.move(ts, stack.index_of(ts, ts.layers[0].id), 3)
+        plan, moved = moved_since(before)
+        edited = {inserted} if edit == 'insert' else set()
+        assert moved - edited, (edit, 'no layer struct moved')
+        graph._refresh_paths(plan, edited, moved)
+        for struct in every_struct():
+            assert graph._path(struct) == scene_path(struct), (edit, graph._path(struct), scene_path(struct))
     print('GRAPH_PATH_INDEX_PASS', len(structs), flush=True)
 finally:
     open_painter.unregister()

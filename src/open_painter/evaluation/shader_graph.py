@@ -278,37 +278,52 @@ def _plan_token(ts):
     return token(ts), len(ts.layers)
 
 
-def path_index(ts, owners=None):
+def path_index(ts, owners=None, cells=None):
     """RNA paths of a texture set's structs by address, exactly as ``path_from_id``
     spells them, in one pass over the set. ``owners``: filled with each layer's addresses."""
     base = ts.path_from_id()
-    paths = {ts.as_pointer(): base, ts.bake.as_pointer(): base + '.bake'}
-    for index, entry in enumerate(ts.baked_maps):
-        paths[entry.as_pointer()] = f'{base}.baked_maps[{index}]'
-    for index, layer in enumerate(ts.layers):
-        found = _layer_paths(f'{base}.layers[{index}]', layer)
-        paths.update(found)
+    return {pointer: _spelled(base, entry) for pointer, entry in _struct_index(ts, owners, cells).items()}
+
+
+def _struct_index(ts, owners=None, cells=None):
+    """``path_index`` as (cell, suffix) per address: a layer's structs share a one-item list
+    holding the layer's index (``_spelled``), so a layer that moved in the stack's array is
+    indexed again by its cell and its own address. ``cells``: filled with each layer's cell."""
+    index = {ts.as_pointer(): (None, ''), ts.bake.as_pointer(): (None, '.bake')}
+    for position, entry in enumerate(ts.baked_maps):
+        index[entry.as_pointer()] = (None, f'.baked_maps[{position}]')
+    for position, layer in enumerate(ts.layers):
+        cell = [position]
+        found = _layer_entries(cell, layer)
+        index.update(found)
         if owners is not None:
             owners[layer.id] = tuple(found)
-    return paths
+        if cells is not None:
+            cells[layer.id] = cell
+    return index
 
 
-def _layer_paths(path, layer):
-    """``path_index`` of one layer's structs."""
-    paths = {layer.as_pointer(): path}
+def _spelled(base, entry):
+    cell, suffix = entry
+    return base + suffix if cell is None else f'{base}.layers[{cell[0]}]{suffix}'
+
+
+def _layer_entries(cell, layer):
+    """``_struct_index`` of one layer's structs; the layer's own address comes first."""
+    entries = {layer.as_pointer(): (cell, '')}
     for c, prop in enumerate(layer.channels):
-        channel = f'{path}.channels[{c}]'
-        paths[prop.as_pointer()] = channel
+        channel = f'.channels[{c}]'
+        entries[prop.as_pointer()] = (cell, channel)
         for e, effect in enumerate(prop.effects):
-            paths[effect.as_pointer()] = f'{channel}.effects[{e}]'
+            entries[effect.as_pointer()] = (cell, f'{channel}.effects[{e}]')
     for m, mask in enumerate(layer.masks):
-        item = f'{path}.masks[{m}]'
-        paths[mask.as_pointer()] = item
+        item = f'.masks[{m}]'
+        entries[mask.as_pointer()] = (cell, item)
         for name in ('effect', 'influence', 'mesh'):
-            paths[getattr(mask, name).as_pointer()] = f'{item}.{name}'
+            entries[getattr(mask, name).as_pointer()] = (cell, f'{item}.{name}')
     for r, row in enumerate(layer.cache):
-        paths[row.as_pointer()] = f'{path}.cache[{r}]'
-    return paths
+        entries[row.as_pointer()] = (cell, f'.cache[{r}]')
+    return entries
 
 
 @dataclass
@@ -353,6 +368,13 @@ class ResourceBinding:
 
 # Diagnostics: compare every incremental plan with a full one (``Graph._verify_plan``).
 VERIFY_STRUCTURE = os.environ.get('OP_VERIFY_STRUCTURE') == '1'
+
+
+def _owner_token(owner):
+    """A binding key's owner: a layer by its id (its struct moves when a layer is added or removed
+    below it, and ``EngineGraph._patch`` moves that layer's bindings in one step), any other
+    struct by address."""
+    return ('layer', owner.id) if type(owner).__name__ == 'OP_Layer' else owner.as_pointer()
 
 
 def _removed_graph_units(bindings):
@@ -716,31 +738,54 @@ class Graph(Math):
         """
         paths = self._paths
         if paths is None:
-            self._path_owners = {}
-            paths = self._paths = path_index(self.ts, self._path_owners)
-        path = paths.get(owner.as_pointer())
-        if path is not None:
-            return path
+            self._path_owners, self._path_cells, self._path_base = {}, {}, self.ts.path_from_id()
+            paths = self._paths = _struct_index(self.ts, self._path_owners, self._path_cells)
+        entry = paths.get(owner.as_pointer())
+        if entry is not None:
+            return _spelled(self._path_base, entry)
         from ..core.layer_store import scene_path
         return scene_path(owner)
 
-    def _refresh_paths(self, plan, identifiers):
-        """Index again the structs of these layers only: a patch leaves every other layer's
-        collections where they were (``_path``)."""
+    def _refresh_paths(self, plan, edited, moved=()):
+        """Index again the structs of the ``edited`` layers only: a patch leaves every other
+        layer's collections where they were (``_path``). A layer that only ``moved`` in the
+        stack's array keeps its entries: its index cell and its own address follow it."""
         paths, owners = self._paths, getattr(self, '_path_owners', None)
-        if paths is None or owners is None or identifiers is None:
-            self._paths = self._path_owners = None
+        cells = getattr(self, '_path_cells', None)
+        if paths is None or owners is None or cells is None or edited is None:
+            self._paths = self._path_owners = self._path_cells = None
             return
-        for identifier in identifiers:
+        moved = set(moved) - set(edited)
+        for identifier in [identifier for identifier in moved if identifier not in owners]:
+            moved.discard(identifier)
+            edited = {*edited, identifier}
+        for identifier in edited:
             for pointer in owners.pop(identifier, ()):
                 paths.pop(pointer, None)
-        base = self.ts.path_from_id()
+            cells.pop(identifier, None)
+        self._path_base = self.ts.path_from_id()
         positions = {identifier: index for index, identifier in enumerate(plan.ids)}
-        for identifier in identifiers:
+        for identifier in [identifier for identifier in cells if identifier not in positions]:
+            for pointer in owners.pop(identifier, ()):
+                paths.pop(pointer, None)
+            del cells[identifier]
+        for identifier, cell in cells.items():
+            cell[0] = positions[identifier]
+        # Every old address goes before any new one is written: a layer moved one slot up
+        # takes the address the layer above it had.
+        shifted = [identifier for identifier in moved if owners[identifier][0] != plan.pointers[identifier]]
+        for identifier in shifted:
+            paths.pop(owners[identifier][0], None)
+        for identifier in shifted:
+            now = plan.pointers[identifier]
+            paths[now] = (cells[identifier], '')
+            owners[identifier] = (now, *owners[identifier][1:])
+        for identifier in edited:
             layer = plan.layers.get(identifier)
             if layer is None:
                 continue
-            found = _layer_paths(f'{base}.layers[{positions[identifier]}]', layer)
+            cell = cells[identifier] = [positions[identifier]]
+            found = _layer_entries(cell, layer)
             paths.update(found)
             owners[identifier] = tuple(found)
 
@@ -812,7 +857,7 @@ class Graph(Math):
         return {'mask': mask, 'mask_effect': mask.effect, 'influence': mask.influence, 'mesh': mask.mesh}.get(kind)
 
     def param(self, owner, field, index=None):
-        key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
+        key = (self.unit.key if self.unit is not None else None, _owner_token(owner), field, index)
         if key not in self.bindings:
             identifier = 'Parameter:' + self._path(owner) + '.' + field
             if index is not None:
@@ -3728,7 +3773,7 @@ class Graph(Math):
                     identifier = node.get('op_dependency')
                     binding = Binding(owner, field, index, node.outputs[0], float(node.outputs[0].default_value),
                                       identifier, unit=unit.key)
-                    key = (unit.key, owner.as_pointer(), field, index)
+                    key = (unit.key, _owner_token(owner), field, index)
                     self.bindings[key] = binding
                     unit.bindings[key] = binding
                     self.owner_bindings[owner.as_pointer()].append(binding)
@@ -3951,7 +3996,8 @@ class Graph(Math):
         changed.extend(key for key in before if key not in after)
         return changed or 'wiring'
 
-    def update(self, owner=None, check_structure=True, resources=True, values=True, owners=None):
+    def update(self, owner=None, check_structure=True, resources=True, values=True, owners=None,
+               value_owners=None):
         """Write changed bindings; ``check_structure`` is False for numeric-only edits.
 
         ``resources=False`` is the stroke-time path (freeze while painting): image
@@ -3959,7 +4005,8 @@ class Graph(Math):
         boundary re-identification or cache reconciliation happens until release.
         ``values=False`` reads no uniform and no image field: a patch whose kept units
         saw every edit reconciles only inputs a structural edit can re-identify, and with
-        ``owners`` (addresses) only the inputs one of those owns.
+        ``owners`` (addresses) only the inputs one of those owns. ``value_owners``
+        (addresses): only these owners' uniforms and image fields are read.
         """
         started = perf_counter()
         if resources and (check_structure or self._stubs):
@@ -3979,6 +4026,9 @@ class Graph(Math):
         removed = _removed_graph_units(bindings)
         if removed:
             raise RebuildRequired('A Mask Graph node was removed', removed)
+        if value_owners is not None and pointer is None:
+            bindings = list({id(binding): binding for address in value_owners
+                             for binding in self.owner_bindings.get(address, ())}.values())
         changed = []
         touched = self.touched
         for binding in bindings if values else ():
@@ -4015,7 +4065,7 @@ class Graph(Math):
                     binding.owners = {o.as_pointer() for o in binding.owner_factory()}
                 invalidated.add(binding.identifier)
         for index, (p, identifier, getter, node, previous) in enumerate(self.image_bindings if values else ()):
-            if pointer is not None and p != pointer:
+            if (pointer is not None and p != pointer) or (value_owners is not None and p not in value_owners):
                 continue
             image = getter()
             identity = image_key(image)

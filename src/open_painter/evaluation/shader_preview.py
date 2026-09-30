@@ -61,18 +61,27 @@ def _unknown_edits(entry, ts):
         _touch(entry, None)
 
 
-def _drop(entry, owner, layer):
-    """An edit the pending patch reads again: its owner's address, or a layer's id (a layer's
-    struct moves when layers are added or removed below it); True when unknown (a rebuild, or a
-    patch reading every binding)."""
-    dropped = entry.get('dropped', set())
-    if dropped is True:
-        return
+def _handle(owner, layer):
+    """How a pending patch finds an edit's owner again: its address, or a layer's id (a layer's
+    struct moves when layers are added or removed below it); None when unknown."""
     if layer is None or owner is None:
-        entry['dropped'] = True
-        return
+        return None
     pointer = owner.as_pointer()
-    entry['dropped'] = dropped | {('layer', layer.id) if pointer == layer.as_pointer() else pointer}
+    return ('layer', layer.id) if pointer == layer.as_pointer() else pointer
+
+
+def _drop(entry, owner, layer):
+    """An edit the pending patch reads again (``_handle``)."""
+    handle = _handle(owner, layer)
+    _drop_handles(entry, None if handle is None else {handle})
+
+
+def _drop_handles(entry, handles):
+    """Edits the pending patch reads again; ``handles`` None when unknown (a rebuild, or a patch
+    reading every binding)."""
+    dropped = entry.get('dropped', set())
+    if dropped is not True:
+        entry['dropped'] = True if handles is None else dropped | handles
 
 
 def invalidated(ts, identifiers):
@@ -87,7 +96,8 @@ def invalidated(ts, identifiers):
 def authoring_batch(ts):
     """Coalesce a bounded authoring transaction; ordinary slider edits stay immediate."""
     key = key_for(ts.id_data, ts)
-    state = _batches.setdefault(key, dict(depth=0, structural=False))
+    # ``owners``: the handles of the edits the batch coalesced (``_handle``); None once one was unknown.
+    state = _batches.setdefault(key, dict(depth=0, structural=False, owners=set()))
     state['depth'] += 1
     try:
         yield
@@ -100,11 +110,11 @@ def authoring_batch(ts):
                     and not entry.get('rebuild')):
                 _busy.add(key)
                 try:
-                    _update(ts.id_data, ts, entry, check_structure=state['structural'])
+                    _update(ts.id_data, ts, entry, check_structure=state['structural'], edited=state['owners'])
                 finally:
                     _busy.discard(key)
             elif entry and entry.get('rebuild'):
-                entry['dropped'] = True   # the rebuild queued before the batch re-reads every value
+                _drop_handles(entry, state['owners'])   # the rebuild queued before the batch reads them again
 
 
 def hold(scene, ts):
@@ -378,10 +388,12 @@ def _inputs(entry):
         stage['inputs_ms'] += (perf_counter() - started) * 1000
 
 
-def _update(scene, ts, entry, owner=None, check_structure=True, resources=True, values_known=False):
+def _update(scene, ts, entry, owner=None, check_structure=True, resources=True, values_known=False, edited=None):
+    """``edited``: with no ``owner``, the handles of the edits this update applies (a batch's),
+    which a patch this update requires reads again; None when unknown."""
     from .shader_graph import RebuildRequired
     if resources and entry.pop('recheck', False):
-        check_structure, owner = True, None   # edits were dropped while held: re-read everything
+        check_structure, owner, edited = True, None, None   # edits were dropped while held: re-read everything
         _touch(entry, None)
     started = perf_counter()
     try:
@@ -389,7 +401,7 @@ def _update(scene, ts, entry, owner=None, check_structure=True, resources=True, 
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
         if owner is None and not values_known:
-            entry['dropped'] = True   # edits nobody named (a batch, a recheck): the patch reads every value
+            _drop_handles(entry, edited)   # a batch's edits; unknown ones make the patch read every value
         metrics.count('shader_topology_invalidations')
         from . import cache
         cache.wake()
@@ -569,8 +581,15 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         if entry and entry.get('graph') is not None and (structural or entry['graph']._stubs):
             _touch(entry, None if layer is None else (layer.id,))
         if key in _batches:
-            _known(entry, ts)   # the batch's end reads every value
-            _batches[key]['structural'] |= structural
+            _known(entry, ts)   # the batch's end applies it
+            state = _batches[key]
+            state['structural'] |= structural
+            if state['owners'] is not None:
+                handle = _handle(owner, layer)
+                if handle is None:
+                    state['owners'] = None
+                else:
+                    state['owners'].add(handle)
             continue
         if key in _holds:
             continue   # the rebuild after release re-reads structure and values

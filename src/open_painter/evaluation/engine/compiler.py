@@ -17,7 +17,7 @@ from time import perf_counter
 
 from ...constants import CHANNELS
 from .. import metrics
-from ..shader_graph import (VERIFY_STRUCTURE, Binding, Graph, _removed_graph_units, _same_literal,
+from ..shader_graph import (VERIFY_STRUCTURE, Binding, Graph, _owner_token, _removed_graph_units, _same_literal,
                             _sampler_limit)
 from ..shader_math import Signal
 from . import headless
@@ -135,6 +135,13 @@ class EngineGraph(Graph):
         super().__init__(scene, ts, None)
         self.chains = {}
         self.consumers = defaultdict(set)   # unit key -> unit keys that import it
+        self.unit_changes = None            # units patches replaced since the engine adopted (None: untracked)
+
+    def take_unit_changes(self):
+        """Units patches added, replaced or removed since the last call (None the first time: the
+        engine adopts every unit); tracked from then on."""
+        changes, self.unit_changes = self.unit_changes, set()
+        return changes
 
     # ---- trees -------------------------------------------------------------------
 
@@ -213,7 +220,7 @@ class EngineGraph(Graph):
         return tuple(self._bits_param(owner, field, shift) for shift in (16, 0))
 
     def _bits_param(self, owner, field, shift, prefix=''):
-        key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, ('bits', shift))
+        key = (self.unit.key if self.unit is not None else None, _owner_token(owner), field, ('bits', shift))
         if key not in self.bindings:
             identifier = f'Parameter:{prefix}{self._path(owner)}.{field}>>{shift}'
             with self.role(identifier):
@@ -445,6 +452,19 @@ class EngineGraph(Graph):
         moved = ({identifier for identifier, pointer in plan.pointers.items()
                   if before_plan.pointers.get(identifier, pointer) != pointer}
                  if before_plan is not None and getattr(before_plan, 'pointers', None) is not None else None)
+        if moved:
+            # A moved layer's bindings follow it in one step: their keys name the layer by id
+            # (``_owner_token``), so only their owner and the layer's entry in ``owner_bindings``
+            # change. Every old address goes first: a layer moved one slot up takes the address
+            # the layer above it had.
+            lists = {identifier: self.owner_bindings.pop(before_plan.pointers[identifier], None)
+                     for identifier in moved if identifier in before_plan.pointers}
+            for identifier, listed in lists.items():
+                if listed:
+                    layer = plan.layers[identifier]
+                    for binding in listed:
+                        binding.owner = layer
+                    self.owner_bindings[plan.pointers[identifier]].extend(listed)
         follow, at = {}, len(self._base_owners())
         for key, unit in self.units.items():
             if key in stale:
@@ -456,10 +476,10 @@ class EngineGraph(Graph):
                     # Only its layer's struct moved: every other owner it captured is where it was.
                     before_owners = unit.owner_pointers
                     owners = before_owners[:at] + (plan.pointers[key[1]],) + before_owners[at + 1:]
-                    if unit.holds_layer:
-                        follow[key] = owners
+                    if unit.resource_bindings or unit.cache_bindings or unit.image_bindings:
+                        follow[key] = owners   # closures may hold the old struct
                     else:
-                        unit.owner_pointers = owners   # nothing it holds refers to the struct that moved
+                        unit.owner_pointers = owners   # its bindings followed with the layer's
             else:
                 owners = self._unit_owners(key)
                 if unit.owner_pointers != owners:
@@ -487,7 +507,7 @@ class EngineGraph(Graph):
         kept = set(self.units)
         # Collections of the edited layers may have moved, and moved layers sit at another
         # index; every other layer's structs stay where they were.
-        self._refresh_paths(plan, None if reached is None or moved is None else reached | moved)
+        self._refresh_paths(plan, None if reached is None or moved is None else reached, moved or ())
         self._reused = []
         try:
             for key in plan.order:
@@ -508,6 +528,9 @@ class EngineGraph(Graph):
             self.resources.used = self._used_resources()   # what the discarded units queued is dropped
             raise
         fresh = [key for key in self.units if key not in kept]
+        if self.unit_changes is not None:
+            self.unit_changes.update(fresh)
+            self.unit_changes.update(retired)
         self._units_token = object()
         nodes, unit_nodes, unit_build_ms = self._tally   # what the last build or patch counted
         nodes -= sum(unit.node_count for unit in retired.values())
@@ -524,6 +547,7 @@ class EngineGraph(Graph):
                 self._reverse_map()
         if VERIFY_STRUCTURE:
             self._verify_reverse()
+            self._verify_owners(plan)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
         if all(self._stub(key) == stubs.get(key) for key in fresh):
             self._structure = current   # each recompiled unit signs as ``current`` assumed
@@ -537,7 +561,6 @@ class EngineGraph(Graph):
             # anchor another layer publishes) may have moved or gained owners.
             if binding.owner_factory is not None:
                 binding.owners = {o.as_pointer() for o in binding.owner_factory()}
-        self.validate_parameters()
         # Inputs a structural edit re-identifies (an anchor's prefix, a cached subtree) are
         # reconciled as a rebuild does, those a layer the edit reached owns (one that only moved
         # reads what it read); uniforms only when edits were dropped meanwhile.
@@ -551,19 +574,15 @@ class EngineGraph(Graph):
                 owned.update(self.units[key].owner_pointers)
         if reconcile is True:
             corrections = self.update(check_structure=False)
+        elif reconcile:
+            # Edits of these owners were dropped while the patch was pending: their values are
+            # read again, a layer's at its current address, in one pass.
+            pointers = {plan.pointers.get(handle[1]) if isinstance(handle, tuple) else handle
+                        for handle in reconcile} - {None}
+            corrections = self.update(check_structure=False, owners=None if owned is None else owned | pointers,
+                                      value_owners=pointers)
         else:
             corrections = self.update(check_structure=False, values=False, owners=owned)
-            if reconcile:
-                # Edits of these owners were dropped while the patch was pending: their values are
-                # read again, a layer's at its current address.
-                pointers = {plan.pointers.get(handle[1]) if isinstance(handle, tuple) else handle
-                            for handle in reconcile}
-                for pointer in pointers - {None}:
-                    found = self.update(_Address(pointer), check_structure=False)
-                    for name in ('parameter_changes', 'invalidated_nodes'):
-                        corrections[name] = list(corrections.get(name, [])) + list(found.get(name, []))
-                    corrections['updated_bindings'] = (corrections.get('updated_bindings', 0)
-                                                       + found.get('updated_bindings', 0))
         for key in (self.units if reconcile is True else fresh):
             for binding in self.units[key].cache_bindings:
                 self._reconcile_cache(binding)
@@ -748,6 +767,28 @@ class EngineGraph(Graph):
                 differ = sorted(str(key) for key in mine.keys() | full.keys() if mine.get(key) != full.get(key))
                 raise AssertionError(f'Patched {name} differ from a full map: {differ[:6]}')
 
+    def _verify_owners(self, plan):
+        """OP_VERIFY_STRUCTURE: every binding is listed under its owner's address and nothing else
+        is listed; a binding of a layer's own field reads the layer's current struct."""
+        listed = defaultdict(set)
+        for address, bindings in self.owner_bindings.items():
+            for binding in bindings:
+                listed[id(binding)].add(address)
+        problems = []
+        for key, binding in self.bindings.items():
+            address = binding.owner.as_pointer()
+            if address not in listed.get(id(binding), ()):
+                problems.append(f'{key}: not listed under its owner')
+            token = key[1] if isinstance(key, tuple) and len(key) > 1 else None
+            if isinstance(token, tuple) and token[0] == 'layer' and plan.pointers.get(token[1]) != address:
+                problems.append(f'{key}: not the layer\'s current struct')
+            elif type(binding.owner).__name__ == 'OP_Layer' and not isinstance(token, tuple):
+                problems.append(f'{key}: a layer keyed by address')
+        live = {id(binding) for binding in self.bindings.values()}
+        problems += [f'{len(listed.keys() - live)} bindings listed after their units went'] if listed.keys() - live else []
+        if problems:
+            raise AssertionError(f'Patched owner bindings differ: {problems[:6]}')
+
     def _reverse_changed(self, retired, fresh):
         """``_reverse_map`` after a patch that changed which units exist or what reads what (a
         layer added, removed or moved): the importers of the units that came, went or were
@@ -897,17 +938,6 @@ def _chains(plan):
         return steps
 
     return {channel: chain('', channel) for channel in CHANNELS}
-
-
-class _Address:
-    """An owner by address alone, for ``Graph.update``'s narrowing (its struct may have moved)."""
-    __slots__ = ('pointer',)
-
-    def __init__(self, pointer):
-        self.pointer = pointer
-
-    def as_pointer(self):
-        return self.pointer
 
 
 def _dependency_roles(unit):

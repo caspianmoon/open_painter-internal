@@ -647,8 +647,8 @@ def _migrate_angles(project):
                     mask['mesh'] = degrees_to_radians(mesh)
                     converted = True
         if converted:
-            text.clear()
-            text.write(json.dumps(base))
+            from ..smart_materials.modules import write_json
+            write_json(text, base)
     project.format_version = FORMAT_VERSION
 
 

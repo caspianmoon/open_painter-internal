@@ -220,11 +220,20 @@ def write_base(module_id, version, layers):
     from ..constants import OWNER
     name = base_name(module_id, version)
     text = bpy.data.texts.get(name) or bpy.data.texts.new(name)
-    text.clear()
-    text.write(json.dumps({'module': module_id, 'version': version, 'layers': layers}))
+    write_json(text, {'module': module_id, 'version': version, 'layers': layers})
     text.use_fake_user = True
     text[OWNER] = True
     return text
+
+
+def write_json(text, data):
+    """Store ``data`` in a Text datablock as JSON, one value per line: Blender inserts text in
+    time quadratic in the line's length (a module base on one line took 140 ms to write, split
+    into lines 1 ms). Content it already holds is not written again."""
+    payload = json.dumps(data, indent=0)
+    if text.as_string() != payload:
+        text.clear()
+        text.write(payload)
 
 
 def read_base(module_id, version):

@@ -407,6 +407,55 @@ Layer properties can no longer be keyframed: a Palette holds no animation data.
 Blender refuses the keyframe with a message. Before, the keyframe landed on the
 Scene, but the engine never followed layer animation.
 
+## Structural edits
+
+A structural edit rebuilds the engine graph and adopts every unit whose structure
+did not change. Examples are a blend mode, a mask source, or adding, removing or
+moving a layer. Profiling the rebuild at 101 layers found four costs that grew
+with the stack.
+
+- **Reach walk.** `compiler._reverse_map` copied its recursion path at every
+  step of chains as deep as the stack, which made it quadratic. It also read
+  every node of every unit tree on each build. It is now a memoised walk, with
+  each unit's dependency roles cached with its tree.
+- **Repeated plan.** The property callback's structure check planned the stack,
+  and the rebuild on the next tick planned it again. The rebuild now reuses the
+  check's plan while the structure token is unchanged.
+- **Chain scans.** `compiler._chain` walked the stack per folder and channel. It
+  now reads the plan's children index.
+- **Moved layers.** Inserting, removing or moving a layer, or the layers array
+  growing, moves the struct of every layer above it. Each unit captured its
+  layer's struct, so every unit of those layers was recompiled: about 370 of 877
+  for an insert in the middle of 101 layers.
+
+  Only the layer group itself moves; its channels, masks and effects live in
+  arrays of their own. So an unchanged unit whose layer is the only owner that
+  moved is re-pointed and adopted (`Graph._follow_moved_layer`). What it captured
+  of the old struct is replaced by address: binding owners and their keys,
+  resource and image closures (cells, defaults, nested closures) and static
+  owner sets. If anything still holds the old address, the unit is recompiled
+  as before.
+
+  `tests/integration/moved_layer_adoption.py` inserts, removes and moves layers
+  with CPU boundaries and text masks, edits the moved layers, and compares the
+  result with a rebuild from scratch. With the re-pointing disabled, it fails
+  (Base Color off by 0.057).
+- **Selective restamp.** After a rebuild that keeps the native topology, only
+  units with a new program, new constants, changed images or written uniforms
+  are restamped. `OP_VERIFY_INCREMENTAL` checks that against a full restamp.
+
+101 layers, 1K, real time from the edit until the set is current (medians of
+three):
+
+| Edit | Before | After |
+| --- | ---: | ---: |
+| Blend mode of a middle layer | 133 ms | 93 ms |
+| Adding a fill in the middle | 315–432 ms | 148 ms |
+| Removing it | 268–395 ms | 98 ms |
+| Moving a layer one step | 104 ms | 95 ms |
+| Removing the top layer | 134 ms | 93 ms |
+| The first smart-material apply | 1.6–2.0 s | 0.95 s |
+
 ## Test and benchmark memory
 
 A 200-layer 2K benchmark run exhausted the development machine. Background
@@ -440,6 +489,9 @@ Machines with 16 GB or more keep the previous limits.
 - **CPU boundaries.** Metric material mapping with images or procedural detail,
   mesh masks and generators still rasterize on the CPU at full resolution.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
-- **Structural edits.** Structural edits and cold builds still rebuild more
-  host state than they change.
+- **Structural edits.** A structural edit still re-signs every unit to find the
+  changed ones, and still adopts every unchanged unit into a new graph. That is
+  about 90 ms at 101 layers. Recompiling only the changed units in place needs
+  per-layer invalidation of unit signatures, because folders, ancestors,
+  anchors and references reach across layers.
 

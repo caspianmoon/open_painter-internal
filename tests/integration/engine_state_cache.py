@@ -75,7 +75,9 @@ try:
         assert sum(counts.values()) < sum(previous_counts.values()), (counts, previous_counts)
         _, unchanged_counts, written = publish(True, invalidate=False)
         assert not written
-        assert max(unchanged_counts.values()) == 1
+        # Incremental preparation inspects only units whose inputs changed: an
+        # unchanged evaluation may check none, and never one twice.
+        assert max(unchanged_counts.values(), default=0) <= 1
 
     # Every following call must re-read both live metadata and uniform sockets.
     for alpha in ('PREMUL', 'STRAIGHT', 'CHANNEL_PACKED'):

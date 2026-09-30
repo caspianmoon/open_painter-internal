@@ -234,7 +234,10 @@ def diagnostics(scene, ts, *, details=True):
     state = ('CPU' if not requested(ts) else 'FAILED' if entry.get('error') else
              'BOUNDARY' if pending else 'SHADER' if current(scene, ts) else 'QUEUED')
     engine = entry.get('engine')
-    return {**entry.get('diagnostics', {}), 'state': state,
+    recorded = entry.get('diagnostics', {})
+    if details and graph is not None and 'unique_images' in recorded and recorded['unique_images'] is None:
+        recorded['unique_images'] = len(graph.unique_images())   # left for explicit diagnostics by the build
+    return {**recorded, 'state': state,
             'serial': ts.edit_serial, 'bound_serial': entry.get('serial', -1),
             'pending_resources': pending, 'error': entry.get('error', ''),
             'attached': bool(entry.get('attached', False)),

@@ -292,7 +292,8 @@ class EngineGraph(Graph):
                       'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
                       'largest_unit': max(unit_nodes.values(), default=0),
                       'reused_units': len(self._reused), 'rebuilt_units': len(self.units) - len(self._reused),
-                      'unique_images': len(self.unique_images()), 'max_textures_frag': _sampler_limit(),
+                      # Counted when explicit diagnostics ask (a walk over every node of every unit).
+                      'unique_images': None, 'max_textures_frag': _sampler_limit(),
                       'pending_resources': self.pending_resources,
                       'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
                       'cache_states': self.cache_states(),

@@ -12,6 +12,8 @@ channel) and ('GROUP', folder, channel), so "an output may only feed layers
 above it" falls out of the same cycle check. Legacy folder channel references
 are rejected: publish the folder composite instead.
 """
+from contextlib import contextmanager
+
 import numpy as np
 
 from . import structure_memo
@@ -20,7 +22,35 @@ LUMA = np.array((.2126, .7152, .0722), np.float32)
 COMPOSITION = frozenset({'OUT', 'BELOW', 'GROUP'})
 
 
+_scoped = {}   # (set pointer, id) -> graph(ts), while a caller holds it (``scope``)
+
+
+@contextmanager
+def scope(ts):
+    """Answer ``graph(ts)`` once for a caller that asks several times without editing in
+    between: a build checks the hierarchy's issues, then collects its warnings."""
+    key = (ts.as_pointer(), ts.id) if hasattr(ts, 'as_pointer') else None
+    owner = key is not None and key not in _scoped
+    if owner:
+        _scoped[key] = None
+    try:
+        yield
+    finally:
+        if owner:
+            _scoped.pop(key, None)
+
+
 def graph(ts):
+    key = (ts.as_pointer(), ts.id) if _scoped and hasattr(ts, 'as_pointer') else None
+    if key is not None and _scoped.get(key) is not None:
+        return _scoped[key]
+    result = _graph(ts)
+    if key is not None and key in _scoped:
+        _scoped[key] = result
+    return result
+
+
+def _graph(ts):
     """Item-granular dependency edges, structural errors and non-fatal warnings.
 
     Nodes are stack positions (layer id, 'MASK' or channel, count): each item
@@ -163,13 +193,13 @@ def graph(ts):
 
 def issues(ts):
     """Errors that block evaluation: reference cycles and folder composite references."""
-    return graph(ts)[1]
+    return list(graph(ts)[1])
 
 
 def warnings(ts):
     """Missing anchors and published sources; evaluation continues with neutral values.
     Structural only: ``core.validation.warnings`` adds the geometry-dependent ones."""
-    return graph(ts)[2]
+    return list(graph(ts)[2])
 
 
 _READERS = structure_memo.store()   # layer positions holding an item that reads another layer

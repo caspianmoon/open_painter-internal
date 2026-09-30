@@ -3090,6 +3090,11 @@ class Graph(Math):
         """Compile the graph; units of ``reuse`` with unchanged structure are adopted."""
         from ..core.validation import hierarchy_issues
         from ..core.udim import validate as validate_udim
+        from .references import scope
+        with scope(self.ts):   # the issues below and the build's warnings read one reference graph
+            return self._checked_build(reuse, hierarchy_issues, validate_udim)
+
+    def _checked_build(self, reuse, hierarchy_issues, validate_udim):
         validate_udim(self.ts)
         problems = hierarchy_issues(self.ts)
         if problems:

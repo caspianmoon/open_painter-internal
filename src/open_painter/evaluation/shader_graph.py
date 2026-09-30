@@ -375,6 +375,14 @@ def _removed_graph_units(bindings):
     return removed
 
 
+def _datablocks():
+    """Session ids of the datablocks layer fields point at (images, Mask Graphs, decal
+    objects, text sources)."""
+    data = bpy.data
+    return frozenset(item.session_uid for collection in (data.images, data.node_groups, data.objects, data.texts)
+                     for item in collection)
+
+
 def _reordered(before, after):
     """Layers added, removed, or whose order among the others changed, from ``before`` to
     ``after`` (layer ids in stack order); None when that is more than a quarter of the stack,
@@ -390,6 +398,25 @@ def _reordered(before, after):
         changed.update(common_before[differ[0]:differ[-1] + 1])
         changed.update(common_after[differ[0]:differ[-1] + 1])
     return changed if len(changed) * 4 <= max(len(after), 1) else None
+
+
+def _image_pointer(node):
+    """The address of a node's image; None without one, or for one Blender removed."""
+    image = node.image
+    if image is None:
+        return None
+    try:
+        return image.as_pointer()
+    except ReferenceError:
+        return None
+
+
+def _layer_memo(memo, identifier):
+    """A plan memo's answers about one layer (plans share those of layers no edit reached)."""
+    found = memo.get(identifier)
+    if found is None:
+        found = memo[identifier] = {}
+    return found
 
 
 def _collection_print(layer):
@@ -409,7 +436,8 @@ def _layer_links(layer):
         owns.update(effect.id for effect in prop.effects if effect.kind == 'ANCHOR' and effect.id)
     for mask in layer.masks:
         reads.update(identifier for identifier, _ in consumed_channels(mask))
-        if mask.source == 'REFERENCE' and mask.reference_layer and not mask.reference_anchor:
+        if mask.source == 'REFERENCE' and not mask.reference_anchor:
+            # A reference with no target yet reads nothing, but it is reported (missing source).
             reads.add(('layer', mask.reference_layer))
         if mask.source == 'ANCHOR' and mask.id:
             owns.add(mask.id)
@@ -420,7 +448,7 @@ def _link_target(handle, owners):
     """The layer a read handle names (``_layer_links``), or None."""
     from .anchors import GROUP_SUFFIX, OUTPUT_SUFFIX
     if isinstance(handle, tuple):
-        return handle[1]
+        return handle[1] or None
     for suffix in (OUTPUT_SUFFIX, GROUP_SUFFIX):
         if handle.endswith(suffix):
             return handle[:-len(suffix)]
@@ -1667,13 +1695,14 @@ class Graph(Math):
 
     def _touched(self, layer, channel):
         memo = getattr(self._plan, 'touched', None)
-        key = (layer.id, channel)
-        if memo is not None and key in memo:
-            return memo[key]
+        if memo is not None:
+            memo = _layer_memo(memo, layer.id)
+            if channel in memo:
+                return memo[channel]
         prop = self._channel(layer, channel)
         touched = not (prop and not prop.enabled) and self._mode(layer, prop) != 'DISABLE'
         if memo is not None:
-            memo[key] = touched
+            memo[channel] = touched
         return touched
 
     def _wired(self, layer, channel):
@@ -1829,6 +1858,7 @@ class Graph(Math):
         memo = getattr(self._plan, 'refs', None)
         if memo is None:
             return tuple(self._reference_keys_uncached(key))
+        memo = _layer_memo(memo, key[1])
         found = memo.get(key)
         if found is None:
             found = memo[key] = tuple(self._reference_keys_uncached(key))
@@ -2027,18 +2057,26 @@ class Graph(Math):
         # may not): its layer's collection sizes differ, and it is planned again.
         prints = {identifier: _collection_print(layer) for identifier, layer in layers.items()}
         affected = None
+        # Removing an image, node group, object or text clears the fields pointing at it with no
+        # callback: a removal since the previous plan plans every layer.
+        present = _datablocks()
         reordered = (_reordered(previous.ids, ids) if previous is not None and dirty is not None
-                     and getattr(previous, 'ids', None) is not None else None)
+                     and getattr(previous, 'ids', None) is not None
+                     and not (getattr(previous, 'datablocks', frozenset()) - present) else None)
         if reordered is not None:
             moved = {identifier for identifier, value in prints.items() if previous.prints.get(identifier) != value}
             affected = self._reach(previous, layers, children, set(dirty) | moved | reordered)
         while True:
             plan = self._plan_from(previous, affected, layers, children, ids, prints)
             plan.pointers = pointers
+            plan.datablocks = present
+            # Which plan it carried answers from, by token: holding the plan would chain every plan.
+            plan.token = object()
+            plan.carried = previous.token if affected is not None and previous is not None else None
             if affected is None:
                 break
             # A re-planned layer that reads another now: that one is reached too.
-            targets = {ref[1] for key in plan.keys if key[1] in affected for ref in plan.refs[key]} - affected
+            targets = {ref[1] for key in plan.keys if key[1] in affected for ref in plan.refs[key[1]][key]} - affected
             if not targets:
                 break
             affected = self._reach(previous, layers, children, affected | targets)
@@ -2061,9 +2099,10 @@ class Graph(Math):
                 return identifier not in affected
             plan.wired = {i: entry for i, entry in previous.wired.items() if kept(i)}
             plan.skipped = {i: value for i, value in previous.skipped.items() if kept(i)}
-            plan.touched = {key: value for key, value in previous.touched.items() if kept(key[0])}
-            plan.refs = {key: refs for key, refs in previous.refs.items() if kept(key[1])}
-            plan.signatures = {entry: value for entry, value in previous.signatures.items() if kept(entry[0][1])}
+            # Per-layer memos of layers no edit reached are shared: their answers still hold.
+            plan.touched = {i: memo for i, memo in previous.touched.items() if kept(i)}
+            plan.refs = {i: memo for i, memo in previous.refs.items() if kept(i)}
+            plan.signatures = {i: memo for i, memo in previous.signatures.items() if kept(i)}
             plan.warned = {i: list(found) for i, found in previous.warned.items() if kept(i)}
             plan.subtree_consumed = {i: value for i, value in previous.subtree_consumed.items() if kept(i)}
             plan.facts = {i: value for i, value in previous.facts.items() if kept(i) and i in layers}
@@ -2109,7 +2148,7 @@ class Graph(Math):
         if plan.links is None:
             readers, targets, named = defaultdict(set), defaultdict(set), defaultdict(set)
             owners = {handle: identifier for identifier, (_, owns) in plan.facts.items() for handle in owns}
-            for key, refs in plan.refs.items():
+            for key, refs in ((key, refs) for memo in plan.refs.values() for key, refs in memo.items()):
                 for ref in refs:
                     if ref[1] != key[1]:
                         readers[ref[1]].add(key[1])
@@ -2182,18 +2221,20 @@ class Graph(Math):
             raise AssertionError(f'Incremental plan differs from a full plan: {problems} '
                                  f'{differ[:6]} (reached {sorted(plan.affected)[:12]}; readers and targets '
                                  f'in the previous plan: {links}; its references: '
-                                 f'{ {k: v for k, v in previous.refs.items() if k[1] in layers} if previous else None}; '
-                                 f'now: { {k: v for k, v in plan.refs.items() if k[1] in layers} })')
+                                 f'{ {i: previous.refs.get(i) for i in layers} if previous else None}; '
+                                 f'now: { {i: plan.refs.get(i) for i in layers} })')
 
     def _unit_signature(self, key, stub=None):
         """The structure a unit compiles from; memoized per plan (each structural edit plans anew)."""
         memo = getattr(self._plan, 'signatures', None)
         if memo is None:
             return self._unit_signature_uncached(key, stub)
+        memo = _layer_memo(memo, key[1])
         entry = (key, stub)
-        if entry not in memo:
-            memo[entry] = self._unit_signature_uncached(key, stub)
-        return memo[entry]
+        found = memo.get(entry, memo)
+        if found is memo:
+            found = memo[entry] = self._unit_signature_uncached(key, stub)
+        return found
 
     def _unit_signature_uncached(self, key, stub=None):
         layer = self._layer(key[1])
@@ -2987,15 +3028,19 @@ class Graph(Math):
         name = layer.name[:24] if layer is not None else key[1][:8]
         return 'OP ' + ' · '.join(str(part) for part in (key[0], name, *key[2:]))
 
-    def _unit_owners(self, key):
-        """RNA items whose addresses this unit's bindings and closures capture."""
+    def _base_owners(self):
+        """The set and its baked maps are owners of every unit: addressed once per plan."""
         plan = self._plan
         base = getattr(plan, 'base_owners', None)
         if base is None:
-            # The set and its baked maps are owners of every unit: address them once per plan.
             base = tuple(item.as_pointer() for item in (self.ts, *self.ts.baked_maps))
             if plan is not None:
                 plan.base_owners = base
+        return base
+
+    def _unit_owners(self, key):
+        """RNA items whose addresses this unit's bindings and closures capture."""
+        base = self._base_owners()
         layer = self._layer(key[1])
         owners = [layer]
         if key[0] == 'CHANNEL':
@@ -3107,13 +3152,14 @@ class Graph(Math):
         self._reused.append(key)
         return unit
 
-    def _follow_moved_layer(self, unit, key, current=None):
+    def _follow_moved_layer(self, unit, key, current=None, tables=False):
         """An unchanged unit whose layer struct moved in the stack's array: a layer inserted,
         removed or moved below it, or the array grown. Only the layer group moves; its channels,
         masks and effects keep arrays of their own. Re-pointing what the unit captured of the old
         struct adopts it instead of recompiling it (an insert mid-stack moved every layer above).
         False, recompiling it, unless the layer is the only owner that moved and nothing still
-        holds the old struct afterwards."""
+        holds the old struct afterwards. ``tables``: the unit is bound in this graph, whose
+        tables follow its re-pointed bindings too (image entries are left to the caller)."""
         current = self._unit_owners(key) if current is None else current
         before = unit.owner_pointers
         at = len(self._plan.base_owners)
@@ -3124,14 +3170,28 @@ class Graph(Math):
         if layer is None or layer.as_pointer() != current[at]:
             return False
         new_pointer, seen = current[at], set()
-        rebound = {}
+        rebound, moved = {}, []
         for identifier, binding in unit.bindings.items():
             if binding.owner.as_pointer() == old:
                 binding.owner = layer
+                before_identifier = identifier
                 if isinstance(identifier, tuple) and len(identifier) > 1 and identifier[1] == old:
                     identifier = (identifier[0], new_pointer, *identifier[2:])
+                moved.append((before_identifier, identifier, binding))
             rebound[identifier] = binding
         unit.bindings = rebound
+        if tables and moved:
+            listed = self.owner_bindings.get(old)
+            gone = {id(binding) for _, _, binding in moved}
+            if listed:
+                listed[:] = [binding for binding in listed if id(binding) not in gone]
+                if not listed:
+                    del self.owner_bindings[old]
+            for before_identifier, identifier, binding in moved:
+                if self.bindings.get(before_identifier) is binding:
+                    del self.bindings[before_identifier]
+                self.bindings[identifier] = binding
+                self.owner_bindings[new_pointer].append(binding)
         for binding in (*unit.resource_bindings, *unit.cache_bindings):
             for name in ('identity', 'factory', 'owner_factory'):
                 _repoint(getattr(binding, name, None), old, layer, seen)
@@ -3817,8 +3877,8 @@ class Graph(Math):
         return tuple(node.as_pointer() for node in self.nodes())
 
     def unique_images(self):
-        return {node.image.as_pointer() for node in self.nodes()
-                if node.bl_idname == 'ShaderNodeTexImage' and node.image}
+        return {pointer for pointer in (_image_pointer(node) for node in self.nodes()
+                                        if node.bl_idname == 'ShaderNodeTexImage') if pointer is not None}
 
     def bound_sampler_count(self):
         # The same image with different sampling state is not one binding.

@@ -192,6 +192,16 @@ check('layer removed', lambda: stack.remove(current(), stack.index_of(current(),
 check('layer moved', lambda: stack.move(current(), stack.index_of(current(), ids[3]), 3), reprogram=False)
 
 
+def insert_and_edit_above():
+    # The edit of a layer above the insertion arrives while the patch is pending, and that
+    # layer's struct moved: the patch reads it again at its new address.
+    current().active_layer = next(i for i, item in enumerate(current().layers) if item.id == ids[2])
+    stack.add(current(), 'FILL', 'Second insert')
+    layer(ids[7]).opacity = .15
+    stack.channel_for(layer(ids[8]), 'BASE_COLOR').color = (.1, .9, .3, 1)
+check('insert, then edits of moved layers', insert_and_edit_above, reprogram=False)
+
+
 def burst():
     # Enough layers that the array grows: every layer struct moves.
     for index in range(12):

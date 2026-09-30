@@ -61,6 +61,20 @@ def _unknown_edits(entry, ts):
         _touch(entry, None)
 
 
+def _drop(entry, owner, layer):
+    """An edit the pending patch reads again: its owner's address, or a layer's id (a layer's
+    struct moves when layers are added or removed below it); True when unknown (a rebuild, or a
+    patch reading every binding)."""
+    dropped = entry.get('dropped', set())
+    if dropped is True:
+        return
+    if layer is None or owner is None:
+        entry['dropped'] = True
+        return
+    pointer = owner.as_pointer()
+    entry['dropped'] = dropped | {('layer', layer.id) if pointer == layer.as_pointer() else pointer}
+
+
 def invalidated(ts, identifiers):
     """``layer_stack.invalidate`` naming the layers it changed."""
     entry = _sessions.get(key_for(ts.id_data, ts))
@@ -374,6 +388,8 @@ def _update(scene, ts, entry, owner=None, check_structure=True, resources=True):
         result = entry['graph'].update(owner, check_structure=check_structure, resources=resources)
     except RebuildRequired as exc:
         entry.update(rebuild=True, error='', rebuild_scope=exc.scope)
+        if owner is None:
+            entry['dropped'] = True   # edits nobody named (a batch, a recheck): the patch reads every value
         metrics.count('shader_topology_invalidations')
         from . import cache
         cache.wake()
@@ -481,7 +497,7 @@ def _patch(scene, ts, entry):
     if (not PATCH or engine is None or engine.graph is not graph or not hasattr(graph, 'patch')
             or entry.get('rebuild_scope') == 'global'):
         return False
-    reconcile = bool(entry.get('dropped') or entry.get('recheck'))
+    reconcile = True if entry.get('recheck') else (entry.get('dropped') or False)
     _unknown_edits(entry, ts)
     try:
         report = graph.patch(reconcile=reconcile)
@@ -563,9 +579,11 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
         _busy.add(key)
         try:
             if entry.get('rebuild'):
-                entry['dropped'] = True   # the pending rebuild (or patch) re-reads every value
+                _drop(entry, owner, layer)
             else:
                 updated = _update(scene, ts, entry, owner, check_structure=structural)
+                if not updated and entry.get('rebuild'):
+                    _drop(entry, owner, layer)   # the edit that needs the patch: its values too
                 affected = entry.get('diagnostics', {}).get('affected_channels')
                 if (updated and previous_dirty is not None and affected is not None
                         and not _pass_through(entry['graph'], ts, layer)):

@@ -555,6 +555,26 @@ struct, so the patch used to decline and the graph was rebuilt.
 mapped from scratch. `structural_patch.py` inserts, removes and moves layers, and
 adds layers until the array grows.
 
+Further trims on the same path:
+
+- A unit of a layer that only moved takes its new owner tuple from its old one
+  (only the layer's address differs). Only the bindings that named the struct
+  are registered again, in place.
+- The native graph keeps each unit's program, imports and index facts (inlined
+  producers, filters, surface reads, image nodes) while its program is the same.
+  A new topology then describes only the units a patch replaced or whose inlined
+  producers changed. `OP_VERIFY_INCREMENTAL=1` compares reused descriptions with
+  `_state`.
+- Plan memos are kept per layer, and a new plan shares the dicts of layers no edit
+  reached instead of copying some 6,000 entries. The engine graph's structural
+  signature is a dict. An incremental plan signs only the reached layers' keys;
+  the rest are the settled structure's (verified).
+- Edits dropped while a patch is pending record their owners. The patch reads
+  those owners' bindings again (a moved layer's at its new address) instead of
+  every binding. An edit whose owner is unknown still reads everything.
+- A smart material's replay names the layers it created (`replay(created_only=True)`),
+  so the structure check after it plans those alone.
+
 200 layers at 1K, idle arming on:
 
 | Edit | Before | After |

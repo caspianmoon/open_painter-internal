@@ -496,7 +496,7 @@ def apply_document(ts,data,name='Declarative Material',seed=1,token=None,parent_
         # lookup, dependent channels, engine notification) for each of the
         # recipe's hundreds of writes; the set is invalidated, physically
         # resolved and notified once when the replay closes.
-        with stack.replay(ts):
+        with stack.replay(ts, created_only=True):   # it only writes the layers it adds
             folder = stack.add(ts, "FOLDER", name, parent_id)
             folder_id = folder.id
             # Isolation prevents this recipe's complete substrate from inheriting

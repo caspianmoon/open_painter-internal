@@ -45,6 +45,28 @@ class Slot:
         self.resident[self.index] = value if state._textures is not None else 0
 
 
+def _key_facts(engine, key, program):
+    """(program, inlined producers, reads object matrices or filters, reads the surface, image
+    nodes it samples): what a unit's program tells the index, kept while the program is."""
+    from ..evaluation.engine import glsl
+    from ..evaluation.engine.runtime import GEOMETRY
+    volatile = surface = False
+    images = {}
+    for part in glsl.programs(program):
+        if part.objects:
+            volatile = True
+        for sampler in part.samplers:
+            if sampler.kind == 'image':
+                images.setdefault(id(sampler.node), sampler.node)
+            elif sampler.kind == 'filter':
+                volatile = True
+                if getattr(sampler.node.effect, 'space', 'UV') == 'SURFACE':
+                    surface = True
+            elif sampler.kind in GEOMETRY:
+                surface = True
+    return program, tuple(engine._inlined(key)), volatile, surface, tuple(images.values())
+
+
 class NativeGraph:
     def __init__(self, lib):
         self.lib = lib
@@ -92,6 +114,8 @@ class NativeGraph:
         self.surface = None
         self.inline_owner = {}                # inlined producer -> the graph node compiling it
         self.deps = {}                        # key -> the keys it reads (imports, then composition)
+        self.key_facts = {}                   # key -> (program, inlined, volatile, surface, image nodes)
+        self.imports = {}                     # key -> the units its programs import
         self.roots = ()                       # the units the channels' results come from
         self.orders = {}                      # channel -> (checkpoint order, backdrops) as native bytes
         self.evaluations = 0
@@ -130,12 +154,15 @@ class NativeGraph:
         valid = (cached is not None and cached[0] is graph and cached[1] is engine.inline
                  and cached[6] == context)
         dirty = states = reprogrammed = None
-        resend = ()   # unchanged units whose own stamps a new topology cleared in C
+        self.path = 'valid'
+        resend = ()       # unchanged units whose own stamps a new topology cleared in C
+        earlier = set()   # units an earlier step of this evaluation marked dirty
         if valid and patched is not None:
             # A patch replaced these units in the same graph (or only moved the wiring): while
             # the topology holds, only they are described again.
             reprogrammed = self._reprogram(engine, epochs, patched) if INCREMENTAL else None
             valid = reprogrammed is not None
+            self.path = 'reprogram' if valid else 'full'
         if valid:
             keys, indices, constants = cached[2:5]
             dirty = self._dirty(engine, epochs, touched) if INCREMENTAL else None
@@ -143,26 +170,48 @@ class NativeGraph:
                 dirty = keys
             elif reprogrammed:
                 dirty |= reprogrammed
+            earlier = set(dirty)
             states = {key: engine._state(key) for key in dirty}
             # A program recompiled on a signature change may read other inputs.
             valid = cached[1] is engine.inline and all(states[key].program is self.programs[key] for key in dirty)
         if not valid:
             # A rebuilt graph that kept the topology restamps only what can have changed.
             self.described += 1
+            self.path = 'full' if self.path == 'valid' else self.path + '>full'
             previous_programs, previous, previous_surface = self.programs, cached, self.surface
             identities = {id(entry[0]): entry[2] for entry in self.image_nodes}
             roots = [ref[1] for ref in engine.finals.values() if ref and ref[0] == 'unit']
+            # After a patch of the same graph, a unit it did not replace keeps its program and
+            # what it imports, unless a producer compiled into it changed or moved in or out.
+            reusable = (patched is not None and cached is not None and cached[0] is graph
+                        and cached[6] == context and self.imports)
+            # A unit whose images changed identity is translated again (alpha and layout are in
+            # its code); the scan below still sees the change against ``identities``.
+            early = self._scan_images(epochs) if reusable else set()
             while True:
                 inline = engine.inline
-                states, deps, constants = {}, {}, {}
+                states, deps, constants, imports_of = {}, {}, {}, {}
+                fresh = set()
+                if reusable:
+                    fresh = set(patched) | early
+                    fresh.update(self.inline_owner[key] for key in patched if key in self.inline_owner)
+                    for key in inline ^ cached[1]:
+                        fresh.update(graph.consumers.get(key, ()))
+                        fresh.add(self.inline_owner.get(key, key))
                 work = list(roots)
                 while work:
                     key = work.pop()
                     if key in states:
                         continue
-                    state = states[key] = engine._state(key)
-                    imports = sorted({s.producer[0] for p in glsl.programs(state.program)
-                                      for s in p.samplers if s.kind == 'import'})
+                    state = engine.states.get(key)
+                    if (reusable and key not in fresh and key in self.imports and state is not None
+                            and state.program is previous_programs.get(key)):
+                        states[key], imports = state, list(self.imports[key])
+                    else:
+                        state = states[key] = engine._state(key)
+                        imports = sorted({s.producer[0] for p in glsl.programs(state.program)
+                                          for s in p.samplers if s.kind == 'import'})
+                    imports_of[key] = tuple(imports)
                     position = engine.positions.get(key) or ()
                     links = imports + [r[1] for r in position if r and r[0] == 'unit']
                     deps[key] = tuple(links)
@@ -171,6 +220,9 @@ class NativeGraph:
                     work.extend(links)
                 if inline is engine.inline:
                     break  # sampler-limit inlining has stabilized
+            if VERIFY and reusable:
+                self._verify_description(engine, states, imports_of)
+            self.imports = imports_of
             keys = tuple(sorted(states))
             indices = {key: i for i, key in enumerate(keys)}
             self.deps, self.roots = deps, tuple(roots)
@@ -207,6 +259,9 @@ class NativeGraph:
                     owner = self.inline_owner.get(unit, unit)
                     if owner in indices:
                         changed.add(owner)
+                # What an earlier step of this evaluation found (its scan recorded the new image
+                # identities, so this description's scan no longer sees them change).
+                changed |= earlier
                 dirty = changed
                 if replaced:
                     # C lost every own stamp with the old topology: an unchanged unit's is the
@@ -252,26 +307,25 @@ class NativeGraph:
         """What can change a unit's own stamp without a new description: its uniforms
         (reported by update()), the images it samples, object matrices, filters and
         the surface. Also mirrors every unit's stamp into native-order arrays."""
-        from ..evaluation.engine import glsl
-        from ..evaluation.engine.runtime import GEOMETRY
         nodes, volatile, surface = {}, set(), set()
         self.programs = {key: states[key].program for key in keys}
         self.inline_owner = {}
+        before, facts_of = self.key_facts, {}
         for key in keys:
-            for producer in engine._inlined(key):
+            program = states[key].program
+            facts = before.get(key)
+            if facts is None or facts[0] is not program:
+                facts = _key_facts(engine, key, program)
+            facts_of[key] = facts
+            for producer in facts[1]:
                 self.inline_owner[producer] = key
-            for program in glsl.programs(states[key].program):
-                if program.objects:
-                    volatile.add(key)
-                for sampler in program.samplers:
-                    if sampler.kind == 'image':
-                        nodes.setdefault(id(sampler.node), (sampler.node, set()))[1].add(key)
-                    elif sampler.kind == 'filter':
-                        volatile.add(key)
-                        if getattr(sampler.node.effect, 'space', 'UV') == 'SURFACE':
-                            surface.add(key)
-                    elif sampler.kind in GEOMETRY:
-                        surface.add(key)
+            if facts[2]:
+                volatile.add(key)
+            if facts[3]:
+                surface.add(key)
+            for node in facts[4]:
+                nodes.setdefault(id(node), (node, set()))[1].add(key)
+        self.key_facts = facts_of
         # A node the previous index held keeps its last identity: the scan then reports only
         # the units whose images really changed (a rebuild adopts most nodes unchanged).
         identities = identities or {}
@@ -382,16 +436,26 @@ class NativeGraph:
                 return None   # it reads other units now
         for key, state in states.items():
             self.programs[key] = state.program
+            self.imports[key] = tuple(sorted({s.producer[0] for p in glsl.programs(state.program)
+                                              for s in p.samplers if s.kind == 'import'}))
         self._compose(engine, keys, indices, self.programs)
         self.description = (graph, inline, keys, indices, constants,
                             tuple((key, self.programs[key]) for key in keys), context)
         self.reprogrammed += 1
         return self._reindex(engine, epochs, states)
 
+    def _verify_description(self, engine, states, imports_of):
+        """OP_VERIFY_INCREMENTAL: a reused program and its imports must be what ``_state`` gives."""
+        from ..evaluation.engine import glsl
+        for key, state in states.items():
+            checked = engine._state(key)
+            imports = tuple(sorted({s.producer[0] for p in glsl.programs(checked.program)
+                                    for s in p.samplers if s.kind == 'import'}))
+            if checked is not state or checked.program is not state.program or imports != imports_of[key]:
+                raise AssertionError(f'Reused description of {key} is stale')
+
     def _reindex(self, engine, epochs, states):
         """``_index`` for the units of ``states`` only."""
-        from ..evaluation.engine import glsl
-        from ..evaluation.engine.runtime import GEOMETRY
         changed = set(states)
         for producer in [p for p, owner in self.inline_owner.items() if owner in changed]:
             del self.inline_owner[producer]
@@ -402,24 +466,19 @@ class NativeGraph:
                 entry[1] = tuple(key for key in entry[1] if key not in changed)
             entries[id(entry[0])] = entry
         for key, state in states.items():
-            for producer in engine._inlined(key):
+            facts = self.key_facts[key] = _key_facts(engine, key, state.program)
+            for producer in facts[1]:
                 self.inline_owner[producer] = key
-            for program in glsl.programs(state.program):
-                if program.objects:
-                    volatile.add(key)
-                for sampler in program.samplers:
-                    if sampler.kind == 'image':
-                        entry = entries.get(id(sampler.node))
-                        if entry is None:
-                            entry = entries[id(sampler.node)] = [sampler.node, (), _MISSING]
-                        if key not in entry[1]:
-                            entry[1] = (*entry[1], key)
-                    elif sampler.kind == 'filter':
-                        volatile.add(key)
-                        if getattr(sampler.node.effect, 'space', 'UV') == 'SURFACE':
-                            surface.add(key)
-                    elif sampler.kind in GEOMETRY:
-                        surface.add(key)
+            if facts[2]:
+                volatile.add(key)
+            if facts[3]:
+                surface.add(key)
+            for node in facts[4]:
+                entry = entries.get(id(node))
+                if entry is None:
+                    entry = entries[id(node)] = [node, (), _MISSING]
+                if key not in entry[1]:
+                    entry[1] = (*entry[1], key)
         self.image_nodes = [entry for entry in entries.values() if entry[1]]
         self.image_groups = None
         scanned = self._scan_images(epochs)
@@ -457,7 +516,10 @@ class NativeGraph:
         missed = [key for key in keys
                   if own.get(key) != hash((key, engine._own_stamp(engine._state(key), epochs), constants[key])) & MASK]
         if missed:
-            raise AssertionError(f'Incremental restamp missed {len(missed)} units: {missed[:8]}')
+            detail = [(key, engine._state(key).program is self.programs.get(key), key in self.own)
+                      for key in missed[:4]]
+            raise AssertionError(f'Incremental restamp missed {len(missed)} units ({self.path}): {missed[:8]} '
+                                 f'(program described, own sent before): {detail}')
 
     def _compose(self, engine, keys, indices, programs):
         """Layer composition for C's affine suffix runs: what each unit composes over."""

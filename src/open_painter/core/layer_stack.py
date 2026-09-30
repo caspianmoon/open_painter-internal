@@ -231,7 +231,7 @@ def replaying() -> bool:
 
 
 @contextmanager
-def replay(ts):
+def replay(ts, created_only=False):
     """Restore snapshots into ``ts`` with one invalidation at the end instead of one per property.
 
     Every value ``restore`` writes fires its update callback, and each callback
@@ -241,19 +241,26 @@ def replay(ts):
     snapshot already holds everything those callbacks derive (mirrored names,
     physical texture sizes, cache rows), so the walks are skipped while a replay
     is open and the set is invalidated, physically resolved and notified once.
+    ``created_only``: the replay writes nothing structural but the layers it adds (a
+    smart material), which the engine's next structure check plans alone.
     """
     global _replays
     from ..evaluation.shader_preview import authoring_batch, notify
+    existing = {layer.id for layer in ts.layers} if created_only else None
     with authoring_batch(ts):
         _replays += 1
         try:
             yield
         finally:
             _replays -= 1
-            invalidate(ts)
+            created = None if existing is None else [l.id for l in ts.layers if l.id not in existing]
+            invalidate(ts, created)
         from ..evaluation import physical
         physical.sync(ts)
-        notify(ts, structural=True)
+        if created:
+            notify(next(l for l in ts.layers if l.id == created[0]), structural=True)
+        else:
+            notify(ts, structural=True)
 
 
 def copy_ids(sources):

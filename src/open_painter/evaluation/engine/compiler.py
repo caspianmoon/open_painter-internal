@@ -300,6 +300,8 @@ class EngineGraph(Graph):
         queued = sum(key in self.resources.used for key in self.resources.queue)
         if references is None:
             references = reference_warnings(self.ts)
+        elif VERIFY_STRUCTURE and list(references) != list(reference_warnings(self.ts)):
+            raise AssertionError('A patch reused reference warnings that changed')
         self._reference_warnings = references
         nodes = self.node_count if nodes is None else nodes
         self._tally = (nodes, unit_nodes, unit_build_ms)
@@ -318,6 +320,29 @@ class EngineGraph(Graph):
                 'unit_build_ms': unit_build_ms,
                 'cache_states': self.cache_states(),
                 'warnings': list(references) + mesh_warnings(self.ts) + self._build_warnings()}
+
+    def structural_signature(self, plan=None):
+        """``Graph.structural_signature`` with the units as a dict: nothing persists its text
+        (``rehydrate`` is the material graph's), so no sort of every unit per structural edit."""
+        from ..shader_graph import global_signature
+        plan = plan if plan is not None else self.plan()
+        stubs = {key: unit.flags['stub'] for key, unit in self.units.items() if unit.flags.get('stub')}
+        signature = self._unit_signature
+        reached, structure = plan.affected, self._structure
+        settled = self._structure_plan
+        if (reached is not None and structure is not None and not stubs and not self._stubs
+                and settled is not None and plan.carried is getattr(settled, 'token', None)):
+            # Only a layer the plan re-planned can sign otherwise: the rest is the structure's.
+            units = {key: value for key, value in structure[2].items() if key[1] not in reached}
+            units.update((key, signature(key)) for key in plan.keys if key[1] in reached)
+            if VERIFY_STRUCTURE:
+                full = {key: signature(key) for key in plan.keys}
+                if full != units:
+                    differ = sorted(str(key) for key in full.keys() | units.keys() if full.get(key) != units.get(key))
+                    raise AssertionError(f'Incremental signature differs from a full one: {differ[:6]}')
+        else:
+            units = {key: signature(key, stub=stubs.get(key)) for key in plan.keys}
+        return (global_signature(self.ts), tuple(plan.wiring), units)
 
     def _stack_layout(self):
         """What a patch needs where the build left it: the set and its baked maps, which every
@@ -338,8 +363,9 @@ class EngineGraph(Graph):
         longer match. Returns the build report; None, having changed nothing, when only a rebuild
         can apply the edit: the layers moved in their array, the set's globals, resolution or
         baked maps changed, or the stack does not validate (the rebuild reports why).
-        ``reconcile``: edits were dropped while the rebuild was pending, so every binding is
-        read again, as a rebuild does. A failed compile restores the graph and raises.
+        ``reconcile``: edits were dropped while the rebuild was pending, so bindings are read
+        again: every one (True, as a rebuild does) or those of these owner addresses (a set).
+        A failed compile restores the graph and raises.
         """
         from ...core.validation import hierarchy_issues
         from ...core.udim import validate as validate_udim
@@ -388,23 +414,32 @@ class EngineGraph(Graph):
         moved = ({identifier for identifier, pointer in plan.pointers.items()
                   if before_plan.pointers.get(identifier, pointer) != pointer}
                  if before_plan is not None and getattr(before_plan, 'pointers', None) is not None else None)
-        follow = {}
+        follow, at = {}, len(self._base_owners())
         for key, unit in self.units.items():
             if key in stale:
                 continue
             if unit.tree is None:
                 stale.add(key)
-            elif reached is None or key[1] in reached or moved is None or key[1] in moved:
+            elif reached is not None and moved is not None and key[1] not in reached:
+                if key[1] in moved:
+                    # Only its layer's struct moved: every other owner it captured is where it was.
+                    before_owners = unit.owner_pointers
+                    follow[key] = before_owners[:at] + (plan.pointers[key[1]],) + before_owners[at + 1:]
+            else:
                 owners = self._unit_owners(key)
                 if unit.owner_pointers != owners:
                     follow[key] = owners
-        if follow:
-            followed = [self.units[key] for key in follow]
-            self._unbind_units(followed)   # registered again under the layers' new addresses
-            for key, owners in follow.items():
-                if not self._follow_moved_layer(self.units[key], key, owners):
-                    stale.add(key)
-            self._rebind_units(followed)
+        entries = {}
+        for key, owners in follow.items():
+            unit = self.units[key]
+            if not self._follow_moved_layer(unit, key, owners, tables=True):
+                stale.add(key)
+            for entry in unit.image_bindings:
+                entries[id(entry[3])] = entry
+        if entries:
+            # The graph's entries carry the identities ``update`` last saw; keep those.
+            self.image_bindings = [(*entries[id(entry[3])][:4], entry[4]) if id(entry[3]) in entries else entry
+                                   for entry in self.image_bindings]
         removed = _removed_graph_units(self.bindings.values() if reached is None else
                                        [binding for key, unit in self.units.items() if key[1] in reached
                                         for binding in unit.bindings.values()])
@@ -469,18 +504,32 @@ class EngineGraph(Graph):
                 binding.owners = {o.as_pointer() for o in binding.owner_factory()}
         self.validate_parameters()
         # Inputs a structural edit re-identifies (an anchor's prefix, a cached subtree) are
-        # reconciled as a rebuild does, those an edited or moved layer owns; uniforms only when
-        # edits were dropped meanwhile.
+        # reconciled as a rebuild does, those a layer the edit reached owns (one that only moved
+        # reads what it read); uniforms only when edits were dropped meanwhile.
         owned = None
         path_owners = getattr(self, '_path_owners', None) if self._paths is not None else None
         if not reconcile and reached is not None and moved is not None and path_owners is not None:
             owned = set()
-            for identifier in reached | moved:
+            for identifier in reached:
                 owned.update(path_owners.get(identifier, ()))
             for key in fresh:
                 owned.update(self.units[key].owner_pointers)
-        corrections = self.update(check_structure=False, values=reconcile, owners=owned)
-        for key in (self.units if reconcile else fresh):
+        if reconcile is True:
+            corrections = self.update(check_structure=False)
+        else:
+            corrections = self.update(check_structure=False, values=False, owners=owned)
+            if reconcile:
+                # Edits of these owners were dropped while the patch was pending: their values are
+                # read again, a layer's at its current address.
+                pointers = {plan.pointers.get(handle[1]) if isinstance(handle, tuple) else handle
+                            for handle in reconcile}
+                for pointer in pointers - {None}:
+                    found = self.update(_Address(pointer), check_structure=False)
+                    for name in ('parameter_changes', 'invalidated_nodes'):
+                        corrections[name] = list(corrections.get(name, [])) + list(found.get(name, []))
+                    corrections['updated_bindings'] = (corrections.get('updated_bindings', 0)
+                                                       + found.get('updated_bindings', 0))
+        for key in (self.units if reconcile is True else fresh):
             for binding in self.units[key].cache_bindings:
                 self._reconcile_cache(binding)
         unit_nodes, unit_build_ms = dict(unit_nodes), dict(unit_build_ms)
@@ -501,20 +550,33 @@ class EngineGraph(Graph):
         return self._last
 
     def _references_reached(self, plan):
-        """Whether the layers an incremental plan re-planned take part in references: they read
-        or publish an anchor or a layer, now or before, or their parent or kind changed."""
+        """Whether an issue ``hierarchy_issues`` reports can have appeared: a re-planned layer
+        reads or publishes an anchor or a layer, now or before, or is read; a layer is left
+        unreachable, has a parent that is no folder, or a folder became another kind; or ids
+        repeat. A layer added, removed or moved without references causes none of these."""
         previous = self._structure_plan
         if plan.affected is None or previous is None or getattr(self, '_reference_warnings', None) is None:
+            return True
+        if len(plan.layers) != len(plan.ids) or '' in plan.layers:
             return True
         named = self._links(previous)[3]
         for identifier in plan.affected:
             now, before = plan.facts.get(identifier), previous.facts.get(identifier)
-            if now is None or before is None or now[0] or before[0] or len(now[1]) > 2 or len(before[1]) > 2:
-                return True   # reads something, or publishes an anchor beyond its two composites
-            if any(named.get(handle) for handle in (*now[1], ('layer', identifier))):
+            for facts in (now, before):
+                if facts is not None and (facts[0] or len(facts[1]) > 2):
+                    return True   # reads something, or publishes an anchor beyond its two composites
+            if any(named.get(handle) for handle in ((now or before or ((), ()))[1]) or ()) \
+                    or named.get(('layer', identifier)):
                 return True   # something reads it
-            if (previous.wired.get(identifier) or (None,) * 3)[1:3] != (plan.wired.get(identifier) or (None,) * 3)[1:3]:
-                return True   # its kind or parent changed
+            if identifier in plan.layers and identifier not in plan.wired:
+                return True   # left unreachable
+            entry, old = plan.wired.get(identifier), previous.wired.get(identifier)
+            if entry is not None and (old is None or entry[1:3] != old[1:3]):
+                parent = entry[2]
+                if parent and (plan.wired.get(parent) or (None, None))[1] != 'FOLDER':
+                    return True   # a parent that is no folder
+                if old is not None and old[1] == 'FOLDER' and entry[1] != 'FOLDER':
+                    return True   # a folder became another kind: its children lose their parent
         return False
 
     def _recompile_importers(self, kept, retired):
@@ -770,6 +832,17 @@ class EngineGraph(Graph):
         # Only node membership is cached. Resource replacement, image identity
         # and color/alpha metadata must be read afresh by the runtime.
         return [(node, node.image) for node in unit.tree.nodes.image_nodes]
+
+
+class _Address:
+    """An owner by address alone, for ``Graph.update``'s narrowing (its struct may have moved)."""
+    __slots__ = ('pointer',)
+
+    def __init__(self, pointer):
+        self.pointer = pointer
+
+    def as_pointer(self):
+        return self.pointer
 
 
 def _dependency_roles(unit):

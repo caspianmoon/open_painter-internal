@@ -214,7 +214,7 @@ class EngineGraph(Graph):
     def _bits_param(self, owner, field, shift, prefix=''):
         key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, ('bits', shift))
         if key not in self.bindings:
-            identifier = f'Parameter:{prefix}{owner.path_from_id()}.{field}>>{shift}'
+            identifier = f'Parameter:{prefix}{self._path(owner)}.{field}>>{shift}'
             with self.role(identifier):
                 node = self.node('ShaderNodeValue')
             binding = BitsBinding(owner, field, None, node.outputs[0], 0.0, identifier, shift)
@@ -235,12 +235,12 @@ class EngineGraph(Graph):
         if generator:
             if owner.source == 'NOISE' or not supported(kind):
                 return super()._field(owner, kind, generator, rehydrate)
-            with self.role('SourceField:' + owner.path_from_id() + ':' + kind):
+            with self.role('SourceField:' + self._path(owner) + ':' + kind):
                 return self._procedural(kind, self.coord_uv(), self.param(owner, 'noise_scale'),
                                         self.seed_param(owner, 'seed'))
         if enabled(owner) or not supported(kind):
             return super()._field(owner, kind, generator, rehydrate)
-        with self.role('SourceField:' + owner.path_from_id() + ':' + kind):
+        with self.role('SourceField:' + self._path(owner) + ':' + kind):
             scale, seed = self.param(owner, 'procedural_scale'), self.seed_param(owner, 'procedural_seed')
             sample = self.projected(owner, lambda uv: Signal(self._procedural(kind, uv, scale, seed)))
             return self.separate(sample.color)[0]

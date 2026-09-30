@@ -205,6 +205,31 @@ def _adoptable_unit(ts_id, key_repr, instance):
 UNKNOWN_UNIT = object()   # a binding registered without its unit: every unit counts as touched
 
 
+def path_index(ts):
+    """RNA paths of a texture set's structs by address, exactly as ``path_from_id``
+    spells them, in one pass over the set."""
+    base = ts.path_from_id()
+    paths = {ts.as_pointer(): base, ts.bake.as_pointer(): base + '.bake'}
+    for index, entry in enumerate(ts.baked_maps):
+        paths[entry.as_pointer()] = f'{base}.baked_maps[{index}]'
+    for index, layer in enumerate(ts.layers):
+        path = f'{base}.layers[{index}]'
+        paths[layer.as_pointer()] = path
+        for c, prop in enumerate(layer.channels):
+            channel = f'{path}.channels[{c}]'
+            paths[prop.as_pointer()] = channel
+            for e, effect in enumerate(prop.effects):
+                paths[effect.as_pointer()] = f'{channel}.effects[{e}]'
+        for m, mask in enumerate(layer.masks):
+            item = f'{path}.masks[{m}]'
+            paths[mask.as_pointer()] = item
+            for name in ('effect', 'influence', 'mesh'):
+                paths[getattr(mask, name).as_pointer()] = f'{item}.{name}'
+        for r, row in enumerate(layer.cache):
+            paths[row.as_pointer()] = f'{path}.cache[{r}]'
+    return paths
+
+
 @dataclass
 class Binding:
     owner: object
@@ -392,6 +417,7 @@ class Graph(Math):
         # Units whose uniform sockets update() wrote since the evaluator last looked
         # (take_touched); None when an edit's unit is unknown and every unit counts.
         self.touched = set()
+        self._paths = None   # struct address -> RNA path, valid for one build (_path)
         self.resource_bindings = []
         self.image_bindings = []
         self.cache_bindings = []
@@ -507,11 +533,24 @@ class Graph(Math):
 
     _PATH = re.compile(r'(\w+)(?:\[(\d+)\])?')
 
+    def _path(self, owner):
+        """``owner.path_from_id()``, from an index of this set's structs built once per build.
+
+        RNA finds a collection item's path by searching the collection, so asking for
+        every bound parameter made compiling a stack quadratic in its size. Structs
+        outside the index (node trees, text settings) ask RNA as before.
+        """
+        paths = self._paths
+        if paths is None:
+            paths = self._paths = path_index(self.ts)
+        path = paths.get(owner.as_pointer())
+        return path if path is not None else owner.path_from_id()
+
     def _owner_key(self, owner):
         """Stable identity of an RNA item: ids rather than collection indices."""
         if owner == self.ts:
             return ['ts']
-        path = owner.path_from_id()
+        path = self._path(owner)
         tokens = self._PATH.findall(path)
         key, cursor = [], None
         for name, index in tokens:
@@ -577,7 +616,7 @@ class Graph(Math):
     def param(self, owner, field, index=None):
         key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
         if key not in self.bindings:
-            identifier = 'Parameter:' + owner.path_from_id() + '.' + field
+            identifier = 'Parameter:' + self._path(owner) + '.' + field
             if index is not None:
                 identifier += f'[{index}]'
             with self.role(identifier):
@@ -921,7 +960,7 @@ class Graph(Math):
             return parts()
         if rehydrate is not None:
             return self._rebind(rehydrate, [owner], identity, factory)
-        with self.role('SourceField:' + owner.path_from_id() + ':' + kind):
+        with self.role('SourceField:' + self._path(owner) + ':' + kind):
             return self.separate(self.boundary(self._role, [owner], identity, factory,
                                                ['field', self._owner_key(owner), kind, bool(generator)]).color)[0]
 
@@ -1993,7 +2032,7 @@ class Graph(Math):
             return parts()
         if rehydrate is not None:
             return self._rebind(rehydrate, owners, identity, factory)
-        with self.role('MicroDetails:' + mask.path_from_id()):
+        with self.role('MicroDetails:' + self._path(mask)):
             red, green, _ = self.separate(self.boundary(self._role, owners, identity, factory,
                                                         ['micro', *self._owner_key(mask)[1:]]).color)
         signed = 0.0
@@ -2143,7 +2182,7 @@ class Graph(Math):
             return parts()
         if rehydrate is not None:
             return self._rebind(rehydrate, [mask], identity, factory)
-        with self.role('SourceField:' + mask.path_from_id() + ':DRIPS'):
+        with self.role('SourceField:' + self._path(mask) + ':DRIPS'):
             return self.separate(self.boundary(self._role, [mask], identity, factory,
                                                ['drips', *self._owner_key(mask)[1:]]).color)[0]
 
@@ -2884,6 +2923,7 @@ class Graph(Math):
         if problems:
             raise ValueError(' | '.join(problems))
         started = perf_counter()
+        self._paths = None   # collection positions may have moved since the last build
         self._reused, self._warnings, self._adopted = [], [], []
         plan = self.plan()
         self._previous = reuse if (reuse is not None and reuse.units
@@ -3000,6 +3040,7 @@ class Graph(Math):
         bindings and the dependency closure are rebuilt from the trees. Nothing
         is created or modified on failure, so the caller can compile normally.
         """
+        self._paths = None   # collection positions may have moved since the last build
         from ..core.validation import hierarchy_issues
         if self.material is None or self.material.node_tree is None or hierarchy_issues(self.ts):
             return False

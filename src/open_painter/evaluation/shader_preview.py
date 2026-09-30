@@ -11,6 +11,7 @@ the add-on has always called.)
 from time import perf_counter
 import json
 import logging
+import os
 from contextlib import contextmanager
 
 import bpy
@@ -25,6 +26,9 @@ _busy = set()
 _batches = {}
 _deferred = {}   # session key -> {owner pointer: owner} touched by a stroke while frozen (0.9.0)
 _holds = {}      # session key -> perf_counter of the last renewal by a gesture rewriting it (a layer drag) (0.9.7)
+# Structural edits recompile their units in the session's own graph (``EngineGraph.patch``);
+# OP_NO_PATCH=1 rebuilds instead, for comparisons.
+PATCH = os.environ.get('OP_NO_PATCH') != '1'
 _retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
@@ -51,12 +55,13 @@ def authoring_batch(ts):
             entry = _sessions.get(key)
             if (entry and entry.get('graph') and _alive(entry, ts) and key not in _busy
                     and not entry.get('rebuild')):
-                # A rebuild queued before the batch already re-reads every value.
                 _busy.add(key)
                 try:
                     _update(ts.id_data, ts, entry, check_structure=state['structural'])
                 finally:
                     _busy.discard(key)
+            elif entry and entry.get('rebuild'):
+                entry['dropped'] = True   # the rebuild queued before the batch re-reads every value
 
 
 def hold(scene, ts):
@@ -244,6 +249,7 @@ def diagnostics(scene, ts, *, details=True):
             'rebuild_pending': bool(entry.get('rebuild')),
             'rebuild_scope': entry.get('rebuild_scope'),
             'graph_builds': entry.get('graph_builds', 0),
+            'graph_patches': entry.get('graph_patches', 0),   # structural edits applied in place
             'graph_rehydrations': 0,
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
@@ -382,6 +388,8 @@ def ensure(scene, ts):
         if entry and entry.get('graph') and _alive(entry, ts):
             if (entry.get('serial') != ts.edit_serial or entry.get('recheck')) and not entry.get('rebuild'):
                 _update(scene, ts, entry)
+            if entry.get('rebuild') and _patch(scene, ts, entry):
+                return entry['graph']
             if not entry.get('rebuild'):
                 return entry['graph']
         from .engine.compiler import EngineGraph
@@ -411,6 +419,7 @@ def ensure(scene, ts):
                 engine.close()
             engine = Engine(scene, ts)
         engine.adopt(candidate)
+        entry.pop('dropped', None)   # the build read every value again
         entry.update(graph=candidate, engine=engine, dirty=True, store=_store(ts),
                      graph_builds=entry.get('graph_builds', 0) + 1, rebuild_scope=None)
         built = getattr(candidate, '_last', {})
@@ -431,6 +440,40 @@ def ensure(scene, ts):
         return candidate
     finally:
         _busy.discard(key)
+
+
+def _patch(scene, ts, entry):
+    """Apply a pending structural edit to the session's own graph and engine instead of a
+    rebuild (``EngineGraph.patch``). False, leaving the rebuild to ``ensure``, when the graph
+    declines or its compile fails: the rebuild then reports the failure as it always has."""
+    graph, engine = entry.get('graph'), entry.get('engine')
+    if (not PATCH or engine is None or engine.graph is not graph or not hasattr(graph, 'patch')
+            or entry.get('rebuild_scope') == 'global'):
+        return False
+    reconcile = bool(entry.get('dropped') or entry.get('recheck'))
+    try:
+        report = graph.patch(reconcile=reconcile)
+    except Exception as exc:
+        logger.debug('Engine patch of %s fell back to a rebuild: %s', ts.name, exc)
+        return False
+    if report is None:
+        return False
+    engine.adopt(graph)
+    entry.pop('dropped', None)
+    entry.pop('recheck', None)
+    entry.update(dirty=True, rebuild_scope=None, graph_patches=entry.get('graph_patches', 0) + 1)
+    stage = entry.setdefault('stage', stages.begin())
+    stage['build_ms'] += float(report.get('build_ms', 0.0))
+    stage['builds'] += 1
+    stage['rebuilt'] += int(report.get('rebuilt_units', 0))
+    stage['reused'] += int(report.get('reused_units', 0))
+    _record(entry, ts, dict(report))
+    metrics.count('shader_graph_patches')
+    from . import gc_policy, profile
+    profile.record_graph(scene, ts, graph, layers={key[1] for key in (*report['patched_units'],
+                                                                      *report['retired_units'])})
+    gc_policy.allocated()
+    return True
 
 
 def _owners(owner):
@@ -480,7 +523,9 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
             continue
         _busy.add(key)
         try:
-            if not entry.get('rebuild'):
+            if entry.get('rebuild'):
+                entry['dropped'] = True   # the pending rebuild (or patch) re-reads every value
+            else:
                 updated = _update(scene, ts, entry, owner, check_structure=structural)
                 affected = entry.get('diagnostics', {}).get('affected_channels')
                 if (updated and previous_dirty is not None and affected is not None
@@ -492,7 +537,7 @@ def notify(owner, context=None, *, previous_dirty=None, structural=True):
                         output.dirty = bool(previous_dirty.get(output.channel, False)
                                             or output.channel in affected)
             _publish_status(scene, ts, entry)
-            result = diagnostics(scene, ts)
+            result = diagnostics(scene, ts, details=False)   # no walk over every node per edit
         finally:
             _busy.discard(key)
     metrics.sample('shader_callback_seconds', perf_counter() - started)

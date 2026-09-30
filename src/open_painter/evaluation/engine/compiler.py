@@ -17,7 +17,7 @@ from time import perf_counter
 
 from ...constants import CHANNELS
 from .. import metrics
-from ..shader_graph import Binding, Graph, _sampler_limit
+from ..shader_graph import Binding, Graph, _removed_graph_units, _same_literal, _sampler_limit
 from ..shader_math import Signal
 from . import headless
 
@@ -277,31 +277,196 @@ class EngineGraph(Graph):
         self._reverse_map()
         self._structure = self.structural_signature(plan)
         self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
+        self._layout = self._stack_layout()
         self.validate_parameters()
         corrections = self.update(check_structure=False) if self._reused else {}
         for binding in self.cache_bindings:
             self._reconcile_cache(binding)
-        from ...core.validation import warnings
         unit_nodes = {repr(key): unit.node_count for key, unit in self.units.items()}
-        queued = sum(key in self.resources.used for key in self.resources.queue)
-        self._last = {'parameter_changes': corrections.get('parameter_changes', []),
-                      'invalidated_nodes': corrections.get('invalidated_nodes', []), 'affected_channels': list(CHANNELS),
-                      'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': queued,
-                      'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
-                      'build_ms': (perf_counter() - started) * 1000,
-                      'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
-                      'largest_unit': max(unit_nodes.values(), default=0),
-                      'reused_units': len(self._reused), 'rebuilt_units': len(self.units) - len(self._reused),
-                      # Counted when explicit diagnostics ask (a walk over every node of every unit).
-                      'unique_images': None, 'max_textures_frag': _sampler_limit(),
-                      'pending_resources': self.pending_resources,
-                      'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
-                      'cache_states': self.cache_states(),
-                      'warnings': list(warnings(self.ts)) + self._warnings}
+        unit_build_ms = {repr(key): unit.build_ms for key, unit in self.units.items()}
+        self._last = self._report(started, corrections, len(self.units) - len(self._reused), unit_nodes, unit_build_ms)
         metrics.count('engine_graph_builds')
         from ..dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
         self._adopted = []
+
+    def _report(self, started, corrections, rebuilt, unit_nodes, unit_build_ms, patched=False):
+        from ...core.validation import warnings
+        queued = sum(key in self.resources.used for key in self.resources.queue)
+        return {'parameter_changes': corrections.get('parameter_changes', []),
+                'invalidated_nodes': corrections.get('invalidated_nodes', []), 'affected_channels': list(CHANNELS),
+                'updated_bindings': corrections.get('updated_bindings', 0), 'raster_boundaries_queued': queued,
+                'texture_bake_triggered': False, 'submission_ms': (perf_counter() - started) * 1000,
+                'build_ms': (perf_counter() - started) * 1000,
+                'shader_nodes': self.node_count, 'units': len(self.units), 'unit_nodes': unit_nodes,
+                'largest_unit': max(unit_nodes.values(), default=0),
+                'reused_units': len(self.units) - rebuilt, 'rebuilt_units': rebuilt, 'patched': patched,
+                # Counted when explicit diagnostics ask (a walk over every node of every unit).
+                'unique_images': None, 'max_textures_frag': _sampler_limit(),
+                'pending_resources': self.pending_resources,
+                'unit_build_ms': unit_build_ms,
+                'cache_states': self.cache_states(),
+                'warnings': list(warnings(self.ts)) + self._build_warnings()}
+
+    def _stack_layout(self):
+        """What a patch needs where the build left it: every layer struct (adding, removing or
+        moving a layer shifts the ones above it) and the set and its baked maps, which every
+        unit captures."""
+        ts = self.ts
+        return (tuple(layer.as_pointer() for layer in ts.layers),
+                tuple(item.as_pointer() for item in (ts, *ts.baked_maps)))
+
+    # ---- structural edits in place ---------------------------------------------------
+
+    def patch(self, reconcile=False):
+        """Apply a structural edit to this graph: recompile only the units whose structure changed.
+
+        A rebuild compiles a new graph and adopts every unchanged unit into it, one by one: at 200
+        layers, some 1,750 units for the 4 to 8 a blend mode or a mask changes. Here the other
+        units keep their trees, bindings and engine states. Stale are the units whose signature
+        changed, whose captured owners moved (a collection of their layer was reallocated), whose
+        Mask Graph lost a bound item, and the importers of a recompiled unit whose exports no
+        longer match. Returns the build report; None, having changed nothing, when only a rebuild
+        can apply the edit: the layers moved in their array, the set's globals, resolution or
+        baked maps changed, or the stack does not validate (the rebuild reports why).
+        ``reconcile``: edits were dropped while the rebuild was pending, so every binding is
+        read again, as a rebuild does. A failed compile restores the graph and raises.
+        """
+        from ...core.validation import hierarchy_issues
+        from ...core.udim import validate as validate_udim
+        from ..references import scope
+        ts = self.ts
+        if (not self.units or self._structure is None or self._previous is not None
+                or int(ts.resolution) != self.n or getattr(self, '_layout', None) != self._stack_layout()):
+            return None
+        with scope(ts):   # the checks below and the report's warnings read one reference graph
+            try:
+                validate_udim(ts)
+            except ValueError:
+                return None
+            if hierarchy_issues(ts):
+                return None
+            return self._patch(reconcile)
+
+    def _patch(self, reconcile):
+        started = perf_counter()
+        plan = self.scope_plan(self.ts)
+        if plan is None:
+            plan = self.plan()
+        else:
+            self._plan, self._anchors = plan, None
+        before, current = self._structure, self.structural_signature(plan)
+        if current[0] != before[0]:
+            return None
+        signatures = dict(current[2])
+        previous = dict(before[2])
+        stale = {key for key in self.units
+                 if key not in signatures or previous.get(key) != signatures[key]}
+        for key, unit in self.units.items():
+            if key not in stale and (unit.tree is None or unit.owner_pointers != self._unit_owners(key)):
+                stale.add(key)
+        removed = _removed_graph_units(self.bindings.values())
+        if removed == 'global':
+            return None
+        stale.update(key for key in removed if key in self.units)
+        retired = {key: self.units.pop(key) for key in stale}
+        self._unbind_units(retired.values())
+        kept = set(self.units)
+        self._paths = None   # collections of the edited layers may have moved
+        self._reused = []
+        try:
+            for key in plan.order:
+                self.compile_unit(key)
+            for key in list(retired):
+                if key in signatures:
+                    self.compile_unit(key)   # a producer only kept units import (a layer's masks)
+            self._recompile_importers(kept, retired)
+        except Exception:
+            self._building_units = set()
+            for key in [key for key in self.units if key not in kept]:
+                self._discard_partial(self.units.pop(key))
+            self._rebind_units(retired.values())
+            self.units.update(retired)
+            self._compiled_effects = {}
+            for unit in self.units.values():
+                self._compiled_effects.update(unit.compiled_effects)
+            self.resources.used = self._used_resources()   # what the discarded units queued is dropped
+            raise
+        fresh = [key for key in self.units if key not in kept]
+        for unit in retired.values():
+            self._free_tree(unit.tree)
+        self.resources.used = self._used_resources()
+        if current[1] != before[1]:
+            self.chains = {channel: self._chain('', channel, frozenset()) for channel in CHANNELS}
+        self._compiled_effects = {}
+        for unit in self.units.values():
+            self._compiled_effects.update(unit.compiled_effects)
+        self._reverse_map()
+        self._structure = self.structural_signature(plan)
+        self._stubs = any(unit.flags.get('stub') for unit in self.units.values())
+        if self.touched is not None:
+            self.touched.update(fresh)
+        for key in kept:
+            # As adoption does: an input a kept closure resolves through the live graph (an
+            # anchor another layer publishes) may have moved or gained owners.
+            unit = self.units[key]
+            for binding in (*unit.resource_bindings, *unit.cache_bindings):
+                if binding.owner_factory is not None:
+                    binding.owners = {o.as_pointer() for o in binding.owner_factory()}
+        self.validate_parameters()
+        # Inputs a structural edit re-identifies (an anchor's prefix, a cached subtree) are
+        # reconciled as a rebuild does; uniforms only when edits were dropped meanwhile.
+        corrections = self.update(check_structure=False, values=reconcile)
+        for key in (self.units if reconcile else fresh):
+            for binding in self.units[key].cache_bindings:
+                self._reconcile_cache(binding)
+        unit_nodes = dict(self._last.get('unit_nodes') or {})
+        unit_build_ms = dict(self._last.get('unit_build_ms') or {})
+        for key in retired:
+            unit_nodes.pop(repr(key), None)
+            unit_build_ms.pop(repr(key), None)
+        for key in fresh:
+            unit_nodes[repr(key)] = self.units[key].node_count
+            unit_build_ms[repr(key)] = self.units[key].build_ms
+        self._last = self._report(started, corrections, len(fresh), unit_nodes, unit_build_ms, patched=True)
+        self._last['patched_units'] = sorted(fresh)
+        self._last['retired_units'] = sorted(retired)
+        metrics.count('engine_graph_patches')
+        from ..dependencies import remember, geometry_key
+        remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
+        return self._last
+
+    def _recompile_importers(self, kept, retired):
+        """Kept units that import a recompiled one: each is recompiled too unless the
+        exports it was linked against (a socket by name, a baked literal) are unchanged."""
+        importers = defaultdict(set)
+        for key in kept:
+            unit = self.units[key]
+            for producer_key, _, _ in (*unit.imports, *unit.const_imports):
+                importers[producer_key].add(key)
+        work = [key for key in self.units if key not in kept]
+        while work:
+            for consumer in importers.pop(work.pop(), ()):
+                unit = self.units.get(consumer)
+                if consumer not in kept or unit is None or self._imports_match(unit):
+                    continue
+                kept.discard(consumer)
+                retired[consumer] = self.units.pop(consumer)
+                self._unbind_units((retired[consumer],))
+                self.compile_unit(consumer)
+                work.append(consumer)
+
+    def _imports_match(self, unit):
+        for producer_key, export_name, _ in unit.imports:
+            producer = self.units.get(producer_key)
+            if producer is None or producer.exports.get(export_name) != ('socket', export_name):
+                return False
+        for producer_key, export_name, payload in unit.const_imports:
+            producer = self.units.get(producer_key)
+            export = producer.exports.get(export_name) if producer is not None else None
+            if export is None or export[0] != 'const' or not _same_literal(export[1], payload):
+                return False
+        return True
 
     def _chain(self, parent, channel, ancestors):
         """CHANNEL units of ``parent``'s children, bottom to top, as ``Graph._wire`` links them."""

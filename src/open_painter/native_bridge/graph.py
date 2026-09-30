@@ -91,9 +91,13 @@ class NativeGraph:
         self.surface_units = frozenset()
         self.surface = None
         self.inline_owner = {}                # inlined producer -> the graph node compiling it
+        self.deps = {}                        # key -> the keys it reads (imports, then composition)
+        self.roots = ()                       # the units the channels' results come from
         self.orders = {}                      # channel -> (checkpoint order, backdrops) as native bytes
         self.evaluations = 0
         self.rebuilds = 0
+        self.described = 0      # evaluations that described every unit
+        self.reprogrammed = 0   # evaluations that described only what a patch replaced
 
     @staticmethod
     def check(status):
@@ -120,20 +124,30 @@ class NativeGraph:
         graph = engine.graph
         take = getattr(graph, 'take_touched', None)
         touched = take() if take is not None else None
+        take = getattr(engine, 'take_replaced', None)
+        patched = take() if take is not None else None
         context = (engine.precise, bool(active_library()))
         valid = (cached is not None and cached[0] is graph and cached[1] is engine.inline
                  and cached[6] == context)
-        dirty = states = None
+        dirty = states = reprogrammed = None
+        if valid and patched is not None:
+            # A patch replaced these units in the same graph (or only moved the wiring): while
+            # the topology holds, only they are described again.
+            reprogrammed = self._reprogram(engine, epochs, patched) if INCREMENTAL else None
+            valid = reprogrammed is not None
         if valid:
             keys, indices, constants = cached[2:5]
             dirty = self._dirty(engine, epochs, touched) if INCREMENTAL else None
             if dirty is None:
                 dirty = keys
+            elif reprogrammed:
+                dirty |= reprogrammed
             states = {key: engine._state(key) for key in dirty}
             # A program recompiled on a signature change may read other inputs.
             valid = cached[1] is engine.inline and all(states[key].program is self.programs[key] for key in dirty)
         if not valid:
             # A rebuilt graph that kept the topology restamps only what can have changed.
+            self.described += 1
             previous_programs, previous, previous_surface = self.programs, cached, self.surface
             identities = {id(entry[0]): entry[2] for entry in self.image_nodes}
             roots = [ref[1] for ref in engine.finals.values() if ref and ref[0] == 'unit']
@@ -158,6 +172,7 @@ class NativeGraph:
                     break  # sampler-limit inlining has stabilized
             keys = tuple(sorted(states))
             indices = {key: i for i, key in enumerate(keys)}
+            self.deps, self.roots = deps, tuple(roots)
             offsets, edges = [0], []
             for key in keys:
                 edges.extend(indices[k] for k in deps[key])
@@ -174,7 +189,7 @@ class NativeGraph:
                 self.topology = topology
                 self.composition = None   # replacing the topology clears it in C
                 self.rebuilds += 1
-            self._compose(engine, keys, indices, states)
+            self._compose(engine, keys, indices, {key: states[key].program for key in keys})
             self.description = (graph, engine.inline, keys, indices, constants,
                                 tuple((key, states[key].program) for key in keys), context)
             scanned = self._index(engine, keys, indices, states, epochs, identities)
@@ -327,6 +342,86 @@ class NativeGraph:
         self.assigned = headless.assignments[0]
         return changed
 
+    def _reprogram(self, engine, epochs, replaced):
+        """Describe again only what a patch replaced: the replaced units the channels reach and
+        the units their inlined producers compile into. Returns the units to restamp; None,
+        having changed nothing, when the topology or what any unit composes over changed."""
+        from ..evaluation.engine import glsl
+        graph, inline, keys, indices, constants, _, context = self.description
+        roots = tuple(ref[1] for ref in engine.finals.values() if ref and ref[0] == 'unit')
+        if roots != self.roots:
+            return None
+        positions = engine.positions
+        for key in keys:
+            position = positions.get(key) or ()
+            if constants[key] != tuple(r if r is None or r[0] == 'const' else ('unit', r[1]) for r in position):
+                return None
+        targets = {key for key in replaced if key in indices}
+        targets.update(self.inline_owner[key] for key in replaced if key in self.inline_owner)
+        states = {}
+        for key in targets:
+            if key not in engine.states:
+                return None   # a unit the channels read is gone
+            state = states[key] = engine._state(key)
+            if engine.inline is not inline:
+                return None   # the sampler limit moved a producer out of its consumer
+            imports = sorted({s.producer[0] for p in glsl.programs(state.program)
+                              for s in p.samplers if s.kind == 'import'})
+            position = positions.get(key) or ()
+            if tuple(imports + [r[1] for r in position if r and r[0] == 'unit']) != self.deps.get(key):
+                return None   # it reads other units now
+        for key, state in states.items():
+            self.programs[key] = state.program
+        self._compose(engine, keys, indices, self.programs)
+        self.description = (graph, inline, keys, indices, constants,
+                            tuple((key, self.programs[key]) for key in keys), context)
+        self.reprogrammed += 1
+        return self._reindex(engine, epochs, states)
+
+    def _reindex(self, engine, epochs, states):
+        """``_index`` for the units of ``states`` only."""
+        from ..evaluation.engine import glsl
+        from ..evaluation.engine.runtime import GEOMETRY
+        changed = set(states)
+        for producer in [p for p, owner in self.inline_owner.items() if owner in changed]:
+            del self.inline_owner[producer]
+        volatile, surface = set(self.volatile) - changed, set(self.surface_units) - changed
+        entries = {}
+        for entry in self.image_nodes:
+            if not changed.isdisjoint(entry[1]):
+                entry[1] = tuple(key for key in entry[1] if key not in changed)
+            entries[id(entry[0])] = entry
+        for key, state in states.items():
+            for producer in engine._inlined(key):
+                self.inline_owner[producer] = key
+            for program in glsl.programs(state.program):
+                if program.objects:
+                    volatile.add(key)
+                for sampler in program.samplers:
+                    if sampler.kind == 'image':
+                        entry = entries.get(id(sampler.node))
+                        if entry is None:
+                            entry = entries[id(sampler.node)] = [sampler.node, (), _MISSING]
+                        if key not in entry[1]:
+                            entry[1] = (*entry[1], key)
+                    elif sampler.kind == 'filter':
+                        volatile.add(key)
+                        if getattr(sampler.node.effect, 'space', 'UV') == 'SURFACE':
+                            surface.add(key)
+                    elif sampler.kind in GEOMETRY:
+                        surface.add(key)
+        self.image_nodes = [entry for entry in entries.values() if entry[1]]
+        self.image_groups = None
+        scanned = self._scan_images(epochs)
+        self.volatile, self.surface_units = frozenset(volatile), frozenset(surface)
+        if surface and self.surface is None:
+            self.surface = engine._surface()
+        indices = self.description[3]
+        for key, state in states.items():
+            state.slot = Slot(self.current, self.resident, indices[key])
+            state.slot.sync(state)
+        return changed | scanned
+
     def _dirty(self, engine, epochs, touched):
         """Units to restamp this evaluation; None when every unit must be."""
         dirty = self._scan_images(epochs)
@@ -354,7 +449,7 @@ class NativeGraph:
         if missed:
             raise AssertionError(f'Incremental restamp missed {len(missed)} units: {missed[:8]}')
 
-    def _compose(self, engine, keys, indices, states):
+    def _compose(self, engine, keys, indices, programs):
         """Layer composition for C's affine suffix runs: what each unit composes over."""
         if self.binding is None:
             return
@@ -363,7 +458,7 @@ class NativeGraph:
             position = engine.positions.get(key) or (None, None)
             for refs, ref in ((backdrop, position[0]), (grouped, position[1])):
                 refs.append(indices[ref[1]] if ref is not None and ref[0] == 'unit' else NONE)
-            affine.append(int(key[0] == 'CHANNEL' and states[key].program.affine is not None))
+            affine.append(int(key[0] == 'CHANNEL' and programs[key].affine is not None))
         composition = (tuple(backdrop), tuple(grouped), bytes(affine))
         if composition != self.composition:
             self.binding.graph_compose(self.handle, bytes((U32 * len(keys))(*backdrop)),

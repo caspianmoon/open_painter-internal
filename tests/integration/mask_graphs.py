@@ -32,6 +32,12 @@ from open_painter.procedural_graph import is_native, templates
 from open_painter.procedural_graph.tree import MIX_BLENDS, MATH_OPERATIONS, RAMP_MODES, TREE_ID, new_tree
 from open_painter.utils.ids import new_id
 
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 N = 512
 report = {'cases': []}
 
@@ -242,28 +248,28 @@ link(noise, math, 'Value', 'A')
 math.inputs['B'].default_value = .9
 to_output(math)
 info = compare(scene, ts, 'edit baseline', statistical=True)
-builds = info['graph_builds']
+builds = revisions(info)
 compiles = runtime.device().compiles
 with Metrics() as observed:
     noise.scale = 7.5
     noise.seed = 1238065627
     math.inputs['B'].default_value = .6
     info = shader_preview.diagnostics(scene, ts)
-    assert not info['rebuild_pending'] and info['graph_builds'] == builds, info
+    assert not info['rebuild_pending'] and revisions(info) == builds, info
     compare(scene, ts, 'after numeric edits', statistical=True)
-assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds
+assert revisions(shader_preview.diagnostics(scene, ts)) == builds
 assert runtime.device().compiles == compiles, 'a numeric graph edit compiled a program'
 assert observed.counts['shader_resource_requests'] == 0, observed.report()
 math.operation = 'MAXIMUM'
 info = shader_preview.diagnostics(scene, ts)
 assert info['rebuild_pending'] and info['rebuild_scope'] == [graph_key()], info
 info = compare(scene, ts, 'after an operation change', statistical=True)
-assert info['graph_builds'] == builds + 1 and info['rebuilt_units'] == 1, info
+assert revisions(info) == builds + 1 and info['rebuilt_units'] == 1, info
 cells = node('OPMGCells', kind='VORONOI', scale=5.0)
 link(coordinates, cells, 'UV', 'Vector')
 link(cells, math, 'Value', 'B')
 info = compare(scene, ts, 'after a relink', statistical=True)
-assert info['graph_builds'] == builds + 2 and info['rebuilt_units'] == 1, info
+assert revisions(info) == builds + 2 and info['rebuilt_units'] == 1, info
 print('MASK_GRAPHS edits: PASS', flush=True)
 
 # ---- 4. an invalid graph reports why and recovers ---------------------------------------------------------
@@ -363,6 +369,7 @@ from open_painter.procedural_graph import program
 from open_painter.procedural_graph.tree import LEGACY_ID, convert_legacy
 assert TREE_ID == GRAPH_TREE and the_mask().node_group.bl_idname == GRAPH_TREE, 'a Mask Graph is an Open Painter Graph'
 from open_painter.procedural_graph.tree import OP_MaskGraphTreeLegacy
+
 assert not OP_MaskGraphTreeLegacy.poll(bpy.context), 'no second Open Painter editor type is offered'
 set_graph = bpy.data.node_groups.new('A texture set graph', TREE_ID)
 try:

@@ -18,6 +18,12 @@ from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph
 from open_painter.utils.ids import new_id
 
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 N = 32
 
 
@@ -173,37 +179,37 @@ def run():
     graph = shader_preview.ensure(scene, ts)
     identities = graph.node_identities()
     trees = {key: unit.tree.as_pointer() for key, unit in graph.units.items()}
-    builds = info['graph_builds']
+    builds = revisions(info)
     inner = layer_by_id(ts, inner_id)
     inner.visible = False
     info = shader_preview.diagnostics(scene, ts)
     assert not info['rebuild_pending'] and settled(scene, ts), info
     assert shader_preview.ensure(scene, ts) is graph and graph.node_identities() == identities
-    assert info['updated_bindings'] == 1 and info['graph_builds'] == builds, info
+    assert info['updated_bindings'] == 1 and revisions(info) == builds, info
     assert 'BASE_COLOR' in info['affected_channels'] and 'ROUGHNESS' in info['affected_channels'], info
     inner.visible = True
     assert settled(scene, ts) and shader_preview.ensure(scene, ts) is graph
     rough = stack.channel_for(layer_by_id(ts, base_id), 'ROUGHNESS')
     rough.effects[0].enabled = False
     assert settled(scene, ts) and shader_preview.ensure(scene, ts) is graph
-    assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds
+    assert revisions(shader_preview.diagnostics(scene, ts)) == builds
     rough.effects[0].enabled = True
     assert settled(scene, ts)
 
-    # A channel blend-mode change rebuilds one unit; every other unit is adopted.
+    # A channel blend-mode change recompiles one unit, in place; every other unit stays.
     stack.channel_for(layer_by_id(ts, multiply_id), 'ROUGHNESS').blend_mode = 'SCREEN'
     assert not shader_preview.current(scene, ts)
     assert shader_preview.diagnostics(scene, ts)['rebuild_scope'] == [('CHANNEL', multiply_id, 'ROUGHNESS')]
     info = ready(scene, ts)
     rebuilt = shader_preview.ensure(scene, ts)
-    assert rebuilt is not graph and info['rebuilt_units'] == 1, info
+    assert rebuilt is graph and info['patched'] and info['rebuilt_units'] == 1, info
     assert info['reused_units'] == len(trees) - 1, info
     for key, pointer in trees.items():
         if key != ('CHANNEL', multiply_id, 'ROUGHNESS'):
             assert rebuilt.units[key].tree.as_pointer() == pointer, key
     assert rebuilt.units[('CHANNEL', multiply_id, 'ROUGHNESS')].tree.as_pointer() != trees[('CHANNEL', multiply_id, 'ROUGHNESS')]
     graph, trees = rebuilt, {key: unit.tree.as_pointer() for key, unit in rebuilt.units.items()}
-    builds = info['graph_builds']
+    builds = revisions(info)
 
     # Adopted units keep working bindings and dependency closure.
     stack.channel_for(layer_by_id(ts, inner_id), 'ROUGHNESS').value = .55
@@ -219,13 +225,13 @@ def run():
     layer_by_id(ts, consumer_id).opacity = .95  # a callback publishes the structural change
     info = ready(scene, ts)
     rebuilt = shader_preview.ensure(scene, ts)
-    assert info['graph_builds'] == builds + 1, info
+    assert revisions(info) == builds + 1, info
     mask_key = ('MASK', consumer_id, '', False)
     assert info['rebuilt_units'] == 1 and rebuilt.units[mask_key].tree.as_pointer() != trees[mask_key], info
     assert all(rebuilt.units[key].tree.as_pointer() == pointer for key, pointer in trees.items()
                if key in rebuilt.units and key != mask_key), 'unrelated units were rebuilt'
     graph, trees = rebuilt, {key: unit.tree.as_pointer() for key, unit in rebuilt.units.items()}
-    builds = info['graph_builds']
+    builds = revisions(info)
 
     # A published source gaining an effect rebuilds its prefix and its consumers' mask.
     base_rough = stack.channel_for(layer_by_id(ts, base_id), 'ROUGHNESS')

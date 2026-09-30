@@ -846,6 +846,7 @@ class Engine:
         self._native_channels = None
         self._native_cache = None
         self._evaluation_depth = 0
+        self.replaced = None            # units a patch replaced, until the native graph takes them
         from .suffix import SuffixCache
         self._suffix = SuffixCache()    # armed affine runs above an edited layer
         device().engines.add(self)
@@ -853,38 +854,72 @@ class Engine:
     # ---- graph -----------------------------------------------------------------------
 
     def adopt(self, graph):
-        """Take a (re)built graph; states of units it adopted unchanged keep their programs and results."""
+        """Take a (re)built graph; states of units it adopted unchanged keep their programs and results.
+
+        The graph this engine already holds, patched in place (``EngineGraph.patch``): only the
+        replaced units lose their states, filter results and publication variants, and the
+        native graph learns which (``replaced``) instead of describing every unit again."""
         if self._native_channels is not None and self._native_channels.dispatching:
             raise RuntimeError("Cannot adopt a graph during native channel submission")
+        patched = graph is self.graph
         n_before = self.graph.n if self.graph is not None else None
         self._clear_constant_renderer()
         # Suffix transforms survive: run keys identify members by content, not by
         # position in the graph (a resolution change closes them below).
         self.graph = graph
         self._native_stamps = None
-        self._publication_programs.clear()
-        self._clear_filters()
+        if not patched:
+            self._publication_programs.clear()
+            self._clear_filters()
         if n_before is not None and n_before != graph.n:
             self.close(n_before)   # the textures were rendered at the previous resolution
-        live = {}
+        live, replaced = {}, set()
         for key, unit in graph.units.items():
             state = self.states.get(key)
             if state is None or state.unit is not unit:
                 if state is not None:
-                    self._free(key, state, n_before)
+                    self._retire_state(key, state, n_before, patched)
                 state = UnitState(unit)
+                replaced.add(key)
             live[key] = state
         for key, state in self.states.items():
             if key not in live:
-                self._free(key, state, n_before)
+                self._retire_state(key, state, n_before, patched)
+                replaced.add(key)
         self.states = live
         self.positions, self.finals, self.orders = _positions(graph)
         # A content or mask unit read by one unit only is compiled into that unit: one pass
-        # and one full-resolution texture less for every layer channel.
-        self.inline = frozenset(key for key in graph.units if key[0] in {'SRC', 'MASK'}
-                                and len(graph.consumers.get(key, ())) == 1)
+        # and one full-resolution texture less for every layer channel. An unchanged set keeps
+        # its identity, which the native graph's description is checked against.
+        inline = frozenset(key for key in graph.units if key[0] in {'SRC', 'MASK'}
+                           and len(graph.consumers.get(key, ())) == 1)
+        if inline != self.inline:
+            self.inline = inline
         self.keep &= set(live)
-        self.published.clear()   # a rebuilt graph re-derives every chain stamp
+        if patched:
+            self.replaced = replaced if self.replaced is None else self.replaced | replaced
+        else:
+            self.replaced = None
+            self.published.clear()   # a rebuilt graph re-derives every chain stamp
+
+    def take_replaced(self):
+        """Units a patch replaced since the native graph last looked; None after a rebuild."""
+        replaced, self.replaced = self.replaced, None
+        return replaced
+
+    def _retire_state(self, key, state, n, patched):
+        if patched:
+            # Its filter results and publication variants go with it; every other unit keeps its own.
+            for program in glsl.programs(state.program) if state.program is not None else ():
+                for sampler in program.samplers:
+                    if sampler.kind == 'filter':
+                        held = self.filter_states.pop(sampler.node, None)
+                        if held is not None:
+                            device().release(held[1], held[2], RGBA)
+            for program_key in [k for k in self._publication_programs if k[0] == key]:
+                del self._publication_programs[program_key]
+        self._free(key, state, n)
+        state.slot = None
 
     def _free(self, key, state, n):
         if state.textures and n is not None:
@@ -919,6 +954,7 @@ class Engine:
         self._suffix.clear()
         self.retained.clear()
         self.keep.clear()
+        self.replaced = None
         self.published = {}
         self.images = {}
         self._uniform_cpu.clear()

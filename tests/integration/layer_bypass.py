@@ -22,6 +22,12 @@ from open_painter.evaluation.evaluator import LayerEvaluator
 from open_painter.evaluation.shader_graph import Graph
 from open_painter.utils.ids import new_id
 
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 N = 32
 
 
@@ -204,7 +210,7 @@ def run():
     material_manager.repair(ts)
     ready(scene, ts)
     session = shader_preview.ensure(scene, ts)
-    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    builds = revisions(shader_preview.diagnostics(scene, ts))
     layer_by_id(ts, blue_id).bypass = True
     info = shader_preview.diagnostics(scene, ts)
     assert info['rebuild_pending'], info
@@ -213,7 +219,7 @@ def run():
     assert all(key[1] in {blue_id, consumer_id} for key in scope), scope
     ready(scene, ts)
     after = shader_preview.diagnostics(scene, ts)
-    assert after['graph_builds'] == builds + 1 and shader_preview.ensure(scene, ts) is not session
+    assert revisions(after) == builds + 1 and after['patched'] and shader_preview.ensure(scene, ts) is session
     # The graph an undo compiles keeps the bypass structure.
     from open_painter.evaluation.engine.compiler import EngineGraph
     probe = EngineGraph(scene, ts)

@@ -121,17 +121,17 @@ report['undo_evaluate_ms'] = round(info['engine'].get('evaluate_ms', 0.0), 1)
 print('SHADER_UNDO undo restores the published state: PASS', flush=True)
 
 # The rebuilt session keeps binding, invalidation and partial rebuilds working.
-builds = info['graph_builds']
+builds = info['graph_builds'] + info['graph_patches']   # rebuilds, and patches of the graph in place
 mask.amount = .77
 info = shader_preview.diagnostics(scene, ts)
 assert not info['rebuild_pending'] and info['updated_bindings'] == 1, info
 assert info['affected_channels'], info
 info = ready(scene, ts)
-assert info['graph_builds'] == builds, info
+assert info['graph_builds'] + info['graph_patches'] == builds, info
 target = next(item for item in ts.layers if item.id == layer_id)
 target.blend_mode = 'MULTIPLY' if target.blend_mode != 'MULTIPLY' else 'SCREEN'
 info = ready(scene, ts)
-assert info['graph_builds'] == builds + 1 and info['reused_units'] > 0, info
+assert info['graph_builds'] + info['graph_patches'] == builds + 1 and info['reused_units'] > 0, info
 
 # Undo then redo return to each state's own images.
 bpy.ops.ed.undo_push(message='blend mode')

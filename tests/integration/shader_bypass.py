@@ -42,10 +42,12 @@ def bypass_lifecycle():
         graph = shader_preview.flush(scene, ts)
     assert initial.counts["shader_resource_requests"] == 0, initial.report()
     assert shader_preview.current(scene, ts)
-    # A topology edit must rebuild the same bypassed recipe successfully.
+    # A topology edit must recompile the same bypassed recipe successfully (in place).
+    patches = shader_preview.diagnostics(scene, ts)["graph_patches"]
     layer.blend_mode = "MULTIPLY"
     rebuilt = shader_preview.flush(scene, ts)
-    assert rebuilt is not graph and shader_preview.current(scene, ts)
+    assert rebuilt is graph and shader_preview.current(scene, ts)
+    assert shader_preview.diagnostics(scene, ts)["graph_patches"] == patches + 1
     identities = rebuilt.node_identities()
     with Metrics() as observed:
         levels.strength = 1.

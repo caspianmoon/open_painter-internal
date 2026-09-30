@@ -45,11 +45,14 @@ def profiled(scene, ts):
     return bool(table(scene, ts)['cpu'])
 
 
-def record_graph(scene, ts, graph):
+def record_graph(scene, ts, graph, layers=None):
+    """Per-layer compile cost, node and sampler counts; ``layers``: only these changed (a patch)."""
     entry = _table(scene, ts)
     compile_ms, nodes, samplers = {}, {}, {}
     for key, unit in getattr(graph, 'units', {}).items():
         layer_id = key[1]
+        if layers is not None and layer_id not in layers:
+            continue
         compile_ms[layer_id] = compile_ms.get(layer_id, 0.0) + float(getattr(unit, 'build_ms', 0.0))
         nodes[layer_id] = nodes.get(layer_id, 0) + unit.node_count
         images = samplers.setdefault(layer_id, set())
@@ -59,8 +62,15 @@ def record_graph(scene, ts, graph):
                     images.add(node.image.as_pointer())
         except (AttributeError, ReferenceError):
             pass
-    entry['compile'] = {layer_id: {'compile_ms': compile_ms[layer_id], 'nodes': nodes[layer_id],
-                                   'samplers': len(samplers[layer_id])} for layer_id in compile_ms}
+    recorded = {layer_id: {'compile_ms': compile_ms[layer_id], 'nodes': nodes[layer_id],
+                           'samplers': len(samplers[layer_id])} for layer_id in compile_ms}
+    if layers is None:
+        entry['compile'] = recorded
+        return
+    table = entry.setdefault('compile', {})
+    for layer_id in layers:
+        table.pop(layer_id, None)
+    table.update(recorded)
 
 
 def record_boundary(scene, ts, timings):

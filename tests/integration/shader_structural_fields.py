@@ -20,6 +20,11 @@ from open_painter.evaluation.metrics import Metrics
 from open_painter.utils.ids import new_id
 
 
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 def ready(scene, ts):
     deadline = monotonic() + 30
     while monotonic() < deadline:
@@ -73,7 +78,7 @@ def current():
 
 def probe(label, assign, structural):
     graph = shader_preview.ensure(scene, ts)
-    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    builds = revisions(shader_preview.diagnostics(scene, ts))
     assign()
     info = shader_preview.diagnostics(scene, ts)
     flagged = bool(info['rebuild_pending'] or info['error'])
@@ -81,9 +86,9 @@ def probe(label, assign, structural):
     ready(scene, ts)
     after = shader_preview.diagnostics(scene, ts)
     if structural:
-        assert after['graph_builds'] == builds + 1, (label, after)
+        assert revisions(after) == builds + 1, (label, after)
     else:
-        assert after['graph_builds'] == builds and shader_preview.ensure(scene, ts) is graph, (label, after)
+        assert revisions(after) == builds and shader_preview.ensure(scene, ts) is graph, (label, after)
     print('STRUCTURAL_FIELD', label, 'structural' if structural else 'numeric', flush=True)
 
 

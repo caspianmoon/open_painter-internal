@@ -457,6 +457,7 @@ class Unit:
     output_producer: dict = field(default_factory=dict)   # output name -> role or ('input', name)
     owner_pointers: tuple = ()                            # RNA addresses captured by this unit
     build_ms: float = 0.0
+    warnings: list = field(default_factory=list)          # what compiling it reported (a stub's error)
 
     def input(self, name, socket_type):
         if name not in self.inputs:
@@ -1804,10 +1805,8 @@ class Graph(Math):
                 # The cache image ignores the anchor; its consumers read the layer
                 # (or the published folder it sits in) live, composed over the
                 # isolated folder's empty backdrop only.
-                message = (f'Anchor consumers read "{consumed.name}" inside cached folder '
+                self._warn(f'Anchor consumers read "{consumed.name}" inside cached folder '
                            f'"{cursor.name}": compiled without its backdrop')
-                if message not in self._warnings:
-                    self._warnings.append(message)
                 return False
             if consumed is None and self._composite_consumed(cursor):
                 consumed = cursor
@@ -1815,6 +1814,21 @@ class Graph(Math):
             own = False
             cursor = self._layer(cursor.parent_id) if cursor.parent_id else None
         return False
+
+    def _warn(self, message):
+        """A warning of the plan's walk, kept with the plan (see ``_build_warnings``)."""
+        found = getattr(self._plan, 'warnings', None)
+        found = self._warnings if found is None else found
+        if message not in found:
+            found.append(message)
+
+    def _build_warnings(self):
+        """What the plan's walk and the compiled units reported, then anything else."""
+        found = list(getattr(self._plan, 'warnings', ()))
+        for unit in self.units.values():
+            found.extend(message for message in unit.warnings if message not in found)
+        found.extend(message for message in self._warnings if message not in found)
+        return found
 
     def _cache_mode(self, layer):
         """The layer's own cache mode, or LIVE when it cannot be cached."""
@@ -1824,10 +1838,8 @@ class Graph(Math):
         if layer.type == 'FOLDER' and layer.group_mode == 'PASSTHROUGH':
             # A passthrough composite depends on its backdrop: no backdrop-
             # independent image exists for it.
-            message = (f'Passthrough folder "{layer.name}" cannot be cached; set it to Isolated '
+            self._warn(f'Passthrough folder "{layer.name}" cannot be cached; set it to Isolated '
                        'or cache its children')
-            if message not in self._warnings:
-                self._warnings.append(message)
             return 'LIVE'
         return mode
 
@@ -1876,7 +1888,8 @@ class Graph(Math):
         # is made for every structural edit. channels holds RNA references and is
         # dropped whenever update() refreshes the layers (a collection may move).
         plan = SimpleNamespace(layers=layers, keys=set(), opaque={}, wiring=[], order=[], children=children,
-                               skipped={}, touched={}, channels={}, signatures={}, base_owners=None)
+                               skipped={}, touched={}, channels={}, signatures={}, base_owners=None,
+                               warnings=[])
         self._plan = plan
         self._anchors = None
 
@@ -2954,7 +2967,7 @@ class Graph(Math):
                         unit.flags['bypass'] = True
                     else:
                         unit.flags['stub'] = stub
-                        self._warnings.append(f'Hidden layer "{layer.name}" is not compiled: {stub}')
+                        unit.warnings.append(f'Hidden layer "{layer.name}" is not compiled: {stub}')
                     self._export('Out', unit.input('In', 'NodeSocketColor'), 'NodeSocketColor')
                     if not self._plan.opaque[layer.id]:
                         self._export('Out:Alpha', unit.input('In:Alpha', 'NodeSocketFloat'), 'NodeSocketFloat')
@@ -2999,6 +3012,52 @@ class Graph(Math):
         except (ReferenceError, RuntimeError):
             pass
         unit.tree = None
+
+    def _unbind_units(self, units):
+        """Take compiled units' bindings out of the graph's tables; the units keep their own.
+        A recompile of the same key must not find them (``param`` returns a bound socket)."""
+        bindings, owned, nodes = {}, set(), set()
+        for unit in units:
+            for identifier, binding in unit.bindings.items():
+                if self.bindings.get(identifier) is binding:
+                    del self.bindings[identifier]
+                bindings[id(binding)] = binding
+            owned.update(id(b) for b in (*unit.resource_bindings, *unit.cache_bindings))
+            # Image entries are tuples ``update`` replaces with new ones: matched by their node.
+            nodes.update(id(entry[3]) for entry in unit.image_bindings)
+        pointers = set()
+        for binding in bindings.values():
+            try:
+                pointers.update(binding.pointers())
+            except ReferenceError:   # an owner Blender removed: look for the binding everywhere
+                pointers.update(self.owner_bindings)
+                break
+        for pointer in pointers:
+            listed = self.owner_bindings.get(pointer)
+            if listed:
+                listed[:] = [binding for binding in listed if id(binding) not in bindings]
+                if not listed:
+                    del self.owner_bindings[pointer]
+        if owned:
+            self.resource_bindings = [b for b in self.resource_bindings if id(b) not in owned]
+            self.cache_bindings = [b for b in self.cache_bindings if id(b) not in owned]
+        if nodes:
+            self.image_bindings = [entry for entry in self.image_bindings if id(entry[3]) not in nodes]
+
+    def _rebind_units(self, units):
+        """Undo ``_unbind_units``: a patch that failed puts its units back as they were."""
+        for unit in units:
+            self.bindings.update(unit.bindings)
+            for binding in unit.bindings.values():
+                try:
+                    pointers = binding.pointers()
+                except ReferenceError:
+                    continue   # its owner is gone: no edit can reach it
+                for pointer in pointers:
+                    self.owner_bindings[pointer].append(binding)
+            self.resource_bindings.extend(unit.resource_bindings)
+            self.image_bindings.extend(unit.image_bindings)
+            self.cache_bindings.extend(unit.cache_bindings)
 
     def blend(self, backdrop, source, coverage, mode, channel):
         return blend(self, backdrop, source, coverage, mode, channel)
@@ -3212,7 +3271,7 @@ class Graph(Math):
                       'pending_resources': self.pending_resources,
                       'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
                       'cache_states': self.cache_states(),
-                      'warnings': list(warnings(self.ts)) + self._warnings}
+                      'warnings': list(warnings(self.ts)) + self._build_warnings()}
         metrics.count('shader_graph_builds')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
@@ -3314,7 +3373,7 @@ class Graph(Math):
                       'pending_resources': self.pending_resources,
                       'unit_build_ms': {repr(key): unit.build_ms for key, unit in self.units.items()},
                       'cache_states': self.cache_states(),
-                      'warnings': list(warnings(self.ts)) + self._warnings}
+                      'warnings': list(warnings(self.ts)) + self._build_warnings()}
         metrics.count('shader_graph_rehydrations')
         from .dependencies import remember, geometry_key
         remember(self.scene, self.ts, geometry_key(self.scene, self.ts))
@@ -3539,12 +3598,14 @@ class Graph(Math):
         changed.extend(key for key in before if key not in after)
         return changed or 'wiring'
 
-    def update(self, owner=None, check_structure=True, resources=True):
+    def update(self, owner=None, check_structure=True, resources=True, values=True):
         """Write changed bindings; ``check_structure`` is False for numeric-only edits.
 
         ``resources=False`` is the stroke-time path (freeze while painting): image
         bindings are refreshed so the canvas shows, but no structural walk,
         boundary re-identification or cache reconciliation happens until release.
+        ``values=False`` reads no uniform and no image field: a patch whose kept units
+        saw every edit reconciles only inputs a structural edit can re-identify.
         """
         started = perf_counter()
         if resources and (check_structure or self._stubs):
@@ -3566,7 +3627,7 @@ class Graph(Math):
             raise RebuildRequired('A Mask Graph node was removed', removed)
         changed = []
         touched = self.touched
-        for binding in bindings:
+        for binding in bindings if values else ():
             value = binding.read()
             if value != binding.value:
                 binding.socket.default_value = value
@@ -3597,7 +3658,7 @@ class Graph(Math):
                     # New inputs (an added effect or mask) must reach the owner filter.
                     binding.owners = {o.as_pointer() for o in binding.owner_factory()}
                 invalidated.add(binding.identifier)
-        for index, (p, identifier, getter, node, previous) in enumerate(self.image_bindings):
+        for index, (p, identifier, getter, node, previous) in enumerate(self.image_bindings if values else ()):
             if pointer is not None and p != pointer:
                 continue
             image = getter()

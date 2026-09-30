@@ -168,7 +168,7 @@ def run():
             assert np.allclose(actual, expected, atol=3e-4), (label, channel, error)
             assert expected.std() > 1e-3, (label, channel, 'flat expectation proves nothing')
         record = {'case': label, 'max_error': worst, 'units': len(graph.units), 'nodes': graph.node_count,
-                  'warnings': list(graph._warnings)}
+                  'warnings': graph._build_warnings()}
         report['cases'].append(record)
         print('SHADER_OUTPUT_ANCHORS_PARITY', json.dumps(record), flush=True)
         tree.nodes.remove(bake_node)

@@ -24,6 +24,12 @@ from open_painter.evaluation.shader_resources import RESOURCE, alive
 from open_painter.painting import channel_paint
 from open_painter.utils.ids import new_id
 
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 N = 32
 
 
@@ -162,10 +168,10 @@ def run():
     print('ADOPTION_LIVE_ANCHORS_OK', flush=True)
 
     # ---- Export shape is part of the contract: a producer that turns constant (or back).
-    builds = ready(scene, ts)['graph_builds']
+    builds = revisions(ready(scene, ts))
     stack.channel_for(layer_by_id(ts, producer_id), 'BASE_COLOR').enabled = False
     info = ready(scene, ts)
-    assert info['graph_builds'] == builds + 1, info
+    assert revisions(info) == builds + 1, info
     graph = shader_preview.ensure(scene, ts)
     reader_unit = graph.units[('CHANNEL', reader_id, 'BASE_COLOR')]
     assert not any(key[0] == 'SRC' for key, _, _ in reader_unit.imports), reader_unit.imports
@@ -236,7 +242,7 @@ def run():
 
     voronoi_binding.factory = failing
     settled = voronoi_binding.node.image
-    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    builds = revisions(shader_preview.diagnostics(scene, ts))
     next(m for m in layer_by_id(ts, noisy_id).masks if m.id == voronoi_id).noise_scale = 6.
     shader_preview.tick(scene, ts)
     info = shader_preview.diagnostics(scene, ts)
@@ -250,7 +256,7 @@ def run():
         stack.invalidate(ts)
         shader_preview.tick(scene, ts)
         info = shader_preview.diagnostics(scene, ts)
-        assert info['graph_builds'] == builds + step + 1, info
+        assert revisions(info) == builds + step + 1, info
         graph = shader_preview.ensure(scene, ts)
         assert graph.units[noisy_key].tree.as_pointer() == noisy_tree, 'the failed unit was recompiled, not adopted'
         assert len(calls) == 1, f'a structural rebuild ran a failed factory again ({len(calls)} calls)'

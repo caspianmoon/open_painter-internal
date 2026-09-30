@@ -25,6 +25,12 @@ from open_painter.evaluation.shader_graph import Graph
 from open_painter.evaluation import shader_resources
 from open_painter.utils.ids import new_id
 
+
+def revisions(info):
+    """Structural revisions of the session: a rebuild, or a patch of its own graph (EngineGraph.patch)."""
+    return info['graph_builds'] + info['graph_patches']
+
+
 N = 32
 
 
@@ -305,13 +311,13 @@ def run():
     stack.channel_for(layer_by_id(ts, blue_id), 'BASE_COLOR').opacity = 1.
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT', states(scene, ts, blue_id)
     # Toggling the mode is structural and scoped to the layer's units.
-    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    builds = revisions(shader_preview.diagnostics(scene, ts))
     layer_by_id(ts, blue_id).cache_mode = 'CACHED'
     info = shader_preview.diagnostics(scene, ts)
     assert info['rebuild_pending'] and isinstance(info['rebuild_scope'], list)
     assert all(key[1] == blue_id for key in info['rebuild_scope']), info['rebuild_scope']
     ready(scene, ts)
-    assert shader_preview.diagnostics(scene, ts)['graph_builds'] == builds + 1
+    assert revisions(shader_preview.diagnostics(scene, ts)) == builds + 1
     assert states(scene, ts, blue_id)['BASE_COLOR'] == 'CURRENT' and not layer_cache.pending(scene)
     # Folder cache: a child slider requests, the folder's own opacity does not.
     layer_by_id(ts, folder_id).cache_mode = 'CACHED'
@@ -534,13 +540,13 @@ def run():
     layer_cache._jobs[fake] = {'signature': 'fake', 'steps': slow_strips(), 'progress': 0., 'name': 'Slow',
                                'data': np.ones((512, 512, 4), np.float32), 'covered': np.zeros(512, np.bool_),
                                'ms': 0., 'size': 512, 'channel': 'ROUGHNESS'}
-    builds = shader_preview.diagnostics(scene, ts)['graph_builds']
+    builds = revisions(shader_preview.diagnostics(scene, ts))
     late = stack.add(ts, 'FILL', 'Late layer')
     late_id = late.id
     assert shader_preview.diagnostics(scene, ts)['rebuild_pending']
     interval = cache.tick()
     info = shader_preview.diagnostics(scene, ts)
-    assert not info['rebuild_pending'] and info['graph_builds'] == builds + 1, info
+    assert not info['rebuild_pending'] and revisions(info) == builds + 1, info
     assert abs(interval - .001) < 1e-9 and fake in layer_cache._jobs, 'the job still advances after the shader loop'
     while shader_preview.diagnostics(scene, ts)['pending_resources']:
         cache.tick()

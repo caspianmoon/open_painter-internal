@@ -306,6 +306,16 @@ The product's editor area over 200 fills, 1K, with the same drag. Before is
 At 44.9 revisions/s, every value change the window delivered was drawn (45.0/s,
 60 draws/s).
 
+The same editor over 204 catalog smart-material layers:
+
+| Build | Revisions/s | Tick p50 | Change → draw p50 |
+| --- | ---: | ---: | ---: |
+| Before (`9fd1db2`) | 25.8 | 6.1 ms | 28.4 ms |
+| After | 34.0 | 4.4 ms | 21.3 ms |
+
+Here too every delivered change was drawn. The window delivered only 34 changes
+per second because the rest of its frame is longer; see below.
+
 ### The rest of the frame
 
 A whole-process sample of Blender during a drag under 204 smart-material layers
@@ -318,6 +328,22 @@ A whole-process sample of Blender during a drag under 204 smart-material layers
 | Depsgraph: copying the Scene into its evaluated copy | 19% |
 | The scheduler tick (engine evaluation and publication) | 17% |
 | The slider's RNA update callback | 18% |
+
+After the reader index, list filter and shelf facts, the same stack in the
+product's editor splits the main thread as follows:
+
+| Work | Share |
+| --- | ---: |
+| Viewport, sidebar and shelf drawing and layout | 43% |
+| Depsgraph: copying the Scene | 18% |
+| The scheduler tick | 16% |
+| Waiting for the next Metal drawable | 14% |
+| The slider's RNA update callback | 3% |
+
+Within the drawing share:
+- The sidebar's layout is 9%.
+- The shelf is 11%. Blender calls the Python `asset_poll` once per asset, and it
+  re-uploads each preview's pixels every time it draws.
 
 The Scene copy is Blender's, and it grows with the stack. After every edit of a
 Python-defined property owned by the Scene, `rna_property_update` tags the

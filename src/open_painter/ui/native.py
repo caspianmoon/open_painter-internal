@@ -10,6 +10,7 @@ from ..constants import BLEND_ITEMS
 from ..core import layer_stack
 from ..core.layer_stack import active, channel_for, visible_rows
 from ..core.project_manager import active_set, require_set
+from ..core import layer_store
 from ..evaluation import structure_memo
 from . import editor, selection
 from .dock import assets, state
@@ -1028,8 +1029,18 @@ def _list_filter(ts, bitflag):
     return result
 
 
+def _list_set(data):
+    """The texture set a layer list shows: the template hands the list the set's layer store."""
+    if getattr(getattr(data, 'bl_rna', None), 'identifier', '') == 'OP_LayerStore':
+        return layer_store.owner(data.id_data)[1]
+    return data
+
+
 class OP_UL_native_layers(bpy.types.UIList):
     def filter_items(self, context, data, propname):
+        data = _list_set(data)
+        if data is None:
+            return [], []
         flags, order, depths = _list_filter(data, self.bitflag_filter_item)
         # filter_items runs once per redraw before the items draw; keep the
         # depths so draw_item does not walk the hierarchy again per row.
@@ -1039,6 +1050,7 @@ class OP_UL_native_layers(bpy.types.UIList):
         return list(flags), list(order)
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        data = active_data   # the set (the template's active data); ``data`` is its layer store
         layer = item
         channel = channel_for(layer, context.scene.open_painter.blend_channel)
         depths = _row_depths.get(data.as_pointer())
@@ -1148,17 +1160,19 @@ class OP_PT_native_layers(PainterPanel, bpy.types.Panel):
         second.operator("open_painter.layer", text="", icon="DUPLICATE").action = "DUPLICATE"
         second.operator("open_painter.layer", text="", icon="TRASH").action = "DELETE"
         draw_selected_row(layout, context, ts)
-        layout.template_list(
-            "OP_UL_native_layers",
-            "stack",
-            ts,
-            "layers",
-            ts,
-            "active_layer",
-            rows=4,
-            maxrows=12,
-            sort_lock=True,
-        )
+        stack = layer_store.rna_owner(ts)   # the stack lives in the set's layer store
+        if stack is not None:
+            layout.template_list(
+                "OP_UL_native_layers",
+                "stack",
+                stack,
+                "layers",
+                ts,
+                "active_layer",
+                rows=4,
+                maxrows=12,
+                sort_lock=True,
+            )
         # Keyboard-free alternatives to dragging: step through the visible hierarchy.
         footer = layout.row(align=True)
         footer.alignment = "LEFT"

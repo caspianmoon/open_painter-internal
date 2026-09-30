@@ -40,7 +40,7 @@ from .properties.project import OP_PaintCanvas, OP_Project
 from .properties.stroke import OP_Stroke, OP_VectorBrushSettings
 from .ui.vector_brush import CLASSES as VECTOR_BRUSH_CLASSES
 from .ui.strokes_panel import CLASSES as STROKE_PANEL_CLASSES
-from .properties.texture_set import OP_Assignment, OP_TextureSet
+from .properties.texture_set import OP_Assignment, OP_LayerStore, OP_TextureSet
 from .ui.assets_panel import OP_OT_import_material, OP_OT_library, OP_OT_save_material, OP_PT_assets
 from .ui.baking_panel import OP_OT_bake, OP_OT_bake_doctor, OP_PT_bake, OP_UL_high
 from .ui.bake_corrections import CLASSES as BAKE_CORRECTION_CLASSES
@@ -86,6 +86,7 @@ CLASSES = (
     OP_BakeSettings,
     OP_ExportSettings,
     *AGING_PROPERTY_CLASSES,
+    OP_LayerStore,
     OP_TextureSet,
     OP_Stroke,
     OP_VectorBrushSettings,
@@ -172,6 +173,7 @@ def register():
             # Saved preferences restore without their update callbacks: a
             # persisted Developer Mode must reach the logger before any output.
             update_debug(addon.preferences, None)
+        bpy.types.Palette.open_painter_layers = bpy.props.PointerProperty(type=OP_LayerStore)
         bpy.types.Scene.open_painter = bpy.props.PointerProperty(type=OP_Project)
         bpy.types.WindowManager.open_painter_director = bpy.props.PointerProperty(type=OP_DirectorSettings)
         _cleanups.append(lambda: delattr(bpy.types.WindowManager, 'open_painter_director'))
@@ -225,6 +227,8 @@ def unregister():
             errors.append(str(exc))
     if _registered_classes and hasattr(bpy.types.Scene, 'open_painter'):
         del bpy.types.Scene.open_painter
+    if _registered_classes and hasattr(bpy.types.Palette, 'open_painter_layers'):
+        del bpy.types.Palette.open_painter_layers
     while _registered_classes:
         cls=_registered_classes.pop()
         try:

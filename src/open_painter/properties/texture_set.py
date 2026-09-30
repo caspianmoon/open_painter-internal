@@ -69,6 +69,13 @@ class OP_Assignment(bpy.types.PropertyGroup):
     udim_original_slot: bpy.props.IntProperty(default=-1)
 
 
+class OP_LayerStore(bpy.types.PropertyGroup):
+    """A texture set's layer stack, held by a hidden Palette (``core.layer_store``)."""
+    set_id: bpy.props.StringProperty(options={'HIDDEN'})
+    home: bpy.props.IntProperty(options={'HIDDEN'})   # session_uid of the scene whose set holds it
+    layers: bpy.props.CollectionProperty(type=OP_Layer)
+
+
 class OP_TextureSet(bpy.types.PropertyGroup):
     shared_stack_id: bpy.props.StringProperty(options={'HIDDEN'})
     shared_stack_version: bpy.props.IntProperty(default=0, options={'HIDDEN'})
@@ -98,7 +105,8 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     assignments: bpy.props.CollectionProperty(type=OP_Assignment)
     active_assignment: bpy.props.IntProperty()
     material: bpy.props.PointerProperty(type=bpy.types.Material)
-    layers: bpy.props.CollectionProperty(type=OP_Layer)
+    # The stack itself lives in a hidden Palette (core.layer_store); ``layers`` reads it.
+    layer_store: bpy.props.PointerProperty(type=bpy.types.Palette, options={'HIDDEN'})
     active_layer: bpy.props.IntProperty(
         name="Layer",
         description="Press to select a layer and drag to move it; double-click to rename",
@@ -119,3 +127,8 @@ class OP_TextureSet(bpy.types.PropertyGroup):
     export: bpy.props.PointerProperty(type=OP_ExportSettings)
     aging: bpy.props.PointerProperty(type=OP_Aging)
     edit_serial: bpy.props.IntProperty()
+
+    @property
+    def layers(self):
+        from ..core.layer_store import layers
+        return layers(self)

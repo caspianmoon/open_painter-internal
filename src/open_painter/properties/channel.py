@@ -3,6 +3,7 @@ import bpy
 from ..constants import BLEND_ITEMS, CHANNEL_ITEMS
 from ..core.layer_stack import replaying
 from .effect import OP_TextureEffect
+from ..core.layer_store import project_of as _project_of
 
 
 def changed(self, context):
@@ -30,7 +31,7 @@ _VALUE_RANGES = {'HEIGHT': (-1.0, 10.0)}
 
 def owning_set(owner):
     """The texture set holding a channel, mask or effect (by address)."""
-    project = getattr(owner.id_data, 'open_painter', None)
+    project = _project_of(owner)
     if project is None:
         return None
     pointer = owner.as_pointer()

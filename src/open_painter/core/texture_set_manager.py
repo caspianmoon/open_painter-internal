@@ -21,6 +21,8 @@ def create(scene: bpy.types.Scene, name: str = "Texture Set", resolution=None):
     from ..evaluation.shader_preview import texture_sets_changed
     texture_sets_changed(scene)   # the array may have been reallocated under live sessions
     ts.id, ts.name = new_id(), name
+    from .layer_store import ensure
+    ensure(ts)   # the stack's hidden store, before anything adds a layer
     if resolution is not None:
         ts.resolution = str(resolution)
     from ..targets import apply, get
@@ -150,7 +152,10 @@ def remove(scene: bpy.types.Scene, index: int) -> None:
         release_node_tree(ts, material)
     from ..baking.corrections import clear as clear_corrections
     clear_corrections(ts)
+    store = ts.layer_store
     project.texture_sets.remove(index)
+    from .layer_store import release
+    release(store)   # the stack's store goes with its set (undo brings both back)
     from ..evaluation.shader_preview import texture_sets_changed
     texture_sets_changed(scene)   # the sets that followed moved down one slot
     scene.open_painter.active_texture_set = max(0, index - 1)

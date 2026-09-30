@@ -45,6 +45,10 @@ def capture(group, pixel_scale=1.0):
             values[name] = tuple(value)
         else:
             values[name] = value
+    if group.bl_rna.identifier == 'OP_TextureSet':
+        # The stack lives in the set's layer store (core.layer_store), not among its RNA properties.
+        values.pop('layer_store', None)
+        values['layers'] = tuple(capture(item, pixel_scale) for item in group.layers)
     if group.bl_rna.identifier == 'OP_TextureEffect' and pixel_scale != 1:
         # Pixel radii refer to authored pixels; angle-based radial blur does not.
         if values.get('kind') != 'RADIAL_BLUR':

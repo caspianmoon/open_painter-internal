@@ -2,6 +2,7 @@
 import bpy
 
 from ..core.layer_stack import replaying
+from ..core.layer_store import project_of as _project_of
 
 
 def changed(self, context):
@@ -20,7 +21,7 @@ def numeric(self, context):
 
 
 def _changed(self, context, structural):
-    project = getattr(self.id_data, 'open_painter', None)
+    project = _project_of(self)
     if not project or replaying():
         return
     pointer = self.as_pointer()

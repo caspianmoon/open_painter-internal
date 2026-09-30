@@ -4,6 +4,7 @@ import math
 import bpy
 
 from ..core.layer_stack import replaying
+from ..core.layer_store import project_of as _project_of
 
 # Project file format (``OP_Project.format_version``): 2 stores selector angles in
 # radians. Files before it (0.9.6 and the first 0.9.7 builds) stored degrees under
@@ -28,7 +29,7 @@ KINDS = [
 
 
 def changed(self, context):
-    project = getattr(self.id_data, 'open_painter', None)
+    project = _project_of(self)
     if not project or replaying():
         return
     for ts in project.texture_sets:
@@ -54,7 +55,7 @@ def _pointer_changed(name):
 
 
 def numeric(self, context):
-    project = getattr(self.id_data, 'open_painter', None)
+    project = _project_of(self)
     if not project or replaying():
         return
     for ts in project.texture_sets:

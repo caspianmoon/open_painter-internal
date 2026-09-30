@@ -35,9 +35,13 @@ def ensure(settings, n):
         # Export jobs capture immutable property snapshots. Reuse their live
         # source only while it still has the captured settings.
         owner = settings.id_data
-        candidates = ([m.text for t in owner.open_painter.texture_sets for l in t.layers for m in l.masks]
-                      if hasattr(owner, 'open_painter') else
-                      [node.text for node in owner.nodes if node.bl_idname == 'OPMGText'])
+        from ..core.layer_store import ATTRIBUTE
+        if isinstance(owner, bpy.types.Palette):   # a mask's text, in its set's layer store
+            candidates = [m.text for l in getattr(owner, ATTRIBUTE).layers for m in l.masks]
+        elif hasattr(owner, 'open_painter'):
+            candidates = [m.text for t in owner.open_painter.texture_sets for l in t.layers for m in l.masks]
+        else:
+            candidates = [node.text for node in owner.nodes if node.bl_idname == 'OPMGText']
         live = next((item for item in candidates if item.as_pointer() == settings.as_pointer() and
                      signature(item) == signature(settings)), None)
         if live is not None:

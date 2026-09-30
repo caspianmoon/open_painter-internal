@@ -58,8 +58,13 @@ def _resolve(project, pointer, entry):
 
 
 def locate(owner):
-    """``(ts, layer)`` holding ``owner`` (``layer`` is None for the set itself), or None."""
-    scene = getattr(owner, 'id_data', None)
+    """``(ts, layer)`` holding ``owner`` (``layer`` is None for the set itself), or None.
+    A layer's structs live in its set's store (``core.layer_store``), not on the Scene."""
+    from .layer_store import scene_of
+    try:
+        scene = scene_of(owner)
+    except AttributeError:
+        return None
     project = getattr(scene, 'open_painter', None)
     if project is None:
         return None

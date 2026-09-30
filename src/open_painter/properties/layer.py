@@ -4,6 +4,7 @@ from ..constants import BLEND_ITEMS, CHANNELS
 from ..core.layer_stack import replaying
 from .channel import OP_Channel
 from .mask import OP_Mask
+from ..core.layer_store import project_of as _project_of
 
 
 def changed(self, context):
@@ -16,7 +17,7 @@ def numeric(self, context):
 
 
 def _changed(self, context, structural):
-    project = getattr(self.id_data, "open_painter", None)
+    project = _project_of(self)
     if not project or replaying():
         return
     from ..core.owners import locate
@@ -55,7 +56,7 @@ def _changed(self, context, structural):
 
 
 def _texture_set_of(self):
-    project = getattr(self.id_data, "open_painter", None)
+    project = _project_of(self)
     if not project:
         return None
     pointer = self.as_pointer()

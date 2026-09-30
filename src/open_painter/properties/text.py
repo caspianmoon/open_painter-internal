@@ -10,9 +10,12 @@ def changed(self, context):
     if isinstance(owner, bpy.types.NodeTree):
         from ..procedural_graph.edits import values_changed
         values_changed(owner)
-    elif hasattr(owner, 'open_painter'):
+        return
+    from ..core.layer_store import project_of
+    project = project_of(self)   # a mask's text settings live in its set's layer store
+    if project is not None:
         from .mask import changed as mask_changed
-        for ts in owner.open_painter.texture_sets:
+        for ts in project.texture_sets:
             for layer in ts.layers:
                 for mask in layer.masks:
                     if mask.text == self:

@@ -2,10 +2,11 @@
 import bpy
 
 from ..core.layer_stack import replaying
+from ..core.layer_store import project_of as _project_of
 
 
 def changed(self, context):
-    project = getattr(self.id_data, 'open_painter', None)
+    project = _project_of(self)
     if project and not replaying():
         from ..core.layer_stack import invalidate
         for ts in project.texture_sets:

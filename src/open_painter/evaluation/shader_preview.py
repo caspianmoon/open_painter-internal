@@ -115,14 +115,22 @@ def requested(ts):
     return getattr(ts, 'preview_backend', 'LIVE') == 'LIVE'
 
 
+def _store(ts):
+    store = ts.layer_store
+    return store.as_pointer() if store is not None else None
+
+
 def _moved(entry, ts):
     """The graph compiled against a set struct that ``texture_sets.add()``/``remove()``
-    has since relocated: its ``ts`` reads another set or freed memory."""
+    has since relocated (its ``ts`` reads another set or freed memory), or against the layer
+    store the set has since left (a copied scene's set took a copy of it)."""
     graph = entry.get('graph')
     if graph is None:
         return False
     try:
-        return graph.ts.as_pointer() != ts.as_pointer()
+        if graph.ts.as_pointer() != ts.as_pointer():
+            return True
+        return 'store' in entry and entry['store'] != _store(ts)   # sessions record it when built
     except ReferenceError:
         return True
 
@@ -400,7 +408,7 @@ def ensure(scene, ts):
                 engine.close()
             engine = Engine(scene, ts)
         engine.adopt(candidate)
-        entry.update(graph=candidate, engine=engine, dirty=True,
+        entry.update(graph=candidate, engine=engine, dirty=True, store=_store(ts),
                      graph_builds=entry.get('graph_builds', 0) + 1, rebuild_scope=None)
         built = getattr(candidate, '_last', {})
         stage = entry.setdefault('stage', stages.begin())
@@ -422,7 +430,11 @@ def ensure(scene, ts):
 
 
 def _owners(owner):
-    scene = getattr(owner, 'id_data', None)
+    from ..core.layer_store import scene_of
+    try:
+        scene = scene_of(owner)   # a layer's structs live in its set's store, not on the Scene
+    except AttributeError:
+        return
     if getattr(scene, 'open_painter', None) is None:
         return
     from ..core.owners import locate

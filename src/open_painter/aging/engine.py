@@ -15,6 +15,7 @@ import bpy
 from . import document, model
 from .environments import ENVIRONMENTS, MAINTENANCE, USAGE, Exposure, Maintenance, Usage
 from .model import Construction, Event, Segment
+from ..core.layer_store import project_of as _project_of
 
 FOLDER_NAME = "Material Aging"
 _suspended = 0
@@ -33,7 +34,7 @@ def batch():
 
 def owning_set(owner):
     """The texture set whose aging settings (or period/event rows) ``owner`` is."""
-    project = getattr(owner.id_data, "open_painter", None)
+    project = _project_of(owner)
     if project is None:
         return None
     pointer = owner.as_pointer()

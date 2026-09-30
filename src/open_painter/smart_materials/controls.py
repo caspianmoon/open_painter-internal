@@ -42,6 +42,7 @@ Two kinds of binding:
 import re
 from dataclasses import dataclass, field as dataclass_field
 from uuid import UUID, uuid5
+from ..core.layer_store import project_of as _project_of
 
 DEPTH_SPAN = 0.1
 LEVELS_SPAN = 0.4          # a Levels width control at 0 is this wide (fully soft), at 1 a hard edge
@@ -946,11 +947,12 @@ def _set_levels(mask, middle, width):
 
 def _owning_set(folder):
     """The texture set a folder belongs to (the RNA path names it; a scan confirms it)."""
-    project = getattr(folder.id_data, "open_painter", None)
+    project = _project_of(folder)
     if project is None:
         return None
     try:
-        match = re.search(r"texture_sets\[(\d+)\]\.layers\[(\d+)\]", folder.path_from_id())
+        from ..core.layer_store import scene_path
+        match = re.search(r"texture_sets\[(\d+)\]\.layers\[(\d+)\]", scene_path(folder))
     except ValueError:
         match = None
     if match:

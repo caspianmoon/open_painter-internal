@@ -152,7 +152,8 @@ def collection(owner, name, desired):
     keys = [item_key(capture(item), i, name) for i, item in enumerate(records)]
     if keys != wanted:
         from ..evaluation.shader_preview import authoring_structure_changed
-        authoring_structure_changed(owner.id_data)
+        from ..core.layer_store import scene_of
+        authoring_structure_changed(scene_of(owner))
     for i in reversed(range(len(keys))):
         if keys[i] not in wanted:
             records.remove(i)

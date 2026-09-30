@@ -109,6 +109,12 @@ def _write(data, target):
                 setattr(target, key, value)
 
 
+def _stack(ts):
+    """The struct whose RNA ``layers`` collection is the set's stack: its layer store."""
+    from .layer_store import ensure
+    return ensure(ts)
+
+
 def publish(ts):
     from .layer_stack import replaying, snapshot, replay
     if _syncing or replaying() or not getattr(ts, 'shared_stack_id', ''):
@@ -122,7 +128,7 @@ def publish(ts):
             if target.id == ts.id:
                 continue
             with replay(target):
-                _write({'layers': recipe}, target)
+                _write({'layers': recipe}, _stack(target))
             target.shared_stack_owner = owner.id
 
 

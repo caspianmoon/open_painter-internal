@@ -354,6 +354,46 @@ That was about 5 ms per edit at 204 layers. Python properties cannot opt out
 evaluates would avoid it: a datablock no scene references, or an ID type without
 copy-on-evaluation.
 
+## Layer stores
+
+Each texture set's layer stack now lives in a hidden Palette datablock
+(`core/layer_store.py`), not on the Scene. Blender never copies a Palette for
+evaluation. Every other part of a set stays on the Scene, so keyframes on set
+settings keep their paths; an animated age is the supported case.
+
+- **Access.** `OP_TextureSet.layers` is a Python property that reads the store.
+  Code that reads or writes `ts.layers` is unchanged. The store's `layers` is an
+  RNA collection, which list templates take as their data. The set remains the
+  owner of `active_layer`.
+- **Naming.** Stores are named `.OP Layers · <set id>`. Blender hides names that
+  start with a dot from its datablock lists. New palettes get a fake user, which
+  the store drops: the set's pointer is its only user, so a removed set's store
+  goes with it.
+- **The Scene of a struct.** A layer's structs have the store as their `id_data`.
+  `layer_store.scene_of` and `project_of` map them back to their Scene, for
+  property callbacks, the owner index and the preview's owner lookup.
+  `scene_path` spells their RNA paths from the Scene, as before, because shader
+  bindings, cache provenance and master controls key on those paths.
+- **Old files.** A file written before the store keeps the stack on the set, as
+  raw properties. On load, `ensure_all` moves it into a new store by a raw
+  property copy: 2,000 layers with nested masks and object pointers take 8 ms.
+- **Copied scenes.** A Full or Linked Copy of a Scene, or a Material Director
+  candidate, points at the original's stores. Each scheduler tick checks for
+  missing or shared stores. The set that held a store keeps it, and the others
+  get copies, so the projects stay independent. A set whose store changed drops
+  its preview sessions.
+- **Snapshots.** Immutable evaluation snapshots of a set (`evaluation/snapshots`)
+  take the stack explicitly, since it is no longer among the set's RNA
+  properties.
+
+With the stack in the store, an edit of a layer property plus the depsgraph
+update takes 0.06 ms at 312 layers (`tests/integration/layer_store.py`). The
+synthetic benchmark measured 19.9 ms with 150,000 properties on the Scene.
+
+Layer properties can no longer be keyframed: a Palette holds no animation data.
+Blender refuses the keyframe with a message. Before, the keyframe landed on the
+Scene, but the engine never followed layer animation.
+
 ## Test and benchmark memory
 
 A 200-layer 2K benchmark run exhausted the development machine. Background
@@ -389,6 +429,4 @@ Machines with 16 GB or more keep the previous limits.
 - **Isolated folders.** Chains inside isolated folders are not collapsed.
 - **Structural edits.** Structural edits and cold builds still rebuild more
   host state than they change.
-- **Scene copies.** Each edit re-copies the project's properties into the
-  evaluated Scene (see "The rest of the frame"). Removing that means moving the
-  project's storage off the Scene, a data-model migration.
+

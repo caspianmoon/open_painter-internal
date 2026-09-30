@@ -544,7 +544,10 @@ class Graph(Math):
         if paths is None:
             paths = self._paths = path_index(self.ts)
         path = paths.get(owner.as_pointer())
-        return path if path is not None else owner.path_from_id()
+        if path is not None:
+            return path
+        from ..core.layer_store import scene_path
+        return scene_path(owner)
 
     def _owner_key(self, owner):
         """Stable identity of an RNA item: ids rather than collection indices."""
@@ -664,7 +667,8 @@ class Graph(Math):
         key = (self.unit.key if self.unit is not None else None, owner.as_pointer(), field, index)
         if key not in self.bindings:
             try:
-                path = owner.path_from_id()
+                from ..core.layer_store import scene_path
+                path = scene_path(owner)
             except ValueError:
                 path = f'item@{owner.as_pointer():x}'   # a ramp stop: RNA builds no path inside a custom node
             identifier = f'Parameter:{tree}:{path}.{field}' + (f'[{index}]' if index is not None else '')
@@ -2291,7 +2295,8 @@ class Graph(Math):
                 # Unpublished fields must not all share the same empty resource:
                 # its first factory only queues analysis for one owning mask.
                 inputs = values(field, excluded={'image', 'provenance', 'error'})
-                return (field.mode, field.path_from_id(), inputs, field.provenance, image_key(field.image), falloff)
+                from ..core.layer_store import scene_path
+                return (field.mode, scene_path(field), inputs, field.provenance, image_key(field.image), falloff)
             from ..generators.scene_fields import signature
             return (field.mode, signature(self.ts, field), falloff)
         return (field.mode, image_key(field.image), field.update_serial, falloff)

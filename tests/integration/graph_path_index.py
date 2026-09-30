@@ -40,8 +40,11 @@ try:
         structs.extend(layer.cache)
     assert any(len(layer.cache) for layer in ts.layers)
     assert len(paths) == len({s.as_pointer() for s in structs}), (len(paths), len(structs))
+    # Paths are spelled from the Scene, as ``path_from_id`` did before stacks moved into
+    # layer stores (``layer_store.scene_path``): bindings and provenance keep them.
+    from open_painter.core.layer_store import scene_path
     for struct in structs:
-        assert paths[struct.as_pointer()] == struct.path_from_id(), (paths[struct.as_pointer()], struct.path_from_id())
+        assert paths[struct.as_pointer()] == scene_path(struct), (paths[struct.as_pointer()], scene_path(struct))
     print('GRAPH_PATH_INDEX_PASS', len(structs), flush=True)
 finally:
     open_painter.unregister()

@@ -339,6 +339,8 @@ def _tick():
     from .evaluator import LayerEvaluator
 
     from . import live_preview, shader_preview
+    from ..core import layer_store
+    layer_store.maintain()   # a copied or appended scene, a directly added set: each gets its own store
     _tick_scene = None
     live = frozenset(key_for(scene, ts) for scene in bpy.data.scenes
                      if hasattr(scene, "open_painter") for ts in scene.open_painter.texture_sets)
@@ -571,8 +573,9 @@ def _reset_runtime(*, forget_corrections):
     clear_live()
     from .shader_preview import clear as clear_shaders
     clear_shaders(undo=not forget_corrections)   # an undo keeps the leaves its rebuild adopts
-    from ..core import owners
+    from ..core import owners, layer_store
     owners.clear()
+    layer_store.clear()
     from .preview_policy import clear
     clear()
     clear_shared()
@@ -681,6 +684,9 @@ def on_load(_):
     retire_unloaded_leaves()   # before any draw regenerates a bufferless leaf blank
     forget_released()   # the remembered superseded-map names belong to the previous file
     freeze_new_leaves(False)   # a fresh file: normal building is allowed
+    from ..core import layer_store
+    layer_store.clear()
+    layer_store.ensure_all()   # stacks an older file kept on its sets move to their stores first
     for scene in bpy.data.scenes:
         if hasattr(scene, "open_painter"):
             _migrate_angles(scene.open_painter)   # file-format upgrades: the loaded file only

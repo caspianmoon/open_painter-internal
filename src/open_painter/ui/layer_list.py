@@ -212,9 +212,12 @@ class OP_PT_layers(bpy.types.Panel):
         row = layout.row(align=True)
         for action, label in (("PAINT", "Paint"), ("FILL", "Fill"), ("GROUP", "Group")):
             row.operator("open_painter.layer", text=label, icon="ADD").action = action
-        layout.template_list(
-            "OP_UL_layers", "", ts, "layers", ts, "active_layer", rows=6, sort_reverse=True
-        )
+        from ..core.layer_store import rna_owner
+        stack = rna_owner(ts)   # the stack lives in the set's layer store
+        if stack is not None:
+            layout.template_list(
+                "OP_UL_layers", "", stack, "layers", ts, "active_layer", rows=6, sort_reverse=True
+            )
         row = layout.row(align=True)
         for action, icon in (
             ("UP", "TRIA_UP"),

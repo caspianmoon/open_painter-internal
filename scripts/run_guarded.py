@@ -30,6 +30,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,7 +101,8 @@ def main():
     if not command:
         parser.error('No command given')
     cap = int(args.cap_gb * GIB)
-    lock_path = ROOT / '.blender-test' / 'guard.lock'
+    # One lock for the machine: worktrees and other checkouts must not overlap either.
+    lock_path = Path(os.environ.get('OP_GUARD_LOCK') or Path(tempfile.gettempdir()) / 'open_painter_guard.lock')
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock = open(lock_path, 'w')
     try:

@@ -22,7 +22,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('tests', nargs='+')
     parser.add_argument('--blender', default='/Applications/Blender.app/Contents/MacOS/Blender')
-    parser.add_argument('--cap-gb', type=float, default=4.0)
+    parser.add_argument('--cap-gb', type=float, default=3.0)
+    parser.add_argument('--start-gb', type=float, default=2.0, help='Available memory needed to start each test')
     parser.add_argument('--timeout', type=float, default=900)
     args = parser.parse_args()
     out = ROOT / '.blender-test/selected' / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
@@ -32,7 +33,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='op-selected-') as profile:
             env = isolated_environment(profile)
             command = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
-                       '--start-gb', '3', '--wait-seconds', '120', '--', args.blender, '--background',
+                       '--start-gb', str(args.start_gb), '--wait-seconds', '120', '--', args.blender, '--background',
                        '--factory-startup', '--python-exit-code', '1', '--python', str(ROOT / 'tests/integration' / name)]
             log = out / (name + '.log')
             with log.open('w') as handle:

@@ -88,6 +88,13 @@ int main(void) {
     runs_of(g, 11, &h, &p);
     assert(p.run_count == 0); /* current */
 
+    /* Before the edit, prediction reports the runs it will produce. */
+    plan predicted;
+    assert(op_graph_edit_runs(g, 11, 7, NULL, NULL, predicted.runs, N, &predicted.run_count, predicted.members, N,
+                              &predicted.member_count) == OP_OK);
+    assert(predicted.run_count == 1 && predicted.runs[0].input == 7 && predicted.runs[0].length == 4);
+    assert(op_graph_edit_runs(g, 11, COUNT, NULL, NULL, predicted.runs, N, &predicted.run_count, predicted.members,
+                              N, &predicted.member_count) == OP_INVALID_ARGUMENT);
     /* Edit the second layer: everything above it is stale only by its backdrop. */
     set_own(g, 7, 500);
     evaluate(g, COUNT, &h, stamps);
@@ -95,6 +102,7 @@ int main(void) {
     assert(p.run_count == 1 && p.member_count == 4);
     op_graph_run_t run = p.runs[0];
     assert(run.top == 11 && run.bottom == 8 && run.input == 7 && run.length == 4 && run.first == 0);
+    assert(run.key == predicted.runs[0].key);   /* armed while idle, found on the first edit */
     for (uint32_t i = 0; i < 4; i++)
         assert(p.members[i] == 8 + i);
     /* Materialize the top as the host would; the members stay stale. */
@@ -187,7 +195,14 @@ int main(void) {
     evaluate(g, 11, &h, stamps);
     render(g, 7, &h);
     /* Edit the bottom child: its siblings form a run, the folder is dirty (its
-     * grouped input changed) and the top-level layers above it form another. */
+     * grouped input changed) and the top-level layers above it form another.
+     * Prediction for an edit of the child's own content matches. */
+    assert(op_graph_edit_runs(g, 7, 2, NULL, NULL, predicted.runs, N, &predicted.run_count, predicted.members, N,
+                              &predicted.member_count) == OP_OK);
+    assert(predicted.run_count == 2 && predicted.runs[0].input == 5 && predicted.runs[1].input == 2);
+    /* An edit of a source reaches its layer through a non-backdrop edge. */
+    assert(op_graph_edit_runs(g, 7, 8, NULL, NULL, p.runs, N, &p.run_count, p.members, N, &p.member_count) == OP_OK);
+    assert(p.run_count == 2 && p.runs[1].input == 2);
     set_own(g, 8, 77);
     set_own(g, 2, 78);
     evaluate(g, 11, &h, stamps);
@@ -196,6 +211,39 @@ int main(void) {
     assert(p.runs[0].top == 7 && p.runs[0].input == 5 && p.runs[0].length == 2);
     assert(p.runs[1].top == 4 && p.runs[1].input == 2 && p.runs[1].length == 2);
     assert(p.members[p.runs[1].first] == 3 && p.members[p.runs[1].first + 1] == 4);
+    assert(p.runs[0].key == predicted.runs[0].key && p.runs[1].key == predicted.runs[1].key);
+    /* The spine of an edit: what it composes over without changing it. */
+    uint32_t keep[N], kept = 0;
+    assert(op_graph_spine(g, 3, keep, N, &kept) == OP_OK && kept == 2 && keep[0] == 2 && keep[1] == 1);
+    assert(op_graph_spine(g, 2, keep, N, &kept) == OP_OK && kept == 1 && keep[0] == 1);
+    assert(op_graph_spine(g, 6, keep, N, &kept) == OP_OK && kept == 1 && keep[0] == 5);
+    assert(op_graph_spine(g, 0, keep, N, &kept) == OP_OK && kept == 0);
+    assert(op_graph_spine(g, 3, keep, 1, &kept) == OP_RESOURCE_EXHAUSTED);
+    assert(op_graph_spine(g, 11, keep, N, &kept) == OP_INVALID_ARGUMENT);
+    uint32_t order[] = {0, 1, 2, 3, 4, 5, 6, 7}, lowest = 0;
+    render(g, 7, &h);
+    assert(op_graph_lowest_changed(g, order, 8, h.resident, stamps, &lowest) == OP_OK && lowest == UINT32_MAX);
+    set_own(g, 3, 123);
+    evaluate(g, 11, &h, stamps);
+    assert(op_graph_lowest_changed(g, order, 8, h.resident, stamps, &lowest) == OP_OK && lowest == 3);
+    order[0] = 40;
+    assert(op_graph_lowest_changed(g, order, 8, h.resident, stamps, &lowest) == OP_VALIDATION_FAILED);
+    /* Released results below an edit are rendered again: prediction given the
+     * resident stamps finds the same run from the chain's start as the planner. */
+    render(g, 7, &h);
+    h.resident[0] = h.resident[1] = 0;   /* the outer chain below the folder, released */
+    assert(op_graph_edit_runs(g, 7, 2, h.resident, stamps, predicted.runs, N, &predicted.run_count,
+                              predicted.members, N, &predicted.member_count) == OP_OK);
+    assert(op_graph_edit_runs(g, 7, 2, h.resident, NULL, predicted.runs, N, &predicted.run_count,
+                              predicted.members, N, &predicted.member_count) == OP_INVALID_ARGUMENT);
+    assert(op_graph_edit_runs(g, 7, 2, h.resident, stamps, predicted.runs, N, &predicted.run_count,
+                              predicted.members, N, &predicted.member_count) == OP_OK);
+    set_own(g, 2, 79);
+    evaluate(g, 11, &h, stamps);
+    runs_of(g, 7, &h, &p);
+    assert(p.run_count == predicted.run_count && p.run_count == 3);
+    for (uint32_t i = 0; i < p.run_count; i++)
+        assert(p.runs[i].key == predicted.runs[i].key);
     op_graph_destroy(g);
     puts("PASS test_suffix");
     return 0;

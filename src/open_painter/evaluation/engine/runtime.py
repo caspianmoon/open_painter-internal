@@ -1375,13 +1375,12 @@ class Engine:
         return texture
 
     def _checkpoints(self, channel, memo, epochs):
-        """Keep the result just below the lowest changed unit of the chain: the next edit
-        of the same layer re-renders from there upward only."""
+        """Keep the results the lowest changed unit of the chain composes over: the one
+        just below it and, natively, the one below each folder enclosing it. The next
+        edit of the same layer re-renders nothing beneath them."""
         keep = {key for key in self.keep if key[2] != channel}
         if self._native_stamps is not None and self._native_graph is not None:
-            checkpoint = self._native_graph.checkpoint(self, channel)
-            if checkpoint is not None:
-                keep.add(checkpoint)
+            keep.update(self._native_graph.checkpoints(self, channel))
         else:
             order = self.orders.get(channel, ())
             lowest = next((key for key in order if self.states[key].stamp != self._stamp(key, memo, epochs)), None)
@@ -1632,6 +1631,39 @@ class Engine:
             metrics.count('engine_channel_publications', len(written))
             metrics.sample('engine_evaluate_ms', self.report['evaluate_ms'])
         return written
+
+    def prearm(self, layer_id, epochs=None):
+        """While idle: arm one suffix transform an edit of ``layer_id`` would use.
+
+        Returns True when it did work (call again on a later idle tick). Nothing is
+        armed while an edit is still unevaluated: prediction assumes the current
+        content is the one on screen.
+        """
+        from .suffix import prearm_enabled
+        if (self.graph is None or not prearm_enabled() or device().pixel_publish
+                or (self._native_channels is not None and self._native_channels.dispatching)):
+            return False
+        n = self.graph.n
+        self.stages = stages.evaluation()
+        self._in_use = Counter()
+        self._surface_key = None
+        self.rendered = []
+        with self._evaluation_states(), device().state():
+            self._prepare_native(epochs or {})
+            graph = self._native_graph
+            if self._native_stamps is None or graph is None or graph.last_patch_count:
+                return False
+            memo = {}
+            # An edit of the layer will compose over its spine: make it resident and
+            # keep it, as the edit's own checkpoints will, so its first tick renders
+            # nothing below the layer.
+            for channel in CHANNELS:
+                node = ('CHANNEL', layer_id, channel)
+                spine = [key for key in graph.spine(node) if key not in self.keep]
+                for key in spine:
+                    self.keep.add(key)
+                    self._texture_of(('unit', key), n, memo, epochs or {})
+            return self._suffix.prearm(self, layer_id, n, memo, epochs or {})
 
     def _evaluate_native_channels(self, order, ts, images, n, memo, epochs):
         from ...native_bridge import lifecycle

@@ -58,6 +58,29 @@ static PyObject *graph_compose(PyObject *self, PyObject *args) {
         return NULL;
     Py_RETURN_NONE;
 }
+static PyObject *run_rows(const op_graph_run_t *runs, uint32_t count, const uint32_t *members) {
+    PyObject *list = PyList_New(count);
+    for (uint32_t i = 0; list && i < count; i++) {
+        const op_graph_run_t *r = &runs[i];
+        PyObject *ids = PyTuple_New(r->length);
+        for (uint32_t j = 0; ids && j < r->length; j++) {
+            PyObject *value = PyLong_FromUnsignedLong(members[r->first + j]);
+            if (!value) {
+                Py_CLEAR(ids);
+                break;
+            }
+            PyTuple_SetItem(ids, j, value);
+        }
+        PyObject *row = ids ? Py_BuildValue("(IIKN)", r->top, r->input, (unsigned long long)r->key, ids)
+                            : NULL;
+        if (!row) {
+            Py_CLEAR(list);
+            break;
+        }
+        PyList_SetItem(list, i, row);
+    }
+    return list;
+}
 /* Runs for one root against the stamps of the last graph_evaluate. */
 static PyObject *graph_runs(PyObject *self, PyObject *args) {
     (void)self;
@@ -88,32 +111,117 @@ static PyObject *graph_runs(PyObject *self, PyObject *args) {
     op_status_t status = op_graph_suffix_runs(g->graph, root, resident, g->stamps, runs, n,
                                               &runs_used, members, n, &members_used);
     free(resident);
-    if (fail(status)) {
-        free(runs);
-        free(members);
-        return NULL;
-    }
-    PyObject *list = PyList_New(runs_used);
-    for (uint32_t i = 0; list && i < runs_used; i++) {
-        const op_graph_run_t *r = &runs[i];
-        PyObject *ids = PyTuple_New(r->length);
-        for (uint32_t j = 0; ids && j < r->length; j++) {
-            PyObject *value = PyLong_FromUnsignedLong(members[r->first + j]);
-            if (!value) {
-                Py_CLEAR(ids);
-                break;
-            }
-            PyTuple_SetItem(ids, j, value);
-        }
-        PyObject *row = ids ? Py_BuildValue("(IIKN)", r->top, r->input, (unsigned long long)r->key, ids)
-                            : NULL;
-        if (!row) {
-            Py_CLEAR(list);
-            break;
-        }
-        PyList_SetItem(list, i, row);
-    }
+    PyObject *list = fail(status) ? NULL : run_rows(runs, runs_used, members);
     free(runs);
     free(members);
     return list;
+}
+/* The runs an edit of node's own content would produce under root, given the
+ * resident stamps and those of the last graph_evaluate. */
+static PyObject *graph_edit_runs(PyObject *self, PyObject *args) {
+    (void)self;
+    PyObject *capsule, *current;
+    unsigned int root, node;
+    uint32_t n, runs_used = 0, members_used = 0;
+    if (!PyArg_ParseTuple(args, "OIIO", &capsule, &root, &node, &current))
+        return NULL;
+    graph_owner *g = graph_get(capsule);
+    if (!g)
+        return NULL;
+    uint64_t *resident = NULL;
+    if (current != Py_None) {
+        resident = copy_buffer(current, 8, 65536, &n);
+        if (!resident)
+            return NULL;
+        if (n != g->count) {
+            free(resident);
+            PyErr_SetString(PyExc_ValueError, "Graph resident count mismatch");
+            return NULL;
+        }
+    }
+    op_graph_run_t *runs = malloc(((size_t)g->count + 1) * sizeof(*runs));
+    uint32_t *members = malloc(((size_t)g->count + 1) * sizeof(*members));
+    if (!runs || !members) {
+        free(resident);
+        free(runs);
+        free(members);
+        return PyErr_NoMemory();
+    }
+    op_status_t status = op_graph_edit_runs(g->graph, root, node, resident, resident ? g->stamps : NULL,
+                                            runs, g->count, &runs_used, members, g->count,
+                                            &members_used);
+    free(resident);
+    PyObject *list = fail(status) ? NULL : run_rows(runs, runs_used, members);
+    free(runs);
+    free(members);
+    return list;
+}
+
+static PyObject *index_tuple(const uint32_t *values, uint32_t count) {
+    PyObject *out = PyTuple_New(count);
+    for (uint32_t i = 0; out && i < count; i++) {
+        PyObject *value = PyLong_FromUnsignedLong(values[i]);
+        if (!value) {
+            Py_CLEAR(out);
+            break;
+        }
+        PyTuple_SetItem(out, i, value);
+    }
+    return out;
+}
+/* The spine of one node: what an edit of it composes over without changing. */
+static PyObject *graph_spine(PyObject *self, PyObject *args) {
+    (void)self;
+    PyObject *capsule;
+    unsigned int node;
+    uint32_t count = 0;
+    if (!PyArg_ParseTuple(args, "OI", &capsule, &node))
+        return NULL;
+    graph_owner *g = graph_get(capsule);
+    if (!g)
+        return NULL;
+    uint32_t *keep = malloc(((size_t)g->count + 1) * sizeof(*keep));
+    if (!keep)
+        return PyErr_NoMemory();
+    op_status_t status = op_graph_spine(g->graph, node, keep, g->count, &count);
+    PyObject *out = fail(status) ? NULL : index_tuple(keep, count);
+    free(keep);
+    return out;
+}
+/* Checkpoints of one channel: the spine of its lowest changed node against the
+ * stamps of the last graph_evaluate. */
+static PyObject *graph_checkpoints(PyObject *self, PyObject *args) {
+    (void)self;
+    PyObject *capsule, *order, *current;
+    uint32_t n, c, count = 0, lowest = UINT32_MAX;
+    if (!PyArg_ParseTuple(args, "OOO", &capsule, &order, &current))
+        return NULL;
+    graph_owner *g = graph_get(capsule);
+    if (!g)
+        return NULL;
+    uint32_t *nodes = copy_buffer(order, 4, 65536, &n);
+    if (!nodes)
+        return NULL;
+    uint64_t *stamps = copy_buffer(current, 8, 65536, &c);
+    if (!stamps) {
+        free(nodes);
+        return NULL;
+    }
+    uint32_t *keep = malloc(((size_t)g->count + 1) * sizeof(*keep));
+    if (!keep || c != g->count) {
+        free(nodes);
+        free(stamps);
+        free(keep);
+        if (keep)
+            PyErr_SetString(PyExc_ValueError, "Checkpoint buffer size mismatch");
+        return keep ? NULL : PyErr_NoMemory();
+    }
+    op_status_t status = op_graph_lowest_changed(g->graph, nodes, n, stamps, g->stamps, &lowest);
+    if (!status && lowest != UINT32_MAX)
+        status = op_graph_spine(g->graph, lowest, keep, g->count, &count);
+    free(nodes);
+    free(stamps);
+    PyObject *out = fail(status) ? NULL : index_tuple(keep, count);
+    free(keep);
+    return out;
 }

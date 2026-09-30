@@ -225,6 +225,32 @@ def main():
         applied = {row['case'] for row in report['cases'] if all(row['applications'])}
         # Deep drags must actually take the collapsed path for the comparison to count.
         assert {'base', 'material_leaf', 'below_overlay', 'base_roughness'} <= applied, applied
+
+        # Idle arming: the selected layer's transforms are armed before the drag,
+        # so its very first tick collapses, and matches sequential rendering.
+        from open_painter.evaluation import dependencies
+        suffix.PREARM = True
+        engine.precise = True
+        shader_preview.flush(scene, ts, pixels=False)
+        base_index = next(i for i, item in enumerate(ts.layers) if item.id == ids['base'])
+        ts.active_layer = base_index
+        prearmed = 0
+        while prearmed < 64 and engine.prearm(ids['base'], dependencies.image_epochs()):
+            prearmed += 1
+        assert prearmed and not engine.prearm(ids['base'], dependencies.image_epochs()), prearmed
+        with Metrics() as metrics:
+            layer('base')().opacity = .52
+            with Capture(engine) as first:
+                shader_preview.tick(scene, ts)
+        counts = dict(metrics.counts)
+        assert counts.get('engine_suffix_applications', 0) >= prearmed, (counts, prearmed)
+        assert not counts.get('engine_suffix_arms', 0), counts   # nothing left to arm on the first tick
+        truth = sequential(scene, ts)
+        error = max(difference(first, truth).values())
+        report['prearm'] = dict(runs=prearmed, first_tick_applications=counts.get('engine_suffix_applications', 0),
+                                error=error)
+        print('SUFFIX_PREARM', json.dumps(report['prearm']), flush=True)
+        assert error <= 2e-5, report['prearm']
         report['status'] = 'PASS'
         print('NATIVE_SUFFIX_PASS', flush=True)
     finally:

@@ -510,6 +510,7 @@ def _evaluate(scene, ts, entry, budget=None):
         entry.update(error=f'Evaluation failed: {exc}', serial=ts.edit_serial)
         return set()
     entry['dirty'] = bool(engine.deferred)
+    entry['evaluated_at'] = perf_counter()
     if engine.deferred:
         from . import cache
         cache.wake()
@@ -648,8 +649,27 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
     if entry.get('dirty') or entry.get('image_epoch') != dependencies.image_epoch():
         entry['image_epoch'] = dependencies.image_epoch()
         _evaluate(scene, ts, entry)
+    elif not painting and not _pending(graph):
+        _prearm(ts, entry)
     _publish_status(scene, ts, entry)
     return current(scene, ts)
+
+
+def _prearm(ts, entry):
+    """Idle: arm the suffix transforms an edit of the selected layer would use."""
+    from .engine.suffix import PREARM_DELAY
+    engine = entry.get('engine')
+    if engine is None or perf_counter() - entry.get('evaluated_at', 0.0) < PREARM_DELAY:
+        return
+    if not 0 <= ts.active_layer < len(ts.layers):
+        return
+    from . import dependencies
+    try:
+        if engine.prearm(ts.layers[ts.active_layer].id, dependencies.image_epochs()):
+            from . import cache
+            cache.wake()   # more runs to arm on the next idle tick
+    except Exception:
+        logger.exception('Open Painter idle suffix arming')
 
 
 def inputs_changed(scene, ts):

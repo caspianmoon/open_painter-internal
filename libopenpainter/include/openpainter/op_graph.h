@@ -62,6 +62,17 @@ op_status_t op_graph_checkpoint(const op_graph_t *graph, const uint32_t *order,
 op_status_t op_graph_set_composition(op_graph_t *graph, const uint32_t *backdrop,
                                      const uint32_t *grouped, const unsigned char *affine,
                                      uint32_t count);
+/* The first node of a channel's render order whose current stamp differs from
+ * its desired one (UINT32_MAX: none). */
+op_status_t op_graph_lowest_changed(const op_graph_t *graph, const uint32_t *order, uint32_t count,
+                                    const uint64_t *current, const uint64_t *desired,
+                                    uint32_t *node);
+/* The results an edit of node composes over without changing them: the backdrop
+ * of node and of every folder enclosing it, innermost first. Keeping them
+ * resident means repeated edits of node never re-render anything below it.
+ * Requires a composition (op_graph_set_composition); otherwise none. */
+op_status_t op_graph_spine(const op_graph_t *graph, uint32_t node, uint32_t *keep,
+                           uint32_t capacity, uint32_t *count);
 /* A run is a chain top -> ... -> bottom of affine nodes, each composing over the
  * next through its backdrop edge, that are stale only because that backdrop
  * changed: their local stamps equal the ones they were last rendered with. The
@@ -79,6 +90,16 @@ op_status_t op_graph_suffix_runs(op_graph_t *graph, uint32_t root, const uint64_
                                  const uint64_t *stamps, op_graph_run_t *runs,
                                  uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
                                  uint32_t member_capacity, uint32_t *member_count);
+/* The runs under root that an edit of node's own content would produce, before
+ * it happens: the same chains, members and keys op_graph_suffix_runs reports
+ * once the edit is evaluated, provided nothing else changed. current/stamps
+ * (both or neither) add results that are not resident, which the planner will
+ * render again too. Lets a host arm a likely edit's transforms while idle. */
+op_status_t op_graph_edit_runs(op_graph_t *graph, uint32_t root, uint32_t node,
+                               const uint64_t *current, const uint64_t *stamps,
+                               op_graph_run_t *runs, uint32_t run_capacity, uint32_t *run_count,
+                               uint32_t *members, uint32_t member_capacity,
+                               uint32_t *member_count);
 #ifdef __cplusplus
 }
 #endif

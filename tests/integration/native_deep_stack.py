@@ -47,6 +47,7 @@ SAMPLES = int(os.environ.get('OP_DEEP_SAMPLES', '24'))
 PROFILE = os.environ.get('OP_DEEP_PROFILE') == '1'
 STRUCTURAL = os.environ.get('OP_DEEP_STRUCTURAL', '1') == '1'
 TRACE = os.environ.get('OP_DEEP_TRACE') == '1'
+FIRST = os.environ.get('OP_DEEP_FIRST') == '1'   # time the first ticks of each drag
 FRAMES = os.environ.get('OP_DEEP_FRAMES', '1') == '1'
 TRACEMALLOC = os.environ.get('OP_DEEP_TRACEMALLOC') == '1'
 ONLY = set(filter(None, os.environ.get('OP_DEEP_ONLY', '').split(',')))   # case names to run; empty: all
@@ -306,17 +307,25 @@ def main():
         top_level = [layer for layer in ts.layers if not layer.parent_id]
         leaves = [layer for layer in ts.layers if layer.type != 'FOLDER']
         # ts.layers is bottom to top within the stack order used by the UI.
+        ids = dict(top_folder=top_level[-1].id, bottom_folder=top_level[0].id,
+                   middle_leaf=leaves[len(leaves) // 2].id, second_leaf=leaves[1].id)
+
+        def layer_by(identifier):
+            return next(l for l in ts.layers if l.id == identifier)
+
         cases = {
-            'top_folder_opacity': (lambda: next(l for l in ts.layers if l.id == top_level[-1].id), 'opacity'),
-            'bottom_folder_opacity': (lambda: next(l for l in ts.layers if l.id == top_level[0].id), 'opacity'),
-            'middle_leaf_opacity': (lambda: next(l for l in ts.layers if l.id == leaves[len(leaves) // 2].id), 'opacity'),
-            'bottom_leaf_roughness': (lambda: stack.channel_for(next(l for l in ts.layers if l.id == leaves[1].id), 'ROUGHNESS'), 'value'),
+            'top_folder_opacity': (lambda: layer_by(ids['top_folder']), 'opacity', ids['top_folder']),
+            'bottom_folder_opacity': (lambda: layer_by(ids['bottom_folder']), 'opacity', ids['bottom_folder']),
+            'middle_leaf_opacity': (lambda: layer_by(ids['middle_leaf']), 'opacity', ids['middle_leaf']),
+            'bottom_leaf_roughness': (lambda: stack.channel_for(layer_by(ids['second_leaf']), 'ROUGHNESS'), 'value',
+                                      ids['second_leaf']),
         }
-        masked = next((l for l in leaves[len(leaves) // 3:] if len(l.masks)), None)
+        masked = next((l.id for l in leaves[len(leaves) // 3:] if len(l.masks)), None)
         if masked is not None:
-            cases['middle_mask_amount'] = (lambda: next(l for l in ts.layers if l.id == masked.id).masks[0], 'amount')
+            # The mask's black level: the same control the real-window slider test drags.
+            cases['middle_mask_black'] = (lambda: layer_by(masked).masks[0], 'black', masked)
         results = {}
-        for name, (target, attribute) in cases.items():
+        for name, (target, attribute, layer_id) in cases.items():
             if ONLY and name not in ONLY:
                 continue
             owner = target()
@@ -332,6 +341,24 @@ def main():
                     assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
                     fence()
                     return (perf_counter() - begin) * 1000
+            first = {}
+            if FIRST:
+                # A new drag on the selected layer: idle arming (when enabled) runs to completion first.
+                ts.active_layer = next(i for i, l in enumerate(ts.layers) if l.id == layer_id)
+                from open_painter.evaluation import dependencies
+                from open_painter.evaluation.engine import suffix
+                prearmed = 0
+                with Frame():
+                    while prearmed < 64 and engine.prearm(layer_id, dependencies.image_epochs()):
+                        prearmed += 1
+                    fence()
+                first = dict(prearmed_runs=prearmed, prearm=suffix.prearm_enabled())
+                for label, index in (('first', 100), ('second', 101), ('third', 102)):
+                    with Metrics() as tick_metrics:
+                        first[label + '_ms'] = edit(index)
+                    first[label + '_suffix'] = {k[len('engine_suffix_'):]: v for k, v in tick_metrics.counts.items()
+                                                if k.startswith('engine_suffix_')}
+                print('DEEP_STACK_FIRST', name, json.dumps(first), flush=True)
             for i in range(4):
                 edit(i)
             profiler = cProfile.Profile() if PROFILE else None
@@ -342,7 +369,7 @@ def main():
                 if profiler:
                     profiler.disable()
             stage = engine.stages
-            row = dict(median_ms=float(np.median(durations)), p95_ms=float(np.percentile(durations, 95)),
+            row = dict(first=first, median_ms=float(np.median(durations)), p95_ms=float(np.percentile(durations, 95)),
                        min_ms=float(np.min(durations)), samples_ms=durations,
                        passes=engine.report.get('passes'), units_rendered=engine.report.get('units_rendered'),
                        evaluate_ms=engine.report.get('evaluate_ms'),

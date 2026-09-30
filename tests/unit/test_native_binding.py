@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 from open_painter.native_bridge import load_library
-from open_painter.native_bridge.compiler import Node, Target, CONSTANT, CONVERT
+from open_painter.native_bridge.compiler import Node, Target, CONSTANT, CONVERT, COMPONENT, FETCH
 from open_painter.native_bridge.graph import Patch
 from open_painter.native_bridge.revisions import Publication
 
@@ -102,6 +102,60 @@ class BindingTests(unittest.TestCase):
         binding.graph_close(graph)
         with self.assertRaises(RuntimeError):
             binding.graph_execute(graph, 2, resident, submit)
+
+    def test_composition_runs_match_their_prediction(self):
+        binding = self.binding
+        graph = binding.graph_create()
+        # Node 0 is a source read by layer 1; layers 2..4 each compose over the one below.
+        offsets = bytes((C.c_uint32 * 6)(0, 0, 1, 2, 3, 4))
+        edges = bytes((C.c_uint32 * 4)(0, 1, 2, 3))
+        binding.graph_replace(graph, offsets, edges)
+        none = 0xffffffff
+        backdrop = bytes((C.c_uint32 * 5)(none, none, 1, 2, 3))
+        grouped = bytes((C.c_uint32 * 5)(*(none,) * 5))
+        affine = bytes([0, 1, 1, 1, 1])
+        with self.assertRaises((ValueError, RuntimeError)):
+            binding.graph_compose(graph, backdrop[:-4], grouped, affine)
+        with self.assertRaises(RuntimeError):   # layer 4 does not read node 0
+            binding.graph_compose(graph, bytes((C.c_uint32 * 5)(none, none, 1, 2, 0)), grouped, affine)
+        binding.graph_compose(graph, backdrop, grouped, affine)
+        resident = (C.c_uint64 * 5)()
+        stamps, _ = binding.graph_evaluate(graph, bytes((Patch * 5)(*(Patch(i, 0, 7 + i) for i in range(5)))),
+                                           bytes(resident))
+
+        def record(action, node, stamp):
+            if action == 1:
+                resident[node] = stamp
+        self.assertEqual(binding.graph_execute(graph, 4, bytes(resident), record), 5)
+        self.assertEqual(binding.graph_runs(graph, 4, bytes(resident)), [])
+        predicted = binding.graph_edit_runs(graph, 4, 1, bytes(resident))
+        self.assertEqual(len(predicted), 1)
+        top, source, key, members = predicted[0]
+        self.assertEqual((top, source, members), (4, 1, (2, 3, 4)))
+        binding.graph_evaluate(graph, bytes(Patch(1, 0, 900)), bytes(resident))
+        self.assertEqual(binding.graph_runs(graph, 4, bytes(resident)), predicted)
+        with self.assertRaises(ValueError):
+            binding.graph_runs(graph, 4, bytes(resident)[:-8])
+        with self.assertRaises(RuntimeError):
+            binding.graph_edit_runs(graph, 4, 9, bytes(resident))
+        binding.graph_close(graph)
+        for operation in (lambda: binding.graph_runs(graph, 4, bytes(resident)),
+                          lambda: binding.graph_edit_runs(graph, 4, 1, bytes(resident)),
+                          lambda: binding.graph_compose(graph, backdrop, grouped, affine)):
+            with self.assertRaises(RuntimeError):
+                operation()
+
+    def test_backdrop_affine_classification_shape(self):
+        nodes = (Node * 3)()
+        nodes[0].opcode, nodes[0].type = FETCH, 3
+        nodes[0].aux[0], nodes[0].aux[1] = 2, 1
+        nodes[1].opcode, nodes[1].type = CONVERT, 2
+        nodes[2].opcode, nodes[2].type, nodes[2].aux[0] = COMPONENT, 1, 3
+        target = bytes(Target(1, 2, 0))
+        self.assertEqual(self.binding.ir_backdrop_affine(bytes(nodes), target, 2), (0, 1, 2, 3))
+        self.assertEqual(self.binding.ir_backdrop_affine(bytes(nodes), target, 5), (255, 255, 255, 255))
+        with self.assertRaises(RuntimeError):
+            self.binding.ir_backdrop_affine(bytes(nodes), bytes(Target(9, 2, 0)), 2)
 
     def test_graph_rejects_previous_abi_capsule(self):
         # The old graph owner has a different layout. Reject its tag before

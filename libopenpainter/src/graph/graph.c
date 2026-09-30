@@ -11,7 +11,7 @@ struct op_graph {
     unsigned char *needed;
     /* Optional composition (op_graph_set_composition): reset with the topology. */
     uint32_t *backdrop, *grouped, *pending;
-    unsigned char *affine;
+    unsigned char *affine, *state;
     uint64_t *local, *rendered;
 };
 static void clear_composition(op_graph_t *g) {
@@ -19,10 +19,11 @@ static void clear_composition(op_graph_t *g) {
     free(g->grouped);
     free(g->pending);
     free(g->affine);
+    free(g->state);
     free(g->local);
     free(g->rendered);
     g->backdrop = g->grouped = g->pending = NULL;
-    g->affine = NULL;
+    g->affine = g->state = NULL;
     g->local = g->rendered = NULL;
 }
 op_status_t op_graph_create(op_graph_t **out) {
@@ -340,13 +341,14 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
     uint32_t *b = malloc(n * sizeof(*b)), *p = malloc(n * sizeof(*p));
     /* The run walk pushes a node once per composition edge into it, plus the root. */
     uint32_t *pending = malloc((2 * n + 1) * sizeof(*pending));
-    unsigned char *a = malloc(n);
+    unsigned char *a = malloc(n), *state = calloc(n, 1);
     uint64_t *local = calloc(n, sizeof(*local)), *rendered = calloc(n, sizeof(*rendered));
-    if (!b || !p || !pending || !a || !local || !rendered) {
+    if (!b || !p || !pending || !a || !state || !local || !rendered) {
         free(b);
         free(p);
         free(pending);
         free(a);
+        free(state);
         free(local);
         free(rendered);
         return OP_RESOURCE_EXHAUSTED;
@@ -369,40 +371,34 @@ op_status_t op_graph_set_composition(op_graph_t *g, const uint32_t *backdrop,
     g->grouped = p;
     g->pending = pending;
     g->affine = a;
+    g->state = state;
     g->local = local;
     g->rendered = rendered;
     return OP_OK;
 }
 
-static int run_member(const op_graph_t *g, uint32_t v, const uint64_t *current,
-                      const uint64_t *stamps) {
-    /* Stale only because its backdrop changed: everything else it reads is
-     * exactly what it read when it was last rendered. */
-    return current[v] != stamps[v] && g->affine[v] && g->rendered[v] &&
+/* Run walk shared by the planner and edit prediction. stale[v] bit 0: the node
+ * must be rendered again; bit 1: it reads a change through something other than
+ * its backdrop. A member is stale only through its backdrop and was rendered
+ * with its current local stamp. */
+enum { RUN_STALE = 1, RUN_DIRTY = 2 };
+static int run_member(const op_graph_t *g, uint32_t v, const unsigned char *state) {
+    return state[v] == RUN_STALE && g->affine[v] && g->rendered[v] &&
            g->rendered[v] == g->local[v] && !g->needed[v];
 }
 
-op_status_t op_graph_suffix_runs(op_graph_t *g, uint32_t root, const uint64_t *current,
-                                 const uint64_t *stamps, op_graph_run_t *runs,
-                                 uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
-                                 uint32_t member_capacity, uint32_t *member_count) {
+static op_status_t plan_runs(op_graph_t *g, uint32_t root, const unsigned char *state,
+                             op_graph_run_t *runs, uint32_t run_capacity, uint32_t *run_count,
+                             uint32_t *members, uint32_t member_capacity, uint32_t *member_count) {
     uint32_t depth = 0;
-    if (!g || !current || !stamps || !run_count || !member_count || root >= g->count ||
-        (run_capacity && !runs) || (member_capacity && !members))
-        return OP_INVALID_ARGUMENT;
-    *run_count = *member_count = 0;
-    if (g->executing)
-        return OP_PENDING;
-    if (!g->backdrop)
-        return OP_OK;
     memset(g->needed, 0, g->count);
     g->pending[depth++] = root;
     while (depth) {
         uint32_t u = g->pending[--depth];
-        if (g->needed[u] || current[u] == stamps[u])
+        if (g->needed[u] || !state[u])
             continue;
         uint32_t start = *member_count, length = 0, v = u;
-        while (v != UINT32_MAX && run_member(g, v, current, stamps)) {
+        while (v != UINT32_MAX && run_member(g, v, state)) {
             if (*member_count >= member_capacity)
                 return OP_RESOURCE_EXHAUSTED;
             members[(*member_count)++] = v;
@@ -443,4 +439,130 @@ op_status_t op_graph_suffix_runs(op_graph_t *g, uint32_t root, const uint64_t *c
         }
     }
     return OP_OK;
+}
+
+op_status_t op_graph_suffix_runs(op_graph_t *g, uint32_t root, const uint64_t *current,
+                                 const uint64_t *stamps, op_graph_run_t *runs,
+                                 uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
+                                 uint32_t member_capacity, uint32_t *member_count) {
+    if (!g || !current || !stamps || !run_count || !member_count || root >= g->count ||
+        (run_capacity && !runs) || (member_capacity && !members))
+        return OP_INVALID_ARGUMENT;
+    *run_count = *member_count = 0;
+    if (g->executing)
+        return OP_PENDING;
+    if (!g->backdrop)
+        return OP_OK;
+    for (uint32_t i = 0; i < g->count; i++)
+        g->state[i] = current[i] != stamps[i] ? RUN_STALE : 0;
+    return plan_runs(g, root, g->state, runs, run_capacity, run_count, members, member_capacity,
+                     member_count);
+}
+
+op_status_t op_graph_edit_runs(op_graph_t *g, uint32_t root, uint32_t node, const uint64_t *current,
+                               const uint64_t *stamps, op_graph_run_t *runs, uint32_t run_capacity,
+                               uint32_t *run_count, uint32_t *members, uint32_t member_capacity,
+                               uint32_t *member_count) {
+    if (!g || !run_count || !member_count || root >= g->count || node >= g->count ||
+        (!current != !stamps) || (run_capacity && !runs) || (member_capacity && !members))
+        return OP_INVALID_ARGUMENT;
+    *run_count = *member_count = 0;
+    if (g->executing)
+        return OP_PENDING;
+    if (!g->backdrop)
+        return OP_OK;
+    /* Producers precede consumers in order: one pass finds everything an edit
+     * of node reaches, and what reaches it other than through a backdrop. */
+    memset(g->state, 0, g->count);
+    for (uint32_t j = 0; j < g->count; j++) {
+        uint32_t v = g->order[j];
+        if (v == node) {
+            g->state[v] = RUN_STALE | RUN_DIRTY;
+            continue;
+        }
+        int skipped = g->backdrop[v] == UINT32_MAX;
+        for (uint32_t d = g->offsets[v]; d < g->offsets[v + 1]; d++) {
+            uint32_t input = g->edges[d];
+            if (!skipped && input == g->backdrop[v]) {
+                skipped = 1;
+                if (g->state[input])
+                    g->state[v] |= RUN_STALE;
+                continue;
+            }
+            if (g->state[input])
+                g->state[v] = RUN_STALE | RUN_DIRTY;
+        }
+        /* A result that is not resident is rendered again whatever the edit: the
+         * planner will treat it as stale, so prediction does too. */
+        if (current && current[v] != stamps[v])
+            g->state[v] |= RUN_STALE;
+    }
+    return plan_runs(g, root, g->state, runs, run_capacity, run_count, members, member_capacity,
+                     member_count);
+}
+
+op_status_t op_graph_lowest_changed(const op_graph_t *g, const uint32_t *order, uint32_t count,
+                                    const uint64_t *current, const uint64_t *desired,
+                                    uint32_t *node) {
+    if (!g || !node || count > g->count || (count && (!order || !current || !desired)))
+        return OP_INVALID_ARGUMENT;
+    *node = UINT32_MAX;
+    for (uint32_t i = 0; i < count; i++)
+        if (order[i] >= g->count)
+            return OP_VALIDATION_FAILED;
+    for (uint32_t i = 0; i < count; i++)
+        if (current[order[i]] != desired[order[i]]) {
+            *node = order[i];
+            break;
+        }
+    return OP_OK;
+}
+
+op_status_t op_graph_spine(const op_graph_t *g, uint32_t node, uint32_t *keep, uint32_t capacity,
+                           uint32_t *count) {
+    if (!g || !count || node >= g->count || (capacity && !keep))
+        return OP_INVALID_ARGUMENT;
+    *count = 0;
+    if (!g->backdrop)
+        return OP_OK;
+    uint32_t *above = malloc(((size_t)g->count + 1) * sizeof(*above));
+    uint32_t *folder = malloc(((size_t)g->count + 1) * sizeof(*folder));
+    if (!above || !folder) {
+        free(above);
+        free(folder);
+        return OP_RESOURCE_EXHAUSTED;
+    }
+    memset(above, 0xff, (size_t)g->count * sizeof(*above));
+    memset(folder, 0xff, (size_t)g->count * sizeof(*folder));
+    for (uint32_t i = 0; i < g->count; i++) {
+        /* A passthrough folder and its first child share a backdrop; the walk
+         * below only ever steps up from a chain member, never from that backdrop. */
+        if (g->backdrop[i] != UINT32_MAX)
+            above[g->backdrop[i]] = i;
+        if (g->grouped[i] != UINT32_MAX)
+            folder[g->grouped[i]] = i;
+    }
+    op_status_t status = OP_OK;
+    uint32_t v = node, steps = 0;
+    while (v != UINT32_MAX) {
+        if (g->backdrop[v] != UINT32_MAX) {
+            if (*count >= capacity) {
+                status = OP_RESOURCE_EXHAUSTED;
+                break;
+            }
+            keep[(*count)++] = g->backdrop[v];
+        }
+        /* Up the sibling chain to its top, then to the folder composing it. */
+        uint32_t top = v;
+        while (above[top] != UINT32_MAX && folder[top] == UINT32_MAX && steps++ <= g->count)
+            top = above[top];
+        if (steps > g->count) {
+            status = OP_VALIDATION_FAILED;   /* composition edges form a loop */
+            break;
+        }
+        v = folder[top];
+    }
+    free(above);
+    free(folder);
+    return status;
 }

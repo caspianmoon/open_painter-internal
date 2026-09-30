@@ -52,6 +52,32 @@ bottom-up in full float. Each later tick then materializes the run's top unit
 with one `suffix.apply` pass and gives it its desired stamp. The ordinary
 executor then treats the top unit as already rendered.
 
+### Checkpoints along the spine
+
+An edit composes over results it does not change. These are the result just below
+the edited layer and the result below each folder enclosing it (`op_graph_spine`).
+For each channel, the host keeps all of them for the lowest changed layer
+(`op_graph_lowest_changed`). Previously only the first was kept. Every tick of an
+edit inside a folder then re-rendered the stack below that folder, or collapsed
+it from the channel's constant start.
+
+### Idle arming
+
+The first ticks of a new drag used to pay the sequential render and then the
+arming. While a set is idle (0.3 s after its last evaluation), the session tick
+prepares an edit of the selected layer in advance:
+
+- It renders and keeps the layer's spine.
+- It arms the runs an edit of the layer would produce. `op_graph_edit_runs`
+  predicts them exactly, with the same members and keys the planner reports once
+  the edit is evaluated.
+- It arms one run per idle tick.
+- A run is never armed twice for the same stack state. If the budget evicts a
+  sibling, idle arming stops instead of cycling.
+
+Idle arming is on with a UI. In background Blender it is off unless `OP_PREARM=1`
+is set, because tests drive ticks by hand.
+
 ### Exactness
 
 `tests/integration/native_suffix.py` drags layers at five depths of a mixed
@@ -129,8 +155,20 @@ excluded. The baseline is `a04b994`, measured the same way without profiling.
 | Bottom leaf roughness | 115 ms | 56 ms | 11.5 ms |
 | Middle mask amount | 329 ms | 54 ms | 16.3 ms |
 
-The first tick of a drag renders sequentially and the second arms. The p95 of
-those runs (43–45 ms) comes from these ticks.
+In these runs, idle arming was off. The first tick of a drag rendered
+sequentially and the second armed. The p95 of those runs (43–45 ms) comes from
+these ticks.
+
+First ticks of a new drag, 101 layers at 1K. Idle arming ran to completion before
+each drag, as it does in the UI while the layer is selected:
+
+| Edit | Without idle arming (1st / 2nd tick) | With idle arming (1st / 2nd tick) |
+| --- | ---: | ---: |
+| Top folder opacity | 44.6 / 10.1 ms | 9.5 / 8.0 ms |
+| Bottom folder opacity | 43.5 / 66.9 ms | 12.0 / 9.6 ms |
+| Middle leaf opacity | 39.6 / 62.9 ms | 10.6 / 10.4 ms |
+| Bottom leaf roughness | 19.4 / 23.3 ms | 8.2 / 5.5 ms |
+| Mask black level | 43.6 / 51.7 ms | 9.0 / 8.6 ms |
 
 101 layers, 1K, from each structural edit until the set is current:
 
@@ -160,8 +198,11 @@ texture it ever used.
   each edit. This is test instrumentation only; the add-on never calls those
   functions.
 - **Heavy suites.** `native_publication_4k.py` needs more than 7 GiB and
-  `resolution_switch.py` more than 4 GiB. They were not run for this change on
-  the 18 GB machine while other work was using its memory.
+  `resolution_switch.py` more than 4 GiB. `mask_groups.py` and
+  `artist_file_edits.py` also exceed 5 GiB; the latter only with the local
+  artist file present. All four exceed these limits at the pre-change commit
+  too, so this is not a regression. They were not run for this change on the
+  18 GB machine while other work was using its memory.
 
 Engine budgets now scale with physical memory. Managed textures get a quarter of
 it (1.5–4 GiB). Retained results and the free pool each get 1/32 (128–512 MiB).

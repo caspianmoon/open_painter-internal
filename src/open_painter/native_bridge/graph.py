@@ -329,6 +329,16 @@ class NativeGraph:
         return [(keys[top], None if source == NONE else keys[source], key, tuple(keys[m] for m in members))
                 for top, source, key, members in reversed(rows)]
 
+    def edit_runs(self, root, node):
+        """The runs an edit of ``node``'s own content would produce under ``root``, bottom-up."""
+        if (self.binding is None or self.composition is None or root not in self.indices
+                or node not in self.indices):
+            return []
+        keys = self.keys
+        rows = self.binding.graph_edit_runs(self.handle, self.indices[root], self.indices[node], None)
+        return [(keys[top], None if source == NONE else keys[source], key, tuple(keys[m] for m in members))
+                for top, source, key, members in reversed(rows)]
+
     def render(self, engine, key, size, memo, epochs):
         """C owns pass order and the lifetime of every dependency in the batch."""
         resident = self.resident
@@ -383,6 +393,24 @@ class NativeGraph:
             # inputs are live. Reclaim those holds before returning its root.
             engine._trim_retained(size, (key,))
 
+
+    def checkpoints(self, engine, channel):
+        """Results to keep for a channel: the spine of its lowest changed unit (op_graph_spine)."""
+        order = self.orders.get(channel)
+        if order is None:
+            return ()
+        if self.binding is None or self.composition is None:
+            keep = self.checkpoint(engine, channel)
+            return (keep,) if keep is not None else ()
+        keys = self.keys
+        return tuple(keys[i] for i in self.binding.graph_checkpoints(self.handle, order[0], bytes(self.current)))
+
+    def spine(self, node):
+        """What an edit of ``node`` composes over without changing it, innermost first."""
+        if self.binding is None or self.composition is None or node not in self.indices:
+            return ()
+        keys = self.keys
+        return tuple(keys[i] for i in self.binding.graph_spine(self.handle, self.indices[node]))
 
     def checkpoint(self, engine, channel):
         order = self.orders.get(channel)

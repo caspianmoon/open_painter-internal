@@ -27,6 +27,11 @@ from .formats import scalar_unit, texture_bytes
 
 ENABLED = True
 MIN_LENGTH = 3                        # shorter runs are cheaper to render than to apply
+# While idle, arm the runs an edit of the selected layer would use, so the first
+# tick of a drag is already one pass. Off in background Blender unless requested:
+# tests drive ticks by hand and count the passes each one submits.
+PREARM = None                         # None: on with a UI, off in background (OP_PREARM=1 forces it)
+PREARM_DELAY = 0.3                    # seconds since the last evaluation before idle arming starts
 
 
 def _budget():
@@ -37,6 +42,14 @@ def _budget():
 BUDGET_BYTES = _budget()              # armed transforms kept per texture set
 NONE = 255
 IDENTITY = (0, 1, 2, 3)
+
+
+def prearm_enabled():
+    if PREARM is not None:
+        return PREARM
+    import os
+    import bpy
+    return os.environ.get('OP_PREARM') == '1' or not bpy.app.background
 
 
 def pack(source):
@@ -60,6 +73,8 @@ class SuffixCache:
         self.seen = {}                 # run key -> serial of the evaluation that last planned it
         self.serial = 0
         self.active = None             # the entry being applied: never reclaimed under it
+        self.idle = None               # (layer, root stamps) whose predicted runs are all armed
+        self.prearming = None          # (that state, run keys already armed for it while idle)
 
     def begin(self):
         self.serial += 1
@@ -75,6 +90,7 @@ class SuffixCache:
             _release(device(), entry)
         self.entries.clear()
         self.seen.clear()
+        self.idle = self.prearming = None
 
     def reclaim(self):
         """Memory pressure: release every transform not being applied right now."""
@@ -118,6 +134,38 @@ class SuffixCache:
                 self.active = None
             applied += 1
         return applied
+
+    def prearm(self, engine, layer_id, n, memo, epochs):
+        """Arm one predicted run of an edit of ``layer_id``; False once there is nothing left."""
+        from ...constants import CHANNELS
+        graph = engine._native_graph
+        if not ENABLED or graph is None or not prearm_enabled():
+            return False
+        roots = tuple((channel, engine.finals[channel][1]) for channel in CHANNELS
+                      if engine.finals.get(channel) and engine.finals[channel][0] == 'unit')
+        state = (layer_id, tuple(graph.stamps.get(root) for _, root in roots))
+        if state == self.idle:
+            return False
+        if self.prearming is None or self.prearming[0] != state:
+            self.prearming = (state, set())
+        # A run armed for this state is never armed again, even if the budget
+        # evicted it for a sibling: arming must not cycle while idle.
+        done = self.prearming[1]
+        for channel, root in roots:
+            for top, source, key, members in graph.edit_runs(root, ('CHANNEL', layer_id, channel)):
+                if len(members) < MIN_LENGTH or key in self.entries or key in done:
+                    continue
+                done.add(key)
+                entry = self._arm(engine, members, n, memo, epochs)
+                if entry is None:
+                    self.idle = state
+                    return False
+                self.entries[key] = entry
+                self._trim(protected=key)
+                metrics.count('engine_suffix_prearms')
+                return True
+        self.idle = state
+        return False
 
     def _trim(self, protected):
         from .runtime import device

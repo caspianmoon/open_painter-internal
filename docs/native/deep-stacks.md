@@ -521,7 +521,7 @@ Blend mode of a middle layer, 200 layers at 1K, idle arming on as in the product
 | Graph rebuild or patch | 65–95 ms | about 8 ms |
 | Engine adopt | 3–4 ms | 1–4 ms |
 | Native prepare | 24–42 ms | 9–19 ms (translating the 4 new programs; a blend variant not compiled yet adds its Metal compile) |
-| Total | 224–286 ms | 35 ms with the variant compiled, up to 57 ms without |
+| Total | 224–286 ms | 29–35 ms with the variant compiled, up to 57 ms without |
 
 ### Adding, removing and moving layers
 
@@ -593,12 +593,18 @@ from 196 to 130 ms. `test_suffix.c` checks that the key survives an insertion.
 
 | Edit | Before | After |
 | --- | ---: | ---: |
-| Adding a fill on top | 306 ms | 48 ms |
-| Adding a fill in the middle | 325 ms | 59 ms |
-| Removing the top layer | 220 ms | 59 ms |
-| Removing a middle layer | 237 ms | 66 ms |
-| Moving a middle layer | 222 ms | 63 ms |
-| Applying a smart material (after the first) | 365 ms | 130 ms |
+| Adding a fill on top | 306 ms | 44 ms |
+| Adding a fill in the middle | 325 ms | 57 ms |
+| Removing the top layer | 220 ms | 39 ms |
+| Removing a middle layer | 237 ms | 61 ms |
+| Moving a middle layer | 222 ms | 38 ms |
+| Applying a smart material (after the first) | 365 ms | 112 ms |
+
+The benchmark selects, and idle-arms, the layer each edit starts from: the one an
+insertion goes above, the one removed or moved. In the UI that is the selected
+layer, which idle arming prepares. A patch after a named invalidation (the stack's
+remove, move, place) reads values again only for edits dropped while it was
+pending: a catch-up update with no owner used to make it read all ~6,600 bindings.
 
 ### Garbage collection
 

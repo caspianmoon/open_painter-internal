@@ -492,26 +492,30 @@ def apply_document(ts,data,name='Declarative Material',seed=1,token=None,parent_
         parent_id = active.parent_id if active else ""
     token = token or new_id()[:8]
     try:
-        folder = stack.add(ts, "FOLDER", name, parent_id)
-        folder_id = folder.id
-        # Isolation prevents this recipe's complete substrate from inheriting
-        # arbitrary blend modes from a previously selected material.
-        folder.group_mode = "ISOLATED"
-        for index, spec in enumerate(data["layers"]):
-            _fill(ts, spec, folder_id, _seed(name, index, seed))
-        nested = []
-        for module_name, overrides in data.get("modules", ()):
-            child_token = nested_token(name, token, module_name)
-            child = apply_document(ts, MODULES[module_name], module_name, seed, token=child_token,
-                                   parent_id=folder_id, surface=False)
-            _override(ts, child, overrides)
-            nested.append(child.id)
-        if surface:
-            for key, default in SURFACE_DEFAULTS.items():
-                setattr(ts, key, data.get("surface", {}).get(key, default))
-        folder = _stamp_module(ts, folder_id, name, data, token=token, nested=nested)
-        ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == folder.id)
-        stack.invalidate(ts)
+        # One transaction: property callbacks skip their set-wide walks (owner
+        # lookup, dependent channels, engine notification) for each of the
+        # recipe's hundreds of writes; the set is invalidated, physically
+        # resolved and notified once when the replay closes.
+        with stack.replay(ts):
+            folder = stack.add(ts, "FOLDER", name, parent_id)
+            folder_id = folder.id
+            # Isolation prevents this recipe's complete substrate from inheriting
+            # arbitrary blend modes from a previously selected material.
+            folder.group_mode = "ISOLATED"
+            for index, spec in enumerate(data["layers"]):
+                _fill(ts, spec, folder_id, _seed(name, index, seed))
+            nested = []
+            for module_name, overrides in data.get("modules", ()):
+                child_token = nested_token(name, token, module_name)
+                child = apply_document(ts, MODULES[module_name], module_name, seed, token=child_token,
+                                       parent_id=folder_id, surface=False)
+                _override(ts, child, overrides)
+                nested.append(child.id)
+            if surface:
+                for key, default in SURFACE_DEFAULTS.items():
+                    setattr(ts, key, data.get("surface", {}).get(key, default))
+            folder = _stamp_module(ts, folder_id, name, data, token=token, nested=nested)
+            ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == folder.id)
         return ts.layers[ts.active_layer]
     except Exception:
         _rollback(ts, before)

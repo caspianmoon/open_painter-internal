@@ -433,8 +433,10 @@ def run_paint(scene, ts, steps=int(os.environ.get('OP_DEEP_PAINT_STEPS', '24')))
                 durations.append(elapsed)
                 ticks.append(count)
                 if PHASES:
+                    engine = shader_preview.session_engine(scene, ts)
                     print('DEEP_STACK_PHASES paint_middle', step, f'total {elapsed:.1f} ms',
-                          {k: round(v, 1) for k, v in sorted(phase_totals.items())}, flush=True)
+                          {k: round(v, 1) for k, v in sorted(phase_totals.items())},
+                          'passes', engine.report.get('passes') if engine else None, flush=True)
         cache._paint_input[pointer] = (True, monotonic() - .2)   # the stroke is released
         cache._live_checks.pop(pointer, None)
         cache.tick()

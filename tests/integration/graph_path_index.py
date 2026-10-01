@@ -39,6 +39,12 @@ try:
             structs.extend((mask, mask.effect, mask.influence, mask.mesh))
         structs.extend(layer.cache)
     assert any(len(layer.cache) for layer in ts.layers)
+    # The plan's collection fingerprint reads stored properties: the sizes RNA reports.
+    from open_painter.evaluation.shader_graph import _collection_print
+    for layer in ts.layers:
+        rna = (len(layer.masks), len(layer.cache), tuple(len(prop.effects) for prop in layer.channels))
+        assert _collection_print(layer) == rna, (layer.name, _collection_print(layer), rna)
+    assert any(any(print_[2]) and print_[0] for print_ in map(_collection_print, ts.layers))
     assert len(paths) == len({s.as_pointer() for s in structs}), (len(paths), len(structs))
     # Paths are spelled from the Scene, as ``path_from_id`` did before stacks moved into
     # layer stores (``layer_store.scene_path``): bindings and provenance keep them.

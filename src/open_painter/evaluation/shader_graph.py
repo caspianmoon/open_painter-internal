@@ -445,8 +445,14 @@ def _layer_memo(memo, identifier):
 
 
 def _collection_print(layer):
-    """Sizes of a layer's collections: they differ when one was added to or removed from."""
-    return (len(layer.masks), len(layer.cache), tuple(len(prop.effects) for prop in layer.channels))
+    """Sizes of a layer's collections: they differ when one was added to or removed from.
+    Read from the layer's stored properties (the same arrays RNA's collections are), which
+    is cheaper than an RNA struct per channel; RNA when the layer stores none."""
+    group = layer.bl_system_properties_get() if hasattr(layer, 'bl_system_properties_get') else None
+    if group is None:
+        return (len(layer.masks), len(layer.cache), tuple(len(prop.effects) for prop in layer.channels))
+    return (len(group.get('masks') or ()), len(group.get('cache') or ()),
+            tuple(len(channel.get('effects') or ()) for channel in group.get('channels') or ()))
 
 
 def _layer_links(layer):

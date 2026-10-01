@@ -29,7 +29,7 @@ int main(void) {
     op_ir_target_t target = {6, 7, 0};
     char *source = NULL;
     for (unsigned i = 0; i < sizeof(modes) / sizeof(modes[0]); i++) {
-        strcpy(nodes[5].operation, modes[i]);
+        snprintf(nodes[5].operation, sizeof nodes[5].operation, "%s", modes[i]);
         for (unsigned opaque = 0; opaque < 2; opaque++) {
             nodes[5].aux[0] = opaque;
             assert(op_ir_compile(nodes, 8, &target, 1, &source) == OP_OK);
@@ -52,7 +52,7 @@ int main(void) {
     nodes[5].aux[0] = 2;
     assert(op_ir_compile(nodes, 8, &target, 1, &source) == OP_VALIDATION_FAILED && !source);
     nodes[5].aux[0] = 0;
-    strcpy(nodes[5].operation, "INJECT();");
+    snprintf(nodes[5].operation, sizeof nodes[5].operation, "%s", "INJECT();");
     assert(op_ir_compile(nodes, 8, &target, 1, &source) == OP_UNSUPPORTED && !source);
     memset(nodes[5].operation, 'a', sizeof(nodes[5].operation));
     assert(op_ir_compile(nodes, 8, &target, 1, &source) == OP_VALIDATION_FAILED && !source);

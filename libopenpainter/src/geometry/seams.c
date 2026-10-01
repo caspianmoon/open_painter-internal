@@ -26,7 +26,7 @@ static void piece_bounds(const side_t *s, uint32_t piece, uint32_t size, float h
               reach = s->normal[j] * halo;
         float lo = fminf(fminf(a, b), fminf(a + reach, b + reach)) - 1;
         float hi = fmaxf(fmaxf(a, b), fmaxf(a + reach, b + reach)) + 1;
-        low[j] = (int32_t)fminf(fmaxf(floorf(lo), 0), size);
+        low[j] = (int32_t)fminf(fmaxf(floorf(lo), 0), (float)size);
         high[j] = (int32_t)fmaxf(fminf(ceilf(hi), (float)size - 1), -1);
     }
 }

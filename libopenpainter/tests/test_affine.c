@@ -93,7 +93,7 @@ static uint32_t channel_unit(op_ir_node_t *n, const char *mode, uint32_t opaque,
     n[blend].inputs[3] = one;
     n[blend].inputs[4] = coverage;
     n[blend].aux[0] = opaque;
-    strcpy(n[blend].operation, mode);
+    snprintf(n[blend].operation, sizeof n[blend].operation, "%s", mode);
     uint32_t color = add(n, &c, OP_IR_CONVERT, OP_IR_VECTOR);
     n[color].inputs[0] = blend;
     uint32_t alpha = add(n, &c, OP_IR_COMPONENT, OP_IR_FLOAT);
@@ -162,7 +162,7 @@ int main(void) {
     n[red].inputs[0] = fetch;
     uint32_t square = add(n, &count, OP_IR_MATH, OP_IR_FLOAT);
     n[square].inputs[0] = n[square].inputs[1] = n[square].inputs[2] = red;
-    strcpy(n[square].operation, "MULTIPLY");
+    snprintf(n[square].operation, sizeof n[square].operation, "%s", "MULTIPLY");
     uint32_t one = add(n, &count, OP_IR_CONSTANT, OP_IR_FLOAT);
     n[one].value[0] = 1.0;
     uint32_t grey = add(n, &count, OP_IR_CONSTANT, OP_IR_VECTOR);
@@ -173,7 +173,7 @@ int main(void) {
     n[blend].inputs[2] = grey;
     n[blend].inputs[4] = square;
     n[blend].aux[0] = 1;
-    strcpy(n[blend].operation, "NORMAL");
+    snprintf(n[blend].operation, sizeof n[blend].operation, "%s", "NORMAL");
     uint32_t color = add(n, &count, OP_IR_CONVERT, OP_IR_VECTOR);
     n[color].inputs[0] = blend;
     uint32_t alpha = add(n, &count, OP_IR_COMPONENT, OP_IR_FLOAT);
@@ -203,7 +203,7 @@ int main(void) {
     n[blend].inputs[1] = n[blend].inputs[3] = n[blend].inputs[4] = one;
     n[blend].inputs[2] = rgb;
     n[blend].aux[0] = 1;
-    strcpy(n[blend].operation, "NORMAL");
+    snprintf(n[blend].operation, sizeof n[blend].operation, "%s", "NORMAL");
     color = add(n, &count, OP_IR_CONVERT, OP_IR_VECTOR);
     n[color].inputs[0] = blend;
     alpha = add(n, &count, OP_IR_COMPONENT, OP_IR_FLOAT);
@@ -253,7 +253,7 @@ int main(void) {
     n[blend].inputs[1] = n[blend].inputs[3] = n[blend].inputs[4] = one;
     n[blend].inputs[2] = base; /* the backdrop also feeds the source: rejected */
     n[blend].aux[0] = 1;
-    strcpy(n[blend].operation, "MULTIPLY");
+    snprintf(n[blend].operation, sizeof n[blend].operation, "%s", "MULTIPLY");
     color = add(n, &count, OP_IR_CONVERT, OP_IR_VECTOR);
     n[color].inputs[0] = blend;
     alpha = add(n, &count, OP_IR_COMPONENT, OP_IR_FLOAT);

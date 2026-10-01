@@ -52,7 +52,7 @@ int main(void) {
         }
         nodes[8].opcode = OP_IR_EFFECT;
         nodes[8].type = OP_IR_VECTOR;
-        strcpy(nodes[8].operation, specs[k].name);
+        snprintf(nodes[8].operation, sizeof nodes[8].operation, "%s", specs[k].name);
         assert(op_ir_compile(nodes, 9, &target, 1, &source) == OP_OK);
         assert(strstr(source, "vec3 v8 = op_effect(v0"));
         op_ir_free(source);
@@ -69,7 +69,7 @@ int main(void) {
             }
         }
     }
-    strcpy(nodes[8].operation, "inject();");
+    snprintf(nodes[8].operation, sizeof nodes[8].operation, "%s", "inject();");
     assert(op_ir_compile(nodes, 9, &target, 1, &source) == OP_UNSUPPORTED && !source);
     memset(nodes[8].operation, 'x', 64);
     assert(op_ir_compile(nodes, 9, &target, 1, &source) == OP_VALIDATION_FAILED && !source);
@@ -85,7 +85,7 @@ int main(void) {
     const char *modes[] = {"NORMAL", "MULTIPLY", "MAX", "MIN", "ADD"};
     for (unsigned k = 0; k < 5; k++)
         for (unsigned first = 0; first < 2; first++) {
-            strcpy(nodes[8].operation, modes[k]);
+            snprintf(nodes[8].operation, sizeof nodes[8].operation, "%s", modes[k]);
             nodes[8].aux[0] = first;
             assert(op_ir_compile(nodes, 9, &target, 1, &source) == OP_OK);
             assert(strstr(source, "float v8 = op_mask_fold("));

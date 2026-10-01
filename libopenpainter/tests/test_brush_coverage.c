@@ -50,7 +50,7 @@ static int reference(const float *p, const float *n, uint32_t texels, const floa
     }
     float soft = fmaxf(1 - b->hardness, 1e-5f), limit = fmaxf(b->depth_limit, 1e-3f);
     for (uint32_t i = 0; i < texels; i++) {
-        float value = b->accumulate ? 1 : 0;
+        float value = b->accumulate ? 1.0f : 0.0f;
         int inside = 1;
         for (int j = 0; j < 3; j++)
             if (p[i * 3 + j] < lo[j] || p[i * 3 + j] > hi[j])
@@ -140,7 +140,7 @@ int main(void) {
             p[3 * i] = x;
             p[3 * i + 1] = y;
             p[3 * i + 2] = .05f * sinf(x * 5) + uniform(-radius, radius) * (trial % 2);
-            float normal[3] = {uniform(-.4f, .4f), uniform(-.4f, .4f), trial % 7 ? 1 : -1};
+            float normal[3] = {uniform(-.4f, .4f), uniform(-.4f, .4f), trial % 7 ? 1.0f : -1.0f};
             normalize(normal);
             memcpy(n + 3 * i, normal, 12);
         }

@@ -28,7 +28,7 @@ int main(void) {
     int64_t owners[] = {7, 2};
     assert(op_seam_bands(covered, 16, 2, duplicates, owners, 2, &samples, &count) == OP_OK);
     for (uint64_t i = 0; i < count; i++)
-        assert(samples[i].nearest == (samples[i].island == 2));
+        assert(samples[i].nearest == (uint32_t)(samples[i].island == 2));
     op_geometry_free(samples);
     sides[0] = NAN;
     assert(op_seam_bands(covered, 16, 2, sides, islands, 1, &samples, &count) ==

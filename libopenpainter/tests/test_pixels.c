@@ -78,7 +78,7 @@ int main(void) {
     uint64_t compared = 0;
     for (int trial = 0; trial < 400; trial++) {
         uint32_t channels = 1 + trial % 5;
-        uint64_t count = 1 + (uint64_t)uniform(0, trial % 7 == 0 ? CHUNK - 1 : 300);
+        uint64_t count = 1 + (uint64_t)uniform(0, (float)(trial % 7 == 0 ? CHUNK - 1 : 300));
         for (uint64_t i = 0; i < count * channels; i++)
             values[i] = i % 13 == 5 ? special[(i / 13) % (sizeof(special) / sizeof(*special))] : uniform(-.2f, 1.2f);
         for (uint32_t bits = 8; bits <= 16; bits += 8)

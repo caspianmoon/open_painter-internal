@@ -149,7 +149,7 @@ static int types_valid(const op_ir_node_t *all, const op_ir_node_t *n) {
         const effect_spec_t *spec = effect_specs + k;
         for (unsigned j = 0; j < spec->count; j++)
             if (all[n->inputs[1 + j]].type !=
-                ((spec->vectors & (1u << j)) ? OP_IR_VECTOR : OP_IR_FLOAT))
+                (uint32_t)((spec->vectors & (1u << j)) ? OP_IR_VECTOR : OP_IR_FLOAT))
                 return 0;
         return all[n->inputs[1 + spec->count]].type == OP_IR_FLOAT &&
                all[n->inputs[2 + spec->count]].type == OP_IR_FLOAT;
@@ -387,7 +387,7 @@ op_status_t op_ir_compile(const op_ir_node_t *nodes, uint32_t count, const op_ir
         const op_ir_target_t *t = &targets[i];
         if (t->color >= count || t->alpha >= count || t->layout > 2 ||
             nodes[t->alpha].type != OP_IR_FLOAT ||
-            nodes[t->color].type != (t->layout == 2 ? OP_IR_FLOAT : OP_IR_VECTOR)) {
+            nodes[t->color].type != (uint32_t)(t->layout == 2 ? OP_IR_FLOAT : OP_IR_VECTOR)) {
             status = OP_VALIDATION_FAILED;
             goto done;
         }

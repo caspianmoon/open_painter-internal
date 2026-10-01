@@ -16,7 +16,7 @@ int main(void) {
     nodes[2].inputs[0] = 0;
     nodes[2].inputs[1] = 1;
     nodes[2].inputs[2] = 0;
-    strcpy(nodes[2].operation, "MULTIPLY");
+    snprintf(nodes[2].operation, sizeof nodes[2].operation, "%s", "MULTIPLY");
     nodes[3].opcode = OP_IR_CONVERT;
     nodes[3].type = OP_IR_VECTOR;
     nodes[3].inputs[0] = 2;
@@ -30,14 +30,14 @@ int main(void) {
     nodes[0].value[0] = NAN;
     assert(op_ir_compile(nodes, 4, &target, 1, &source) == OP_VALIDATION_FAILED && !source);
     nodes[0].value[0] = .25;
-    strcpy(nodes[2].operation, "NOT_SUPPORTED");
+    snprintf(nodes[2].operation, sizeof nodes[2].operation, "%s", "NOT_SUPPORTED");
     assert(op_ir_compile(nodes, 4, &target, 1, &source) == OP_UNSUPPORTED && !source);
     nodes[4].opcode = OP_IR_PROCEDURAL;
     nodes[4].type = OP_IR_FLOAT;
     nodes[4].inputs[0] = 3;
     nodes[4].inputs[1] = nodes[4].inputs[2] = nodes[4].inputs[3] = 0;
-    strcpy(nodes[2].operation, "MULTIPLY");
-    strcpy(nodes[4].operation, "CELLULAR");
+    snprintf(nodes[2].operation, sizeof nodes[2].operation, "%s", "MULTIPLY");
+    snprintf(nodes[4].operation, sizeof nodes[4].operation, "%s", "CELLULAR");
     target.color = 4;
     target.layout = 2;
     assert(op_ir_compile(nodes, 5, &target, 1, &source) == OP_OK &&

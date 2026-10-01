@@ -21,7 +21,7 @@ int main(void) {
         /* Large triangles on small rasters, many small ones on large rasters (the samples stay
          * within what the sorting reference finishes quickly). */
         int large = trial % 5 == 0;
-        uint32_t triangles = 1 + (uint32_t)uniform(0, large ? 120 : MAX - 1);
+        uint32_t triangles = 1 + (uint32_t)uniform(0, (float)(large ? 120 : MAX - 1));
         uint32_t size = large ? 16 + (uint32_t)uniform(0, 300) : trial % 23 == 1 ? 4096 : 16 + (uint32_t)uniform(0, 700);
         float scale = large ? uniform(.05f, .6f) : uniform(.002f, size > 1024 ? .01f : .08f);
         for (uint32_t t = 0; t < triangles; t++) {

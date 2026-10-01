@@ -69,12 +69,20 @@ op_status_t op_get_metrics(const op_context_t *ctx, op_metrics_t *out) {
     return OP_OK;
 }
 
+/* At most size - 1 bytes of text, always terminated (MSVC deprecates strncpy). */
+static void copy_text(char *buffer, size_t size, const char *text) {
+    size_t length = strlen(text);
+    if (length > size - 1u)
+        length = size - 1u;
+    memcpy(buffer, text, length);
+    buffer[length] = '\0';
+}
+
 op_status_t op_copy_last_error(op_context_t *ctx, char *buffer, size_t size) {
     if (ctx == NULL || buffer == NULL || size == 0u) {
         return OP_INVALID_ARGUMENT;
     }
-    strncpy(buffer, ctx->last_error, size - 1u);
-    buffer[size - 1u] = '\0';
+    copy_text(buffer, size, ctx->last_error);
     return OP_OK;
 }
 
@@ -82,8 +90,7 @@ op_status_t op_copy_last_error(op_context_t *ctx, char *buffer, size_t size) {
 
 op_status_t op_fail(op_context_t *ctx, op_status_t code, const char *message) {
     if (ctx != NULL && message != NULL) {
-        strncpy(ctx->last_error, message, OP_LAST_ERROR_SIZE - 1u);
-        ctx->last_error[OP_LAST_ERROR_SIZE - 1u] = '\0';
+        copy_text(ctx->last_error, OP_LAST_ERROR_SIZE, message);
     }
     return code;
 }

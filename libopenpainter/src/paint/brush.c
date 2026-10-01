@@ -355,7 +355,7 @@ op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, c
             }
         }
 #endif
-        float value = b->accumulate ? 1 : 0;
+        float value = b->accumulate ? 1.0f : 0.0f;
         int inside = 1;
         for (int j = 0; j < 3; j++)
             if (p[i * 3 + j] < lo[j] || p[i * 3 + j] > hi[j])

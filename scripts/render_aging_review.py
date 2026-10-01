@@ -118,4 +118,4 @@ for label, builder in [('before', document_v1), ('after', document)]:
     bpy.ops.wm.save_as_mainfile(filepath=str(args.output / f'{args.case}-{label}.blend'))
     report['versions'][label] = doc['version']
     print('REVIEW_RENDER', args.case, label, flush=True)
-(args.output / f'{args.case}.json').write_text(json.dumps(report, indent=2))
+(args.output / f'{args.case}.json').write_text(json.dumps(report, indent=2), encoding="utf-8")

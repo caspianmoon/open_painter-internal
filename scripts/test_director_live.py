@@ -27,7 +27,7 @@ parser.add_argument("--scope", choices=("SET", "SCENE"), default="SET")
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 source = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
-auth = json.loads(source.read_text())
+auth = json.loads(source.read_text(encoding="utf-8"))
 tokens = auth.get("tokens") or {}
 if not tokens.get("access_token") or not tokens.get("id_token"):
     raise SystemExit("The current Codex cache does not contain a ChatGPT login")
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory(prefix="painter-live-auth-") as directory:
     result = subprocess.run(command, env=env, cwd=ROOT, timeout=5400 if args.scope == "SCENE" else 2400)
     if result.returncode:
         raise SystemExit(result.returncode)
-report = json.loads((args.output / "report.json").read_text())
+report = json.loads((args.output / "report.json").read_text(encoding="utf-8"))
 print(json.dumps(dict(status=report["status"], cases=[dict(name=c["name"], outcome=c.get("outcome"),
                                                         seconds=c.get("seconds")) for c in report["cases"]]), indent=2))
 raise SystemExit(0 if report["status"] == "completed" else 1)

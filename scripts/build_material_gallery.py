@@ -48,5 +48,5 @@ function draw(){main.replaceChildren();const shown=cards.filter(c=>(category.val
 for(const c of shown){const card=document.createElement('article');if(compare.checked){card.className='compare';const pair=document.createElement('div');pair.className='pair';for(const [label,src]of[['Before',c.before],['After',c.after]]){const f=document.createElement('figure'),im=new Image(),cap=document.createElement('figcaption');im.src=src;im.alt=c.name+' '+label;cap.textContent=label;f.append(im,cap);pair.append(f)}card.append(pair)}else{const im=new Image();im.src=c.image;im.alt=c.name;im.loading='lazy';card.append(im)}const h=document.createElement('h2'),p=document.createElement('p');h.textContent=c.name;p.textContent=c.category+' · '+c.layers+' editable layers';card.append(h,p);main.append(card)}document.querySelector('#count').textContent=shown.length+' materials'}
 search.oninput=category.onchange=compare.onchange=draw;draw();</script></html>'''
 path = root / 'docs/generated-material-gallery.html'
-path.write_text(page.replace('DATA', json.dumps(cards)))
+path.write_text(page.replace('DATA', json.dumps(cards)), encoding="utf-8")
 print(path)

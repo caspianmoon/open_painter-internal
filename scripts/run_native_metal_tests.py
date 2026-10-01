@@ -76,7 +76,7 @@ def main():
             item = dict(test=name, exit=result.returncode)
             report['tests'].append(item)
             print(item, flush=True)
-            (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
+            (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n', encoding="utf-8")
             if result.returncode:
                 raise RuntimeError(f'{name} failed; see {out / (name + ".log")}')
 
@@ -87,7 +87,7 @@ def main():
                 # at all in background mode. Require their fresh result report.
                 target = out / 'live-masks.json'
                 run(name, gui=True, extra={'OP_MASK_REPORT': str(target), 'OP_MASK_N': '512'})
-                data = json.loads(target.read_text())
+                data = json.loads(target.read_text(encoding="utf-8"))
                 assert data['status'] == 'PASS', data
             else:
                 run(name)
@@ -98,7 +98,7 @@ def main():
                 target = out / filename
                 target.unlink(missing_ok=True)
                 run(name, gui=True, extra={variable: str(target), 'OP_VECTOR_BRUSH_UI_SIZE': '2048'})
-                data = json.loads(target.read_text())
+                data = json.loads(target.read_text(encoding="utf-8"))
                 assert data.get('result', data.get('status')) == 'PASS', data
                 assert data['execution_backend'] == 'c17-host-metal', data
             # A real drag over 200 layers: every value change is evaluated, and every evaluation drawn.
@@ -106,7 +106,7 @@ def main():
             target.unlink(missing_ok=True)
             run('native_drag_cadence.py', gui=True, extra={'OP_DRAG_REPORT': str(target), 'OP_DRAG_RES': '1024',
                                                            'OP_DRAG_LAYERS': '200', 'OP_DRAG_SECONDS': '8'})
-            data = json.loads(target.read_text())
+            data = json.loads(target.read_text(encoding="utf-8"))
             assert data['status'] == 'PASS', data.get('error')
             summary = data['summary']
             assert summary['undrawn_evaluations'] == 0, summary
@@ -115,7 +115,7 @@ def main():
         if args.sustained:
             target = out / 'native-sustained-ui.json'
             run('native_sustained_ui.py', gui=True, extra={'OP_SUSTAINED_REPORT': str(target)})
-            data = json.loads(target.read_text())
+            data = json.loads(target.read_text(encoding="utf-8"))
             assert data['status'] == 'PASS', data.get('error')
         if args.package:
             run('install_extension.py', package=True)
@@ -124,7 +124,7 @@ def main():
         report.update(status='FAIL', error=str(exc))
         raise
     finally:
-        (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n')
+        (out / 'results.json').write_text(json.dumps(report, indent=2) + '\n', encoding="utf-8")
         # Preserve each run's evidence; compatibility consumers use the latest copy.
         for path in out.iterdir():
             if path.is_file():

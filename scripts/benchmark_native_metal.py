@@ -79,7 +79,7 @@ def main():
     print('BENCHMARK_OUTPUT', str(out), flush=True)
 
     def save():
-        (out/'results.json').write_text(json.dumps(result, indent=2)+'\n')
+        (out/'results.json').write_text(json.dumps(result, indent=2)+'\n', encoding="utf-8")
 
     def run(pair, mode):
         path = out / f'pair-{pair}-{mode}.json'
@@ -99,7 +99,7 @@ def main():
                 completed = subprocess.run(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                                            timeout=args.seconds + 150)
             assert completed.returncode == 0, f'{mode} failed: {path.with_suffix(".log")}'
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         assert data['status'] == 'PASS', data.get('error')
         assert data['execution_backend'] == env['OP_SUSTAINED_BACKEND'], data['execution_backend']
         assert data['backend'] == 'METAL' and len(data['runs']) == 1

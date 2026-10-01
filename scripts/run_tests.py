@@ -189,7 +189,7 @@ if args.gui or args.gui_only:
             }.get(filename, {}))),
             check=True,
         )
-        result = result_path.read_text()
+        result = result_path.read_text(encoding="utf-8")
         report = json.loads(result)
         if filename in {"authoring_ui.py", "bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "graph_templates_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "udim_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_target_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
             if report.get("status") != "PASS":
@@ -217,16 +217,16 @@ if args.gui or args.gui_only:
                     str(root / 'tests/integration/gui_workflow.py'),
                     *(['--','-ApplePersistenceIgnoreState','YES'] if os.sys.platform == 'darwin' else [])],
                    cwd=root, env=env, check=True)
-    if not stroke_result.read_text().startswith('PASS:'):
-        raise RuntimeError(stroke_result.read_text())
+    if not stroke_result.read_text(encoding="utf-8").startswith('PASS:'):
+        raise RuntimeError(stroke_result.read_text(encoding="utf-8"))
     regions_result = root / '.blender-test/native_regions_result.txt'
     regions_result.unlink(missing_ok=True)
     subprocess.run([*BLENDER, '--factory-startup', '--enable-event-simulate', '--python',
                     str(root / 'tests/integration/native_regions_ui.py'),
                     *(['--','-ApplePersistenceIgnoreState','YES'] if os.sys.platform == 'darwin' else [])],
                    cwd=root, env=env, check=True)
-    if not regions_result.read_text().startswith('PASS:'):
-        raise RuntimeError(regions_result.read_text())
+    if not regions_result.read_text(encoding="utf-8").startswith('PASS:'):
+        raise RuntimeError(regions_result.read_text(encoding="utf-8"))
 if args.gpu_only:
     for filename, report_name, variable, success_key, success_value in (
         ('live_gpu_math.py', 'live-gpu-math.json', 'OP_LIVE_MATH_REPORT', 'passed', True),
@@ -242,7 +242,7 @@ if args.gpu_only:
                         str(root / 'tests/integration' / filename),
                         *(['--', '-ApplePersistenceIgnoreState', 'YES'] if os.sys.platform == 'darwin' else [])],
                        cwd=root, env=dict(env, **{variable: str(result_path)}), check=True)
-        report = json.loads(result_path.read_text())
+        report = json.loads(result_path.read_text(encoding="utf-8"))
         if report.get(success_key) != success_value:
             raise RuntimeError(json.dumps(report))
 if failures:

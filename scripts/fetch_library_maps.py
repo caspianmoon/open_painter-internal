@@ -25,4 +25,4 @@ def fetch(item):
     return record
 with ThreadPoolExecutor(max_workers=3) as pool:
     records=list(pool.map(fetch,[('Rough Wood','rough_wood'),('Fine Wood','fine_grained_wood'),('Weathered Paint','rusty_painted_metal')]))
-(root/'catalog.json').write_text(json.dumps(records,indent=2)+'\n')
+(root/'catalog.json').write_text(json.dumps(records,indent=2)+'\n', encoding="utf-8")

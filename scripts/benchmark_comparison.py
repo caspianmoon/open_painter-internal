@@ -18,9 +18,9 @@ with tempfile.TemporaryDirectory(prefix='op-paired-control-') as folder:
             report=Path(folder)/f'{repeat}-{variant}.json'
             command=[blender,'--background','--factory-startup','--python-exit-code','1','--python',str(code_root/'scripts/benchmark_textures.py'),'--','--worker','--fixture','worn','--resolution','2048','--report',str(report)]
             subprocess.run(command,cwd=code_root,env=dict(os.environ,BLENDER_USER_RESOURCES=folder+f'/user-{repeat}-{variant}'),check=True)
-            row=json.loads(report.read_text());row.update(variant=variant,repeat=repeat+1,command=command)
+            row=json.loads(report.read_text(encoding="utf-8"));row.update(variant=variant,repeat=repeat+1,command=command)
             results.append(row)
             print(variant,repeat+1,row['final']['wall_s'],row['warm_roughness_edit']['wall_s'],flush=True)
 summary={v:{p:statistics.median(r[p]['wall_s'] for r in results if r['variant']==v) for p in ['final','warm_roughness_edit']} for v in ['before','after']}
 args.report.parent.mkdir(parents=True,exist_ok=True)
-args.report.write_text(json.dumps(dict(context='Alternating-order fresh processes, reconstructed baseline instrumentation versus final task source; same 2K Worn inputs. No concurrent Codex Blender workload.',summary=summary,runs=results),indent=2)+'\n')
+args.report.write_text(json.dumps(dict(context='Alternating-order fresh processes, reconstructed baseline instrumentation versus final task source; same 2K Worn inputs. No concurrent Codex Blender workload.',summary=summary,runs=results),indent=2)+'\n', encoding="utf-8")

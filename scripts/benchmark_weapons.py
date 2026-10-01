@@ -42,7 +42,7 @@ def extract(pack, output):
             raise ValueError("Source archive CRC failure")
         archive.extractall(output)
     root = output / "open_painter_weapon_test"
-    manifest = json.loads((root / "manifest.json").read_text())
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     if {a["folder"] for a in manifest["assets"]} != set(WEAPONS):
         raise ValueError("Expected exactly the two weapon assets")
     for asset in manifest["assets"]:
@@ -83,11 +83,11 @@ def run(args):
         out = args.output / weapon
         out.mkdir(exist_ok=True)
         fixture = args.output / "fixtures" / (weapon + ".blend")
-        audit = json.loads(fixture.with_suffix(".json").read_text())
+        audit = json.loads(fixture.with_suffix(".json").read_text(encoding="utf-8"))
         if audit["status"] != "READY" or sha256(fixture) != audit["sha256"]:
             raise ValueError("Fixture is not frozen and verified")
         if (out / "attempt.json").exists():
-            attempted = json.loads((out / "attempt.json").read_text())
+            attempted = json.loads((out / "attempt.json").read_text(encoding="utf-8"))
             if (attempted["model"] != args.model or not attempted["generated_textures"]
                     or attempted.get("surface_sources", False) != args.surface_sources):
                 raise ValueError("Cannot change provider settings between weapons")
@@ -122,11 +122,11 @@ def run(args):
                 finally:
                     if control.exists() and os.name != "nt":
                         try:
-                            os.killpg(json.loads(control.read_text())["companion_pid"], signal.SIGTERM)
+                            os.killpg(json.loads(control.read_text(encoding="utf-8"))["companion_pid"], signal.SIGTERM)
                         except ProcessLookupError:
                             pass
             result_path = out / "result.json"
-            result = json.loads(result_path.read_text()) if result_path.exists() else dict(stages=[])
+            result = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else dict(stages=[])
             if result.get("status") in {None, "RUNNING"}:
                 result["status"] = "FAILED"
                 result.setdefault("failures", []).append(dict(category="process",
@@ -147,13 +147,13 @@ def run(args):
 def report(args):
     escape = html.escape
     review_path = args.output / "review.json"
-    review = json.loads(review_path.read_text()) if review_path.exists() else {}
+    review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else {}
     parts = ['<!doctype html><html lang="en"><meta charset="utf-8"><title>Weapon material review</title>',
              '<style>body{font:16px system-ui;background:#17191c;color:#eee;margin:2rem}table{width:100%;table-layout:fixed}td{vertical-align:top;padding:1rem}img{width:100%}pre{white-space:pre-wrap}a{color:#9cd8ff}</style>',
              '<h1>Two-weapon Material Director test</h1><p>Development review. No independent human validation. Eevee only; source scale retained. Images and checkpoints are included in this ZIP.</p>']
     execution = args.output / "execution_status.json"
     if execution.exists():
-        parts.append('<pre>' + escape(execution.read_text()) + '</pre>')
+        parts.append('<pre>' + escape(execution.read_text(encoding="utf-8")) + '</pre>')
     if review:
         parts.append('<pre>' + escape(json.dumps(review, indent=2)) + '</pre>')
     else:
@@ -161,7 +161,7 @@ def report(args):
     results = {}
     for weapon in WEAPONS:
         path = args.output / weapon / "result.json"
-        results[weapon] = json.loads(path.read_text()) if path.exists() else dict(
+        results[weapon] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else dict(
             status="NOT_RUN", stages=unattempted_stages("Live session has not been started", args.surface_sources))
     parts.append('<table><tr><th>Assault rifle</th><th>SMG</th></tr>')
     for label in ("before", "after_create", "after_refine_1", "after_refine_2",
@@ -194,7 +194,7 @@ def report(args):
                          escape(stage.get("prompt", "") + '\n\n' + stage.get("response", "") + '\n' + stage.get("status_message", "")) + '</pre>')
         parts.append('<pre>' + escape(json.dumps(result.get("failures", []), indent=2)) + '</pre>')
     parts.append('</html>')
-    (args.output / "index.html").write_text('\n'.join(parts))
+    (args.output / "index.html").write_text('\n'.join(parts), encoding="utf-8")
     shutil.copyfile(ROOT / "Weapon_Test_Guide.md", args.output / "TEST_GUIDE.md")
     source = args.output / "sources/open_painter_weapon_test"
     shutil.copyfile(source / "manifest.json", args.output / "SOURCE_MANIFEST.json")

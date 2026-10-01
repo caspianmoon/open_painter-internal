@@ -267,7 +267,7 @@ passing = [name for name, path in report["paths"].items() if path["result"] == "
 report["tile_addressing"] = "PASS" if passing else "FAILED"
 report["passing_paths"] = passing
 REPORT.parent.mkdir(parents=True, exist_ok=True)
-REPORT.write_text(json.dumps(report, indent=2))
+REPORT.write_text(json.dumps(report, indent=2), encoding="utf-8")
 print("UDIM_PROBE", json.dumps(report), flush=True)
 if "--quit" in sys.argv:
     bpy.ops.wm.quit_blender()

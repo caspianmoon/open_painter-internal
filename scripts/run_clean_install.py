@@ -17,7 +17,7 @@ import tomllib
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-version = tomllib.loads((root / "blender_manifest.toml").read_text())["version"]
+version = tomllib.loads((root / "blender_manifest.toml").read_text(encoding="utf-8"))["version"]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--blender", default="/Applications/Blender.app/Contents/MacOS/Blender")
 parser.add_argument("--package", type=Path, default=root / "dist" / f"open_painter-{version}.zip")
@@ -50,7 +50,7 @@ for phase in (1, 2):
     if not report_path.is_file():
         print(completed.stdout[-3000:], completed.stderr[-3000:])
         sys.exit(f"Phase {phase} wrote no report")
-    report = json.loads(report_path.read_text())
+    report = json.loads(report_path.read_text(encoding="utf-8"))
     reports[phase] = report
     print(f"phase {phase}: {report['status']} · {len(report['steps'])} steps")
     for step in report["steps"]:
@@ -62,7 +62,7 @@ summary = {"package": str(args.package), "version": version, "blender": reports[
            "platform": sys.platform, "machine": os.uname().machine, "profile": str(profile), "work": str(work),
            "phases": reports}
 (root / ".blender-test").mkdir(exist_ok=True)
-(root / ".blender-test/clean-install.json").write_text(json.dumps(summary, indent=2))
+(root / ".blender-test/clean-install.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 print("CLEAN_INSTALL_PASS", version, reports[1]["blender"], sys.platform, os.uname().machine)
 if not args.keep:
     import shutil

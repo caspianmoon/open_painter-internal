@@ -121,5 +121,5 @@ for name in args.mask or [preset[0] for preset in PRESETS]:
     print("MASK_PREVIEW", name, statistics[name], flush=True)
 report = root / ".blender-test" / "mask-preview-statistics.json"
 report.parent.mkdir(exist_ok=True)
-report.write_text(json.dumps(statistics, indent=2))
+report.write_text(json.dumps(statistics, indent=2), encoding="utf-8")
 open_painter.unregister()

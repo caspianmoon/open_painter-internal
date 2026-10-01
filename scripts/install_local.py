@@ -13,7 +13,7 @@ import addon_utils
 if "--factory-startup" in sys.argv:
     raise RuntimeError("Refusing to save factory preferences over the existing user preferences.")
 root = Path(__file__).resolve().parents[1]
-version = tomllib.loads((root / "blender_manifest.toml").read_text())["version"]
+version = tomllib.loads((root / "blender_manifest.toml").read_text(encoding="utf-8"))["version"]
 repo = next(
     (r for r in bpy.context.preferences.extensions.repos if r.module == "user_default"), None
 )

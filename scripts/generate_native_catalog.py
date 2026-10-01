@@ -42,7 +42,7 @@ for k, (deps, body) in sorted(p.KINDS.items()):
     source = f'float {fn}(vec2 uv, float scale, uint seed) {{\n  float u = uv.x, v = uv.y;\n  float x = u * scale, y = v * scale;\n  float res = 0.0;\n  {body}\n  if (isnan(res)) {{ res = 0.0; }}\n  if (isinf(res)) {{ res = (res > 0.0) ? 1.0 : 0.0; }}\n  return clamp(res, 0.0, 1.0);\n}}\n'
     out.append('{' + ','.join([quote(k), quote(fn), quote(source), f'UINT64_C({mask})']) + '},\n')
 out.append('{NULL,NULL,NULL,0}};\n')
-(ROOT / 'libopenpainter/src/shaders/catalog.inc').write_text(''.join(out))
+(ROOT / 'libopenpainter/src/shaders/catalog.inc').write_text(''.join(out), encoding="utf-8")
 print(len(glsl.MATH), 'math;', len(glsl.VECTOR_MATH), 'vector;', len(p.KINDS), 'procedurals')
 
 # Fixed paint/publication/filter shaders are frozen with the native compiler too.
@@ -51,7 +51,7 @@ import ast
 fixed = {}
 for relative, prefix in [('evaluation/engine/runtime.py', 'runtime'),
                          ('painting/gpu_strokes.py', 'paint'), ('painting/gpu_history.py', 'paint'), ('evaluation/engine/filters.py', 'filter')]:
-    tree = ast.parse((ROOT / 'src/open_painter' / relative).read_text())
+    tree = ast.parse((ROOT / 'src/open_painter' / relative).read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             name = node.targets[0]
@@ -64,7 +64,7 @@ for count in (2, 3):
     fixed[f'runtime.mip_{count}'] = mip_batch_source(fixed['runtime.mip'], count)
 # Resolve the reference's literal shader concatenations without importing its
 # NumPy/GPU modules. These expressions are repository-owned build inputs.
-filter_tree = ast.parse((ROOT / 'src/open_painter/evaluation/engine/filters.py').read_text())
+filter_tree = ast.parse((ROOT / 'src/open_painter/evaluation/engine/filters.py').read_text(encoding="utf-8"))
 env = {}
 def value(node, scope):
     if isinstance(node, ast.Constant):
@@ -99,5 +99,5 @@ for index, (name, source) in enumerate(sorted(fixed.items())):
 text.append('static const struct { const char *name,*source; } fixed_shaders[] = {\n')
 text.extend('{' + quote(name) + f',fixed_{i}' + '},\n' for i, name in enumerate(sorted(fixed)))
 text.append('{NULL,NULL}};\n')
-(ROOT / 'libopenpainter/src/shaders/fixed.inc').write_text(''.join(text))
+(ROOT / 'libopenpainter/src/shaders/fixed.inc').write_text(''.join(text), encoding="utf-8")
 print(len(fixed), 'fixed GPU programs')

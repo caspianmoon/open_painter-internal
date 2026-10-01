@@ -42,7 +42,7 @@ def main():
                 runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 scope='Twenty warm edits, then identical fixed trajectories in fresh background processes. Every update waits for GPU completion. Not viewport latency.')
     def save():
-        (out / 'results.json').write_text(json.dumps(data, indent=2) + '\n')
+        (out / 'results.json').write_text(json.dumps(data, indent=2) + '\n', encoding="utf-8")
     print('UPDATE_BENCHMARK_OUTPUT', out, flush=True)
     with tempfile.TemporaryDirectory(prefix='op-old-release-') as baseline_dir:
         baseline = Path(baseline_dir) / 'open_painter'
@@ -63,7 +63,7 @@ def main():
                     result = subprocess.run([args.blender, '--background', '--factory-startup', '--python-exit-code', '1',
                         '--python', str(WORKER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300)
                 assert result.returncode == 0, path.with_suffix('.log')
-            row = json.loads(path.read_text())
+            row = json.loads(path.read_text(encoding="utf-8"))
             assert row['status'] == 'PASS'
             if mode == 'candidate':
                 assert row['counters'].get('engine_texture_allocations', 0) == 0, row['counters']

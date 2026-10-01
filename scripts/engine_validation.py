@@ -28,7 +28,7 @@ status = {"fixtures": None, "unreal": {"status": "NOT RUN"}, "unity_urp": {"stat
 if not args.skip_fixtures:
     subprocess.run([args.blender, "--background", "--factory-startup", "--python-exit-code", "1", "--python",
                     str(root / "engine_validation/build_fixtures.py"), "--", str(args.out)], cwd=root, env=env, check=True)
-record = json.loads((args.out / "fixtures.json").read_text())
+record = json.loads((args.out / "fixtures.json").read_text(encoding="utf-8"))
 status["fixtures"] = {"path": str(args.out / "fixtures.json"), "package": record.get("package"), "sha256": record.get("sha256"),
                       "commit": record.get("commit"), "blender": record.get("blender")}
 
@@ -38,7 +38,7 @@ if unreal_editor and unreal_project and Path(unreal_editor).exists() and Path(un
     result = subprocess.run([unreal_editor, unreal_project, "-run=pythonscript",
                              f"-script={root / 'engine_validation/unreal/import_and_validate.py'}", "-unattended", "-nopause"],
                             env=dict(env, OP_FIXTURES=str(args.out / "unreal"), OP_REPORT=str(report)))
-    status["unreal"] = {"status": json.loads(report.read_text())["status"] if report.exists() else "FAIL",
+    status["unreal"] = {"status": json.loads(report.read_text(encoding="utf-8"))["status"] if report.exists() else "FAIL",
                         "exit": result.returncode, "report": str(report)}
 else:
     status["unreal"]["reason"] = "no Unreal Editor on this machine (set OP_UNREAL_EDITOR and OP_UNREAL_PROJECT)"
@@ -52,11 +52,11 @@ if unity_editor and unity_project and Path(unity_editor).exists() and Path(unity
     result = subprocess.run([unity_editor, "-batchmode", "-nographics", "-projectPath", unity_project, "-executeMethod",
                              "OpenPainter.Validation.Run", "-opFixtures", str(args.out / "unity_urp"), "-opReport", str(report),
                              "-quit", "-logFile", str(args.out / "unity.log")])
-    status["unity_urp"] = {"status": json.loads(report.read_text())["status"] if report.exists() else "FAIL",
+    status["unity_urp"] = {"status": json.loads(report.read_text(encoding="utf-8"))["status"] if report.exists() else "FAIL",
                            "exit": result.returncode, "report": str(report)}
 else:
     status["unity_urp"]["reason"] = "no Unity Editor on this machine (set OP_UNITY_EDITOR and OP_UNITY_PROJECT)"
 
-(args.out / "engine-validation-status.json").write_text(json.dumps(status, indent=2))
+(args.out / "engine-validation-status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
 print(json.dumps(status, indent=2))
 sys.exit(0)

@@ -35,7 +35,7 @@ out = args.output.resolve()
 out.mkdir(parents=True,exist_ok=False)
 run = args.run.resolve()
 trace_path = run/'provider_and_tool_trace.jsonl'
-trace = [json.loads(line)['data'] for line in trace_path.read_text().splitlines()]
+trace = [json.loads(line)['data'] for line in trace_path.read_text(encoding="utf-8").splitlines()]
 previews = [event for event in trace if event.get('event')=='tool' and event.get('tool')=='preview_proposal']
 event = previews[-1]
 proposal_text = event['arguments']['proposal_json']
@@ -50,7 +50,7 @@ report = dict(track='ISOLATED_REGION_SAMPLING_ENGINE_DIAGNOSTIC',provider_calls=
     product_root=str(args.product_root.resolve()),loaded_module=open_painter.__file__,
     implementation={name:sha(args.product_root/'src/open_painter/evaluation'/name)
                     for name in ('mesh_masks.py','shader_graph.py')})
-(out/'unchanged_proposal.json').write_text(proposal_text+'\n')
+(out/'unchanged_proposal.json').write_text(proposal_text+'\n', encoding="utf-8")
 open_painter.register()
 if bpy.app.timers.is_registered(cache.tick):
     bpy.app.timers.unregister(cache.tick)

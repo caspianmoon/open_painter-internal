@@ -25,8 +25,8 @@ if a.mode == 'gallery':
     records = []
     sections = []
     for source in sorted(output.glob('attempt-*/T*/calibration.json')):
-        data = json.loads(source.read_text())
-        diagnostics=[json.loads(path.read_text()) for path in (source.parent/'mapping_diagnostic.json',) if path.is_file()]
+        data = json.loads(source.read_text(encoding="utf-8"))
+        diagnostics=[json.loads(path.read_text(encoding="utf-8")) for path in (source.parent/'mapping_diagnostic.json',) if path.is_file()]
         frames = []
         figures = []
         for frame in sorted(source.parent.glob('*.png')):
@@ -50,7 +50,7 @@ if a.mode == 'gallery':
             html.escape(json.dumps({key:value for key,value in record.items() if key!='frames'},indent=2))+'</pre></details></section>')
     output.mkdir(parents=True,exist_ok=True)
     (output/'calibration_inventory.json').write_text(json.dumps(dict(track='DETERMINISTIC_AUTHORED_ENGINE_CALIBRATION',
-        provider_calls=0,reviewer='PENDING',quality='NOT_SCORED',attempts=records),indent=2)+'\n')
+        provider_calls=0,reviewer='PENDING',quality='NOT_SCORED',attempts=records),indent=2)+'\n', encoding="utf-8")
     (output/'review.html').write_text('<!doctype html><meta charset="utf-8"><title>Material engine calibration</title><style>'+
         'body{font:16px system-ui;background:#191b1e;color:#eee;max-width:1500px;margin:2rem auto;padding:1rem}'
         '.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem}figure{margin:0}img{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}section{border-top:1px solid #555;padding:1.2rem 0}'
@@ -58,7 +58,7 @@ if a.mode == 'gallery':
         'These are authored engine diagnostics, not human-authored references, AI results, or artistic quality passes. '
         'Reviewer: PENDING. Rating: NOT SCORED. All preview images are embedded for offline review.</p>'+
         '<p>Neutral fixture sizes are explicit nominal assumptions, not source measurements. Cameras, lights, geometry, UVs and bake maps remain fixed. '
-        'Rejected authoring attempts are retained below. Editable Blender states and float channel buffers remain in the accompanying local evidence folders.</p>'+''.join(sections))
+        'Rejected authoring attempts are retained below. Editable Blender states and float channel buffers remain in the accompanying local evidence folders.</p>'+''.join(sections), encoding="utf-8")
     print(output/'review.html')
     sys.exit(0)
 args = [a.mode, '--fixtures',str(a.fixtures.resolve()),'--output',str(a.output.resolve())]

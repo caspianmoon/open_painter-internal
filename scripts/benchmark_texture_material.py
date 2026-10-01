@@ -66,9 +66,9 @@ def main():
         started = time.perf_counter()
         recipe = deepcopy(composer.CATALOG["Worn Painted Metal"])
         if args.recipes:
-            recipe = json.loads(args.recipes.read_text())["Worn Painted Metal"]
+            recipe = json.loads(args.recipes.read_text(encoding="utf-8"))["Worn Painted Metal"]
         if args.legacy_detail:
-            recipe = json.loads((ROOT / 'tests/performance/worn_v020.json').read_text())
+            recipe = json.loads((ROOT / 'tests/performance/worn_v020.json').read_text(encoding="utf-8"))
         composer.apply_document(ts, recipe, "Worn Painted Metal")
         author_seconds = time.perf_counter() - started
         evaluator = LayerEvaluator(scene)
@@ -129,7 +129,7 @@ def main():
             context="CPU texture composition with synthetic AO/curvature; excludes mesh baking and viewport rendering.",
         )
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2) + "\n")
+        args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2), flush=True)
         print("Report:", args.report, flush=True)
     finally:

@@ -63,7 +63,7 @@ def main():
                         filter=lambda info: None if '/build' in info.name or info.name.endswith('.DS_Store') else info)
         for target in targets:
             script = Path(scratch) / 'build.sh'
-            script.write_text(WINDOWS if target.startswith('windows') else LINUX)
+            script.write_text(WINDOWS if target.startswith('windows') else LINUX, encoding="utf-8")
             container = run('run', '-d', '--platform', PLATFORMS[target], IMAGE, 'sleep', '7200',
                             capture_output=True).stdout.strip().splitlines()[-1]
             try:

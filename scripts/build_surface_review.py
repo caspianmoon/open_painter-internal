@@ -19,8 +19,8 @@ parser.add_argument('--allow-partial', action='store_true', help='Review a match
 parser.add_argument('--linked-images', action='store_true', help='Use relative image links instead of embedding PNGs')
 parser.add_argument('--output', type=Path, default=ROOT / 'docs/material-surface-review.html')
 args = parser.parse_args()
-before = json.loads((args.before_context or args.before / 'render-context.json').read_text())
-after = json.loads((args.after_context or args.after / 'render-context.json').read_text())
+before = json.loads((args.before_context or args.before / 'render-context.json').read_text(encoding="utf-8"))
+after = json.loads((args.after_context or args.after / 'render-context.json').read_text(encoding="utf-8"))
 
 
 def index(context):
@@ -45,7 +45,7 @@ for filename in ('material-review-metals.md', 'material-review-natural.md'):
     file = ROOT / 'docs' / filename
     if not file.is_file():
         continue
-    for line in file.read_text().splitlines():
+    for line in file.read_text(encoding="utf-8").splitlines():
         # Ignore later three-column notes tables: only numbered defect/correction
         # rows with all four columns supply this optional historical text.
         cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
@@ -170,5 +170,5 @@ document.querySelector('#search').addEventListener('input',e=>{const q=e.target.
 document.querySelectorAll('figure img').forEach(img=>img.addEventListener('click',()=>{const w=window.open();if(w){const full=w.document.createElement('img');full.src=img.src;full.alt=img.alt;w.document.body.append(full);}}));
 </script></html>'''
 args.output.parent.mkdir(parents=True, exist_ok=True)
-args.output.write_text(document)
+args.output.write_text(document, encoding="utf-8")
 print(args.output, args.output.stat().st_size, f'bytes; {len(names)} paired reviews')

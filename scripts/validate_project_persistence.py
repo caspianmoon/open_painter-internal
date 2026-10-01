@@ -52,7 +52,7 @@ def digest_array(value):
 
 def progress(stage, **values):
     record.update(stage=stage, **values)
-    REPORT.write_text(json.dumps(record, indent=2, allow_nan=False) + '\n')
+    REPORT.write_text(json.dumps(record, indent=2, allow_nan=False) + '\n', encoding="utf-8")
     print('PROJECT_PERSISTENCE', stage, flush=True)
 
 
@@ -217,7 +217,7 @@ def quantized(value):
 def main():
     DIRECTORY.mkdir(parents=True, exist_ok=True)
     original_sha = digest_file(SOURCE)
-    inventory = json.loads((ROOT / '.blender-test/project-native/inventory.json').read_text())
+    inventory = json.loads((ROOT / '.blender-test/project-native/inventory.json').read_text(encoding="utf-8"))
     assert original_sha == inventory['sha256'], 'Input changed since the actual project inventory'
     record['source_sha256_before'] = original_sha
     working = DIRECTORY / 'project-working-copy.blend'
@@ -361,7 +361,7 @@ if __name__ == '__main__':
         DIRECTORY.mkdir(parents=True, exist_ok=True)
         record.update(result='FAIL', error=traceback.format_exc(),
                       source_sha256_after=digest_file(SOURCE))
-        REPORT.write_text(json.dumps(record, indent=2, allow_nan=False) + '\n')
+        REPORT.write_text(json.dumps(record, indent=2, allow_nan=False) + '\n', encoding="utf-8")
         traceback.print_exc()
         raise
     print('ACTUAL_PROJECT_PERSISTENCE_EXPORT_PASS', REPORT, flush=True)

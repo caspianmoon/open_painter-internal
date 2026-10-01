@@ -128,7 +128,7 @@ for kind in ('POSITION','WORLD_NORMAL'):
     item.kind, item.image = kind, image
 path = args.output
 path.mkdir(parents=True, exist_ok=True)
-recipes = json.loads(args.recipes.read_text()) if args.recipes else CATALOG
+recipes = json.loads(args.recipes.read_text(encoding="utf-8")) if args.recipes else CATALOG
 records = []
 context = {
     'schema_version': 2, 'label': args.label or args.output.name,
@@ -193,6 +193,6 @@ for name in selected:
     records.append({'material': name, 'seconds': perf_counter()-start,
                     'recipe': recipe, 'render': stem + '.png', 'maps': maps,
                     'height_stats': stats, 'source_sha256': sources})
-    (path / 'render-context.json').write_text(json.dumps(context, indent=2))
+    (path / 'render-context.json').write_text(json.dumps(context, indent=2), encoding="utf-8")
     print('CATALOG_PREVIEW', name, round(perf_counter()-start,3), flush=True)
 open_painter.unregister()

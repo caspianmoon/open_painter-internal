@@ -59,7 +59,7 @@ if not bpy.app.background:
                          "resolution_scale": bpy.context.preferences.system.ui_scale}
 else:
     record["display"] = {"note": "background session; the GUI probes record their window size in their reports"}
-out.write_text(json.dumps(record, indent=2))
+out.write_text(json.dumps(record, indent=2), encoding="utf-8")
 print("QUALITY_ENVIRONMENT", out, flush=True)
 if not bpy.app.background:
     bpy.ops.wm.quit_blender()

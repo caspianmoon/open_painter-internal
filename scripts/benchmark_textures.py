@@ -121,7 +121,7 @@ def worker(args):
             report['export']=dict(wall_s=time.perf_counter()-start, files=len(paths))
             report['io_metrics']=io_metrics.report()
     args.report.parent.mkdir(parents=True,exist_ok=True)
-    args.report.write_text(json.dumps(report,indent=2)+'\n')
+    args.report.write_text(json.dumps(report,indent=2)+'\n', encoding="utf-8")
     open_painter.unregister()
 
 
@@ -155,7 +155,7 @@ def main():
                          '--worker','--fixture',fixture,'--resolution',str(n),'--report',str(path)]
                     if args.io: cmd+=['--io']
                     subprocess.run(cmd,cwd=ROOT,env=env,check=True)
-                    result=json.loads(path.read_text()); result['repeat']=index+1
+                    result=json.loads(path.read_text(encoding="utf-8")); result['repeat']=index+1
                     results.append(result)
                     print(f'{fixture} {n} run {index+1}: {result["final"]["wall_s"]:.3f}s cold, {result["warm_roughness_edit"]["wall_s"]:.3f}s warm',flush=True)
     summary=[]
@@ -167,6 +167,6 @@ def main():
                 warm_median_wall_s=statistics.median(r['warm_roughness_edit']['wall_s'] for r in samples),
                 timing_p95=None, note='No across-run p95 estimate with fewer than 20 independent runs.'))
     args.report.parent.mkdir(parents=True,exist_ok=True)
-    args.report.write_text(json.dumps(dict(stage=args.stage,command=sys.argv,summary=summary,runs=results),indent=2)+'\n')
+    args.report.write_text(json.dumps(dict(stage=args.stage,command=sys.argv,summary=summary,runs=results),indent=2)+'\n', encoding="utf-8")
 
 if __name__=='__main__': main()

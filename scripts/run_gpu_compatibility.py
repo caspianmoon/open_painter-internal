@@ -120,13 +120,13 @@ def main():
                          'forced pixel publication on actual GPU' if pixels else 'actual GPU',
                    log=str(folder / 'run.log'))
         if metadata.exists():
-            row.update(json.loads(metadata.read_text()))
+            row.update(json.loads(metadata.read_text(encoding="utf-8")))
         results.append(row)
         report = dict(requested_backend=args.backend, selected_tests=[case[0] for case in runs], tests=results,
                       status=('FAIL' if any(row['status'] == 'FAIL' for row in results) else
                               'PASS' if len(results) == len(runs) else 'RUNNING'),
                       limitation='Simulated contracts and forced publication do not validate a Vulkan/OpenGL driver.')
-        (output / 'report.json').write_text(json.dumps(report, indent=2))
+        (output / 'report.json').write_text(json.dumps(report, indent=2), encoding="utf-8")
         print(f'{name}: {row["status"]} ({row["seconds"]}s)', flush=True)
     return 0 if all(row['status'] == 'PASS' for row in results) else 1
 

@@ -114,7 +114,7 @@ def main():
                   note='Construction wall time only (nodes.new, rename, links.new); no GPU compile.',
                   rows=rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2) + '\n')
+    args.report.write_text(json.dumps(report, indent=2) + '\n', encoding="utf-8")
     print('NODE_GRAPH_SCALING', json.dumps(report), flush=True)
 
 

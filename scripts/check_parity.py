@@ -117,14 +117,14 @@ def main():
     parser.add_argument("--require-parity", action="store_true")
     parser.add_argument("--write-doc", action="store_true")
     args = parser.parse_args()
-    data = json.loads((ROOT / "docs/substance_parity.json").read_text())
+    data = json.loads((ROOT / "docs/substance_parity.json").read_text(encoding="utf-8"))
     errors = validate(data)
     if errors:
         raise SystemExit("\n".join(errors))
     document = render(data)
     if args.write_doc:
-        (ROOT / "PARITY.md").write_text(document)
-    elif not (ROOT / "PARITY.md").exists() or (ROOT / "PARITY.md").read_text() != document:
+        (ROOT / "PARITY.md").write_text(document, encoding="utf-8")
+    elif not (ROOT / "PARITY.md").exists() or (ROOT / "PARITY.md").read_text(encoding="utf-8") != document:
         raise SystemExit("PARITY.md is stale; run scripts/check_parity.py --write-doc")
     counts = Counter(item["status"] for item in data["features"])
     print("Inventory valid: " + ", ".join(f"{n} {s}" for s, n in sorted(counts.items())))

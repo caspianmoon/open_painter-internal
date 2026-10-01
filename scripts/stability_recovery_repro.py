@@ -24,7 +24,7 @@ same = b'identical BaseColor bytes\n' * 100
 # Case 1: identical original, interrupted after PREPARED before any backup.
 tmp = tempfile.mkdtemp(prefix='op-s0-'); out = Path(tmp, 'out'); st = Path(tmp, 'staging'); out.mkdir(); st.mkdir()
 (out / 'BaseColor.png').write_bytes(same); (st / 'BaseColor.png').write_bytes(same)
-spec = Path(tmp, 'spec.json'); spec.write_text(json.dumps({'identifier': 'feedfacecafe', 'items': [(str(out / 'BaseColor.png'), str(st / 'BaseColor.png'))]}))
+spec = Path(tmp, 'spec.json'); spec.write_text(json.dumps({'identifier': 'feedfacecafe', 'items': [(str(out / 'BaseColor.png'), str(st / 'BaseColor.png'))]}), encoding="utf-8")
 env = dict(os.environ, OP_EXPORT_FAILPOINT='after_prepared')
 r = subprocess.run([sys.executable, '-c', WORKER, str(root / 'src'), str(spec)], env=env, capture_output=True, text=True)
 before = snap(out)
@@ -37,7 +37,7 @@ results['case1_after_prepared_identical'] = {'worker_exit': r.returncode, 'befor
 # Case 2: original moved to backup, first recovery restores it, journal cleanup interrupted, recovery runs again.
 tmp = tempfile.mkdtemp(prefix='op-s0-'); out = Path(tmp, 'out'); st = Path(tmp, 'staging'); out.mkdir(); st.mkdir()
 (out / 'BaseColor.png').write_bytes(same); (st / 'BaseColor.png').write_bytes(same)
-spec = Path(tmp, 'spec.json'); spec.write_text(json.dumps({'identifier': 'feedfacecafe', 'items': [(str(out / 'BaseColor.png'), str(st / 'BaseColor.png'))]}))
+spec = Path(tmp, 'spec.json'); spec.write_text(json.dumps({'identifier': 'feedfacecafe', 'items': [(str(out / 'BaseColor.png'), str(st / 'BaseColor.png'))]}), encoding="utf-8")
 env = dict(os.environ, OP_EXPORT_FAILPOINT='after_backups')
 r = subprocess.run([sys.executable, '-c', WORKER, str(root / 'src'), str(spec)], env=env, capture_output=True, text=True)
 before = snap(out)
@@ -62,5 +62,5 @@ print(json.dumps(results, indent=1))
 out_dir = root / '.blender-test/quality/stability'
 out_dir.mkdir(parents=True, exist_ok=True)
 name = 's1-recovery-after.json' if transaction.FORMAT >= 3 else 's0-recovery-before.json'
-(out_dir / name).write_text(json.dumps(results, indent=1))
+(out_dir / name).write_text(json.dumps(results, indent=1), encoding="utf-8")
 print('WROTE', out_dir / name)

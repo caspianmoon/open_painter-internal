@@ -209,6 +209,6 @@ for name in selected:
         sheet = np.concatenate([np.concatenate(row, axis=1) for row in reversed(rows)], axis=0)
         write_image(out / f'{stem}.png', sheet[::-1], bits=8, srgb=False)
     report[name] = {'seconds': round(perf_counter() - started, 1), 'controls': records}
-    (out / 'report.json').write_text(json.dumps(report, indent=1))
+    (out / 'report.json').write_text(json.dumps(report, indent=1), encoding="utf-8")
     print('MASTER_CONTROLS', name, len(records), round(perf_counter() - started, 1), flush=True)
 open_painter.unregister()

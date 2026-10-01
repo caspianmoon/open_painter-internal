@@ -90,7 +90,7 @@ def main():
     report['capabilities']['native_udim_paint_bake_addressing']=dict(status='NOT_TESTED',reason='Creating a tiled Image would not prove brush/bake tile addressing. No UDIM path is enabled by this increment.')
     report['capabilities']['partial_image_upload']=dict(status='NOT_PROVEN',reason='Only full-buffer Image transfer tested.')
     args.report.parent.mkdir(parents=True,exist_ok=True)
-    args.report.write_text(json.dumps(report,indent=2)+'\n')
+    args.report.write_text(json.dumps(report,indent=2)+'\n', encoding="utf-8")
     print(json.dumps(report,indent=2),flush=True)
     if not bpy.app.background: bpy.ops.wm.quit_blender()
 

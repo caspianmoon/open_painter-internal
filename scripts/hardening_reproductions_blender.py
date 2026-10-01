@@ -170,5 +170,5 @@ for name, fn in (("cross_set_scope_after_link", cross_set_scope), ("rear_sheet_i
         record["cases"][name] = {"exception": traceback.format_exc()}
     print(name, json.dumps(record["cases"][name], default=str)[:500], flush=True)
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text(json.dumps(record, indent=2, default=str))
+out.write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
 print("PAINTING_REPRODUCTIONS", out, flush=True)

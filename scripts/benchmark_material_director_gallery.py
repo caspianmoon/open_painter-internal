@@ -29,7 +29,7 @@ VIEWS = {
 
 def read_json(path, warnings):
     if not path.is_file(): return None
-    try: return json.loads(path.read_text())
+    try: return json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError) as exc:
         warnings.append(f"{path.name}: {exc}"); return None
 
@@ -199,7 +199,7 @@ class Resources(HTMLParser):
         if tag=='img': self.images.append(a.get('src',''))
 
 def validate_html(path, *, portable=False):
-    parser=Resources(); parser.feed(Path(path).read_text()); errors=[]; decoded={}
+    parser=Resources(); parser.feed(Path(path).read_text(encoding="utf-8")); errors=[]; decoded={}
     for url in parser.urls:
         if url.startswith('data:image/png;base64,'):
             if url not in decoded:
@@ -212,7 +212,7 @@ def validate_html(path, *, portable=False):
     return dict(status='COMPLETE' if not errors else 'INCOMPLETE',errors=errors,decoded_images=len(decoded),image_elements=len(parser.images))
 
 def export_html(root, output, *, portable=False, case_ids=None):
-    data=collect(root,output,portable=portable,case_ids=case_ids); output.parent.mkdir(parents=True,exist_ok=True); output.write_text(render(data))
+    data=collect(root,output,portable=portable,case_ids=case_ids); output.parent.mkdir(parents=True,exist_ok=True); output.write_text(render(data), encoding="utf-8")
     checked=validate_html(output,portable=portable)
     checked['html_status']=checked['status']
     checked['evidence_errors']=[run['run_id']+': '+stage+'/'+view+': '+frame['status']
@@ -233,18 +233,18 @@ def export_portable_cases(root, output):
     root,output=Path(root),Path(output)
     if output.exists() and any(output.iterdir()): raise FileExistsError('Use an empty portable-case export directory')
     output.mkdir(parents=True,exist_ok=True)
-    manifest=json.loads((root/'manifest.json').read_text());records=[]
+    manifest=json.loads((root/'manifest.json').read_text(encoding="utf-8"));records=[]
     for case in manifest['specification']['cases']:
         path=output/(case['id']+'.html')
         checked=export_html(root,path,portable=True,case_ids={case['id']})
         records.append(dict(case_id=case['id'],file=path.name,sha256=digest(path),bytes=path.stat().st_size,validation=checked))
     links=''.join('<li><a href="'+html.escape(r['file'])+'">'+html.escape(r['case_id'])+'</a> · '+str(r['bytes'])+' bytes</li>' for r in records)
-    (output/'index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Material Director review</title><h1>Material Director review</h1><p>Each case file contains its own images and can be copied and opened alone offline. This index links the five files. Human ratings remain pending until independently reviewed.</p><ul>'+links+'</ul></html>')
+    (output/'index.html').write_text('<!doctype html><html lang="en"><meta charset="utf-8"><title>Material Director review</title><h1>Material Director review</h1><p>Each case file contains its own images and can be copied and opened alone offline. This index links the five files. Human ratings remain pending until independently reviewed.</p><ul>'+links+'</ul></html>', encoding="utf-8")
     index_validation=validate_html(output/'index.html')
     checked=dict(status='COMPLETE' if index_validation['status']=='COMPLETE' and all(
         r['validation']['status']=='COMPLETE' and r['validation']['evidence_status']=='COMPLETE' for r in records) else 'INCOMPLETE',
         format='portable_cases_v1',cases=records,index_validation=index_validation)
-    (output/'validation.json').write_text(json.dumps(checked,indent=2))
+    (output/'validation.json').write_text(json.dumps(checked,indent=2), encoding="utf-8")
     return checked
 
 def export_archive(root, output, *, separate_blends=False):
@@ -270,15 +270,15 @@ def export_archive(root, output, *, separate_blends=False):
             # The primary HTML keeps state links valid only in a complete archive.
             # Companion export therefore includes a plaintext declaration and
             # removes state anchors, never advertises silently broken links.
-            text=(package/'gallery.html').read_text()
+            text=(package/'gallery.html').read_text(encoding="utf-8")
             import re
             text=re.sub(r'<a href="[^"]+\.blend">([^<]+)</a>',r'<span>\1: see declared companion archive</span>',text)
-            (package/'gallery.html').write_text(text)
+            (package/'gallery.html').write_text(text, encoding="utf-8")
             for path in package.rglob('*.blend'):path.unlink()
         records={p.relative_to(package).as_posix():digest(p) for p in package.rglob('*') if p.is_file()}
         inventory={'format':'director_evidence_zip_v1','files':records,'companion_blends':companion,
                    'companion_archive':companion_path.name if separate_blends else None,'portable_review':False}
-        (package/'evidence_inventory.json').write_text(json.dumps(inventory,indent=2))
+        (package/'evidence_inventory.json').write_text(json.dumps(inventory,indent=2), encoding="utf-8")
         output.parent.mkdir(parents=True,exist_ok=True)
         with zipfile.ZipFile(output,'x',compression=zipfile.ZIP_DEFLATED) as archive:
             for p in package.rglob('*'):

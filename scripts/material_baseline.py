@@ -112,11 +112,11 @@ for name in selected:
     record['materials'][name] = entry
     print('MATERIAL_BASELINE', name, flush=True)
 args.output.parent.mkdir(parents=True, exist_ok=True)
-args.output.write_text(json.dumps(record, indent=1))
+args.output.write_text(json.dumps(record, indent=1), encoding="utf-8")
 print('MATERIAL_BASELINE_WRITTEN', args.output, flush=True)
 
 if args.compare and args.compare.exists():
-    other = json.loads(args.compare.read_text())
+    other = json.loads(args.compare.read_text(encoding="utf-8"))
     comparison = {'reference': str(args.compare), 'identical': [], 'different': {}, 'missing': []}
     for name, entry in record['materials'].items():
         reference = other['materials'].get(name)
@@ -132,7 +132,7 @@ if args.compare and args.compare.exists():
                                                        'reference_mean': reference['authored'][channel]['mean']}
                                              for channel, flag in changed.items() if flag}
     out = args.output.with_name(args.output.stem + '-comparison.json')
-    out.write_text(json.dumps(comparison, indent=1))
+    out.write_text(json.dumps(comparison, indent=1), encoding="utf-8")
     print('MATERIAL_BASELINE_COMPARISON', f"{len(comparison['identical'])} identical, {len(comparison['different'])} different, "
           f"{len(comparison['missing'])} missing", out, flush=True)
 open_painter.unregister()

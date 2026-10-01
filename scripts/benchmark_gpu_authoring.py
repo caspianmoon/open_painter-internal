@@ -182,6 +182,6 @@ with metrics.Metrics() as observed:
               'painting': painting, 'publication': publication, 'cpu_gaussian': filtering, 'gpu_gaussian': gpu_filtering,
               'undo_transaction': undo_time, 'metrics': observed.report()}
 args.output.parent.mkdir(parents=True, exist_ok=True)
-args.output.write_text(json.dumps(report, indent=2))
+args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
 print('AUTHORING_BENCHMARK', json.dumps({k: v for k, v in report.items() if k != 'metrics'}), flush=True)
 open_painter.unregister()

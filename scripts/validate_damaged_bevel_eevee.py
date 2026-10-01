@@ -95,7 +95,7 @@ cycles_mask = np.abs(after["CYCLES"] - before["CYCLES"]).mean(axis=-1) > .04
 overlap = (eevee_mask & cycles_mask).sum() / max((eevee_mask | cycles_mask).sum(), 1)
 report["engine_agreement_jaccard"] = float(overlap)
 report["pass"] = bool(report["renders"]["BLENDER_EEVEE"]["changed_pixels"] > .01 and overlap > .4)
-(OUT / "report.json").write_text(json.dumps(report, indent=2))
+(OUT / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 print("DAMAGED_BEVEL_EEVEE", json.dumps(report), flush=True)
 if "--quit" in sys.argv:
     bpy.ops.wm.quit_blender()

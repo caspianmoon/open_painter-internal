@@ -537,6 +537,7 @@ def main():
             text = io.StringIO()
             pstats.Stats(cold_profiler, stream=text).sort_stats('cumulative').print_stats(60)
             cold['profile'] = text.getvalue()
+            cold_profiler.dump_stats(str(REPORT) + '.cold.prof')
         cold['footprint_mib'] = footprint_mib()
         cold['images'] = image_breakdown(ts)
         print('DEEP_STACK_IMAGES', cold['images'], flush=True)

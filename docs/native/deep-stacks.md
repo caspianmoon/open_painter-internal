@@ -779,6 +779,48 @@ A smart material's apply also stopped writing the set's surface parameters when 
 are unchanged; an unchanged height distance still walked every channel. A replay
 that only adds layers resolves the physical units of those layers alone.
 
+### Undo
+
+A memfile undo reallocates every struct of the restored layer store: layers,
+channels, effects, masks. The Palette and Scene IDs keep their addresses, but
+Blender invalidates the Python wrappers of every ID, images in headless nodes
+included. The undo handler therefore drops every session and the next tick builds
+the graph again. At 200 layers that took 2.9–3.3 s:
+
+- **Collector.** The rebuild's ~600,000 new objects set off full collections over
+  a growing heap (0.6–2 s). `gc_policy.paused()` disables automatic collection
+  while a graph is built from scratch or first evaluated, and freezes what survives
+  at once. On undo and load, `release(defer=True)` marks a sweep for the next
+  pause, because the dropped graph is still held for the rebuild to adopt its
+  leaves and a collection then walked it and freed nothing.
+- **Results.** The engine an undo drops is kept for its session's rebuild. Adopting
+  a rebuilt graph hands each new unit state its predecessor's textures and stamp,
+  so the native graph renders a unit again only where its content stamp differs.
+- **Programs.** A native program's stamp counts its uniform revisions, which restart
+  with every new program, so a carried stamp is only trusted with its own program.
+  A rebuilt unit takes its predecessor's program, uniform bank and shader, rebound
+  to its own tree's nodes and sockets (`_rebound`, `_same_shape`, `_rebind`). This
+  happens when the unit and every producer compiled into it sign the same, their
+  trees have the same shape and its images sign the same. A state given a newly
+  translated program keeps its targets but not their stamp.
+  `OP_VERIFY_INCREMENTAL` compares every rebound program with a fresh
+  translation, and `shader_undo.py` asserts programs were rebound and that the
+  published state is exactly the restored one.
+
+200 layers at 1K (`undo_numeric`, `undo_structural` in `native_deep_stack.py`):
+
+| Step | Undo |
+| --- | ---: |
+| Before | 2.9–3.3 s |
+| Collector out of the rebuild | 1.6–2.2 s |
+| Results carried | 1.2–1.6 s |
+| Programs rebound | 0.8–1.1 s |
+
+The rest is compiling every unit's tree again (about 0.5 s). Keeping the graph
+itself across an undo would mean re-pointing every captured struct and every ID
+wrapper first, and a missed one reads freed memory. The first build of a file also
+went from 4.7 to 3.3 s.
+
 ## CPU kernels
 
 Profiles of the structural paths show arithmetic in C taking microseconds. The time
@@ -852,9 +894,10 @@ Machines with 16 GB or more keep the previous limits.
   backdrop. Editing a layer inside a smart material re-renders the siblings above it
   (4 of a middle leaf's 7 units per channel). Premultiplied compositing inside
   isolated folders would make them collapsible.
-- **Opening a deep file.** The first build of the 200-layer stack takes about 4.7 s
-  at 1K. Of that, compiling 1,728 units takes 1.2 s, decoding the detail-source
-  images 0.9 s, translating programs 0.65 s and the first render about 1.1 s.
+- **Opening a deep file.** The first build of the 200-layer stack takes about 3.3 s
+  at 1K: compiling 1,728 units, decoding the detail-source images (about 0.9 s),
+  translating programs and the first render.
+- **Undo.** 0.8–1.1 s at 200 layers, mostly compiling every unit's tree again.
 - **Layer order.** A layer inserted mid-stack still updates the owner tuple of
   every unit of the layers above it (about 1,000 at 200 layers), though its bindings
   move once per layer. C still takes the whole topology on every change (built at C

@@ -7,6 +7,8 @@ invalidate that membership instead of silently selecting different faces.
 import hashlib
 import json
 
+from ..utils.digest import sha256
+
 MAX_REGIONS = 128
 MAX_COMPONENTS = 48
 MAX_QUERIES = 32
@@ -236,7 +238,7 @@ def _record(ts, target, object_id, slot, faces, kind, provenance, uncertainty):
     valid = np.isfinite(uv).all(axis=(1, 2)) & (uv_area > 1e-12) & (uv >= 0).all(axis=(1, 2)) & (uv <= 1).all(axis=(1, 2))
     stamp = target['_region_topology']
     object_key = f'{obj.library.filepath if obj.library else ""}|{obj.name_full}'
-    digest = hashlib.sha256(f'{ts.id}|{object_key}|{stamp}|{slot}|{kind}'.encode() + faces.tobytes()).hexdigest()
+    digest = sha256(f'{ts.id}|{object_key}|{stamp}|{slot}|{kind}'.encode() + faces.tobytes()).hexdigest()
     centered = xyz - xyz.mean(axis=0)
     eigenvalues, eigenvectors = np.linalg.eigh(centered.T @ centered)
     axis = eigenvectors[:, -1]

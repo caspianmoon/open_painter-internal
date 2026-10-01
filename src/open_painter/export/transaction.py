@@ -60,7 +60,6 @@ are not established by those tests: the request is coherent and recoverable, not
 a concurrent reader.
 """
 import errno
-import hashlib
 import json
 import os
 import shutil
@@ -104,7 +103,8 @@ def _fault(name):
 
 
 def _sha256(path):
-    digest = hashlib.sha256()
+    from ..utils.digest import sha256
+    digest = sha256()
     with open(path, 'rb') as stream:
         for chunk in iter(lambda: stream.read(COPY_CHUNK), b''):
             digest.update(chunk)

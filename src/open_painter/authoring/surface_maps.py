@@ -4,10 +4,10 @@ Registration is a provider claim to inspect, not a guarantee inferred from size.
 Normal relief is evaluated/exported from HEIGHT by the existing surface pipeline.
 """
 import base64
-import hashlib
 import json
 
 from .schema import AuthoringError
+from ..utils.digest import sha256
 
 MAPPING = ('projection', 'scale', 'offset', 'rotation', 'tiling', 'filtering',
            'triplanar_hardness', 'material_mapping_version', 'material_meters_per_unit',
@@ -121,7 +121,7 @@ def load(value, images):
                 + (alpha[y1[:, None], x0] * (1-fx) + alpha[y1[:, None], x1] * fx) * fy)
     rgba[..., :3] = rgba[..., :3].mean(axis=2, keepdims=True)
     rgba[..., 3] = coverage * rgba[..., 3]
-    digest = hashlib.sha256(rgba.tobytes()).hexdigest()
+    digest = sha256(rgba.tobytes()).hexdigest()
     key = value['$generated'] + ':' + value['$surface_map'] + ':' + digest
     for image in bpy.data.images:
         if image.get('director_surface_map') == key and not image.is_dirty and image.packed_file:

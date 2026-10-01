@@ -3,10 +3,10 @@
 The original remains packed and editable. Supporting channels derive from the
 same source pixels and share mapping; this is not measured or inferred PBR.
 """
-import hashlib
 import json
 
 from .schema import AuthoringError
+from ..utils.digest import sha256
 
 
 def scalar_detail(rgb):
@@ -86,7 +86,7 @@ def load_detail(value, images):
     rgba = np.empty(len(source.pixels), np.float32)
     source.pixels.foreach_get(rgba)
     rgba = rgba.reshape(source.size[1], source.size[0], 4)
-    digest = hashlib.sha256(rgba.tobytes()).hexdigest()
+    digest = sha256(rgba.tobytes()).hexdigest()
     key = value["$generated"] + ":" + value["$surface_detail"] + ":" + digest
     for image in bpy.data.images:
         if image.get("director_surface_derivation") == key and not image.is_dirty and image.packed_file:

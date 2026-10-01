@@ -5,6 +5,7 @@ import struct
 
 from . import document, schema
 from .surface_maps import MAPPING, source_info
+from ..utils.digest import sha256
 
 
 def mapping_signature(layer):
@@ -156,7 +157,7 @@ def load(value, images):
     corrected = original.copy()
     chosen = mask > 0
     corrected[chosen] = original[chosen]*(1-mask[chosen, None]) + rgba[chosen]*mask[chosen, None]
-    digest = hashlib.sha256(corrected.tobytes()).hexdigest()
+    digest = sha256(corrected.tobytes()).hexdigest()
     key = value['$generated'] + ':' + value['color_space'] + ':' + digest
     for image in bpy.data.images:
         if image.get('director_surface_replacement') == key and not image.is_dirty and image.packed_file:

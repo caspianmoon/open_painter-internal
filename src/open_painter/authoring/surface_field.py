@@ -14,6 +14,7 @@ import json
 from collections import OrderedDict
 
 from .schema import AuthoringError
+from ..utils.digest import sha256
 
 FIELD = '$surface_field'
 VERSION = 1
@@ -316,7 +317,7 @@ def load(value, images):
             data = padded(ts, source if source.shape[2] == 3 else source[..., :1].repeat(3, axis=2))
     rgba = np.ones((resolution, resolution, 4), np.float32)
     rgba[..., :3] = np.clip(np.nan_to_num(data, nan=0., posinf=1., neginf=0.), 0, None)
-    digest = hashlib.sha256(rgba.tobytes()).hexdigest()
+    digest = sha256(rgba.tobytes()).hexdigest()
     identity = _key(value) + ':' + channel + ':' + str(value.get('derivation', '')) + ':' + digest
     for image in bpy.data.images:
         if image.get('director_surface_field') == identity and not image.is_dirty and image.packed_file:

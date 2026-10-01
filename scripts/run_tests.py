@@ -102,13 +102,20 @@ if not args.gui_only and not args.gpu_only:
 if args.gui or args.gui_only:
     # These acceptance scripts own their assertions and nonzero failure exits.
     gui_started = not args.gui_start_at
-    for filename in ("director_candidates.py", "director_regions.py", "director_region_queries.py", "director_coverage_tools.py"):
+    # Timer-driven: in background Blender their timers never fire and they would pass empty.
+    for filename in ("director_candidates.py", "director_regions.py", "director_region_queries.py", "director_coverage_tools.py",
+                     "director_correspondence.py", "director_generated_surfaces.py", "director_surface_maps.py",
+                     "director_surface_projection.py"):
         if not gui_started:
             gui_started = filename == args.gui_start_at
         if not gui_started:
             continue
         subprocess.run([*BLENDER, "--factory-startup", "--python",
                         str(root / "tests/integration" / filename)], cwd=root, env=env, check=True)
+        if filename == "director_correspondence.py":
+            # Reopens the file the GUI run just saved.
+            subprocess.run([*BLENDER, "--background", "--factory-startup", "--python-exit-code", "1", "--python",
+                            str(root / "tests/integration/director_correspondence_reopen.py")], cwd=root, env=env, check=True)
     for filename, result_name in [
         ("authoring_ui.py", "authoring-upgrade/authoring-ui.json"),
         ("native_ui.py", "native-ui.json"),

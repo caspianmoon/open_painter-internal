@@ -107,8 +107,10 @@ def run(directory):
             assert evidence['materials'][ts.id]['channels'][key]['maximum_difference'] > 0, key
         critique = dict(candidate_digest=first_result['candidate_digest'], weaknesses=[dict(component='Body',
             observation='The alternating source has excessive roughness contrast',
-            correction='Narrow the roughness range while preserving machining color', evidence_image_id=ts.id+':ROUGHNESS')],
-            generated_contribution='Bypass removes visible color and roughness structure', preserved_decisions='Preserve color source and projected scale')
+            correction='Narrow the roughness range while preserving machining color', evidence_image_id=ts.id+':ROUGHNESS',
+            category='APPEARANCE', scope='GLOBAL', correction_type='TEXTURE_SOURCE')],
+            generated_contribution='Bypass removes visible color and roughness structure', preserved_decisions='Preserve color source and projected scale',
+            reviewed_views=first_result['review_views'])
         tool('critique_candidate', **critique)
         try:
             tool('propose_changes', proposal_json=json.dumps(first), candidate_digest=first_result['candidate_digest'], visual_review='The contrast needs correction')
@@ -117,7 +119,8 @@ def run(directory):
             pass
         second = proposal([.4, .55])
         result = tool('preview_proposal', proposal_json=json.dumps(second))
-        tool('critique_candidate', **dict(critique, candidate_digest=result['candidate_digest'], weaknesses=[]))
+        tool('critique_candidate', **dict(critique, candidate_digest=result['candidate_digest'], weaknesses=[],
+                                          reviewed_views=result['review_views']))
         tool('propose_changes', proposal_json=json.dumps(second), candidate_digest=result['candidate_digest'],
              visual_review='The evaluated roughness range is narrower; original color detail is retained in the Eevee preview')
         captured['running'] = False

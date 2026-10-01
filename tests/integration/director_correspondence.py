@@ -137,7 +137,7 @@ def run():
             (OUT/'packet.json').write_text(json.dumps({k:v for k,v in packet.items() if k != '_images'}, indent=2))
             weakness = dict(component='Bent panel', observation='The stripe changes direction at the same physical boundary',
                 correction='Edit paired source windows to continue the stripe across the seam', evidence_image_id='candidate:top',
-                category='UV_SEAM', scope='LOCAL', correspondence_id=packet['correspondence_id'])
+                category='UV_SEAM', scope='LOCAL', correction_type='TEXTURE_SOURCE', correspondence_id=packet['correspondence_id'])
             critique = dict(candidate_digest=preview['candidate_digest'], weaknesses=[weakness],
                 generated_contribution='The generated color chart dominates the visible surface', preserved_decisions='Keep existing palette and scale beyond the inspected boundary')
             expect_error(lambda: tool('critique_candidate', **critique), 'front')

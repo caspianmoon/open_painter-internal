@@ -816,9 +816,41 @@ the graph again. At 200 layers that took 2.9–3.3 s:
 | Results carried | 1.2–1.6 s |
 | Programs rebound | 0.8–1.1 s |
 
-The rest is compiling every unit's tree again (about 0.5 s). Keeping the graph
-itself across an undo would mean re-pointing every captured struct and every ID
-wrapper first, and a missed one reads freed memory. The first build of a file also
+That left compiling every unit's tree again, about 0.45 s.
+
+- **Units.** The graph an undo retires now gives its units to the rebuild,
+  re-pointed to the restored structs. The memfile freed the old structs, so
+  nothing reads them. The graph's struct index (`_path`, kept current by every
+  patch) is plain data: each address as a layer id and a path within the layer
+  (`undo_index`). The rebuild resolves those paths in the restored set
+  (`_undo_structs`).
+- **Adoption.** A unit is adopted as after a structural patch: its signature
+  must match, and so must its imports and exports. In addition, its owners,
+  re-pointed, must be exactly the structs the restored stack gives its key; a
+  channel whose index an undo shifted is therefore compiled again.
+  `_follow_undo` re-points bindings, aliases, binding keys, compiled effects and
+  every struct an image getter captures. A unit is compiled instead when any
+  closure still holds something else (`_holds_foreign`). Image nodes take their
+  datablocks back by session id.
+- **Excluded.** A unit holding a resource or cache binding, a Mask Graph, a
+  decal object, a custom node group or a GPU resource is compiled again.
+- **Values.** The build reads every binding again, as after a patch, so a
+  value the undo restored reaches its socket. An adopted unit keeps its engine
+  state (program, uniform bank, results), so nothing is carried or rebound.
+- **Checks.** `OP_VERIFY_UNDO=1` compares every adopted unit with a fresh
+  compile: nodes, sockets, links, bindings, image entries, imports, exports,
+  flags and owners. `OP_UNDO_ADOPTION=0` compiles everything, as before.
+  `shader_undo.py` asserts adoption and that the published state is exactly
+  the restored one.
+
+| Step | Undo |
+| --- | ---: |
+| Programs rebound (compile everything) | 0.73–1.1 s |
+| Units adopted across the undo | 0.28–0.42 s |
+
+Of the remaining 0.3 s, the build (plan, adoption, value reads) takes about 135
+ms, evaluation about 100 ms (native prepare 43, the re-render above the undone
+layer 57), and Blender's memfile restore about 50 ms. The first build of a file
 went from 4.7 to 3.3 s.
 
 ## CPU kernels
@@ -938,8 +970,9 @@ texture it ever used.
   `resolution_switch.py` more than 4 GiB. `mask_groups.py` and
   `artist_file_edits.py` also exceed 5 GiB; the latter only with the local
   artist file present. `auto_edge_rebake.py` passes 4.5 GiB within seconds of
-  its first Cycles bake. All five exceed these limits at the pre-change commit
-  too, so this is not a regression. They were not run for this change on the
+  its first Cycles bake. `artist_file_workflow.py` and `artist_file_multiset.py`
+  pass 6 GiB while opening the local artist file. All of these exceed these limits
+  at the pre-change commit too, so this is not a regression. They were not run for this change on the
   18 GB machine while other work was using its memory.
 
 Engine budgets now scale with physical memory. Managed textures get a quarter of
@@ -963,7 +996,8 @@ Machines with 16 GB or more keep the previous limits.
 - **Opening a deep file.** The first build of the 200-layer stack takes about 3.3 s
   at 1K: compiling 1,728 units, decoding the detail-source images (about 0.9 s),
   translating programs and the first render.
-- **Undo.** 0.8–1.1 s at 200 layers, mostly compiling every unit's tree again.
+- **Undo.** About 0.3 s at 200 layers (see Undo). Units with resource or cache
+  bindings, Mask Graphs, decals or custom node groups are still compiled again.
 - **Layer order.** A layer inserted mid-stack still updates the owner tuple of
   every unit of the layers above it (about 1,000 at 200 layers), though its bindings
   move once per layer. C still takes the whole topology on every change (built at C

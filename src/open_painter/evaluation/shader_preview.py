@@ -29,6 +29,9 @@ _holds = {}      # session key -> perf_counter of the last renewal by a gesture 
 # Structural edits recompile their units in the session's own graph (``EngineGraph.patch``);
 # OP_NO_PATCH=1 rebuilds instead, for comparisons.
 PATCH = os.environ.get('OP_NO_PATCH') != '1'
+# After an undo, re-point the retired graph's units instead of compiling them (0: compile all).
+UNDO_ADOPTION = os.environ.get('OP_UNDO_ADOPTION', '1') != '0'
+VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'   # compare them with a fresh compile
 _retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
 _carried = {}    # session key -> the engine an undo dropped: its rebuild starts from its results
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
@@ -456,12 +459,22 @@ def ensure(scene, ts):
         from .engine.compiler import EngineGraph
         from .engine.runtime import Engine
         previous = entry.get('graph') if entry else None
+        # After an undo, the graph it retired: its units are re-pointed to the restored structs
+        # (``Graph._follow_undo``) instead of compiled again.
+        retired = _retiring.get(key, [None])[-1] if previous is None and UNDO_ADOPTION else None
+        undo = retired.undo_index() if retired is not None and hasattr(retired, 'undo_index') else None
         candidate = EngineGraph(scene, ts)
         from . import gc_policy
         try:
             # Units whose structure and owners are unchanged move over intact.
             with gc_policy.paused():
-                candidate.build(reuse=previous)
+                if undo is not None:
+                    candidate.build(reuse=retired, undo=undo)
+                    metrics.count('shader_undo_adopted_units', len(candidate._reused))
+                    if VERIFY_UNDO:
+                        candidate.verify_undo()
+                else:
+                    candidate.build(reuse=previous)
         except Exception as exc:
             try:
                 candidate.close()

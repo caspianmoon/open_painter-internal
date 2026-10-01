@@ -116,13 +116,19 @@ assert abs(mask.amount - (original * .5 + .1)) < 1e-6
 assert same(published(scene, ts), first), 'undo published a state other than the one it restored'
 assert material_shape(ts.material) == shape, 'undo changed the material'
 report['undo_ms'] = round(undo_ms, 1)
-# The engine an undo dropped hands its results to the rebuild: units whose content stamps
-# still match are not rendered again (the published state above is the restored one).
+# The units the undo left unchanged come over from the graph it retired, re-pointed to the
+# restored structs, with their engine states (programs and results): nothing to compile, carry
+# or rebind. With OP_UNDO_ADOPTION=0 the rebuild compiles every unit instead, and the engine an
+# undo dropped hands its results over: units whose content stamps still match are not rendered
+# again, each carried result with its own program rebound to the rebuilt unit's tree.
+report['undo_adopted'] = observed.counts.get('shader_undo_adopted_units', 0)
 report['undo_carried'] = observed.counts.get('engine_carried_results', 0)
-assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"
-# A carried result keeps its stamp only with its own program, rebound to the rebuilt unit's tree.
 report['undo_rebound'] = observed.counts.get('engine_rebound_programs', 0)
-assert report['undo_rebound'] > 0, 'no carried program was rebound to its rebuilt unit'
+if shader_preview.UNDO_ADOPTION:
+    assert report['undo_adopted'] > 0, 'the rebuild adopted no unit of the graph the undo retired'
+else:
+    assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"
+    assert report['undo_rebound'] > 0, 'no carried program was rebound to its rebuilt unit'
 
 report['undo_build_ms'] = round(info.get('build_ms', 0.0), 1)
 report['undo_evaluate_ms'] = round(info['engine'].get('evaluate_ms', 0.0), 1)

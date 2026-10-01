@@ -313,20 +313,81 @@ def _spelled(base, entry):
 
 def _layer_entries(cell, layer):
     """``_struct_index`` of one layer's structs; the layer's own address comes first."""
-    entries = {layer.as_pointer(): (cell, '')}
+    return {struct.as_pointer(): (cell, suffix) for suffix, struct in _layer_structs(layer)}
+
+
+def _layer_structs(layer):
+    """A layer's structs with their paths within it, the layer itself ('') first."""
+    yield '', layer
     for c, prop in enumerate(layer.channels):
         channel = f'.channels[{c}]'
-        entries[prop.as_pointer()] = (cell, channel)
+        yield channel, prop
         for e, effect in enumerate(prop.effects):
-            entries[effect.as_pointer()] = (cell, f'{channel}.effects[{e}]')
+            yield f'{channel}.effects[{e}]', effect
     for m, mask in enumerate(layer.masks):
         item = f'.masks[{m}]'
-        entries[mask.as_pointer()] = (cell, item)
+        yield item, mask
         for name in ('effect', 'influence', 'mesh'):
-            entries[getattr(mask, name).as_pointer()] = (cell, f'{item}.{name}')
+            yield f'{item}.{name}', getattr(mask, name)
     for r, row in enumerate(layer.cache):
-        entries[row.as_pointer()] = (cell, f'.cache[{r}]')
-    return entries
+        yield f'.cache[{r}]', row
+
+
+def _repoint_many(value, moves, seen):
+    """``_repoint`` for many structs at once: ``moves`` maps old addresses to new structs."""
+    import types
+    if isinstance(value, bpy.types.bpy_struct):
+        try:
+            return moves.get(value.as_pointer(), value)
+        except ReferenceError:
+            return value
+    if isinstance(value, tuple):
+        items = tuple(_repoint_many(item, moves, seen) for item in value)
+        return items if any(a is not b for a, b in zip(items, value)) else value
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            value[index] = _repoint_many(item, moves, seen)
+        return value
+    if isinstance(value, dict):
+        for name, item in list(value.items()):
+            value[name] = _repoint_many(item, moves, seen)
+        return value
+    if isinstance(value, types.FunctionType) and id(value) not in seen:
+        seen.add(id(value))
+        for cell in value.__closure__ or ():
+            try:
+                content = cell.cell_contents
+            except ValueError:
+                continue
+            replaced = _repoint_many(content, moves, seen)
+            if replaced is not content:
+                cell.cell_contents = replaced
+        if value.__defaults__:
+            value.__defaults__ = tuple(_repoint_many(item, moves, seen) for item in value.__defaults__)
+    return value
+
+
+def _holds_foreign(value, fresh, seen):
+    """Whether ``value`` captures an RNA struct other than the ``fresh`` wrappers (by id), or a
+    closure cell not filled yet (it may hold one later)."""
+    import types
+    if isinstance(value, bpy.types.bpy_struct):
+        return id(value) not in fresh
+    if isinstance(value, (tuple, list)):
+        return any(_holds_foreign(item, fresh, seen) for item in value)
+    if isinstance(value, dict):
+        return any(_holds_foreign(item, fresh, seen) for item in value.values())
+    if isinstance(value, types.FunctionType) and id(value) not in seen:
+        seen.add(id(value))
+        for cell in value.__closure__ or ():
+            try:
+                content = cell.cell_contents
+            except ValueError:
+                return True
+            if _holds_foreign(content, fresh, seen):
+                return True
+        return any(_holds_foreign(item, fresh, seen) for item in value.__defaults__ or ())
+    return False
 
 
 @dataclass
@@ -371,6 +432,46 @@ class ResourceBinding:
 
 # Diagnostics: compare every incremental plan with a full one (``Graph._verify_plan``).
 VERIFY_STRUCTURE = os.environ.get('OP_VERIFY_STRUCTURE') == '1'
+# Diagnostics: compare every unit adopted after an undo with a fresh compile (``verify_undo``).
+VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'
+
+
+def _plain(value):
+    """A comparable copy of a socket value or node attribute."""
+    if isinstance(value, (bool, int, float, str, type(None))):
+        return value
+    if isinstance(value, (tuple, list)):
+        return tuple(_plain(item) for item in value)
+    return type(value).__name__
+
+
+# Not compared: references, image bookkeeping and the name (a per-graph sequence number).
+_UNSHAPED = {'id_data', 'inputs', 'outputs', '_props', '_image', '_image_key', '_image_assigned', '_tree',
+             '_gpu_resource', 'name'}
+
+
+def _unit_shape(unit):
+    """What a unit compiled to, by position, for comparing an adopted unit with a fresh compile."""
+    nodes = list(unit.tree.nodes)
+    position, sockets, shape = {id(node): i for i, node in enumerate(nodes)}, {}, []
+    for i, node in enumerate(nodes):
+        for j, socket in enumerate(node.inputs):
+            sockets[id(socket)] = (i, 'in', j)
+        for j, socket in enumerate(node.outputs):
+            sockets[id(socket)] = (i, 'out', j)
+        shape.append((node.bl_idname,
+                      tuple((s.identifier, s.type, None if s.links else _plain(s.default_value)) for s in node.inputs),
+                      tuple((s.identifier, s.type, _plain(s.default_value)) for s in node.outputs),
+                      tuple(sorted((k, _plain(v)) for k, v in node.__dict__.items() if k not in _UNSHAPED)),
+                      tuple(sorted((k, _plain(v)) for k, v in node._props.items()))))
+    links = sorted((sockets[id(link.from_socket)], sockets[id(link.to_socket)]) for link in unit.tree.links)
+    bindings = sorted((repr(key), b.field, b.index, b.value, sockets.get(id(b.socket)), b.owner.as_pointer(), b.aliases)
+                      for key, b in unit.bindings.items())
+    images = [(entry[0], entry[1], position.get(id(entry[3])), entry[4]) for entry in unit.image_bindings]
+    return dict(nodes=shape, links=links, bindings=bindings, images=images, exports=_plain(sorted(unit.exports.items())),
+                imports=_plain(unit.imports), const_imports=_plain(unit.const_imports), flags=repr(unit.flags),
+                owners=unit.owner_pointers, signature=repr(unit.signature), effects=sorted(unit.compiled_effects),
+                interface=(sorted(unit.inputs.items()), sorted(unit.outputs.items())))
 
 
 def _owner_token(owner):
@@ -622,6 +723,8 @@ class Graph(Math):
         # (take_touched); None when an edit's unit is unknown and every unit counts.
         self.touched = set()
         self._paths = None   # struct address -> RNA path, valid for one build (_path)
+        self._undo_moves = self._undo_images = self._undo_fresh = None   # during a build after an undo (_follow_undo)
+        self._global = None   # global_signature of the last build, read after an undo
         self.resource_bindings = []
         self.image_bindings = []
         self.cache_bindings = []
@@ -755,6 +858,35 @@ class Graph(Math):
             return _spelled(self._path_base, entry)
         from ..core.layer_store import scene_path
         return scene_path(owner)
+
+    def undo_index(self):
+        """Each struct address ``_path`` indexed, as (layer id, path within the layer), or
+        (None, path within the set) for the set's own structs. Plain data, so it is read after
+        a memfile undo freed the structs (``build(undo=...)``); None without an index."""
+        paths, owners = self._paths, getattr(self, '_path_owners', None)
+        if paths is None or owners is None:
+            return None
+        layer_of = {pointer: identifier for identifier, pointers in owners.items() for pointer in pointers}
+        return {pointer: (layer_of.get(pointer), entry[1]) for pointer, entry in paths.items()
+                if entry[0] is None or pointer in layer_of}
+
+    def _undo_structs(self, index):
+        """``undo_index`` resolved in the restored set: old address -> the struct now at its path."""
+        ts = self.ts
+        own = {'': ts, '.bake': ts.bake, **{f'.baked_maps[{i}]': m for i, m in enumerate(ts.baked_maps)}}
+        layers, found, moves = self._plan.layers, {}, {}
+        for pointer, (identifier, suffix) in index.items():
+            if identifier is None:
+                struct = own.get(suffix)
+            else:
+                structs = found.get(identifier)
+                if structs is None:
+                    layer = layers.get(identifier)
+                    structs = found[identifier] = dict(_layer_structs(layer)) if layer is not None else {}
+                struct = structs.get(suffix)
+            if struct is not None:
+                moves[pointer] = struct
+        return moves
 
     def _refresh_paths(self, plan, edited, moved=()):
         """Index again the structs of the ``edited`` layers only: a patch leaves every other
@@ -3151,7 +3283,12 @@ class Graph(Math):
                 return None
             # Collection reallocation moves PropertyGroups; captured references
             # are only valid while every owner still lives at its old address.
-            if unit.owner_pointers != self._unit_owners(key) and not self._follow_moved_layer(unit, key):
+            current = self._unit_owners(key)
+            if self._undo_moves is not None:
+                # After an undo every struct moved (an address may even repeat): re-point always.
+                if not self._follow_undo(unit, key, current):
+                    return None
+            elif unit.owner_pointers != current and not self._follow_moved_layer(unit, key, current):
                 return None
             if _removed_graph_units(unit.bindings.values()):
                 return None   # a Mask Graph binding lost its node: compile afresh, never refresh it
@@ -3272,6 +3409,84 @@ class Graph(Math):
             return False
         unit.owner_pointers = current
         return True
+
+    def _follow_undo(self, unit, key, current):
+        """``_follow_moved_layer`` after a memfile undo, which reallocated every struct of the set
+        and invalidated every ID wrapper. Each captured owner is re-pointed to the struct now at
+        its path (``_undo_moves``), image nodes to their datablocks by session id. False,
+        recompiling the unit, when it holds anything else from before the undo: a resource or
+        cache binding, a Mask Graph, a decal object, a custom node group or a GPU resource."""
+        from .engine import headless
+        moves, before = self._undo_moves, unit.owner_pointers
+        if (len(before) != len(current) or unit.resource_bindings or unit.cache_bindings
+                or any(binding.native for binding in unit.bindings.values())):
+            return False
+        try:
+            if tuple(moves[pointer].as_pointer() for pointer in before) != current:
+                return False
+            images = []
+            for node in unit.tree.nodes:
+                held = node.__dict__
+                if held.get('object') is not None or held.get('_gpu_resource') is not None:
+                    return False
+                if node.bl_idname == 'ShaderNodeGroup' and not isinstance(held.get('_tree'), headless.Tree):
+                    return False
+                if held.get('_image') is not None:
+                    image = self._undo_images.get(held.get('_image_uid'))
+                    if image is None:
+                        return False
+                    images.append((node, image))
+            rebound = []
+            for identifier, binding in unit.bindings.items():
+                owner = moves[binding.owner.as_pointer()]
+                aliases = tuple(moves[pointer].as_pointer() for pointer in binding.aliases)
+                if isinstance(identifier, tuple) and len(identifier) > 1 and isinstance(identifier[1], int):
+                    identifier = (identifier[0], moves[identifier[1]].as_pointer(), *identifier[2:])
+                rebound.append((identifier, binding, owner, aliases))
+            effects = {moves[pointer].as_pointer(): moves[pointer] for pointer in unit.compiled_effects}
+            entries = [(moves[entry[0]].as_pointer(), *entry[1:]) for entry in unit.image_bindings]
+        except (KeyError, ReferenceError):
+            return False
+        seen, fresh = set(), self._undo_fresh
+        for entry in unit.image_bindings:
+            _repoint_many(entry[2], moves, seen)
+        checked = set()
+        if any(_holds_foreign(entry[2], fresh, checked) for entry in unit.image_bindings):
+            return False   # the unit is recompiled; what was re-pointed goes with the retired graph
+        unit.bindings = {}
+        for identifier, binding, owner, aliases in rebound:
+            binding.owner, binding.aliases = owner, aliases
+            unit.bindings[identifier] = binding
+        unit.compiled_effects = effects
+        unit.image_bindings = entries
+        for node, image in images:
+            node.image = image
+        unit.owner_pointers = current
+        return True
+
+    def verify_undo(self):
+        """``OP_VERIFY_UNDO``: every unit adopted after an undo equals a fresh compile of it."""
+        from . import metrics
+        fresh, active = type(self)(self.scene, self.ts), metrics._active
+        metrics._active = None   # the check's own compile counts toward nothing a test asserts
+        try:
+            fresh.build()
+        finally:
+            metrics._active = active
+        try:
+            for key in self._reused:
+                mine, theirs = _unit_shape(self.units[key]), _unit_shape(fresh.units[key])
+                if mine != theirs:
+                    field = next(name for name in mine if mine[name] != theirs[name])
+                    a, b = mine[field], theirs[field]
+                    if isinstance(a, list) and isinstance(b, list):
+                        at = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+                        a, b = (f'[{at}] of {len(a)}: {a[at] if at < len(a) else None!r}',
+                                f'[{at}] of {len(b)}: {b[at] if at < len(b) else None!r}')
+                    raise AssertionError(f'Unit {key} adopted after an undo differs from its compile in {field}: '
+                                         f'{a!s:.600} != {b!s:.600}')
+        finally:
+            fresh.close()
 
     def _rollback_adoption(self):
         """A failed build hands adopted units back to the graph they came from."""
@@ -3543,15 +3758,17 @@ class Graph(Math):
         unit.instance = node
         return node
 
-    def build(self, reuse=None):
-        """Compile the graph; units of ``reuse`` with unchanged structure are adopted."""
+    def build(self, reuse=None, undo=None):
+        """Compile the graph; units of ``reuse`` with unchanged structure are adopted. ``undo``:
+        ``reuse`` is a graph a memfile undo retired, and this its ``undo_index``: none of its
+        RNA is read, its units are re-pointed (``_follow_undo``)."""
         from ..core.validation import hierarchy_issues
         from ..core.udim import validate as validate_udim
         from .references import scope
         with scope(self.ts):   # the issues below and the build's warnings read one reference graph
-            return self._checked_build(reuse, hierarchy_issues, validate_udim)
+            return self._checked_build(reuse, hierarchy_issues, validate_udim, undo)
 
-    def _checked_build(self, reuse, hierarchy_issues, validate_udim):
+    def _checked_build(self, reuse, hierarchy_issues, validate_udim, undo=None):
         validate_udim(self.ts)
         problems = hierarchy_issues(self.ts)
         if problems:
@@ -3559,13 +3776,22 @@ class Graph(Math):
         started = perf_counter()
         self._paths = None   # collection positions may have moved since the last build
         self._reused, self._warnings, self._adopted = [], [], []
-        plan = reuse.scope_plan(self.ts) if reuse is not None else None
-        if plan is None:
+        if undo is not None:
             plan = self.plan()
+            self._previous = reuse if (reuse is not None and reuse.units
+                                       and getattr(reuse, '_global', None) == global_signature(self.ts)) else None
+            if self._previous is not None:
+                self._undo_moves = self._undo_structs(undo)
+                self._undo_fresh = {id(struct) for struct in self._undo_moves.values()}
+                self._undo_images = {image.session_uid: image for image in bpy.data.images}
         else:
-            self._plan, self._anchors = plan, None
-        self._previous = reuse if (reuse is not None and reuse.units
-                                   and global_signature(reuse.ts) == global_signature(self.ts)) else None
+            plan = reuse.scope_plan(self.ts) if reuse is not None else None
+            if plan is None:
+                plan = self.plan()
+            else:
+                self._plan, self._anchors = plan, None
+            self._previous = reuse if (reuse is not None and reuse.units
+                                       and global_signature(reuse.ts) == global_signature(self.ts)) else None
         if self._previous is not None:
             # Adopted closures read authoring state through the session's live graph.
             self._head = self._previous._head
@@ -3576,7 +3802,11 @@ class Graph(Math):
             self._rollback_adoption()
             raise
         finally:
-            self._previous = None
+            self._previous = self._undo_moves = self._undo_images = self._undo_fresh = None
+        self._global = global_signature(self.ts)
+        if self._paths is None:
+            # Adopted units ask for no path: index the set now, for the next undo (``undo_index``).
+            self._path(self.ts)
         if reuse is not None:
             # Uniform edits the previous graph wrote and nobody restamped yet: the adopted
             # units carry the written values, so this build's own pass finds nothing new.

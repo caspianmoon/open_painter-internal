@@ -405,6 +405,7 @@ def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
         if ONLY and name not in ONLY:
             continue
         durations = []
+        profiler = cProfile.Profile() if PROFILE else None
         for index in range(repeats):
             bpy.ops.ed.undo_push(message=f'{name} before {index}')
             edit(index)
@@ -412,16 +413,31 @@ def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
             bpy.ops.ed.undo_push(message=f'{name} {index}')
             gc_policy.settle(now=monotonic() + gc_policy.SETTLE_DELAY)   # the pause before the undo
             phase_totals.clear()
+            counted = Metrics() if PHASES else None
+            if counted:
+                counted.__enter__()
             started = perf_counter()
+            if profiler:
+                profiler.enable()
             with Frame():
                 bpy.ops.ed.undo()
             resolve()
             elapsed, count = settle(current['scene'], current['ts'], started)
+            if profiler:
+                profiler.disable()
             durations.append(elapsed)
             if PHASES:
+                counted.__exit__(None, None, None)
                 print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms',
                       {k: round(v, 1) for k, v in sorted(phase_totals.items())}, flush=True)
+                print('DEEP_STACK_COUNTS', name, index, {k: v for k, v in sorted(counted.counts.items())
+                                                          if k.startswith(('engine_', 'native_'))}, flush=True)
         rows[name] = dict(median_ms=median(durations), durations=durations, footprint_mib=footprint_mib())
+        if profiler:
+            text = io.StringIO()
+            pstats.Stats(profiler, stream=text).sort_stats('cumulative').print_stats(60)
+            rows[name]['profile'] = text.getvalue()
+            profiler.dump_stats(str(REPORT) + f'.{name}.prof')
         print('DEEP_STACK_UNDO', name, f"median {rows[name]['median_ms']:.0f} ms", [round(d) for d in durations],
               'footprint', rows[name]['footprint_mib'], 'MiB', flush=True)
     return rows

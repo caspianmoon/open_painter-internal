@@ -11,6 +11,15 @@ import numpy as np
 
 
 def quantize(values: np.ndarray, bits: int, srgb: bool = False) -> np.ndarray:
+    from ..native_bridge.lifecycle import active_library
+    lib = active_library()
+    if lib is not None and values.ndim == 3 and values.shape[-1] <= 4 and hasattr(lib, 'op_quantize'):
+        from ..native_bridge.pixels import quantize as native
+        return native(lib, values, bits, srgb)   # one pass, the arithmetic below
+    return _quantize(values, bits, srgb)
+
+
+def _quantize(values: np.ndarray, bits: int, srgb: bool = False) -> np.ndarray:
     values = np.clip(values, 0, 1)
     if srgb:
         values = values.copy()

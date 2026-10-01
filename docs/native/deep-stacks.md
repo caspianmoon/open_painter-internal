@@ -851,6 +851,23 @@ reference its C test must match exactly.
   nearest column with any donor in reach. The vertical pass runs its per-column
   scan row by row, in memory order. `test_padding` requires identical donors and
   distances over 120 random layouts. 4K with 24 islands: 710 → 140 ms.
+- **UV rasterize (`op_uv_rasterize`).** Bakes, mesh masks, vector strokes and texel
+  density rasterize here. Unique output used to sort every sample by texel and then
+  triangle (a qsort over up to 16M samples at 4K). Samples are now bucketed by row,
+  stably, and within a row the last sample of each column wins, which gives the same
+  samples in the same order. On arm64 the barycentric test takes four texels a step
+  (`-DOP_SCALAR_RASTER` builds the scalar path). `test_rasterize` keeps the previous
+  function and requires identical samples. 100K triangles, unique: 2K 391 → 52 ms,
+  4K 1584 → 235 ms.
+- **Export pixels (`op_quantize`, `op_normal_encode`).** These replace NumPy's
+  clip, sRGB curve, round and cast for every written channel, and the normal
+  map's normalize and encode (padding, and `surface_normal.combined` without
+  relief). Each takes one pass with no temporaries. The non-sRGB quantize uses
+  NEON, eight values a step; normal encoding takes four RGBA pixels a step, split
+  into channels with `vld4q`. The NumPy code stays as the fallback, and
+  `tests/unit/test_native_pixels.py` requires identical bits from both. Its inputs
+  include NaN, infinities, the sRGB knee and rounding ties. 2K Unreal export:
+  967 → 519 ms.
 
 ## Test and benchmark memory
 

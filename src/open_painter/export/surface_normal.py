@@ -138,13 +138,19 @@ the same deterministic object/triangle order as other geometry rasterization.
     normal = np.asarray(normal, np.float32)
     if height.shape != normal.shape[:2] or height.shape[0] != height.shape[1]:
         raise ValueError("Surface normal inputs need matching square dimensions.")
+    relief = ts.height_distance > 0 and np.ptp(height) > 1e-8
+    from ..native_bridge.lifecycle import active_library
+    lib = active_library()
+    if not relief and lib is not None and normal.shape[-1] in (3, 4) and hasattr(lib, 'op_normal_encode'):
+        from ..native_bridge.pixels import normal_encode
+        return normal_encode(lib, np.array(normal, np.float32, order='C'), decode=True)   # the arithmetic below
     base = normal[..., :3] * 2 - 1
     length = np.linalg.norm(base, axis=-1, keepdims=True)
     base = np.divide(base, length, out=np.zeros_like(base), where=length > 1e-8)
     base[..., 2] = np.where(length[..., 0] > 1e-8, base[..., 2], 1)
     result = normal.copy()
     perturbed = base
-    if ts.height_distance > 0 and np.ptp(height) > 1e-8:
+    if relief:
         metric, charts = _uv_metric(ts, height.shape[0])
         dhdu = _derivative(height, charts, 1)
         dhdv = _derivative(height, charts, 0)

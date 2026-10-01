@@ -400,6 +400,15 @@ def resample(values, covered, n_out, vector=False):
 
 
 def _encode(values):
+    from ..native_bridge.lifecycle import active_library
+    lib = active_library()
+    if lib is not None and values.dtype == np.float32 and values.shape[-1] in (3, 4) and hasattr(lib, 'op_normal_encode'):
+        from ..native_bridge.pixels import normal_encode
+        return normal_encode(lib, np.array(values, np.float32, order='C'), decode=False)   # the arithmetic below
+    return _encode_numpy(values)
+
+
+def _encode_numpy(values):
     xyz = values[..., :3]
     length = np.linalg.norm(xyz, axis=-1, keepdims=True)
     xyz = np.divide(xyz, length, out=np.zeros_like(xyz), where=length > 1e-8)

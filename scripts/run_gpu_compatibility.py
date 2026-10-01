@@ -27,6 +27,8 @@ def main():
                         help='Cap engine samplers per pass to exercise constrained GPUs (default: 16)')
     parser.add_argument('--tests', nargs='+', metavar='NAME',
                         help='Run only these named suites (for example backend-contract pixel-publication)')
+    parser.add_argument('--cap-gb', type=float, default=4.0,
+                        help='Kill a Blender process whose memory footprint passes this (scripts/run_guarded.py)')
     args = parser.parse_args()
     if args.sampler_limit < 2:
         parser.error('--sampler-limit must be at least 2')
@@ -74,7 +76,9 @@ def main():
         case_env.update({key: str(folder / filename) for key, filename in reports.items()})
         if pixels:
             case_env['OP_ENGINE_PIXEL_PUBLISH'] = '1'
-        command = [args.blender, '--background', '--factory-startup']
+        # Every Blender launch goes through the memory guard, one at a time.
+        command = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
+                   '--start-gb', '3', '--wait-seconds', '120', '--', args.blender, '--background', '--factory-startup']
         if args.backend:
             command += ['--gpu-backend', args.backend]
         command += ['--python-exit-code', '1']

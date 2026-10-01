@@ -39,8 +39,11 @@ if args.native_library:
     binding = native.parent / ('_native.pyd' if os.name == 'nt' else '_native.abi3.so')
     if not binding.is_file():
         raise RuntimeError('A native release requires the compiled CPython binding beside the library')
+    # What the bundle runs by default: the host scheduler on Metal (lifecycle.host_backends());
+    # elsewhere the CPU kernels, until a backend is qualified for the scheduler.
+    execution = 'c17-host-metal' if platform.system() == 'Darwin' else 'c17-cpu-kernels'
     native_manifest = dict(binding_sha256=hashlib.sha256(binding.read_bytes()).hexdigest(), python_abi='cp311-abi3', abi_version=OP_ABI_VERSION, sha256=hashlib.sha256(native.read_bytes()).hexdigest(),
-                           platform=package_platform, execution='c17-host-metal')
+                           platform=package_platform, execution=execution)
 
 
 def write_file(archive, path, archive_name):

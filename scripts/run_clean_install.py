@@ -10,6 +10,7 @@ Blender and Unreal, disables and re-enables the extension and opens the project 
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,10 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--blender", default="/Applications/Blender.app/Contents/MacOS/Blender")
 parser.add_argument("--package", type=Path, default=root / "dist" / f"open_painter-{version}.zip")
 parser.add_argument("--keep", action="store_true", help="Keep the profile and work folders")
+parser.add_argument("--gpu-backend", choices=("metal", "opengl", "vulkan"),
+                    help="Blender's --gpu-backend in both phases (default: the factory setting)")
+parser.add_argument("--cap-gb", type=float, default=4.0,
+                    help="Kill a Blender process whose memory footprint passes this (scripts/run_guarded.py)")
 args = parser.parse_args()
 if not args.package.is_file():
     sys.exit(f"Package missing: {args.package}")
@@ -41,11 +46,18 @@ for phase in (1, 2):
     env["OP_CLEAN_INSTALL_PHASE"] = str(phase)
     # Phase 1 starts from factory settings in the empty profile; phase 2 starts the way a user
     # does, with the preferences that phase 1 saved (the extension enabled).
-    completed = subprocess.run([args.blender, *(["--factory-startup"] if phase == 1 else []),
+    # Every Blender launch goes through the memory guard, one at a time.
+    guard = [sys.executable, str(root / "scripts/run_guarded.py"), "--cap-gb", str(args.cap_gb),
+             "--start-gb", "3", "--wait-seconds", "120", "--"]
+    backend = ["--gpu-backend", args.gpu_backend] if args.gpu_backend else []
+    completed = subprocess.run([*guard, args.blender, *(["--factory-startup"] if phase == 1 else []), *backend,
                                 "--enable-event-simulate", "--python",
                                 str(root / "tests/integration/clean_install_ui.py"),
                                 *(["--", "-ApplePersistenceIgnoreState", "YES"] if sys.platform == "darwin" else [])],
-                               cwd=work, env=env, capture_output=True, text=True)
+                               cwd=work, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    for line in completed.stdout.splitlines():
+        if line.startswith(("GUARD_SUMMARY", "GUARD_KILLED")):
+            print(f"phase {phase}: {line}")
     report_path = work / f"clean-install-phase{phase}.json"
     if not report_path.is_file():
         print(completed.stdout[-3000:], completed.stderr[-3000:])
@@ -59,11 +71,11 @@ for phase in (1, 2):
         print("\n".join(report["errors"]))
         sys.exit(f"Phase {phase} failed (profile {profile}, work {work})")
 summary = {"package": str(args.package), "version": version, "blender": reports[1]["blender"],
-           "platform": sys.platform, "machine": os.uname().machine, "profile": str(profile), "work": str(work),
+           "platform": sys.platform, "machine": platform.machine(), "profile": str(profile), "work": str(work),
            "phases": reports}
 (root / ".blender-test").mkdir(exist_ok=True)
 (root / ".blender-test/clean-install.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-print("CLEAN_INSTALL_PASS", version, reports[1]["blender"], sys.platform, os.uname().machine)
+print("CLEAN_INSTALL_PASS", version, reports[1]["blender"], sys.platform, platform.machine())
 if not args.keep:
     import shutil
     shutil.rmtree(profile, ignore_errors=True)

@@ -65,11 +65,21 @@ material_manager.repair(ts)
 graph = shader_preview.ensure(bpy.context.scene, ts)
 assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)
 if os.environ.get('OP_EXPECT_NATIVE') == '1':
+    # The bundled library and binding load from the installed extension, with no developer
+    # override; the native scheduler runs on the host backends (Metal, or those opted in).
+    import gpu
+    assert 'OP_LIBOPENPAINTER_PATH' not in os.environ
     info = shader_preview.diagnostics(bpy.context.scene, ts)
-    assert info['engine']['execution_backend'] == 'c17-host-metal', info
+    lifecycle = importlib.import_module(module + '.native_bridge.lifecycle')
+    backend = gpu.platform.backend_type_get()
+    expected = 'c17-host-' + backend.lower() if backend in lifecycle.host_backends() else 'legacy'
+    assert info['engine']['execution_backend'] == expected, info
     loader = importlib.import_module(module + '.native_bridge.loader')
     assert loader.find_library().is_relative_to(Path(repo.directory).resolve())
-    print('INSTALLED_C17_HOST_METAL_PASS', loader.find_library())
+    native = lifecycle.diagnostics()
+    assert native['native_loaded'] and native['compiled_binding'], native
+    assert lifecycle.cpu_library() is not None
+    print('INSTALLED_NATIVE_PASS', expected, loader.find_library())
 with Metrics() as observed:
     stack.channel_for(ts.layers[0], 'ROUGHNESS').value = .37
     assert rendered(ts), shader_preview.diagnostics(bpy.context.scene, ts)

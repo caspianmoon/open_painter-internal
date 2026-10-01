@@ -769,10 +769,12 @@ def _publication_program(program, scalar=False, donor=False):
 
     Only the translator's known coordinate prologue is rewritten. A future
     program using fragment coordinates elsewhere falls back rather than sampling
-    a donor's inputs with the destination pixel's coordinates.
+    a donor's inputs with the destination pixel's coordinates. The native
+    compiler's programs open with helper functions, so the prologue is found
+    where main begins rather than at the start of the source.
     """
     prefix = 'void main() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n'
-    if (len(program.targets) != 1 or not program.source.startswith(prefix)
+    if (len(program.targets) != 1 or program.source.count(prefix) != 1
             or program.source.count('gl_FragCoord') != 1):
         return None
     coordinates = 'void op_channel() {\n  ivec2 op_texel = ivec2(gl_FragCoord.xy);\n'
@@ -869,6 +871,8 @@ class Engine:
         native graph learns which (``replaced``) instead of describing every unit again."""
         if self._native_channels is not None and self._native_channels.dispatching:
             raise RuntimeError("Cannot adopt a graph during native channel submission")
+        if self._evaluation_depth:
+            raise RuntimeError("Cannot adopt a graph during an evaluation")
         patched = graph is self.graph
         n_before = self.graph.n if self.graph is not None else None
         previous, previous_inline = self.graph, self.inline
@@ -1000,6 +1004,10 @@ class Engine:
     def close(self, n=None):
         """Release every unit's textures to the pool, under ``n`` (default: the graph's side): the
         resolution they were created at, or a later request would be handed a texture of another size."""
+        if self._evaluation_depth:
+            # A callback inside a draw or a publication (any backend) must not free the
+            # states the evaluation is using.
+            raise RuntimeError("Cannot close an engine during an evaluation")
         if self._native_channels is not None:
             self._native_channels.close()
             self._native_channels = None
@@ -1639,6 +1647,9 @@ class Engine:
         """
         if self._native_channels is not None and self._native_channels.dispatching:
             raise RuntimeError("Cannot reenter native channel evaluation")
+        if self._evaluation_depth:
+            # Pixel publication has no native channel submission to refuse it: guard here.
+            raise RuntimeError("Cannot reenter an evaluation")
         graph = self.graph
         if graph is None:
             return set()
@@ -1708,6 +1719,11 @@ class Engine:
                             released = self._checkpoints(channel, memo, epochs)
                             for key in released:
                                 self._settle(key, n)
+                            if final[0] == 'unit' and self._native_stamps is not None:
+                                # The runs under the final unit, one pass each (suffix.py), as on
+                                # the native channel path. A collapsed final is then current, so
+                                # it is published as it is rather than fused.
+                                self._suffix.collapse(self, final[1], n, memo, epochs)
                             result = self._fused_final(channel, n, memo, epochs)
                             fused = result is not None
                             if not fused:
@@ -1779,15 +1795,21 @@ class Engine:
             metrics.sample('engine_evaluate_ms', self.report['evaluate_ms'])
         return written
 
+    def deferred_channels(self):
+        """Channels an evaluation held back for a later one (pixel publication's budget)."""
+        return set(self.waiting)
+
     def prearm(self, layer_id, epochs=None):
         """While idle: arm one suffix transform an edit of ``layer_id`` would use.
 
         Returns True when it did work (call again on a later idle tick). Nothing is
         armed while an edit is still unevaluated: prediction assumes the current
-        content is the one on screen.
+        content is the one on screen. Under pixel publication (Vulkan) a channel
+        still waiting for its publication budget keeps the session dirty, so this
+        runs only once every channel is on screen, as with framebuffer publication.
         """
         from .suffix import prearm_enabled
-        if (self.graph is None or not prearm_enabled() or device().pixel_publish
+        if (self.graph is None or not prearm_enabled() or self.deferred_channels()
                 or (self._native_channels is not None and self._native_channels.dispatching)):
             return False
         n = self.graph.n

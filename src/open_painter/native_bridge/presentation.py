@@ -37,9 +37,6 @@ class HostGPUProbe:
         from ..evaluation.engine import runtime
         runtime.ensure_gpu()
         self.backend = gpu.platform.backend_type_get()
-        if self.backend == "VULKAN":
-            raise RuntimeError("Vulkan Blender image storage has no qualified render-target "
-                               "usage or public external texture import; legacy backend retained")
         if size not in (512, 1024, 2048):
             raise ValueError("Probe resolution must be 512, 1024 or 2048")
         self.size = size
@@ -97,6 +94,10 @@ class HostGPUProbe:
         contract. Failure may leave mixed host storage; production stays off.
         """
         import gpu
+        if self.backend == "VULKAN":
+            # Reads (read_mip) only sample image storage; this renders into it.
+            raise RuntimeError("Vulkan Blender image storage has no qualified render-target "
+                               "usage or public external texture import; legacy backend retained")
         if len(images) != 8 or any(tuple(im.size) != (self.size, self.size) for im in images):
             raise ValueError("Eight full-resolution images are required")
         start = perf_counter_ns()

@@ -297,6 +297,8 @@ class _Job:
         except OSError:
             self.gpu = None
         self.gpu_peak = {'dedicated': 0, 'shared': 0} if self.gpu else None
+        self.processes = 1   # most processes in the job at once (Blender's shader compilers join it)
+        self.resident = 0   # largest sampled working set of the job: physical memory in use
 
     def pids(self):
         ids = _ProcessIds()
@@ -308,8 +310,9 @@ class _Job:
 
     def used(self):
         """Commit charge (private bytes) of every process in the job."""
-        total = 0
-        for pid in self.pids():
+        total, resident, pids = 0, 0, self.pids()
+        self.processes = max(self.processes, len(pids))
+        for pid in pids:
             process = _kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, False, pid)
             if not process:
                 continue   # exited since the listing
@@ -317,8 +320,10 @@ class _Job:
                 counters = _MemoryCounters(cb=ctypes.sizeof(_MemoryCounters))
                 if _kernel32.K32GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
                     total += counters.PrivateUsage
+                    resident += counters.WorkingSetSize
             finally:
                 _kernel32.CloseHandle(process)
+        self.resident = max(self.resident, resident)
         return total
 
     def sample(self):
@@ -345,6 +350,7 @@ class _Job:
     def summary(self):
         gpu = self.gpu_peak or {}
         return dict(measure='job commit charge; dedicated GPU memory is not included and not capped',
+                    working_set_peak_gib=round(self.resident / GIB, 2), processes_peak=self.processes,
                     gpu_dedicated_peak_gib=round(gpu['dedicated'] / GIB, 2) if gpu else None,
                     gpu_shared_peak_gib=round(gpu['shared'] / GIB, 2) if gpu else None)
 

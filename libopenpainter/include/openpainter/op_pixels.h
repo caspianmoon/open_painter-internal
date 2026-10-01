@@ -25,6 +25,15 @@ op_status_t op_normal_encode(const float *values, float *out, uint64_t count, ui
  * normalized (the base where too short), encoded (x 0.5 + 0.5). A fourth channel is copied. */
 op_status_t op_normal_relief(const float *normal, const float *height, const float *metric, const int32_t *charts,
                              uint32_t n, uint32_t channels, float distance, float *out);
+/* PNG scanlines with adaptive filtering. rows: count rows of row_bytes bytes, stride bytes
+ * apart (negative for a flipped view); 16-bit samples (swap16 1) are native-endian and written
+ * big-endian. previous 1: the row before the first (at rows - stride) is the filters' upper
+ * neighbour; 0: the image's first row (zeros). bpp: bytes per pixel, 1 to 8. out: count x
+ * (row_bytes + 1), each row's filter type and then its filtered bytes. A row takes the filter
+ * (None, Sub, Up, Average, Paeth) whose bytes have the smallest sum of |signed byte| (libpng's
+ * heuristic), the lowest type on ties. */
+op_status_t op_png_filter(const void *rows, int64_t stride, uint32_t count, uint32_t row_bytes, uint32_t bpp,
+                          uint32_t swap16, uint32_t previous, uint8_t *out);
 #ifdef __cplusplus
 }
 #endif

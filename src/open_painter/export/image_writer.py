@@ -11,11 +11,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-# The image data is deflated in segments of about SEGMENT bytes of scanlines, each on its
-# own thread (as pigz does): a segment starts from the previous one's last WINDOW bytes as
+# Rows are filtered adaptively (as libpng does by default) where a sample says it pays, and the
+# image data is deflated in segments of about SEGMENT bytes of scanlines, each on its own thread
+# (as pigz does): a segment starts from the previous one's last WINDOW bytes as
 # its dictionary and ends with a sync flush, so the segments join into one zlib stream. The
 # boundaries depend only on the row size, so a file's bytes never depend on the thread count.
 SEGMENT = 1 << 20
+SAMPLE = 1 << 16
 WINDOW = 1 << 15
 LEVEL = 6
 _ZLIB_HEADER = b"\x78\x9c"   # deflate, 32K window, default level
@@ -46,7 +48,43 @@ def adler32_combine(first, second, length):
 
 
 def _scanlines(data, bits, start, stop):
-    """PNG scanlines (filter byte 0, then the row big-endian) of rows start..stop."""
+    """Filtered PNG scanlines of rows start..stop: each row's filter type, then its bytes
+    (big-endian samples). The native filter and NumPy's choose the same filters."""
+    from ..native_bridge.lifecycle import active_library
+    lib = active_library()
+    if lib is not None and hasattr(lib, 'op_png_filter'):
+        from ..native_bridge.pixels import png_filter
+        lines = png_filter(lib, data, bits, start, stop)
+        if lines is not None:
+            return lines
+    return _filter_numpy(data, bits, start, stop)
+
+
+def _filter_numpy(data, bits, start, stop):
+    """Adaptive filtering as libpng does by default: per row, of None, Sub, Up, Average and
+    Paeth the one whose bytes have the smallest sum of |signed byte|, the lowest on ties."""
+    first = max(start - 1, 0)
+    rows = data[first:stop]
+    rows = np.ascontiguousarray(rows.astype(">u2") if bits == 16 else rows).view(np.uint8)
+    rows = rows.reshape(stop - first, -1).astype(np.int16)
+    x = rows[start - first:]
+    b = rows[:-1] if start else np.vstack((np.zeros((1, rows.shape[1]), np.int16), rows[:-1]))
+    bpp = data.shape[2] * (bits // 8)
+    a, c = np.zeros_like(x), np.zeros_like(b)
+    a[:, bpp:], c[:, bpp:] = x[:, :-bpp], b[:, :-bpp]
+    p = a + b - c
+    pa, pb, pc = np.abs(p - a), np.abs(p - b), np.abs(p - c)
+    predicted = np.where((pa <= pb) & (pa <= pc), a, np.where(pb <= pc, b, c))
+    candidates = np.stack((x, x - a, x - b, x - ((a + b) >> 1), x - predicted)) & 0xFF
+    choice = np.minimum(candidates, 256 - candidates).sum(axis=2).argmin(axis=0)
+    lines = np.empty((len(x), x.shape[1] + 1), np.uint8)
+    lines[:, 0] = choice
+    lines[:, 1:] = candidates[choice, np.arange(len(x))]
+    return lines
+
+
+def _raw(data, bits, start, stop):
+    """Unfiltered scanlines (filter type 0) of rows start..stop."""
     rows = data[start:stop]
     rows = np.ascontiguousarray(rows.astype(">u2") if bits == 16 else rows).view(np.uint8)
     lines = np.empty((stop - start, rows[0].size + 1), np.uint8)
@@ -55,14 +93,35 @@ def _scanlines(data, bits, start, stop):
     return lines
 
 
-def _deflate(data, bits, start, stop, last):
-    """One segment: raw deflate of rows start..stop, with its Adler-32 and length."""
-    lines = _scanlines(data, bits, start, stop)
+def _lines(data, bits, start, stop, filtered):
+    return _scanlines(data, bits, start, stop) if filtered else _raw(data, bits, start, stop)
+
+
+def _filtered(data, bits, start, stop):
+    """Whether rows start..stop compress better filtered. Filters lose on noise-like masks,
+    where deflate finds repeats in the raw rows, so a sample of rows spread through the
+    segment is compressed both ways; filtering must win it by 1%."""
+    count = min(stop - start, max(1, SAMPLE // (data[0].size * (bits // 8) + 1)))
+    rows = np.unique(np.linspace(start, stop - 1, count).astype(np.int64))
+    filtered = b"".join(_scanlines(data, bits, int(r), int(r) + 1).tobytes() for r in rows)
+    raw = b"".join(_raw(data, bits, int(r), int(r) + 1).tobytes() for r in rows)
+    return len(zlib.compress(filtered, LEVEL)) < .99 * len(zlib.compress(raw, LEVEL))
+
+
+def _deflate(data, bits, segments, index):
+    """Segment index of segments ((start, stop, filtered) each): raw deflate of its rows with
+    its Adler-32 and length. The dictionary is the stream before it, each earlier segment's
+    rows as that segment wrote them."""
+    start, stop, filtered = segments[index]
+    lines = _lines(data, bits, start, stop, filtered)
     if start:
-        before = _scanlines(data, bits, max(0, start - -(-WINDOW // lines.shape[1])), start)
-        compressor = zlib.compressobj(LEVEL, zlib.DEFLATED, -15, zdict=before.reshape(-1)[-WINDOW:].tobytes())
+        first = max(0, start - -(-WINDOW // lines.shape[1]))
+        before = b"".join(_lines(data, bits, max(first, a), b, mode).tobytes()
+                          for a, b, mode in segments[:index] if b > first)
+        compressor = zlib.compressobj(LEVEL, zlib.DEFLATED, -15, zdict=before[-WINDOW:])
     else:
         compressor = zlib.compressobj(LEVEL, zlib.DEFLATED, -15)
+    last = index == len(segments) - 1
     body = compressor.compress(lines) + compressor.flush(zlib.Z_FINISH if last else zlib.Z_SYNC_FLUSH)
     return body, zlib.adler32(lines), lines.size
 
@@ -118,7 +177,10 @@ def write_png(path, data, bits, srgb):
             chunk(b"IDAT", zlib.compress(b"", LEVEL))
         rows = max(1, SEGMENT // (data[0].size * (bits // 8) + 1)) if height else 1
         bounds = [(start, min(start + rows, height)) for start in range(0, height, rows)]
-        futures = [_segments().submit(_deflate, data, bits, start, stop, stop == height) for start, stop in bounds]
+        pool = _segments()
+        modes = [pool.submit(_filtered, data, bits, start, stop) for start, stop in bounds]
+        segments = [(start, stop, mode.result()) for (start, stop), mode in zip(bounds, modes)]
+        futures = [pool.submit(_deflate, data, bits, segments, index) for index in range(len(segments))]
         adler = 1
         for index, future in enumerate(futures):
             body, checksum, length = future.result()

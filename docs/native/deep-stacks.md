@@ -895,7 +895,20 @@ reference its C test must match exactly.
   stream, and the boundaries depend only on the row size, so repeated exports
   give the same bytes. `tests/unit/test_png_segments.py` decodes the files with
   plain zlib at both depths, with segments down to one row. Dropping the
-  dictionary or breaking the checksum fails it. Hashing went the same way:
+  dictionary or breaking the checksum fails it.
+
+  Rows are filtered (None, Sub, Up, Average, Paeth) by `op_png_filter`. It
+  picks, per row, the filter with the smallest sum of |signed byte|, as libpng
+  does by default. Encoding filters read only raw neighbours, so NEON computes
+  all five candidates and their sums sixteen bytes a step; Paeth uses `vabdq`
+  and a widened third distance. Filters lose on noise-like masks, where deflate
+  finds repeats in the raw rows (libpng's heuristic made those files up to 9%
+  larger). So each segment compresses a 64 KiB sample of its rows both ways and
+  is filtered only if that wins by 1%. Earlier segments' rows enter a dictionary
+  as those segments wrote them. Over 36 material textures the files are 6.4%
+  smaller (up to 15% on wood and brushed metal), and none grew. A NumPy filter
+  gives the same bytes without the library, and the tests compare the two.
+  Hashing went the same way:
   Blender's bundled `hashlib.sha256` runs at about 87 MB/s, and the export
   transaction hashes every staged file. `op_sha256` uses the arm64 SHA2
   instructions (SHA256H/H2/SU0/SU1) at about 1.7 GB/s, with identical digests.

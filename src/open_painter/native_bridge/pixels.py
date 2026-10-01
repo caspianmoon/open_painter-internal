@@ -65,3 +65,20 @@ def normal_relief(lib, normal, height, metric, charts, distance):
                                charts.ctypes.data_as(I32), n, normal.shape[-1], float(distance),
                                out.ctypes.data_as(F32)))
     return out
+
+
+def png_filter(lib, data, bits, start, stop):
+    """``image_writer._filter_numpy`` of rows start..stop of (rows, columns, channels) uint8
+    or native uint16 samples whose rows are each contiguous (any row stride), else None."""
+    dtype = np.dtype(np.uint8 if bits == 8 else np.uint16)
+    if (data.ndim != 3 or data.dtype != dtype or not data.dtype.isnative or stop <= start
+            or data.strides[2] != dtype.itemsize or data.strides[1] != data.shape[2] * dtype.itemsize):
+        return None
+    row_bytes = data.shape[1] * data.shape[2] * dtype.itemsize
+    out = np.empty((stop - start, row_bytes + 1), np.uint8)
+    lib.op_png_filter.argtypes = [C.c_void_p, C.c_int64, C.c_uint32, C.c_uint32, C.c_uint32, C.c_uint32,
+                                  C.c_uint32, C.c_void_p]
+    lib.op_png_filter.restype = C.c_int
+    check(lib.op_png_filter(data[start].ctypes.data, data.strides[0], stop - start, row_bytes,
+                            data.shape[2] * dtype.itemsize, int(bits == 16), int(start > 0), out.ctypes.data))
+    return out

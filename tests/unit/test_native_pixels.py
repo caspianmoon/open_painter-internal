@@ -110,6 +110,22 @@ class NativePixelsTest(unittest.TestCase):
         finally:
             surface_normal._uv_metric = saved
 
+    def test_png_filter_is_numpys(self):
+        from open_painter.export.image_writer import _filter_numpy
+        rng = np.random.default_rng(8)
+        smooth = (np.linspace(0, 255, 300)[None, :, None] + rng.normal(0, 4, (90, 300, 4))).clip(0, 255)
+        for data, bits in ((smooth.astype(np.uint8), 8), ((smooth * 257).astype(np.uint16), 16),
+                           (rng.integers(0, 256, (40, 33, 4), dtype=np.uint8), 8),
+                           (rng.integers(0, 65536, (17, 5, 4), dtype=np.uint16), 16),
+                           (rng.integers(0, 256, (12, 9, 3), dtype=np.uint8), 8),
+                           (np.full((6, 2, 4), 7, np.uint8), 8)):
+            for view in (data, data[::-1]):   # the export writes a row-flipped view
+                for start, stop in ((0, len(view)), (1, len(view)), (len(view) // 2, len(view)), (0, 1)):
+                    found = pixels.png_filter(self.lib, view, bits, start, stop)
+                    np.testing.assert_array_equal(found, _filter_numpy(view, bits, start, stop),
+                                                  err_msg=f'{data.shape} {bits} {start}:{stop}')
+        self.assertIsNone(pixels.png_filter(self.lib, smooth.astype(np.uint8)[:, ::2], 8, 0, 4))
+
 
 if __name__ == '__main__':
     unittest.main()

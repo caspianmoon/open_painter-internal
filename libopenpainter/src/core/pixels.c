@@ -1,5 +1,7 @@
 #include "openpainter/op_pixels.h"
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_PIXELS)
 #include <arm_neon.h>
@@ -434,5 +436,157 @@ op_status_t op_normal_relief(const float *normal, const float *height, const flo
         for (; c < n; c++)
             relief(normal, height, metric, charts, n, channels, distance, r, c, out);
     }
+    return OP_OK;
+}
+
+/* ---- PNG filters ---------------------------------------------------------------------------- */
+
+static uint8_t paeth(uint8_t a, uint8_t b, uint8_t c) {
+    int p = a + b - c, pa = abs(p - a), pb = abs(p - b), pc = abs(p - c);
+    return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+}
+static uint8_t filtered(uint32_t type, uint8_t x, uint8_t a, uint8_t b, uint8_t c) {
+    switch (type) {
+    case 1: return (uint8_t)(x - a);
+    case 2: return (uint8_t)(x - b);
+    case 3: return (uint8_t)(x - ((a + b) >> 1));
+    case 4: return (uint8_t)(x - paeth(a, b, c));
+    default: return x;
+    }
+}
+static uint32_t magnitude(uint8_t f) { return f < 128 ? f : 256u - f; }
+
+#ifdef OP_NEON_PIXELS
+static inline uint8x16_t paeth16(uint8x16_t a, uint8x16_t b, uint8x16_t c) {
+    uint8x16_t pa = vabdq_u8(b, c), pb = vabdq_u8(a, c);   /* |p - a| = |b - c|, |p - b| = |a - c| */
+    int16x8_t low = vabsq_s16(vaddq_s16(vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(a), vget_low_u8(c))),
+                                        vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(b), vget_low_u8(c)))));
+    int16x8_t high = vabsq_s16(vaddq_s16(vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(a), vget_high_u8(c))),
+                                         vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(b), vget_high_u8(c)))));
+    /* |p - c| = |a + b - 2c| saturates at 255: above that it exceeds pa and pb anyway. */
+    uint8x16_t pc = vcombine_u8(vqmovun_s16(low), vqmovun_s16(high));
+    uint8x16_t use_a = vandq_u8(vcleq_u8(pa, pb), vcleq_u8(pa, pc));
+    return vbslq_u8(use_a, a, vbslq_u8(vcleq_u8(pb, pc), b, c));
+}
+static inline uint8x16_t filtered16(uint32_t type, uint8x16_t x, uint8x16_t a, uint8x16_t b, uint8x16_t c) {
+    switch (type) {
+    case 1: return vsubq_u8(x, a);
+    case 2: return vsubq_u8(x, b);
+    case 3: return vsubq_u8(x, vhaddq_u8(a, b));
+    case 4: return vsubq_u8(x, paeth16(a, b, c));
+    default: return x;
+    }
+}
+static inline uint8x16_t magnitude16(uint8x16_t f) { return vminq_u8(f, vsubq_u8(vdupq_n_u8(0), f)); }
+#endif
+
+/* The five filters' sums of |signed byte| over one row (x the row, b the one above). */
+static void filter_sums(const uint8_t *x, const uint8_t *b, uint32_t n, uint32_t bpp, uint64_t sums[5]) {
+    uint32_t i = 0;
+    for (int k = 0; k < 5; k++)
+        sums[k] = 0;
+    for (; i < bpp && i < n; i++)
+        for (uint32_t k = 0; k < 5; k++)
+            sums[k] += magnitude(filtered(k, x[i], 0, b[i], 0));
+#ifdef OP_NEON_PIXELS
+    uint32x4_t total[5];
+    for (int k = 0; k < 5; k++)
+        total[k] = vdupq_n_u32(0);
+    while (i + 16 <= n) {
+        /* 128 steps at most per 16-bit partial sum (2 x 128 x 128 < 65536). */
+        uint16x8_t partial[5];
+        for (int k = 0; k < 5; k++)
+            partial[k] = vdupq_n_u16(0);
+        for (uint32_t steps = 0; steps < 128 && i + 16 <= n; steps++, i += 16) {
+            uint8x16_t vx = vld1q_u8(x + i), va = vld1q_u8(x + i - bpp);
+            uint8x16_t vb = vld1q_u8(b + i), vc = vld1q_u8(b + i - bpp);
+            partial[0] = vpadalq_u8(partial[0], magnitude16(vx));
+            partial[1] = vpadalq_u8(partial[1], magnitude16(vsubq_u8(vx, va)));
+            partial[2] = vpadalq_u8(partial[2], magnitude16(vsubq_u8(vx, vb)));
+            partial[3] = vpadalq_u8(partial[3], magnitude16(vsubq_u8(vx, vhaddq_u8(va, vb))));
+            partial[4] = vpadalq_u8(partial[4], magnitude16(vsubq_u8(vx, paeth16(va, vb, vc))));
+        }
+        for (int k = 0; k < 5; k++)
+            total[k] = vpadalq_u16(total[k], partial[k]);
+    }
+    for (int k = 0; k < 5; k++)
+        sums[k] += vaddvq_u32(total[k]);
+#endif
+    for (; i < n; i++)
+        for (uint32_t k = 0; k < 5; k++)
+            sums[k] += magnitude(filtered(k, x[i], x[i - bpp], b[i], b[i - bpp]));
+}
+
+static void filter_row(uint32_t type, const uint8_t *x, const uint8_t *b, uint32_t n, uint32_t bpp, uint8_t *out) {
+    uint32_t i = 0;
+    for (; i < bpp && i < n; i++)
+        out[i] = filtered(type, x[i], 0, b[i], 0);
+#ifdef OP_NEON_PIXELS
+    for (; i + 16 <= n; i += 16)
+        vst1q_u8(out + i, filtered16(type, vld1q_u8(x + i), vld1q_u8(x + i - bpp), vld1q_u8(b + i), vld1q_u8(b + i - bpp)));
+#endif
+    for (; i < n; i++)
+        out[i] = filtered(type, x[i], x[i - bpp], b[i], b[i - bpp]);
+}
+
+static void swap_row(const uint8_t *row, uint32_t n, uint8_t *out) {
+    uint32_t i = 0;
+#ifdef OP_NEON_PIXELS
+    for (; i + 16 <= n; i += 16)
+        vst1q_u8(out + i, vrev16q_u8(vld1q_u8(row + i)));
+#endif
+    for (; i + 1 < n; i += 2) {
+        out[i] = row[i + 1];
+        out[i + 1] = row[i];
+    }
+}
+
+op_status_t op_png_filter(const void *rows, int64_t stride, uint32_t count, uint32_t row_bytes, uint32_t bpp,
+                          uint32_t swap16, uint32_t previous, uint8_t *out) {
+    if ((count && (!rows || !out)) || !bpp || bpp > 8 || swap16 > 1 || previous > 1 || (swap16 && row_bytes % 2) ||
+        (uint64_t)count * (row_bytes + 1ull) > (UINT64_C(1) << 36))
+        return OP_INVALID_ARGUMENT;
+    if (!count || !row_bytes) {
+        for (uint32_t r = 0; r < count; r++)
+            out[(uint64_t)r * (row_bytes + 1)] = 0;
+        return OP_OK;
+    }
+    const uint8_t *base = rows;
+    uint8_t *scratch = calloc(swap16 ? 3 : 1, row_bytes);   /* zeros above the first row; swapped rows */
+    if (!scratch)
+        return OP_RESOURCE_EXHAUSTED;
+    uint8_t *above = swap16 ? scratch + row_bytes : NULL, *current = swap16 ? scratch + 2 * (uint64_t)row_bytes : NULL;
+    const uint8_t *b = scratch;
+    if (previous) {
+        b = base - stride;
+        if (swap16) {
+            swap_row(b, row_bytes, above);
+            b = above;
+        }
+    }
+    for (uint32_t r = 0; r < count; r++) {
+        const uint8_t *x = base + (int64_t)r * stride;
+        if (swap16) {
+            swap_row(x, row_bytes, current);
+            x = current;
+        }
+        uint64_t sums[5];
+        filter_sums(x, b, row_bytes, bpp, sums);
+        uint32_t best = 0;
+        for (uint32_t k = 1; k < 5; k++)
+            if (sums[k] < sums[best])
+                best = k;
+        uint8_t *line = out + (uint64_t)r * (row_bytes + 1);
+        line[0] = (uint8_t)best;
+        filter_row(best, x, b, row_bytes, bpp, line + 1);
+        if (swap16) {   /* the swapped row is the next row's upper neighbour */
+            uint8_t *t = above;
+            above = current;
+            current = t;
+            b = above;
+        } else
+            b = x;
+    }
+    free(scratch);
     return OP_OK;
 }

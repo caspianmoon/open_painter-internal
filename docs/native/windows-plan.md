@@ -34,6 +34,88 @@ replaces the context those sessions kept on the Mac.
 5. **Commits.** Commit as you go, with descriptive messages: what changed, why, and how it
    was verified. Work on a branch of your own (below). Ask the user before pushing.
 
+## Progress on the Windows laptop
+
+Branch `feat/native-windows`, 2026-10-01 to 10-02. Each commit message records its
+evidence.
+
+- **Machine:** Windows 11 22631; i7-8750H (SSE4.2, AVX2/FMA3); 12 GB RAM, about 5 GiB
+  available with the desktop running.
+- **GPU and Blender:** GTX 1050, 4 GiB, driver 560.70; Blender 5.2.2 LTS (`d13f752e3b9c`).
+- **Toolchain:** VS 2022 Build Tools 17.14 (MSVC 14.44) with the Windows 11 SDK 10.0.26100;
+  python.org CPython 3.11 for the binding headers.
+
+| Step | State | Result |
+| --- | --- | --- |
+| 1. MSVC build | Done | 33/33 in the Release and scalar builds, no `/W4` warnings. `test_pixels` takes 41 s here, so pass `--test-timeout 120` to `build_native.py`. |
+| 2. Unit tests | Done | 530 tests, no failures. 3 skips: no system libpng (2), POSIX shebang layout. |
+| 3. Baseline matrix | Done | Vulkan 21/21 (`.blender-test/windows-vulkan/validation-native-branch`). |
+| 4. Guard | Done | Job Object; `tests/unit/test_run_guarded.py`. |
+| 5. Suites | Done | All pass without and with the library, on OpenGL and on Vulkan. `native_geometry_projection.py` needs the library. |
+| 6. Binding | Done | In Blender, `abi()` is 13 and `compiled_binding: true`. |
+| 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
+| 8. Native engine | Open | OpenGL qualifies except `native_publication_4k.py`; Vulkan lacks four features (below). Defaults unchanged. |
+| 9. Windows on Arm | Not applicable | This laptop is x64. |
+| 10. Full gate | See below | |
+
+### Findings that change how to work here
+
+- **Text encoding.** A plain `python.exe` reads and writes text as cp1252 on Windows.
+  Blender's Python runs in UTF-8 mode, so add-on code is fine, but tests and scripts must
+  pass `encoding="utf-8"`; they all do now.
+- **Guard measure.** On Windows the guard caps the job's commit charge. GPU drivers commit
+  system memory alongside video memory, so GUI runs commit 4–5 GiB with a 1.2–1.8 GiB
+  working set. The summary reports `working_set_peak_gib`, `processes_peak` and peak
+  dedicated GPU memory.
+- **Approved caps.** The user approved these caps on this laptop:
+  - GUI runs: 6 GB;
+  - `resolution_switch.py` and `native_publication_4k.py`: 4 GB;
+  - `utility_maps.py` under the OpenGL native scheduler: 5 GB. It commits 3.2 GiB on
+    OpenGL otherwise, and `run_selected_tests.py` gives it 4 GB.
+- **Bevel UVs are not bit-stable.** Re-evaluating a bevelled mesh can move a few corner
+  UVs by one ulp, even with one thread. Tests that compare two evaluations at about 1e-6
+  must read one snapshot (see `native_geometry_projection.py`, `evaluated_projection.py`).
+- **Budgeted publication.** On Vulkan one tick publishes channels within a time budget,
+  not all of them. A test may assert "current after one tick" only where
+  `runtime.device().pixel_publish` is false.
+- **GPU leaks at exit.** Some Vulkan runs print `VMA: UNFREED ALLOCATION` at exit, for
+  example `layer_store.py`, `structural_patch.py` and `moved_layer_adoption.py`, with the
+  legacy scheduler too. No test fails; not yet investigated.
+
+### Step 8: the native scheduler on Vulkan and OpenGL
+
+Medians from `tests/integration/native_deep_stack.py` (40 layers, 1024, `OP_PREARM=1`), two
+alternating rounds, native scheduler against `OP_NATIVE_ENGINE=0`, in ms:
+
+| Case | Vulkan native | Vulkan legacy | OpenGL native | OpenGL legacy |
+| --- | ---: | ---: | ---: | ---: |
+| Bottom leaf roughness | 11–12 | 35–37 | 7 | 28 |
+| Middle leaf opacity | 79–80 | 128–132 | 11 | 69 |
+| Middle mask black | 62–72 | 129–132 | 26–27 | 73 |
+| Bottom folder opacity | 135–149 | 182–206 | 13 | 78 |
+| Apply smart material | 222–249 | 309–316 | 114–124 | 190–192 |
+| Undo (numeric) | 255–264 | 306–314 | 285–289 | 302–314 |
+
+On OpenGL the native scheduler doubles video memory (1.4 against 0.6 GiB); the working
+set is unchanged.
+
+- **OpenGL** (`OP_NATIVE_HOST_BACKENDS=OPENGL`):
+  - 24 of 25 native suites, every step 5 suite and the GPU matrix (at `--sampler-limit`
+    16 and 8) pass.
+  - `native_publication_4k.py` exceeded the 4 GB cap (4.3 GiB commit) and was not
+    retried.
+  - The user chose to keep OpenGL opt-in until that suite passes.
+- **Vulkan** (`OP_NATIVE_HOST_BACKENDS=VULKAN`): every step 5 suite passes, and 19 of 25
+  native suites pass. Pixel publication, Vulkan's only route into Blender images, skips
+  four features:
+  - native revision transactions (`native_host_metal.py`);
+  - `HostGPUProbe` mip reads (`native_publication_precision.py`);
+  - idle suffix arming (`native_suffix.py`);
+  - fused publication, because the native plan renders final units before publication
+    (`engine_fused_publish.py`).
+
+  The user chose to port these features before any default change.
+
 ## Where things stand
 
 ### The native library
@@ -69,15 +151,16 @@ There are two gates (`src/open_painter/native_bridge/lifecycle.py`):
 | x86-64 macOS build under Rosetta (SSE4.2, no AVX) | 33/33 C tests, including the exhaustive sRGB test |
 | Linux arm64 and amd64, GCC 12 (`scripts/cross_test_native.py`) | 33/33, no warnings |
 | Windows x64, MinGW-w64 GCC 12, tests under Wine | 33/33, no warnings |
+| Windows x64, MSVC 14.44 (VS 2022 Build Tools), Release and scalar builds | 33/33, no warnings at `/W4` |
+| Windows x64, unit tests with the MSVC library and its `_native.pyd` | 530 run, no failures |
+| Windows x64, Blender 5.2.2, Vulkan and OpenGL | The step 5 suites with and without the library, the GPU matrix, the package install; see [progress](#progress-on-the-windows-laptop) |
 
 Not verified anywhere yet:
 
-- MSVC (x64 or ARM64);
-- the Windows CPython binding;
-- Blender on Windows with the native library loaded;
-- the native GPU engine on Vulkan or OpenGL;
-- any of the Python changes on `feat/native-c-engine` since the last Windows round
-  (2026-09-28, on branch `fix/windows-vulkan-performance`, version 0.13.1).
+- MSVC on ARM64 (step 9; the laptop is x64);
+- the native GPU engine as the default on Vulkan or OpenGL (step 8 qualified OpenGL except
+  the 4K suite, and found the features Vulkan lacks);
+- `native_publication_4k.py` on Windows (it needs more memory than this laptop allows).
 
 The C code has no variable-length arrays (checked with `-Wvla`) and no GCC builtins. Two
 global counters use `_InterlockedExchangeAdd64` under MSVC (`src/core/serial.h`), because
@@ -138,14 +221,24 @@ $py = 'C:\Program Files\Blender Foundation\Blender 5.2\5.2\python\bin\python.exe
 ```
 
 - **Line endings:** keep `core.autocrlf=false`. The repo has no line-ending rules, and
-  CRLF would change source digests and patch files.
+  CRLF would change source digests and patch files. Git for Windows sets
+  `core.autocrlf=true` system-wide, so an existing checkout has CRLF files: on a clean
+  tree, `git config core.autocrlf false`, then `git rm -r --cached .` and
+  `git reset --hard` rewrites them with LF.
 - **Compiler:** install Visual Studio 2022 Build Tools with the Desktop C++ workload (MSVC
   v143, Windows SDK, CMake). Build from a *Developer PowerShell for VS 2022*, which puts
   `cl.exe` and `cmake` on PATH. On an ARM64 laptop, use the ARM64 native environment.
-- **Binding (step 6):** a python.org CPython 3.13 x64 install provides the headers and
-  `libs\python3.lib`. Blender ships neither. Ask the user before installing it.
+  Without the Windows SDK component, CMake fails at `LNK1181: cannot open input file
+  'kernel32.lib'`; add `Microsoft.VisualStudio.Component.Windows11SDK.26100` from an
+  elevated installer.
+- **Binding (step 6):** a python.org CPython 3.11 or later x64 install provides the
+  headers and `libs\python3.lib`; the module needs only the 3.11 limited API. Blender
+  ships neither, but ships `python3.dll`. Ask the user before installing one.
 - **Check the GPU backend** Blender uses (Preferences ▸ System, or
-  `gpu.platform.backend_type_get()`). `--gpu-backend vulkan|opengl` forces one.
+  `gpu.platform.backend_type_get()`). `--gpu-backend vulkan|opengl` forces one. Factory
+  settings on this laptop select **OpenGL**, so pass `--gpu-backend vulkan` to
+  `run_selected_tests.py`, `run_native_metal_tests.py` and `run_clean_install.py` (and
+  `--backend vulkan` to `run_gpu_compatibility.py`) to test Vulkan.
 
 ## Steps
 
@@ -165,8 +258,9 @@ and runs ctest. The library lands at `.blender-test\native\build\Release\openpai
 - **Likely trouble on ARM64:** NEON intrinsics MSVC may spell or support differently.
   Look at `vqtbl3q_u8` and the `uint8x16x3_t` initializer in `pixels.c`, the SHA2
   intrinsics in `sha256.c`, and `vrndnq_f32`/`vminnmq_f32`.
-- **Timeouts:** a slow laptop may hit the 20 s per-test limit. Reconfigure with
-  `-DOP_TEST_TIMEOUT=120` rather than weakening a test.
+- **Timeouts:** a slow laptop may hit the 20 s per-test limit. Pass `--test-timeout 120`
+  to `build_native.py` (it sets `-DOP_TEST_TIMEOUT`) rather than weakening a test. On the
+  i7-8750H, `test_pixels` takes 41 s.
 - Also run `& $py scripts/native_ctypes_spike.py --lib <dll>`, which CI ran on
   `windows-latest` (`.github/workflows/native-core.yml`; the Actions billing has been
   blocked, so CI has not been running).
@@ -201,10 +295,17 @@ The branch has a lot of Python work since the last Windows round. Without
 
 ### 4. Make the guarded test runners work on Windows
 
-`scripts/run_guarded.py` is macOS-only: it uses `libproc` for process footprints,
+**Done.** `scripts/run_guarded.py` now runs on Windows with the same command line and
+output. It starts the command suspended, puts it in a Job Object and resumes it, polls
+the job's commit charge, and has the kernel limit the job to the cap plus 1 GiB. It also
+reports the job's peak working set, process count and dedicated GPU memory.
+`run_gpu_compatibility.py` and `run_clean_install.py` launch Blender through it too.
+
+The original instructions, kept for reference:
+
+`scripts/run_guarded.py` was macOS-only: it used `libproc` for process footprints,
 `vm_stat` for free memory and `fcntl` for its lock. `run_tests.py`,
-`run_selected_tests.py` and `run_native_metal_tests.py` all launch Blender through it, so
-they cannot run on Windows yet.
+`run_selected_tests.py` and `run_native_metal_tests.py` all launch Blender through it.
 
 Port it, keeping its command line and its `GUARD_SUMMARY` / `GUARD_KILLED` output:
 

@@ -106,3 +106,33 @@ If `~/.docker/config.json` names a credential helper that is not installed, poin
    and the engine suites with `OP_NATIVE_HOST_BACKENDS=VULKAN` (or `OPENGL`). That switch
    lets `execution_library` select the native scheduler on those backends. It is off by
    default until those suites pass there.
+
+## Results on the Windows laptop (2026-10)
+
+Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
+[Windows plan](windows-plan.md#progress-on-the-windows-laptop) has the details.
+
+- **Build.**
+  - MSVC compiles the library, the tests and the binding with no warnings at `/W4`.
+  - All 33 C tests pass in the vector (SSE4.2) and scalar builds.
+  - `dumpbin` shows the SSE4 instructions in `openpainter.dll`, so `test_pixels_paths`
+    really compares the SSE path with the scalar one.
+- **Binding.**
+  - `_native.pyd` is built against the 3.11 limited API and imports `python3.dll`, which
+    Blender ships.
+  - It shares the UCRT heap with `openpainter.dll`.
+- **CPU kernels.** They run on both GPU backends, and every Blender suite of the plan passes
+  with and without the library, on OpenGL (the factory default there) and on Vulkan.
+- **Engine on OpenGL.** OpenGL keeps framebuffer publication, so the native scheduler works
+  as on Metal.
+  - Every engine suite passes except the 4K suite, which needs more memory than the laptop
+    has.
+  - Warm edits are 3–7 times faster than the legacy scheduler, at the cost of about twice
+    the video memory.
+- **Engine on Vulkan.** Image textures cannot be render targets on Vulkan, so the engine
+  publishes through pixel readback.
+  - The native scheduler is 1.3–3 times faster and every workflow suite passes.
+  - Four features need framebuffer publication and are not available yet: revision
+    transactions, `HostGPUProbe` mip reads, idle suffix arming and fused publication of
+    final units under the native plan.
+- **Defaults.** Neither backend is in the default `host_backends()` yet.

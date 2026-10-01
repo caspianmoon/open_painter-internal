@@ -115,8 +115,11 @@ def expected(owner, ts):
     return result
 
 
-def _owners(ts):
+def _owners(ts, layers=None):
+    """Every scalable owner of the set, or of the layers with these ids."""
     for layer in ts.layers:
+        if layers is not None and layer.id not in layers:
+            continue
         for prop in layer.channels:
             yield prop
             yield from prop.effects
@@ -139,11 +142,13 @@ def sync_owner(owner, ts):
     return changed
 
 
-def sync(ts):
-    """Resolve every Physical owner of the set; returns the number of fields rewritten."""
-    if not uses(ts):
-        return 0
-    return sum(len(sync_owner(owner, ts)) for owner in list(_owners(ts)))
+def sync(ts, layers=None):
+    """Resolve every Physical owner of the set, or of the layers with these ids (a replay that
+    only added them: an owner's values follow it and the set's texel density alone); returns
+    the number of fields rewritten."""
+    layers = None if layers is None else set(layers)
+    owners = [owner for owner in _owners(ts, layers) if getattr(owner, 'units', 'TEXTURE') == 'PHYSICAL']
+    return sum(len(sync_owner(owner, ts)) for owner in owners)
 
 
 def sync_all(scene):

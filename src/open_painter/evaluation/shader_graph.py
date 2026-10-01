@@ -2145,17 +2145,16 @@ class Graph(Math):
         if affected is None:
             plan.facts = {identifier: _layer_links(layer) for identifier, layer in layers.items()}
         else:
-            def kept(identifier):
-                return identifier not in affected
-            plan.wired = {i: entry for i, entry in previous.wired.items() if kept(i)}
-            plan.skipped = {i: value for i, value in previous.skipped.items() if kept(i)}
+            plan.wired = {i: entry for i, entry in previous.wired.items() if i not in affected}
+            plan.skipped = {i: value for i, value in previous.skipped.items() if i not in affected}
             # Per-layer memos of layers no edit reached are shared: their answers still hold.
-            plan.touched = {i: memo for i, memo in previous.touched.items() if kept(i)}
-            plan.refs = {i: memo for i, memo in previous.refs.items() if kept(i)}
-            plan.signatures = {i: memo for i, memo in previous.signatures.items() if kept(i)}
-            plan.warned = {i: list(found) for i, found in previous.warned.items() if kept(i)}
-            plan.subtree_consumed = {i: value for i, value in previous.subtree_consumed.items() if kept(i)}
-            plan.facts = {i: value for i, value in previous.facts.items() if kept(i) and i in layers}
+            plan.touched = {i: memo for i, memo in previous.touched.items() if i not in affected}
+            plan.refs = {i: memo for i, memo in previous.refs.items() if i not in affected}
+            plan.signatures = {i: memo for i, memo in previous.signatures.items() if i not in affected}
+            plan.warned = {i: list(found) for i, found in previous.warned.items() if i not in affected}
+            plan.subtree_consumed = {i: value for i, value in previous.subtree_consumed.items()
+                                     if i not in affected}
+            plan.facts = {i: value for i, value in previous.facts.items() if i not in affected and i in layers}
             plan.facts.update((i, _layer_links(layers[i])) for i in affected if i in layers)
         plan.composite_readers = {identifier for identifier, (reads, _) in plan.facts.items()
                                   if any(_composite_handle(handle) for handle in reads)}
@@ -2181,13 +2180,15 @@ class Graph(Math):
                     walk(identifier, opaque and entry[3] == 'PASSTHROUGH', ancestors | {identifier})
 
         walk('', True, frozenset())
-        work = list(plan.order)
+        keys, refs, work = plan.keys, plan.refs, list(plan.order)
         while work:
             key = work.pop()
-            if key in plan.keys:
+            if key in keys:
                 continue
-            plan.keys.add(key)
-            work.extend(self._reference_keys(key))
+            keys.add(key)
+            memo = refs.get(key[1])   # ``_reference_keys``'s memo, read in place
+            found = memo.get(key) if memo is not None else None
+            work.extend(found if found is not None else self._reference_keys(key))
         return plan
 
     @staticmethod

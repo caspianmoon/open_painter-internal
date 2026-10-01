@@ -256,7 +256,7 @@ def replay(ts, created_only=False):
             created = None if existing is None else [l.id for l in ts.layers if l.id not in existing]
             invalidate(ts, created)
         from ..evaluation import physical
-        physical.sync(ts)
+        physical.sync(ts, created)   # a replay that only added layers resolves theirs
         if created:
             notify(next(l for l in ts.layers if l.id == created[0]), structural=True)
         else:

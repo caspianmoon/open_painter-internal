@@ -30,6 +30,7 @@ _holds = {}      # session key -> perf_counter of the last renewal by a gesture 
 # OP_NO_PATCH=1 rebuilds instead, for comparisons.
 PATCH = os.environ.get('OP_NO_PATCH') != '1'
 _retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
+_carried = {}    # session key -> the engine an undo dropped: its rebuild starts from its results
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
 
@@ -475,11 +476,13 @@ def ensure(scene, ts):
                 return previous
             raise
         entry = _sessions.setdefault(key, {})
-        engine = entry.get('engine')
+        engine = entry.get('engine') or _carried.pop(key, None)
         if engine is None or engine.set_id != ts.id or engine.scene_uid != getattr(scene, 'session_uid', None):
             if engine is not None:
                 engine.close()
             engine = Engine(scene, ts)
+        else:
+            engine.scene = scene   # an undo restored the Scene: its old reference is stale
         engine.adopt(candidate)
         entry.pop('dropped', None)   # the build read every value again
         entry.update(graph=candidate, engine=engine, dirty=True, store=_store(ts),
@@ -1022,6 +1025,11 @@ def clear(undo=False):
                 graph.unbind()
         engine = entry.get('engine')
         if engine is not None:
+            if undo and key not in _carried:
+                # Unit results are GPU textures with content stamps, which nothing the undo
+                # restored can make stale: the rebuilt graph renders only what differs.
+                _carried[key] = engine
+                continue
             try:
                 engine.close()
             except Exception:
@@ -1031,6 +1039,12 @@ def clear(undo=False):
             for retired in graphs:
                 retired.unbind()
         _retiring.clear()
+        for engine in _carried.values():
+            try:
+                engine.close()
+            except Exception:
+                pass
+        _carried.clear()
     _sessions.clear()
     _busy.clear()
     _batches.clear()

@@ -65,6 +65,7 @@ CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one te
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
+CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -693,7 +694,7 @@ def forget_device():
 
 class UnitState:
     __slots__ = ('unit', 'program', 'shader', 'signature', '_stamp', '_textures', 'formats', 'ubo', 'ubo_data',
-                 'slot')
+                 'slot', 'carried')
 
     def __init__(self, unit):
         self.unit = unit
@@ -702,6 +703,9 @@ class UnitState:
         self.formats = ()
         self.ubo = self.ubo_data = None
         self.slot = None   # the native graph's mirror of stamp and residency (NativeGraph)
+        # The shader a carried result was rendered with (``Engine.adopt``): held until this state
+        # renders, so no new shader takes its id while the carried stamp still names it.
+        self.carried = None
 
     @property
     def stamp(self):
@@ -880,12 +884,22 @@ class Engine:
         replaced = set()
         if not patched or changes is None or n_before != graph.n:
             live = {}
+            carry = CARRY_RESULTS and not patched and n_before == graph.n
             for key, unit in graph.units.items():
                 state = self.states.get(key)
                 if state is None or state.unit is not unit:
-                    if state is not None:
+                    fresh = UnitState(unit)
+                    if state is not None and carry and state.textures:
+                        # A rebuilt graph (an undo, a declined patch): the unit starts from its
+                        # predecessor's result and stamp, and the native graph renders it again
+                        # only where its content stamp differs.
+                        fresh._textures, fresh.formats, fresh._stamp = state.textures, state.formats, state.stamp
+                        fresh.carried = state.shader
+                        state._textures, state.slot = None, None
+                        metrics.count('engine_carried_results')
+                    elif state is not None:
                         self._retire_state(key, state, n_before, patched)
-                    state = UnitState(unit)
+                    state = fresh
                     replaced.add(key)
                 live[key] = state
             for key, state in self.states.items():
@@ -1063,12 +1077,15 @@ class Engine:
             state.program = program
             state.shader = device().shader(state.program)
             state.signature = signature
-            if state.textures:
+            formats = tuple(self._format(key, color) for color, _ in state.program.targets)
+            if state.textures and formats != state.formats:
+                # Targets of another layout: the next render allocates them. Same layout: the
+                # result stays, and its stamp decides whether it is rendered again.
                 n = self.graph.n
                 for texture, fmt in zip(state.textures, state.formats):
                     device().release(texture, n, fmt)
                 state.textures = None
-            state.formats = tuple(self._format(key, color) for color, _ in state.program.targets)
+            state.formats = formats
             compiled = device().compile_seconds - compiled
             self.stages['compile_ms'] += compiled * 1000
             self.stages['translate_ms'] += (perf_counter() - started - compiled) * 1000
@@ -1229,6 +1246,7 @@ class Engine:
         finally:
             self._in_use.subtract(inputs)
         state.stamp = stamp
+        state.carried = None
         self.rendered.append(key)
         # What a chain step composed over is not needed once this step has drawn.
         if position:
@@ -1309,6 +1327,7 @@ class Engine:
         # this finished image. A later dependency can still render it normally.
         self._free(key, state, n)
         state.stamp = stamp
+        state.carried = None
         self.rendered.append(key)
         for ref in position or ():
             if ref is not None and ref[0] == 'unit':

@@ -116,6 +116,10 @@ assert abs(mask.amount - (original * .5 + .1)) < 1e-6
 assert same(published(scene, ts), first), 'undo published a state other than the one it restored'
 assert material_shape(ts.material) == shape, 'undo changed the material'
 report['undo_ms'] = round(undo_ms, 1)
+# The engine an undo dropped hands its results to the rebuild: units whose content stamps
+# still match are not rendered again (the published state above is the restored one).
+report['undo_carried'] = observed.counts.get('engine_carried_results', 0)
+assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"
 report['undo_build_ms'] = round(info.get('build_ms', 0.0), 1)
 report['undo_evaluate_ms'] = round(info['engine'].get('evaluate_ms', 0.0), 1)
 print('SHADER_UNDO undo restores the published state: PASS', flush=True)

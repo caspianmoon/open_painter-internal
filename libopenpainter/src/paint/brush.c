@@ -68,7 +68,7 @@ op_status_t op_brush_uniforms(const float *s, uint32_t count, const op_brush_set
     }
     return OP_OK;
 }
-op_status_t op_brush_bounds(const float *s, uint32_t count, float margin, float *lo, float *hi) {
+op_status_t op_brush_bounds(const float *s, uint32_t count, float margin, float lo[3], float hi[3]) {
     if (!lo || !hi || !isfinite(margin) || count > MAX_COUNT || (count && !s) ||
         !valid(s, (uint64_t)count * 13))
         return OP_INVALID_ARGUMENT;
@@ -476,8 +476,8 @@ op_status_t op_triangle_distances(const double *p, const double *c, uint32_t cou
     }
     return OP_OK;
 }
-op_status_t op_uv_window(const double *c, const double *uv, uint32_t count, const double *lo,
-                         const double *hi, double margin, float *out) {
+op_status_t op_uv_window(const double *c, const double *uv, uint32_t count, const double lo[3],
+                         const double hi[3], double margin, float *out) {
     if (count > MAX_COUNT || !lo || !hi || !isfinite(margin) || (count && (!c || !uv || !out)))
         return OP_INVALID_ARGUMENT;
     for (uint32_t i = 0; i < count; i++, c += 9, uv += 6, out += 4) {

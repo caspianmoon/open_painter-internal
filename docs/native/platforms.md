@@ -69,6 +69,27 @@ the same guard band. Under Rosetta, 2K RGBA, SSE against scalar: sRGB quantize 2
   - **Floating point:** MSVC builds with an explicit `/fp:precise`, which does not contract
     a multiply and an add.
 
+## Linux and Windows builds in containers
+
+`scripts/cross_test_native.py` builds the library and runs its C tests with the
+platform's own compiler. It uses whatever `docker` the environment points at.
+
+| Target | Compiler | Path | Result |
+| --- | --- | --- | --- |
+| linux-arm64 | GCC 12 | NEON | 33 of 33, no warnings |
+| linux-amd64 | GCC 12 | SSE4.2 | 33 of 33, no warnings |
+| windows-amd64 | MinGW-w64 GCC 12, tests under Wine | SSE4.2 | 33 of 33, no warnings |
+
+The Windows run checks a real PE DLL and the Windows ABI, though not MSVC. Under Wine
+on Rosetta it is slow (the exhaustive sRGB test takes about five minutes), so the script
+raises `OP_TEST_TIMEOUT` (CMake, default 20 seconds per test). GCC also found prototypes
+whose array parameters (`float low[3]`) the definitions spelled as pointers, and an
+allocation it could not see initialized; both are fixed.
+
+On Apple silicon, amd64 containers need Rosetta: `colima start <profile> --vz-rosetta`.
+If `~/.docker/config.json` names a credential helper that is not installed, point
+`DOCKER_CONFIG` at a directory holding `{}`.
+
 ## On the Windows machine
 
 1. **Build and test.** Run `python scripts/build_native.py` with MSVC (x64, and arm64 for

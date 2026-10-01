@@ -258,7 +258,7 @@ op_status_t op_reach_seeds(const op_reach_t *r, const float *anchors, const floa
     op_status_t status = op_reach_validate(r, anchors, radii, samples, pairs, count, resolved);
     if (status)
         return status;
-    uint8_t *wanted = malloc((size_t)samples + 1);
+    uint8_t *wanted = calloc((size_t)samples + 1, 1);
     int64_t *triangles = malloc(((size_t)samples + 1) * sizeof(*triangles));
     double *distances = malloc(((size_t)samples + 1) * sizeof(*distances));
     if (!wanted || !triangles || !distances) {

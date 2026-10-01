@@ -4,7 +4,7 @@ typedef struct frame {
     uint32_t next, backdrop, owner;
 } frame;
 op_status_t op_stack_plan(const op_stack_node_t *n, uint32_t count, op_stack_position_t *p,
-                          uint32_t *order, uint32_t *offsets, uint32_t *finals) {
+                          uint32_t *order, uint32_t offsets[9], uint32_t finals[8]) {
     if (count > 65536 || !offsets || !finals || (count && (!n || !p || !order)))
         return OP_INVALID_ARGUMENT;
     for (uint32_t i = 0; i < count; i++) {

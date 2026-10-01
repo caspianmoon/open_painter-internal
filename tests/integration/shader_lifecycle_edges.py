@@ -13,6 +13,7 @@ import open_painter
 from open_painter.core import image_manager as images, layer_stack as stack, material_manager
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import cache, shader_preview
+from open_painter.evaluation.engine import runtime
 from open_painter.evaluation.metrics import Metrics
 from open_painter.utils.ids import new_id
 
@@ -26,6 +27,17 @@ def ready(scene, ts, seconds=60):
         if shader_preview.current(scene, ts):
             return info
     raise AssertionError(shader_preview.diagnostics(scene, ts))
+
+
+def settled(scene, ts):
+    """Whether one tick makes the set current; publication through pixels (Vulkan) spends a time
+    budget per tick, so there the following ticks may finish it."""
+    shader_preview.tick(scene, ts)
+    for _ in range(100):
+        if shader_preview.current(scene, ts) or not runtime.device().pixel_publish:
+            break
+        shader_preview.tick(scene, ts)
+    return shader_preview.current(scene, ts)
 
 
 def find(scene, ts_id):
@@ -129,8 +141,7 @@ images_of = lambda item: {out.image.as_pointer() for out in item.outputs if out.
 assert images_of(ts) and not images_of(ts) & images_of(copy_ts), 'the copy writes the original set\'s images'
 copy_layer = next(l for l in copy_ts.layers if l.id == layer_id)
 copy_layer.opacity = .37
-shader_preview.tick(copy, copy_ts)
-assert shader_preview.current(copy, copy_ts) and shader_preview.current(scene, ts)
+assert settled(copy, copy_ts) and shader_preview.current(scene, ts)
 assert ts.edit_serial == serial, 'an edit in the copy invalidated the original scene'
 original_layer = next(l for l in ts.layers if l.id == layer_id)
 opacity = [b for b in original_graph.bindings.values() if b.field == 'opacity' and b.owner == original_layer]
@@ -161,8 +172,7 @@ assert info['state'] == 'FAILED' and 'share an object material slot' in info['er
 assert shader_preview.current(scene, ts) and shader_preview.ensure(scene, ts) is original_graph
 assert sum(node.bl_idname == NODE_ID for node in original_material.node_tree.nodes) == 1
 next(l for l in ts.layers if l.id == layer_id).opacity = .6
-shader_preview.tick(scene, ts)
-assert shader_preview.current(scene, ts)
+assert settled(scene, ts)
 bpy.data.scenes.remove(linked)
 cache.tick()
 assert shader_preview.current(bpy.context.scene, find(bpy.context.scene, ts_id))

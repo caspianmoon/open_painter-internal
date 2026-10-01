@@ -23,6 +23,7 @@ OP_UI_RESPONSE_REPORT selects the JSON report.
 """
 import json
 import os
+import platform
 import sys
 import time
 import traceback
@@ -90,7 +91,7 @@ def p95(values):
 
 def finish(error=None):
     report = dict(result="FAIL" if error else "PASS", error=error, blender=bpy.app.version_string,
-                  machine=os.uname().machine, targets=TARGETS,
+                  machine=platform.machine(), targets=TARGETS,
                   selection=dict(n=len(state["samples"]["selection"]), p95_ms=p95(state["samples"]["selection"]),
                                  max_ms=round(max(state["samples"]["selection"]), 2) if state["samples"]["selection"] else None),
                   control=dict(n=len(state["samples"]["control"]), p95_ms=p95(state["samples"]["control"]),

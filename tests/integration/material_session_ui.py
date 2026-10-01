@@ -29,7 +29,6 @@ OP_SESSION_REPORT (the JSON report). Synthetic events only: tablet behaviour is 
 import hashlib
 import json
 import os
-import resource
 import sys
 import tempfile
 import time
@@ -74,6 +73,23 @@ env = {"draws": [], "publications": [], "capture": None}
 
 
 def rss_mb():
+    """Peak resident memory of this Blender in MB (macOS ru_maxrss; Windows peak working set)."""
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        class Counters(ctypes.Structure):   # PROCESS_MEMORY_COUNTERS
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                        *((name, ctypes.c_size_t) for name in (
+                            "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage",
+                            "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage"))]
+        kernel32 = ctypes.WinDLL("kernel32")
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.K32GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
+        counters = Counters(cb=ctypes.sizeof(Counters))
+        kernel32.K32GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb)
+        return round(counters.PeakWorkingSetSize / (1024 * 1024), 1)
+    import resource
     usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return round(usage / (1024 * 1024), 1)   # macOS reports bytes
 

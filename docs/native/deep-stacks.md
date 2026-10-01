@@ -743,6 +743,42 @@ with `OP_DEEP_PHASES=1` reports collection time per generation. At 200 layers,
 the 311 ms full collections are gone; younger collections still cost 5–10 ms per
 structural edit.
 
+### Painting and dragging inside a deep stack
+
+`native_deep_stack.py` has a `paint_middle` case. It adds a paint layer in the
+middle of the stack and feeds brush inputs as `paint_freeze.py` does, timing each
+one from the pixels landing until the set is current. The pixel write itself is
+Blender's brush in the product and is not timed.
+
+- **Paint inputs kept the structure memos.** `channel_paint.mark_changed` moved the
+  edit serial without recording a numeric edit. Every per-structure answer was
+  therefore computed again on each input: the reader layers `dependent_channels`
+  walks the whole stack for, `uses_geometry`, the geometry key.
+  `geometry_uses_memo.py` now paints during its drag.
+- **Same image, no reassignment.** `Graph.update` assigns a painted image to its
+  node again whenever the image's identity changes. A headless node given the same
+  datablock again (same address and `session_uid`) no longer counts as an
+  assignment, so the native image groups hold and an evaluation reads only the
+  distinct images' identities.
+- **A folder's child composite is part of its spine.** `op_graph_spine` kept the
+  backdrops of the edited node and of its enclosing folders. A folder's own edit
+  (its opacity or blend) also composes over its child composite. Nothing kept that
+  composite, so every tick of a folder-opacity drag rendered all of the folder's
+  children again.
+
+200 layers at 1K:
+
+| Interaction | Before | After |
+| --- | ---: | ---: |
+| A brush input on a paint layer mid-stack | 23.4 ms (p95 31) | 7–13 ms (p95 12–19) |
+| Bottom folder opacity drag | 15.2 ms, 44 units | 6.9 ms, 16 units |
+| Top folder opacity drag | 7.2 ms, 20 units | 5.8 ms, 8 units |
+| Middle leaf opacity drag | 9.5 ms | 7.3–7.7 ms |
+
+A smart material's apply also stopped writing the set's surface parameters when they
+are unchanged; an unchanged height distance still walked every channel. A replay
+that only adds layers resolves the physical units of those layers alone.
+
 ## CPU kernels
 
 Profiles of the structural paths show arithmetic in C taking microseconds. The time
@@ -811,7 +847,14 @@ Machines with 16 GB or more keep the previous limits.
   mapping with images or procedural detail, mesh masks, scene fields, anchored
   micro details and the legacy Noise source still rasterize on the CPU at full
   resolution.
-- **Isolated folders.** Chains inside isolated folders are not collapsed.
+- **Isolated folders.** Chains inside isolated folders are not collapsed: they
+  composite with straight alpha over a transparent start, which is not affine in the
+  backdrop. Editing a layer inside a smart material re-renders the siblings above it
+  (4 of a middle leaf's 7 units per channel). Premultiplied compositing inside
+  isolated folders would make them collapsible.
+- **Opening a deep file.** The first build of the 200-layer stack takes about 4.7 s
+  at 1K. Of that, compiling 1,728 units takes 1.2 s, decoding the detail-source
+  images 0.9 s, translating programs 0.65 s and the first render about 1.1 s.
 - **Layer order.** A layer inserted mid-stack still updates the owner tuple of
   every unit of the layers above it (about 1,000 at 200 layers), though its bindings
   move once per layer. C still takes the whole topology on every change (built at C

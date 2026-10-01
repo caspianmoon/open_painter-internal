@@ -20,6 +20,7 @@ import open_painter
 from open_painter.constants import CHANNELS
 from open_painter.core import image_manager as images, material_manager
 from open_painter.core import texture_set_manager as sets
+from open_painter.core import layer_stack as stack
 from open_painter.core.texture_set_node import NODE_ID
 from open_painter.evaluation import cache, shader_preview
 from open_painter.evaluation.metrics import Metrics
@@ -77,6 +78,11 @@ for kind in ('CURVATURE', 'AO', 'POSITION', 'WORLD_NORMAL', 'THICKNESS', 'UV_BOR
     images.write(entry.image, data, pack=False)
 composer.apply(ts, 'Worn Painted Metal')
 material_manager.repair(ts)
+# A spatial filter: its node holds the effect's struct, which an undo moves (``_follow_undo``).
+blurred = next(item for item in ts.layers if item.type != 'FOLDER' and not item.masks)
+blur = stack.channel_for(blurred, 'BASE_COLOR').effects.add()
+blur.kind, blur.radius = 'GAUSSIAN_BLUR', 3.
+blurred_id = blurred.id
 info = ready(scene, ts)
 graph = shader_preview.ensure(scene, ts)
 shape = material_shape(ts.material)
@@ -129,6 +135,24 @@ if shader_preview.UNDO_ADOPTION:
 else:
     assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"
     assert report['undo_rebound'] > 0, 'no carried program was rebound to its rebuilt unit'
+
+# Every struct an adopted unit's nodes hold is one of the restored set's (an RNA struct a node
+# kept from before the undo would read freed memory).
+graph = shader_preview.ensure(scene, ts)
+live = {struct.as_pointer() for layer in ts.layers for prop in layer.channels
+        for struct in (prop, *prop.effects)} | {struct.as_pointer() for layer in ts.layers for mask in layer.masks
+                                               for struct in (mask, mask.effect, mask.influence, mask.mesh)}
+held = [(key, node.bl_idname, value.as_pointer()) for key in graph._reused for node in graph.units[key].rna_nodes
+        for name, value in node.__dict__.items() if isinstance(value, bpy.types.bpy_struct) and name != 'id_data']
+assert all(pointer in live for _, _, pointer in held) and (held or not shader_preview.UNDO_ADOPTION), held
+report['undo_filter_nodes'] = len(held)
+# The re-pointed effect still answers its edits.
+effect = stack.channel_for(next(item for item in ts.layers if item.id == blurred_id), 'BASE_COLOR').effects[0]
+before_blur = published(scene, ts)
+effect.radius = 6.
+assert not same(published(scene, ts), before_blur), 'an edit of an adopted filter changed nothing'
+effect.radius = 3.
+assert same(published(scene, ts), before_blur), 'an adopted filter did not return to its radius'
 
 report['undo_build_ms'] = round(info.get('build_ms', 0.0), 1)
 report['undo_evaluate_ms'] = round(info['engine'].get('evaluate_ms', 0.0), 1)

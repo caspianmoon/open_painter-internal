@@ -437,13 +437,21 @@ VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'
 
 
 def _plain(value):
-    """A comparable copy of a socket value or node attribute."""
+    """A comparable copy of a socket value or node attribute (an RNA struct by its address)."""
     if isinstance(value, (bool, int, float, str, type(None))):
         return value
+    if isinstance(value, bpy.types.bpy_struct):
+        try:
+            return ('rna', value.as_pointer())
+        except ReferenceError:
+            return ('rna', 'removed')
     if isinstance(value, (tuple, list)):
         return tuple(_plain(item) for item in value)
     return type(value).__name__
 
+
+# Headless node attributes holding what is not a node's own RNA: its tree and image (followed apart).
+_NODE_REFERENCES = {'id_data', '_image'}
 
 # Not compared: references, image bookkeeping and the name (a per-graph sequence number).
 _UNSHAPED = {'id_data', 'inputs', 'outputs', '_props', '_image', '_image_key', '_image_assigned', '_tree',
@@ -690,6 +698,7 @@ class Unit:
     warnings: list = field(default_factory=list)          # what compiling it reported (a stub's error)
     holds_layer: bool = True   # a binding or closure of it refers to its layer's struct (``_follow_moved_layer``)
     captures_layer: bool = True   # a resource, cache or image closure may hold its layer's struct (``_patch``)
+    rna_nodes: tuple = ()   # headless nodes whose attributes hold RNA (a filter's effect, a decal object)
 
     def input(self, name, socket_type):
         if name not in self.inputs:
@@ -3415,8 +3424,8 @@ class Graph(Math):
         and invalidated every ID wrapper. Each captured owner is re-pointed to the struct now at
         its path (``_undo_moves``), image nodes to their datablocks by session id. False,
         recompiling the unit, when it holds anything else from before the undo: a resource or
-        cache binding, a Mask Graph, a decal object, a custom node group or a GPU resource."""
-        from .engine import headless
+        cache binding, a Mask Graph, a decal object or custom node group (IDs ``rna_nodes`` holds,
+        which no path maps) or a GPU resource. A node's own RNA (a filter's effect) is re-pointed."""
         moves, before = self._undo_moves, unit.owner_pointers
         if (len(before) != len(current) or unit.resource_bindings or unit.cache_bindings
                 or any(binding.native for binding in unit.bindings.values())):
@@ -3424,18 +3433,20 @@ class Graph(Math):
         try:
             if tuple(moves[pointer].as_pointer() for pointer in before) != current:
                 return False
-            images = []
-            for node in unit.tree.nodes:
+            images, attributes = [], []
+            for node in unit.tree.nodes.image_nodes:
                 held = node.__dict__
-                if held.get('object') is not None or held.get('_gpu_resource') is not None:
-                    return False
-                if node.bl_idname == 'ShaderNodeGroup' and not isinstance(held.get('_tree'), headless.Tree):
+                if held.get('_gpu_resource') is not None:
                     return False
                 if held.get('_image') is not None:
                     image = self._undo_images.get(held.get('_image_uid'))
                     if image is None:
                         return False
                     images.append((node, image))
+            for node in unit.rna_nodes:
+                for name, value in node.__dict__.items():
+                    if name not in _NODE_REFERENCES and isinstance(value, bpy.types.bpy_struct):
+                        attributes.append((node, name, moves[value.as_pointer()]))   # an ID: KeyError
             rebound = []
             for identifier, binding in unit.bindings.items():
                 owner = moves[binding.owner.as_pointer()]
@@ -3461,6 +3472,8 @@ class Graph(Math):
         unit.image_bindings = entries
         for node, image in images:
             node.image = image
+        for node, name, struct in attributes:
+            setattr(node, name, struct)
         unit.owner_pointers = current
         return True
 
@@ -3544,6 +3557,10 @@ class Graph(Math):
         unit.captures_layer = bool(unit.resource_bindings or unit.cache_bindings) or any(
             entry[0] == pointer or _captures(entry[2], pointer, seen, unfilled=True) for entry in unit.image_bindings)
         unit.signature = self._unit_signature(key, stub=unit.flags.get('stub'))
+        if not isinstance(unit.tree, bpy.types.ID):
+            unit.rna_nodes = tuple(node for node in unit.tree.nodes if any(
+                isinstance(value, bpy.types.bpy_struct) for name, value in node.__dict__.items()
+                if name not in _NODE_REFERENCES))
         unit.build_ms = (perf_counter() - started) * 1000
         unit.tree['op_flags'] = json.dumps(unit.flags)
         unit.tree['op_exports'] = json.dumps(unit.exports)

@@ -829,9 +829,11 @@ That left compiling every unit's tree again, about 0.45 s.
   re-pointed, must be exactly the structs the restored stack gives its key; a
   channel whose index an undo shifted is therefore compiled again.
   `_follow_undo` re-points bindings, aliases, binding keys, compiled effects and
-  every struct an image getter captures. A unit is compiled instead when any
-  closure still holds something else (`_holds_foreign`). Image nodes take their
-  datablocks back by session id.
+  every struct an image getter captures. It also re-points every struct a node
+  attribute holds, such as a spatial filter's effect; compiling records those
+  nodes in `rna_nodes`. A unit is compiled instead when any closure or node
+  attribute still holds something else (`_holds_foreign`). Image nodes take
+  their datablocks back by session id.
 - **Excluded.** A unit holding a resource or cache binding, a Mask Graph, a
   decal object, a custom node group or a GPU resource is compiled again.
 - **Values.** The build reads every binding again, as after a patch, so a
@@ -839,9 +841,11 @@ That left compiling every unit's tree again, about 0.45 s.
   state (program, uniform bank, results), so nothing is carried or rebound.
 - **Checks.** `OP_VERIFY_UNDO=1` compares every adopted unit with a fresh
   compile: nodes, sockets, links, bindings, image entries, imports, exports,
-  flags and owners. `OP_UNDO_ADOPTION=0` compiles everything, as before.
-  `shader_undo.py` asserts adoption and that the published state is exactly
-  the restored one.
+  flags and owners. Node attributes holding RNA are compared by address.
+  `OP_UNDO_ADOPTION=0` compiles everything, as before. `shader_undo.py`
+  asserts adoption and that the published state is exactly the restored one.
+  It also blurs a layer and checks that every struct an adopted node holds
+  belongs to the restored set, and that edits of the effect still apply.
 
 - **Native graph.** The native graph now outlives an undo too
   (`survives_undo`). The undo handler closed every native object as a

@@ -30,7 +30,7 @@ class SeamTests(unittest.TestCase):
             sides[1][0] = sides[0][0]  # degenerate edge has no band
             covered = rng.random((n, n)) < .15
             for halo in (1, 4, 17):
-                with patch.object(lifecycle, 'active_library', return_value=None):
+                with patch.object(lifecycle, 'cpu_library', return_value=None):
                     expected = seams._bands(covered, n, halo, *sides, islands)
                 actual = bands(self.lib, covered, n, halo, *sides, islands)
                 self.assertEqual(actual is None, expected is None)

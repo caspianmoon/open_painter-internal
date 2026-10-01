@@ -357,7 +357,7 @@ class Canvas:
             self.alpha = dev.upload(np.ones((1, 1), np.float32) if alpha is None else alpha, 'R32F')
             self.alpha_key = alpha
         from ..native_bridge import paint
-        lib = paint.active_library()
+        lib = paint.cpu_library()
         batch = paint.uniforms(lib, samples, settings) if lib is not None else None
         shader = program('stamp', STAMP, ['op_position', 'op_normal', 'op_before', 'op_eligible', 'op_alpha'], 4, ('op_flow',))
         with dev.state():

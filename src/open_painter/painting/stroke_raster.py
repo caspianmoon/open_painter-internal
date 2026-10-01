@@ -39,7 +39,7 @@ def resample(points, spacing):
     if not len(points):
         return np.zeros(0, np.int64)
     from ..native_bridge import paint
-    if (lib := paint.active_library()) is not None:
+    if (lib := paint.cpu_library()) is not None:
         return paint.resample(lib, points, spacing)
     kept = [0]
     last = points[0]
@@ -55,7 +55,7 @@ def bounds(samples, margin=0.0):
     if not len(samples):
         return np.zeros(3, np.float32), np.zeros(3, np.float32)
     from ..native_bridge import paint
-    if (lib := paint.active_library()) is not None:
+    if (lib := paint.cpu_library()) is not None:
         return paint.bounds(lib, samples, margin)
     centres, radius = samples[:, :3], samples[:, 7:8]
     return (centres - radius).min(axis=0) - margin, (centres + radius).max(axis=0) + margin
@@ -77,7 +77,7 @@ def kernel(positions, normals, samples, hardness=.8, flow=1.0, accumulate='MAX',
     reach of a SURFACE stroke, ``surface_reach.Sheets.mask``): pairs it refuses score 0.
     """
     from ..native_bridge import paint
-    if (lib := paint.active_library()) is not None:
+    if (lib := paint.cpu_library()) is not None:
         return paint.coverage(lib, positions, normals, samples,
                               dict(hardness=hardness, flow=flow, accumulate=accumulate, planar=planar,
                                    alpha_rotation=alpha_rotation, alpha_angle=alpha_angle, depth_limit=depth_limit),
@@ -204,7 +204,7 @@ def uv_window(corners, uv, lo, hi, margin=0.0):
     widens the box: one texel of it keeps the neighbours of every marked texel rasterised,
     so the seam dilation sees the same coverage as an unclipped raster."""
     from ..native_bridge import paint
-    if (lib := paint.active_library()) is not None:
+    if (lib := paint.cpu_library()) is not None:
         return paint.uv_window(lib, corners, uv, lo, hi, margin)
     corners = np.asarray(corners, np.float64)
     p0, e1, e2 = corners[:, 0], corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0]

@@ -97,8 +97,8 @@ class SeamMap:
 
     def uv_direction(self, world_direction):
         """(n, n, 2) unit UV-space direction (pixels) of a world direction on each texel's face."""
-        from ..native_bridge.lifecycle import active_library
-        if len(self.jacobians) and (lib := active_library()) is not None:
+        from ..native_bridge.lifecycle import cpu_library
+        if len(self.jacobians) and (lib := cpu_library()) is not None:
             from ..native_bridge.geometry import directions
             return directions(lib, self.triangle, self.jacobians, world_direction)
         direction = np.asarray(world_direction, np.float32)
@@ -152,10 +152,10 @@ def build(ts, n, halo=DEFAULT_HALO):
             mesh, uv = target['mesh'], target['uv']
             tri_loops, tri_vertices = target['tri_loops'], target['tri_vertices']
             rows, cols, tri, _ = rasterize(uv[tri_loops], n)
-            from ..native_bridge.lifecycle import active_library
+            from ..native_bridge.lifecycle import cpu_library
             native_topology = None
             target_island_base = island_base
-            if (lib := active_library()) is not None:
+            if (lib := cpu_library()) is not None:
                 from ..native_bridge.topology import from_target
                 native_topology = from_target(lib, target, n, seams=True)
                 island_of_face = np.where(native_topology.islands >= 0,
@@ -175,8 +175,8 @@ def build(ts, n, halo=DEFAULT_HALO):
             # Tangent Jacobian per triangle: dUV(px)/dWorld on the triangle's plane.
             p = target['positions'][tri_vertices].astype(np.float64)
             t = uv[tri_loops].astype(np.float64) * n
-            from ..native_bridge.lifecycle import active_library
-            if (lib := active_library()) is not None:
+            from ..native_bridge.lifecycle import cpu_library
+            if (lib := cpu_library()) is not None:
                 from ..native_bridge.geometry import jacobians as native_jacobians
                 jacobians.append(native_jacobians(lib, p, uv[tri_loops], n))
             else:
@@ -233,8 +233,8 @@ def build(ts, n, halo=DEFAULT_HALO):
     closest = None
     if sides:
         seam.sides = tuple(np.concatenate(items) for items in zip(*sides))
-        from ..native_bridge.lifecycle import active_library
-        if (lib := active_library()) is not None:
+        from ..native_bridge.lifecycle import cpu_library
+        if (lib := cpu_library()) is not None:
             from ..native_bridge.seams import bands
             result = bands(lib, seam.covered, n, halo, *seam.sides, with_nearest=True)
             if result is not None:
@@ -253,8 +253,8 @@ def build(ts, n, halo=DEFAULT_HALO):
             seam._nearest = race[linear] == composite
     else:
         seam._nearest = np.zeros(0, bool)
-    from ..native_bridge.lifecycle import active_library
-    if (lib := active_library()) is not None:
+    from ..native_bridge.lifecycle import cpu_library
+    if (lib := cpu_library()) is not None:
         from ..native_bridge.topology import island_bounds
         seam.bounds = island_bounds(lib, seam.island_of, island_base)
         return seam
@@ -288,8 +288,8 @@ def _bands(covered, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, island):
     the overlapping bands of a dense mesh never pile up: memory is the arena and one
     grid chunk, and the winners are read back from the arena.
     """
-    from ..native_bridge.lifecycle import active_library
-    if (lib := active_library()) is not None:
+    from ..native_bridge.lifecycle import cpu_library
+    if (lib := cpu_library()) is not None:
         from ..native_bridge.seams import bands
         return bands(lib, covered, n, halo, s0, s1, s_centroid, o0, o1, o_centroid, island)
     s0, s1, o0, o1 = (np.asarray(v, np.float32) for v in (s0, s1, o0, o1))

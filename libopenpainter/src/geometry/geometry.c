@@ -3,9 +3,11 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_RASTER)
-#include <arm_neon.h>
+#include "../core/simd.h"
+#if defined(OP_SIMD_NEON) && !defined(OP_SCALAR_RASTER)
 #define OP_NEON_RASTER 1   /* build with -DOP_SCALAR_RASTER to compare */
+#elif defined(OP_SIMD_SSE) && !defined(OP_SCALAR_RASTER)
+#define OP_SSE_RASTER 1
 #endif
 #define BLOCK 256u
 #define MAX_TRIANGLES 8388608u
@@ -233,6 +235,50 @@ op_status_t op_uv_rasterize(const float *uv, uint32_t triangles, uint32_t size, 
                 vst1q_u32(hit, inside);
                 for (int lane = 0; lane < 4; lane++) {
                     if (!hit[lane])
+                        continue;
+                    if (used == capacity) {
+                        if (capacity == MAX_SAMPLES) {
+                            status = OP_RESOURCE_EXHAUSTED;
+                            goto done;
+                        }
+                        size_t next = capacity ? capacity * 2 : 4096;
+                        if (next > MAX_SAMPLES)
+                            next = MAX_SAMPLES;
+                        op_uv_sample_t *grown = realloc(result, next * sizeof(*result));
+                        if (!grown) {
+                            status = OP_RESOURCE_EXHAUSTED;
+                            goto done;
+                        }
+                        result = grown;
+                        capacity = next;
+                    }
+                    result[used++] =
+                        (op_uv_sample_t){(uint32_t)y, (uint32_t)(x + lane), t, {u0[lane], u1[lane], u2[lane]}};
+                }
+            }
+#elif defined(OP_SSE_RASTER)
+            /* The NEON loop above on SSE: the same operations lane by lane (cmpge is false for
+             * a NaN, as the scalar test is). */
+            const __m128 a = _mm_set1_ps(p[3] - p[5]), b = _mm_set1_ps(p[4] - p[2]), c = _mm_set1_ps(p[5] - p[1]),
+                         d = _mm_set1_ps(p[0] - p[4]), origin = _mm_set1_ps(p[4]), denominator = _mm_set1_ps(det),
+                         one = _mm_set1_ps(1.0f), floor = _mm_set1_ps(-1e-5f);
+            const __m128 dy = _mm_set1_ps((float)y - p[5]), steps = _mm_setr_ps(0, 1, 2, 3);
+            const __m128 bdy = _mm_mul_ps(b, dy), ddy = _mm_mul_ps(d, dy);
+            for (; x + 4 <= hi[0]; x += 4) {
+                __m128 dx = _mm_sub_ps(_mm_add_ps(_mm_set1_ps((float)x), steps), origin);
+                __m128 w0 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(a, dx), bdy), denominator);
+                __m128 w1 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(c, dx), ddy), denominator);
+                __m128 w2 = _mm_sub_ps(_mm_sub_ps(one, w0), w1);
+                int hit = _mm_movemask_ps(_mm_and_ps(_mm_and_ps(_mm_cmpge_ps(w0, floor), _mm_cmpge_ps(w1, floor)),
+                                                     _mm_cmpge_ps(w2, floor)));
+                if (!hit)
+                    continue;
+                float u0[4], u1[4], u2[4];
+                _mm_storeu_ps(u0, w0);
+                _mm_storeu_ps(u1, w1);
+                _mm_storeu_ps(u2, w2);
+                for (int lane = 0; lane < 4; lane++) {
+                    if (!((hit >> lane) & 1))
                         continue;
                     if (used == capacity) {
                         if (capacity == MAX_SAMPLES) {

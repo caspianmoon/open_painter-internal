@@ -104,7 +104,7 @@ int main(void) {
     for (int j = 0; j < 16 * 12; j++)
         alpha[j] = uniform(0, 1);
     assert(p && n && mine && theirs && eligible);
-    long pairs = 0;
+    long long pairs = 0;
     for (int trial = 0; trial < 400; trial++) {
         uint32_t count = 1 + (uint32_t)uniform(0, 256), texels = 1 + (uint32_t)uniform(0, TEXELS - 1);
         float offset = uniform(-20, 20), radius = uniform(.002f, .2f), wobble = uniform(0, 1);
@@ -165,9 +165,9 @@ int main(void) {
             fprintf(stderr, "trial %d: status %d != %d\n", trial, found, expected);
             return 1;
         }
-        pairs += (long)texels * count;
+        pairs += (long long)texels * count;
     }
-    printf("brush coverage matches its reference over %ld texel-stamp pairs\n", pairs);
+    printf("brush coverage matches its reference over %lld texel-stamp pairs\n", pairs);
     free(p);
     free(n);
     free(mine);

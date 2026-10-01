@@ -95,15 +95,32 @@ def track(graph):
     _graphs.add(graph)
 
 
+def cpu_library():
+    """The library for CPU kernels (export pixels and padding, rasterization, brush coverage,
+    reach, topology, digests) once it is loaded, on any platform and GPU backend. Each is exact
+    against the Python it replaces. ``active_library`` instead waits for the host Metal executor's
+    selection, which the GPU engine needs. None when unloaded or with OP_NATIVE_ENGINE=0."""
+    return _library if os.environ.get('OP_NATIVE_ENGINE', '1') != '0' else None
+
+
 def active_library():
     """Already selected context's library, without importing Blender or creating a device."""
-    return _library if (_report.get('selected') == 'c17-host-metal'
+    return _library if (str(_report.get('selected', '')).startswith('c17-host-')
                         and os.environ.get('OP_NATIVE_ENGINE', '1') != '0') else None
 
 
+def host_backends():
+    """GPU backends the native host scheduler runs on. Metal is qualified; OP_NATIVE_HOST_BACKENDS
+    (comma separated: VULKAN, OPENGL) adds others, to qualify them on machines that have them
+    (docs/native/platforms.md)."""
+    extra = os.environ.get('OP_NATIVE_HOST_BACKENDS', '')
+    return {'METAL', *(name.strip().upper() for name in extra.split(',') if name.strip())}
+
+
 def execution_library(backend):
-    """The public host Metal executor; other platforms retain their current path."""
-    if backend != 'METAL' or os.environ.get('OP_NATIVE_ENGINE', '1') == '0':
+    """The public host executor on Metal (and on backends being qualified); other backends retain
+    their current path."""
+    if backend not in host_backends() or os.environ.get('OP_NATIVE_ENGINE', '1') == '0':
         _report.update(selected='legacy', host_backend=backend,
                        qualified=False, host_gpu=False,
                        reason='Host native scheduling is disabled or unavailable for this backend')
@@ -112,16 +129,16 @@ def execution_library(backend):
         return None
     import bpy
     import platform
-    qualified = (platform.machine() == 'arm64' and bpy.app.version == (5, 2, 1)
+    qualified = (backend == 'METAL' and platform.machine() == 'arm64' and bpy.app.version == (5, 2, 1)
                  and bpy.app.build_hash == b'9e2066aef7ef'
                  and bool(getattr(_library, '_op_binding', None)))
-    _report.update(selected='c17-host-metal', host_backend=backend,
+    _report.update(selected='c17-host-' + str(backend).lower(), host_backend=backend,
                    host_gpu=True, fully_migrated=False,
                    qualified=qualified, integration='embedded-host-gpu',
                    compiled_binding=bool(getattr(_library, '_op_binding', None)),
                    gpu_device_owner='Blender',
                    gpu_submission=('compiled-public-host-api' if getattr(_library, '_op_binding', None) else 'python-development-adapter'),
-                   reason='C17 shader, paint, geometry, cache and revision core with public host Metal execution')
+                   reason=f'C17 shader, paint, geometry, cache and revision core with public host {backend} execution')
     return _library
 
 

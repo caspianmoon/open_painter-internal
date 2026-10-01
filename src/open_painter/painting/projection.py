@@ -54,8 +54,8 @@ def tangents(ts, n, geometry_cache=None):
         for target in objects:
             uv = target["uv"][target["tri_loops"]].astype(np.float64)
             p = target["positions"][target["tri_vertices"]].astype(np.float64)
-            from ..native_bridge.lifecycle import active_library
-            if (lib := active_library()) is not None:
+            from ..native_bridge.lifecycle import cpu_library
+            if (lib := cpu_library()) is not None:
                 from ..native_bridge.geometry import frames
                 frame = frames(lib, p, uv)
             else:

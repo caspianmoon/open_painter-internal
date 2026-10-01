@@ -50,8 +50,8 @@ def adler32_combine(first, second, length):
 def _scanlines(data, bits, start, stop):
     """Filtered PNG scanlines of rows start..stop: each row's filter type, then its bytes
     (big-endian samples). The native filter and NumPy's choose the same filters."""
-    from ..native_bridge.lifecycle import active_library
-    lib = active_library()
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     if lib is not None and hasattr(lib, 'op_png_filter'):
         from ..native_bridge.pixels import png_filter
         lines = png_filter(lib, data, bits, start, stop)
@@ -127,8 +127,8 @@ def _deflate(data, bits, segments, index):
 
 
 def quantize(values: np.ndarray, bits: int, srgb: bool = False) -> np.ndarray:
-    from ..native_bridge.lifecycle import active_library
-    lib = active_library()
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     if lib is not None and values.ndim == 3 and values.shape[-1] <= 4 and hasattr(lib, 'op_quantize'):
         from ..native_bridge.pixels import quantize as native
         return native(lib, values, bits, srgb)   # one pass, the arithmetic below

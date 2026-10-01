@@ -139,8 +139,8 @@ the same deterministic object/triangle order as other geometry rasterization.
     if height.shape != normal.shape[:2] or height.shape[0] != height.shape[1]:
         raise ValueError("Surface normal inputs need matching square dimensions.")
     relief = ts.height_distance > 0 and np.ptp(height) > 1e-8
-    from ..native_bridge.lifecycle import active_library
-    lib = active_library()
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     if lib is not None and normal.shape[-1] in (3, 4) and hasattr(lib, 'op_normal_relief'):
         from ..native_bridge import pixels
         if not relief:

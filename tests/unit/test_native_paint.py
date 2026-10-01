@@ -32,7 +32,7 @@ class PaintTests(unittest.TestCase):
                 for texture in (None, alpha):
                     settings = dict(hardness=.35, flow=.47, accumulate=accumulate, planar=planar,
                                     alpha_rotation='RAKE', alpha_angle=.4, depth_limit=.8)
-                    with patch.object(paint, 'active_library', return_value=None):
+                    with patch.object(paint, 'cpu_library', return_value=None):
                         expected = reference.kernel(positions, normals, samples, **settings,
                                                     alpha_texture=texture, eligible=eligible)
                     actual = paint.coverage(self.lib, positions, normals, samples, settings, texture, eligible)
@@ -44,7 +44,7 @@ class PaintTests(unittest.TestCase):
         corners[:4] = 0
         points = rng.normal(size=(2048, 3))
         uv = rng.uniform(0, 1, (2048, 3, 2))
-        with patch.object(paint, 'active_library', return_value=None):
+        with patch.object(paint, 'cpu_library', return_value=None):
             expected = surface_reach.point_triangle_distance(points, corners)
             windows = reference.uv_window(corners, uv, (-.5, -.2, -.1), (.5, .3, .8), .01)
         np.testing.assert_allclose(paint.distances(self.lib, points, corners), expected, rtol=0, atol=2e-14)
@@ -64,7 +64,7 @@ class PaintTests(unittest.TestCase):
         samples = np.zeros((5, 13), np.float32)
         samples[:, 0] = [0, .1, .3, .6, 1]
         samples[:, 7] = .2
-        with patch.object(paint, 'active_library', return_value=None):
+        with patch.object(paint, 'cpu_library', return_value=None):
             kept = reference.resample(samples[:, :3], .25)
             low, high = reference.bounds(samples, .02)
         np.testing.assert_array_equal(paint.resample(self.lib, samples[:, :3], .25), kept)

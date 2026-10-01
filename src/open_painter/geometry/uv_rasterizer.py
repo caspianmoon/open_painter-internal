@@ -48,8 +48,8 @@ def rasterize(uv, n, unique=True, clip=None):
     uv = np.asarray(uv, np.float32)
     if uv.ndim != 3 or len(uv) == 0:
         return EMPTY
-    from ..native_bridge.lifecycle import active_library
-    lib = active_library()
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     if lib is not None and hasattr(lib, 'op_uv_rasterize'):
         from ..native_bridge.geometry import rasterize as native_rasterize
         return native_rasterize(lib, uv, n, unique, clip)
@@ -117,8 +117,8 @@ def rasterize(uv, n, unique=True, clip=None):
 
 def interpolate(weights, corners):
     """Per-texel interpolation of (K, 3, C) corner attributes by (K, 3) weights."""
-    from ..native_bridge.lifecycle import active_library
-    if weights.dtype == corners.dtype == np.float32 and (lib := active_library()) is not None:
+    from ..native_bridge.lifecycle import cpu_library
+    if weights.dtype == corners.dtype == np.float32 and (lib := cpu_library()) is not None:
         from ..native_bridge.geometry import interpolate as native_interpolate
         return native_interpolate(lib, weights, corners)
     return (weights[:, 0, None] * corners[:, 0] + weights[:, 1, None] * corners[:, 1]

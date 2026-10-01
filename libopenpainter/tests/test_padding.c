@@ -18,7 +18,7 @@ int main(void) {
     static uint8_t covered[MAX * MAX];
     static int32_t islands[MAX * MAX], mine[MAX * MAX], theirs[MAX * MAX];
     static int16_t near[MAX * MAX], far[MAX * MAX];
-    long texels = 0;
+    long long texels = 0;
     for (int trial = 0; trial < 120; trial++) {
         uint32_t size = 8 + below(MAX - 8), limit = below(65), discs = 1 + below(12);
         memset(covered, 0, (size_t)size * size);
@@ -48,8 +48,8 @@ int main(void) {
             fprintf(stderr, "trial %d (size %u, limit %u): status %d/%d differs\n", trial, size, limit, a, b);
             return 1;
         }
-        texels += (long)count;
+        texels += (long long)count;
     }
-    printf("padding donors match their reference over %ld texels\n", texels);
+    printf("padding donors match their reference over %lld texels\n", texels);
     return 0;
 }

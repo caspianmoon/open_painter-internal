@@ -24,7 +24,7 @@ class NativeReachTests(unittest.TestCase):
         target = target_of([grid(48, 48), grid(8, 8, z=.01, polygon_offset=2304)])
         for mirrored in (False, True):
             target['mirrored'] = mirrored
-            with patch.object(lifecycle, 'active_library', return_value=None):
+            with patch.object(lifecycle, 'cpu_library', return_value=None):
                 reference = surface_reach.prepare(copy.deepcopy(target))
             snapshot = Reach(self.lib, target)
             actual = snapshot.snapshot()
@@ -38,7 +38,7 @@ class NativeReachTests(unittest.TestCase):
             axes = np.tile((0, 0, -1 if mirrored else 1), (len(anchors), 1)).astype(np.float32)
             radii = rng.uniform(.01, .2, len(anchors)).astype(np.float32)
             wanted = rng.random(len(anchors)) > .3
-            with patch.object(lifecycle, 'active_library', return_value=None):
+            with patch.object(lifecycle, 'cpu_library', return_value=None):
                 valid = surface_reach.validate(reference, anchors, radii)
                 nearest = surface_reach.nearest(reference, anchors, axes, radii, wanted)
                 seeds = surface_reach.seeds(reference, anchors, axes, radii, radii, wanted)
@@ -59,11 +59,11 @@ class NativeReachTests(unittest.TestCase):
         samples = np.asarray([sample((.3, .4, .002), radius=.12)] * 259)
         anchors = np.asarray([anchor((.3, .4, .002), 6 * 16 + 4)] * len(samples))
         for hit in (anchors, None, anchors + np.array([0, 0, 0, 100000])):
-            with patch.object(lifecycle, 'active_library', return_value=None):
+            with patch.object(lifecycle, 'cpu_library', return_value=None):
                 reference = surface_reach.for_targets(copy.deepcopy(entries), samples, hit)
                 expected = [s.mask(np.arange(512), 254, 259) for s in reference]
-            with patch.object(lifecycle, 'active_library', return_value=self.lib), \
-                    patch('open_painter.native_bridge.paint.active_library', return_value=self.lib):
+            with patch.object(lifecycle, 'cpu_library', return_value=self.lib), \
+                    patch('open_painter.native_bridge.paint.cpu_library', return_value=self.lib):
                 native = surface_reach.for_targets(copy.deepcopy(entries), samples, hit)
                 actual = [s.mask(np.arange(512), 254, 259) for s in native]
             for a, b in zip(actual, expected):

@@ -876,7 +876,9 @@ restore about 50 ms. The first build of a file went from 4.7 to 3.3 s.
 
 ## CPU kernels
 
-Profiles of the structural paths show arithmetic in C taking microseconds. The time
+These run wherever the library loads (`lifecycle.cpu_library`), with NEON on Arm and SSE4.2
+on x86-64. `platforms.md` covers Windows, Linux and Intel Macs. Profiles of the structural
+paths show arithmetic in C taking microseconds. The time
 there is Python bookkeeping, which assembly cannot speed up. The CPU kernels that do
 spend their time computing were reworked, and each keeps its previous version as a
 reference its C test must match exactly.
@@ -991,8 +993,10 @@ texture it ever used.
   `resolution_switch.py` more than 4 GiB. `mask_groups.py` and
   `artist_file_edits.py` also exceed 5 GiB; the latter only with the local
   artist file present. `auto_edge_rebake.py` passes 4.5 GiB within seconds of
-  its first Cycles bake. `artist_file_workflow.py` and `artist_file_multiset.py`
-  pass 6 GiB while opening the local artist file. All of these exceed these limits
+  its first Cycles bake; `bake_back.py`, `bake_corrections.py` and
+  `geometric_curvature.py` pass 6 GiB as Cycles compiles its kernels.
+  `artist_file_workflow.py` and `artist_file_multiset.py` pass 6 GiB while opening
+  the local artist file. All of these exceed these limits
   at the pre-change commit too, so this is not a regression. They were not run for this change on the
   18 GB machine while other work was using its memory.
 

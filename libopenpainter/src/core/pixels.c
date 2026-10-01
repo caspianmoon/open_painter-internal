@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_PIXELS)
-#include <arm_neon.h>
+#include "simd.h"
+#if defined(OP_SIMD_NEON) && !defined(OP_SCALAR_PIXELS)
 #define OP_NEON_PIXELS 1   /* build with -DOP_SCALAR_PIXELS to compare */
+#elif defined(OP_SIMD_SSE) && !defined(OP_SCALAR_PIXELS)
+#define OP_SSE_PIXELS 1
 #endif
 #define MAX_PIXELS (UINT64_C(1) << 32)
 
@@ -27,7 +29,7 @@ static void put(void *out, uint32_t bits, uint64_t i, float value, uint32_t curv
         ((uint16_t *)out)[i] = (uint16_t)q;
 }
 
-#ifdef OP_NEON_PIXELS
+#if defined(OP_NEON_PIXELS) || defined(OP_SSE_PIXELS)
 /* The sRGB curve without powf. Above the knee, x^(1/2.4) is 2^(5e/12) (a table, by the
  * exponent e of x in [-9, 0]) times m^(5/12) for the mantissa m in [1, 2): a degree-7
  * polynomial in m - 1.5. Over every float in (0.0031308, 1] this is within 2.4 x 2^-24 of
@@ -49,6 +51,19 @@ static const float SCALE[12] = {0.07432544231414795f, 0.09921256452798843f, 0.13
 #define GUARD_8 2e-4f
 #define GUARD_16 0.05f
 
+/* Positions of lanes marked exact, recomputed with powf in one loop when the list fills and
+ * at the end. At 16 bits more than half the blocks have one, so the appends take no branches;
+ * at 8 bits (a guard band 1/250 as wide) a block without one returns early. */
+#define PENDING 256
+static uint32_t settle(const float *values, void *out, uint32_t bits, float maximum, const uint64_t *at,
+                       uint32_t n) {
+    for (uint32_t j = 0; j < n; j++)
+        put(out, bits, at[j], values[at[j]], 1, maximum);
+    return 0;
+}
+#endif
+
+#ifdef OP_NEON_PIXELS
 typedef struct {
     float32x4_t maximum, guard;
     uint8x16x3_t scale;
@@ -81,16 +96,6 @@ static inline float32x4_t clip4(float32x4_t x) {
 }
 static inline uint16x8_t narrow(uint32x4_t a, uint32x4_t b) { return vcombine_u16(vmovn_u32(a), vmovn_u32(b)); }
 
-/* Positions of lanes marked exact, recomputed with powf in one loop when the list fills and
- * at the end. At 16 bits more than half the blocks have one, so the appends take no branches;
- * at 8 bits (a guard band 1/250 as wide) a block without one returns early. */
-#define PENDING 256
-static uint32_t settle(const float *values, void *out, uint32_t bits, float maximum, const uint64_t *at,
-                       uint32_t n) {
-    for (uint32_t j = 0; j < n; j++)
-        put(out, bits, at[j], values[at[j]], 1, maximum);
-    return 0;
-}
 static inline uint32_t mark(uint64_t *at, uint32_t n, uint32x4_t lo, uint32x4_t hi, uint64_t first,
                             uint64_t stride, uint32_t rare) {
     if (rare && !vmaxvq_u32(vorrq_u32(lo, hi)))
@@ -185,6 +190,104 @@ static uint64_t quantize_curve(const float *values, uint64_t count, uint32_t cha
 }
 #endif
 
+#ifdef OP_SSE_PIXELS
+#define ROUND_EVEN (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)
+typedef struct {
+    __m128 maximum, guard;
+} curve_t;
+
+/* curve_codes on SSE4.1: the same operations, the polynomial without fused multiply-add (the
+ * exhaustive test holds it to the same guard band). maxps returns its second operand for a
+ * NaN, as fmaxf(NaN, 0) gives 0. */
+static inline __m128 clip4(__m128 x) { return _mm_min_ps(_mm_max_ps(x, _mm_setzero_ps()), _mm_set1_ps(1.0f)); }
+
+static inline __m128i curve_codes(const curve_t *k, __m128 x, __m128 *exact) {
+    __m128 linear = _mm_cmple_ps(x, _mm_set1_ps(0.0031308f));
+    __m128 low = _mm_mul_ps(_mm_mul_ps(x, _mm_set1_ps(12.92f)), k->maximum);
+    __m128i bits = _mm_castps_si128(x);
+    __m128 m = _mm_castsi128_ps(_mm_or_si128(_mm_and_si128(bits, _mm_set1_epi32(0x007fffff)),
+                                             _mm_set1_epi32(0x3f800000)));
+    __m128 t = _mm_sub_ps(m, _mm_set1_ps(1.5f));
+    __m128 p = _mm_set1_ps(POLY[7]);
+    for (int j = 6; j >= 0; j--)
+        p = _mm_add_ps(_mm_mul_ps(p, t), _mm_set1_ps(POLY[j]));
+    /* SCALE[e + 9] per lane; lanes below the knee (discarded) read SCALE[11] = 0. */
+    __m128i row = _mm_min_epu32(_mm_sub_epi32(_mm_srli_epi32(bits, 23), _mm_set1_epi32(118)), _mm_set1_epi32(11));
+    p = _mm_mul_ps(p, _mm_setr_ps(SCALE[_mm_cvtsi128_si32(row)], SCALE[_mm_extract_epi32(row, 1)],
+                                  SCALE[_mm_extract_epi32(row, 2)], SCALE[_mm_extract_epi32(row, 3)]));
+    __m128 high = _mm_mul_ps(_mm_sub_ps(_mm_mul_ps(p, _mm_set1_ps(1.055f)), _mm_set1_ps(0.055f)), k->maximum);
+    __m128 s = _mm_blendv_ps(high, low, linear);
+    __m128 tie = _mm_andnot_ps(_mm_set1_ps(-0.0f), _mm_sub_ps(_mm_sub_ps(s, _mm_floor_ps(s)), _mm_set1_ps(0.5f)));
+    *exact = _mm_andnot_ps(linear, _mm_cmplt_ps(tie, k->guard));
+    return _mm_cvtps_epi32(_mm_round_ps(s, ROUND_EVEN));
+}
+
+static inline uint32_t mark(uint64_t *at, uint32_t n, __m128 exact, uint64_t first, uint64_t stride, uint32_t rare) {
+    int lanes = _mm_movemask_ps(exact);
+    if (rare && !lanes)
+        return n;
+    for (int j = 0; j < 4; j++) {
+        at[n] = first + j * stride;
+        n += (uint32_t)(lanes >> j) & 1;
+    }
+    return n;
+}
+
+/* Four pixels a step: RGBA (curve on rgb, alpha linear), or one to three channels all on the
+ * curve. Returns pixels done; a pixel the flat loop only began is redone by the caller. */
+static uint64_t quantize_curve(const float *values, uint64_t count, uint32_t channels, uint32_t bits, void *out) {
+    const float maximum = bits == 8 ? 255.0f : 65535.0f;
+    curve_t k = {_mm_set1_ps(maximum), _mm_set1_ps(bits == 8 ? GUARD_8 : GUARD_16)};
+    uint8_t *bytes = out;
+    uint16_t *words = out;
+    uint64_t i = 0, at[PENDING + 16];
+    uint32_t n = 0, rare = bits == 8;
+    __m128 e;
+    if (channels == 4) {
+        for (; i + 4 <= count; i += 4) {
+            const float *v = values + i * 4;
+            __m128 r = _mm_loadu_ps(v), g = _mm_loadu_ps(v + 4), b = _mm_loadu_ps(v + 8), a = _mm_loadu_ps(v + 12);
+            _MM_TRANSPOSE4_PS(r, g, b, a);
+            __m128 q0 = _mm_castsi128_ps(curve_codes(&k, clip4(r), &e));
+            n = mark(at, n, e, i * 4, 4, rare);
+            __m128 q1 = _mm_castsi128_ps(curve_codes(&k, clip4(g), &e));
+            n = mark(at, n, e, i * 4 + 1, 4, rare);
+            __m128 q2 = _mm_castsi128_ps(curve_codes(&k, clip4(b), &e));
+            n = mark(at, n, e, i * 4 + 2, 4, rare);
+            __m128 q3 = _mm_castsi128_ps(_mm_cvtps_epi32(_mm_round_ps(_mm_mul_ps(clip4(a), k.maximum), ROUND_EVEN)));
+            _MM_TRANSPOSE4_PS(q0, q1, q2, q3);   /* back to pixels: shuffles move the codes' bits */
+            __m128i first = _mm_packus_epi32(_mm_castps_si128(q0), _mm_castps_si128(q1));
+            __m128i second = _mm_packus_epi32(_mm_castps_si128(q2), _mm_castps_si128(q3));
+            if (bits == 8)
+                _mm_storeu_si128((__m128i *)(bytes + i * 4), _mm_packus_epi16(first, second));
+            else {
+                _mm_storeu_si128((__m128i *)(words + i * 4), first);
+                _mm_storeu_si128((__m128i *)(words + i * 4 + 8), second);
+            }
+            if (n > PENDING)
+                n = settle(values, out, bits, maximum, at, n);
+        }
+    } else {
+        uint64_t total = count * channels, j = 0;
+        for (; j + 4 <= total; j += 4) {
+            __m128i q = curve_codes(&k, clip4(_mm_loadu_ps(values + j)), &e);
+            __m128i w = _mm_packus_epi32(q, q);
+            if (bits == 8) {
+                int32_t packed = _mm_cvtsi128_si32(_mm_packus_epi16(w, w));
+                memcpy(bytes + j, &packed, 4);
+            } else
+                _mm_storel_epi64((__m128i *)(words + j), w);
+            n = mark(at, n, e, j, 1, rare);
+            if (n > PENDING)
+                n = settle(values, out, bits, maximum, at, n);
+        }
+        i = j / channels;
+    }
+    settle(values, out, bits, maximum, at, n);
+    return i;
+}
+#endif
+
 op_status_t op_quantize(const float *values, uint64_t count, uint32_t channels, uint32_t bits,
                         uint32_t srgb_rgb, void *out) {
     if ((count && (!values || !out)) || count > MAX_PIXELS || !channels || channels > 16 ||
@@ -211,6 +314,23 @@ op_status_t op_quantize(const float *values, uint64_t count, uint32_t channels, 
                 vst1_u8(bytes + i, vmovn_u16(q));
             else
                 vst1q_u16(words + i, q);
+        }
+    }
+#elif defined(OP_SSE_PIXELS)
+    if (curved && channels <= 4)
+        i = quantize_curve(values, count, channels, bits, out) * channels;
+    if (!curved) {
+        uint8_t *bytes = out;
+        uint16_t *words = out;
+        const __m128 scale = _mm_set1_ps(maximum);
+        for (; i + 8 <= total; i += 8) {
+            __m128i qa = _mm_cvtps_epi32(_mm_round_ps(_mm_mul_ps(clip4(_mm_loadu_ps(values + i)), scale), ROUND_EVEN));
+            __m128i qb = _mm_cvtps_epi32(_mm_round_ps(_mm_mul_ps(clip4(_mm_loadu_ps(values + i + 4)), scale), ROUND_EVEN));
+            __m128i q = _mm_packus_epi32(qa, qb);
+            if (bits == 8)
+                _mm_storel_epi64((__m128i *)(bytes + i), _mm_packus_epi16(q, q));
+            else
+                _mm_storeu_si128((__m128i *)(words + i), q);
         }
     }
 #endif
@@ -283,6 +403,35 @@ op_status_t op_normal_encode(const float *values, float *out, uint64_t count, ui
             vst3q_f32(out + i * 3, p);
         }
 #undef NORMALIZE
+#elif defined(OP_SSE_PIXELS)
+    /* RGBA, four pixels a step, split into channels by a transpose (only shuffles). */
+    const __m128 two = _mm_set1_ps(2.0f), one = _mm_set1_ps(1.0f), half = _mm_set1_ps(0.5f),
+                 zero = _mm_setzero_ps(), floor = _mm_set1_ps(1e-8f);
+    if (channels == 4)
+        for (; i + 4 <= count; i += 4) {
+            const float *v = values + i * 4;
+            __m128 x = _mm_loadu_ps(v), y = _mm_loadu_ps(v + 4), z = _mm_loadu_ps(v + 8), w = _mm_loadu_ps(v + 12);
+            _MM_TRANSPOSE4_PS(x, y, z, w);
+            if (decode) {
+                x = _mm_sub_ps(_mm_mul_ps(x, two), one);
+                y = _mm_sub_ps(_mm_mul_ps(y, two), one);
+                z = _mm_sub_ps(_mm_mul_ps(z, two), one);
+            }
+            __m128 length = _mm_sqrt_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(x, x), _mm_mul_ps(y, y)), _mm_mul_ps(z, z)));
+            __m128 long_enough = _mm_cmpgt_ps(length, floor);
+            x = _mm_blendv_ps(zero, _mm_div_ps(x, length), long_enough);
+            y = _mm_blendv_ps(zero, _mm_div_ps(y, length), long_enough);
+            z = _mm_blendv_ps(one, _mm_div_ps(z, length), long_enough);
+            x = _mm_add_ps(_mm_mul_ps(x, half), half);
+            y = _mm_add_ps(_mm_mul_ps(y, half), half);
+            z = _mm_add_ps(_mm_mul_ps(z, half), half);
+            _MM_TRANSPOSE4_PS(x, y, z, w);
+            float *o = out + i * 4;
+            _mm_storeu_ps(o, x);
+            _mm_storeu_ps(o + 4, y);
+            _mm_storeu_ps(o + 8, z);
+            _mm_storeu_ps(o + 12, w);
+        }
 #endif
     for (; i < count; i++)
         encode(values + i * channels, out + i * channels, channels, decode);
@@ -420,6 +569,81 @@ static inline void relief4(const float *normal, const float *height, const float
 }
 #endif
 
+#ifdef OP_SSE_PIXELS
+static inline __m128 derivative4(const float *height, const int32_t *charts, uint64_t at, uint64_t step,
+                                 int has_before, int has_after, __m128 size) {
+    const __m128 one = _mm_set1_ps(1.0f);
+    __m128 value = _mm_loadu_ps(height + at);
+    __m128i chart = _mm_loadu_si128((const __m128i *)(charts + at));
+    __m128i inside = _mm_cmpgt_epi32(chart, _mm_setzero_si128());
+    __m128 after = _mm_setzero_ps(), before = _mm_setzero_ps(), ahead = value, behind = value;
+    if (has_after) {
+        ahead = _mm_loadu_ps(height + at + step);
+        after = _mm_castsi128_ps(_mm_and_si128(
+            inside, _mm_cmpeq_epi32(_mm_loadu_si128((const __m128i *)(charts + at + step)), chart)));
+    }
+    if (has_before) {
+        behind = _mm_loadu_ps(height + at - step);
+        before = _mm_castsi128_ps(_mm_and_si128(
+            inside, _mm_cmpeq_epi32(_mm_loadu_si128((const __m128i *)(charts + at - step)), chart)));
+    }
+    /* A mask keeps a value's bits or gives 0.0: the selects of the scalar code. */
+    __m128 difference = _mm_and_ps(after, _mm_sub_ps(ahead, value));
+    difference = _mm_add_ps(difference, _mm_and_ps(before, _mm_sub_ps(value, behind)));
+    __m128 count = _mm_add_ps(_mm_and_ps(after, one), _mm_and_ps(before, one));
+    return _mm_and_ps(_mm_cmpgt_ps(count, _mm_setzero_ps()), _mm_div_ps(_mm_mul_ps(difference, size), count));
+}
+
+/* relief() for texels c..c+3 of row r of an RGBA map (0 < c, c + 3 < n - 1). */
+static inline void relief4(const float *normal, const float *height, const float *metric, const int32_t *charts,
+                           uint32_t n, float distance, uint32_t r, uint32_t c, float *out) {
+    const __m128 zero = _mm_setzero_ps(), one = _mm_set1_ps(1.0f), two = _mm_set1_ps(2.0f), half = _mm_set1_ps(0.5f),
+                 floor = _mm_set1_ps(1e-8f), d = _mm_set1_ps(distance), size = _mm_set1_ps((float)n),
+                 sign_bit = _mm_set1_ps(-0.0f);
+    uint64_t at = (uint64_t)r * n + c;
+    __m128 du = derivative4(height, charts, at, 1, 1, 1, size);
+    __m128 dv = derivative4(height, charts, at, n, r > 0, r + 1 < n, size);
+    const float *m = metric + at * 3;
+    __m128 m0 = _mm_setr_ps(m[0], m[3], m[6], m[9]), m1 = _mm_setr_ps(m[1], m[4], m[7], m[10]),
+           m2 = _mm_setr_ps(m[2], m[5], m[8], m[11]);
+    __m128 sx = _mm_mul_ps(_mm_mul_ps(du, m0), d);
+    __m128 sy = _mm_mul_ps(_mm_add_ps(_mm_mul_ps(du, m1), _mm_mul_ps(dv, m2)), d);
+    const float *v = normal + at * 4;
+    __m128 bx = _mm_loadu_ps(v), by = _mm_loadu_ps(v + 4), bz = _mm_loadu_ps(v + 8), w = _mm_loadu_ps(v + 12);
+    _MM_TRANSPOSE4_PS(bx, by, bz, w);
+    bx = _mm_sub_ps(_mm_mul_ps(bx, two), one);
+    by = _mm_sub_ps(_mm_mul_ps(by, two), one);
+    bz = _mm_sub_ps(_mm_mul_ps(bz, two), one);
+    __m128 length = _mm_sqrt_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(bx, bx), _mm_mul_ps(by, by)), _mm_mul_ps(bz, bz)));
+    __m128 long_enough = _mm_cmpgt_ps(length, floor);
+    bx = _mm_blendv_ps(zero, _mm_div_ps(bx, length), long_enough);
+    by = _mm_blendv_ps(zero, _mm_div_ps(by, length), long_enough);
+    bz = _mm_blendv_ps(one, _mm_div_ps(bz, length), long_enough);
+    __m128 a = _mm_andnot_ps(sign_bit, bz);
+    __m128 s = _mm_blendv_ps(_mm_blendv_ps(_mm_blendv_ps(bz, zero, _mm_cmpeq_ps(bz, zero)), _mm_xor_ps(one, sign_bit),
+                                           _mm_cmplt_ps(bz, zero)),
+                             one, _mm_cmpgt_ps(bz, zero));
+    __m128 px = _mm_sub_ps(_mm_mul_ps(a, bx), _mm_mul_ps(s, _mm_mul_ps(sx, bz)));
+    __m128 py = _mm_sub_ps(_mm_mul_ps(a, by), _mm_mul_ps(s, _mm_mul_ps(sy, bz)));
+    __m128 pz = _mm_sub_ps(_mm_mul_ps(a, bz),
+                           _mm_mul_ps(s, _mm_sub_ps(_mm_mul_ps(_mm_xor_ps(sx, sign_bit), bx), _mm_mul_ps(sy, by))));
+    __m128 tilted = _mm_sqrt_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(px, px), _mm_mul_ps(py, py)), _mm_mul_ps(pz, pz)));
+    __m128 straight = _mm_cmpgt_ps(tilted, floor);
+    px = _mm_blendv_ps(bx, _mm_div_ps(px, tilted), straight);
+    py = _mm_blendv_ps(by, _mm_div_ps(py, tilted), straight);
+    pz = _mm_blendv_ps(bz, _mm_div_ps(pz, tilted), straight);
+    px = _mm_add_ps(_mm_mul_ps(px, half), half);
+    py = _mm_add_ps(_mm_mul_ps(py, half), half);
+    pz = _mm_add_ps(_mm_mul_ps(pz, half), half);
+    _MM_TRANSPOSE4_PS(px, py, pz, w);
+    float *o = out + at * 4;
+    _mm_storeu_ps(o, px);
+    _mm_storeu_ps(o + 4, py);
+    _mm_storeu_ps(o + 8, pz);
+    _mm_storeu_ps(o + 12, w);
+}
+#endif
+
 op_status_t op_normal_relief(const float *normal, const float *height, const float *metric, const int32_t *charts,
                              uint32_t n, uint32_t channels, float distance, float *out) {
     uint64_t texels = (uint64_t)n * n;
@@ -432,6 +656,12 @@ op_status_t op_normal_relief(const float *normal, const float *height, const flo
         relief(normal, height, metric, charts, n, channels, distance, r, 0, out);
         for (c = 1; c + 4 < n; c += 4)   /* the last column keeps its scalar border */
             relief4(normal, height, metric, charts, n, channels, distance, r, c, out);
+#elif defined(OP_SSE_PIXELS)
+        if (channels == 4) {
+            relief(normal, height, metric, charts, n, channels, distance, r, 0, out);
+            for (c = 1; c + 4 < n; c += 4)
+                relief4(normal, height, metric, charts, n, distance, r, c, out);
+        }
 #endif
         for (; c < n; c++)
             relief(normal, height, metric, charts, n, channels, distance, r, c, out);
@@ -478,6 +708,34 @@ static inline uint8x16_t filtered16(uint32_t type, uint8x16_t x, uint8x16_t a, u
     }
 }
 static inline uint8x16_t magnitude16(uint8x16_t f) { return vminq_u8(f, vsubq_u8(vdupq_n_u8(0), f)); }
+#elif defined(OP_SSE_PIXELS)
+static inline __m128i absdiff8(__m128i x, __m128i y) { return _mm_or_si128(_mm_subs_epu8(x, y), _mm_subs_epu8(y, x)); }
+static inline __m128i le8(__m128i x, __m128i y) { return _mm_cmpeq_epi8(_mm_min_epu8(x, y), x); }
+/* (a + b) >> 1: pavgb rounds up, so its carried low bit comes off again. */
+static inline __m128i halve8(__m128i a, __m128i b) {
+    return _mm_sub_epi8(_mm_avg_epu8(a, b), _mm_and_si128(_mm_xor_si128(a, b), _mm_set1_epi8(1)));
+}
+static inline __m128i paeth16(__m128i a, __m128i b, __m128i c) {
+    const __m128i zero = _mm_setzero_si128();
+    __m128i pa = absdiff8(b, c), pb = absdiff8(a, c);
+    __m128i low = _mm_abs_epi16(_mm_add_epi16(_mm_sub_epi16(_mm_unpacklo_epi8(a, zero), _mm_unpacklo_epi8(c, zero)),
+                                              _mm_sub_epi16(_mm_unpacklo_epi8(b, zero), _mm_unpacklo_epi8(c, zero))));
+    __m128i high = _mm_abs_epi16(_mm_add_epi16(_mm_sub_epi16(_mm_unpackhi_epi8(a, zero), _mm_unpackhi_epi8(c, zero)),
+                                               _mm_sub_epi16(_mm_unpackhi_epi8(b, zero), _mm_unpackhi_epi8(c, zero))));
+    __m128i pc = _mm_packus_epi16(low, high);   /* saturates at 255, as on NEON */
+    __m128i use_a = _mm_and_si128(le8(pa, pb), le8(pa, pc));
+    return _mm_blendv_epi8(_mm_blendv_epi8(c, b, le8(pb, pc)), a, use_a);
+}
+static inline __m128i filtered16(uint32_t type, __m128i x, __m128i a, __m128i b, __m128i c) {
+    switch (type) {
+    case 1: return _mm_sub_epi8(x, a);
+    case 2: return _mm_sub_epi8(x, b);
+    case 3: return _mm_sub_epi8(x, halve8(a, b));
+    case 4: return _mm_sub_epi8(x, paeth16(a, b, c));
+    default: return x;
+    }
+}
+static inline __m128i magnitude16(__m128i f) { return _mm_min_epu8(f, _mm_sub_epi8(_mm_setzero_si128(), f)); }
 #endif
 
 /* The five filters' sums of |signed byte| over one row (x the row, b the one above). */
@@ -511,6 +769,23 @@ static void filter_sums(const uint8_t *x, const uint8_t *b, uint32_t n, uint32_t
     }
     for (int k = 0; k < 5; k++)
         sums[k] += vaddvq_u32(total[k]);
+#elif defined(OP_SSE_PIXELS)
+    __m128i total[5];
+    const __m128i zero = _mm_setzero_si128();
+    for (int k = 0; k < 5; k++)
+        total[k] = zero;
+    for (; i + 16 <= n; i += 16) {
+        __m128i vx = _mm_loadu_si128((const __m128i *)(x + i)), va = _mm_loadu_si128((const __m128i *)(x + i - bpp));
+        __m128i vb = _mm_loadu_si128((const __m128i *)(b + i)), vc = _mm_loadu_si128((const __m128i *)(b + i - bpp));
+        /* psadbw against zero sums each half's eight magnitudes into a 64-bit lane. */
+        total[0] = _mm_add_epi64(total[0], _mm_sad_epu8(magnitude16(vx), zero));
+        total[1] = _mm_add_epi64(total[1], _mm_sad_epu8(magnitude16(_mm_sub_epi8(vx, va)), zero));
+        total[2] = _mm_add_epi64(total[2], _mm_sad_epu8(magnitude16(_mm_sub_epi8(vx, vb)), zero));
+        total[3] = _mm_add_epi64(total[3], _mm_sad_epu8(magnitude16(_mm_sub_epi8(vx, halve8(va, vb))), zero));
+        total[4] = _mm_add_epi64(total[4], _mm_sad_epu8(magnitude16(_mm_sub_epi8(vx, paeth16(va, vb, vc))), zero));
+    }
+    for (int k = 0; k < 5; k++)
+        sums[k] += (uint64_t)_mm_cvtsi128_si64(total[k]) + (uint64_t)_mm_extract_epi64(total[k], 1);
 #endif
     for (; i < n; i++)
         for (uint32_t k = 0; k < 5; k++)
@@ -524,6 +799,13 @@ static void filter_row(uint32_t type, const uint8_t *x, const uint8_t *b, uint32
 #ifdef OP_NEON_PIXELS
     for (; i + 16 <= n; i += 16)
         vst1q_u8(out + i, filtered16(type, vld1q_u8(x + i), vld1q_u8(x + i - bpp), vld1q_u8(b + i), vld1q_u8(b + i - bpp)));
+#elif defined(OP_SSE_PIXELS)
+    for (; i + 16 <= n; i += 16)
+        _mm_storeu_si128((__m128i *)(out + i),
+                         filtered16(type, _mm_loadu_si128((const __m128i *)(x + i)),
+                                    _mm_loadu_si128((const __m128i *)(x + i - bpp)),
+                                    _mm_loadu_si128((const __m128i *)(b + i)),
+                                    _mm_loadu_si128((const __m128i *)(b + i - bpp))));
 #endif
     for (; i < n; i++)
         out[i] = filtered(type, x[i], x[i - bpp], b[i], b[i - bpp]);
@@ -534,6 +816,10 @@ static void swap_row(const uint8_t *row, uint32_t n, uint8_t *out) {
 #ifdef OP_NEON_PIXELS
     for (; i + 16 <= n; i += 16)
         vst1q_u8(out + i, vrev16q_u8(vld1q_u8(row + i)));
+#elif defined(OP_SSE_PIXELS)
+    const __m128i swap = _mm_setr_epi8(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
+    for (; i + 16 <= n; i += 16)
+        _mm_storeu_si128((__m128i *)(out + i), _mm_shuffle_epi8(_mm_loadu_si128((const __m128i *)(row + i)), swap));
 #endif
     for (; i + 1 < n; i += 2) {
         out[i] = row[i + 1];

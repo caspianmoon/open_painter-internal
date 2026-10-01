@@ -1,5 +1,5 @@
 #include "openpainter/op_revision.h"
-#include <stdatomic.h>
+#include "../core/serial.h"
 #include <stdlib.h>
 #include <string.h>
 #define FRAMES 8
@@ -17,14 +17,14 @@ struct op_revisions {
     } leases[LEASES];
     uint32_t latest, expected, staged, slot, open;
 };
-static atomic_uint_fast64_t next_instance = 1;
+static op_serial_t next_instance = 1;
 op_status_t op_revisions_create(op_revisions_t **out) {
     if (!out)
         return OP_INVALID_ARGUMENT;
     *out = calloc(1, sizeof(**out));
     if (!*out)
         return OP_RESOURCE_EXHAUSTED;
-    (*out)->instance = atomic_fetch_add(&next_instance, 1);
+    (*out)->instance = op_serial_next(&next_instance);
     (*out)->latest = FRAMES;
     return OP_OK;
 }

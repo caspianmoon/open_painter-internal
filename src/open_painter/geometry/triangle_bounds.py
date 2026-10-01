@@ -15,8 +15,8 @@ class TriangleBounds:
         self.minimum, self.maximum = np.asarray(minimum), np.asarray(maximum)
         self.order = self.block_minimum = self.block_maximum = None
         self.native = None
-        from ..native_bridge.lifecycle import active_library
-        lib = active_library()
+        from ..native_bridge.lifecycle import cpu_library
+        lib = cpu_library()
         if lib is not None and hasattr(lib, 'op_bounds_create'):
             from ..native_bridge.geometry import Bounds
             self.native = Bounds(lib, self.minimum, self.maximum)

@@ -2,9 +2,11 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_COVERAGE)
-#include <arm_neon.h>
+#include "../core/simd.h"
+#if defined(OP_SIMD_NEON) && !defined(OP_SCALAR_COVERAGE)
 #define OP_NEON_COVERAGE 1   /* build with -DOP_SCALAR_COVERAGE to compare */
+#elif defined(OP_SIMD_SSE) && !defined(OP_SCALAR_COVERAGE)
+#define OP_SSE_COVERAGE 1
 #endif
 #define MAX_COUNT 33554432u
 static float dot(const float *a, const float *b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
@@ -261,6 +263,50 @@ static void coverage4(const float *p, const float *n, uint32_t i, const float *s
     }
     vst1q_f32(out + i, b->accumulate ? vsubq_f32(one, value) : value);
 }
+#elif defined(OP_SSE_COVERAGE)
+/* coverage4 on SSE: the same operations lane by lane. The values min and max see are never
+ * NaN (a lane whose radial is NaN fails its test and contributes 0). */
+static void coverage4(const float *p, const float *n, uint32_t i, const float *s, const unsigned char *list,
+                      uint32_t first, uint32_t last, uint32_t count, float axis[][3],
+                      const op_brush_settings_t *b, float soft, float limit, const uint8_t *eligible,
+                      float *out) {
+    const float *x = p + 3 * (uint64_t)i, *m = n + 3 * (uint64_t)i;
+    const __m128 px = _mm_setr_ps(x[0], x[3], x[6], x[9]), py = _mm_setr_ps(x[1], x[4], x[7], x[10]),
+                 pz = _mm_setr_ps(x[2], x[5], x[8], x[11]);
+    const __m128 nx = _mm_setr_ps(m[0], m[3], m[6], m[9]), ny = _mm_setr_ps(m[1], m[4], m[7], m[10]),
+                 nz = _mm_setr_ps(m[2], m[5], m[8], m[11]);
+    const __m128 one = _mm_set1_ps(1), zero = _mm_setzero_ps(), threshold = _mm_set1_ps(.05f),
+                 sign_bit = _mm_set1_ps(-0.0f), softness = _mm_set1_ps(soft), flow = _mm_set1_ps(b->flow);
+    __m128 value = b->accumulate ? one : zero;
+    for (uint32_t e = first; e < last; e++) {
+        uint32_t k = list[e];
+        const float *q = s + 13 * k;
+        const __m128 a0 = _mm_set1_ps(axis[k][0]), a1 = _mm_set1_ps(axis[k][1]), a2 = _mm_set1_ps(axis[k][2]);
+        __m128 r0 = _mm_sub_ps(px, _mm_set1_ps(q[0])), r1 = _mm_sub_ps(py, _mm_set1_ps(q[1])),
+               r2 = _mm_sub_ps(pz, _mm_set1_ps(q[2]));
+        __m128 depth = _mm_add_ps(_mm_add_ps(_mm_mul_ps(r0, a0), _mm_mul_ps(r1, a1)), _mm_mul_ps(r2, a2));
+        float radius = fmaxf(q[7], 1e-8f);
+        __m128 l0 = _mm_sub_ps(r0, _mm_mul_ps(depth, a0)), l1 = _mm_sub_ps(r1, _mm_mul_ps(depth, a1)),
+               l2 = _mm_sub_ps(r2, _mm_mul_ps(depth, a2));
+        __m128 lateral = _mm_add_ps(_mm_add_ps(_mm_mul_ps(l0, l0), _mm_mul_ps(l1, l1)), _mm_mul_ps(l2, l2));
+        __m128 radial = _mm_div_ps(_mm_sqrt_ps(lateral), _mm_set1_ps(radius));
+        __m128 facing = _mm_add_ps(_mm_add_ps(_mm_mul_ps(nx, a0), _mm_mul_ps(ny, a1)), _mm_mul_ps(nz, a2));
+        __m128 mask = _mm_and_ps(_mm_and_ps(_mm_cmpgt_ps(facing, threshold), _mm_cmplt_ps(radial, one)),
+                                 _mm_cmplt_ps(_mm_andnot_ps(sign_bit, depth), _mm_set1_ps(radius * limit)));
+        if (eligible) {
+            const uint8_t *row = eligible + (uint64_t)i * count + k;
+            mask = _mm_and_ps(mask, _mm_castsi128_ps(_mm_setr_epi32(row[0] ? -1 : 0, row[count] ? -1 : 0,
+                                                                    row[2 * (uint64_t)count] ? -1 : 0,
+                                                                    row[3 * (uint64_t)count] ? -1 : 0)));
+        }
+        if (!_mm_movemask_ps(mask))
+            continue;   /* no lane reached: value * (1 - 0) and fmaxf(value, 0) change nothing */
+        __m128 a = _mm_min_ps(_mm_max_ps(_mm_div_ps(_mm_sub_ps(one, radial), softness), zero), one);
+        a = _mm_and_ps(mask, _mm_mul_ps(_mm_mul_ps(a, _mm_set1_ps(q[6])), flow));
+        value = b->accumulate ? _mm_mul_ps(value, _mm_sub_ps(one, a)) : _mm_max_ps(value, a);
+    }
+    _mm_storeu_ps(out + i, b->accumulate ? _mm_sub_ps(one, value) : value);
+}
 #endif
 
 op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, const float *s,
@@ -284,7 +330,7 @@ op_status_t op_brush_coverage(const float *p, const float *n, uint32_t texels, c
     int binned = count > 4 && grid_build(&grid, s, count, axis, limit, lo, hi);
     op_status_t status = OP_OK;
     for (uint32_t i = 0; i < texels; i++) {
-#ifdef OP_NEON_COVERAGE
+#if defined(OP_NEON_COVERAGE) || defined(OP_SSE_COVERAGE)
         if (binned && !alpha && i + 4 <= texels) {
             /* Four texels inside the stroke's bounds and in one cell: one pass over its stamps. */
             uint64_t cell = 0;

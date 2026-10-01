@@ -2,7 +2,7 @@
 import ctypes as C
 import numpy as np
 from .geometry import F32, F64, U32, check
-from .lifecycle import active_library
+from .lifecycle import cpu_library
 
 U64, U8 = C.POINTER(C.c_uint64), C.POINTER(C.c_uint8)
 

@@ -1,9 +1,9 @@
 #include "openpainter/op_program.h"
 #include <math.h>
-#include <stdatomic.h>
+#include "../core/serial.h"
 #include <stdlib.h>
 #include <string.h>
-static atomic_uint_fast64_t program_serial = 1;
+static op_serial_t program_serial = 1;
 struct op_program {
     op_ir_node_t *nodes;
     op_ir_target_t *targets;
@@ -46,7 +46,7 @@ op_status_t op_program_create(const op_ir_node_t *nodes, uint32_t count,
     }
     memcpy(p->nodes, nodes, (size_t)count * sizeof(*nodes));
     memcpy(p->targets, targets, target_count * sizeof(*targets));
-    p->identity = atomic_fetch_add(&program_serial, 1);
+    p->identity = op_serial_next(&program_serial);
     *out = p;
     return OP_OK;
 }

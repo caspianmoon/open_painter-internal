@@ -25,7 +25,7 @@ class GeometryTests(unittest.TestCase):
         for vertices in (np.empty((0, 3), np.int64),
                          np.array([[0, 1, 2], [1, 0, 3], [0, 1, 4], [4, 4, 0], [9, 9, 9]]),
                          rng.integers(0, 80, (1800, 3), dtype=np.int64)):
-            with patch('open_painter.native_bridge.lifecycle.active_library', return_value=None):
+            with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=None):
                 expected = surface_reach.adjacency(vertices)
             for a, b in zip(adjacency(self.lib, vertices), expected):
                 np.testing.assert_array_equal(a, b)
@@ -51,7 +51,7 @@ class GeometryTests(unittest.TestCase):
         np.testing.assert_allclose(frames(self.lib, p, uv), expected, atol=2e-14, rtol=0)
         w = rng.random((len(p), 3), dtype=np.float32)
         p = p.astype(np.float32)
-        with patch('open_painter.native_bridge.lifecycle.active_library', return_value=None):
+        with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=None):
             expected = uv_rasterizer.interpolate(w, p)
         np.testing.assert_array_equal(interpolate(self.lib, w, p), expected)
 
@@ -62,7 +62,7 @@ class GeometryTests(unittest.TestCase):
             covered = rng.random((n, n)) < .02
             islands = np.where(covered, rng.integers(0, 10, (n, n)), -1).astype(np.int32)
             for limit in (0, 1, 4, 16, 64):
-                with patch('open_painter.native_bridge.lifecycle.active_library', return_value=None):
+                with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=None):
                     expected = padding._banded(covered, islands, limit)
                 actual = padding_donors(self.lib, covered, islands, limit)
                 for a, b in zip(actual, expected):
@@ -93,7 +93,7 @@ class GeometryTests(unittest.TestCase):
         uv[2] = 0
         for unique in (False, True):
             for clip in (None, np.tile(((.2, .3), (.8, .9)), (len(uv), 1, 1)).astype(np.float32)):
-                with patch('open_painter.native_bridge.lifecycle.active_library', return_value=None):
+                with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=None):
                     expected = uv_rasterizer.rasterize(uv, 64, unique, clip)
                 actual = rasterize(self.lib, uv, 64, unique, clip)
                 for result in (actual, expected):

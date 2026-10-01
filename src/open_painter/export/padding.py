@@ -191,8 +191,8 @@ def _vertical_keys(covered, island, limit, r0, r1):
 def _banded(covered, island, limit):
     """Exact nearest donor within ``limit`` pixels: (donor index or -1, d² as int16) per texel.
     Processed in row bands: the whole-image state is the two result arrays."""
-    from ..native_bridge.lifecycle import active_library
-    if (lib := active_library()) is not None:
+    from ..native_bridge.lifecycle import cpu_library
+    if (lib := cpu_library()) is not None:
         from ..native_bridge.geometry import padding_donors
         return padding_donors(lib, covered, island, int(limit))
     n = covered.shape[0]
@@ -401,8 +401,8 @@ def resample(values, covered, n_out, vector=False):
 
 def _encode(values, decode=False):
     """Normalized and encoded tangent normals (decoded from [0, 1] first when ``decode``)."""
-    from ..native_bridge.lifecycle import active_library
-    lib = active_library()
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     if lib is not None and values.dtype == np.float32 and values.shape[-1] in (3, 4) and hasattr(lib, 'op_normal_encode'):
         from ..native_bridge.pixels import normal_encode
         return normal_encode(lib, values, decode)   # the arithmetic below, in one pass

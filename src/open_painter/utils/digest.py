@@ -34,8 +34,8 @@ def _faster_sha256():
 def _native():
     """libopenpainter's SHA-256 (the arm64 SHA2 instructions) once the native engine is active."""
     try:
-        from ..native_bridge.lifecycle import active_library
-        lib = active_library()
+        from ..native_bridge.lifecycle import cpu_library
+        lib = cpu_library()
     except Exception:
         return None
     return lib if lib is not None and hasattr(lib, 'op_sha256_update') else None

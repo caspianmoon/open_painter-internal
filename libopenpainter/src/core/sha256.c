@@ -1,6 +1,9 @@
 #include "openpainter/op_digest.h"
 #include <string.h>
-#if defined(__aarch64__) && defined(__ARM_FEATURE_SHA2) && !defined(OP_SCALAR_SHA256)
+/* The Arm SHA2 instructions: GCC and Clang say so with __ARM_FEATURE_SHA2; MSVC (Windows on
+ * Arm, whose processors all have them) defines only _M_ARM64. */
+#if ((defined(__aarch64__) && defined(__ARM_FEATURE_SHA2)) || (defined(_M_ARM64) && !defined(__clang__))) && \
+    !defined(OP_SCALAR_SHA256)
 #include <arm_neon.h>
 #define OP_ARM_SHA256 1   /* build with -DOP_SCALAR_SHA256 to compare */
 #endif

@@ -257,7 +257,20 @@ with tempfile.TemporaryDirectory(prefix="op-export-safety-") as tmp:
     original = fresh
 
     # A destination the filesystem refuses (read-only folder): nothing changes, a clear error.
-    if os.geteuid() != 0:
+    # POSIX: a folder without write permission (root ignores it). Windows: a folder's read-only
+    # attribute stops nothing, so an ACL denies this user adding and removing its entries.
+    if sys.platform == "win32":
+        system = Path(os.environ["SystemRoot"]) / "System32"
+        sid = subprocess.run([str(system / "whoami.exe"), "/user", "/fo", "csv", "/nh"], capture_output=True,
+                             text=True, check=True).stdout.strip().split(",")[-1].strip('"')
+        subprocess.run([str(system / "icacls.exe"), str(folder), "/deny", f"*{sid}:(WD,AD,DC)"],
+                       capture_output=True, check=True)
+        try:
+            attempt("read-only destination folder", lambda: PublishFault(10 ** 6))
+        finally:
+            subprocess.run([str(system / "icacls.exe"), str(folder), "/remove:d", f"*{sid}"],
+                           capture_output=True, check=True)
+    elif os.geteuid() != 0:
         mode = folder.stat().st_mode
         os.chmod(folder, stat.S_IRUSR | stat.S_IXUSR)
         try:

@@ -600,7 +600,7 @@ def _reset_runtime(*, forget_corrections):
     from . import physical
     physical.forget()
     from . import gc_policy
-    gc_policy.release()   # every session just went: frozen cycles among them are collected now
+    gc_policy.release(defer=True)   # every session just went: their frozen cycles are swept at the next pause
 
 
 def _migrate_angles(project):

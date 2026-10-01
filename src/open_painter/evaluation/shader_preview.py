@@ -12,7 +12,7 @@ from time import perf_counter
 import json
 import logging
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 import bpy
 
@@ -456,9 +456,11 @@ def ensure(scene, ts):
         from .engine.runtime import Engine
         previous = entry.get('graph') if entry else None
         candidate = EngineGraph(scene, ts)
+        from . import gc_policy
         try:
             # Units whose structure and owners are unchanged move over intact.
-            candidate.build(reuse=previous)
+            with gc_policy.paused():
+                candidate.build(reuse=previous)
         except Exception as exc:
             try:
                 candidate.close()
@@ -639,8 +641,12 @@ def _evaluate(scene, ts, entry, budget=None):
             image_manager.output(ts, out.channel)
     from ..core import texture_set_node
     texture_set_node.sync(ts)   # the node samples the images the engine writes (a replaced one too)
+    from . import gc_policy
     try:
-        written = engine.evaluate(epochs=dependencies.image_epochs(), budget=budget)
+        # The first evaluation of a graph built from scratch translates every program: the
+        # collector waits for the settle, as it did for the build.
+        with gc_policy.paused() if gc_policy.unsettled() else nullcontext():
+            written = engine.evaluate(epochs=dependencies.image_epochs(), budget=budget)
     except EngineUnavailable as exc:
         entry.update(error=str(exc), serial=ts.edit_serial)
         return set()

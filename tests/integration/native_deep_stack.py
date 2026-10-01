@@ -382,6 +382,51 @@ def run_structural(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3')
     return rows
 
 
+def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
+    """Memfile undo of a numeric edit (a leaf's opacity) and of a structural one (its blend
+    mode), each timed from ``ed.undo`` until the set is current again."""
+    from statistics import median
+    leaves = [layer.id for layer in ts.layers if layer.type != 'FOLDER']
+    middle, set_id = leaves[len(leaves) // 2], ts.id
+    current = {}
+
+    def resolve():
+        """Undo reloads the Scene: references taken before it are stale."""
+        current['scene'] = bpy.context.scene
+        current['ts'] = next(item for item in current['scene'].open_painter.texture_sets if item.id == set_id)
+    resolve()
+
+    def layer():
+        return next(item for item in current['ts'].layers if item.id == middle)
+    edits = {'undo_numeric': lambda i: setattr(layer(), 'opacity', .3 + .1 * (i % 5)),
+             'undo_structural': lambda i: setattr(layer(), 'blend_mode', 'MULTIPLY' if i % 2 else 'SCREEN')}
+    rows = {}
+    for name, edit in edits.items():
+        if ONLY and name not in ONLY:
+            continue
+        durations = []
+        for index in range(repeats):
+            bpy.ops.ed.undo_push(message=f'{name} before {index}')
+            edit(index)
+            settle(current['scene'], current['ts'], perf_counter())
+            bpy.ops.ed.undo_push(message=f'{name} {index}')
+            gc_policy.settle(now=monotonic() + gc_policy.SETTLE_DELAY)   # the pause before the undo
+            phase_totals.clear()
+            started = perf_counter()
+            with Frame():
+                bpy.ops.ed.undo()
+            resolve()
+            elapsed, count = settle(current['scene'], current['ts'], started)
+            durations.append(elapsed)
+            if PHASES:
+                print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms',
+                      {k: round(v, 1) for k, v in sorted(phase_totals.items())}, flush=True)
+        rows[name] = dict(median_ms=median(durations), durations=durations, footprint_mib=footprint_mib())
+        print('DEEP_STACK_UNDO', name, f"median {rows[name]['median_ms']:.0f} ms", [round(d) for d in durations],
+              'footprint', rows[name]['footprint_mib'], 'MiB', flush=True)
+    return rows
+
+
 def run_paint(scene, ts, steps=int(os.environ.get('OP_DEEP_PAINT_STEPS', '24'))):
     """Emulated brush inputs on a paint layer added in the middle of the stack (as
     paint_freeze.py drives them), each timed from the pixels landing until the set is
@@ -595,10 +640,11 @@ def main():
                   'engine', row['engine_memory_mib'], flush=True)
         structural = run_structural(scene, ts) if STRUCTURAL else {}
         paint = run_paint(scene, ts) if not ONLY or 'paint_middle' in ONLY else {}
+        undo = run_undo(scene, ts) if not ONLY or ONLY & {'undo_numeric', 'undo_structural'} else {}
         data = dict(status='PASS', version=VERSION, blender=bpy.app.version_string,
                     backend=gpu.platform.backend_type_get(), resolution=RES, counts=counts,
                     applied=applied, authoring_seconds=authoring_s, cold=cold, cases=results,
-                    structural=structural, paint=paint,
+                    structural=structural, paint=paint, undo=undo,
                     library=os.environ.get('OP_LIBOPENPAINTER_PATH'),
                     native_engine=os.environ.get('OP_NATIVE_ENGINE'))
         REPORT.parent.mkdir(parents=True, exist_ok=True)

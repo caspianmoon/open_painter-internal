@@ -73,6 +73,22 @@ class GcPolicyTest(unittest.TestCase):
         self.assertIsNone(gc_policy.settle(now=began + gc_policy.SWEEP_IDLE * 2))   # no growth since
         del grown
 
+    def test_a_reset_sweeps_at_the_next_pause(self):
+        gc_policy.allocated()
+        gc_policy.settle(now=gc_policy._state['active'] + gc_policy.SETTLE_DELAY)
+        cycle = Cycle()
+        gc_policy.allocated()
+        gc_policy.settle(now=gc_policy._state['active'] + gc_policy.SETTLE_DELAY)
+        del cycle
+        frozen = gc.get_freeze_count()
+        gc_policy.release(defer=True)   # sessions dropped: nothing is walked now
+        self.assertEqual(gc.get_freeze_count(), frozen)
+        began = gc_policy._state['active']
+        self.assertIsNone(gc_policy.settle(now=began + gc_policy.SETTLE_DELAY / 2))
+        self.assertEqual(gc_policy.settle(now=began + gc_policy.SETTLE_DELAY), 'swept')
+        self.assertLess(gc.get_freeze_count(), frozen)
+        self.assertIsNone(gc_policy.settle(now=began + gc_policy.SETTLE_DELAY * 2))
+
     def test_release_unfreezes(self):
         gc_policy.allocated()
         gc_policy.settle(now=gc_policy._state['active'] + gc_policy.SETTLE_DELAY)

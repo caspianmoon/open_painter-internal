@@ -278,6 +278,9 @@ def run_structural(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3')
                 with Frame():
                     while engine.prearm(identifier, dependencies.image_epochs()):
                         pass
+                    # Arming runs while idle, long before the next edit: its GPU work is done
+                    # by then, not waited for by the edit's first readback (as in FIRST mode).
+                    fence()
             # The pause between two edits: the idle timer freezes what the last one kept.
             gc_policy.settle(now=monotonic() + gc_policy.SETTLE_DELAY)
             entry = shader_preview._sessions.get(key_for(scene, ts), {})

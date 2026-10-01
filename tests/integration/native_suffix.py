@@ -173,6 +173,13 @@ def difference(a, b):
 def main():
     gpu.init()
     open_painter.register()
+    # This suite measures the collapse per tick. Pixel publication (Vulkan) spends a time
+    # budget per tick and leaves channels for later ticks; lift it so every tick publishes
+    # all channels, as framebuffer publication does (where the budget does not apply).
+    runtime.PIXEL_BUDGET_MS = math.inf
+    # Capture reads the final units handed to publication; a fused final (Vulkan) never is.
+    # Fusion over collapsed runs is checked on its own at the end.
+    runtime.FUSE_PIXEL_PUBLISH = False
     scene = bpy.context.scene
     report = dict(status='RUNNING', cases=[])
     try:
@@ -274,6 +281,22 @@ def main():
         print('SUFFIX_REBUILD_REUSE', json.dumps(report['rebuild_reuse']), flush=True)
         assert report['rebuild_reuse']['applications'] and not report['rebuild_reuse']['arms'], report['rebuild_reuse']
         assert error <= 2e-5, report['rebuild_reuse']
+        if runtime.device().pixel_publish:
+            # Vulkan publishes each final fused with its publication pass, over the collapsed
+            # runs below it: the images equal those of the same drag published unfused.
+            published, fused_count = {}, 0
+            for fused in (True, False):
+                runtime.FUSE_PIXEL_PUBLISH = fused
+                counts, _ = drag(scene, ts, layer('material_leaf'), 'opacity')
+                if fused:
+                    fused_count = counts.get('engine_fused_publications', 0)
+                published[fused] = {out.channel: images.pixels(out.image).copy() for out in ts.outputs}
+            runtime.FUSE_PIXEL_PUBLISH = False
+            assert fused_count, 'the fused drag published nothing fused'
+            for channel, values in published[True].items():
+                np.testing.assert_array_equal(values, published[False][channel], err_msg='fused ' + channel)
+            report['fused_over_collapse'] = dict(fused_publications=fused_count, identical=True)
+            print('SUFFIX_FUSED', json.dumps(report['fused_over_collapse']), flush=True)
         report['status'] = 'PASS'
         print('NATIVE_SUFFIX_PASS', flush=True)
     finally:

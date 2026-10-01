@@ -68,6 +68,14 @@ def mip_pixels():
 try:
     engine = ready()
     assert engine.report['execution_backend'] == EXPECTED, engine.report
+    from open_painter.evaluation.engine import runtime
+    # Framebuffer publication (Metal, OpenGL) accepts channel batches as native revisions:
+    # atomic, rolled back as a whole, restored after eviction. Pixel publication (Vulkan)
+    # writes each channel's pixels within a per-tick budget; there is no revision stream,
+    # Blender owns the textures it builds from those pixels, and a fault can leave the
+    # channels published before it. Those checks run where revisions exist.
+    REVISIONS = not runtime.device().pixel_publish
+    assert (engine._native_revisions is not None) == REVISIONS
     first = pixels()
     assert np.ptp(first['BASE_COLOR']) > .1
     topology_builds = engine._native_graph.rebuilds
@@ -113,7 +121,7 @@ try:
 
     # Reject before GPU allocation; preserve active work and all accepted outputs.
     before_pressure = pixels()
-    revision = engine._native_revisions.revision
+    revision = engine._native_revisions.revision if REVISIONS else None
     with patch.object(runtime, 'DEVICE_BYTES', 0), patch.object(gpu.types, 'GPUTexture', side_effect=AssertionError('allocated past budget')):
         try:
             with engine._evaluation_states():
@@ -122,7 +130,8 @@ try:
             assert 'budget exhausted' in str(error)
         else:
             raise AssertionError('Memory admission failure was not exercised')
-    assert engine._native_revisions.revision == revision
+    if REVISIONS:
+        assert engine._native_revisions.revision == revision
     for channel, actual in pixels().items():
         np.testing.assert_array_equal(before_pressure[channel], actual, err_msg='budget ' + channel)
     # Idle result reclamation is allowed, while its accepted revision survives.
@@ -148,14 +157,14 @@ try:
         np.testing.assert_array_equal(first[channel], actual, err_msg='budget retry ' + channel)
 
     # Native channel state owns no-op selection, subset acceptance and host target changes.
-    assert engine.report['native_channel_selection']
+    assert engine.report['native_channel_selection'] == REVISIONS
     # Direct calls use their own source-epoch snapshot; warm that snapshot once.
     engine.evaluate(CHANNELS, budget=False)
-    revision = engine._native_revisions.revision
+    revision = engine._native_revisions.revision if REVISIONS else 0
     from open_painter.evaluation.engine import runtime
     passes = runtime.device().passes
     assert engine.evaluate(CHANNELS, budget=False) == set()
-    assert engine._native_revisions.revision == revision
+    assert not REVISIONS or engine._native_revisions.revision == revision
     from open_painter.evaluation.engine import runtime
     assert runtime.device().passes == passes
     coat.opacity = .42
@@ -165,109 +174,113 @@ try:
     for channel in CHANNELS:
         if channel != 'ROUGHNESS':
             np.testing.assert_array_equal(first[channel], partial[channel], err_msg='subset ' + channel)
-    assert engine._native_revisions.revision == revision + 1
+    assert not REVISIONS or engine._native_revisions.revision == revision + 1
     remaining = engine.evaluate(CHANNELS, budget=False)
     assert 'ROUGHNESS' not in remaining and 'BASE_COLOR' in remaining
-    assert engine._native_revisions.revision == revision + 2
+    assert not REVISIONS or engine._native_revisions.revision == revision + 2
     coat.opacity = .6
     engine = ready()
     original = pixels()['ROUGHNESS']
     replacement = bpy.data.images.new('Native alternate channel target', width=512, height=512, float_buffer=True)
     replacement.colorspace_settings.name = 'Non-Color'
     try:
-        # A target not owned by the revision stream can have arbitrary existing
-        # mip contents. Cold rollback must snapshot those exact levels rather
-        # than regenerate them from the base or reduce their precision.
-        from open_painter.native_bridge.presentation import HostGPUProbe
-        probe = HostGPUProbe(lifecycle._core, 512)
-        target = gpu.texture.from_image(replacement)
-        with dev.state():
-            for level in range(10):
-                fb = gpu.types.GPUFrameBuffer(color_slots=[{'texture': target, 'mip': level}])
-                with fb.bind():
-                    fb.clear(color=(level / 20, .123456789, .7654321, 1.))
-        before = [probe.read_mip(target, level, 512 >> level) for level in range(10)]
-        original_draw, failed = dev.draw, []
-        revision = engine._native_revisions.revision
-        def fail_cold_mip(shader, targets, size, *args, **kwargs):
-            original_draw(shader, targets, size, *args, **kwargs)
-            if (not failed and isinstance(targets[0], dict) and targets[0]['texture'] is target
-                    and targets[0]['mip'] == 4):
-                failed.append(True)
-                raise MemoryError('cold mip publication')
-        with patch.object(dev, 'draw', side_effect=fail_cold_mip):
-            try:
-                engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False)
-            except MemoryError as error:
-                assert 'cold mip publication' in str(error)
-            else:
-                raise AssertionError('Cold target failure was not exercised')
-        assert failed and engine._native_revisions.revision == revision
-        for level, values in enumerate(before):
-            np.testing.assert_array_equal(probe.read_mip(target, level, 512 >> level), values,
-                                          err_msg=f'cold target mip {level}')
+        if REVISIONS:
+            # A target not owned by the revision stream can have arbitrary existing
+            # mip contents. Cold rollback must snapshot those exact levels rather
+            # than regenerate them from the base or reduce their precision.
+            from open_painter.native_bridge.presentation import HostGPUProbe
+            probe = HostGPUProbe(lifecycle._core, 512)
+            target = gpu.texture.from_image(replacement)
+            with dev.state():
+                for level in range(10):
+                    fb = gpu.types.GPUFrameBuffer(color_slots=[{'texture': target, 'mip': level}])
+                    with fb.bind():
+                        fb.clear(color=(level / 20, .123456789, .7654321, 1.))
+            before = [probe.read_mip(target, level, 512 >> level) for level in range(10)]
+            original_draw, failed = dev.draw, []
+            revision = engine._native_revisions.revision
+            def fail_cold_mip(shader, targets, size, *args, **kwargs):
+                original_draw(shader, targets, size, *args, **kwargs)
+                if (not failed and isinstance(targets[0], dict) and targets[0]['texture'] is target
+                        and targets[0]['mip'] == 4):
+                    failed.append(True)
+                    raise MemoryError('cold mip publication')
+            with patch.object(dev, 'draw', side_effect=fail_cold_mip):
+                try:
+                    engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False)
+                except MemoryError as error:
+                    assert 'cold mip publication' in str(error)
+                else:
+                    raise AssertionError('Cold target failure was not exercised')
+            assert failed and engine._native_revisions.revision == revision
+            for level, values in enumerate(before):
+                np.testing.assert_array_equal(probe.read_mip(target, level, 512 >> level), values,
+                                              err_msg=f'cold target mip {level}')
         assert engine.evaluate(['ROUGHNESS'], images={'ROUGHNESS': replacement}, budget=False) == {'ROUGHNESS'}
         np.testing.assert_array_equal(np.array(gpu.texture.from_image(replacement).read(), np.float32), original)
         assert engine.evaluate(['ROUGHNESS'], budget=False) == {'ROUGHNESS'}
     finally:
         bpy.data.images.remove(replacement)
 
-    # Host metadata allocations occur while GPU output is still staged. An
-    # exception must leave native acceptance and visible images at the old state.
-    before_metadata = pixels()
-    revision = engine._native_revisions.revision
-    coat.opacity = .48
-    engine.graph.update(check_structure=False)
-    class FailingDirty(set):
-        calls = 0
-        def add(self, value):
-            self.calls += 1
-            if self.calls == 2:
-                raise MemoryError('injected host mirror allocation failure')
-            super().add(value)
-    engine.dirty_cpu = FailingDirty(engine.dirty_cpu)
-    try:
-        engine.evaluate(CHANNELS, budget=False)
-    except MemoryError as error:
-        assert 'host mirror' in str(error)
-    else:
-        raise AssertionError('Host metadata failure was not exercised')
-    assert engine._native_revisions.revision == revision
-    for channel, actual in pixels().items():
-        np.testing.assert_array_equal(before_metadata[channel], actual, err_msg='metadata rollback ' + channel)
-    assert 'BASE_COLOR' in engine.evaluate(CHANNELS, budget=False)
-    assert engine._native_revisions.revision == revision + 1
-    coat.opacity = .6
-    engine = ready()
-
-    # Cleanup after acceptance can fail independently; do not roll back host
-    # bookkeeping or make C accept the same material revision a second time.
-    from unittest.mock import patch
-    stream = engine._native_revisions
-    revision = stream.revision
-    coat.opacity = .44
-    engine.graph.update(check_structure=False)
-    collect = stream.collect
-    retirement_failed = []
-    def fail_retirement():
-        if not retirement_failed and not stream.submitting and stream.revision > revision:
-            retirement_failed.append(True)
-            raise MemoryError('injected retirement failure')
-        collect()
-    with patch.object(stream, 'collect', side_effect=fail_retirement):
+    # The next two blocks inject faults inside the revision stream (its host bookkeeping
+    # and its retirement), which pixel publication does not have.
+    if REVISIONS:
+        # Host metadata allocations occur while GPU output is still staged. An
+        # exception must leave native acceptance and visible images at the old state.
+        before_metadata = pixels()
+        revision = engine._native_revisions.revision
+        coat.opacity = .48
+        engine.graph.update(check_structure=False)
+        class FailingDirty(set):
+            calls = 0
+            def add(self, value):
+                self.calls += 1
+                if self.calls == 2:
+                    raise MemoryError('injected host mirror allocation failure')
+                super().add(value)
+        engine.dirty_cpu = FailingDirty(engine.dirty_cpu)
         try:
             engine.evaluate(CHANNELS, budget=False)
         except MemoryError as error:
-            assert 'retirement' in str(error)
+            assert 'host mirror' in str(error)
         else:
-            raise AssertionError('Retirement failure was not exercised')
-    assert stream.revision == revision + 1 and retirement_failed
-    assert 'BASE_COLOR' in engine.dirty_cpu
-    assert engine.evaluate(CHANNELS, budget=False) == set()
-    assert stream.revision == revision + 1 and not stream._scratch
-    assert len(stream.resources) == len(CHANNELS)
-    coat.opacity = .6
-    engine = ready()
+            raise AssertionError('Host metadata failure was not exercised')
+        assert engine._native_revisions.revision == revision
+        for channel, actual in pixels().items():
+            np.testing.assert_array_equal(before_metadata[channel], actual, err_msg='metadata rollback ' + channel)
+        assert 'BASE_COLOR' in engine.evaluate(CHANNELS, budget=False)
+        assert engine._native_revisions.revision == revision + 1
+        coat.opacity = .6
+        engine = ready()
+
+        # Cleanup after acceptance can fail independently; do not roll back host
+        # bookkeeping or make C accept the same material revision a second time.
+        from unittest.mock import patch
+        stream = engine._native_revisions
+        revision = stream.revision
+        coat.opacity = .44
+        engine.graph.update(check_structure=False)
+        collect = stream.collect
+        retirement_failed = []
+        def fail_retirement():
+            if not retirement_failed and not stream.submitting and stream.revision > revision:
+                retirement_failed.append(True)
+                raise MemoryError('injected retirement failure')
+            collect()
+        with patch.object(stream, 'collect', side_effect=fail_retirement):
+            try:
+                engine.evaluate(CHANNELS, budget=False)
+            except MemoryError as error:
+                assert 'retirement' in str(error)
+            else:
+                raise AssertionError('Retirement failure was not exercised')
+        assert stream.revision == revision + 1 and retirement_failed
+        assert 'BASE_COLOR' in engine.dirty_cpu
+        assert engine.evaluate(CHANNELS, budget=False) == set()
+        assert stream.revision == revision + 1 and not stream._scratch
+        assert len(stream.resources) == len(CHANNELS)
+        coat.opacity = .6
+        engine = ready()
 
     # Native batches retain shared inputs until the last consumer, then enforce
     # the budget even if the final pass itself is not a retained cache entry.
@@ -323,50 +336,85 @@ try:
             raise AssertionError('unit failure was not injected')
     assert failed_unit and engine.states[failed_unit[0]].stamp is None
     assert not any(engine._in_use.values()), engine._in_use
-    for channel, actual in pixels().items():
-        np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
+    if REVISIONS:   # pixel publication keeps the channels published before the fault
+        for channel, actual in pixels().items():
+            np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
     coat.opacity = .6
     engine.graph.update(check_structure=False)
     engine.evaluate(CHANNELS, budget=False)
     for channel, actual in pixels().items():
         np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
 
-    # Fail after the first complete channel has reached host image storage.
-    # Every channel and the accepted native revision must remain unchanged.
-    from unittest.mock import patch
-    from open_painter.evaluation.engine import runtime
-    before_failure = pixels()
-    before_failure_mips = mip_pixels()
-    revision = engine._native_revisions.revision
-    coat.opacity = .25
-    engine.graph.update(check_structure=False)
-    original_draw = runtime.device().draw
-    copies = [0]
-    def fail_once(shader, targets, size, *args, **kwargs):
-        if targets and isinstance(targets[0], dict) and targets[0].get('mip') == 0:
-            copies[0] += 1
-            if copies[0] == 2:
-                midway = pixels()
-                assert np.max(abs(midway['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01, 'The fault must interrupt a genuinely changed revision'
+    if REVISIONS:
+        # Fail after the first complete channel has reached host image storage.
+        # Every channel and the accepted native revision must remain unchanged.
+        from unittest.mock import patch
+        from open_painter.evaluation.engine import runtime
+        before_failure = pixels()
+        before_failure_mips = mip_pixels()
+        revision = engine._native_revisions.revision
+        coat.opacity = .25
+        engine.graph.update(check_structure=False)
+        original_draw = runtime.device().draw
+        copies = [0]
+        def fail_once(shader, targets, size, *args, **kwargs):
+            if targets and isinstance(targets[0], dict) and targets[0].get('mip') == 0:
+                copies[0] += 1
+                if copies[0] == 2:
+                    midway = pixels()
+                    assert np.max(abs(midway['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01, 'The fault must interrupt a genuinely changed revision'
+                    raise RuntimeError('injected publication failure')
+            return original_draw(shader, targets, size, *args, **kwargs)
+        with patch.object(runtime.device(), 'draw', side_effect=fail_once):
+            try:
+                engine.evaluate(CHANNELS, budget=False)
+            except RuntimeError as error:
+                assert 'injected publication failure' in str(error), error
+            else:
+                raise AssertionError('Publication fault was not exercised')
+        assert engine._native_revisions.revision == revision
+        for channel, values in pixels().items():
+            np.testing.assert_array_equal(values, before_failure[channel], err_msg='rollback ' + channel)
+        for key, values in mip_pixels().items():
+            np.testing.assert_array_equal(values, before_failure_mips[key], err_msg='mip rollback ' + str(key))
+        engine.evaluate(CHANNELS, budget=False)
+        assert engine._native_revisions.revision == revision + 1
+        assert np.max(abs(pixels()['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01
+        coat.opacity = .6
+        engine = ready()
+
+    else:
+        # Pixel publication: a fault while publishing keeps the channels published before
+        # it; the next evaluation must finish exactly what a fresh evaluation renders, with
+        # no stale stamp or hold left by the failed one.
+        from unittest.mock import patch
+        coat.opacity = .25
+        engine.graph.update(check_structure=False)
+        original_readback, reads = runtime.device().readback, [0]
+        def fail_second(texture, n):
+            reads[0] += 1
+            if reads[0] == 2:
                 raise RuntimeError('injected publication failure')
-        return original_draw(shader, targets, size, *args, **kwargs)
-    with patch.object(runtime.device(), 'draw', side_effect=fail_once):
-        try:
-            engine.evaluate(CHANNELS, budget=False)
-        except RuntimeError as error:
-            assert 'injected publication failure' in str(error), error
-        else:
-            raise AssertionError('Publication fault was not exercised')
-    assert engine._native_revisions.revision == revision
-    for channel, values in pixels().items():
-        np.testing.assert_array_equal(values, before_failure[channel], err_msg='rollback ' + channel)
-    for key, values in mip_pixels().items():
-        np.testing.assert_array_equal(values, before_failure_mips[key], err_msg='mip rollback ' + str(key))
-    engine.evaluate(CHANNELS, budget=False)
-    assert engine._native_revisions.revision == revision + 1
-    assert np.max(abs(pixels()['BASE_COLOR'] - before_failure['BASE_COLOR'])) > .01
-    coat.opacity = .6
-    engine = ready()
+            return original_readback(texture, n)
+        with patch.object(runtime.device(), 'readback', side_effect=fail_second):
+            try:
+                engine.evaluate(CHANNELS, budget=False)
+            except RuntimeError as error:
+                assert 'injected publication failure' in str(error), error
+            else:
+                raise AssertionError('Publication fault was not exercised')
+        assert not any(engine._in_use.values()), engine._in_use
+        engine.evaluate(CHANNELS, budget=False)
+        recovered = pixels()
+        assert np.max(abs(recovered['BASE_COLOR'] - before_draw_failure['BASE_COLOR'])) > .01
+        engine.published.clear()
+        for state in engine.states.values():
+            state.stamp = None
+        engine.evaluate(CHANNELS, budget=False)
+        for channel, values in pixels().items():
+            np.testing.assert_array_equal(values, recovered[channel], err_msg='pixel retry ' + channel)
+        coat.opacity = .6
+        engine = ready()
 
     # Blender can evict image-owned GPU storage while CPU pixels lag behind.
     # Reconstruct it from the accepted native GPU revision, including mips.
@@ -375,13 +423,13 @@ try:
     mip_reader = HostGPUProbe(lifecycle._core, 512)
     before_mips = {(output.channel, level): mip_reader.read_mip(gpu.texture.from_image(output.image), level, 512 >> level)
                    for output in ts.outputs for level in range(1, 10)}
-    revision = engine._native_revisions.revision
+    revision = engine._native_revisions.revision if REVISIONS else None
     for output in ts.outputs:
         output.image.gl_free()
     engine = ready()
     for channel, values in pixels().items():
         np.testing.assert_array_equal(values, before_eviction[channel], err_msg='eviction ' + channel)
-    assert engine._native_revisions.revision == revision
+    assert not REVISIONS or engine._native_revisions.revision == revision
     for output in ts.outputs:
         for level in range(1, 10):
             np.testing.assert_array_equal(mip_reader.read_mip(gpu.texture.from_image(output.image), level, 512 >> level),
@@ -396,7 +444,7 @@ try:
     for channel, values in pixels().items():
         np.testing.assert_array_equal(first[channel], values, err_msg='restore ' + channel)
     assert scene.render.engine == original_engine and bpy.context.object == obj
-    report = dict(status='PASS', backend=EXPECTED, errors=errors,
+    report = dict(status='PASS', backend=EXPECTED, errors=errors, revisions=REVISIONS,
                   managed_budget_failure_recovery=True, idle_cache_reclamation=True,
                   live_shader_after_eviction=True,
                   topology_rebuilds=topology_builds, channels=list(CHANNELS),

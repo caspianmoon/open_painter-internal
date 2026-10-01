@@ -39,7 +39,9 @@ try:
         os.environ['OP_NATIVE_ENGINE'] = mode
         engine.published.clear()
         engine.evaluate(CHANNELS, budget=False)
-        if mode == '1':
+        if mode == '1' and engine._native_revisions is not None:
+            # Framebuffer publication stages each channel in a revision texture; pixel
+            # publication (Vulkan) has none and writes the full-float pixels directly.
             stream = engine._native_revisions
             for _, token, _ in stream.current.values():
                 assert stream.resources[token][2] == 'RGBA32F', stream.resources[token][2]

@@ -103,6 +103,8 @@ class NativeGraph:
         self.description = None
         self.own = {}
         self.dispatching = False
+        # Plain descriptions, no RNA: the engine an undo carries keeps it (``lifecycle.close``).
+        self.survives_undo = True
         self.current_key = None
         self.binding = getattr(lib, '_op_binding', None)
         if self.binding is not None:

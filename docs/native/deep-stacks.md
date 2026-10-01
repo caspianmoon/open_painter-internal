@@ -843,15 +843,32 @@ That left compiling every unit's tree again, about 0.45 s.
   `shader_undo.py` asserts adoption and that the published state is exactly
   the restored one.
 
+- **Native graph.** The native graph now outlives an undo too
+  (`survives_undo`). The undo handler closed every native object as a
+  generation barrier for restored documents. A native graph holds only plain
+  unit descriptions, though, and its own stamps are what tell the carried
+  engine which units the undo changed. Without them every unit was restamped,
+  and about 1,000 rendered again in order. A load still closes it.
+- **Image epochs.** Image epochs also survive an undo or redo
+  (`dependencies.clear(undo=True)`). A memfile undo leaves images at their
+  addresses with their pixel caches, which Blender preserves even for re-read
+  datablocks. An image undo tags every image it restores, so the depsgraph
+  moves its epoch. Restarting the epochs only made every unit sampling a detail
+  image render again. An image outside the depsgraph never had an epoch to
+  restart.
+- **Collapse.** The undo now reaches the engine as the units it changed, 4 for
+  a numeric undo of one leaf. Suffix collapse applies as it does to any edit.
+  After the first undo, an undo renders 28 units.
+
 | Step | Undo |
 | --- | ---: |
 | Programs rebound (compile everything) | 0.73–1.1 s |
 | Units adopted across the undo | 0.28–0.42 s |
+| Native graph and image epochs kept (collapse applies) | 0.22–0.25 s |
 
-Of the remaining 0.3 s, the build (plan, adoption, value reads) takes about 135
-ms, evaluation about 100 ms (native prepare 43, the re-render above the undone
-layer 57), and Blender's memfile restore about 50 ms. The first build of a file
-went from 4.7 to 3.3 s.
+The first undo after a build still restamps about 300 units. Of the rest, the
+build (plan, adoption, value reads) takes about 135 ms and Blender's memfile
+restore about 50 ms. The first build of a file went from 4.7 to 3.3 s.
 
 ## CPU kernels
 
@@ -996,7 +1013,7 @@ Machines with 16 GB or more keep the previous limits.
 - **Opening a deep file.** The first build of the 200-layer stack takes about 3.3 s
   at 1K: compiling 1,728 units, decoding the detail-source images (about 0.9 s),
   translating programs and the first render.
-- **Undo.** About 0.3 s at 200 layers (see Undo). Units with resource or cache
+- **Undo.** About 0.22–0.25 s at 200 layers (see Undo), most of it the build. Units with resource or cache
   bindings, Mask Graphs, decals or custom node groups are still compiled again.
 - **Layer order.** A layer inserted mid-stack still updates the owner tuple of
   every unit of the layers above it (about 1,000 at 200 layers), though its bindings

@@ -579,7 +579,7 @@ def _reset_runtime(*, forget_corrections):
     from .preview_policy import clear
     clear()
     clear_shared()
-    dependencies.clear()
+    dependencies.clear(undo=not forget_corrections)
     _states.clear()
     _set_cursors.clear()
     from ..baking.diagnostics import forget

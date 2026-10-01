@@ -740,13 +740,19 @@ def image_written(image):
                 notify(ts, previous_dirty=previous_dirty)
 
 
-def clear():
-    """What load_post, undo_post and redo_post run: the epochs restart for every mesh."""
+def clear(undo=False):
+    """What load_post, undo_post and redo_post run: the epochs restart for every mesh.
+
+    An ``undo`` (or redo) keeps the image epochs. A memfile undo leaves images where they were,
+    with their pixel caches (Blender preserves them for re-read datablocks too), and an image
+    undo tags every image it restores, which moves its epoch (``on_depsgraph``). Restarting
+    them made every unit sampling an image render again after every undo."""
     global _SESSION
     from . import mesh_masks
     from ..painting import decals
     _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
-    _image_epochs.clear()
+    if not undo:
+        _image_epochs.clear()
     structure_memo.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs

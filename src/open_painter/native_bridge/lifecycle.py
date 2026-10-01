@@ -22,21 +22,30 @@ def diagnostics():
     return dict(_report)
 
 
-def close(*_args):
+def close(*_args, undo=False):
+    """Close every tracked native object. An ``undo`` keeps those marked ``survives_undo``: a
+    native graph holds plain unit descriptions, and the engine an undo carries keeps using it
+    (its stamps say which units the undo changed). A load closes everything."""
     global _core
     for graph in list(_graphs):
+        if undo and getattr(graph, 'survives_undo', False):
+            continue
         graph.close()
-    _graphs.clear()
+        _graphs.discard(graph)
     if _core is not None:
         _core.close()
         _core = None
 
 
-def _restore(*_args):
+def _restore(*_args, undo=False):
     # Destroying contexts and plans is a generation barrier.
     # No old document or queued callback is carried into restored recipe data.
-    close()
+    close(undo=undo)
     _report.update(native_loaded=_library is not None, native_has_gpu=False)
+
+
+def _restore_undo(*_args):
+    _restore(undo=True)
 
 
 def register():
@@ -58,8 +67,8 @@ def register():
         close()
         _library = None
         _report['load_error'] = str(exc)
-    callback = persistent(_restore)
     for name in ('load_pre', 'undo_pre', 'redo_pre'):
+        callback = persistent(_restore if name == 'load_pre' else _restore_undo)
         handlers = getattr(bpy.app.handlers, name)
         handlers.append(callback)
         _handlers.append((handlers, callback))

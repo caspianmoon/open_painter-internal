@@ -430,8 +430,13 @@ def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
                 counted.__exit__(None, None, None)
                 print('DEEP_STACK_PHASES', name, index, f'total {elapsed:.1f} ms',
                       {k: round(v, 1) for k, v in sorted(phase_totals.items())}, flush=True)
+                engine = shader_preview.session_engine(current['scene'], current['ts'])
+                native = getattr(engine, '_native_graph', None)
                 print('DEEP_STACK_COUNTS', name, index, {k: v for k, v in sorted(counted.counts.items())
-                                                          if k.startswith(('engine_', 'native_'))}, flush=True)
+                                                          if k.startswith(('engine_', 'native_'))},
+                      'native patch', getattr(native, 'last_patch_count', None), 'dirty',
+                      getattr(native, 'last_dirty_count', None), 'rendered', len(getattr(engine, 'rendered', ())),
+                      flush=True)
         rows[name] = dict(median_ms=median(durations), durations=durations, footprint_mib=footprint_mib())
         if profiler:
             text = io.StringIO()

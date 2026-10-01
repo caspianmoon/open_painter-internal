@@ -51,6 +51,11 @@ with patch.object(projection, 'geometry', wraps=projection.geometry) as geometry
     LayerEvaluator(scene).evaluate_texture_set(ts.id)
     assert geometry.call_count == 0, 'Unrelated object movement rebuilt geometry'
 
+# Exact until the prop gets a bevel (below): from then on a forced evaluation may differ
+# by Blender's bevel UV rounding.
+reevaluated_atol = 0
+
+
 def changed_geometry(mutate, label, changes_pixels=True):
     before = images.pixels(images.output(ts, 'ROUGHNESS').image)
     mutate()
@@ -62,7 +67,12 @@ def changed_geometry(mutate, label, changes_pixels=True):
     if changes_pixels:
         assert np.max(abs(before-actual)) > 1e-5, label + ' had no effect'
     LayerEvaluator(scene).evaluate_texture_set(ts.id, force=True)
-    np.testing.assert_array_equal(images.pixels(images.output(ts, 'ROUGHNESS').image), actual)
+    forced = images.pixels(images.output(ts, 'ROUGHNESS').image)
+    if reevaluated_atol:
+        # The forced pass evaluates the mesh again; see the bevel note below.
+        np.testing.assert_allclose(forced, actual, rtol=0, atol=reevaluated_atol)
+    else:
+        np.testing.assert_array_equal(forced, actual)
 
 changed_geometry(lambda: setattr(obj.location, 'x', obj.location.x+.31), 'transform')
 def edit_uv():
@@ -74,6 +84,10 @@ def edit_mesh():
     obj.data.update()
 changed_geometry(edit_mesh, 'mesh')
 modifier = obj.modifiers.new('Lifetime bevel', 'BEVEL')
+# Blender's bevel can round a few corner UVs one ulp differently from one evaluation to
+# the next (seen on Windows, even single-threaded): the forced pass then samples the
+# procedural a hair away at those texels: 1.3% of texels moved, by up to 1.8e-7.
+reevaluated_atol = 1e-6
 changed_geometry(lambda: setattr(modifier, 'width', .15), 'modifier', False)
 # A static prop's key leaves the frame out: scrubbing the timeline keeps its geometry and
 # every raster keyed on it. An armature-deformed prop follows the pose, so its key does not.

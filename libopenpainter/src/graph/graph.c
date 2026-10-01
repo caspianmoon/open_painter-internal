@@ -627,7 +627,15 @@ op_status_t op_graph_spine(const op_graph_t *g, uint32_t node, uint32_t *keep, u
             folder[g->grouped[i]] = i;
     }
     op_status_t status = OP_OK;
-    uint32_t v = node, steps = 0;
+    /* A folder's own edit (its opacity, its blend) composes over its child composite as over
+     * its backdrop, and changes neither. */
+    if (g->grouped[node] != UINT32_MAX) {
+        if (*count >= capacity)
+            status = OP_RESOURCE_EXHAUSTED;
+        else
+            keep[(*count)++] = g->grouped[node];
+    }
+    uint32_t v = status == OP_OK ? node : UINT32_MAX, steps = 0;
     while (v != UINT32_MAX) {
         if (g->backdrop[v] != UINT32_MAX) {
             if (*count >= capacity) {

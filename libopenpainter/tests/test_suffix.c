@@ -217,6 +217,9 @@ int main(void) {
     assert(op_graph_spine(g, 3, keep, N, &kept) == OP_OK && kept == 2 && keep[0] == 2 && keep[1] == 1);
     assert(op_graph_spine(g, 2, keep, N, &kept) == OP_OK && kept == 1 && keep[0] == 1);
     assert(op_graph_spine(g, 6, keep, N, &kept) == OP_OK && kept == 1 && keep[0] == 5);
+    /* The folder's own edit keeps its child composite and its backdrop. */
+    assert(op_graph_spine(g, 5, keep, N, &kept) == OP_OK && kept == 2 && keep[0] == 4 && keep[1] == 1);
+    assert(op_graph_spine(g, 5, keep, 1, &kept) == OP_RESOURCE_EXHAUSTED);
     assert(op_graph_spine(g, 0, keep, N, &kept) == OP_OK && kept == 0);
     assert(op_graph_spine(g, 3, keep, 1, &kept) == OP_RESOURCE_EXHAUSTED);
     assert(op_graph_spine(g, 11, keep, N, &kept) == OP_INVALID_ARGUMENT);

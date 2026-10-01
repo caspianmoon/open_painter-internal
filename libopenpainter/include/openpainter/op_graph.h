@@ -75,9 +75,10 @@ op_status_t op_graph_set_composition_from(op_graph_t *graph, const uint32_t *bac
 op_status_t op_graph_lowest_changed(const op_graph_t *graph, const uint32_t *order, uint32_t count,
                                     const uint64_t *current, const uint64_t *desired,
                                     uint32_t *node);
-/* The results an edit of node composes over without changing them: the backdrop
- * of node and of every folder enclosing it, innermost first. Keeping them
- * resident means repeated edits of node never re-render anything below it.
+/* The results an edit of node composes over without changing them: a folder
+ * node's own child composite, then the backdrop of node and of every folder
+ * enclosing it, innermost first. Keeping them resident means repeated edits of
+ * node never re-render anything below it (or, for a folder, inside it).
  * Requires a composition (op_graph_set_composition); otherwise none. */
 op_status_t op_graph_spine(const op_graph_t *graph, uint32_t node, uint32_t *keep,
                            uint32_t capacity, uint32_t *count);

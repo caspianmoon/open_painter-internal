@@ -545,7 +545,8 @@ class EngineGraph(Graph):
             self.chains = _chains(plan)
         self._compiled_effects = {}
         for unit in self.units.values():
-            self._compiled_effects.update(unit.compiled_effects)
+            if unit.compiled_effects:
+                self._compiled_effects.update(unit.compiled_effects)
         if current[1] != before[1] or not self._reverse_units(retired, fresh):
             if not self._reverse_changed(retired, fresh):
                 self._reverse_map()

@@ -2039,7 +2039,8 @@ class Graph(Math):
         for messages in getattr(self._plan, 'warned', {}).values():
             found.extend(message for message in messages if message not in found)
         for unit in self.units.values():
-            found.extend(message for message in unit.warnings if message not in found)
+            if unit.warnings:   # most units have none
+                found.extend(message for message in unit.warnings if message not in found)
         found.extend(message for message in self._warnings if message not in found)
         return found
 

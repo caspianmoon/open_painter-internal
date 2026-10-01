@@ -513,7 +513,11 @@ def apply_document(ts,data,name='Declarative Material',seed=1,token=None,parent_
                 nested.append(child.id)
             if surface:
                 for key, default in SURFACE_DEFAULTS.items():
-                    setattr(ts, key, data.get("surface", {}).get(key, default))
+                    value = data.get("surface", {}).get(key, default)
+                    # An unchanged value would still run its callback (the height distance's
+                    # walks every channel of the set); the properties hold float32.
+                    if not math.isclose(getattr(ts, key), value, rel_tol=1e-6, abs_tol=1e-9):
+                        setattr(ts, key, value)
             folder = _stamp_module(ts, folder_id, name, data, token=token, nested=nested)
             ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == folder.id)
         return ts.layers[ts.active_layer]

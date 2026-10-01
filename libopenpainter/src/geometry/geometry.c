@@ -3,6 +3,10 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(OP_SCALAR_RASTER)
+#include <arm_neon.h>
+#define OP_NEON_RASTER 1   /* build with -DOP_SCALAR_RASTER to compare */
+#endif
 #define BLOCK 256u
 #define MAX_TRIANGLES 8388608u
 #define MAX_SAMPLES 33554432u
@@ -151,14 +155,6 @@ op_status_t op_bounds_query(const op_bounds_t *b, const double low[3], const dou
     }
     return OP_OK;
 }
-static int sample_compare(const void *a, const void *b) {
-    const op_uv_sample_t *x = a, *y = b;
-    if (x->row != y->row)
-        return x->row < y->row ? -1 : 1;
-    if (x->column != y->column)
-        return x->column < y->column ? -1 : 1;
-    return x->triangle < y->triangle ? -1 : x->triangle > y->triangle;
-}
 static int lower(float x, uint32_t n) {
     return x <= 0 ? 0 : x >= (float)n ? (int)n : (int)ceilf(x);
 }
@@ -208,8 +204,58 @@ op_status_t op_uv_rasterize(const float *uv, uint32_t triangles, uint32_t size, 
         float det = (p[3] - p[5]) * (p[0] - p[4]) + (p[4] - p[2]) * (p[1] - p[5]);
         if (!isfinite(det) || fabsf(det) < 1e-8f)
             continue;
-        for (int y = lo[1]; y < hi[1]; y++)
-            for (int x = lo[0]; x < hi[0]; x++) {
+        for (int y = lo[1]; y < hi[1]; y++) {
+            int x = lo[0];
+#ifdef OP_NEON_RASTER
+            /* Four texels a step: the scalar operations below, lane by lane and in the same
+             * order (no fused multiply-add, IEEE division; a NaN fails the tests as it does
+             * there). Covered lanes are appended in texel order. */
+            const float32x4_t a = vdupq_n_f32(p[3] - p[5]), b = vdupq_n_f32(p[4] - p[2]),
+                              c = vdupq_n_f32(p[5] - p[1]), d = vdupq_n_f32(p[0] - p[4]),
+                              origin = vdupq_n_f32(p[4]), denominator = vdupq_n_f32(det),
+                              one = vdupq_n_f32(1.0f), floor = vdupq_n_f32(-1e-5f);
+            const float32x4_t dy = vdupq_n_f32((float)y - p[5]), steps = {0, 1, 2, 3};
+            const float32x4_t bdy = vmulq_f32(b, dy), ddy = vmulq_f32(d, dy);
+            for (; x + 4 <= hi[0]; x += 4) {
+                float32x4_t dx = vsubq_f32(vaddq_f32(vdupq_n_f32((float)x), steps), origin);
+                float32x4_t w0 = vdivq_f32(vaddq_f32(vmulq_f32(a, dx), bdy), denominator);
+                float32x4_t w1 = vdivq_f32(vaddq_f32(vmulq_f32(c, dx), ddy), denominator);
+                float32x4_t w2 = vsubq_f32(vsubq_f32(one, w0), w1);
+                uint32x4_t inside = vandq_u32(vandq_u32(vcgeq_f32(w0, floor), vcgeq_f32(w1, floor)),
+                                              vcgeq_f32(w2, floor));
+                if (!vmaxvq_u32(inside))
+                    continue;
+                float u0[4], u1[4], u2[4];
+                uint32_t hit[4];
+                vst1q_f32(u0, w0);
+                vst1q_f32(u1, w1);
+                vst1q_f32(u2, w2);
+                vst1q_u32(hit, inside);
+                for (int lane = 0; lane < 4; lane++) {
+                    if (!hit[lane])
+                        continue;
+                    if (used == capacity) {
+                        if (capacity == MAX_SAMPLES) {
+                            status = OP_RESOURCE_EXHAUSTED;
+                            goto done;
+                        }
+                        size_t next = capacity ? capacity * 2 : 4096;
+                        if (next > MAX_SAMPLES)
+                            next = MAX_SAMPLES;
+                        op_uv_sample_t *grown = realloc(result, next * sizeof(*result));
+                        if (!grown) {
+                            status = OP_RESOURCE_EXHAUSTED;
+                            goto done;
+                        }
+                        result = grown;
+                        capacity = next;
+                    }
+                    result[used++] =
+                        (op_uv_sample_t){(uint32_t)y, (uint32_t)(x + lane), t, {u0[lane], u1[lane], u2[lane]}};
+                }
+            }
+#endif
+            for (; x < hi[0]; x++) {
                 float w0 =
                     ((p[3] - p[5]) * ((float)x - p[4]) + (p[4] - p[2]) * ((float)y - p[5])) / det;
                 float w1 =
@@ -235,16 +281,56 @@ op_status_t op_uv_rasterize(const float *uv, uint32_t triangles, uint32_t size, 
                 }
                 result[used++] = (op_uv_sample_t){(uint32_t)y, (uint32_t)x, t, {w0, w1, w2}};
             }
+        }
     }
     if (unique && used) {
-        qsort(result, used, sizeof(*result), sample_compare);
-        size_t out = 0;
-        for (size_t i = 0; i < used; i++) {
-            if (i + 1 < used && result[i].row == result[i + 1].row &&
-                result[i].column == result[i + 1].column)
-                continue;
-            result[out++] = result[i];
+        /* Texel order, the last triangle's sample of each texel, in linear time: samples are
+         * bucketed by row (stably, so each row keeps triangle order), and within a row the
+         * last sample of a column wins (what sorting by texel then triangle kept). */
+        size_t *starts = calloc((size_t)size + 1, sizeof(*starts));
+        op_uv_sample_t *rows = malloc(used * sizeof(*rows));
+        size_t *winner = malloc((size_t)size * sizeof(*winner));
+        uint32_t *mark = calloc(size, sizeof(*mark));
+        if (!starts || !rows || !winner || !mark) {
+            free(starts);
+            free(rows);
+            free(winner);
+            free(mark);
+            status = OP_RESOURCE_EXHAUSTED;
+            goto done;
         }
+        for (size_t i = 0; i < used; i++)
+            starts[result[i].row + 1]++;
+        for (uint32_t r = 0; r < size; r++)
+            starts[r + 1] += starts[r];
+        for (size_t i = 0; i < used; i++)
+            rows[starts[result[i].row]++] = result[i];
+        /* The scatter advanced each row's start to the next row's: shift them back. */
+        for (uint32_t r = size; r > 0; r--)
+            starts[r] = starts[r - 1];
+        starts[0] = 0;
+        size_t out = 0;
+        for (uint32_t r = 0; r < size; r++) {
+            if (starts[r] == starts[r + 1])
+                continue;
+            uint32_t lo = size, hi = 0;
+            for (size_t k = starts[r]; k < starts[r + 1]; k++) {
+                uint32_t c = rows[k].column;
+                winner[c] = k;
+                mark[c] = r + 1;
+                if (c < lo)
+                    lo = c;
+                if (c > hi)
+                    hi = c;
+            }
+            for (uint32_t c = lo; c <= hi; c++)
+                if (mark[c] == r + 1)
+                    result[out++] = rows[winner[c]];
+        }
+        free(starts);
+        free(rows);
+        free(winner);
+        free(mark);
         used = out;
     }
     *samples = result;

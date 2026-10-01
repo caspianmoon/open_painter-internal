@@ -314,6 +314,9 @@ output. It starts the command suspended, puts it in a Job Object and resumes it,
 the job's commit charge, and has the kernel limit the job to the cap plus 1 GiB. It also
 reports the job's peak working set, process count and dedicated GPU memory.
 `run_gpu_compatibility.py` and `run_clean_install.py` launch Blender through it too.
+`--timeout-seconds` kills a run that is still going after that long, so a Blender that
+hangs fails its suite instead of stalling the gate; `run_tests.py` passes 30 minutes
+(`--timeout-minutes`).
 
 The original instructions, kept for reference:
 

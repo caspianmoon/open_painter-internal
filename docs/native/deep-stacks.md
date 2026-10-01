@@ -862,12 +862,22 @@ reference its C test must match exactly.
 - **Export pixels (`op_quantize`, `op_normal_encode`).** These replace NumPy's
   clip, sRGB curve, round and cast for every written channel, and the normal
   map's normalize and encode (padding, and `surface_normal.combined` without
-  relief). Each takes one pass with no temporaries. The non-sRGB quantize uses
-  NEON, eight values a step; normal encoding takes four RGBA pixels a step, split
-  into channels with `vld4q`. The NumPy code stays as the fallback, and
+  relief). Each takes one pass with no temporaries. Quantize uses NEON, eight
+  values a step; normal encoding takes four RGBA pixels a step, split into
+  channels with `vld4q`. The NumPy code stays as the fallback, and
   `tests/unit/test_native_pixels.py` requires identical bits from both. Its inputs
-  include NaN, infinities, the sRGB knee and rounding ties. 2K Unreal export:
-  967 → 519 ms.
+  include NaN, infinities, the sRGB knee and rounding ties.
+
+  The sRGB curve avoids powf in the vector path. x^(1/2.4) is a table entry for
+  x's exponent times a degree-7 polynomial in its mantissa, within 4 × 2⁻²⁴ of the
+  exact power. A code is rint(s) for s = (1.055 p − 0.055) × maximum. Allowing two
+  ulps of error in the platform's powf, the approximate s is within 0.045 of the
+  exact one at 16 bits and within 1.7e-4 at 8 bits. A lane closer than that to a
+  rounding tie (k + 0.5) is recomputed with powf, so every code matches powf's.
+  That is 9.8% of 16-bit values and 0.04% of 8-bit ones. `test_pixels` compares
+  every float in [2⁻⁹, 1] at both depths. A guard ten times smaller fails it (the
+  measured deviation is 0.012–0.02 at 16 bits and 4–6e-5 at 8). 2K RGBA, sRGB:
+  80 → 14 ms at 8 bits, 81 → 23 ms at 16. 2K Unreal export: 967 → 499 ms.
 
 ## Test and benchmark memory
 

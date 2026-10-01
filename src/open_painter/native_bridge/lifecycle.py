@@ -112,11 +112,12 @@ def active_library():
 
 
 def host_backends():
-    """GPU backends the native host scheduler runs on. Metal is qualified; OP_NATIVE_HOST_BACKENDS
-    (comma separated: VULKAN, OPENGL) adds others, to qualify them on machines that have them
+    """GPU backends the native host scheduler runs on. Metal and Vulkan are qualified (Vulkan
+    publishes through pixels: docs/native/windows-plan.md); OP_NATIVE_HOST_BACKENDS (comma
+    separated: OPENGL) adds others, to qualify them on machines that have them
     (docs/native/platforms.md)."""
     extra = os.environ.get('OP_NATIVE_HOST_BACKENDS', '')
-    return {'METAL', *(name.strip().upper() for name in extra.split(',') if name.strip())}
+    return {'METAL', 'VULKAN', *(name.strip().upper() for name in extra.split(',') if name.strip())}
 
 
 def execution_library(backend):
@@ -131,9 +132,13 @@ def execution_library(backend):
         return None
     import bpy
     import platform
-    qualified = (backend == 'METAL' and platform.machine() == 'arm64' and bpy.app.version == (5, 2, 1)
-                 and bpy.app.build_hash == b'9e2066aef7ef'
-                 and bool(getattr(_library, '_op_binding', None)))
+    binding = bool(getattr(_library, '_op_binding', None))
+    # The configurations the engine suites passed on (the hosts where they ran).
+    qualified = binding and (
+        (backend == 'METAL' and platform.machine() == 'arm64' and bpy.app.version == (5, 2, 1)
+         and bpy.app.build_hash == b'9e2066aef7ef')
+        or (backend == 'VULKAN' and platform.system() == 'Windows' and platform.machine().lower() == 'amd64'
+            and bpy.app.version == (5, 2, 2) and bpy.app.build_hash == b'd13f752e3b9c'))
     _report.update(selected='c17-host-' + str(backend).lower(), host_backend=backend,
                    host_gpu=True, fully_migrated=False,
                    qualified=qualified, integration='embedded-host-gpu',

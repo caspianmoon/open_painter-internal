@@ -63,6 +63,8 @@ def register():
             caps = _core.capabilities()
             _report = select_backend(native_loaded=True, has_gpu=caps.has_gpu)
             _report['library'] = str(path)
+            # On any backend: the CPU kernels use the binding too (geometry, paint, topology).
+            _report['compiled_binding'] = bool(getattr(lib, '_op_binding', None))
     except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as exc:
         close()
         _library = None

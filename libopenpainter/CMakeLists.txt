@@ -101,7 +101,25 @@ if(OP_PYTHON_INCLUDE)
   if(APPLE)
     target_link_options(openpainter_python PRIVATE -undefined dynamic_lookup)
   elseif(WIN32)
-    message(FATAL_ERROR "Windows CPython binding must be qualified on the Windows build machine")
+    # The limited API imports python3.dll, which Blender ships beside python313.dll (in the
+    # Blender folder and in <version>/python/bin). Its import library comes from a CPython
+    # 3.11+ install, next to the headers by default. pyconfig.h also names python3.lib
+    # (#pragma comment(lib)), so its folder goes on the link path.
+    set(OP_PYTHON_LIBRARY "" CACHE FILEPATH "python3.lib of a CPython 3.11+ install (Windows binding)")
+    if(NOT OP_PYTHON_LIBRARY)
+      get_filename_component(op_python_root "${OP_PYTHON_INCLUDE}" DIRECTORY)
+      set(OP_PYTHON_LIBRARY "${op_python_root}/libs/python3.lib")
+    endif()
+    if(NOT EXISTS "${OP_PYTHON_LIBRARY}")
+      message(FATAL_ERROR "No ${OP_PYTHON_LIBRARY}; set OP_PYTHON_LIBRARY to a CPython 3.11+ python3.lib")
+    endif()
+    get_filename_component(op_python_libs "${OP_PYTHON_LIBRARY}" DIRECTORY)
+    target_link_directories(openpainter_python PRIVATE "${op_python_libs}")
+    target_link_libraries(openpainter_python PRIVATE "${OP_PYTHON_LIBRARY}")
+    set_target_properties(openpainter_python PROPERTIES SUFFIX ".pyd")
+  endif()
+  if(MSVC)
+    target_link_libraries(openpainter_python PRIVATE op_release_ndebug)
   endif()
 endif()
 

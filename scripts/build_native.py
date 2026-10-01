@@ -15,6 +15,8 @@ def main():
     parser.add_argument('--build-dir', type=Path, default=root / '.blender-test/native/build')
     parser.add_argument('--package', type=Path)
     parser.add_argument('--python-include', type=Path, help='CPython 3.11+ headers for the limited ABI binding')
+    parser.add_argument('--test-timeout', type=int,
+                        help='Seconds each C test may take (default 20; slower machines need more)')
     args = parser.parse_args()
     build = args.build_dir.resolve()
     headers = args.python_include
@@ -25,6 +27,8 @@ def main():
         if headers is None:
             raise RuntimeError('Pass --python-include with CPython 3.11+ headers to build the release binding')
     options = ['-DOP_PYTHON_INCLUDE=' + str(headers.resolve())] if headers else []
+    if args.test_timeout:
+        options.append(f'-DOP_TEST_TIMEOUT={args.test_timeout}')
     subprocess.run(['cmake', '-S', str(root / 'libopenpainter'), '-B', str(build),
                     '-DCMAKE_BUILD_TYPE=Release', *options], check=True)
     subprocess.run(['cmake', '--build', str(build), '--config', 'Release', '--parallel'], check=True)

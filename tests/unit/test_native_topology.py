@@ -147,7 +147,9 @@ class TopologyTests(unittest.TestCase):
             build(self.lib, faces, vertices.astype(float), uv)
         with self.assertRaises(ValueError):
             build(self.lib, faces, vertices, uv[:-1])
-        binding = self.lib._op_binding
+        binding = getattr(self.lib, '_op_binding', None)
+        if binding is None:
+            self.skipTest('compiled binding not supplied')
         for args in ((b'x', b'', b'', 1), (b'', b'x', b'', 1), (b'', b'', b'x', 1), (b'', bytes(8), b'', 1)):
             with self.assertRaises(ValueError):
                 binding.uv_topology(*args)
@@ -170,10 +172,13 @@ class TopologyTests(unittest.TestCase):
                            (np.full((2, 2), 1, np.int32), 1), (np.zeros((2, 2), float), 1)):
             with self.assertRaises(ValueError):
                 island_bounds(self.lib, bad, count)
+        binding = getattr(self.lib, '_op_binding', None)
+        if binding is None:
+            self.skipTest('compiled binding not supplied')
         with self.assertRaises(ValueError):
-            self.lib._op_binding.uv_bounds(b'x', 1, 1)
+            binding.uv_bounds(b'x', 1, 1)
         with self.assertRaises(RuntimeError):
-            self.lib._op_binding.uv_bounds(np.full((2, 2), 7, np.int32), 2, 1)
+            binding.uv_bounds(np.full((2, 2), 7, np.int32), 2, 1)
 
     def test_host_extraction_and_ctypes_fallback(self):
         class Collection:

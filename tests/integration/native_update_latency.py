@@ -43,7 +43,7 @@ try:
         raise AssertionError('Fixture did not become current')
     dev = runtime.device()
     engine = shader_preview.session_engine(bpy.context.scene, ts)
-    assert engine.report['execution_backend'] == 'c17-host-metal'
+    assert engine.report['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), engine.report
 
     def update(value):
         started = perf_counter()

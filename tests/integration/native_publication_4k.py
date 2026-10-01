@@ -32,7 +32,7 @@ try:
         else:
             raise AssertionError('4K publication never became current')
         engine = shader_preview.session_engine(bpy.context.scene, ts)
-        assert engine.report['execution_backend'] == 'c17-host-metal'
+        assert engine.report['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), engine.report
         memory = runtime.device().memory()
         assert memory['leased_bytes'] + memory['pooled_bytes'] <= runtime.DEVICE_BYTES, memory
         assert not engine._native_revisions._pin_sources

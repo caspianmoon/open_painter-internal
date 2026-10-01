@@ -73,7 +73,7 @@ def reference(base, source, coverage, mode, opaque):
 gpu.init()
 open_painter.register()
 try:
-    lib = lifecycle.execution_library('METAL')
+    lib = lifecycle.execution_library(gpu.platform.backend_type_get())
     assert lib is not None
     dev, n = runtime.device(), 32
     rng = np.random.default_rng(9841)

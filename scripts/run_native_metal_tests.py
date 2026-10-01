@@ -35,6 +35,9 @@ def main():
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('--sustained', action='store_true', help='Five 60-second real viewport RNA edit runs')
     parser.add_argument('--tests', nargs='+', default=TESTS)
+    parser.add_argument('--gpu-backend', choices=('metal', 'opengl', 'vulkan'),
+                        help="Blender's --gpu-backend (default: the factory setting); backends other "
+                             "than Metal also need OP_NATIVE_HOST_BACKENDS")
     parser.add_argument('--cap-gb', type=float, default=4.0,
                         help='Kill a test whose Blender memory footprint passes this (scripts/run_guarded.py)')
     args = parser.parse_args()
@@ -66,6 +69,8 @@ def main():
             cmd = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(cap),
                    '--start-gb', '3', '--wait-seconds', '120', '--',
                    args.blender, '--factory-startup', '--python-exit-code', '1']
+            if args.gpu_backend:
+                cmd += ['--gpu-backend', args.gpu_backend]
             cmd += ['--enable-event-simulate'] if gui else ['--background']
             cmd += ['--python', str(ROOT / 'tests/integration' / name)]
             if gui:
@@ -100,7 +105,7 @@ def main():
                 run(name, gui=True, extra={variable: str(target), 'OP_VECTOR_BRUSH_UI_SIZE': '2048'})
                 data = json.loads(target.read_text(encoding="utf-8"))
                 assert data.get('result', data.get('status')) == 'PASS', data
-                assert data['execution_backend'] == 'c17-host-metal', data
+                assert data['execution_backend'].startswith('c17-host-'), data   # the test checks its backend
             # A real drag over 200 layers: every value change is evaluated, and every evaluation drawn.
             target = out / 'native-drag-cadence.json'
             target.unlink(missing_ok=True)

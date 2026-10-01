@@ -179,7 +179,7 @@ def main():
         ts, ids = build(scene)
         shader_preview.flush(scene, ts, pixels=False)
         engine = shader_preview.session_engine(scene, ts)
-        assert engine.report['execution_backend'] == 'c17-host-metal', engine.report
+        assert engine.report['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), engine.report
         affine = sum(1 for key, state in engine.states.items()
                      if key[0] == 'CHANNEL' and state.program is not None and state.program.affine is not None)
         barriers = sum(1 for key, state in engine.states.items()

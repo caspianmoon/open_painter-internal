@@ -143,7 +143,8 @@ def steps():
     report['execution_backend'] = engine.report.get('execution_backend')
     report['resolution'] = int(ts.resolution)
     if os.environ.get('OP_EXPECT_NATIVE') == '1':
-        assert report['execution_backend'] == 'c17-host-metal', report
+        import gpu
+        assert report['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), report
         assert report['changed_before_release'], report
         project = REPORT.with_suffix('.blend')
         bpy.ops.wm.save_as_mainfile(filepath=str(project))

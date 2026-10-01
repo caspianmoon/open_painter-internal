@@ -1,4 +1,5 @@
-"""Real C scheduling, executor switching and restore against host Metal output."""
+"""Real C scheduling, executor switching and restore against host GPU output: Metal, or a backend
+being qualified (OP_NATIVE_HOST_BACKENDS=VULKAN or OPENGL)."""
 import json
 import os
 from pathlib import Path
@@ -19,9 +20,11 @@ from open_painter.evaluation import shader_preview
 from open_painter.native_bridge import lifecycle
 
 gpu.init()
-assert gpu.platform.backend_type_get() == 'METAL'
+BACKEND = gpu.platform.backend_type_get()
+EXPECTED = 'c17-host-' + BACKEND.lower()
+assert BACKEND in lifecycle.host_backends(), (BACKEND, lifecycle.host_backends())
 open_painter.register()
-assert lifecycle.execution_library('METAL') is not None, lifecycle.diagnostics()
+assert lifecycle.execution_library(BACKEND) is not None, lifecycle.diagnostics()
 scene = bpy.context.scene
 obj = bpy.context.object
 original_engine = scene.render.engine
@@ -64,7 +67,7 @@ def mip_pixels():
 
 try:
     engine = ready()
-    assert engine.report['execution_backend'] == 'c17-host-metal', engine.report
+    assert engine.report['execution_backend'] == EXPECTED, engine.report
     first = pixels()
     assert np.ptp(first['BASE_COLOR']) > .1
     topology_builds = engine._native_graph.rebuilds
@@ -285,7 +288,7 @@ try:
         os.environ['OP_NATIVE_ENGINE'] = enabled
         engine.published.clear()
         engine.evaluate(CHANNELS, budget=False)
-        assert engine.report['execution_backend'] == ('legacy' if enabled == '0' else 'c17-host-metal')
+        assert engine.report['execution_backend'] == ('legacy' if enabled == '0' else EXPECTED)
         actual = pixels()
         errors[enabled] = {c: float(np.max(abs(actual[c] - first[c]))) for c in CHANNELS}
         assert max(errors[enabled].values()) <= .002, errors
@@ -393,7 +396,7 @@ try:
     for channel, values in pixels().items():
         np.testing.assert_array_equal(first[channel], values, err_msg='restore ' + channel)
     assert scene.render.engine == original_engine and bpy.context.object == obj
-    report = dict(status='PASS', backend='c17-host-metal', errors=errors,
+    report = dict(status='PASS', backend=EXPECTED, errors=errors,
                   managed_budget_failure_recovery=True, idle_cache_reclamation=True,
                   live_shader_after_eviction=True,
                   topology_rebuilds=topology_builds, channels=list(CHANNELS),
@@ -408,4 +411,4 @@ try:
 finally:
     os.environ.pop('OP_NATIVE_ENGINE', None)
     open_painter.unregister()
-    assert lifecycle.execution_library('METAL') is None
+    assert lifecycle.execution_library(BACKEND) is None

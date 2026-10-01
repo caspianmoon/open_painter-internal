@@ -33,7 +33,7 @@ for _ in range(300):
     if shader_preview.current(scene, ts):
         break
 assert shader_preview.current(scene, ts), info
-assert info['engine']['execution_backend'] == 'c17-host-metal', info
+assert info['engine']['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), info
 image = next(o.image for o in ts.outputs if o.channel == 'BASE_COLOR')
 values = np.array(gpu.texture.from_image(image).read(), np.float32).reshape(-1, 4)
 assert np.ptp(values[:, 0]) > .1

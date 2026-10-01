@@ -76,7 +76,8 @@ gpu.init()
 open_painter.register()
 try:
     assert set(EFFECT_FIELDS) == POINTWISE
-    lib = lifecycle.execution_library('METAL')
+    lib = lifecycle.execution_library(gpu.platform.backend_type_get())
+    assert lib is not None, lifecycle.diagnostics()
     dev, n = runtime.device(), 32
     rng = np.random.default_rng(78043)
     source = rng.random((n,n,4), dtype=np.float32)

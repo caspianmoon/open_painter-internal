@@ -83,8 +83,9 @@ def finish(error=None):
     if ts is not None:
         engine = shader_preview.session_engine(bpy.context.scene, ts)
         report['execution_backend'] = engine.report.get('execution_backend') if engine else None
-        if os.environ.get('OP_EXPECT_NATIVE') == '1' and report['execution_backend'] != 'c17-host-metal':
-            error = 'Expected the C17 host Metal executor: ' + str(report['execution_backend'])
+        expected = 'c17-host-' + gpu.platform.backend_type_get().lower()
+        if os.environ.get('OP_EXPECT_NATIVE') == '1' and report['execution_backend'] != expected:
+            error = f'Expected the C17 host executor {expected}: ' + str(report['execution_backend'])
             report.update(result='FAIL', error=error)
     if not error:
         report.update(material_roi=roi, baseline_jitter=baseline_jitter,

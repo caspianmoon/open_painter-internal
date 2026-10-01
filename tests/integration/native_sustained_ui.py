@@ -27,7 +27,7 @@ from open_painter.core import layer_stack
 REPORT = Path(os.environ['OP_SUSTAINED_REPORT'])
 DURATION = float(os.environ.get('OP_SUSTAINED_SECONDS', '60'))
 RUNS = int(os.environ.get('OP_SUSTAINED_RUNS', '5'))
-EXPECTED = os.environ.get('OP_SUSTAINED_BACKEND', 'c17-host-metal')
+EXPECTED = os.environ.get('OP_SUSTAINED_BACKEND', 'c17-host-' + gpu.platform.backend_type_get().lower())
 # Frame breakdown: viewport draw spans (PRE_VIEW to POST_PIXEL), scheduler ticks and
 # engine evaluations, so cadence can be attributed rather than only counted.
 TRACE = os.environ.get('OP_SUSTAINED_TRACE') == '1'

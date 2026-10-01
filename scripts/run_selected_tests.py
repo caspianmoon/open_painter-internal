@@ -16,6 +16,9 @@ import tempfile
 from blender_test_profile import isolated_environment
 
 ROOT = Path(__file__).resolve().parents[1]
+# Suites that need more than the default cap; run_tests.py runs every suite at 4 GB. On Windows
+# utility_maps.py commits 3.2 GiB (its 2048 border bake).
+MEMORY_CAPS_GB = {'utility_maps.py': 4.0}
 
 
 def main():
@@ -25,6 +28,8 @@ def main():
     parser.add_argument('--cap-gb', type=float, default=3.0)
     parser.add_argument('--start-gb', type=float, default=2.0, help='Available memory needed to start each test')
     parser.add_argument('--timeout', type=float, default=900)
+    parser.add_argument('--gpu-backend', choices=('metal', 'opengl', 'vulkan'),
+                        help="Blender's --gpu-backend (default: the factory setting)")
     args = parser.parse_args()
     out = ROOT / '.blender-test/selected' / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')
     out.mkdir(parents=True, exist_ok=True)
@@ -32,9 +37,11 @@ def main():
     for name in args.tests:
         with tempfile.TemporaryDirectory(prefix='op-selected-') as profile:
             env = isolated_environment(profile)
-            command = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
+            cap = max(args.cap_gb, MEMORY_CAPS_GB.get(name, 0.0))
+            command = [sys.executable, str(ROOT / 'scripts/run_guarded.py'), '--cap-gb', str(cap),
                        '--start-gb', str(args.start_gb), '--wait-seconds', '120', '--', args.blender, '--background',
-                       '--factory-startup', '--python-exit-code', '1', '--python', str(ROOT / 'tests/integration' / name)]
+                       '--factory-startup', *(['--gpu-backend', args.gpu_backend] if args.gpu_backend else []),
+                       '--python-exit-code', '1', '--python', str(ROOT / 'tests/integration' / name)]
             log = out / (name + '.log')
             with log.open('w') as handle:
                 try:

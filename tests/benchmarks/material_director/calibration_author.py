@@ -55,7 +55,7 @@ def prepare(fixtures, output, cases):
         if target.exists():
             raise ValueError(f'Refuse to overwrite prepared fixture: {target}')
         source_hash = sha256(source)
-        metadata = json.loads(source.with_suffix('.json').read_text())
+        metadata = json.loads(source.with_suffix('.json').read_text(encoding="utf-8"))
         if metadata['status'] != 'READY' or metadata['sha256'] != source_hash:
             raise ValueError('Source fixture is not the unchanged READY fixture')
         bpy.ops.wm.open_mainfile(filepath=str(source))

@@ -524,11 +524,11 @@ class LaunchTests(unittest.TestCase):
         self.bin = root / "nvm" / "bin"
         self.bin.mkdir(parents=True)
         node = self.bin / "node"
-        node.write_text("#!/bin/sh\nprintf 'codex-cli 0.154.0-test\\n'\n")
+        node.write_text("#!/bin/sh\nprintf 'codex-cli 0.154.0-test\\n'\n", encoding="utf-8")
         node.chmod(0o755)
         shim = root / "lib" / "node_modules" / "codex" / "bin" / "codex.js"
         shim.parent.mkdir(parents=True)
-        shim.write_text("#!/usr/bin/env node\n")
+        shim.write_text("#!/usr/bin/env node\n", encoding="utf-8")
         shim.chmod(0o755)
         (self.bin / "codex").symlink_to(shim)
         self.shim = shim

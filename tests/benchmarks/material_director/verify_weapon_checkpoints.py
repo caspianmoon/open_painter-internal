@@ -23,10 +23,10 @@ def verify(root):
     results = {}
     for weapon in ("assault_rifle", "smg"):
         output = root / weapon
-        audit = json.loads((root / "fixtures" / (weapon + ".json")).read_text())
+        audit = json.loads((root / "fixtures" / (weapon + ".json")).read_text(encoding="utf-8"))
         records = []
         for state_path in sorted(output.glob("*_state.json")):
-            state = json.loads(state_path.read_text())
+            state = json.loads(state_path.read_text(encoding="utf-8"))
             if not state.get("saved_state"):
                 continue
             path = output / state["saved_state"]["path"]

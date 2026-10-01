@@ -34,9 +34,9 @@ class NativeBridgeTests(unittest.TestCase):
             adapter = root / 'src/open_painter/native_bridge'
             adapter.mkdir(parents=True)
             file = adapter / 'core.py'
-            file.write_text('first')
+            file.write_text('first', encoding="utf-8")
             before = artifact_digests(root)
-            file.write_text('second')
+            file.write_text('second', encoding="utf-8")
             after = artifact_digests(root)
             self.assertNotEqual(before['adapter_sha256'], after['adapter_sha256'])
             self.assertIsNone(after['native_binary'])

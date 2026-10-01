@@ -14,7 +14,7 @@ def measurement_policy(config=None):
     config = config or {}
     policy = config.get("measurement_policy")
     if policy is None:
-        policy = json.loads(Path(__file__).with_name("test_cases_v3.json").read_text())["measurements"]
+        policy = json.loads(Path(__file__).with_name("test_cases_v3.json").read_text(encoding="utf-8"))["measurements"]
     policy = deepcopy(policy)
     required = ("mask_threshold", "mask_absolute_tolerance", "invalid_uv_area_max_fraction",
                 "minimum_initial_moss_area_fraction", "moss_area_ratio", "moss_area_ratio_tolerance",

@@ -48,7 +48,7 @@ def digest(value):
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def file_hash(path):
@@ -66,7 +66,7 @@ class SyntheticCampaign:
         self.product_root = root / "product_snapshot"
         self.source = self.product_root / "src/open_painter/ai/codex_client.py"
         self.source.parent.mkdir(parents=True)
-        self.source.write_text(SOURCE_EXCERPT)
+        self.source.write_text(SOURCE_EXCERPT, encoding="utf-8")
         self.pin = dict(commit="a" * 40,
                         source_sha256=digest({str(self.source.relative_to(self.product_root)): file_hash(self.source)}))
         write_json(self.product_root / ".benchmark_product_pin.json", self.pin)
@@ -129,7 +129,7 @@ class SyntheticCampaign:
         write_json(self.directory / "terminal_attempt.json",
                    {key: value for key, value in self.result.items() if key != "manifest_sha256"})
         (self.directory / "provider_and_tool_trace.jsonl").write_text(
-            "".join(json.dumps(event) + "\n" for event in self.trace))
+            "".join(json.dumps(event) + "\n" for event in self.trace), encoding="utf-8")
 
     def repin_source(self):
         self.pin["source_sha256"] = digest({str(self.source.relative_to(self.product_root)): file_hash(self.source)})
@@ -293,14 +293,14 @@ class SourceLinkedDeadlineDiagnostics(unittest.TestCase):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as folder:
                 campaign = SyntheticCampaign(Path(folder))
                 if case == "source_changed":
-                    campaign.source.write_text(SOURCE_EXCERPT + "\n# Changed after producing evidence\n")
+                    campaign.source.write_text(SOURCE_EXCERPT + "\n# Changed after producing evidence\n", encoding="utf-8")
                 elif case == "pin_changed":
                     write_json(campaign.product_root / ".benchmark_product_pin.json",
                                dict(campaign.pin, source_sha256="0" * 64))
                 elif case == "job_pin_changed":
                     campaign.job["build"]["source_sha256"] = "0" * 64
                 else:
-                    (campaign.source.parent / "extra.py").write_text("# New product bytes\n")
+                    (campaign.source.parent / "extra.py").write_text("# New product bytes\n", encoding="utf-8")
                 report = self.inspect(campaign)
                 self.assert_not_attributed(report)
                 self.assertEqual(self.selected_run(report, campaign)["status"], "UNVERIFIED")
@@ -321,7 +321,7 @@ class SourceLinkedDeadlineDiagnostics(unittest.TestCase):
         for case, source in variants.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as folder:
                 campaign = SyntheticCampaign(Path(folder))
-                campaign.source.write_text(source)
+                campaign.source.write_text(source, encoding="utf-8")
                 campaign.repin_source()
                 report = self.inspect(campaign)
                 self.assert_not_attributed(report)
@@ -354,7 +354,7 @@ class SourceLinkedDeadlineDiagnostics(unittest.TestCase):
                 campaign.write()
                 if case == "terminal":
                     terminal = campaign.directory / "terminal_attempt.json"
-                    data = json.loads(terminal.read_text())
+                    data = json.loads(terminal.read_text(encoding="utf-8"))
                     data["status"] = "COMPLETED"
                     write_json(terminal, data)
                 report = self.diagnostic.inspect_campaign(campaign.root)
@@ -369,7 +369,7 @@ class SourceLinkedDeadlineDiagnostics(unittest.TestCase):
                 if case == "missing":
                     path.unlink()
                 else:
-                    data = json.loads(path.read_text())
+                    data = json.loads(path.read_text(encoding="utf-8"))
                     del data["manifest_sha256"]
                     write_json(path, data)
                 report = self.diagnostic.inspect_campaign(campaign.root)
@@ -379,7 +379,7 @@ class SourceLinkedDeadlineDiagnostics(unittest.TestCase):
     def test_malformed_trace_is_unverified_instead_of_inventing_a_diagnosis(self):
         with tempfile.TemporaryDirectory() as folder:
             campaign = SyntheticCampaign(Path(folder))
-            (campaign.directory / "provider_and_tool_trace.jsonl").write_text('{"broken":\n')
+            (campaign.directory / "provider_and_tool_trace.jsonl").write_text('{"broken":\n', encoding="utf-8")
             report = self.diagnostic.inspect_campaign(campaign.root)
             self.assert_not_attributed(report)
             self.assertEqual(self.selected_run(report, campaign)["status"], "UNVERIFIED")

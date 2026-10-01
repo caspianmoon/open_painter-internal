@@ -55,7 +55,7 @@ class MathTests(unittest.TestCase):
                         "format_version": 1,
                         "layers": [{"id": "a", "type": "FOLDER", "parent_id": "a"}],
                     }
-                )
+                ), encoding="utf-8"
             )
             with self.assertRaisesRegex(ValueError, "hierarchy"):
                 read(path)

@@ -109,7 +109,7 @@ class ManifestTests(unittest.TestCase):
                 manifest.record_result(path, entry["run_id"], result)
             manifest_path = Path(path) / "manifest.json"
             frozen["schedule"].reverse()
-            manifest_path.write_text(json.dumps(frozen))
+            manifest_path.write_text(json.dumps(frozen), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Frozen manifest changed"):
                 manifest.load_manifest(path)
 
@@ -245,7 +245,7 @@ class ScoringTests(unittest.TestCase):
             summary = report.write_report(path)
             self.assertEqual(len(summary["core_results"]), 48)
             self.assertEqual(len(summary["robustness_results"]), 16)
-            text = Path(path, "report.md").read_text()
+            text = Path(path, "report.md").read_text(encoding="utf-8")
             self.assertIn("0 / 24", text)
             self.assertIn("NOT SCORED", text)
             self.assertIn("PENDING", text)
@@ -262,13 +262,13 @@ class ScoringTests(unittest.TestCase):
             image_path.write_bytes(b"captured render bytes")
             checkpoint = {"views": {"views": [{"path": str(image_path), "sha256": manifest.file_sha256(image_path),
                                                   "camera": "BENCH_CAM_front", "distance": "normal"}]}}
-            (run_directory / "create_state.json").write_text(json.dumps(checkpoint))
+            (run_directory / "create_state.json").write_text(json.dumps(checkpoint), encoding="utf-8")
             result["stages"]["create"]["checkpoint"] = "create_state.json"
             manifest.record_result(path, entry["run_id"], result)
             exported = report.export_review_packets(path)
             self.assertEqual(exported["packets"], 1)
             self.assertEqual(exported["missing_packets"], 47)
-            index = Path(exported["directory"], "index.json").read_text()
+            index = Path(exported["directory"], "index.json").read_text(encoding="utf-8")
             self.assertNotIn(entry["run_id"], index)
             self.assertNotIn('"mode"', index)
             anonymous = Path(exported["directory"], entry["review_id"], "create", "view-01.png")

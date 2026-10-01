@@ -62,7 +62,7 @@ def file_sha256(path):
 
 
 def load_cases(path=None):
-    data = json.loads(Path(path or ROOT / "test_cases_v3.json").read_text())
+    data = json.loads(Path(path or ROOT / "test_cases_v3.json").read_text(encoding="utf-8"))
     cases = data["cases"]
     if [case["id"] for case in cases] != [f"T{i:02d}" for i in range(1, 6)]:
         raise ValueError("The primary benchmark requires exactly T01 through T05")
@@ -384,7 +384,7 @@ def freeze_manifest(directory, configuration, fixtures, seed=20260922):
     calibration = validate_no_edit_calibration(configuration)
     evidence_path = Path(calibration["evidence"])
     if (not evidence_path.is_file() or file_sha256(evidence_path) != calibration["sha256"]
-            or json.loads(evidence_path.read_text()) != calibration["report"]):
+            or json.loads(evidence_path.read_text(encoding="utf-8")) != calibration["report"]):
         raise ValueError("No-edit calibration proof changed before freezing")
     for name in ("capture_evidence.py", "revision_measurements.py"):
         if calibration["report"].get("implementation", {}).get(name) != file_sha256(ROOT / name):
@@ -392,7 +392,7 @@ def freeze_manifest(directory, configuration, fixtures, seed=20260922):
     if execution["jobs"] == 2:
         evidence = Path(execution.get("concurrency_evidence") or "")
         if (not evidence.is_file() or file_sha256(evidence) != execution.get("concurrency_evidence_sha256")
-                or json.loads(evidence.read_text()) != execution["concurrency_proof"]):
+                or json.loads(evidence.read_text(encoding="utf-8")) != execution["concurrency_proof"]):
             raise ValueError("Concurrency proof file changed before freezing")
     specification = load_cases()
     required = {case["fixture"] for case in specification["cases"]}
@@ -419,7 +419,7 @@ def freeze_manifest(directory, configuration, fixtures, seed=20260922):
                                    correction_ablation=configuration["correction_ablation"]),
     }
     _write_json_new(directory / "manifest.json", manifest)
-    (directory / "manifest.sha256").write_text(digest(manifest) + "\n")
+    (directory / "manifest.sha256").write_text(digest(manifest) + "\n", encoding="utf-8")
     cases = {case["id"]: case for case in specification["cases"]}
     for entry in manifest["schedule"]:
         _write_json_new(directory / entry["relative_directory"] / "result.json", result_template(entry))
@@ -440,14 +440,14 @@ def load_manifest(path):
     path = Path(path)
     if path.is_dir():
         path /= "manifest.json"
-    manifest = json.loads(path.read_text())
+    manifest = json.loads(path.read_text(encoding="utf-8"))
     if manifest.get("schema_version") == 1:
         from .legacy.manifest import load_manifest as load_legacy
         return load_legacy(path)
     if manifest.get("schema_version") == 2:
         from .v2.manifest import load_manifest as load_v2
         return load_v2(path)
-    expected = path.with_suffix(".sha256").read_text().strip()
+    expected = path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
     if digest(manifest) != expected:
         raise ValueError("Frozen manifest changed: use a new comparison for new settings or run order")
     validate_configuration(manifest["configuration"])
@@ -490,7 +490,7 @@ def record_result(directory, run_id, result):
     result["run_id"] = run_id
     result["manifest_sha256"] = digest(manifest)
     path = directory / entry["relative_directory"] / "result.json"
-    previous = json.loads(path.read_text()) if path.exists() else None
+    previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     if previous and previous.get("status") not in {"NOT_RUN", "RUNNING"}:
         # Later evidence/reviews may augment a result, but cannot replace its live attempt.
         for field in ("status", "started_at", "completed_at", "stages", "hard_failures"):
@@ -500,6 +500,6 @@ def record_result(directory, run_id, result):
         history.write(canonical({"recorded_at": datetime.now(timezone.utc).isoformat(),
                                  "previous": previous, "result": result}).decode() + "\n")
     temporary = path.with_name("result.json.tmp")
-    temporary.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+    temporary.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     temporary.replace(path)
     return path

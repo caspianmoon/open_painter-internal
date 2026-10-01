@@ -30,7 +30,7 @@ def png(side=32, color=b"\x80\x90\xa0"):
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value))
+    path.write_text(json.dumps(value), encoding="utf-8")
 
 
 def complete_fixture(directory):
@@ -116,7 +116,7 @@ class CapturedEvidenceHashes(unittest.TestCase):
             directory = Path(folder)
             result, job, _ = complete_fixture(directory)
             path = directory / "after_create_state.json"
-            checkpoint = json.loads(path.read_text())
+            checkpoint = json.loads(path.read_text(encoding="utf-8"))
             del checkpoint["channels"]["sets"]["synthetic-ts"]["channels"]["BASE_COLOR"]["sha256"]
             write_json(path, checkpoint)
             checked = runner._evidence_delivery(result, job, directory)

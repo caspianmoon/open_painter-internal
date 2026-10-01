@@ -38,7 +38,7 @@ def load_generator(path, name, procedural):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
-    tree = ast.parse(path.read_text(), filename=str(path))
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
                and node.module == "evaluation.mask_eval"]
     if len(imports) != 1 or [alias.name for alias in imports[0].names] != ["map_pixels"]:
@@ -75,7 +75,7 @@ def generator_parameters(**kwargs):
 
 class ProceduralOptimizationTests(unittest.TestCase):
     def test_frozen_sources_match_recorded_commit_hashes(self):
-        metadata = json.loads((HERE / "reference_noise_metadata.json").read_text())
+        metadata = json.loads((HERE / "reference_noise_metadata.json").read_text(encoding="utf-8"))
         self.assertEqual(metadata["commit"], "df32483a158fb3852564654c6d10f5f2ff7673d4")
         for entry in metadata["files"].values():
             # The recorded hashes describe Git's LF source blobs. Windows Git

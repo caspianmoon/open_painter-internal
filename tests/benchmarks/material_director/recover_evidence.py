@@ -14,7 +14,7 @@ def main():
     import open_painter
     from capture_evidence import capture_checkpoint, material_state
     from runtime import sha256, write_json
-    request = json.loads(Path(os.environ["OP_MD_EVIDENCE_RECOVERY"]).read_text())
+    request = json.loads(Path(os.environ["OP_MD_EVIDENCE_RECOVERY"]).read_text(encoding="utf-8"))
     state, output = Path(request["state"]), Path(request["output"])
     if sha256(state) != request["state_sha256"]:
         raise ValueError("Recovery checkpoint hash changed")

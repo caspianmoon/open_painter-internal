@@ -30,7 +30,7 @@ PREPARATION_CODE_SHA256 = digest(__file__)
 
 def export_reference(manifest_path, asset_root, output_directory):
     """Place the pinned external reference beside fixtures; never load into Blender."""
-    manifest = json.loads(Path(manifest_path).read_text())
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     entry = next(item for item in manifest["assets"] if item["id"] == "R01")
     source = Path(asset_root) / entry["entrypoint"]
     expected = next(item["sha256"] for item in entry["files"] if item["path"] == entry["entrypoint"])
@@ -643,7 +643,7 @@ def _open_rig(output_directory):
     path = directory / "benchmark_rig.blend"
     metadata = path.with_suffix(".json")
     if path.exists():
-        audit = json.loads(metadata.read_text())
+        audit = json.loads(metadata.read_text(encoding="utf-8"))
         if digest(path) != audit["sha256"]:
             raise ValueError("The fixed benchmark rig was modified")
         bpy.ops.wm.open_mainfile(filepath=str(path), load_ui=False, use_scripts=False)
@@ -660,7 +660,7 @@ def _open_rig(output_directory):
         bpy.ops.wm.save_as_mainfile(filepath=str(path), check_existing=False)
         audit = dict(path=str(path), sha256=digest(path), config=config,
                      rig_record=fixed_rig_record(scene, config))
-        metadata.write_text(json.dumps(audit, indent=2) + "\n")
+        metadata.write_text(json.dumps(audit, indent=2) + "\n", encoding="utf-8")
     return config, dict(path=str(path), sha256=digest(path))
 
 
@@ -696,7 +696,7 @@ def prepare_fixture(asset_ids, manifest_path, asset_root, output_path, *, sample
         raise ValueError("Primary fixtures contain exactly one of A01,A02,A05,A04,A06")
     if output_path.exists():
         raise FileExistsError(f"Frozen fixture exists; choose a new output directory: {output_path}")
-    manifest = json.loads(Path(manifest_path).read_text())
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     entry = next(item for item in manifest["assets"] if item["id"] == asset_ids[0])
     if entry.get("status") != "DOWNLOADED_VERIFIED":
         raise ValueError(f"Download and verify {entry['id']} first")
@@ -713,7 +713,7 @@ def prepare_fixture(asset_ids, manifest_path, asset_root, output_path, *, sample
     started = time.monotonic()
     def save_report():
         report["elapsed_seconds"] = round(time.monotonic() - started, 3)
-        report_path.write_text(json.dumps(report, indent=2) + "\n")
+        report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     if not hasattr(bpy.types.Scene, "open_painter"):
         open_painter.register()
@@ -835,21 +835,21 @@ def main():
     parser.add_argument("--samples", type=int, default=32)
     parser.add_argument("--skip-bakes", action="store_true", help="Diagnostic only; emits FAIL and no runnable fixture")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:])
-    manifest = json.loads(args.asset_manifest.read_text())
+    manifest = json.loads(args.asset_manifest.read_text(encoding="utf-8"))
     reports = []
     for identifier in filter(None, args.assets.split(",")):
         entry = next(e for e in manifest["assets"] if e["id"] == identifier)
         reports.append(prepare_fixture([identifier], args.asset_manifest, args.assets_root, args.output / entry["fixture"],
                                        samples=args.samples, bake=not args.skip_bakes))
     # Rebuild from all ready reports so separate invocations produce one index.
-    all_reports = [json.loads(path.read_text()) for path in args.output.glob("A*.json")]
+    all_reports = [json.loads(path.read_text(encoding="utf-8")) for path in args.output.glob("A*.json")]
     fixtures = [dict(fixture_id=r["fixture_id"], path=r["path"], sha256=r["sha256"],
                      asset_ids=r["asset_ids"], rig_signature=r["config"]["rig_signature"])
                 for r in all_reports if r.get("status") == "READY"]
     signatures = {item["rig_signature"] for item in fixtures}
     if len(signatures) != 1:
         raise ValueError("Fixture rig signatures differ")
-    (args.output / "fixture_index.json").write_text(json.dumps(dict(protocol=RIG_VERSION, fixtures=fixtures), indent=2) + "\n")
+    (args.output / "fixture_index.json").write_text(json.dumps(dict(protocol=RIG_VERSION, fixtures=fixtures), indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

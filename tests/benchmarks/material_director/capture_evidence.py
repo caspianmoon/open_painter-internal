@@ -17,7 +17,7 @@ import time
 def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
     return str(path)
 
 
@@ -572,7 +572,7 @@ def capture_checkpoint(context, output_dir, label, *, config=None):
         comparisons = dict(previous_checkpoint=previous_path.name, texture_sets={}, independent_artistic_review="PENDING",
             measurement_policy=policy, no_edit_calibration=effective.get("no_edit_calibration",{"status":"NOT_SUPPLIED"}),
             area_estimator_limitation="Four fixed points per triangle; no convergence bound for fine chips or thin bands")
-        previous = json.loads(previous_path.read_text()) if previous_path.is_file() else {}
+        previous = json.loads(previous_path.read_text(encoding="utf-8")) if previous_path.is_file() else {}
         for ts_id, current_set in result["channels"].get("sets", {}).items():
             previous_set = previous.get("channels", {}).get("sets", {}).get(ts_id, {})
             old_masks, masks = previous_set.get("effect_masks", {}), current_set.get("effect_masks", {})
@@ -642,8 +642,8 @@ def compare_buffers(before, after, *, valid=None, tolerance=1 / 255, minimum_fra
 def compare_checkpoints(before, after, *, protected_set_ids=None, exact_channels=False, compare_scene=True):
     """No automatic semantic-region selection: caller must declare protected sets."""
     import numpy as np
-    before = json.loads(Path(before).read_text()) if isinstance(before, (str, Path)) else before
-    after = json.loads(Path(after).read_text()) if isinstance(after, (str, Path)) else after
+    before = json.loads(Path(before).read_text(encoding="utf-8")) if isinstance(before, (str, Path)) else before
+    after = json.loads(Path(after).read_text(encoding="utf-8")) if isinstance(after, (str, Path)) else after
     a, b = before["state"], after["state"]
     ids = list(protected_set_ids) if protected_set_ids is not None else list(a["texture_sets"])
     checks = {}

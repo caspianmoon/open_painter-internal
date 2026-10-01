@@ -110,7 +110,7 @@ def undo_check(context, output_dir, config=None):
     if not reference.exists():
         return dict(status="NOT_TESTED", reason="Refine 1 checkpoint absent")
     receipt_path = Path(output_dir) / "refine_2_receipt.json"
-    if receipt_path.exists() and not json.loads(receipt_path.read_text()):
+    if receipt_path.exists() and not json.loads(receipt_path.read_text(encoding="utf-8")):
         final_reference = Path(output_dir) / "after_refine_2_state.json"
         comparison = compare_checkpoints(reference, final_reference, exact_channels=True) if final_reference.exists() else None
         return dict(status="NOT_TESTED", reason="Refine 2 committed no transaction; Undo would reverse an earlier instruction",
@@ -381,7 +381,7 @@ def verify_offline(output_dir, *, render=True, export=True, check_4k=True):
     import bpy
     output = Path(output_dir).resolve()
     final = output / "final.blend"
-    config = json.loads((output / "finalization.json").read_text()).get("configuration", {})
+    config = json.loads((output / "finalization.json").read_text(encoding="utf-8")).get("configuration", {})
     config["render_views"] = render and config.get("render_views", True)
     provider_home = os.environ.get("CODEX_HOME")
     isolation = bool(provider_home and Path(provider_home).is_dir() and not any(Path(provider_home).iterdir()))

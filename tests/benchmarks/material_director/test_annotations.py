@@ -29,7 +29,7 @@ class AnnotationTests(unittest.TestCase):
                     declared_before_ai_outputs=True, fixtures=[dict(fixture="test.blend", fixture_sha256=self.fixture,
                     regions=[dict(id="target", texture_set_id="set", **region)], measurements=measurements)])
         source = self.root / "draft.json"
-        source.write_text(json.dumps(spec))
+        source.write_text(json.dumps(spec), encoding="utf-8")
         return subject.freeze(source, self.root / "frozen")
 
     def checkpoint(self, label, values):
@@ -41,7 +41,7 @@ class AnnotationTests(unittest.TestCase):
         result = dict(label=label, state_path=str(self.root / (label + "_state.json")),
             channels=dict(sets={"set": dict(channels={"ROUGHNESS": dict(path=str(path),
                 decoded=dict(sha256=hashlib.sha256(values.tobytes()).hexdigest()))}, valid_samples=dict(path=str(valid)))}))
-        Path(result["state_path"]).write_text(json.dumps(result))
+        Path(result["state_path"]).write_text(json.dumps(result), encoding="utf-8")
         return result
 
     def test_surface_weighted_coverage_and_spill(self):

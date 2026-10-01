@@ -55,7 +55,7 @@ ConvertTo-Json -InputObject @($privateRecords) -Depth 4 -Compress
         payload = base64.urlsafe_b64encode(json.dumps({"exp": expires}).encode()).decode().rstrip("=")
         path = Path(directory) / "source.json"
         path.write_text(json.dumps({"tokens": {"access_token": "header." + payload + ".signature",
-            "id_token": "test-identity", "refresh_token": "never-copy-me", "account_id": "test-account"}}))
+            "id_token": "test-identity", "refresh_token": "never-copy-me", "account_id": "test-account"}}), encoding="utf-8")
         return path
 
     def test_access_only_private_copy_removed_and_source_unchanged(self):
@@ -64,9 +64,9 @@ ConvertTo-Json -InputObject @($privateRecords) -Depth 4 -Compress
             before = source.read_bytes()
             with isolated_login(source, minimum_seconds=100) as isolated:
                 target = isolated / "auth.json"
-                value = json.loads(target.read_text())
+                value = json.loads(target.read_text(encoding="utf-8"))
                 self.assertEqual(value["tokens"]["refresh_token"], "")
-                self.assertNotIn("never-copy-me", target.read_text())
+                self.assertNotIn("never-copy-me", target.read_text(encoding="utf-8"))
                 self.assert_private_copy(target)
                 self.assertEqual(value["tokens"]["id_token"], "test-identity")
             self.assertFalse(isolated.exists())
@@ -92,11 +92,11 @@ ConvertTo-Json -InputObject @($privateRecords) -Depth 4 -Compress
             self.assertEqual(list(Path(directory).iterdir()),[source])
             self.assertEqual(source.read_bytes(),original)
             for value in ('{}','[]','{"tokens":"private-token"}',json.dumps({'tokens':{'access_token':123,'id_token':'private-token'}}),'x'*(MAX_AUTH_BYTES+1)):
-                source.write_text(value)
+                source.write_text(value, encoding="utf-8")
                 with self.assertRaises(AuthRefreshRequired) as caught:
                     preflight_login(source,minimum_seconds=1920)
                 self.assertNotIn('private-token',str(caught.exception))
-                self.assertEqual(source.read_text(),value)
+                self.assertEqual(source.read_text(encoding="utf-8"),value)
             source.unlink()
             with self.assertRaises(AuthRefreshRequired):
                 preflight_login(source,minimum_seconds=1920)

@@ -9,7 +9,7 @@ from .scoring import stage_map, summarize
 
 
 def _read(path, default):
-    return json.loads(path.read_text()) if path.exists() else default
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
 
 
 def collect(directory):
@@ -134,8 +134,8 @@ def write_report(directory):
         return write_legacy(directory)
     manifest, results, controls, reviews = collect(directory)
     summary = summarize(manifest, results, controls, reviews)
-    (directory / "report.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
-    (directory / "report.md").write_text(markdown(summary, manifest))
+    (directory / "report.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8")
+    (directory / "report.md").write_text(markdown(summary, manifest), encoding="utf-8")
     return summary
 
 
@@ -201,11 +201,11 @@ def export_review_packets(directory):
         form_path = destination / entry["review_id"] / "review.json"
         if not form_path.exists():
             form = review_template(entry, cases[entry["case_id"]], manifest["specification"])
-            form_path.write_text(json.dumps(form, indent=2, ensure_ascii=False) + "\n")
+            form_path.write_text(json.dumps(form, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         packet = {"review_id": entry["review_id"], "views": copied, "missing_stages": missing, "stage_outcomes": stage_outcomes,
                   "review_form": f"{entry['review_id']}/review.json"}
         packets.append(packet)
-    (destination / "index.json").write_text(json.dumps({"packets": packets}, indent=2) + "\n")
+    (destination / "index.json").write_text(json.dumps({"packets": packets}, indent=2) + "\n", encoding="utf-8")
     (destination / "README.md").write_text(
         "# Anonymous material review\n\n"
         "Review packets are in randomized order and omit mode, model and provider traces. "
@@ -214,6 +214,6 @@ def export_review_packets(directory):
         "leave those judgments pending until the evaluator supplies the corresponding blind evidence.\n\n"
         "Record your reviewer ID, independent status, role and evidence in review.json. "
         "Return the file to the evaluator for merging into reviews/<review_id>.json. "
-        "The generating AI cannot be the final judge. Do not obtain or distribute the private run key.\n")
+        "The generating AI cannot be the final judge. Do not obtain or distribute the private run key.\n", encoding="utf-8")
     return {"directory": str(destination), "packets": len(packets),
             "scheduled": len(entries), "missing_packets": len(entries) - len(packets)}

@@ -21,7 +21,7 @@ def verify_fixture(path, manifest_path=DEFAULT_MANIFEST, asset_root=DEFAULT_ROOT
     from open_painter.geometry.provenance import status
     from open_painter.geometry.texel_density import measure
     path = Path(path)
-    audit = json.loads(path.with_suffix('.json').read_text())
+    audit = json.loads(path.with_suffix('.json').read_text(encoding="utf-8"))
     result = dict(fixture=path.name, status='PASS', checks=[], failures=[])
     def check(name, passed):
         result['checks'].append(dict(name=name, passed=bool(passed)))
@@ -78,7 +78,7 @@ def verify_fixture(path, manifest_path=DEFAULT_MANIFEST, asset_root=DEFAULT_ROOT
         ao = next(m.image for m in ts.baked_maps if m.kind == 'AO')
         check(ts.name + ':renderer_independent_fresh_ao', ao.get('benchmark_bake_method') == 'CPU_BVH_COSINE_HEMISPHERE_V1'
               and ao.get('sampling_resolution') == 1024 and ao.get('samples') == 32)
-    manifest = json.loads(Path(manifest_path).read_text())
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     if len(audit['asset_ids']) != 1:
         raise ValueError('Legacy multi-asset fixture cannot enter this benchmark')
     entry = next(item for item in manifest['assets'] if item['id'] == audit['asset_ids'][0])
@@ -143,7 +143,7 @@ def main():
     output = args.output or args.fixtures / 'source_fixture_audit.json'
     good = same_rig and all(result['status'] == 'PASS' for result in results)
     output.write_text(json.dumps(dict(status='PASS' if good else 'FAIL', same_fixed_rig=same_rig,
-                                     results=results), indent=2) + '\n')
+                                     results=results), indent=2) + '\n', encoding="utf-8")
     if not good:
         raise SystemExit(1)
 

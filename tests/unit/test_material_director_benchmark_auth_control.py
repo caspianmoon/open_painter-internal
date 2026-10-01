@@ -38,10 +38,10 @@ class AuthSchedulingTests(unittest.TestCase):
                     self.assertEqual(preflight.call_count,2)
                 self.assertEqual(calls,[frozen['schedule'][0]['run_id']])
                 first=comparison/frozen['schedule'][0]['relative_directory']/'result.json';first_bytes=first.read_bytes()
-                self.assertEqual(json.loads((comparison/'execution_control.json').read_text())['status'],'AUTH_REFRESH_REQUIRED')
+                self.assertEqual(json.loads((comparison/'execution_control.json').read_text(encoding="utf-8"))['status'],'AUTH_REFRESH_REQUIRED')
                 for entry in frozen['schedule'][1:]:
                     directory=comparison/entry['relative_directory']
-                    self.assertEqual(json.loads((directory/'result.json').read_text())['status'],'NOT_RUN')
+                    self.assertEqual(json.loads((directory/'result.json').read_text(encoding="utf-8"))['status'],'NOT_RUN')
                     self.assertFalse((directory/'attempt.json').exists())
                 with patch.object(runner,'preflight_login',return_value={'status':'READY'}):
                     self.assertEqual(runner.main(args+['--max-sessions','1']),0)
@@ -55,9 +55,9 @@ class AuthSchedulingTests(unittest.TestCase):
                 self.assertEqual(runner.main(['run','--comparison',str(comparison),'--fixtures',str(fixtures),'--use-codex-login']),3)
             for entry in frozen['schedule']:
                 directory=comparison/entry['relative_directory']
-                self.assertEqual(json.loads((directory/'result.json').read_text())['status'],'NOT_RUN')
+                self.assertEqual(json.loads((directory/'result.json').read_text(encoding="utf-8"))['status'],'NOT_RUN')
                 self.assertFalse((directory/'attempt.json').exists())
-            report=json.loads((comparison/'report.json').read_text())
+            report=json.loads((comparison/'report.json').read_text(encoding="utf-8"))
             self.assertEqual(report['failures'],[])
 
     def test_smoke_stops_once_before_snapshot_or_any_attempt_on_expired_login(self):
@@ -100,7 +100,7 @@ class AuthSchedulingTests(unittest.TestCase):
                 self.assertEqual(len(calls),5);self.assertEqual(len(set(calls)),5)
                 self.assertEqual(first.read_bytes(),original)
                 self.assertEqual((output/'manifest.json').read_bytes(),frozen)
-                self.assertEqual(len(json.loads((output/'smoke_index.json').read_text())['cases']),5)
+                self.assertEqual(len(json.loads((output/'smoke_index.json').read_text(encoding="utf-8"))['cases']),5)
 
 
 if __name__=='__main__':

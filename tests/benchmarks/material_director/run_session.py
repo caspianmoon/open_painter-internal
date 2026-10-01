@@ -590,7 +590,7 @@ class LiveRun:
             emergency = dict(record_version=3,run_id=self.job["run_id"],status="FAILED",requested_terminal_status=status,
                 failures=[failure],terminal_cleanup_required=True)
             try:
-                previous = json.loads((self.out / "result.json").read_text())
+                previous = json.loads((self.out / "result.json").read_text(encoding="utf-8"))
                 previous.update(status="FAILED",terminal_emergency=emergency)
                 previous.setdefault("failures",[]).append(failure)
                 write_json(self.out / "result.json",redact(previous))
@@ -655,7 +655,7 @@ class LiveRun:
 
 
 def main():
-    job = json.loads(Path(os.environ["OP_MD_BENCHMARK_JOB"]).read_text())
+    job = json.loads(Path(os.environ["OP_MD_BENCHMARK_JOB"]).read_text(encoding="utf-8"))
     open_painter.register()
     bpy.context.preferences.view.show_splash = False
     bpy.ops.wm.open_mainfile(filepath=job["fixture"], use_scripts=False)

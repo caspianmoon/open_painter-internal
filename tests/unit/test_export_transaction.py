@@ -96,7 +96,7 @@ class Scene:
         belong to this test: the folders are under this scene's temporary directory."""
         spec = self.root / "spec.json"
         spec.write_text(json.dumps({"identifier": identifier, "overwrite": overwrite, "recover": str(recover) if recover else None,
-                                    "items": [(str(d), str(s)) for d, s in self.items]}))
+                                    "items": [(str(d), str(s)) for d, s in self.items]}), encoding="utf-8")
         env = dict(os.environ, OP_EXPORT_FAILPOINT=failpoint or "")
         env.pop("OP_EXPORT_FAULT", None)
         if fault:
@@ -401,7 +401,7 @@ class TransactionTests(unittest.TestCase):
         try:
             completed = scene.run_subprocess("after_backups")
             self.assertEqual(completed.returncode, 3)
-            journal = json.loads((scene.out / transaction.JOURNAL).read_text())
+            journal = json.loads((scene.out / transaction.JOURNAL).read_text(encoding="utf-8"))
             coordinator = Path(journal["coordinator"])
             participant = scene.other if coordinator.parent.resolve() == scene.out.resolve() else scene.out
             coordinator.unlink()                                        # the decision record vanishes
@@ -427,7 +427,7 @@ class TransactionTests(unittest.TestCase):
                 self.assertEqual({k: v for k, v in snapshot(scene.out).items() if k != transaction.LOCK}, ORIGINAL)
                 (scene.out / transaction.JOURNAL).write_text(json.dumps({
                     "format": 2, "transaction": "feedfacecafe", "state": "PREPARED", "pid": holder.pid,
-                    "coordinator": str(scene.out / transaction.JOURNAL), "folders": [str(scene.out)], "items": [], "created": 0}))
+                    "coordinator": str(scene.out / transaction.JOURNAL), "folders": [str(scene.out)], "items": [], "created": 0}), encoding="utf-8")
                 with self.assertRaises(transaction.ExportBusy):
                     transaction.recover(scene.out)
                 (scene.out / transaction.JOURNAL).unlink()
@@ -447,8 +447,8 @@ class TransactionTests(unittest.TestCase):
             # A journal of a live process with its lock present: not ours to recover.
             spec = {"format": 2, "transaction": "feedfacecafe", "state": "PREPARED", "pid": os.getppid() if os.getppid() > 1 else os.getpid(),
                     "coordinator": str(scene.out / transaction.JOURNAL), "folders": [str(scene.out)], "items": [], "created": 0}
-            (scene.out / transaction.JOURNAL).write_text(json.dumps(spec))
-            (scene.out / transaction.LOCK).write_text(f"{spec['pid']}\n0\n")
+            (scene.out / transaction.JOURNAL).write_text(json.dumps(spec), encoding="utf-8")
+            (scene.out / transaction.LOCK).write_text(f"{spec['pid']}\n0\n", encoding="utf-8")
             with self.assertRaises(transaction.ExportBusy):
                 transaction.recover(scene.out)
             self.assertTrue((scene.out / transaction.JOURNAL).exists())
@@ -723,7 +723,7 @@ class IdenticalContentTests(unittest.TestCase):
                     transaction.recover(scene.out)
                     self._assert_pre_request(scene, failpoint)
                     continue
-                journal = json.loads((scene.out / transaction.JOURNAL).read_text())
+                journal = json.loads((scene.out / transaction.JOURNAL).read_text(encoding="utf-8"))
                 claimed = {item["name"] for item in journal["items"] if item.get("claimed")}
                 self.assertEqual(claimed, {"A.png"}, (failpoint, journal["items"]))
                 if failpoint == "during_exclusive_fill":
@@ -786,7 +786,7 @@ class IdenticalContentTests(unittest.TestCase):
                                          "backup": f"{backup}{transaction.BACKUP_SUFFIX}feedfacecafe" if backup else None,
                                          "staging": f"{name}{transaction.STAGING_SUFFIX}feedfacecafe", "staged_sha256": staged,
                                          "published_sha256": None, "method": None})
-            (scene.out / transaction.JOURNAL).write_text(json.dumps(journal))
+            (scene.out / transaction.JOURNAL).write_text(json.dumps(journal), encoding="utf-8")
             with self.assertRaises(transaction.RecoveryRequired) as raised:
                 transaction.recover(scene.out)
             message = str(raised.exception)

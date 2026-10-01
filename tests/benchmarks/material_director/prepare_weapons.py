@@ -22,7 +22,7 @@ from runtime import sha256, write_json
 
 def prepare(source_root, output, rig):
     open_painter.register()
-    manifest = json.loads((source_root / "manifest.json").read_text())
+    manifest = json.loads((source_root / "manifest.json").read_text(encoding="utf-8"))
     rig_hash = sha256(rig)
     for asset in manifest["assets"]:
         destination = output / (asset["folder"] + ".blend")

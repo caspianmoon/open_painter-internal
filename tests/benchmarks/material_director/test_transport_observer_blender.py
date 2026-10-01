@@ -24,7 +24,7 @@ from runtime import redact, sha256, write_json
 def main():
     source = Path(os.environ.get("OP_MD_TRANSPORT_REPLAY_TRACE", str(ROOT /
         ".blender-test/material-director-benchmark/remedy-v3-smoke-03/T01/H/1/provider_and_tool_trace.jsonl")))
-    records = [json.loads(line) for line in source.read_text().splitlines()]
+    records = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines()]
     event = next(record["data"] for record in records
         if record.get("direction") == "provider"
         and record.get("data", {}).get("event") == "tool"
@@ -44,7 +44,7 @@ def main():
             started_monotonic=time.monotonic(), submitted=True)
         run.result["stages"].append(run.turn)
         run.observe_event(copy.deepcopy(event))
-        persisted = json.loads((run.out / "result.json").read_text())
+        persisted = json.loads((run.out / "result.json").read_text(encoding="utf-8"))
         assert persisted["stages"][0]["tool_call_count"] == 1
         assert str(event["call_id"]) in run.tool_started
         assert "tool_started" not in persisted and "tool_started" not in persisted["stages"][0]
@@ -52,12 +52,12 @@ def main():
             call_id=event["call_id"], success=True,
             result={"probe": "Synthetic response; original tool was not executed"})
         run.observe_send(reply)
-        persisted = json.loads((run.out / "result.json").read_text())
+        persisted = json.loads((run.out / "result.json").read_text(encoding="utf-8"))
         timing = persisted["stages"][0]["tool_timings"]
         assert len(timing) == 1 and timing[0]["call_id"] == event["call_id"]
         assert timing[0]["name"] == event["tool"] and timing[0]["success"] is True
         assert timing[0]["seconds"] >= 0 and not run.tool_started
-        trace = [json.loads(line) for line in (run.out / "provider_and_tool_trace.jsonl").read_text().splitlines()]
+        trace = [json.loads(line) for line in (run.out / "provider_and_tool_trace.jsonl").read_text(encoding="utf-8").splitlines()]
         assert trace[-2]["direction"] == "provider" and trace[-2]["data"] == redact(event)
         assert trace[-1]["direction"] == "host" and trace[-1]["data"] == redact(reply)
         return run
@@ -72,8 +72,8 @@ def main():
     disconnect.assert_called_once_with()
     quit_blender.assert_called_once_with()
     assert forced.phase == "finished"
-    final = json.loads((forced.out / "result.json").read_text())
-    emergency = json.loads((forced.out / "terminal_emergency.json").read_text())
+    final = json.loads((forced.out / "result.json").read_text(encoding="utf-8"))
+    emergency = json.loads((forced.out / "terminal_emergency.json").read_text(encoding="utf-8"))
     assert final["status"] == "FAILED" and final["stages"][0]["tool_timings"]
     assert emergency["failures"][0]["cause_code"] == "TERMINAL_EVIDENCE_WRITE_FAILED"
 

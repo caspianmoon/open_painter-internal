@@ -64,7 +64,7 @@ class RevisedProtocolTests(unittest.TestCase):
     def test_exact_user_prompts_and_five_case_alternating_schedule(self):
         spec = manifest.load_cases()
         self.assertEqual([case["id"] for case in spec["cases"]], ["T01", "T02", "T03", "T04", "T05"])
-        raw = Path(__file__).resolve().parents[2].joinpath("Open_Painter_Material_Director_Eevee_Benchmark.md").read_text()
+        raw = Path(__file__).resolve().parents[2].joinpath("Open_Painter_Material_Director_Eevee_Benchmark.md").read_text(encoding="utf-8")
         for case in spec["cases"]:
             self.assertIn(case["create"], raw)
             for prompt in case["refinements"]:
@@ -100,7 +100,7 @@ class RevisedProtocolTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 manifest.freeze_manifest(path, configuration(), fixtures())
             frozen["schedule"].reverse()
-            Path(path, "manifest.json").write_text(json.dumps(frozen))
+            Path(path, "manifest.json").write_text(json.dumps(frozen), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Frozen manifest changed"):
                 manifest.load_manifest(path)
 
@@ -164,7 +164,7 @@ class RevisedProtocolTests(unittest.TestCase):
             frozen = manifest.freeze_manifest(path, configuration(), fixtures())
             summary = report.write_report(path)
             self.assertEqual(len(summary["core_results"]), 5)
-            text = Path(path, "report.md").read_text()
+            text = Path(path, "report.md").read_text(encoding="utf-8")
             self.assertIn("0 / 5", text)
             self.assertIn("NOT SCORED", text)
             self.assertNotIn("20/24", text)
@@ -220,7 +220,7 @@ class RunnerTests(unittest.TestCase):
                     elif defect == "failed_channel":
                         target = out / "after_refine_2_state.json"
                         restore[target] = target.read_bytes()
-                        data = json.loads(target.read_text())
+                        data = json.loads(target.read_text(encoding="utf-8"))
                         data["channels"]["status"] = "FAILED"
                         runner.write_json(target, data)
                     elif defect == "packing_error":
@@ -260,9 +260,9 @@ class RunnerTests(unittest.TestCase):
             context = {"visual_context": {"view_sent": True, "maps_sent": True, "reference_sent": False},
                        "target": {"id": "texture-set"},
                        "visual_inputs": [{"id": "map:" + kind, "provenance_status": "Ready"} for kind in families]}
-            (out / "create_input.json").write_text(json.dumps({"current_context": context}))
+            (out / "create_input.json").write_text(json.dumps({"current_context": context}), encoding="utf-8")
             log = out / "input_manifest.jsonl"
-            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n")
+            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n", encoding="utf-8")
             result = {"stages": [{"name": "create", "status": "APPLIED",
                                    "actual_settings": {"generate_textures": False, "model": "pinned-model"}}]}
             job = {"case": {"id": "T04"}, "mode": "P", "model_id": "pinned-model"}
@@ -281,13 +281,13 @@ class RunnerTests(unittest.TestCase):
             contradiction=json.dumps({'turn':'refine_1','action':'run','attachments':attachments})+'\n'
             with log.open('a') as stream:stream.write(contradiction)
             self.assertFalse(runner._input_checks(result,job,out)['passed'])
-            log.write_text(json.dumps({'turn':'create','action':'run','attachments':attachments})+'\n')
+            log.write_text(json.dumps({'turn':'create','action':'run','attachments':attachments})+'\n', encoding="utf-8")
             attachments[0]["sanity"]["passed"] = False
-            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n")
+            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n", encoding="utf-8")
             self.assertFalse(runner._input_checks(result, job, out)["passed"])
             attachments[0]["sanity"]["passed"] = True
             attachments.pop()
-            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n")
+            log.write_text(json.dumps({"turn": "create", "action": "run", "attachments": attachments}) + "\n", encoding="utf-8")
             self.assertFalse(runner._input_checks(result, job, out)["passed"])
 
     def test_metrics_do_not_invent_operator_time_or_image_assignments(self):
@@ -314,7 +314,7 @@ class RunnerTests(unittest.TestCase):
                         "undo": {"status": "PASS"}, "editability": {"status": "CAPTURED"},
                         "export": {"status": "CAPTURED"}, "reconstruction": {"status": "CAPTURED"},
                         "resolution_4k": {"status": "CAPTURED"}}
-            (out / "offline_verification.json").write_text(json.dumps(evidence))
+            (out / "offline_verification.json").write_text(json.dumps(evidence), encoding="utf-8")
             result = {"offline_verification": evidence, "checks": {}}
             runner._checks(result, {"fixture": str(out / "fixture.blend"), "kind": "core"}, out)
             self.assertTrue(result["checks"]["undo"]["passed"])
@@ -340,7 +340,7 @@ class RunnerTests(unittest.TestCase):
                 calls.append(job)
                 entry = next(item for item in frozen["schedule"] if item["run_id"] == job["run_id"])
                 self.assertEqual(Path(job["output"]), (comparison / entry["relative_directory"]).resolve())
-                existing = json.loads((Path(job["output"]) / "result.json").read_text())
+                existing = json.loads((Path(job["output"]) / "result.json").read_text(encoding="utf-8"))
                 self.assertEqual(existing["status"], "RUNNING")
                 result = manifest.result_template(entry)
                 result.update(status="UNAVAILABLE", reason="Synthetic provider unavailable boundary")
@@ -356,7 +356,7 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual(runner.main(args), 0)
             self.assertEqual([job["run_id"] for job in calls], [entry["run_id"] for entry in frozen["schedule"][:2]])
             self.assertFalse((comparison / "results").exists())
-            summary = json.loads((comparison / "report.json").read_text())
+            summary = json.loads((comparison / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(len(summary["failures"]), 2)
             self.assertEqual(summary["core_scheduled"], 5)
 
@@ -373,9 +373,9 @@ class RunnerTests(unittest.TestCase):
             out = root / "session"
             out.mkdir()
             codex = root / "codex"
-            codex.write_text("synthetic executable boundary")
+            codex.write_text("synthetic executable boundary", encoding="utf-8")
             entry = manifest.build_schedule()[0]
-            (out / "result.json").write_text(json.dumps(manifest.result_template(entry)))
+            (out / "result.json").write_text(json.dumps(manifest.result_template(entry)), encoding="utf-8")
             pristine = (out / "result.json").read_bytes()
             case = next(case for case in manifest.load_cases()["cases"] if case["id"] == entry["case_id"])
             job = runner.make_job(case, mode=entry["mode"], repeat=1, fixture=fixture, output=out, model="model-pinned")
@@ -397,9 +397,9 @@ class RunnerTests(unittest.TestCase):
             result["checks"]["editability_probe"] = {"passed": None, "evidence": ["probes.json"]}
             review["workflow_checks"]["editability_probe"] = {"passed": True, "evidence": ["reviewed-probes.json"]}
             source = Path(path) / "returned-review.json"
-            source.write_text(json.dumps(review))
+            source.write_text(json.dumps(review), encoding="utf-8")
             runner._import_review(path, source)
-            stored = json.loads((Path(path) / "reviews" / f"{entry['review_id']}.json").read_text())
+            stored = json.loads((Path(path) / "reviews" / f"{entry['review_id']}.json").read_text(encoding="utf-8"))
             case = next(case for case in manifest.load_cases()["cases"] if case["id"] == entry["case_id"])
             self.assertEqual(scoring.score_session(result, case, stored)["verdict"], "PASS")
             result["checks"]["editability_probe"]["passed"] = False

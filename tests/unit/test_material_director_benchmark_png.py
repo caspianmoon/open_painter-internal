@@ -233,7 +233,7 @@ class BenchmarkPNGValidation(unittest.TestCase):
                     observed.append(png.decoder_backend())
                 runner.write_json(out/'result.json',dict(status='FAILED',stages=[],checks={},hard_failures=[],
                     failures=[],environment={'blender_version':'synthetic-observer'}))
-                self.assertNotIn('png_decoder',json.loads((out/'result.json').read_text())['environment'])
+                self.assertNotIn('png_decoder',json.loads((out/'result.json').read_text(encoding="utf-8"))['environment'])
                 return 0
             def inspect_normalization(result,*args):
                 self.assertEqual(result['environment']['png_decoder'],host)

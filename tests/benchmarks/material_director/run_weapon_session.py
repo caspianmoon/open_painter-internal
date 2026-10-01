@@ -109,7 +109,7 @@ class WeaponRun(LiveRun):
 
 
 def main():
-    job = json.loads(Path(os.environ["OP_MD_BENCHMARK_JOB"]).read_text())
+    job = json.loads(Path(os.environ["OP_MD_BENCHMARK_JOB"]).read_text(encoding="utf-8"))
     open_painter.register()
     bpy.context.preferences.view.show_splash = False
     bpy.ops.wm.open_mainfile(filepath=job["fixture"], use_scripts=False)

@@ -43,7 +43,7 @@ def main():
                 '--probe-id', str(index), '--concurrency-barrier', str(output / 'barrier')]
             code = run_blender(command, env=env, timeout=240, log=destination / 'blender.log')
         path = destination / 'ui_probe.json'
-        report = json.loads(path.read_text()) if path.is_file() else {'status':'FAILED', 'error':'No terminal probe record'}
+        report = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {'status':'FAILED', 'error':'No terminal probe record'}
         report.update(exit_code=code, output=str(destination), fixture=str(fixture.resolve()))
         for image in destination.rglob('*.png'):
             report.setdefault('verified_images', []).append(dict(path=str(image.relative_to(output)),

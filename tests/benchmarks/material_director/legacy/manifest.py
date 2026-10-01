@@ -61,7 +61,7 @@ def file_sha256(path):
 
 
 def load_cases(path=None):
-    data = json.loads(Path(path or ROOT / "test_cases.json").read_text())
+    data = json.loads(Path(path or ROOT / "test_cases.json").read_text(encoding="utf-8"))
     cases = data["cases"]
     if [case["id"] for case in cases] != [f"MD-{i:02d}" for i in range(1, 9)]:
         raise ValueError("The core benchmark requires exactly MD-01 through MD-08")
@@ -279,7 +279,7 @@ def freeze_manifest(directory, configuration, fixtures, seed=20260922):
         "schedule": build_schedule(seed, specification),
     }
     _write_json_new(directory / "manifest.json", manifest)
-    (directory / "manifest.sha256").write_text(digest(manifest) + "\n")
+    (directory / "manifest.sha256").write_text(digest(manifest) + "\n", encoding="utf-8")
     cases = {case["id"]: case for case in specification["cases"]}
     for entry in manifest["schedule"]:
         _write_json_new(directory / entry["relative_directory"] / "result.json", result_template(entry))
@@ -300,8 +300,8 @@ def load_manifest(path):
     path = Path(path)
     if path.is_dir():
         path /= "manifest.json"
-    manifest = json.loads(path.read_text())
-    expected = path.with_suffix(".sha256").read_text().strip()
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    expected = path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
     if digest(manifest) != expected:
         raise ValueError("Frozen manifest changed: use a new comparison for new settings or run order")
     validate_configuration(manifest["configuration"])
@@ -338,7 +338,7 @@ def record_result(directory, run_id, result):
     result["run_id"] = run_id
     result["manifest_sha256"] = digest(manifest)
     path = directory / entry["relative_directory"] / "result.json"
-    previous = json.loads(path.read_text()) if path.exists() else None
+    previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     if previous and previous.get("status") not in {"NOT_RUN", "RUNNING"}:
         # Later evidence/reviews may augment a result, but cannot replace its live attempt.
         for field in ("status", "started_at", "completed_at", "stages", "hard_failures"):
@@ -348,6 +348,6 @@ def record_result(directory, run_id, result):
         history.write(canonical({"recorded_at": datetime.now(timezone.utc).isoformat(),
                                  "previous": previous, "result": result}).decode() + "\n")
     temporary = path.with_name("result.json.tmp")
-    temporary.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+    temporary.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     temporary.replace(path)
     return path

@@ -69,7 +69,7 @@ def main():
     for case in ([a.case] if a.case else ('T01','T02','T03','T04','T05')):
         base=a.boots_attempt if case=='T03' and a.boots_attempt else a.base_attempt
         source=base/case/'after_create.blend'
-        authored=json.loads((base/case/'calibration.json').read_text())
+        authored=json.loads((base/case/'calibration.json').read_text(encoding="utf-8"))
         if authored['source_build']['source_sha256']!=pin['source_sha256']:
             raise ValueError('Saved calibration is from another product build')
         before=sha256(source)

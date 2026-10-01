@@ -33,7 +33,7 @@ def png(size=1024):
 
 def write(path, value):
     path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_text(json.dumps(value))
+    path.write_text(json.dumps(value), encoding="utf-8")
 
 
 def synthetic_no_edit(config, root):
@@ -61,7 +61,7 @@ def example(root, execution='APPLIED'):
     if execution=='PROVIDER_FAILED':stage.update(provider_status='failed',status='RESPONSE_ONLY')
     result=dict(record_version=3,status='FAILED',stages=[stage],run_id='unit-run',generated_inputs={'assigned':0})
     write(directory/'result.json',result)
-    (directory/'provider_and_tool_trace.jsonl').write_text('{}\n')
+    (directory/'provider_and_tool_trace.jsonl').write_text('{}\n', encoding="utf-8")
     for name in ('00_before.png','01_create_front.png','02_create_back.png','03_create_close.png','v3_create_underside.png'):
         (directory/name).write_bytes(png())
     for label,names in [('before',['00_before.png']),('after_create',['01_create_front.png','02_create_back.png','03_create_close.png','v3_create_underside.png'])]:
@@ -72,7 +72,7 @@ def example(root, execution='APPLIED'):
 
 class V3ProtocolTests(unittest.TestCase):
     def test_exact_v3_prompts_and_balanced_sixty_sessions(self):
-        spec=manifest.load_cases(); doc=(ROOT/'Open_Painter_Material_Director_Capability_Remedy.md').read_text()
+        spec=manifest.load_cases(); doc=(ROOT/'Open_Painter_Material_Director_Capability_Remedy.md').read_text(encoding="utf-8")
         for case in spec['cases']:
             for prompt in [case['create'],*case['refinements']]:self.assertIn(prompt,doc)
         schedule=manifest.build_schedule(); self.assertEqual(len(schedule),60)
@@ -238,7 +238,7 @@ class PairedExecutionTests(unittest.TestCase):
             self.assertEqual(len({j['output'] for j in calls}),2)
             self.assertEqual({j['wave_id'] for j in calls},{1})
             self.assertEqual({j['concurrent_jobs'] for j in calls},{2})
-            self.assertEqual(len(json.loads((comparison/'report.json').read_text())['core_results']),60)
+            self.assertEqual(len(json.loads((comparison/'report.json').read_text(encoding="utf-8"))['core_results']),60)
             with self.assertRaises(SystemExit),redirect_stdout(io.StringIO()):
                 runner.main(['run','--comparison',str(comparison),'--fixtures',str(fixtures),'--jobs','1','--use-codex-login'])
 
@@ -289,7 +289,7 @@ class GalleryTests(unittest.TestCase):
             self.assertIn('Observed generation requests 0',rendered)
             self.assertNotIn('Requested generation True',rendered)
             # An observed failed call is a request even without a generated image.
-            result=json.loads((directory/'result.json').read_text())
+            result=json.loads((directory/'result.json').read_text(encoding="utf-8"))
             result['stages'][0]['generation_call_count']=1
             write(directory/'result.json',result)
             collected=gallery.collect_run(root,entry,root/'gallery.html')
@@ -312,7 +312,7 @@ class GalleryTests(unittest.TestCase):
                 if defect=='missing':
                     (directory/'01_create_front.png').unlink()
                 else:
-                    state=json.loads((directory/'after_create_state.json').read_text())
+                    state=json.loads((directory/'after_create_state.json').read_text(encoding="utf-8"))
                     state['views']['views'][0]['sha256']='0'*64
                     write(directory/'after_create_state.json',state)
                 checked=gallery.export_html(root,root/'portable.html',portable=True)
@@ -339,10 +339,10 @@ class GalleryTests(unittest.TestCase):
             with self.subTest(defect=defect), tempfile.TemporaryDirectory() as path:
                 root=Path(path);entry,directory=example(root);target=directory/'01_create_front.png'
                 if defect=='exception':
-                    target.unlink();record=json.loads((directory/'after_create_state.json').read_text());record['views'].update(status='FAILED',errors=['synthetic render exception']);write(directory/'after_create_state.json',record)
+                    target.unlink();record=json.loads((directory/'after_create_state.json').read_text(encoding="utf-8"));record['views'].update(status='FAILED',errors=['synthetic render exception']);write(directory/'after_create_state.json',record)
                 elif defect=='moved':target.rename(directory/'moved.png')
                 elif defect=='hash':
-                    record=json.loads((directory/'after_create_state.json').read_text());record['views']['views'][0]['sha256']='0'*64;write(directory/'after_create_state.json',record)
+                    record=json.loads((directory/'after_create_state.json').read_text(encoding="utf-8"));record['views']['views'][0]['sha256']='0'*64;write(directory/'after_create_state.json',record)
                 else:target.write_bytes(b'\x89PNG\r\n\x1a\ninvalid compressed pixels')
                 collected=gallery.collect_run(root,entry,root/'gallery.html')
                 self.assertEqual(collected['frames']['create']['front']['status'],expected)
@@ -354,11 +354,11 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual(checked['status'],'COMPLETE')
             self.assertEqual(checked['offline_empty_directory']['status'],'COMPLETE')
             self.assertGreater(checked['decoded_images'],0)
-            self.assertIn('data:image/png;base64,',output.read_text())
-            self.assertIn('<h4>Create</h4>',output.read_text())
-            self.assertIn('<h4>Final revision</h4>',output.read_text())
-            self.assertNotIn('src="http',output.read_text())
-            metadata=output.read_text().split('<script id="gallery-data" type="application/json">',1)[1].split('</script>',1)[0]
+            self.assertIn('data:image/png;base64,',output.read_text(encoding="utf-8"))
+            self.assertIn('<h4>Create</h4>',output.read_text(encoding="utf-8"))
+            self.assertIn('<h4>Final revision</h4>',output.read_text(encoding="utf-8"))
+            self.assertNotIn('src="http',output.read_text(encoding="utf-8"))
+            metadata=output.read_text(encoding="utf-8").split('<script id="gallery-data" type="application/json">',1)[1].split('</script>',1)[0]
             self.assertNotIn('data:image/png;base64,',metadata)
             cases=gallery.export_portable_cases(root,root/'cases')
             self.assertEqual(cases['status'],'COMPLETE')

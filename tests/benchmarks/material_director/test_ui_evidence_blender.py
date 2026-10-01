@@ -113,7 +113,7 @@ def tick():
             report["stage"] = "settle"
             if args.concurrency_barrier:
                 args.concurrency_barrier.mkdir(parents=True, exist_ok=True)
-                (args.concurrency_barrier / (args.probe_id + ".ready")).write_text(str(os.getpid()))
+                (args.concurrency_barrier / (args.probe_id + ".ready")).write_text(str(os.getpid()), encoding="utf-8")
             return .25
         with bpy.context.temp_override(window=window, area=area, region=region):
             shader_preview.tick(scene, target)

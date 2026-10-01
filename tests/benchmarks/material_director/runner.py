@@ -71,7 +71,7 @@ def fixture_records(directory):
     records = {}
     for path in sorted(directory.glob("*.blend")):
         metadata = path.with_suffix(".json")
-        report = json.loads(metadata.read_text()) if metadata.exists() else {}
+        report = json.loads(metadata.read_text(encoding="utf-8")) if metadata.exists() else {}
         measured = sha256(path)
         records[path.name] = dict(path=str(path), sha256=sha256(path),
             status=report.get("status", "UNVERIFIED") if report.get("sha256") == measured else "UNVERIFIED",
@@ -150,7 +150,7 @@ def snapshot_runtime(destination):
 
 
 def _read(path, default=None):
-    return json.loads(Path(path).read_text()) if Path(path).exists() else ({} if default is None else default)
+    return json.loads(Path(path).read_text(encoding="utf-8")) if Path(path).exists() else ({} if default is None else default)
 
 
 def _status_check(record, evidence, *, pass_statuses=("PASS",), reason=None):
@@ -174,11 +174,11 @@ def _input_checks(result, job, out):
                            for channel in ("BASE_COLOR", "ROUGHNESS", "METALLIC", "HEIGHT", "NORMAL"))
     wants_reference = job["case"]["id"] == "MD-08"  # Archived protocol only.
     input_log = out / "input_manifest.jsonl"
-    attachments_log = [json.loads(line) for line in input_log.read_text().splitlines() if line.strip()] if input_log.exists() else []
+    attachments_log = [json.loads(line) for line in input_log.read_text(encoding="utf-8").splitlines() if line.strip()] if input_log.exists() else []
     tool_replies = {}
     trace = out / "provider_and_tool_trace.jsonl"
     if trace.exists():
-        for line in trace.read_text().splitlines():
+        for line in trace.read_text(encoding="utf-8").splitlines():
             item = json.loads(line)
             data = item.get("data", {})
             if item.get("direction") == "host" and data.get("action") == "tool_result" and isinstance(data.get("result"), dict):
@@ -529,7 +529,7 @@ def _execute_authenticated(job, *, auth, blender, codex, quick=False, cancel_eve
     out = Path(job["output"]).resolve()
     out.mkdir(parents=True, exist_ok=True)
     if (out / "result.json").exists():
-        existing = json.loads((out / "result.json").read_text())
+        existing = json.loads((out / "result.json").read_text(encoding="utf-8"))
         if (existing.get("status") not in {"NOT_RUN", "RUNNING"} or existing.get("attempted")
                 or any(stage.get("status") not in {None, "NOT_RUN"} for stage in stage_map(existing).values())):
             raise ValueError("This attempt already has evidence. Use another comparison/pilot directory; do not overwrite an attempted run")
@@ -572,7 +572,7 @@ def _execute_authenticated(job, *, auth, blender, codex, quick=False, cancel_eve
                 control = Path(profile) / "owned-process.json"
                 if control.exists() and os.name != "nt":
                     import signal
-                    pid = json.loads(control.read_text()).get("companion_pid")
+                    pid = json.loads(control.read_text(encoding="utf-8")).get("companion_pid")
                     if isinstance(pid, int) and pid > 1:
                         try:
                             if os.getpgid(pid) == pid:
@@ -582,7 +582,7 @@ def _execute_authenticated(job, *, auth, blender, codex, quick=False, cancel_eve
         # Both the access-only cache and live Blender profile are gone before
         # offline reconstruction. Never touch the user's normal provider cache.
         if (out / "result.json").exists():
-            result = json.loads((out / "result.json").read_text())
+            result = json.loads((out / "result.json").read_text(encoding="utf-8"))
         else:
             result = dict(run_id=job["run_id"], case_id=job["case"]["id"], mode=job["mode"], repeat=job.get("repeat", 1),
                           status="FAILED", stages=[], hard_failures=[], checks={}, failures=[])
@@ -613,11 +613,11 @@ def _execute_authenticated(job, *, auth, blender, codex, quick=False, cancel_eve
             result["offline_seconds"] = round(time.monotonic() - offline_started, 3)
             evidence = out / "offline_verification.json"
             if evidence.exists():
-                result["offline_verification"] = json.loads(evidence.read_text())
+                result["offline_verification"] = json.loads(evidence.read_text(encoding="utf-8"))
             if offline_code:
                 result.setdefault("failures", []).append(dict(category="export_or_persistence", message=f"Offline verifier exited {offline_code}; see offline.log"))
     except (RuntimeError, OSError, subprocess.SubprocessError, TimeoutError) as exc:
-        result = json.loads((out / "result.json").read_text()) if (out / "result.json").exists() else dict(
+        result = json.loads((out / "result.json").read_text(encoding="utf-8")) if (out / "result.json").exists() else dict(
             run_id=job["run_id"], case_id=job["case"]["id"], mode=job["mode"], repeat=job.get("repeat", 1),
             stages=[], checks={}, hard_failures=[], failures=[])
         attempted = any(stage.get("status") not in {None, "NOT_RUN"} for stage in stage_map(result).values())
@@ -676,7 +676,7 @@ def _execute_authenticated(job, *, auth, blender, codex, quick=False, cancel_eve
     for name in ("blender.log", "offline.log"):
         path = out / name
         if path.exists():
-            path.write_text(redact(path.read_text(errors="replace")))
+            path.write_text(redact(path.read_text(errors="replace", encoding="utf-8")), encoding="utf-8")
     return result
 
 
@@ -1036,7 +1036,7 @@ def main(argv=None):
         print(output / "smoke_index.json")
         return 3 if auth_paused else 0
     elif args.command == "freeze":
-        configuration = json.loads(args.config.read_text())
+        configuration = json.loads(args.config.read_text(encoding="utf-8"))
         if args.controlled_matrix:
             configuration.update(modes=["P", "H"], repeat_count=3)
         if args.extended_checks:
@@ -1129,7 +1129,7 @@ def main(argv=None):
                     continue
                 directory = args.comparison / entry["relative_directory"]
                 if (directory / "result.json").exists():
-                    previous = json.loads((directory / "result.json").read_text())
+                    previous = json.loads((directory / "result.json").read_text(encoding="utf-8"))
                     if previous.get("status") != "NOT_RUN":
                         continue
                 if args.max_sessions is not None and count >= args.max_sessions:

@@ -62,7 +62,7 @@ def _verify(path, size=None, md5=None, sha256=None):
 
 def acquire(manifest_path=DEFAULT_MANIFEST, asset_root=DEFAULT_ROOT, asset_ids=None):
     manifest_path, asset_root = Path(manifest_path), Path(asset_root)
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     selected = set(asset_ids or [entry["id"] for entry in manifest["assets"]])
     unknown = selected - {entry["id"] for entry in manifest["assets"]}
     if unknown:
@@ -82,7 +82,7 @@ def acquire(manifest_path=DEFAULT_MANIFEST, asset_root=DEFAULT_ROOT, asset_ids=N
         for endpoint in ("files", "info"):
             url = f"https://api.polyhaven.com/{endpoint}/{slug}"
             result = fetch(url, directory / f"{slug}.{endpoint}.json")
-            metadata[endpoint] = json.loads(Path(result["path"]).read_text())
+            metadata[endpoint] = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
             result.update(path=str(Path(result["path"]).relative_to(asset_root)), url=url)
             entry["metadata_files"].append(result)
         entry["creators"] = metadata["info"].get("authors", {})
@@ -112,7 +112,7 @@ def acquire(manifest_path=DEFAULT_MANIFEST, asset_root=DEFAULT_ROOT, asset_ids=N
             if header[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", header[16:24]) != (1024, 1024):
                 raise ValueError("Reference must be the specified 1K PNG")
             entry["dimensions"] = [1024, 1024]
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         print("ASSET_DOWNLOADED", entry["id"], sum(f["size"] for f in entry["files"]), flush=True)
     return manifest
 

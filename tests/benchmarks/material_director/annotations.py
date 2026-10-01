@@ -33,7 +33,7 @@ def file_hash(path):
 
 
 def _write(path, value):
-    Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+    Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
 
 def _array(path):
@@ -174,7 +174,7 @@ def validate_spec(spec, base, *, check_arrays=True):
 def freeze(source, output):
     """Copy dependencies into a new immutable bundle; do not inspect AI evidence."""
     source, output = Path(source).resolve(), Path(output).resolve()
-    spec = validate_spec(json.loads(source.read_text()), source.parent)
+    spec = validate_spec(json.loads(source.read_text(encoding="utf-8")), source.parent)
     if output.exists():
         raise FileExistsError("Never replace frozen annotation bundles")
     output.mkdir(parents=True)
@@ -194,19 +194,19 @@ def freeze(source, output):
     manifest = output / "annotations.json"
     _write(manifest, spec)
     checksum = file_hash(manifest)
-    (output / "annotations.sha256").write_text(checksum + "\n")
+    (output / "annotations.sha256").write_text(checksum + "\n", encoding="utf-8")
     return dict(annotations_manifest=str(manifest), annotations_sha256=checksum)
 
 
 def verify_frozen(path, expected_sha256=None, fixture_sha256=None):
     path = Path(path).resolve()
-    expected = expected_sha256 or path.with_suffix(".sha256").read_text().strip()
+    expected = expected_sha256 or path.with_suffix(".sha256").read_text(encoding="utf-8").strip()
     if not SHA.fullmatch(expected) or file_hash(path) != expected:
         raise ValueError("Frozen annotation manifest changed")
     # Verification is usable by the ordinary-Python launcher without NumPy.
     # Full numeric validation happened on freeze and repeats during measurement;
     # the content hashes below pin those exact array bytes in the meantime.
-    spec = validate_spec(json.loads(path.read_text()), path.parent, check_arrays=False)
+    spec = validate_spec(json.loads(path.read_text(encoding="utf-8")), path.parent, check_arrays=False)
     if not spec.get("frozen_at") or spec.get("evaluator_only") is not True:
         raise ValueError("Annotations must be a frozen evaluator-only bundle")
     for fixture in spec["fixtures"]:
@@ -336,7 +336,7 @@ def evaluate_checkpoint(checkpoint, config, *, fixture_sha256=None):
     spec = verify_frozen(path, config.get("annotations_sha256"), checksum)
     if isinstance(checkpoint, (str, Path)):
         checkpoint_path = Path(checkpoint)
-        checkpoint = json.loads(checkpoint_path.read_text())
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
     else:
         checkpoint_path = Path(checkpoint.get("state_path", "checkpoint.json"))
     checkpoints = {checkpoint["label"]: checkpoint}
@@ -347,7 +347,7 @@ def evaluate_checkpoint(checkpoint, config, *, fixture_sha256=None):
         if item.get("before"):
             before_path = checkpoint_path.parent / (item["before"] + "_state.json")
             if before_path.exists():
-                checkpoints[item["before"]] = json.loads(before_path.read_text())
+                checkpoints[item["before"]] = json.loads(before_path.read_text(encoding="utf-8"))
         region = next(r for r in spec["regions"] if r["id"] == item["region_id"])
         try:
             measurements[item["id"]] = _measure(checkpoint, item, region, path.parent, checkpoints)
@@ -411,7 +411,7 @@ def main():
     command.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.action == "validate":
-        validate_spec(json.loads(args.source.read_text()), args.source.parent)
+        validate_spec(json.loads(args.source.read_text(encoding="utf-8")), args.source.parent)
         print("VALID_EVALUATOR_SPEC")
     elif args.action == "freeze":
         print(json.dumps(freeze(args.source, args.output), indent=2))
@@ -420,7 +420,7 @@ def main():
         if args.action == "measure":
             result = evaluate_checkpoint(args.checkpoint, dict(annotations_manifest=str(args.annotations)), fixture_sha256=args.fixture_sha256)
         else:
-            result = validate_probe_mapping(json.loads(args.bindings.read_text()), json.loads(args.checkpoint.read_text()), fixture)
+            result = validate_probe_mapping(json.loads(args.bindings.read_text(encoding="utf-8")), json.loads(args.checkpoint.read_text(encoding="utf-8")), fixture)
             result["source_checkpoint_sha256"] = file_hash(args.checkpoint)
         _write(args.output, result)
         print(args.output)

@@ -38,7 +38,12 @@ def mark_changed(ts, layer, channel, mask=False):
             prop.dirty = True
         layer.dirty = True
         ts.dirty = True
+        serial = ts.edit_serial
         ts.edit_serial += 1
+        # Pixels change nothing structural: answers memoised per structure (the readers
+        # below, the geometry uses) stand through a stroke.
+        from ..evaluation.structure_memo import numeric_edit
+        numeric_edit(ts, serial)
         from ..evaluation.references import dependent_channels
         affected = dependent_channels(ts, layer.id, channel) | {channel}
         for out in ts.outputs:

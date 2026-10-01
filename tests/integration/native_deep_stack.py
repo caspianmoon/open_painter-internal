@@ -16,6 +16,7 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_PHASES   1: print wall-clock totals of the main phases of each edit
     OP_DEEP_SECTIONS 1: with OP_DEEP_PHASES, also the sections of patching and native planning
     OP_DEEP_REPEATS  samples per structural edit (default 3)
+    OP_DEEP_PAINT_STEPS brush inputs on a paint layer mid-stack (default 24; OP_DEEP_ONLY=paint_middle)
 """
 import cProfile
 import io
@@ -381,6 +382,78 @@ def run_structural(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3')
     return rows
 
 
+def run_paint(scene, ts, steps=int(os.environ.get('OP_DEEP_PAINT_STEPS', '24'))):
+    """Emulated brush inputs on a paint layer added in the middle of the stack (as
+    paint_freeze.py drives them), each timed from the pixels landing until the set is
+    current. Writing the pixels is Blender's brush in the product and is not timed."""
+    from statistics import median
+    from unittest.mock import patch
+    from open_painter.evaluation import cache, dependencies
+    from open_painter.painting import paint_session
+    from open_painter.painting.channel_paint import target as paint_target
+    project = scene.open_painter
+    leaves = [layer.id for layer in ts.layers if layer.type != 'FOLDER']
+    middle = leaves[len(leaves) // 2]
+    ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == middle)
+    layer_id = stack.add(ts, 'PAINT', 'Deep paint').id
+    image = paint_target(ts, next(item for item in ts.layers if item.id == layer_id), 'BASE_COLOR')
+    settle(scene, ts, perf_counter())
+    project.paint_image = image
+    project.paint_set_id, project.paint_layer_id = ts.id, layer_id
+    project.paint_channel = project.paint_target_channel = 'BASE_COLOR'
+    project.paint_mask, project.paint_mask_id = False, ''
+    project.paint_canvases.clear()
+    paint_session.reset()
+    paint_session.detect(scene, force=True)
+    pointer = scene.as_pointer()
+    engine = shader_preview.session_engine(scene, ts)
+    with Frame():   # the idle timer arms the selected layer
+        while engine.prearm(layer_id, dependencies.image_epochs()):
+            pass
+    data, n = images.pixels(image), image.size[0]
+    durations, ticks = [], []
+    profiler = cProfile.Profile() if PROFILE else None
+    try:
+        with patch.object(cache, '_modal_painting', lambda s: True):
+            for step in range(steps):
+                y, x = (step * 37) % (n - 64), (step * 53) % (n - 64)
+                data[y:y + 64, x:x + 64, :3] = (step % 5) / 5 + .1
+                image.pixels.foreach_set(data.ravel())
+                image.update()
+                phase_totals.clear()
+                started = perf_counter()
+                if profiler:
+                    profiler.enable()
+                cache._live_checks.pop(pointer, None)
+                with Frame():
+                    cache.tick()
+                elapsed, count = settle(scene, ts, started)
+                if profiler:
+                    profiler.disable()
+                durations.append(elapsed)
+                ticks.append(count)
+                if PHASES:
+                    print('DEEP_STACK_PHASES paint_middle', step, f'total {elapsed:.1f} ms',
+                          {k: round(v, 1) for k, v in sorted(phase_totals.items())}, flush=True)
+        cache._paint_input[pointer] = (True, monotonic() - .2)   # the stroke is released
+        cache._live_checks.pop(pointer, None)
+        cache.tick()
+        settle(scene, ts, perf_counter())
+    finally:
+        project.paint_image = None
+        project.paint_set_id = project.paint_layer_id = project.paint_target_channel = ''
+        project.paint_canvases.clear()
+        cache._paint_input.pop(pointer, None)
+    if profiler:
+        profiler.dump_stats(str(REPORT) + '.paint_middle.prof')
+    warm = sorted(durations[2:] or durations)
+    row = dict(median_ms=median(warm), p95_ms=warm[min(len(warm) - 1, int(len(warm) * .95))], ticks=ticks,
+               durations=durations, footprint_mib=footprint_mib())
+    print('DEEP_STACK_PAINT paint_middle', f"median {row['median_ms']:.1f} ms p95 {row['p95_ms']:.1f} ms",
+          'ticks', ticks, 'footprint', row['footprint_mib'], 'MiB', flush=True)
+    return row
+
+
 def main():
     gpu.init()
     open_painter.register()
@@ -519,10 +592,11 @@ def main():
                   'passes', row['passes'], 'units', row['units_rendered'], 'footprint', row['footprint_mib'], 'MiB',
                   'engine', row['engine_memory_mib'], flush=True)
         structural = run_structural(scene, ts) if STRUCTURAL else {}
+        paint = run_paint(scene, ts) if not ONLY or 'paint_middle' in ONLY else {}
         data = dict(status='PASS', version=VERSION, blender=bpy.app.version_string,
                     backend=gpu.platform.backend_type_get(), resolution=RES, counts=counts,
                     applied=applied, authoring_seconds=authoring_s, cold=cold, cases=results,
-                    structural=structural,
+                    structural=structural, paint=paint,
                     library=os.environ.get('OP_LIBOPENPAINTER_PATH'),
                     native_engine=os.environ.get('OP_NATIVE_ENGINE'))
         REPORT.parent.mkdir(parents=True, exist_ok=True)

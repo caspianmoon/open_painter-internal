@@ -146,7 +146,7 @@ def _image(node):
     node.inputs._add(Socket(node, 'Vector', VECTOR, False, (0.0, 0.0, 0.0)))
     node.outputs._add(Socket(node, 'Color', RGBA, True))
     node.outputs._add(Socket(node, 'Alpha', VALUE, True))
-    node._image, node._image_key = None, None
+    node._image, node._image_key, node._image_uid = None, None, None
     node.gpu_resource = None
     node.interpolation = 'Linear'
     node.extension = 'REPEAT'
@@ -302,9 +302,14 @@ class Node:
         key = _image_pointer(value) if value is not None else None
         if key is not None:
             _image_refs[key] += 1
-        self._image, self._image_key = value, key
-        assignments[0] += 1
-        self._image_assigned = assignments[0]
+        uid = getattr(value, 'session_uid', None) if value is not None else None
+        same = key == previous and uid == self.__dict__.get('_image_uid')
+        self._image, self._image_key, self._image_uid = value, key, uid
+        if not same:
+            # The same datablock again (an edit changed its pixels, not what the node samples):
+            # nothing a scan of the sampled images groups by has changed.
+            assignments[0] += 1
+            self._image_assigned = assignments[0]
 
     @property
     def gpu_resource(self):

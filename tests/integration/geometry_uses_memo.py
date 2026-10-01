@@ -64,7 +64,9 @@ def agree():
 
 
 def drag(check):
-    """Numeric edits of a layer, a channel, an effect and a mask, as a drag's ticks."""
+    """Numeric edits of a layer, a channel, an effect and a mask, as a drag's ticks, and a
+    brush input on a layer's channel (pixels change nothing structural)."""
+    from open_painter.painting.channel_paint import mark_changed
     effect = stack.channel_for(layer(4), 'ROUGHNESS').effects
     effect = effect[0] if len(effect) else None
     mask = layer(5).masks[0] if len(layer(5).masks) else None
@@ -76,6 +78,7 @@ def drag(check):
             effect.strength = .5 + .1 * step
         if mask is not None:
             mask.invert = bool(step % 2)
+        mark_changed(ts, layer(1), 'BASE_COLOR')
         check()
     assert walks[0] == before, f'a numeric drag re-walked the stack {walks[0] - before} times'
 

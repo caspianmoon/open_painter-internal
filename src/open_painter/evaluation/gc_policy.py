@@ -67,18 +67,20 @@ def settle(now=None):
     if not ENABLED:
         return None
     now = monotonic() if now is None else now
-    idle = now - _state['active']
-    if _state['sweep_due'] and idle >= SETTLE_DELAY:
+    # Deadlines, not ``now - active``: that difference rounds below the delay for about a
+    # fifth of clock readings, so a pause of exactly the delay would not count.
+    active = _state['active']
+    if _state['sweep_due'] and now >= active + SETTLE_DELAY:
         sweep()   # what a reset let go (``release(defer=True)``), with what was built since
         return 'swept'
-    if _state['pending'] and idle >= SETTLE_DELAY:
+    if _state['pending'] and now >= active + SETTLE_DELAY:
         _state['pending'] = False
         gc.collect()   # the frozen objects are not walked: only what is new since the last settle
         gc.freeze()
         _state['frozen'] = True
         return 'settled'
     frozen = gc.get_freeze_count()
-    if (_state['frozen'] and idle >= SWEEP_IDLE
+    if (_state['frozen'] and now >= active + SWEEP_IDLE
             and frozen > max(_state['swept'] * SWEEP_GROWTH, _state['swept'] + SWEEP_MINIMUM)):
         sweep()
         return 'swept'

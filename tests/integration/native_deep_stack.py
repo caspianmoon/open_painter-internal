@@ -10,7 +10,7 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_RES      texture resolution (default 2048)
     OP_DEEP_SAMPLES  timed edits per case (default 24)
     OP_DEEP_PROFILE  1: add a cProfile summary of each case's Python time
-    OP_DEEP_FRAMES   0: skip the window-manager frame emulation (see Frame)
+    OP_DEEP_FRAMES   0: skip the window-manager frame emulation (see Frame; off on Windows)
     OP_DEEP_STRUCTURAL 0: skip structural edits (add, remove, blend mode, visibility,
                      smart material), each timed from the edit until the set is current
     OP_DEEP_PHASES   1: print wall-clock totals of the main phases of each edit
@@ -52,7 +52,8 @@ PROFILE = os.environ.get('OP_DEEP_PROFILE') == '1'
 STRUCTURAL = os.environ.get('OP_DEEP_STRUCTURAL', '1') == '1'
 TRACE = os.environ.get('OP_DEEP_TRACE') == '1'
 FIRST = os.environ.get('OP_DEEP_FIRST') == '1'   # time the first ticks of each drag
-FRAMES = os.environ.get('OP_DEEP_FRAMES', '1') == '1'
+# Frame calls Blender internals by their exported names; blender.exe on Windows exports none.
+FRAMES = os.environ.get('OP_DEEP_FRAMES', '0' if sys.platform == 'win32' else '1') == '1'
 TRACEMALLOC = os.environ.get('OP_DEEP_TRACEMALLOC') == '1'
 ONLY = set(filter(None, os.environ.get('OP_DEEP_ONLY', '').split(',')))   # case names to run; empty: all
 PHASES = os.environ.get('OP_DEEP_PHASES') == '1'   # real-time totals of the main phases of each edit
@@ -608,6 +609,12 @@ def main():
                     begin = perf_counter()
                     setattr(target(), attribute, value)
                     shader_preview.tick(scene, ts)
+                    # Pixel publication (Vulkan) spends a time budget per tick, so an edit can take
+                    # several ticks to publish every channel; on Metal one tick must do it.
+                    for _ in range(100):
+                        if shader_preview.current(scene, ts) or not runtime.device().pixel_publish:
+                            break
+                        shader_preview.tick(scene, ts)
                     assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
                     fence()
                     return (perf_counter() - begin) * 1000

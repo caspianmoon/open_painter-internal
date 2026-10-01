@@ -16,13 +16,16 @@ parser.add_argument("--gui-start-at", help="Resume GUI regressions at this filen
 parser.add_argument("--gpu-only", action="store_true", help="Run real-window live GPU math and workflow regressions")
 parser.add_argument("--package", type=Path, help="Validate and install this candidate ZIP in isolated resources")
 parser.add_argument("--user-resources", type=Path, help="Isolated Blender profile (defaults to .blender-test/user)")
+parser.add_argument("--gpu-backend", choices=("metal", "opengl", "vulkan"),
+                    help="Blender's --gpu-backend for every launch (default: the factory setting)")
 parser.add_argument("--cap-gb", type=float, default=4.0,
                     help="Kill a Blender process whose memory footprint passes this (scripts/run_guarded.py)")
 args = parser.parse_args()
 # Every Blender launch goes through the memory guard: one runaway phase must not
 # take the machine down. The guard waits for free memory and serializes runs.
 BLENDER = [sys.executable, str(root / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
-           '--start-gb', '3', '--wait-seconds', '120', '--', args.blender]
+           '--start-gb', '3', '--wait-seconds', '120', '--', args.blender,
+           *(['--gpu-backend', args.gpu_backend] if args.gpu_backend else [])]
 # Tests never install into or save the artist's preference directory.
 env = isolated_environment(args.user_resources or root / ".blender-test" / "user")
 profile_guard = (

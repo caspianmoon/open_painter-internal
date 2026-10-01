@@ -337,11 +337,11 @@ def resample(values, covered, n_out, vector=False):
     valid source. Tangent normals (``vector``) are filtered as decoded vectors and renormalised."""
     values = np.asarray(values, np.float32)
     n = values.shape[0]
+    if n_out == n:
+        return values if not vector else _encode(values, decode=True), covered.copy()
     if vector:
         values = values.copy()
         values[..., :3] = values[..., :3] * 2 - 1
-    if n_out == n:
-        return values if not vector else _encode(values), covered.copy()
     weight = covered.astype(np.float32)
     if n_out < n:
         if n % n_out:
@@ -399,12 +399,16 @@ def resample(values, covered, n_out, vector=False):
     return out, has_data
 
 
-def _encode(values):
+def _encode(values, decode=False):
+    """Normalized and encoded tangent normals (decoded from [0, 1] first when ``decode``)."""
     from ..native_bridge.lifecycle import active_library
     lib = active_library()
     if lib is not None and values.dtype == np.float32 and values.shape[-1] in (3, 4) and hasattr(lib, 'op_normal_encode'):
         from ..native_bridge.pixels import normal_encode
-        return normal_encode(lib, np.array(values, np.float32, order='C'), decode=False)   # the arithmetic below
+        return normal_encode(lib, values, decode)   # the arithmetic below, in one pass
+    if decode:
+        values = values.copy()
+        values[..., :3] = values[..., :3] * 2 - 1
     return _encode_numpy(values)
 
 
@@ -429,14 +433,13 @@ def gutters(ownership, donor, d2, padding):
     owner = np.where(ownership.covered, island, np.where(donor >= 0, island.reshape(-1)[np.clip(donor, 0, None)], -1))
     distance = np.sqrt(np.maximum(d2, 0).astype(np.float32))
     narrowest = {}
-    for axis in (0, 1):
-        a = owner.take(np.arange(n - 1), axis=axis)
-        b = owner.take(np.arange(1, n), axis=axis)
+    for before, after in (((slice(0, n - 1),), (slice(1, n),)), ((Ellipsis, slice(0, n - 1)), (Ellipsis, slice(1, n)))):
+        a, b = owner[before], owner[after]   # neighbours down the rows, then across the columns
         contact = (a >= 0) & (b >= 0) & (a != b)
         if not contact.any():
             continue
-        da = distance.take(np.arange(n - 1), axis=axis)[contact]
-        db = distance.take(np.arange(1, n), axis=axis)[contact]
+        da = distance[before][contact]
+        db = distance[after][contact]
         width = da + db + 1.0
         for side in (a[contact], b[contact]):
             for identifier in np.unique(side):

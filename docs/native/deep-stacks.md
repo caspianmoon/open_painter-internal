@@ -859,14 +859,21 @@ reference its C test must match exactly.
   (`-DOP_SCALAR_RASTER` builds the scalar path). `test_rasterize` keeps the previous
   function and requires identical samples. 100K triangles, unique: 2K 391 → 52 ms,
   4K 1584 → 235 ms.
-- **Export pixels (`op_quantize`, `op_normal_encode`).** These replace NumPy's
-  clip, sRGB curve, round and cast for every written channel, and the normal
-  map's normalize and encode (padding, and `surface_normal.combined` without
-  relief). Each takes one pass with no temporaries. Quantize uses NEON, eight
-  values a step; normal encoding takes four RGBA pixels a step, split into
-  channels with `vld4q`. The NumPy code stays as the fallback, and
-  `tests/unit/test_native_pixels.py` requires identical bits from both. Its inputs
-  include NaN, infinities, the sRGB knee and rounding ties.
+- **Export pixels (`op_quantize`, `op_normal_encode`, `op_normal_relief`).**
+  These replace NumPy's clip, sRGB curve, round and cast for every written
+  channel. They also replace the normal map's decode, normalize and encode
+  (padding, and `surface_normal.combined` without relief) and the whole relief
+  path of `combined`. That path covers chart-aware height derivatives, slopes
+  through the UV metric, the Bump-style tilt of the authored normal, and the
+  final normalize and encode. Each kernel takes one pass with no temporaries,
+  writing a separate output so no input is copied first. Quantize uses NEON,
+  eight values a step. Normal encoding takes four RGBA pixels a step, split into
+  channels with `vld4q`. Relief takes four interior texels a step, with
+  neighbours from unaligned loads and each scalar branch a lane select. The NumPy
+  code stays as the fallback, and `tests/unit/test_native_pixels.py` requires
+  identical bits from both. Its inputs include NaN, infinities, the sRGB knee,
+  rounding ties, empty texels, chart borders and height cliffs. Relief at 2K:
+  about 450 ms in NumPy, 88 ms scalar, 25 ms NEON.
 
   The sRGB curve avoids powf in the vector path. x^(1/2.4) is a table entry for
   x's exponent times a degree-7 polynomial in its mantissa, within 4 × 2⁻²⁴ of the
@@ -878,6 +885,25 @@ reference its C test must match exactly.
   every float in [2⁻⁹, 1] at both depths. A guard ten times smaller fails it (the
   measured deviation is 0.012–0.02 at 16 bits and 4–6e-5 at 8). 2K RGBA, sRGB:
   80 → 14 ms at 8 bits, 81 → 23 ms at 16. 2K Unreal export: 967 → 499 ms.
+- **PNG compression.** On painted content zlib dominated the export: a 2K
+  Unreal export of noisy maps spent 4.6 of 6.9 s in `compress`, at about 10
+  MB/s. The scanlines are now deflated in row-aligned segments of about 1 MiB,
+  each on its own thread, as pigz does. Each segment starts from the previous
+  segment's last 32 KiB as its dictionary and ends with a sync flush, so the
+  segments join into one zlib stream. Adler-32 is combined from the segments'
+  checksums. The pixels are identical, sizes stay within 0.1% of one serial
+  stream, and the boundaries depend only on the row size, so repeated exports
+  give the same bytes. `tests/unit/test_png_segments.py` decodes the files with
+  plain zlib at both depths, with segments down to one row. Dropping the
+  dictionary or breaking the checksum fails it. Hashing went the same way:
+  Blender's bundled `hashlib.sha256` runs at about 87 MB/s, and the export
+  transaction hashes every staged file. `op_sha256` uses the arm64 SHA2
+  instructions (SHA256H/H2/SU0/SU1) at about 1.7 GB/s, with identical digests.
+  `utils.digest.sha256` picks it once the native engine is active, and the
+  transaction and the authoring code's whole-image digests use that helper.
+  `test_sha256` checks the FIPS 180-4 examples and a separate implementation over
+  every length to 1100 bytes and random splits. Noisy 2K export: 5.9 → 1.1–1.3 s;
+  flat fills: 499 → 233 ms.
 
 ## Test and benchmark memory
 

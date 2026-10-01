@@ -46,8 +46,10 @@ class NativePixelsTest(unittest.TestCase):
 
     def test_quantize_takes_views(self):
         from open_painter.export.image_writer import _quantize
-        values = np.random.default_rng(1).random((40, 40, 4), dtype=np.float32)[::-1]   # export flips rows
-        np.testing.assert_array_equal(pixels.quantize(self.lib, values, 8, True), _quantize(values, 8, True))
+        base = np.random.default_rng(1).random((40, 40, 4), dtype=np.float32)
+        for values in (base[::-1], base[::2], base[:, ::-1], base[::-1, :, :3]):   # export flips rows
+            np.testing.assert_array_equal(pixels.quantize(self.lib, values, 8, True), _quantize(values, 8, True))
+            np.testing.assert_array_equal(pixels.quantize(self.lib, values, 16, False), _quantize(values, 16, False))
 
     def test_normal_encode_is_numpys(self):
         from open_painter.export.padding import _encode_numpy
@@ -61,17 +63,52 @@ class NativePixelsTest(unittest.TestCase):
             values[1, 0, :3] = (3e-9, -4e-9, 0)       # just under the threshold
             with np.errstate(invalid='ignore'):
                 expected = _encode_numpy(values)
-            found = pixels.normal_encode(self.lib, values.copy(), decode=False)
+            original = values.copy()
+            found = pixels.normal_encode(self.lib, values, decode=False)
             np.testing.assert_array_equal(found, expected, err_msg=f'encode {shape}')
+            np.testing.assert_array_equal(values, original)   # a new array unless told otherwise
+            in_place = values.copy()
+            self.assertIs(pixels.normal_encode(self.lib, in_place, decode=False, out=in_place), in_place)
+            np.testing.assert_array_equal(in_place, expected, err_msg=f'in place {shape}')
+            # resample at the same resolution: decode, then padding._encode.
+            stored = (values * .5 + .5).astype(np.float32)
+            decoded = stored.copy()
+            decoded[..., :3] = decoded[..., :3] * 2 - 1
+            with np.errstate(invalid='ignore'):
+                expected = _encode_numpy(decoded)
+            np.testing.assert_array_equal(pixels.normal_encode(self.lib, stored, decode=True), expected,
+                                          err_msg=f'decode {shape}')
             # surface_normal.combined without relief decodes from [0, 1] first (NumPy here: no
             # library is active in a unit test).
-            stored = (values * .5 + .5).astype(np.float32)
             height = np.zeros(shape[:2], np.float32)
             if shape[0] == shape[1]:
                 with np.errstate(invalid='ignore'):
                     expected = surface_normal.combined(SimpleNamespace(height_distance=0), stored, height)
-                found = pixels.normal_encode(self.lib, stored.copy(), decode=True)
+                found = pixels.normal_encode(self.lib, stored, decode=True)
                 np.testing.assert_array_equal(found, expected, err_msg=f'combined {shape}')
+
+    def test_normal_relief_is_numpys(self):
+        from open_painter.export import surface_normal
+        rng = np.random.default_rng(12)
+        saved = surface_normal._uv_metric
+        try:
+            for n, channels in ((96, 4), (33, 3), (2, 4), (3, 4)):
+                normal = rng.uniform(-.1, 1.1, (n, n, channels)).astype(np.float32)
+                normal[0, 0, :3] = .5                                  # decodes to no length
+                height = rng.normal(0, 1, (n, n)).astype(np.float32)
+                height[n // 2, :] *= np.where(rng.random(n) < .1, 1e6, 1).astype(np.float32)   # cliffs (a NaN would turn relief off)
+                metric = rng.normal(0, 3, (n, n, 3)).astype(np.float32)
+                charts = rng.integers(0, 4, (n, n), dtype=np.int32)    # 0 is empty
+                charts[n // 3:, n // 3:] = 7                           # one large chart
+                surface_normal._uv_metric = lambda ts, size: (metric, charts)
+                for distance in (.37, 1e-3, 25.0):
+                    ts = SimpleNamespace(height_distance=distance, assignments=[1])
+                    with np.errstate(invalid='ignore', divide='ignore'):
+                        expected = surface_normal.combined(ts, normal, height)   # NumPy: no active library
+                    found = pixels.normal_relief(self.lib, normal, height, metric, charts, distance)
+                    np.testing.assert_array_equal(found, expected, err_msg=f'{n} {channels} {distance}')
+        finally:
+            surface_normal._uv_metric = saved
 
 
 if __name__ == '__main__':

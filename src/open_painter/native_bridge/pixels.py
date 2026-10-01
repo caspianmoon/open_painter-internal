@@ -15,23 +15,53 @@ def check(status):
 
 
 def quantize(lib, values, bits, srgb):
-    """``image_writer.quantize`` of (..., channels) float32 values."""
-    values = np.ascontiguousarray(values, np.float32)
+    """``image_writer.quantize`` of (..., channels) float32 values. Rows flipped by a view
+    (the export's ``values[::-1]``) are read in place and come back flipped the same way."""
+    flipped = (values.ndim >= 2 and values.dtype == np.float32 and values.strides[0] < 0
+               and values[::-1].flags.c_contiguous)
+    values = values[::-1] if flipped else np.ascontiguousarray(values, np.float32)
     out = np.empty(values.shape, np.uint8 if bits == 8 else np.uint16)
     channels = values.shape[-1]
     lib.op_quantize.argtypes = [F32, C.c_uint64, C.c_uint32, C.c_uint32, C.c_uint32, C.c_void_p]
     lib.op_quantize.restype = C.c_int
     check(lib.op_quantize(values.ctypes.data_as(F32), values.size // channels, channels, bits, int(bool(srgb)),
                           out.ctypes.data))
+    return out[::-1] if flipped else out
+
+
+def normal_encode(lib, values, decode, out=None):
+    """Tangent normals of (..., 3 | 4) float32 values normalized and encoded, decoded from
+    [0, 1] first when ``decode``: into ``out`` (which may be ``values``), else a new array."""
+    values = np.ascontiguousarray(values, np.float32)
+    if values.shape[-1] not in (3, 4):
+        raise ValueError('Expected normals with 3 or 4 channels')
+    if out is None:
+        out = np.empty_like(values)
+    elif out.dtype != np.float32 or not out.flags.c_contiguous or out.shape != values.shape:
+        raise ValueError('Expected a contiguous float32 output of the normals\' shape')
+    lib.op_normal_encode.argtypes = [F32, F32, C.c_uint64, C.c_uint32, C.c_uint32]
+    lib.op_normal_encode.restype = C.c_int
+    check(lib.op_normal_encode(values.ctypes.data_as(F32), out.ctypes.data_as(F32), values.size // values.shape[-1],
+                               values.shape[-1], int(bool(decode))))
     return out
 
 
-def normal_encode(lib, values, decode):
-    """Normalize and encode the tangent normals of (..., 3 | 4) float32 values, in place."""
-    if values.dtype != np.float32 or not values.flags.c_contiguous or values.shape[-1] not in (3, 4):
-        raise ValueError('Expected contiguous float32 normals with 3 or 4 channels')
-    lib.op_normal_encode.argtypes = [F32, C.c_uint64, C.c_uint32, C.c_uint32]
-    lib.op_normal_encode.restype = C.c_int
-    check(lib.op_normal_encode(values.ctypes.data_as(F32), values.size // values.shape[-1], values.shape[-1],
-                               int(bool(decode))))
-    return values
+def normal_relief(lib, normal, height, metric, charts, distance):
+    """``surface_normal.combined``'s relief path: (n, n, 3 | 4) normals tilted by an (n, n)
+    height through the (n, n, 3) UV metric within (n, n) charts, into a new array."""
+    normal = np.ascontiguousarray(normal, np.float32)
+    height = np.ascontiguousarray(height, np.float32)
+    metric = np.ascontiguousarray(metric, np.float32)
+    charts = np.ascontiguousarray(charts, np.int32)
+    n = height.shape[0]
+    if (height.shape != (n, n) or normal.shape[:2] != (n, n) or normal.shape[-1] not in (3, 4)
+            or metric.shape != (n, n, 3) or charts.shape != (n, n)):
+        raise ValueError('Expected square normal, height, metric and chart maps of one size')
+    out = np.empty_like(normal)
+    I32 = C.POINTER(C.c_int32)
+    lib.op_normal_relief.argtypes = [F32, F32, F32, I32, C.c_uint32, C.c_uint32, C.c_float, F32]
+    lib.op_normal_relief.restype = C.c_int
+    check(lib.op_normal_relief(normal.ctypes.data_as(F32), height.ctypes.data_as(F32), metric.ctypes.data_as(F32),
+                               charts.ctypes.data_as(I32), n, normal.shape[-1], float(distance),
+                               out.ctypes.data_as(F32)))
+    return out

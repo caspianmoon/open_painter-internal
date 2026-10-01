@@ -4,10 +4,67 @@ Blender's float save_render pipeline unpremultiplies alpha, which loses RGB
 when a packed data channel happens to be zero. Encode integer data directly.
 """
 
+import os
 import struct
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+
+# The image data is deflated in segments of about SEGMENT bytes of scanlines, each on its
+# own thread (as pigz does): a segment starts from the previous one's last WINDOW bytes as
+# its dictionary and ends with a sync flush, so the segments join into one zlib stream. The
+# boundaries depend only on the row size, so a file's bytes never depend on the thread count.
+SEGMENT = 1 << 20
+WINDOW = 1 << 15
+LEVEL = 6
+_ZLIB_HEADER = b"\x78\x9c"   # deflate, 32K window, default level
+_pool = None
+
+
+def _segments():
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(max_workers=max(1, min(8, (os.cpu_count() or 2) - 1)),
+                                   thread_name_prefix="open-painter-deflate")
+    return _pool
+
+
+def adler32_combine(first, second, length):
+    """zlib's adler32_combine: the Adler-32 of A + B from those of A and B (B's byte length)."""
+    base = 65521
+    remainder = length % base
+    low = first & 0xFFFF
+    high = (remainder * low) % base
+    low += (second & 0xFFFF) + base - 1
+    high += (first >> 16) + (second >> 16) + base - remainder
+    low = low - base if low >= base else low
+    low = low - base if low >= base else low
+    high = high - 2 * base if high >= 2 * base else high
+    high = high - base if high >= base else high
+    return low | (high << 16)
+
+
+def _scanlines(data, bits, start, stop):
+    """PNG scanlines (filter byte 0, then the row big-endian) of rows start..stop."""
+    rows = data[start:stop]
+    rows = np.ascontiguousarray(rows.astype(">u2") if bits == 16 else rows).view(np.uint8)
+    lines = np.empty((stop - start, rows[0].size + 1), np.uint8)
+    lines[:, 0] = 0
+    lines[:, 1:] = rows.reshape(stop - start, -1)
+    return lines
+
+
+def _deflate(data, bits, start, stop, last):
+    """One segment: raw deflate of rows start..stop, with its Adler-32 and length."""
+    lines = _scanlines(data, bits, start, stop)
+    if start:
+        before = _scanlines(data, bits, max(0, start - -(-WINDOW // lines.shape[1])), start)
+        compressor = zlib.compressobj(LEVEL, zlib.DEFLATED, -15, zdict=before.reshape(-1)[-WINDOW:].tobytes())
+    else:
+        compressor = zlib.compressobj(LEVEL, zlib.DEFLATED, -15)
+    body = compressor.compress(lines) + compressor.flush(zlib.Z_FINISH if last else zlib.Z_SYNC_FLUSH)
+    return body, zlib.adler32(lines), lines.size
 
 
 def quantize(values: np.ndarray, bits: int, srgb: bool = False) -> np.ndarray:
@@ -57,13 +114,17 @@ def write_png(path, data, bits, srgb):
         chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, bits, 6, 0, 0, 0))
         if srgb:
             chunk(b"sRGB", b"\x00")
-        compressor = zlib.compressobj(6)
-        for row in data:
-            encoded = row.astype(">u2").tobytes() if bits == 16 else row.tobytes()
-            payload = compressor.compress(b"\x00" + encoded)
-            if payload:
-                chunk(b"IDAT", payload)
-        chunk(b"IDAT", compressor.flush())
+        if not height:
+            chunk(b"IDAT", zlib.compress(b"", LEVEL))
+        rows = max(1, SEGMENT // (data[0].size * (bits // 8) + 1)) if height else 1
+        bounds = [(start, min(start + rows, height)) for start in range(0, height, rows)]
+        futures = [_segments().submit(_deflate, data, bits, start, stop, stop == height) for start, stop in bounds]
+        adler = 1
+        for index, future in enumerate(futures):
+            body, checksum, length = future.result()
+            adler = adler32_combine(adler, checksum, length)
+            chunk(b"IDAT", (_ZLIB_HEADER if index == 0 else b"") + body
+                  + (struct.pack(">I", adler) if index == len(futures) - 1 else b""))
         chunk(b"IEND", b"")
 
 

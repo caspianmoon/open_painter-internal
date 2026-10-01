@@ -364,6 +364,9 @@ def main():
     parser.add_argument('--reserve-gb', type=float, default=None, help=argparse.SUPPRESS)  # accepted, unused
     parser.add_argument('--wait-seconds', type=float, default=0.0,
                         help='Wait this long for enough available memory before refusing')
+    parser.add_argument('--timeout-seconds', type=float, default=0.0,
+                        help='Kill the run when it is still running after this long (0: no limit); '
+                             'a hung process fails instead of stalling everything queued behind it')
     parser.add_argument('--report', type=Path, help='Write the peak and timeline as JSON')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -403,6 +406,8 @@ def main():
             run.sample()
             if system < args.floor_gb * GIB:
                 reason = f'available system memory fell to {system / GIB:.1f} GiB'
+        if args.timeout_seconds and time.monotonic() - started > args.timeout_seconds:
+            reason = f'still running after {args.timeout_seconds:g} s'
         if used > cap:
             reason = f'footprint passed {args.cap_gb} GiB'
         if reason:

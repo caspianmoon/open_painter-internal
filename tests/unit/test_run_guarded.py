@@ -90,6 +90,22 @@ class GuardTests(unittest.TestCase):
         if sys.platform == "win32":
             self.assertIn("dedicated GPU memory is not included", summary["measure"])
 
+    def test_a_run_past_its_timeout_is_killed_with_its_descendants(self):
+        pid_file = self.root / "grandchild.pid"
+        started = time.monotonic()
+        completed, summary = self.guard("--timeout-seconds", "3",
+                                        command=[sys.executable, "-c", TREE, str(pid_file), "64"])
+        self.assertEqual(completed.returncode, 137, completed.stdout + completed.stderr)
+        self.assertIn("GUARD_KILLED still running after 3 s", completed.stdout)
+        self.assertEqual((summary["killed"], summary["exit"]), (True, 137))
+        self.assertGreaterEqual(summary["seconds"], 3)
+        self.assertLess(time.monotonic() - started, 30)   # not the grandchild's 60 s sleep
+        grandchild = int(pid_file.read_text(encoding="utf-8"))
+        deadline = time.monotonic() + 5
+        while alive(grandchild) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        self.assertFalse(alive(grandchild), "the grandchild outlived the kill")
+
     def test_exit_code_passes_through(self):
         completed, summary = self.guard(command=[sys.executable, "-c", "import sys; sys.exit(3)"])
         self.assertEqual(completed.returncode, 3, completed.stdout + completed.stderr)

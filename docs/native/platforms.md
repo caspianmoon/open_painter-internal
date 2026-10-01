@@ -10,10 +10,11 @@ done on a Windows machine.
   backend. They cover export pixels and padding, PNG filtering, UV rasterization, brush
   coverage, surface reach, topology, seams and SHA-256. Each is exact against the Python it
   replaces, so the platform changes only the speed. `OP_NATIVE_ENGINE=0` turns them off.
-- **The GPU engine** (`lifecycle.active_library`, `execution_library`) runs only with
-  Blender's Metal backend. That covers native scheduling, suffix collapse and the stamps
-  that make undo re-render 28 units. On Vulkan or OpenGL, the engine keeps its Python
-  scheduler. Enabling it there is a Windows qualification step (below).
+- **The GPU engine** (`lifecycle.active_library`, `execution_library`) runs with Blender's
+  Metal and Vulkan backends. It covers native scheduling, suffix collapse and the stamps
+  that make undo re-render 28 units. Vulkan publishes through pixels (results below). On
+  OpenGL the engine keeps its Python scheduler unless `OP_NATIVE_HOST_BACKENDS=OPENGL`
+  opts it in.
 
 ## Vector paths
 
@@ -130,9 +131,12 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
   - Warm edits are 3–7 times faster than the legacy scheduler, at the cost of about twice
     the video memory.
 - **Engine on Vulkan.** Image textures cannot be render targets on Vulkan, so the engine
-  publishes through pixel readback.
-  - The native scheduler is 1.3–3 times faster and every workflow suite passes.
-  - Four features need framebuffer publication and are not available yet: revision
-    transactions, `HostGPUProbe` mip reads, idle suffix arming and fused publication of
-    final units under the native plan.
-- **Defaults.** Neither backend is in the default `host_backends()` yet.
+  publishes through pixel readback, within a time budget per tick.
+  - Vulkan is a default host backend (`lifecycle.host_backends()`).
+  - On that path the native scheduler now runs suffix collapse, idle arming and fused
+    finals.
+  - Warm edits are about 1.4–3.3 times faster than the legacy scheduler, structural edits up
+    to 3.5 times, and the cold build about 1.8 times. Every workflow and engine suite passes
+    except the 4K one.
+  - Pixel publication has no revision transactions: channels can land a tick apart.
+- **Defaults.** `host_backends()` is Metal and Vulkan; OpenGL is opt-in.

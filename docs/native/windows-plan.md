@@ -54,7 +54,7 @@ evidence.
 | 5. Suites | Done | All pass without and with the library, on OpenGL and on Vulkan. `native_geometry_projection.py` needs the library. |
 | 6. Binding | Done | In Blender, `abi()` is 13 and `compiled_binding: true`. |
 | 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
-| 8. Native engine | Open | OpenGL qualifies except `native_publication_4k.py`; Vulkan lacks four features (below). Defaults unchanged. |
+| 8. Native engine | Done for Vulkan | Vulkan is a default host backend, with collapse, idle arming and fused finals ported. OpenGL is opt-in (below). |
 | 9. Windows on Arm | Not applicable | This laptop is x64. |
 | 10. Full gate | See below | |
 
@@ -78,43 +78,58 @@ evidence.
 - **Budgeted publication.** On Vulkan one tick publishes channels within a time budget,
   not all of them. A test may assert "current after one tick" only where
   `runtime.device().pixel_publish` is false.
-- **GPU leaks at exit.** Some Vulkan runs print `VMA: UNFREED ALLOCATION` at exit, for
+- **GPU allocations at exit.** Some Vulkan runs print `VMA: UNFREED ALLOCATION` at exit, for
   example `layer_store.py`, `structural_patch.py` and `moved_layer_adoption.py`, with the
-  legacy scheduler too. No test fails; not yet investigated.
+  legacy scheduler too. Each was a run that ended without `open_painter.unregister()`, which
+  releases the device (`forget_device`) and unfreezes the collector (`gc_policy.release`).
+  The likely cause: frozen reference cycles that hold GPU textures outlive Blender's GPU
+  shutdown. A user who quits Blender sees the same, because Blender does not unregister
+  add-ons on quit. No test fails, and it is cosmetic at exit.
 
 ### Step 8: the native scheduler on Vulkan and OpenGL
+
+**Vulkan is a default host backend** (`lifecycle.host_backends()` is Metal and Vulkan;
+OpenGL stays opt-in). Vulkan publishes through pixels because image textures cannot be
+render targets. Four native features were missing on that path and are now ported:
+
+- **Suffix collapse:** it ran only on the native channel path, which pixel publication
+  does not take.
+- **Idle arming:** it is enabled once no channel waits for the publication budget.
+- **Fused finals:** these failed for native programs, which start with helper functions.
+- **Reentry guard:** `evaluate`, `close` and `adopt` refuse during an evaluation.
+
+Pixel publication keeps its per-tick budget (about 13 ms per channel at 1K, 50 ms at 2K on
+the GTX 1050), which keeps drags responsive. It has no revision transactions: channels can
+land a tick apart, and a fault leaves the channels published before it. The native suites
+check each publication model's own guarantees.
 
 Medians from `tests/integration/native_deep_stack.py` (40 layers, 1024, `OP_PREARM=1`), two
 alternating rounds, native scheduler against `OP_NATIVE_ENGINE=0`, in ms:
 
 | Case | Vulkan native | Vulkan legacy | OpenGL native | OpenGL legacy |
 | --- | ---: | ---: | ---: | ---: |
-| Bottom leaf roughness | 11–12 | 35–37 | 7 | 28 |
-| Middle leaf opacity | 79–80 | 128–132 | 11 | 69 |
-| Middle mask black | 62–72 | 129–132 | 26–27 | 73 |
-| Bottom folder opacity | 135–149 | 182–206 | 13 | 78 |
-| Apply smart material | 222–249 | 309–316 | 114–124 | 190–192 |
-| Undo (numeric) | 255–264 | 306–314 | 285–289 | 302–314 |
+| Cold build (s) | 1.8 | 3.0–3.4 | 1.9–2.8 | 2.9–5.4 |
+| Bottom leaf roughness | 11 | 36 | 7 | 28 |
+| Middle leaf opacity | 63–67 | 129–132 | 11 | 69 |
+| Middle mask black | 60–62 | 132–134 | 26–27 | 73 |
+| Bottom folder opacity | 129–135 | 178–194 | 13 | 78 |
+| Blend mode (structural) | 63–64 | 144–162 | 20–71 | 76–94 |
+| Remove layer (structural) | 34–39 | 119–184 | 13–14 | 58–59 |
+| Apply smart material | 206–319 | 328 | 114–124 | 190–192 |
+| Undo (numeric) | 280–287 | 303–710 | 285–289 | 302–314 |
 
-On OpenGL the native scheduler doubles video memory (1.4 against 0.6 GiB); the working
-set is unchanged.
+Undo medians are noisy on both schedulers: each series of three starts with a cold sample
+of about 700 ms. The OpenGL columns were measured before the Vulkan port.
 
-- **OpenGL** (`OP_NATIVE_HOST_BACKENDS=OPENGL`):
+- **Vulkan, as the default:**
   - 24 of 25 native suites, every step 5 suite and the GPU matrix (at `--sampler-limit`
     16 and 8) pass.
-  - `native_publication_4k.py` exceeded the 4 GB cap (4.3 GiB commit) and was not
-    retried.
-  - The user chose to keep OpenGL opt-in until that suite passes.
-- **Vulkan** (`OP_NATIVE_HOST_BACKENDS=VULKAN`): every step 5 suite passes, and 19 of 25
-  native suites pass. Pixel publication, Vulkan's only route into Blender images, skips
-  four features:
-  - native revision transactions (`native_host_metal.py`);
-  - `HostGPUProbe` mip reads (`native_publication_precision.py`);
-  - idle suffix arming (`native_suffix.py`);
-  - fused publication, because the native plan renders final units before publication
-    (`engine_fused_publish.py`).
-
-  The user chose to port these features before any default change.
+  - `native_publication_4k.py` exceeds the approved 4 GB cap (4.46 GiB commit) and is not
+    run on this laptop.
+- **OpenGL** (`OP_NATIVE_HOST_BACKENDS=OPENGL`):
+  - The same result, and the 4K suite is likewise not run.
+  - The native scheduler doubles video memory (1.4 against 0.6 GiB).
+  - The user keeps OpenGL opt-in until that suite has run.
 
 ## Where things stand
 
@@ -133,7 +148,7 @@ There are two gates (`src/open_painter/native_bridge/lifecycle.py`):
 | Gate | What it enables | Where it runs today |
 | --- | --- | --- |
 | `cpu_library()` | CPU kernels: export pixels and padding, PNG filters, UV rasterize, brush coverage, surface reach, topology, seams, SHA-256 | Any platform and GPU backend once the library loads |
-| `active_library()` / `execution_library(backend)` | The native GPU engine scheduler (incremental plans, suffix collapse, stamps that let undo re-render 28 units) | Metal only. `OP_NATIVE_HOST_BACKENDS=VULKAN` (or `OPENGL`) opts other backends in, for qualification |
+| `active_library()` / `execution_library(backend)` | The native GPU engine scheduler (incremental plans, suffix collapse, stamps that let undo re-render 28 units) | Metal and Vulkan. `OP_NATIVE_HOST_BACKENDS=OPENGL` opts OpenGL in, for qualification |
 
 `src/core/simd.h` selects the vector paths:
 
@@ -158,8 +173,7 @@ There are two gates (`src/open_painter/native_bridge/lifecycle.py`):
 Not verified anywhere yet:
 
 - MSVC on ARM64 (step 9; the laptop is x64);
-- the native GPU engine as the default on Vulkan or OpenGL (step 8 qualified OpenGL except
-  the 4K suite, and found the features Vulkan lacks);
+- the native GPU engine as the default on OpenGL (opt-in until the 4K suite has run);
 - `native_publication_4k.py` on Windows (it needs more memory than this laptop allows).
 
 The C code has no variable-length arrays (checked with `-Wvla`) and no GCC builtins. Two
@@ -438,7 +452,7 @@ overlapping. Background takes about 35 minutes on the Mac. **Done when:** zero f
 | `OP_LIBOPENPAINTER_PATH` | Blender loads this library instead of the bundle (no binding needed) |
 | `OP_TEST_NATIVE_LIBRARY` | Library for the unit tests |
 | `OP_NATIVE_ENGINE=0` | No native library use at all (CPU kernels and engine) |
-| `OP_NATIVE_HOST_BACKENDS` | Extra GPU backends for the native engine scheduler (`VULKAN,OPENGL`) |
+| `OP_NATIVE_HOST_BACKENDS` | Extra GPU backends for the native engine scheduler (`OPENGL`; Metal and Vulkan are defaults) |
 | `OP_VERIFY_STRUCTURE=1` | Compare every incremental plan with a full one |
 | `OP_VERIFY_INCREMENTAL=1` | Compare incremental native descriptions and stamps, rebound programs and adoption with full ones |
 | `OP_VERIFY_UNDO=1` | Compare every unit an undo reused with a fresh compile |

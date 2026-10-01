@@ -66,6 +66,7 @@ CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous eva
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
+VERIFY_REBIND = os.environ.get('OP_VERIFY_INCREMENTAL') == '1'   # every rebound program against its translation
 
 VERTEX = 'void main() { gl_Position = vec4(op_pos, 0.0, 1.0); }'
 
@@ -703,8 +704,9 @@ class UnitState:
         self.formats = ()
         self.ubo = self.ubo_data = None
         self.slot = None   # the native graph's mirror of stamp and residency (NativeGraph)
-        # The shader a carried result was rendered with (``Engine.adopt``): held until this state
-        # renders, so no new shader takes its id while the carried stamp still names it.
+        # (predecessor state, [(producer key, producer unit)] compiled into its program) of a
+        # carried result (``Engine.adopt``): its program is rebound to this unit's tree when they
+        # are the same program, else the result is only a render target (``_state``).
         self.carried = None
 
     @property
@@ -869,6 +871,7 @@ class Engine:
             raise RuntimeError("Cannot adopt a graph during native channel submission")
         patched = graph is self.graph
         n_before = self.graph.n if self.graph is not None else None
+        previous, previous_inline = self.graph, self.inline
         self._clear_constant_renderer()
         # Suffix transforms survive: run keys identify members by content, not by
         # position in the graph (a resolution change closes them below).
@@ -889,14 +892,19 @@ class Engine:
                 state = self.states.get(key)
                 if state is None or state.unit is not unit:
                     fresh = UnitState(unit)
-                    if state is not None and carry and state.textures:
+                    if state is not None and carry:
                         # A rebuilt graph (an undo, a declined patch): the unit starts from its
-                        # predecessor's result and stamp, and the native graph renders it again
-                        # only where its content stamp differs.
-                        fresh._textures, fresh.formats, fresh._stamp = state.textures, state.formats, state.stamp
-                        fresh.carried = state.shader
-                        state._textures, state.slot = None, None
-                        metrics.count('engine_carried_results')
+                        # predecessor's program, rebound to its tree when it is the same one
+                        # (``_rebound``), and from its result and stamp, which the native graph
+                        # renders again only where its content stamp differs.
+                        fresh.carried = (state, [(producer, previous.units[producer]) for producer in
+                                                 _inlined_in(previous, previous_inline, key)])
+                        if state.textures:
+                            fresh._textures, fresh.formats, fresh._stamp = state.textures, state.formats, state.stamp
+                            state._textures, state.slot = None, None
+                            metrics.count('engine_carried_results')
+                        else:
+                            self._retire_state(key, state, n_before, patched)
                     elif state is not None:
                         self._retire_state(key, state, n_before, patched)
                     state = fresh
@@ -1062,6 +1070,16 @@ class Engine:
         signature = self._signature(key)
         if state.signature != signature:
             started, compiled = perf_counter(), device().compile_seconds
+            carried, state.carried = state.carried, None
+            rebound = self._rebound(key, state, signature, *carried) if carried is not None else None
+            if rebound is not None:
+                state.program, state.shader, state.signature = rebound, carried[0].shader, signature
+                if state.textures is None:
+                    state.formats = carried[0].formats
+                metrics.count('engine_rebound_programs')
+                if cache is not None:
+                    cache[key] = (self.inline, self.precise, state)
+                return state
             program = glsl.translate(self.graph, unit, self.inline)
             limit = device().max_samplers
             while max(len(p.samplers) for p in glsl.programs(program)) > limit:
@@ -1079,12 +1097,15 @@ class Engine:
             state.signature = signature
             formats = tuple(self._format(key, color) for color, _ in state.program.targets)
             if state.textures and formats != state.formats:
-                # Targets of another layout: the next render allocates them. Same layout: the
-                # result stays, and its stamp decides whether it is rendered again.
+                # Targets of another layout: the next render allocates them.
                 n = self.graph.n
                 for texture, fmt in zip(state.textures, state.formats):
                     device().release(texture, n, fmt)
                 state.textures = None
+            elif state.textures:
+                # Same layout: the targets stay for the next render, but their content stands only
+                # with the program it was rendered by (a new program restarts its uniform revision).
+                state.stamp = None
             state.formats = formats
             compiled = device().compile_seconds - compiled
             self.stages['compile_ms'] += compiled * 1000
@@ -1112,14 +1133,38 @@ class Engine:
 
     def _inlined(self, key):
         """The producers compiled into ``key``'s program, nearest first."""
-        found, work = [], [key]
-        while work:
-            current = work.pop(0)
-            for producer, _, _ in self.graph.units[current].imports:
-                if producer in self.inline and producer not in found and producer in self.graph.units:
-                    found.append(producer)
-                    work.append(producer)
-        return found
+        return _inlined_in(self.graph, self.inline, key)
+
+    def _rebound(self, key, state, signature, prior, inlined):
+        """The predecessor's program on this unit's tree, when it is the same program: the unit
+        and every producer compiled into it sign the same and their trees have the same shape,
+        and its images sign the same. None: translate (a carried result is then only a target)."""
+        program = prior.program
+        if program is None or prior.shader is None or prior.signature is None:
+            return None
+        if any(part.objects for part in glsl.programs(program)):
+            return None   # object uniforms name RNA objects, which an undo replaced
+        if prior.unit.signature is None or prior.unit.signature != state.unit.signature:
+            return None
+        if [producer for producer, _ in inlined] != self._inlined(key) or prior.signature[2:] != signature[2:]:
+            return None
+        units = self.graph.units
+        pairs = [(prior.unit, state.unit), *((unit, units[producer]) for producer, unit in inlined)]
+        if any(old.signature is None or old.signature != new.signature for old, new in pairs[1:]):
+            return None
+        nodes, sockets = {}, {}
+        if not all(_same_shape(old.tree, new.tree, nodes, sockets) for old, new in pairs):
+            return None
+        rebound = _rebind(program, nodes, sockets)
+        if rebound is not None and VERIFY_REBIND:
+            fresh = glsl.translate(self.graph, state.unit, self.inline)
+            mine = [(p.source, [id(s) for s in p.params], [(s.kind, id(s.node), s.producer) for s in p.samplers],
+                     p.targets, p.imports) for p in glsl.programs(rebound)]
+            theirs = [(p.source, [id(s) for s in p.params], [(s.kind, id(s.node), s.producer) for s in p.samplers],
+                       p.targets, p.imports) for p in glsl.programs(fresh)]
+            if mine != theirs:
+                raise AssertionError(f'A rebound program of {key} differs from its translation')
+        return rebound
 
     def _images(self, key):
         """Image nodes of a unit and of the producers compiled into it."""
@@ -2030,6 +2075,55 @@ class Engine:
             metrics.count('engine_image_pixel_writes')
             metrics.count('engine_image_pixel_write_bytes', n * n * 16)
             self.dirty_cpu.discard(channel)
+
+
+def _inlined_in(graph, inline, key):
+    found, work = [], [key]
+    while work:
+        current = work.pop(0)
+        for producer, _, _ in graph.units[current].imports:
+            if producer in inline and producer not in found and producer in graph.units:
+                found.append(producer)
+                work.append(producer)
+    return found
+
+
+def _same_shape(old, new, nodes, sockets):
+    """Whether two unit trees have the same nodes (kind and sockets, in order) and links; fills
+    ``nodes`` and ``sockets`` (old id -> new) for ``_rebind``."""
+    if old is None or new is None:
+        return False
+    a, b = list(old.nodes), list(new.nodes)
+    if len(a) != len(b) or len(old.links) != len(new.links):
+        return False
+    for x, y in zip(a, b):
+        if x.bl_idname != y.bl_idname or len(x.inputs) != len(y.inputs) or len(x.outputs) != len(y.outputs):
+            return False
+        nodes[id(x)] = y
+        for p, q in zip(x.inputs, y.inputs):
+            sockets[id(p)] = q
+        for p, q in zip(x.outputs, y.outputs):
+            sockets[id(p)] = q
+    linked = {(id(link.from_socket), id(link.to_socket)) for link in new.links}
+    return all((id(sockets.get(id(link.from_socket))), id(sockets.get(id(link.to_socket)))) in linked
+               for link in old.links)
+
+
+def _rebind(program, nodes, sockets):
+    """``program`` reading the matching nodes and sockets of another tree of the same shape (its
+    source, native uniform bank and revision stay); None when something is not mapped."""
+    samplers = []
+    for sampler in program.samplers:
+        node = sampler.node
+        if node is not None and id(node) not in nodes:
+            return None
+        source = _rebind(sampler.source, nodes, sockets) if sampler.source is not None else None
+        if sampler.source is not None and source is None:
+            return None
+        samplers.append(replace(sampler, node=nodes[id(node)] if node is not None else None, source=source))
+    if any(id(socket) not in sockets for socket in program.params):
+        return None
+    return replace(program, samplers=samplers, params=[sockets[id(socket)] for socket in program.params])
 
 
 def _positions(graph):

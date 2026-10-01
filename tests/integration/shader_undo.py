@@ -120,6 +120,10 @@ report['undo_ms'] = round(undo_ms, 1)
 # still match are not rendered again (the published state above is the restored one).
 report['undo_carried'] = observed.counts.get('engine_carried_results', 0)
 assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"
+# A carried result keeps its stamp only with its own program, rebound to the rebuilt unit's tree.
+report['undo_rebound'] = observed.counts.get('engine_rebound_programs', 0)
+assert report['undo_rebound'] > 0, 'no carried program was rebound to its rebuilt unit'
+
 report['undo_build_ms'] = round(info.get('build_ms', 0.0), 1)
 report['undo_evaluate_ms'] = round(info['engine'].get('evaluate_ms', 0.0), 1)
 print('SHADER_UNDO undo restores the published state: PASS', flush=True)

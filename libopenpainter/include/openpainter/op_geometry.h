@@ -32,6 +32,29 @@ op_status_t op_uv_rasterize(const float *uv, uint32_t triangles, uint32_t size, 
 op_status_t op_uv_raster_interpolate(const float *uv, uint32_t triangles, uint32_t size, uint32_t attributes,
                                      const void *const *corners, const uint32_t *components,
                                      const uint32_t *bytes, float *const *outs, uint8_t *covered);
+/* Kinds of op_uv_raster_assign's per-triangle values, each with NumPy's assignment cast. */
+#define OP_ASSIGN_F32 0u   /* float32 copied into a float32 map */
+#define OP_ASSIGN_F64 1u   /* float64 rounded to the float32 map */
+#define OP_ASSIGN_I32 2u   /* int32 copied into an int32 map */
+#define OP_ASSIGN_I64 3u   /* int64 cast to the int32 map (wrapping) */
+/* The unique raster of op_uv_rasterize with per-triangle values assigned straight into maps, as
+ * rasterizing and scattering values[triangle] would: for each covered texel (the later triangle
+ * wins) and attribute a, outs[a][texel] = values[a][triangle] for each of components[a], cast by
+ * kinds[a]. values[a]: triangles x components[a]; outs[a]: size x size x components[a] float32 or
+ * int32, texels by rows; texels no triangle covers keep their values. covered (optional): size x
+ * size bytes, set to 1 where a triangle covers. 1 to 8 attributes of 1 to 16 components. */
+op_status_t op_uv_raster_assign(const float *uv, uint32_t triangles, uint32_t size, uint32_t attributes,
+                                const void *const *values, const uint32_t *components, const uint32_t *kinds,
+                                void *const *outs, uint8_t *covered);
+/* padding.build_ownership's raster of one target. Triangles come in batches (starts: each batch's
+ * first triangle, ascending from 0); each triangle covers texels by op_uv_rasterize's rule and
+ * writes owners[triangle] there, the later triangle winning: island[texel] = owner and
+ * covered[texel] = 1. conflicts[texel] = 1 where a writer in a batch differs from that batch's
+ * first writer of the texel (writers in different batches are not compared). Texels no triangle
+ * covers keep their values. island: size x size int32; covered, conflicts: size x size bytes. */
+op_status_t op_uv_raster_ownership(const float *uv, uint32_t triangles, uint32_t size, const int32_t *owners,
+                                   const uint32_t *starts, uint32_t batches, int32_t *island, uint8_t *covered,
+                                   uint8_t *conflicts);
 void op_geometry_free(void *memory);
 /* Exact Euclidean gutter donors, tie-broken by island then texel index.
  * Square arrays, size <= 8192, limit <= 64; covered texels have donor -1.

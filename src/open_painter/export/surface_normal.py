@@ -77,6 +77,8 @@ materials use the conventional one-world-unit tile. Empty atlas texels have
         return metric, charts
     from ..geometry.snapshots import targets
     from ..geometry.uv_rasterizer import rasterize
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     chart_offset = 1
     with targets(ts) as entries:
         for entry in entries:
@@ -97,11 +99,16 @@ materials use the conventional one-world-unit tile. Empty atlas texels have
             # overwrite texels an earlier valid triangle covered.
             kept = np.flatnonzero((np.abs(determinant) >= 1e-12)
                                   & (length_u >= 1e-12) & (length_v >= 1e-12))
-            rows, cols, tri, _ = rasterize(uv[kept], n)
-            if len(rows):
-                tri = kept[tri]
-                metric[rows, cols] = inverse[tri]
-                charts[rows, cols] = chart_offset + chart_ids[tri]
+            if lib is not None and hasattr(lib, 'op_uv_raster_assign'):
+                # One native pass, with no per-texel arrays: the maps the scatter below writes.
+                from ..native_bridge.geometry import raster_assign
+                raster_assign(lib, uv[kept], n, [(inverse[kept], metric), (chart_offset + chart_ids[kept], charts)])
+            else:
+                rows, cols, tri, _ = rasterize(uv[kept], n)
+                if len(rows):
+                    tri = kept[tri]
+                    metric[rows, cols] = inverse[tri]
+                    charts[rows, cols] = chart_offset + chart_ids[tri]
             chart_offset += len(chart_ids)
     return metric, charts
 

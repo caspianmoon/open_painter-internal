@@ -386,27 +386,123 @@ done:
     free(result);
     return status;
 }
-/* One covered texel of op_uv_raster_interpolate: every attribute interpolated at weights w0, w1, w2
- * of triangle t, summed left to right (op_mesh_interpolate's float arithmetic for float corners;
- * NumPy's float64 arithmetic for double corners, rounded to float once). */
-static void put_texel(uint64_t texel, uint32_t t, float w0, float w1, float w2, uint32_t attributes,
-                      const void *const *corners, const uint32_t *components, const uint32_t *bytes,
-                      float *const *outs, uint8_t *covered) {
-    for (uint32_t a = 0; a < attributes; a++) {
-        uint32_t n = components[a];
-        float *out = outs[a] + texel * n;
-        if (bytes[a] == 4) {
-            const float *c = (const float *)corners[a] + (uint64_t)t * 3 * n;
+/* What a raster visit does at one covered texel of triangle t, with its weights. */
+typedef void (*texel_visit)(void *context, uint64_t texel, uint32_t t, float w0, float w1, float w2);
+
+/* Every texel triangle t covers, by op_uv_rasterize's rule and with its weights, operation for
+ * operation (vector lanes and scalar tails alike; no clip), row by row: the coverage loop of the
+ * raster kernels below. The caller has checked that the triangle's UVs are finite. */
+static inline void raster_triangle(const float *uv, uint32_t t, uint32_t size, texel_visit visit, void *context) {
+    float p[6];
+    int lo[2], hi[2];
+    for (unsigned j = 0; j < 6; j++)
+        p[j] = uv[t * 6 + j] * (float)size - .5f;
+    for (unsigned d = 0; d < 2; d++) {
+        float min = fminf(p[d], fminf(p[2 + d], p[4 + d])), max = fmaxf(p[d], fmaxf(p[2 + d], p[4 + d]));
+        lo[d] = lower(min, size);
+        hi[d] = upper(max, size);
+    }
+    float det = (p[3] - p[5]) * (p[0] - p[4]) + (p[4] - p[2]) * (p[1] - p[5]);
+    if (!isfinite(det) || fabsf(det) < 1e-8f)
+        return;
+    for (int y = lo[1]; y < hi[1]; y++) {
+        int x = lo[0];
+        uint64_t row = (uint64_t)y * size;
+#ifdef OP_NEON_RASTER
+        const float32x4_t a = vdupq_n_f32(p[3] - p[5]), b = vdupq_n_f32(p[4] - p[2]), c = vdupq_n_f32(p[5] - p[1]),
+                          d = vdupq_n_f32(p[0] - p[4]), origin = vdupq_n_f32(p[4]), denominator = vdupq_n_f32(det),
+                          one = vdupq_n_f32(1.0f), floor = vdupq_n_f32(-1e-5f);
+        const float32x4_t dy = vdupq_n_f32((float)y - p[5]), steps = {0, 1, 2, 3};
+        const float32x4_t bdy = vmulq_f32(b, dy), ddy = vmulq_f32(d, dy);
+        for (; x + 4 <= hi[0]; x += 4) {
+            float32x4_t dx = vsubq_f32(vaddq_f32(vdupq_n_f32((float)x), steps), origin);
+            float32x4_t w0 = vdivq_f32(vaddq_f32(vmulq_f32(a, dx), bdy), denominator);
+            float32x4_t w1 = vdivq_f32(vaddq_f32(vmulq_f32(c, dx), ddy), denominator);
+            float32x4_t w2 = vsubq_f32(vsubq_f32(one, w0), w1);
+            uint32x4_t inside = vandq_u32(vandq_u32(vcgeq_f32(w0, floor), vcgeq_f32(w1, floor)), vcgeq_f32(w2, floor));
+            if (!vmaxvq_u32(inside))
+                continue;
+            float u0[4], u1[4], u2[4];
+            uint32_t hit[4];
+            vst1q_f32(u0, w0);
+            vst1q_f32(u1, w1);
+            vst1q_f32(u2, w2);
+            vst1q_u32(hit, inside);
+            for (int lane = 0; lane < 4; lane++)
+                if (hit[lane])
+                    visit(context, row + (uint64_t)(x + lane), t, u0[lane], u1[lane], u2[lane]);
+        }
+#elif defined(OP_SSE_RASTER)
+        const __m128 a = _mm_set1_ps(p[3] - p[5]), b = _mm_set1_ps(p[4] - p[2]), c = _mm_set1_ps(p[5] - p[1]),
+                     d = _mm_set1_ps(p[0] - p[4]), origin = _mm_set1_ps(p[4]), denominator = _mm_set1_ps(det),
+                     one = _mm_set1_ps(1.0f), floor = _mm_set1_ps(-1e-5f);
+        const __m128 dy = _mm_set1_ps((float)y - p[5]), steps = _mm_setr_ps(0, 1, 2, 3);
+        const __m128 bdy = _mm_mul_ps(b, dy), ddy = _mm_mul_ps(d, dy);
+        for (; x + 4 <= hi[0]; x += 4) {
+            __m128 dx = _mm_sub_ps(_mm_add_ps(_mm_set1_ps((float)x), steps), origin);
+            __m128 w0 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(a, dx), bdy), denominator);
+            __m128 w1 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(c, dx), ddy), denominator);
+            __m128 w2 = _mm_sub_ps(_mm_sub_ps(one, w0), w1);
+            int hit = _mm_movemask_ps(_mm_and_ps(_mm_and_ps(_mm_cmpge_ps(w0, floor), _mm_cmpge_ps(w1, floor)),
+                                                 _mm_cmpge_ps(w2, floor)));
+            if (!hit)
+                continue;
+            float u0[4], u1[4], u2[4];
+            _mm_storeu_ps(u0, w0);
+            _mm_storeu_ps(u1, w1);
+            _mm_storeu_ps(u2, w2);
+            for (int lane = 0; lane < 4; lane++)
+                if ((hit >> lane) & 1)
+                    visit(context, row + (uint64_t)(x + lane), t, u0[lane], u1[lane], u2[lane]);
+        }
+#endif
+        for (; x < hi[0]; x++) {
+            float w0 = ((p[3] - p[5]) * ((float)x - p[4]) + (p[4] - p[2]) * ((float)y - p[5])) / det;
+            float w1 = ((p[5] - p[1]) * ((float)x - p[4]) + (p[0] - p[4]) * ((float)y - p[5])) / det;
+            float w2 = 1.0f - w0 - w1;
+            if (w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f)
+                visit(context, row + (uint64_t)x, t, w0, w1, w2);
+        }
+    }
+}
+
+/* A non-finite UV fails a raster kernel's call before any texel is written, as op_uv_rasterize
+ * keeps no sample then. */
+static int finite_uvs(const float *uv, uint32_t triangles) {
+    for (uint64_t i = 0; i < (uint64_t)triangles * 6; i++)
+        if (!isfinite(uv[i]))
+            return 0;
+    return 1;
+}
+
+typedef struct interpolation {
+    uint32_t attributes;
+    const void *const *corners;
+    const uint32_t *components, *bytes;
+    float *const *outs;
+    uint8_t *covered;
+} interpolation;
+
+/* One covered texel of op_uv_raster_interpolate: every attribute interpolated at the weights,
+ * summed left to right (op_mesh_interpolate's float arithmetic for float corners; NumPy's float64
+ * arithmetic for double corners, rounded to float once). */
+static void interpolate_texel(void *context, uint64_t texel, uint32_t t, float w0, float w1, float w2) {
+    const interpolation *m = context;
+    for (uint32_t a = 0; a < m->attributes; a++) {
+        uint32_t n = m->components[a];
+        float *out = m->outs[a] + texel * n;
+        if (m->bytes[a] == 4) {
+            const float *c = (const float *)m->corners[a] + (uint64_t)t * 3 * n;
             for (uint32_t j = 0; j < n; j++)
                 out[j] = w0 * c[j] + w1 * c[n + j] + w2 * c[2 * n + j];
         } else {
-            const double *c = (const double *)corners[a] + (uint64_t)t * 3 * n;
+            const double *c = (const double *)m->corners[a] + (uint64_t)t * 3 * n;
             for (uint32_t j = 0; j < n; j++)
                 out[j] = (float)((double)w0 * c[j] + (double)w1 * c[n + j] + (double)w2 * c[2 * n + j]);
         }
     }
-    if (covered)
-        covered[texel] = 1;
+    if (m->covered)
+        m->covered[texel] = 1;
 }
 
 op_status_t op_uv_raster_interpolate(const float *uv, uint32_t triangles, uint32_t size, uint32_t attributes,
@@ -419,91 +515,122 @@ op_status_t op_uv_raster_interpolate(const float *uv, uint32_t triangles, uint32
         if (!components[a] || components[a] > 16 || (bytes[a] != 4 && bytes[a] != 8) || !outs[a] ||
             (triangles && !corners[a]))
             return OP_INVALID_ARGUMENT;
-    /* A non-finite UV fails the call before any map is written, as op_uv_rasterize keeps no sample. */
-    for (uint64_t i = 0; i < (uint64_t)triangles * 6; i++)
-        if (!isfinite(uv[i]))
-            return OP_VALIDATION_FAILED;
+    if (!finite_uvs(uv, triangles))
+        return OP_VALIDATION_FAILED;
     /* Triangles in order, each overwriting the texels it covers: the later triangle wins, as the
-     * unique raster keeps, with no sample list to build, grow and deduplicate. The weights are
-     * op_uv_rasterize's, operation for operation (vector lanes and scalar tails alike). */
-    for (uint32_t t = 0; t < triangles; t++) {
-        float p[6];
-        int lo[2], hi[2];
-        for (unsigned j = 0; j < 6; j++)
-            p[j] = uv[t * 6 + j] * (float)size - .5f;
-        for (unsigned d = 0; d < 2; d++) {
-            float min = fminf(p[d], fminf(p[2 + d], p[4 + d])), max = fmaxf(p[d], fmaxf(p[2 + d], p[4 + d]));
-            lo[d] = lower(min, size);
-            hi[d] = upper(max, size);
-        }
-        float det = (p[3] - p[5]) * (p[0] - p[4]) + (p[4] - p[2]) * (p[1] - p[5]);
-        if (!isfinite(det) || fabsf(det) < 1e-8f)
-            continue;
-        for (int y = lo[1]; y < hi[1]; y++) {
-            int x = lo[0];
-            uint64_t row = (uint64_t)y * size;
-#ifdef OP_NEON_RASTER
-            const float32x4_t a = vdupq_n_f32(p[3] - p[5]), b = vdupq_n_f32(p[4] - p[2]),
-                              c = vdupq_n_f32(p[5] - p[1]), d = vdupq_n_f32(p[0] - p[4]),
-                              origin = vdupq_n_f32(p[4]), denominator = vdupq_n_f32(det),
-                              one = vdupq_n_f32(1.0f), floor = vdupq_n_f32(-1e-5f);
-            const float32x4_t dy = vdupq_n_f32((float)y - p[5]), steps = {0, 1, 2, 3};
-            const float32x4_t bdy = vmulq_f32(b, dy), ddy = vmulq_f32(d, dy);
-            for (; x + 4 <= hi[0]; x += 4) {
-                float32x4_t dx = vsubq_f32(vaddq_f32(vdupq_n_f32((float)x), steps), origin);
-                float32x4_t w0 = vdivq_f32(vaddq_f32(vmulq_f32(a, dx), bdy), denominator);
-                float32x4_t w1 = vdivq_f32(vaddq_f32(vmulq_f32(c, dx), ddy), denominator);
-                float32x4_t w2 = vsubq_f32(vsubq_f32(one, w0), w1);
-                uint32x4_t inside = vandq_u32(vandq_u32(vcgeq_f32(w0, floor), vcgeq_f32(w1, floor)),
-                                              vcgeq_f32(w2, floor));
-                if (!vmaxvq_u32(inside))
-                    continue;
-                float u0[4], u1[4], u2[4];
-                uint32_t hit[4];
-                vst1q_f32(u0, w0);
-                vst1q_f32(u1, w1);
-                vst1q_f32(u2, w2);
-                vst1q_u32(hit, inside);
-                for (int lane = 0; lane < 4; lane++)
-                    if (hit[lane])
-                        put_texel(row + (uint64_t)(x + lane), t, u0[lane], u1[lane], u2[lane], attributes, corners,
-                                  components, bytes, outs, covered);
-            }
-#elif defined(OP_SSE_RASTER)
-            const __m128 a = _mm_set1_ps(p[3] - p[5]), b = _mm_set1_ps(p[4] - p[2]), c = _mm_set1_ps(p[5] - p[1]),
-                         d = _mm_set1_ps(p[0] - p[4]), origin = _mm_set1_ps(p[4]), denominator = _mm_set1_ps(det),
-                         one = _mm_set1_ps(1.0f), floor = _mm_set1_ps(-1e-5f);
-            const __m128 dy = _mm_set1_ps((float)y - p[5]), steps = _mm_setr_ps(0, 1, 2, 3);
-            const __m128 bdy = _mm_mul_ps(b, dy), ddy = _mm_mul_ps(d, dy);
-            for (; x + 4 <= hi[0]; x += 4) {
-                __m128 dx = _mm_sub_ps(_mm_add_ps(_mm_set1_ps((float)x), steps), origin);
-                __m128 w0 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(a, dx), bdy), denominator);
-                __m128 w1 = _mm_div_ps(_mm_add_ps(_mm_mul_ps(c, dx), ddy), denominator);
-                __m128 w2 = _mm_sub_ps(_mm_sub_ps(one, w0), w1);
-                int hit = _mm_movemask_ps(_mm_and_ps(_mm_and_ps(_mm_cmpge_ps(w0, floor), _mm_cmpge_ps(w1, floor)),
-                                                     _mm_cmpge_ps(w2, floor)));
-                if (!hit)
-                    continue;
-                float u0[4], u1[4], u2[4];
-                _mm_storeu_ps(u0, w0);
-                _mm_storeu_ps(u1, w1);
-                _mm_storeu_ps(u2, w2);
-                for (int lane = 0; lane < 4; lane++)
-                    if ((hit >> lane) & 1)
-                        put_texel(row + (uint64_t)(x + lane), t, u0[lane], u1[lane], u2[lane], attributes, corners,
-                                  components, bytes, outs, covered);
-            }
-#endif
-            for (; x < hi[0]; x++) {
-                float w0 = ((p[3] - p[5]) * ((float)x - p[4]) + (p[4] - p[2]) * ((float)y - p[5])) / det;
-                float w1 = ((p[5] - p[1]) * ((float)x - p[4]) + (p[0] - p[4]) * ((float)y - p[5])) / det;
-                float w2 = 1.0f - w0 - w1;
-                if (w0 >= -1e-5f && w1 >= -1e-5f && w2 >= -1e-5f)
-                    put_texel(row + (uint64_t)x, t, w0, w1, w2, attributes, corners, components, bytes, outs,
-                              covered);
-            }
+     * unique raster keeps, with no sample list to build, grow and deduplicate. */
+    interpolation m = {attributes, corners, components, bytes, outs, covered};
+    for (uint32_t t = 0; t < triangles; t++)
+        raster_triangle(uv, t, size, interpolate_texel, &m);
+    return OP_OK;
+}
+
+typedef struct assignment {
+    uint32_t attributes;
+    const void *const *values;
+    const uint32_t *components, *kinds;
+    void *const *outs;
+    uint8_t *covered;
+} assignment;
+
+/* One covered texel of op_uv_raster_assign: each attribute's values of triangle t, cast as NumPy's
+ * assignment into the map's dtype casts them. */
+static void assign_texel(void *context, uint64_t texel, uint32_t t, float w0, float w1, float w2) {
+    (void)w0;
+    (void)w1;
+    (void)w2;
+    const assignment *m = context;
+    for (uint32_t a = 0; a < m->attributes; a++) {
+        uint32_t n = m->components[a];
+        uint64_t from = (uint64_t)t * n, to = texel * n;
+        switch (m->kinds[a]) {
+        case OP_ASSIGN_F32:
+            for (uint32_t j = 0; j < n; j++)
+                ((float *)m->outs[a])[to + j] = ((const float *)m->values[a])[from + j];
+            break;
+        case OP_ASSIGN_F64:
+            for (uint32_t j = 0; j < n; j++)
+                ((float *)m->outs[a])[to + j] = (float)((const double *)m->values[a])[from + j];
+            break;
+        case OP_ASSIGN_I32:
+            for (uint32_t j = 0; j < n; j++)
+                ((int32_t *)m->outs[a])[to + j] = ((const int32_t *)m->values[a])[from + j];
+            break;
+        default:
+            for (uint32_t j = 0; j < n; j++)
+                ((int32_t *)m->outs[a])[to + j] = (int32_t)(uint32_t)(uint64_t)((const int64_t *)m->values[a])[from + j];
         }
     }
+    if (m->covered)
+        m->covered[texel] = 1;
+}
+
+op_status_t op_uv_raster_assign(const float *uv, uint32_t triangles, uint32_t size, uint32_t attributes,
+                                const void *const *values, const uint32_t *components, const uint32_t *kinds,
+                                void *const *outs, uint8_t *covered) {
+    if (!attributes || attributes > 8 || !values || !components || !kinds || !outs || (triangles && !uv) ||
+        triangles > MAX_TRIANGLES || !size || size > 32768)
+        return OP_INVALID_ARGUMENT;
+    for (uint32_t a = 0; a < attributes; a++)
+        if (!components[a] || components[a] > 16 || kinds[a] > OP_ASSIGN_I64 || !outs[a] || (triangles && !values[a]))
+            return OP_INVALID_ARGUMENT;
+    if (!finite_uvs(uv, triangles))
+        return OP_VALIDATION_FAILED;
+    assignment m = {attributes, values, components, kinds, outs, covered};
+    for (uint32_t t = 0; t < triangles; t++)
+        raster_triangle(uv, t, size, assign_texel, &m);
+    return OP_OK;
+}
+
+typedef struct ownership {
+    const int32_t *owners;
+    int32_t *island;
+    uint32_t *batch_of, batch;
+    uint8_t *covered, *conflicts;
+} ownership;
+
+/* One covered texel of op_uv_raster_ownership. build_ownership flags a texel whose writers in a
+ * batch differ from the batch's first writer; that holds exactly when two of them in a row differ,
+ * so each writer after the batch's first is compared with the one before it, the island so far
+ * (batch_of says which batch wrote the texel last). */
+static void own_texel(void *context, uint64_t texel, uint32_t t, float w0, float w1, float w2) {
+    (void)w0;
+    (void)w1;
+    (void)w2;
+    ownership *m = context;
+    int32_t owner = m->owners[t];
+    if (m->batch_of[texel] != m->batch)
+        m->batch_of[texel] = m->batch;
+    else if (m->island[texel] != owner)
+        m->conflicts[texel] = 1;
+    m->island[texel] = owner;
+    m->covered[texel] = 1;
+}
+
+op_status_t op_uv_raster_ownership(const float *uv, uint32_t triangles, uint32_t size, const int32_t *owners,
+                                   const uint32_t *starts, uint32_t batches, int32_t *island, uint8_t *covered,
+                                   uint8_t *conflicts) {
+    if ((triangles && (!uv || !owners || !starts || !batches)) || triangles > MAX_TRIANGLES || !size ||
+        size > 32768 || !island || !covered || !conflicts)
+        return OP_INVALID_ARGUMENT;
+    for (uint32_t b = 0; b < batches; b++)
+        if ((b == 0 && starts[b] != 0) || (b > 0 && starts[b] <= starts[b - 1]) || starts[b] >= triangles)
+            return OP_INVALID_ARGUMENT;
+    if (!finite_uvs(uv, triangles))
+        return OP_VALIDATION_FAILED;
+    if (!triangles)
+        return OP_OK;
+    ownership m = {owners, island, calloc((uint64_t)size * size, sizeof(uint32_t)), 0, covered, conflicts};
+    if (!m.batch_of)
+        return OP_RESOURCE_EXHAUSTED;
+    /* Batch b is stamped b + 1: the zeroed stamps mean no writer in this batch yet. */
+    for (uint32_t b = 0; b < batches; b++) {
+        m.batch = b + 1;
+        uint32_t end = b + 1 < batches ? starts[b + 1] : triangles;
+        for (uint32_t t = starts[b]; t < end; t++)
+            raster_triangle(uv, t, size, own_texel, &m);
+    }
+    free(m.batch_of);
     return OP_OK;
 }
 

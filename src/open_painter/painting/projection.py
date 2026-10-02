@@ -79,6 +79,10 @@ def tangents(ts, n, geometry_cache=None):
                 inverse[ok, 1, 0] = -f[ok, 1, 0] / det[ok]
                 frame = inverse @ e                                                     # (T, 2, 3): dP/du, dP/dv
                 frame /= np.maximum(np.linalg.norm(frame, axis=2, keepdims=True), 1e-12)
+            if lib is not None and hasattr(lib, 'op_uv_raster_assign'):
+                from ..native_bridge.geometry import raster_assign
+                raster_assign(lib, target["uv"][target["tri_loops"]], n, [(frame[:, 0], tangent), (frame[:, 1], bitangent)])
+                continue
             rows, cols, tri, _ = rasterize(target["uv"][target["tri_loops"]], n)
             if not len(rows):
                 continue

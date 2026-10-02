@@ -10,7 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 from open_painter.native_bridge import load_library
 from open_painter.native_bridge.geometry import (Bounds, rasterize, adjacency, frames, interpolate, padding_donors,
-                                                 raster_interpolate)
+                                                 raster_assign, raster_interpolate, raster_ownership)
 from open_painter.geometry import uv_rasterizer
 from open_painter.painting import surface_reach
 
@@ -112,6 +112,62 @@ class GeometryTests(unittest.TestCase):
             raster_interpolate(self.lib, uv, 8, [(positions.astype(np.float16), np.empty((8, 8, 3), np.float32))])
         with self.assertRaises(ValueError):
             raster_interpolate(self.lib, uv, 8, [(normals, np.empty((8, 8, 2), np.float32))])
+
+    def test_raster_assign_is_rasterize_and_scatter(self):
+        rng = np.random.default_rng(812)
+        uv = rng.uniform(-.1, 1.1, size=(260, 3, 2)).astype(np.float32)
+        uv[3] = uv[4] = ((0, 0), (1, 0), (0, 1))   # overlapping: the later triangle wins
+        values = [rng.normal(size=(260, 3)).astype(np.float32), rng.normal(size=(260, 3)) * 1e3,
+                  rng.integers(-9, 9, 260).astype(np.int32), rng.integers(-9, 9, 260) + (1 << 33)]
+        n = 72
+        rows, cols, tri, _ = rasterize(self.lib, uv, n, True, None)
+        maps, expected = [], []
+        for v in values:
+            shape = (n, n, 3) if v.ndim == 2 else (n, n)
+            dtype = np.float32 if v.dtype.kind == 'f' else np.int32
+            maps.append(np.full(shape, -3, dtype))
+            reference = np.full(shape, -3, dtype)
+            reference[rows, cols] = v[tri]   # NumPy's assignment casts (float64 rounds, int64 wraps)
+            expected.append(reference)
+        covered = np.zeros((n, n), bool)
+        raster_assign(self.lib, uv, n, list(zip(values, maps)), covered)
+        for a, b in zip(maps, expected):
+            np.testing.assert_array_equal(a.view(np.uint32), b.view(np.uint32))
+        marked = np.zeros((n, n), bool)
+        marked[rows, cols] = True
+        np.testing.assert_array_equal(covered, marked)
+        with self.assertRaises(ValueError):   # a float into an int map is not an assignment cast here
+            raster_assign(self.lib, uv, n, [(values[0], np.zeros((n, n, 3), np.int32))])
+
+    def test_raster_ownership_is_build_ownerships_batch_loop(self):
+        rng = np.random.default_rng(6203)
+        uv = rng.uniform(-.1, 1.1, size=(240, 3, 2)).astype(np.float32)
+        uv[5] = uv[9] = uv[100] = ((0, 0), (1, 0), (0, 1))   # overlaps within and across batches
+        uv[7] = 0                                             # degenerate
+        of_triangle = rng.integers(-1, 6, len(uv)).astype(np.int64)
+        n = 80
+        for split in ([0], [0, 100], [0, 7, 9, 101, 239]):
+            with self.subTest(batches=split):
+                batches = np.split(np.arange(len(uv)), split[1:])
+                # build_ownership's NumPy loop over the same batches, on the native samples.
+                island = np.full((n, n), -1, np.int32)
+                covered = np.zeros((n, n), bool)
+                conflicts = np.zeros((n, n), bool)
+                for batch in batches:
+                    rows, cols, tri, _ = rasterize(self.lib, uv[batch], n, False, None)
+                    owner = of_triangle[batch[tri]].astype(np.int32)
+                    flat = rows * n + cols
+                    first = np.full(n * n, -2, np.int32)
+                    first_order = np.unique(flat, return_index=True)[1]
+                    first[flat[first_order]] = owner[first_order]
+                    island.reshape(-1)[flat] = owner
+                    covered.reshape(-1)[flat] = True
+                    conflicts.reshape(-1)[flat[first[flat] != owner]] = True
+                found = (np.full((n, n), -1, np.int32), np.zeros((n, n), bool), np.zeros((n, n), bool))
+                raster_ownership(self.lib, uv, n, of_triangle.astype(np.int32), split, *found)
+                for a, b in zip(found, (island, covered, conflicts)):
+                    np.testing.assert_array_equal(a, b)
+                self.assertTrue(conflicts.any())
 
     def test_uv_overlap_clipping_and_barycentric_parity(self):
         rng = np.random.default_rng(934)

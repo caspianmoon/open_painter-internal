@@ -90,7 +90,9 @@ def build_ownership(entries, n):
     texel centres, island ids from UV-connected faces, overlap and degeneracy counts."""
     from ..baking.maps.utility import _islands
     from ..geometry.uv_rasterizer import rasterize
+    from ..native_bridge.lifecycle import cpu_library
     from ..painting.stroke_raster import _batches
+    lib = cpu_library()
     covered = np.zeros((n, n), bool)
     island = np.full((n, n), -1, np.int32)
     conflicts = np.zeros((n, n), bool)
@@ -105,7 +107,14 @@ def build_ownership(entries, n):
         of_triangle = island_of_face[target['tri_polygons']]
         du, dv = uv[:, 1] - uv[:, 0], uv[:, 2] - uv[:, 0]
         degenerate += int((np.abs(du[:, 0] * dv[:, 1] - du[:, 1] * dv[:, 0]) < 1e-12).sum())
-        for batch in _batches(uv, n):
+        batches = _batches(uv, n)
+        if lib is not None and hasattr(lib, 'op_uv_raster_ownership'):
+            # One native pass over the same batches, with no per-texel arrays or sorting.
+            from ..native_bridge.geometry import raster_ownership
+            raster_ownership(lib, uv, n, of_triangle.astype(np.int32), [batch[0] for batch in batches if len(batch)],
+                             island, covered, conflicts)
+            continue
+        for batch in batches:
             rows, cols, tri, _ = rasterize(uv[batch], n, unique=False)
             if not len(rows):
                 continue

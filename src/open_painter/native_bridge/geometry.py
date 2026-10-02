@@ -170,6 +170,68 @@ def raster_interpolate(lib, uv, n, attributes, covered=None):
                                        widths, outs, covered.ctypes.data if covered is not None else None))
 
 
+ASSIGN_KINDS = {(np.dtype(np.float32), np.dtype(np.float32)): 0, (np.dtype(np.float64), np.dtype(np.float32)): 1,
+                (np.dtype(np.int32), np.dtype(np.int32)): 2, (np.dtype(np.int64), np.dtype(np.int32)): 3}
+
+
+def raster_assign(lib, uv, n, attributes, covered=None):
+    """The unique raster of (T, 3, 2) ``uv`` at n with each (values, out) pair of ``attributes``
+    assigned straight into ``out``, as rasterize and a scatter of values[triangle] would give it:
+    values (T, C) or (T,) float32/float64 into a float32 map, int32/int64 into an int32 map, cast as
+    NumPy's assignment casts; out a C-contiguous (n, n, C) or (n, n) map. ``covered`` (n, n) bytes is
+    set where a triangle covers. Texels no triangle covers keep their values."""
+    uv = np.ascontiguousarray(uv, np.float32)
+    if uv.ndim != 3 or uv.shape[1:] != (3, 2):
+        raise ValueError('Expected N x 3 x 2 triangle UVs')
+    count = len(attributes)
+    if not 1 <= count <= 8:
+        raise ValueError('Expected one to eight attributes')
+    held, data, outs = [], (C.c_void_p * count)(), (C.c_void_p * count)()
+    components, kinds = (C.c_uint32 * count)(), (C.c_uint32 * count)()
+    for i, (values, out) in enumerate(attributes):
+        values = np.ascontiguousarray(values)
+        kind = ASSIGN_KINDS.get((values.dtype, out.dtype))
+        width = values.shape[1] if values.ndim == 2 else 1
+        if (kind is None or values.ndim not in (1, 2) or len(values) != len(uv) or not 1 <= width <= 16
+                or not out.flags.c_contiguous or out.shape != ((n, n, width) if values.ndim == 2 else (n, n))):
+            raise ValueError('Expected (T, C) values and a contiguous (n, n, C) map of a matching dtype')
+        held.append(values)
+        data[i], outs[i] = values.ctypes.data, out.ctypes.data
+        components[i], kinds[i] = width, kind
+    if covered is not None and (covered.shape != (n, n) or covered.itemsize != 1 or not covered.flags.c_contiguous):
+        raise ValueError('Expected a contiguous (n, n) coverage map of bytes')
+    lib.op_uv_raster_assign.argtypes = [F32, C.c_uint32, C.c_uint32, C.c_uint32, C.POINTER(C.c_void_p), U32, U32,
+                                        C.POINTER(C.c_void_p), C.c_void_p]
+    lib.op_uv_raster_assign.restype = C.c_int
+    check(lib.op_uv_raster_assign(uv.ctypes.data_as(F32), len(uv), n, count, data, components, kinds, outs,
+                                  covered.ctypes.data if covered is not None else None))
+
+
+def raster_ownership(lib, uv, n, owners, starts, island, covered, conflicts):
+    """padding.build_ownership's raster of one target, batch by batch (op_uv_raster_ownership):
+    ``owners`` (T,) per triangle, batches starting at the ascending triangle indices ``starts``
+    (the first 0). Where triangles cover, the (n, n) int32 ``island`` takes the later writer's
+    owner, the bool ``covered`` is set, and the bool ``conflicts`` marks texels where a writer
+    differs from its batch's first writer."""
+    uv = np.ascontiguousarray(uv, np.float32)
+    if uv.ndim != 3 or uv.shape[1:] != (3, 2):
+        raise ValueError('Expected N x 3 x 2 triangle UVs')
+    owners = np.ascontiguousarray(owners, np.int32)
+    starts = np.ascontiguousarray(starts, np.uint32)
+    if owners.shape != (len(uv),) or starts.ndim != 1:
+        raise ValueError('Expected one owner per triangle and a list of batch starts')
+    if (island.dtype != np.int32 or island.shape != (n, n) or not island.flags.c_contiguous
+            or any(m.shape != (n, n) or m.itemsize != 1 or not m.flags.c_contiguous for m in (covered, conflicts))):
+        raise ValueError('Expected contiguous (n, n) island int32, covered and conflicts byte maps')
+    I32 = C.POINTER(C.c_int32)
+    lib.op_uv_raster_ownership.argtypes = [F32, C.c_uint32, C.c_uint32, I32, U32, C.c_uint32, I32, C.c_void_p,
+                                           C.c_void_p]
+    lib.op_uv_raster_ownership.restype = C.c_int
+    check(lib.op_uv_raster_ownership(uv.ctypes.data_as(F32), len(uv), n, owners.ctypes.data_as(I32),
+                                     starts.ctypes.data_as(U32), len(starts), island.ctypes.data_as(I32),
+                                     covered.ctypes.data, conflicts.ctypes.data))
+
+
 def jacobians(lib, corners, uv, n):
     corners, uv = np.ascontiguousarray(corners, np.float64), np.ascontiguousarray(uv, np.float64)
     if corners.ndim != 3 or corners.shape[1:] != (3, 3) or uv.shape != (len(corners), 3, 2):

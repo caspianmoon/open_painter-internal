@@ -10,7 +10,7 @@ import math
 import re
 
 from . import metrics
-from .live_procedurals import UnsupportedSource, _configuration
+from .live_procedurals import QUALIFIED_BACKENDS, UnsupportedSource, _configuration
 
 
 KINDS = {name: index for index, name in enumerate((
@@ -185,8 +185,8 @@ class MaskDevice:
         from gpu_extras.batch import batch_for_shader
         if bpy.app.background or not bpy.context.window:
             raise RuntimeError('GPU masks require a Blender window')
-        if gpu.platform.backend_type_get() != 'METAL':
-            raise UnsupportedMask('GPU mask arithmetic is currently validated on Metal; use CPU')
+        if gpu.platform.backend_type_get() not in QUALIFIED_BACKENDS:
+            raise UnsupportedMask('GPU mask arithmetic is validated on Metal, Vulkan and OpenGL; use CPU')
         self.window = bpy.context.window.as_pointer()
         info = gpu.types.GPUShaderCreateInfo()
         info.vertex_in(0, 'VEC2', 'position')

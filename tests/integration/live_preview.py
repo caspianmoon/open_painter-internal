@@ -169,7 +169,14 @@ def main():
         assert ts.dirty and shader_preview.current(scene, ts)
         assert saved.phases['image_write']['calls'] == 0, saved.report()
         assert {output.channel: output.revision for output in ts.outputs} == saved_revisions
-        np.testing.assert_array_equal(images.pixels(images.output(ts, 'ROUGHNESS').image), saved_output)
+        from open_painter.evaluation.engine import runtime
+        if runtime.device().pixel_publish:
+            # Through pixels (Vulkan) publishing the flushed preview is writing the output's pixels:
+            # they show the edit (0.77 at half precision), as the output's GPU texture does on
+            # framebuffer backends, and the save wrote no image (above).
+            np.testing.assert_allclose(images.pixels(images.output(ts, 'ROUGHNESS').image)[..., :3], .77, atol=5e-4)
+        else:
+            np.testing.assert_array_equal(images.pixels(images.output(ts, 'ROUGHNESS').image), saved_output)
         np.testing.assert_allclose(images.pixels(prop.image)[..., 0], .77, atol=3e-5)
         assert prop.image.packed_file
         assert not any(image.get('open_painter_disposable_preview') for image in bpy.data.images)

@@ -20,6 +20,11 @@ KINDS = {name: i for i, name in enumerate((
     'CONCRETE_PORES', 'ORANGE_PEEL', 'SCRATCHES', 'VORONOI'))}
 
 
+# Backends whose scalar and mask results the GPU parity suites (tests/integration/live_procedurals.py,
+# live_masks.py) have checked against the CPU reference; anything else keeps the CPU path.
+QUALIFIED_BACKENDS = frozenset({'METAL', 'VULKAN', 'OPENGL'})
+
+
 class UnsupportedSource(ValueError):
     """Use the CPU reference for this source or coordinate domain."""
 
@@ -176,8 +181,8 @@ class ScalarDevice:
         from gpu_extras.batch import batch_for_shader
         if bpy.app.background or not bpy.context.window:
             raise RuntimeError('Live procedural evaluation needs a Blender GPU window')
-        if gpu.platform.backend_type_get() != 'METAL':
-            raise UnsupportedSource('GPU scalar parity is currently verified on Metal only')
+        if gpu.platform.backend_type_get() not in QUALIFIED_BACKENDS:
+            raise UnsupportedSource('GPU scalar parity is verified on Metal, Vulkan and OpenGL only')
         self.window = bpy.context.window.as_pointer()
         info = gpu.types.GPUShaderCreateInfo()
         info.vertex_in(0, 'VEC2', 'position')

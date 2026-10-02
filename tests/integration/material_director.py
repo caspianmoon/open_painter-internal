@@ -47,6 +47,20 @@ class DirectorTests(unittest.TestCase):
         session._pending.clear()
         session._announced.clear()
         shader_preview.clear()
+        # Every test builds a scene with a set of its own: release it and what it leaves
+        # orphaned, or the suite's memory grows with its number of tests (each set's images
+        # hold their pixels and, published into, a GPU texture).
+        try:
+            scene = self.scene
+            others = [other for other in bpy.data.scenes if other != scene]
+            if others and scene.name in bpy.data.scenes:
+                bpy.context.window.scene = others[0]
+                for obj in list(scene.objects):
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                bpy.data.scenes.remove(scene)
+                bpy.data.orphans_purge(do_recursive=True)
+        except ReferenceError:
+            pass
 
     def apply(self, proposal, **kwargs):
         self.serial += 1

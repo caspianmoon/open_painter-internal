@@ -85,6 +85,49 @@ evidence.
   The likely cause: frozen reference cycles that hold GPU textures outlive Blender's GPU
   shutdown. A user who quits Blender sees the same, because Blender does not unregister
   add-ons on quit. No test fails, and it is cosmetic at exit.
+- **A Blender preview-loading crash.** In the first OpenGL GUI gate, `authoring_ui.py`
+  passed and then hung at exit, after Blender printed `Code marked as unreachable` from
+  `IMB_thumb_path_unlock`. Reproduced twice in three runs:
+  - one exit crashed (code 11);
+  - one hung. Blender's crash log, with every thread's stack, shows an access violation in
+    `blender::PreviewLoadJob::run_fn` (the job that loads asset previews for the shelf),
+    reading address 0x20.
+  - The job holds a pointer into a `PreviewImage` that was freed while it was loading. The
+    path unlock then reads garbage, and the job crashes, or Blender's crash handler hangs.
+
+  It did not recur in 27 later runs, including runs with the asset shelf hidden, with
+  library refreshes or new images forced during loading, and after evicting the file
+  cache. Python cannot see the job, so a test cannot wait for it. The trigger is not
+  identified. The guard's `--timeout-seconds` makes such a hang fail its suite instead of
+  stalling the gate. To catch the next occurrence, fault a thread in the hung `blender.exe`
+  (CreateRemoteThread at an unmapped address): Blender's crash handler then writes every
+  thread's stack to `%TEMP%\blender.crash.txt`.
+
+### Speed: native kernels where the time went (2026-10-02)
+
+Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time
+that native code could take. Each kernel has SSE4.2 and NEON paths, a scalar path, tests
+against the code it replaces and mutation checks. The NEON paths are also tested on x86-64
+through SIMDe's emulated intrinsics (`docs/native/platforms.md`).
+
+| What | Kernel | Before | After |
+| --- | --- | ---: | ---: |
+| Scalar channel readback (Vulkan, 1K) | `op_expand_compact`, R16F publication | 3.45 ms read | 0.98 ms read + 1.1 ms expand |
+| Edits that publish scalar channels (Vulkan) | (same) | e.g. move layer 59 ms | 46 ms (10–24% across cases) |
+| `projection.geometry()` at 1K | `op_uv_raster_interpolate` | 260 ms | 34 ms |
+| Padding ownership at 1K | `op_uv_raster_ownership` | 110 ms | 8 ms |
+| Export relief metric, tangent frames | `op_uv_raster_assign` | per-texel arrays | none |
+| `export_padding.py` (4K export) | (all three rasters) | killed at 4.21 GiB | passes, 3.94 GiB |
+
+What remains is not CPU arithmetic:
+- GPU readback waits: each readback waits for the stack's GPU work, which takes 13 ms on
+  the GTX 1050 during an undo.
+- Blender's image upload: Blender rebuilds an image texture after its pixels change, 6.5 ms
+  for a 1K float image.
+- Python graph code: about 126 ms per undo under the profiler.
+
+Hand-written assembly would not help: the compiler already emits the minimal instruction
+sequence for these loops (see platforms.md).
 
 ### Step 8: the native scheduler on Vulkan and OpenGL
 

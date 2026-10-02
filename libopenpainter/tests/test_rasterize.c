@@ -13,6 +13,94 @@ static float uniform(float lo, float hi) {
     return lo + (hi - lo) * (float)((state >> 11) * (1.0 / 9007199254740992.0));
 }
 
+/* op_uv_raster_interpolate against rasterizing (unique), interpolating each kept sample's corners
+ * and scattering the values into maps step by step: float corners in float arithmetic, double
+ * corners in double rounded once, uncovered texels untouched, coverage marked; overlapping,
+ * sliver and degenerate triangles. */
+static int interpolated_maps(void) {
+    enum { TRIANGLES = 400, SIZE = 160 };
+    static float uv[TRIANGLES * 6], single[TRIANGLES * 9], maps[2][SIZE * SIZE * 3], expected[2][SIZE * SIZE * 3];
+    static double doubles[TRIANGLES * 6];
+    static uint8_t covered[SIZE * SIZE], marked[SIZE * SIZE];
+    uint64_t texels = 0;
+    for (int trial = 0; trial < 60; trial++) {
+        uint32_t triangles = 1 + (uint32_t)uniform(0, TRIANGLES - 1), size = 4 + (uint32_t)uniform(0, SIZE - 4);
+        float scale = uniform(.01f, .4f);
+        for (uint32_t t = 0; t < triangles; t++) {
+            float u = uniform(-.05f, 1.05f), v = uniform(-.05f, 1.05f);
+            for (int k = 0; k < 6; k++)
+                uv[t * 6 + k] = (k % 2 ? v : u) + uniform(-scale, scale);
+            if (t % 29 == 7) {   /* degenerate */
+                uv[t * 6 + 4] = uv[t * 6];
+                uv[t * 6 + 5] = uv[t * 6 + 1];
+            }
+        }
+        for (uint32_t i = 0; i < triangles * 9; i++)
+            single[i] = uniform(-3, 3);
+        for (uint32_t i = 0; i < triangles * 6; i++)
+            doubles[i] = (double)uniform(-50, 50) + (double)uniform(-1, 1) * 1e-9;   /* past float precision */
+        const void *corners[2] = {single, doubles};
+        const uint32_t components[2] = {3, 2}, bytes[2] = {4, 8};
+        float *outs[2] = {maps[0], maps[1]};
+        for (int a = 0; a < 2; a++)
+            for (uint32_t i = 0; i < size * size * 3; i++)
+                maps[a][i] = expected[a][i] = (float)(i % 7) - 100.0f;   /* uncovered texels keep these */
+        memset(covered, 0, sizeof covered);
+        memset(marked, 0, sizeof marked);
+        if (op_uv_raster_interpolate(uv, triangles, size, 2, corners, components, bytes, outs,
+                                     trial % 4 ? covered : NULL))
+            return 1;
+        op_uv_sample_t *samples = NULL;
+        uint64_t count = 0;
+        if (op_uv_rasterize(uv, triangles, size, 1, NULL, &samples, &count))
+            return 1;
+        for (uint64_t k = 0; k < count; k++) {
+            const op_uv_sample_t *s = samples + k;
+            uint64_t texel = (uint64_t)s->row * size + s->column;
+            const float *w = s->weights, *f = single + (uint64_t)s->triangle * 9;
+            const double *d = doubles + (uint64_t)s->triangle * 6;
+            for (int j = 0; j < 3; j++) {
+                float a = w[0] * f[j];
+                a = a + w[1] * f[3 + j];
+                expected[0][texel * 3 + j] = a + w[2] * f[6 + j];
+            }
+            for (int j = 0; j < 2; j++) {
+                double a = (double)w[0] * d[j];
+                a = a + (double)w[1] * d[2 + j];
+                expected[1][texel * 2 + j] = (float)(a + (double)w[2] * d[4 + j]);
+            }
+            marked[texel] = 1;
+        }
+        texels += count;
+        op_geometry_free(samples);
+        if (memcmp(maps[0], expected[0], size * size * 3 * sizeof(float)) ||
+            memcmp(maps[1], expected[1], size * size * 2 * sizeof(float)) ||
+            (trial % 4 && memcmp(covered, marked, size * size))) {
+            fprintf(stderr, "interpolated maps, trial %d: a map or the coverage differs\n", trial);
+            return 1;
+        }
+    }
+    const void *corners[1] = {single};
+    float *outs[1] = {maps[0]};
+    const uint32_t three[1] = {3}, seventeen[1] = {17}, four[1] = {4}, two[1] = {2};
+    /* A non-finite UV anywhere fails the call before any texel is written. */
+    for (uint32_t i = 0; i < 64 * 3; i++)
+        maps[0][i] = -1.0f;
+    uv[6 * 3 + 2] = NAN;
+    if (op_uv_raster_interpolate(uv, 4, 8, 1, corners, three, four, outs, NULL) != OP_VALIDATION_FAILED)
+        return 1;
+    for (uint32_t i = 0; i < 64 * 3; i++)
+        if (maps[0][i] != -1.0f)
+            return 1;
+    if (op_uv_raster_interpolate(uv, 1, 8, 0, corners, three, four, outs, NULL) != OP_INVALID_ARGUMENT ||
+        op_uv_raster_interpolate(uv, 1, 8, 9, corners, three, four, outs, NULL) != OP_INVALID_ARGUMENT ||
+        op_uv_raster_interpolate(uv, 1, 8, 1, corners, seventeen, four, outs, NULL) != OP_INVALID_ARGUMENT ||
+        op_uv_raster_interpolate(uv, 1, 8, 1, corners, three, two, outs, NULL) != OP_INVALID_ARGUMENT)
+        return 1;
+    printf("interpolated raster maps match step-by-step interpolation over %llu texels\n", (unsigned long long)texels);
+    return 0;
+}
+
 int main(void) {
     enum { MAX = 4000 };
     static float uv[MAX * 6], clip[MAX * 4];
@@ -67,5 +155,5 @@ int main(void) {
         }
     }
     printf("uv rasterize matches its reference over %llu samples\n", (unsigned long long)compared);
-    return 0;
+    return interpolated_maps();
 }

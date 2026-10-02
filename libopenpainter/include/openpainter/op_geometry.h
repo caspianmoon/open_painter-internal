@@ -21,6 +21,17 @@ typedef struct op_uv_sample {
  * The result is native-owned until op_geometry_free; no pointers are retained. */
 op_status_t op_uv_rasterize(const float *uv, uint32_t triangles, uint32_t size, uint32_t unique,
                             const float *clip, op_uv_sample_t **samples, uint64_t *count);
+/* The unique raster of op_uv_rasterize with corner attributes interpolated straight into maps,
+ * as rasterizing, interpolating the kept samples' corners and scattering them would: for each
+ * covered texel (the later triangle wins) and attribute a, outs[a][texel] = w0 c0 + w1 c1 + w2 c2
+ * per component, summed left to right. corners[a]: triangles x 3 x components[a] values of
+ * bytes[a] 4 (float32, float32 arithmetic, as op_mesh_interpolate) or 8 (float64: NumPy's float64
+ * arithmetic, rounded to float32 once). outs[a]: size x size x components[a] float32, texels by
+ * rows; texels no triangle covers keep their values. covered (optional): size x size bytes, set
+ * to 1 where a triangle covers. 1 to 8 attributes of 1 to 16 components. */
+op_status_t op_uv_raster_interpolate(const float *uv, uint32_t triangles, uint32_t size, uint32_t attributes,
+                                     const void *const *corners, const uint32_t *components,
+                                     const uint32_t *bytes, float *const *outs, uint8_t *covered);
 void op_geometry_free(void *memory);
 /* Exact Euclidean gutter donors, tie-broken by island then texel index.
  * Square arrays, size <= 8192, limit <= 64; covered texels have donor -1.

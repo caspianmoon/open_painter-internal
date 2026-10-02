@@ -22,9 +22,18 @@ def geometry(ts, n, coverage=False):
         return (positions, normals, valid) if coverage else (positions, normals)
     from ..geometry.snapshots import targets
     from ..geometry.uv_rasterizer import interpolate, rasterize
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
     with targets(ts) as objects:
         for target in objects:
             # All triangles of a target at once; later targets overwrite earlier ones.
+            if lib is not None and hasattr(lib, 'op_uv_raster_interpolate'):
+                # One native pass, with no per-texel arrays: the maps the code below writes.
+                from ..native_bridge.geometry import raster_interpolate
+                raster_interpolate(lib, target["uv"][target["tri_loops"]], n, [
+                    (target["positions"][target["tri_vertices"]], positions),
+                    (target["world_normals"][target["tri_loops"]], normals)], valid)
+                continue
             rows, cols, tri, weights = rasterize(target["uv"][target["tri_loops"]], n)
             if not len(rows):
                 continue

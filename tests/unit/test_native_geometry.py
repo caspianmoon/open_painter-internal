@@ -9,7 +9,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 from open_painter.native_bridge import load_library
-from open_painter.native_bridge.geometry import Bounds, rasterize, adjacency, frames, interpolate, padding_donors
+from open_painter.native_bridge.geometry import (Bounds, rasterize, adjacency, frames, interpolate, padding_donors,
+                                                 raster_interpolate)
 from open_painter.geometry import uv_rasterizer
 from open_painter.painting import surface_reach
 
@@ -85,6 +86,32 @@ class GeometryTests(unittest.TestCase):
         low[:] = high[:] = 1e9
         np.testing.assert_array_equal(native.query((-1, -1, -1), (1, 1, 1)), result)
         native.close()
+
+    def test_raster_interpolate_is_rasterize_interpolate_and_scatter(self):
+        rng = np.random.default_rng(4471)
+        uv = rng.uniform(-.1, 1.1, size=(300, 3, 2)).astype(np.float32)
+        uv[0] = uv[1] = ((0, 0), (1, 0), (0, 1))   # overlapping: the later triangle wins
+        uv[2] = 0                                   # degenerate
+        positions = rng.normal(size=(300, 3, 3)) * 40   # float64: NumPy's float64 arithmetic
+        normals = rng.normal(size=(300, 3, 3)).astype(np.float32)
+        for n in (1, 7, 96):
+            with self.subTest(n=n):
+                rows, cols, tri, weights = rasterize(self.lib, uv, n, True, None)
+                expected = [np.full((n, n, 3), -7, np.float32) for _ in range(2)]
+                expected[0][rows, cols] = uv_rasterizer.interpolate(weights, positions[tri])
+                expected[1][rows, cols] = interpolate(self.lib, weights, normals[tri])
+                covered = np.zeros((n, n), bool)
+                found = [np.full((n, n, 3), -7, np.float32) for _ in range(2)]
+                raster_interpolate(self.lib, uv, n, [(positions, found[0]), (normals, found[1])], covered)
+                for a, b in zip(found, expected):
+                    np.testing.assert_array_equal(a.view(np.uint32), b.view(np.uint32))
+                marked = np.zeros((n, n), bool)
+                marked[rows, cols] = True
+                np.testing.assert_array_equal(covered, marked)
+        with self.assertRaises(ValueError):
+            raster_interpolate(self.lib, uv, 8, [(positions.astype(np.float16), np.empty((8, 8, 3), np.float32))])
+        with self.assertRaises(ValueError):
+            raster_interpolate(self.lib, uv, 8, [(normals, np.empty((8, 8, 2), np.float32))])
 
     def test_uv_overlap_clipping_and_barycentric_parity(self):
         rng = np.random.default_rng(934)

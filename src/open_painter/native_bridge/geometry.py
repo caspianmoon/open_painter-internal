@@ -135,6 +135,41 @@ def rasterize(lib, uv, n, unique=True, clip=None):
         lib.op_geometry_free(pointer)
 
 
+def raster_interpolate(lib, uv, n, attributes, covered=None):
+    """The unique raster of (T, 3, 2) ``uv`` at n, each (corners, out) pair of ``attributes``
+    interpolated straight into ``out``, as rasterize, interpolate and a scatter would give it:
+    corners (T, 3, C) float32 (float32 arithmetic) or float64 (float64, rounded once), out a
+    C-contiguous float32 (n, n, C) map. ``covered``, an (n, n) bool or uint8 map, is set where a
+    triangle covers. Texels no triangle covers keep their values."""
+    uv = np.ascontiguousarray(uv, np.float32)
+    if uv.ndim != 3 or uv.shape[1:] != (3, 2):
+        raise ValueError('Expected N x 3 x 2 triangle UVs')
+    count = len(attributes)
+    if not 1 <= count <= 8:
+        raise ValueError('Expected one to eight attributes')
+    held, corner_data = [], (C.c_void_p * count)()
+    outs, components, widths = (F32 * count)(), (C.c_uint32 * count)(), (C.c_uint32 * count)()
+    for i, (corners, out) in enumerate(attributes):
+        if corners.dtype not in (np.float32, np.float64):
+            raise ValueError('Expected float32 or float64 corner attributes')
+        corners = np.ascontiguousarray(corners)
+        if corners.ndim != 3 or corners.shape[:2] != (len(uv), 3) or not 1 <= corners.shape[2] <= 16:
+            raise ValueError('Expected triangles x 3 x C corner attributes')
+        if out.dtype != np.float32 or not out.flags.c_contiguous or out.shape != (n, n, corners.shape[2]):
+            raise ValueError('Expected a contiguous float32 (n, n, C) map per attribute')
+        held.append(corners)
+        corner_data[i] = corners.ctypes.data
+        outs[i] = out.ctypes.data_as(F32)
+        components[i], widths[i] = corners.shape[2], corners.itemsize
+    if covered is not None and (covered.shape != (n, n) or covered.itemsize != 1 or not covered.flags.c_contiguous):
+        raise ValueError('Expected a contiguous (n, n) coverage map of bytes')
+    lib.op_uv_raster_interpolate.argtypes = [F32, C.c_uint32, C.c_uint32, C.c_uint32, C.POINTER(C.c_void_p),
+                                             U32, U32, C.POINTER(F32), C.c_void_p]
+    lib.op_uv_raster_interpolate.restype = C.c_int
+    check(lib.op_uv_raster_interpolate(uv.ctypes.data_as(F32), len(uv), n, count, corner_data, components,
+                                       widths, outs, covered.ctypes.data if covered is not None else None))
+
+
 def jacobians(lib, corners, uv, n):
     corners, uv = np.ascontiguousarray(corners, np.float64), np.ascontiguousarray(uv, np.float64)
     if corners.ndim != 3 or corners.shape[1:] != (3, 3) or uv.shape != (len(corners), 3, 2):

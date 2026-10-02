@@ -12,8 +12,9 @@ done on a Windows machine.
   replaces, so the platform changes only the speed. `OP_NATIVE_ENGINE=0` turns them off.
 - **The GPU engine** (`lifecycle.active_library`, `execution_library`) runs with Blender's
   Metal and Vulkan backends. It covers native scheduling, suffix collapse and the stamps
-  that make undo re-render 28 units. Vulkan publishes through pixels (results below). On
-  OpenGL the engine keeps its Python scheduler unless `OP_NATIVE_HOST_BACKENDS=OPENGL`
+  that make undo re-render 28 units. In a window it renders into the images' GPU textures
+  on every backend; a background Vulkan session publishes through pixels (results below).
+  On OpenGL the engine keeps its Python scheduler unless `OP_NATIVE_HOST_BACKENDS=OPENGL`
   opts it in.
 
 ## Vector paths
@@ -144,18 +145,26 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
     has.
   - Warm edits are 3–7 times faster than the legacy scheduler, at the cost of about twice
     the video memory.
-- **Engine on Vulkan.** Image textures cannot be render targets on Vulkan, so the engine
-  publishes through pixel readback, within a time budget per tick.
+- **Engine on Vulkan.** Image textures are render targets on Vulkan in Blender 5.2.2 (an
+  earlier belief otherwise came from a simulated GPU), so in a window the engine renders
+  into them, as on Metal and OpenGL: edits at 1K are 3–10 times faster than through pixels
+  (`windows-plan.md`, "Publication on Vulkan").
   - Vulkan is a default host backend (`lifecycle.host_backends()`).
-  - On that path the native scheduler now runs suffix collapse, idle arming and fused
-    finals.
-  - Warm edits are about 1.4–3.3 times faster than the legacy scheduler, structural edits up
-    to 3.5 times, and the cold build about 1.8 times. Every workflow and engine suite passes
-    except the 4K one.
-  - Scalar channels publish one component (R16F, or R32F for Height): a quarter of the
-    read-back bytes and of the half-to-float conversion, expanded to (v, v, v, 1) by
-    `op_expand_compact`. At 1K a scalar channel reads back in 0.98 ms instead of 3.45, and
-    edits that publish scalar channels got 10–24% faster.
+  - A background session publishes through pixel readback, within a time budget per tick:
+    nothing draws the GPU textures there, Vulkan image textures count toward the process
+    commit charge on Windows, and released GPU resources are destroyed only after a wait
+    or a frame end.
+  - Native revisions run where they fit the retained-result budget (1K; 2K from 16 GB of
+    RAM). Elsewhere channels publish in place, and `InPlacePresentation` restores an
+    evicted image texture from the one it replaced.
+  - The pixel route keeps suffix collapse, idle arming and fused finals. Through pixels,
+    warm edits were about 1.4–3.3 times faster than the legacy scheduler, structural edits
+    up to 3.5 times, and the cold build about 1.8 times. Every workflow and engine suite
+    passes except the 4K one.
+  - Through pixels, scalar channels publish one component (R16F, or R32F for Height): a
+    quarter of the read-back bytes and of the half-to-float conversion, expanded to
+    (v, v, v, 1) by `op_expand_compact`. At 1K a scalar channel reads back in 0.98 ms
+    instead of 3.45, and edits that publish scalar channels got 10–24% faster.
 - **Native raster kernels.** projection.geometry() (world positions and normals for
   triplanar fills, projections and the engine's geometry textures) takes 34 ms instead of
   260 at 1K, bit-identical; the padding ownership raster 8 instead of 110 ms. Without their

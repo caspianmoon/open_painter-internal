@@ -103,6 +103,75 @@ evidence.
   (CreateRemoteThread at an unmapped address): Blender's crash handler then writes every
   thread's stack to `%TEMP%\blender.crash.txt`.
 
+### Publication on Vulkan (2026-10-02)
+
+Steps 8 and 10 ran with Vulkan publishing through pixels. Each channel was read back,
+written into `Image.pixels`, and re-uploaded by Blender with its mips on the next draw. The
+reason given in `4575759`, that image textures cannot be render targets on Vulkan, came
+from a simulated GPU on a machine without Vulkan (`dbf3ef0`'s strict fake GPU). On the GTX
+1050 with Blender 5.2.2, an image's own GPU texture (RGBA16F, SRGB8_A8) takes clears, draws
+and mip-level attachments, and keeps them across redraws. Two probes showed this: a draw
+into half of the texture, read back, and levels 0 and 1 written separately, then sampled
+with `textureLod`.
+
+**In a window, every backend renders into the images** (`85cba57`): one pass finishes,
+pads and writes level 0, and one pass per level writes the mips. Deep stack, 40 layers at
+1K, Vulkan, medians of two alternating rounds, in ms:
+
+| Edit | Through pixels | Into the images |
+| --- | ---: | ---: |
+| Bottom folder opacity | 121–145 | 12.5 |
+| Top folder opacity | 53 | 10–16 |
+| Middle leaf opacity | 57–64 | 10.7 |
+| Add fill (top) | 102–125 | 17 |
+| Move layer | 45–49 | 16 |
+| Visibility | 38–43 | 10 |
+| Remove layer | 33–35 | 10 |
+| Blend mode | 47–57 | 20–23 |
+| Mask black | 58–62 | 28 |
+| Paint tick | 16 | 12.5 |
+| Apply smart material | 170–197 | 121–124 |
+
+Three memory effects then pushed background suites past the 4 GB cap (`resolution_switch`
+4.05 GiB against 2.11, `material_painting` 4.12 against 3.32, `material_director` killed).
+They were handled in `4b32d81`:
+
+- **Native revisions** keep each channel's previous mip chain and its next one, and pin
+  the final sources until the batch commits. They now run only where that fits the
+  retained-result budget (`runtime.revisions_fit`): 1K everywhere, 2K from 16 GB of RAM,
+  never 4K. Elsewhere each channel publishes straight into its image, as OpenGL's default
+  scheduler always did.
+- **Eviction.** Blender recreates an image's texture from its CPU pixels when it evicts it
+  (Texture Time Out, `gl_free`), and those pixels lag behind a GPU publication. A revision
+  restored its channels. Channels published in place had no recovery, on OpenGL's default
+  scheduler too. `InPlacePresentation` holds the wrapper of the texture each channel was
+  published into, which keeps that texture alive, and copies every mip into the recreated
+  one before the next viewport draw, with no new evaluation (`engine_eviction.py`).
+- **Deferred destruction.** Blender's Vulkan backend destroys released GPU resources (a
+  resize's old textures, upload staging) only after a wait or a frame end, and a
+  background session has no frames. Publishing into the images never waits, so each 1K
+  resolution switch kept about 0.5 GB. `Device.settle()` waits once after an evaluation
+  that submitted passes, in background sessions. A 1K switch loop then peaks at 1.71 GiB
+  instead of 3.39, flat across switches.
+- **Background Vulkan sessions publish through pixels** (`runtime.BACKGROUND_PIXELS`).
+  Vulkan image textures count toward the process commit charge on Windows (about 29 MiB
+  per 1K image here). A background session never draws them, and every consumer (export,
+  bake, save) reads the CPU pixels. This is the route the background suites took before
+  `85cba57`. In a window Vulkan keeps the faster route. Benchmarks that run in background
+  measure the window route with `OP_ENGINE_PIXEL_PUBLISH=0`.
+
+Peaks after the change (guard, 4 GB cap):
+
+| Suite | Vulkan | OpenGL |
+| --- | ---: | ---: |
+| `resolution_switch.py` | 2.12 GiB | 2.87 GiB |
+| `material_painting.py` | 3.30 GiB | 3.73 GiB |
+| `material_director.py` | 2.42 GiB | 2.58 GiB (was 3.98–4.03; its tests now release their scenes) |
+| `engine_eviction.py` | 0.77 GiB | 0.96 GiB |
+
+`native_publication_4k.py` still cannot run here. Rendering into the images, it was killed
+at 4.0 GiB during its first evaluation: the eight 4K images' CPU pixels alone are 2 GiB.
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time
@@ -132,8 +201,10 @@ sequence for these loops (see platforms.md).
 ### Step 8: the native scheduler on Vulkan and OpenGL
 
 **Vulkan is a default host backend** (`lifecycle.host_backends()` is Metal and Vulkan;
-OpenGL stays opt-in). Vulkan publishes through pixels because image textures cannot be
-render targets. Four native features were missing on that path and are now ported:
+OpenGL stays opt-in). At this step Vulkan published through pixels, on the belief that image
+textures cannot be render targets (corrected since: see "Publication on Vulkan"; background
+Vulkan sessions still take this route). Four native features were missing on that path and
+are now ported:
 
 - **Suffix collapse:** it ran only on the native channel path, which pixel publication
   does not take.
@@ -257,9 +328,13 @@ These are untested on Windows. Step 5 covers them.
 
 Vulkan facts that matter (Blender 5.2):
 
-- **Image textures:** they cannot be framebuffer targets on Vulkan, so the engine publishes
-  through pixel readback. `PIXEL_PUBLISH` follows the backend, and
-  `OP_ENGINE_PIXEL_PUBLISH=1` forces it elsewhere.
+- **Image textures:** an image's GPU texture takes clears, draws and mip-level attachments,
+  so in a window the engine renders into it. Background sessions publish through pixel
+  readback (`runtime.BACKGROUND_PIXELS`). `OP_ENGINE_PIXEL_PUBLISH=1` or `=0` forces
+  either route on any backend.
+- **Memory:** image textures count toward the process commit charge on Windows, and
+  released GPU resources are destroyed only after a wait or a frame end
+  (`Device.settle`).
 - **Pixel writes:** `Image.pixels.foreach_set` frees the image's GPU textures.
 - **Shader cache:** SPIR-V is cached on disk.
 - **Publication budget:** about 20 ms per evaluation.
@@ -526,7 +601,7 @@ the release library and the package built at that commit:
 | `OP_VERIFY_INCREMENTAL=1` | Compare incremental native descriptions and stamps, rebound programs and adoption with full ones |
 | `OP_VERIFY_UNDO=1` | Compare every unit an undo reused with a fresh compile |
 | `OP_UNDO_ADOPTION=0` | Compile every unit after an undo (the old path) |
-| `OP_ENGINE_PIXEL_PUBLISH=1` | Force Vulkan-style pixel publication on another backend |
+| `OP_ENGINE_PIXEL_PUBLISH=1` / `=0` | Force publication through pixels / into the images' GPU textures, on any backend (background Vulkan defaults to pixels) |
 | `OP_PREARM=1` | Idle suffix arming in background Blender (benchmarks) |
 | `OP_DEEP_*` | Deep-stack benchmark options (see `tests/integration/native_deep_stack.py`) |
 | CMake `-DOP_TEST_TIMEOUT=<s>` | Seconds per C test (default 20) |

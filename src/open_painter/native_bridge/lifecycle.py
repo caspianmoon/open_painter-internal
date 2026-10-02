@@ -150,10 +150,12 @@ def execution_library(backend):
 
 
 def restore_presentations(scene_uid=None):
-    if active_library() is None:
-        return
+    # Channels published in place restore on every backend; native revisions only while the
+    # native scheduler runs (a legacy publication since then is newer than their revision).
+    native = active_library() is not None
     for item in tuple(_graphs):
-        if hasattr(item, 'restore_evicted') and (scene_uid is None or item.scene_uid == scene_uid):
+        if (hasattr(item, 'restore_evicted') and (native or getattr(item, 'in_place', False))
+                and (scene_uid is None or item.scene_uid == scene_uid)):
             item.restore_evicted()
 
 

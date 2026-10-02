@@ -670,6 +670,9 @@ def _evaluate(scene, ts, entry, budget=None):
         logger.exception('Open Painter engine evaluation')
         entry.update(error=f'Evaluation failed: {exc}', serial=ts.edit_serial)
         return set()
+    if bpy.app.background:
+        from .engine.runtime import device
+        device().settle()   # no frame ends: let the GPU release what this evaluation let go
     entry['dirty'] = bool(engine.deferred)
     entry['evaluated_at'] = perf_counter()
     from . import gc_policy
@@ -783,9 +786,9 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
             _publish_status(scene, ts, entry)
             return False
     engine = entry.get('engine')
-    if engine is not None and getattr(engine, '_native_revisions', None) is not None:
+    if engine is not None:
         try:
-            engine._native_revisions.restore_evicted()
+            engine.restore_evicted()
         except Exception as exc:
             entry.update(error='GPU presentation recovery failed: ' + str(exc), serial=ts.edit_serial)
             _publish_status(scene, ts, entry)

@@ -138,7 +138,9 @@ assert units[graph_key] >= min(ms for key, ms in units.items() if key[0] == 'CHA
 # Uniform output proofs can omit compiled channel units entirely. Profile each
 # executed pass once; skipped work must not be charged as a rendered pass.
 assert set(units) == set(engine.rendered) and len(units) == len(engine.rendered), 'every executed pass is timed once'
-if runtime.device().backend == 'VULKAN' and runtime.PIXEL_PUBLISH is None:
+if runtime.device().backend == 'VULKAN' and runtime.PIXEL_PUBLISH is None and runtime.device().pixel_publish:
+    # The Vulkan pixel route's uniform proofs (runtime.VULKAN_PIXEL_ROUTE) skip a neutral channel's unit;
+    # framebuffer publication renders it, as on every other backend.
     assert any(key not in engine.inline and key not in units for key in engine.states), 'neutral channel was not skipped'
 assert abs(sum(units.values()) - profiled['render']) < 1e-6, (sum(units.values()), profiled['render'])
 assert len(profiled['published']) == len([o for o in ts.outputs if o.image is not None]), profiled['published']

@@ -320,6 +320,8 @@ class Revisions:
         # Bound simultaneous final inputs by the result-cache allowance. At
         # the default budget 2K can fuse finishing, while 4K+ stages bases and
         # releases sources sequentially. Both use identical pixels/mip math.
+        # Engines start a transaction only where the sources fit (runtime.revisions_fit); a
+        # direct caller of a larger set still stages sequentially.
         self._pin_sources = engine.graph.n ** 2 * 16 * 8 <= RETAIN_BYTES
         self.scene_uid = engine.scene_uid
         previous = (dict(engine.published), dict(engine.images), set(engine.dirty_cpu))

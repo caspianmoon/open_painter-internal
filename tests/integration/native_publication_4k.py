@@ -35,7 +35,10 @@ try:
         assert engine.report['execution_backend'] == 'c17-host-' + gpu.platform.backend_type_get().lower(), engine.report
         memory = runtime.device().memory()
         assert memory['leased_bytes'] + memory['pooled_bytes'] <= runtime.DEVICE_BYTES, memory
-        assert not engine._native_revisions._pin_sources
+        # Two immutable 4K revisions per channel do not fit the retained budget on any machine:
+        # each channel publishes in place, with eviction recovery (engine_eviction.py).
+        assert not runtime.revisions_fit(4096) and engine._native_revisions is None
+        assert runtime.device().pixel_publish or engine._presentation.targets
         return engine, memory
 
     def samples():

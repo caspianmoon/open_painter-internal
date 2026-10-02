@@ -63,6 +63,11 @@ PIXEL_PUBLISH = {'1': True, '0': False}.get(os.environ.get('OP_ENGINE_PIXEL_PUBL
 # The Vulkan default before 0.14.2: pixel publication with its Vulkan shortcuts (uniform clears,
 # one-texel constants, fused finals). Kept as a fallback; its suites turn it on.
 VULKAN_PIXEL_ROUTE = False
+# A background Vulkan session takes that route too. Nothing draws the images' GPU textures
+# there: each set's would only hold device memory (charged to the process on Windows), every
+# consumer (export, bake, save) reads the CPU pixels, and Blender's Vulkan backend frees released
+# GPU resources at frame ends, which a background session never has.
+BACKGROUND_PIXELS = True
 PIXEL_BUDGET_MS = 20.0   # per evaluation through pixels: the channels waiting longest publish first
 FUSE_PIXEL_PUBLISH = True   # test/diagnostic opt-out; the normal publication path remains available
 FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured faster compact path
@@ -70,6 +75,7 @@ COMPACT_PIXEL_PUBLISH = True   # scalar channels publish one component through p
 CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one texel on Vulkan
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
+NATIVE_REVISIONS = True        # all-or-nothing framebuffer commits with GPU rollback snapshots
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
 VERIFY_REBIND = os.environ.get('OP_VERIFY_INCREMENTAL') == '1'   # every rebound program against its translation
@@ -200,6 +206,7 @@ class Device:
         self.compiles = 0
         self.compile_seconds = 0.0
         self.passes = 0
+        self.settled = 0     # ``passes`` when the GPU was last waited for (``settle``)
         self.wait_cost = 0.0 # ms of submitting a pass that does nothing and waiting for it (``calibrate``)
         self._readbacks = {}  # side -> float buffer a pixel publication reads into (no allocation each time)
         self._compact_readback = None  # (side, components, buffer), at most one compact transfer buffer
@@ -554,12 +561,13 @@ class Device:
 
     @property
     def pixel_publish(self):
-        """Results reach the images through their pixel buffers, not a framebuffer pass: only
-        when forced (PIXEL_PUBLISH) or on the Vulkan fallback route (VULKAN_PIXEL_ROUTE). Every
-        backend renders into the images' GPU textures by default."""
+        """Results reach the images through their pixel buffers, not a framebuffer pass: when
+        forced (PIXEL_PUBLISH), on the Vulkan fallback route (VULKAN_PIXEL_ROUTE), and in a
+        background Vulkan session (BACKGROUND_PIXELS). Every backend renders into the images'
+        GPU textures in a window."""
         if PIXEL_PUBLISH is not None:
             return PIXEL_PUBLISH
-        return VULKAN_PIXEL_ROUTE and self.backend == 'VULKAN'
+        return self.backend == 'VULKAN' and (VULKAN_PIXEL_ROUTE or (BACKGROUND_PIXELS and _background()))
 
     def readback(self, texture, n, gray=False):
         """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K
@@ -583,6 +591,7 @@ class Device:
         framebuffer = gpu.types.GPUFrameBuffer(color_slots=(texture,))
         with self.state(), framebuffer.bind():
             framebuffer.read_color(0, 0, n, n, components, 0, 'FLOAT', data=transfer)
+        self.settled = self.passes   # a read waits for every pass before it
         if components != 4:
             from .compact_readback import expand_compact
             expand_compact(transfer, buffer, components, gray and components == 1)
@@ -631,8 +640,18 @@ class Device:
         try:
             with self.state(), framebuffer.bind():
                 _wait(framebuffer)
+            self.settled = self.passes
         finally:
             self.release(texture, 1, SCALAR)
+
+    def settle(self):
+        """Wait for the passes submitted since the last wait. Blender's Vulkan backend destroys
+        the GPU resources released meanwhile (textures a resize or a pool trim let go, upload
+        staging) only once the work that used them is known to be complete: at a window's frame
+        end, or at a wait. A background session draws no frames, so without a wait every
+        resolution switch kept its old textures (1K switches grew by 0.5 GB each)."""
+        if self.passes != self.settled:
+            self.finish()
 
     def calibrate(self, samples=7):
         """The cost of submitting a pass that does nothing and waiting for it (a 1×1 draw:
@@ -671,6 +690,11 @@ def _has_uniform(shader, name, *, block=False):
         return location >= 0
     except ValueError:
         return False
+
+
+def _background():
+    import bpy
+    return bpy.app.background
 
 
 def _wait(framebuffer):
@@ -767,6 +791,74 @@ class UnitState:
             self.ubo.update(gpu.types.Buffer('FLOAT', len(data), data))
         self.ubo_data = data
         return self.ubo
+
+
+def revisions_fit(n):
+    """Whether native revisions are worth their memory at n x n. A revision commit keeps every
+    channel's previous mip chain and the next one, and pins each final source until the batch
+    commits; that is what the retained-result budget is sized to hold. Where it is not (2K on
+    a machine under 16 GB, 4K anywhere), each channel publishes straight into its image, as the
+    legacy scheduler does: the same pixels, without the all-or-nothing rollback."""
+    return n * n * 16 * 8 <= RETAIN_BYTES
+
+
+class InPlacePresentation:
+    """Eviction recovery for channels published straight into their images (no native revision).
+
+    Blender recreates an image's GPU texture from its CPU pixels after evicting it (Texture Time
+    Out, ``gl_free``), and those lag behind a framebuffer publication. The texture a channel was
+    published into stays alive while its public wrapper is held, so before the next viewport draw
+    (or on the session tick) each of its mips is copied into the recreated one. Holding the
+    wrapper costs nothing until an eviction, and then only the old texture until the copy."""
+    in_place = True         # restored whether or not the native scheduler runs (lifecycle)
+    survives_undo = True    # an undo keeps the images; a load closes it
+
+    def __init__(self, dev, scene_uid):
+        self.dev, self.scene_uid = dev, scene_uid
+        self.targets = {}   # channel -> (image, its pointer, the wrapper it was published into)
+
+    def published(self, channel, image, target):
+        self.targets[channel] = image, image.as_pointer(), target
+
+    def forget(self, channel):
+        self.targets.pop(channel, None)
+
+    def close(self):
+        self.targets.clear()
+
+    def restore_evicted(self):
+        if not self.targets:
+            return
+        import gpu
+        replacements = []
+        for channel, (image, pointer, previous) in tuple(self.targets.items()):
+            try:
+                if image.as_pointer() != pointer:
+                    raise ReferenceError
+                target = gpu.texture.from_image(image)
+            except ReferenceError:
+                self.targets.pop(channel)
+                continue
+            if target is previous:
+                continue
+            if (target.width, target.height, target.format) != (previous.width, previous.height, previous.format):
+                self.targets.pop(channel)   # resized: the resolution rebuild publishes it again
+                continue
+            replacements.append((channel, image, pointer, previous, target))
+        if not replacements:
+            return
+        shader = self.dev.fixed('copy_mip')
+        with self.dev.state():
+            for channel, image, pointer, previous, target in replacements:
+                size, level = previous.width, 0
+                while True:
+                    self.dev.draw(shader, [{'texture': target, 'mip': level}], size,
+                                  [('op_source', previous)], ints={'op_level': level})
+                    if size == 1:
+                        break
+                    size, level = max(1, size // 2), level + 1
+                self.targets[channel] = image, pointer, target
+                metrics.count('engine_image_restorations')
 
 
 def _publication_format(channel, precise, gray=False):
@@ -876,6 +968,7 @@ class Engine:
         self._native_revisions = None
         self._native_channels = None
         self._native_cache = None
+        self._presentation = None       # eviction recovery of channels published in place
         self._evaluation_depth = 0
         self.replaced = None            # units a patch replaced, until the native graph takes them
         self._chains = None             # the graph chains ``positions`` were derived from
@@ -1045,6 +1138,8 @@ class Engine:
         if self._native_revisions is not None:
             self._native_revisions.close()
             self._native_revisions = None
+        if self._presentation is not None:
+            self._presentation.close()
         if self._native_cache is not None:
             self._native_cache.close()
             self._native_cache = None
@@ -1882,10 +1977,11 @@ class Engine:
         written = set()
         def submit(action, index):
             if action == 1:
-                started = perf_counter()
-                self._native_revisions.commit()
-                self.stages['publish_ms'] += (perf_counter() - started) * 1000
-                return
+                if self._native_revisions is not None and self._native_revisions.submitting:
+                    started = perf_counter()
+                    self._native_revisions.commit()
+                    self.stages['publish_ms'] += (perf_counter() - started) * 1000
+                return   # without a revision each channel was published in place (_publish)
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
@@ -1916,7 +2012,12 @@ class Engine:
     def _revision_transaction(self, dev, *, external_commit=False):
         from ...native_bridge import lifecycle
         lib = lifecycle.execution_library(dev.backend)
-        if lib is None or dev.pixel_publish:
+        if lib is None or dev.pixel_publish or not NATIVE_REVISIONS or not revisions_fit(self.graph.n):
+            if self._native_revisions is not None and not self._native_revisions.submitting:
+                # Its immutable chains (the previous revision of every channel) are only worth
+                # their memory while commits go through it.
+                self._native_revisions.close()
+                self._native_revisions = None
             return nullcontext()
         if self._native_revisions is None or not self._native_revisions.handle:
             from ...native_bridge.revisions import Revisions
@@ -1979,6 +2080,8 @@ class Engine:
         explicit gl_free(), saving and Cycles safe without a later GPU read.
         """
         import gpu
+        if self._presentation is not None:
+            self._presentation.forget(channel)
         if tuple(image.size) != (n, n):
             raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
         stamp = (image.as_pointer(), n, color, image.get('open_painter_pixel_revision', 0))
@@ -2064,7 +2167,16 @@ class Engine:
                 values = values[..., [0, 0, 0, 1]]
             return np.broadcast_to(values, (n, n, 4)).copy() if values.shape[0] == 1 else values
 
+    def restore_evicted(self):
+        """Show the published channels again in image textures Blender recreated (eviction)."""
+        if self._native_revisions is not None:
+            self._native_revisions.restore_evicted()
+        if self._presentation is not None:
+            self._presentation.restore_evicted()
+
     def _publish(self, image, channel, result, n):
+        if self._presentation is not None:
+            self._presentation.forget(channel)   # a revision or the CPU pixels restore it now
         if self._native_revisions is not None and self._native_revisions.submitting:
             return self._native_revisions.stage(self, image, channel, result, n)
         import gpu
@@ -2100,6 +2212,11 @@ class Engine:
                 scratch.append((smaller, size))
                 dev.draw(dev.fixed('mip'), [{'texture': target, 'mip': level}, smaller], size, [('op_source', source)])
                 source = smaller
+            if self._presentation is None:
+                from ...native_bridge import lifecycle
+                self._presentation = InPlacePresentation(dev, self.scene_uid)
+                lifecycle.track(self._presentation)
+            self._presentation.published(channel, image, target)
         finally:
             for texture, size in scratch:
                 dev.release(texture, size, fmt)

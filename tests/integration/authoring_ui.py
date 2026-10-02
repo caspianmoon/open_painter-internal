@@ -6,6 +6,7 @@ import traceback
 from pathlib import Path
 
 import bpy
+import gpu
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'src'))
@@ -76,7 +77,7 @@ def steps():
         bpy.ops.node.view_all()
     yield 2.
     bpy.ops.screen.screenshot(filepath=str(OUT / 'brush-graph-authoring.png'))
-    (OUT / 'authoring-ui.json').write_text(json.dumps({'status': 'PASS', 'backend': 'METAL',
+    (OUT / 'authoring-ui.json').write_text(json.dumps({'status': 'PASS', 'backend': gpu.platform.backend_type_get(),
         'checks': ['Add Text action', 'Multiline saved mask', 'Material display', 'Brush Graph editor', 'Graph sockets'],
         'screenshots': ['text-authoring.png', 'brush-graph-authoring.png']}))
     print('AUTHORING_UI_PASS', flush=True)

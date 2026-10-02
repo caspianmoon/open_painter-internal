@@ -11,11 +11,11 @@ done on a Windows machine.
   coverage, surface reach, topology, seams and SHA-256. Each is exact against the Python it
   replaces, so the platform changes only the speed. `OP_NATIVE_ENGINE=0` turns them off.
 - **The GPU engine** (`lifecycle.active_library`, `execution_library`) runs with Blender's
-  Metal and Vulkan backends. It covers native scheduling, suffix collapse and the stamps
-  that make undo re-render 28 units. In a window it renders into the images' GPU textures
-  on every backend; a background Vulkan session publishes through pixels (results below).
-  On OpenGL the engine keeps its Python scheduler unless `OP_NATIVE_HOST_BACKENDS=OPENGL`
-  opts it in.
+  Metal and Vulkan backends, and with OpenGL on Windows. It covers native scheduling,
+  suffix collapse and the stamps that make undo re-render 28 units. In a window it renders
+  into the images' GPU textures on every backend; a background Vulkan session publishes
+  through pixels (results below). Elsewhere OpenGL keeps its Python scheduler unless
+  `OP_NATIVE_HOST_BACKENDS=OPENGL` opts it in.
 
 ## Vector paths
 
@@ -139,12 +139,16 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
   - It shares the UCRT heap with `openpainter.dll`.
 - **CPU kernels.** They run on both GPU backends, and every Blender suite of the plan passes
   with and without the library, on OpenGL (the factory default there) and on Vulkan.
-- **Engine on OpenGL.** OpenGL keeps framebuffer publication, so the native scheduler works
-  as on Metal.
-  - Every engine suite passes except the 4K suite, which needs more memory than the laptop
-    has.
-  - Warm edits are 3–7 times faster than the legacy scheduler, at the cost of about twice
-    the video memory.
+- **Engine on OpenGL.** On Windows the native scheduler is the default (`6ae821b`): every
+  engine suite passes on it except the 4K suite, which needs more memory than the laptop
+  has.
+  - Warm edits are 2.5–6.6 times faster than with the Python scheduler. The deep stack
+    peaks at 2.61 GiB against 1.99 with the Python scheduler (Vulkan's: 2.72). In a window
+    OpenGL's commit charge runs higher than Vulkan's: `material_painting_ui.py` at 1K peaks
+    at 4.78 GiB against 4.14 (4.54 with the Python scheduler).
+  - Vulkan and OpenGL publish in place, without native revisions (`REVISION_BACKENDS` is
+    Metal): as fast, faster after an undo, and about 0.45 GiB less at 1K
+    (`windows-plan.md`, "Undo and publication in place").
 - **Engine on Vulkan.** Image textures are render targets on Vulkan in Blender 5.2.2 (an
   earlier belief otherwise came from a simulated GPU), so in a window the engine renders
   into them, as on Metal and OpenGL: edits at 1K are 3–10 times faster than through pixels
@@ -171,4 +175,5 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
   per-texel sample arrays the 4K export fits the 4 GB cap (`export_padding.py`, 3.94 GiB on
   Vulkan).
   - Pixel publication has no revision transactions: channels can land a tick apart.
-- **Defaults.** `host_backends()` is Metal and Vulkan; OpenGL is opt-in.
+- **Defaults.** `host_backends()` is Metal, Vulkan and, on Windows, OpenGL; elsewhere OpenGL
+  is opt-in.

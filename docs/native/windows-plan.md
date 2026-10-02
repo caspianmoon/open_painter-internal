@@ -54,9 +54,9 @@ evidence.
 | 5. Suites | Done | All pass without and with the library, on OpenGL and on Vulkan. `native_geometry_projection.py` needs the library. |
 | 6. Binding | Done | In Blender, `abi()` is 13 and `compiled_binding: true`. |
 | 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
-| 8. Native engine | Done for Vulkan | Vulkan is a default host backend, with collapse, idle arming and fused finals ported. OpenGL is opt-in (below). |
+| 8. Native engine | Done | Vulkan, and on Windows OpenGL, are default host backends, with collapse, idle arming and fused finals ported (OpenGL since `6ae821b`: "Undo and publication in place"). |
 | 9. Windows on Arm | Not applicable | This laptop is x64. |
-| 10. Full gate | Done, two suites over the cap | Background (178 suites, the 0.12.2 contract, 536 unit tests) and GPU pass on OpenGL and Vulkan; GUI passes except the two 2K production-prop suites, killed at the approved 6 GB cap (below). |
+| 10. Full gate | Done, one suite over the cap | At `6ae821b`: background (180 suites, the 0.12.2 contract, 539 unit tests), GPU and GUI pass on OpenGL and Vulkan, except `quality_baseline_paint_ui.py` at 2K, killed at the approved 6 GB cap (6.38 and 6.02 GiB; below). |
 
 ### Findings that change how to work here
 
@@ -172,6 +172,133 @@ Peaks after the change (guard, 4 GB cap):
 `native_publication_4k.py` still cannot run here. Rendering into the images, it was killed
 at 4.0 GiB during its first evaluation: the eight 4K images' CPU pixels alone are 2 GiB.
 
+### Undo and publication in place (2026-10-02, evening)
+
+Profiles of the deep stack (40 layers at 1K, Vulkan, window route) found three costs in an
+undo and in a full republish. None of the fixes changes a published pixel.
+
+- **Every undo rebuilt the output textures.** Each publication called
+  `image.update_tag()`, so that EEVEE restarts its temporal history. Blender's undo
+  therefore counted every output image as changed since its step. An undo read the image
+  again, which drops its GPU texture, and the next use rebuilt it from CPU pixels that lag
+  behind the GPU result: 7–10 ms per 1K channel, about four times that at 2K. The engine
+  then published over it anyway. A plain-Blender probe shows the same for any image tagged
+  between two undo steps, and for a Non-Color image whose colour space was set then.
+  - A publication now tags the set's material instead, as `live_display` already did.
+    EEVEE's history restarts the same way; `shader_preview_ui.py` and
+    `shader_snapshot_ui.py` pass on both backends.
+  - `OP_TAG_IMAGES=1` restores the image tags. Undo, steady state: 204–215 ms with image
+    tags, 159–163 ms with the material tag.
+- **Publication in place dropped every final result.** A revision commit hands each
+  channel's final result to the bounded result cache, so the next edit that composes over
+  it reuses it (a layer added on top, an undo). A channel published in place released it,
+  and that edit rendered the stack below again: adding a fill on top took 80 ms instead of
+  20 (597 native submissions instead of 4). `_keep_final` keeps it in the same cache, whose
+  budget is enforced once the evaluation has published.
+- **Publication in place leased its mip scratch every time.** Each lease and return is a
+  call into the native registry, which calls back into Python: about 1 ms per published
+  channel at 1K.
+  - The device now keeps one scratch texture per lane, level and format up to 2K
+    (`Device.mip_scratch`, budget `MIP_SCRATCH_BYTES`).
+  - The engine whose mips are queued owns it until they are drawn. Another engine leases
+    its own meanwhile, and nothing is dropped from under a queue.
+  - The mips of three channels share a draw, as in a revision commit (`MIP_LANES`).
+
+With those three fixes, publication in place matches revisions on warm edits, beats them
+after an undo and needs about 0.45 GiB less. Vulkan and OpenGL therefore publish in place:
+`runtime.REVISION_BACKENDS` is Metal, where revisions were qualified. Vulkan, 40 layers at
+1K, two alternating rounds, in ms:
+
+| Edit | Revisions | In place |
+| --- | ---: | ---: |
+| Top folder opacity | 10.5–10.6 | 10.5–10.8 |
+| Bottom folder opacity | 13.0–13.1 | 12.8–13.4 |
+| Middle leaf opacity | 11.0–11.1 | 11.1–11.3 |
+| Bottom leaf roughness | 6.7–7.3 | 6.4–6.5 |
+| Middle mask black | 28.3–28.4 | 28.5 |
+| Visibility | 10.9–11.2 | 10.5 |
+| Undo (numeric) | 162–197 | 120 |
+| Undo (structural) | 144–158 | 113–125 |
+| Peak commit | 3.17 GiB | 2.72 GiB |
+
+Undo on this route was 174–190 ms in the morning (`85cba57`) and is now 84–125 ms. The
+first undo after a build takes 280–320 ms: see "What remains".
+
+Also measured:
+- **The Python scheduler** (OpenGL's default before `6ae821b`) draws through the binding's C
+  function now (`BINDING_DRAWS`). These are the same calls, and the A/B showed no measurable
+  change.
+- **The 4K export** pads each map with `op_padding_extend`: 44 ms in place against 184 ms
+  for the NumPy gather, and 310 MiB less transient memory. `export_padding.py` still peaks
+  at 3.91–3.92 GiB, so its peak lies elsewhere.
+
+What remains, by measured share:
+- **Smart-material apply, about 110 ms.** Compiling the new units' node trees takes
+  2.7 ms per unit (Python node, link and parameter construction). The IR walk takes
+  12 ms, and the composer's module snapshot 8–10 ms.
+- **Undo, 84–92 ms in steady state** (a probe of every texture lease and of each stamp
+  that changes, Vulkan, window route). Blender's memfile restore takes 14 ms, our undo
+  handler 2.3 ms, the rebuild 45–52 ms (compiling with adoption, the plan, value reads) and
+  the evaluation 10–13 ms. Nothing is allocated: the earlier churn of about 120 textures
+  per undo was the revisions' staged mip chains.
+- **The first undo after a build, 280–320 ms.** The memfile restore re-tags the images
+  whose tags were still pending when its target step was pushed (Blender's
+  `direct_link_id_restore_recalc`): here the detail images a smart material loaded, whose
+  colour space the loader sets. Their updates carry no geometry, shading or transform flag,
+  but `on_depsgraph` moves their epochs, so the 66 units that sample them render again
+  although no pixel changed. In a window the depsgraph evaluates an operator's tags before
+  the next tick, so this needs an undo back to a step pushed by such an operator. The same
+  tags made the benchmark's cold build render those units twice (146 ms): background
+  Blender evaluates them only when the engine reads geometry, mid-tick. Ignoring flagless
+  image updates would avoid both, but Blender's image (paint) undo also signals through the
+  epochs; until its flags are measured in a window, the epochs stay as they are.
+- **Cold build, 1.5–1.8 s.** About 0.45 s of it is decoding the thirteen bundled detail
+  PNGs that the stack uses (1254 × 1254, about 37 ms each). They are noisy, so they hardly
+  compress: an uncompressed lossless copy would load almost free at a similar size. That
+  would change the provenance-tracked asset files, so it is the user's call.
+- **`native_publication_4k.py`** was killed at 6.61 GiB (OpenGL, native) and 6.22 GiB
+  (Vulkan, window route) under a 6 GB cap, so it cannot run on this laptop. Native
+  scheduling is a default on both backends anyway (below).
+- **The 2048 production-prop GUI suites** (`material_painting_ui.py`,
+  `quality_baseline_paint_ui.py`) pass the 6 GB cap on both backends during the first
+  evaluation of three sets of 25 layers: 6.38 GiB on OpenGL and 6.02 on Vulkan for the
+  baseline (step 10). The engine's own textures are a small share of that peak.
+
+**OpenGL on Windows schedules natively** (`6ae821b`), as Vulkan does. OpenGL is Blender
+5.2's factory backend there, and its Python scheduler rendered every layer above an edit
+again. The user had kept the native one opt-in until `native_publication_4k.py` had run, and
+then left the call to me, on condition that nothing changes for an artist but speed.
+
+- **Why it is on.** That suite cannot fit this laptop on either backend: it was killed at
+  6.61 GiB under a 6 GB cap. Vulkan already schedules natively without it.
+- **The evidence.** The same native suites pass on OpenGL (24 of 24, the 4K one aside), and
+  the pixels are identical. The deep stack's memory is close to Vulkan's default (2.61
+  against 2.72 GiB); in a window OpenGL's commit charge runs about 0.25 GiB above its Python
+  scheduler's at 1K (step 10).
+- **Where it stays off.** Elsewhere OpenGL is not qualified (Linux, other GPUs), so it keeps
+  its scheduler there. `OP_NATIVE_HOST_BACKENDS=OPENGL` still opts it in.
+
+Deep stack, OpenGL, 40 layers at 1K, two alternating rounds, in ms:
+
+| Edit | Python scheduler | Native |
+| --- | ---: | ---: |
+| Top folder opacity | 28.6–29.0 | 9.8 |
+| Bottom folder opacity | 78.2–78.4 | 11.9–12.4 |
+| Middle leaf opacity | 69.2–69.6 | 10.2–10.8 |
+| Bottom leaf roughness | 29.0–29.4 | 7.2–7.7 |
+| Middle mask black | 73.0–74.7 | 26.6–32.6 |
+| Move layer | 73.3–75.4 | 17.0–17.4 |
+| Blend mode | 78.7–79.9 | 19.9–20.3 |
+| Visibility | 69.0 | 10.5–10.8 |
+| Paint tick | 26.5–26.7 | 12.8–13.6 |
+| Apply smart material | 185 | 116–121 |
+| Peak commit | 1.99 GiB | 2.61 GiB |
+
+The evening's other changes also apply to the Python scheduler wherever it still runs:
+- undo went from 311–377 ms to 120–127 ms;
+- adding a fill on top went from 68–69 ms to 28–30 ms;
+- removing a layer went from 64 ms to 23–25 ms.
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time
@@ -200,11 +327,11 @@ sequence for these loops (see platforms.md).
 
 ### Step 8: the native scheduler on Vulkan and OpenGL
 
-**Vulkan is a default host backend** (`lifecycle.host_backends()` is Metal and Vulkan;
-OpenGL stays opt-in). At this step Vulkan published through pixels, on the belief that image
-textures cannot be render targets (corrected since: see "Publication on Vulkan"; background
-Vulkan sessions still take this route). Four native features were missing on that path and
-are now ported:
+**Vulkan is a default host backend** (`lifecycle.host_backends()` was Metal and Vulkan;
+OpenGL stayed opt-in until `6ae821b`, see "Undo and publication in place"). At this step
+Vulkan published through pixels, on the belief that image textures cannot be render targets
+(corrected since: see "Publication on Vulkan"; background Vulkan sessions still take this
+route). Four native features were missing on that path and are now ported:
 
 - **Suffix collapse:** it ran only on the native channel path, which pixel publication
   does not take.
@@ -243,7 +370,9 @@ of about 700 ms. The OpenGL columns were measured before the Vulkan port.
 - **OpenGL** (`OP_NATIVE_HOST_BACKENDS=OPENGL`):
   - The same result, and the 4K suite is likewise not run.
   - The native scheduler doubles video memory (1.4 against 0.6 GiB).
-  - The user keeps OpenGL opt-in until that suite has run.
+  - The user kept OpenGL opt-in until that suite had run. It cannot run on this laptop (killed
+    at 6.61 GiB under a 6 GB cap), and OpenGL became a default on Windows on the user's
+    go-ahead to decide (`6ae821b`, "Undo and publication in place").
 
 ## Where things stand
 
@@ -287,7 +416,7 @@ There are two gates (`src/open_painter/native_bridge/lifecycle.py`):
 Not verified anywhere yet:
 
 - MSVC on ARM64 (step 9; the laptop is x64);
-- the native GPU engine as the default on OpenGL (opt-in until the 4K suite has run);
+- the native GPU engine on OpenGL outside Windows (Linux, other GPUs): opt-in there;
 - `native_publication_4k.py` on Windows (it needs more memory than this laptop allows).
 
 The C code has no variable-length arrays (checked with `-Wvla`) and no GCC builtins. Two
@@ -587,6 +716,31 @@ the release library and the package built at that commit:
   - `launch_audit_ui.py` ran into Blender's `introspect()` failing on Windows paths.
 - `authoring_ui.py`'s exit crash (findings above) did not recur.
 
+**Again after the speed work (2026-10-02, `6ae821b`, OpenGL scheduling natively)**, with the
+release library and the package rebuilt at that commit and `material_painting_ui.py` at 1K:
+
+- **Background:** everything passes on both backends: 180 suites, the 0.12.2 contract and
+  539 unit tests in Blender (58 skips: no native build supplied to the unit tests, no system
+  libpng, POSIX launchers).
+  - The heaviest runs against the 4 GB cap: `export_padding.py` 3.92 GiB on both;
+    `material_painting.py` 3.85 GiB on OpenGL (3.73 with the Python scheduler) and 3.25 on
+    Vulkan, whose background sessions publish through pixels; `resolution_switch.py` 3.02
+    and 2.12 GiB. OpenGL's `material_painting.py` has the least margin.
+- **GPU:** all six real-window suites pass on both backends.
+- **GUI:** 37 of 38 suites pass on each backend, `material_painting_ui.py` at 1K included
+  (4.78 GiB on OpenGL, 4.14 on Vulkan). `quality_baseline_paint_ui.py` builds the production
+  prop at 2048 and was killed under the 6 GB cap, at 6.38 GiB on OpenGL (6.61 before) and
+  6.02 GiB on Vulkan, 11–13 s into its first evaluation. The runner stops at the first
+  failure, so the two window checks after it ran separately (`--gui-start-at` with a name
+  no suite has): `gui_workflow.py` and `native_regions_ui.py` pass on both backends.
+- **Where that memory goes** (`material_painting_ui.py` at 1K on OpenGL, sampled every
+  0.5 s; peak 4.66 GiB): the engine's textures are about 0.5 GiB (386–433 MiB leased, of
+  which 280 MiB are retained results, and 74 MiB of mip scratch), the images' CPU buffers
+  0.4 GiB. The rest is Blender's: the commit charge rises from 2.8 to 4.0 GiB in the 0.6 s
+  of the viewport's first Material Preview draw, while the engine's textures grow by 64 MiB.
+  At 2K the 0.4 GiB OpenGL lacks would have to come out of the result budgets that make
+  edits fast, so the suite stays reported, not tuned to the cap.
+
 ## Reference
 
 ### Environment switches
@@ -596,7 +750,8 @@ the release library and the package built at that commit:
 | `OP_LIBOPENPAINTER_PATH` | Blender loads this library instead of the bundle (no binding needed) |
 | `OP_TEST_NATIVE_LIBRARY` | Library for the unit tests |
 | `OP_NATIVE_ENGINE=0` | No native library use at all (CPU kernels and engine) |
-| `OP_NATIVE_HOST_BACKENDS` | Extra GPU backends for the native engine scheduler (`OPENGL`; Metal and Vulkan are defaults) |
+| `OP_NATIVE_HOST_BACKENDS` | Extra GPU backends for the native engine scheduler (`OPENGL` outside Windows; Metal, Vulkan and Windows' OpenGL are defaults) |
+| `OP_TAG_IMAGES=1` | A publication tags its images instead of the set's material (comparisons; undo then rebuilds the output textures) |
 | `OP_VERIFY_STRUCTURE=1` | Compare every incremental plan with a full one |
 | `OP_VERIFY_INCREMENTAL=1` | Compare incremental native descriptions and stamps, rebound programs and adoption with full ones |
 | `OP_VERIFY_UNDO=1` | Compare every unit an undo reused with a fresh compile |

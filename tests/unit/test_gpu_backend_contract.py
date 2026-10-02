@@ -196,6 +196,64 @@ class BackendContract(unittest.TestCase):
             np.testing.assert_array_equal(calls[0].args[0], np.full(8 * 8 * 4, .375))
             self.assertEqual(gpu.values, before)
 
+    def test_in_place_mips_render_three_channels_to_a_draw(self):
+        # Channels published into their images queue their mips: three channels share each
+        # level's draw (six attachments), a fourth gets draws of its own when the evaluation's
+        # batches close, and every source and scratch texture goes back to the pool.
+        with self.device('OPENGL') as (gpu, dev):
+            engine = runtime.Engine(None, SimpleNamespace(id='test'))
+            engine.pad = False
+            images = [SimpleNamespace(size=(8, 8), as_pointer=lambda i=i: 100 + i) for i in range(4)]
+            results = [dev.texture(8) for _ in images]
+            with dev.state(), engine._mip_batches():
+                for channel, image, result in zip(('BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'AO'), images, results):
+                    engine._publish(image, channel, result, 8)
+            # 4 publication passes; levels 4, 2 and 1 for the batch of three, then for the fourth.
+            self.assertEqual(dev.batch.draw.call_count, 4 + 3 + 3)
+            mips = [texture for texture in gpu.attachments if texture.image]
+            self.assertEqual(len(mips), 4 + 3 * 3 + 3)
+            self.assertEqual(sorted(engine._presentation.targets), ['AO', 'BASE_COLOR', 'METALLIC', 'ROUGHNESS'])
+            self.assertFalse(engine._pending_mips)
+            # The mip scratch stays leased between publications: one texture per lane, level and
+            # format, reused by the next round without leasing anything more.
+            kept = {id(texture) for texture in dev._mip_scratch.values()}
+            self.assertEqual(sorted(dev._mip_scratch), sorted((lane, size, runtime.HALF)
+                                                             for lane in range(3) for size in (8, 4, 2, 1)))
+            self.assertEqual(set(dev._leases), {id(result) for result in results} | kept)
+            leases = dict(dev._leases)
+            with dev.state(), engine._mip_batches():
+                for channel, image, result in zip(('BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'AO'), images, results):
+                    engine._publish(image, channel, result, 8)
+            self.assertEqual(dev._leases, leases)
+            # Past the kept side, each publication leases its scratch and returns all of it.
+            dev.drop_mip_scratch()
+            with patch.object(runtime, 'MIP_SCRATCH_SIDE', 4), dev.state(), engine._mip_batches():
+                for channel, image, result in zip(('BASE_COLOR', 'ROUGHNESS', 'METALLIC', 'AO'), images, results):
+                    engine._publish(image, channel, result, 8)
+            self.assertFalse(dev._mip_scratch)
+            self.assertEqual(set(dev._leases), {id(result) for result in results})
+
+    def test_kept_mip_scratch_is_never_shared_with_queued_mips(self):
+        # One engine's queued channel holds the kept scratch until its mips are drawn: another
+        # engine publishing meanwhile leases its own, and nothing is dropped from under the queue.
+        with self.device('OPENGL') as (gpu, dev):
+            first, second = (runtime.Engine(None, SimpleNamespace(id=name)) for name in ('a', 'b'))
+            first.pad = second.pad = False
+            image = SimpleNamespace(size=(8, 8), as_pointer=lambda: 7)
+            results = [dev.texture(8) for _ in range(2)]
+            with dev.state(), first._mip_batches():
+                first._publish(image, 'BASE_COLOR', results[0], 8)
+                queued = first._pending_mips[0][1]
+                self.assertIs(queued, dev._mip_scratch[(0, 8, runtime.HALF)])
+                self.assertFalse(dev.drop_mip_scratch())
+                with second._mip_batches():
+                    second._publish(image, 'ROUGHNESS', results[1], 8)
+                    self.assertIsNot(second._pending_mips[0][1], queued)
+                self.assertIs(dev._mip_scratch_owner, first)
+            self.assertIsNone(dev._mip_scratch_owner)
+            self.assertTrue(dev.drop_mip_scratch())
+            self.assertEqual(set(dev._leases), {id(result) for result in results})
+
     def test_scratch_returned_after_failed_publication(self):
         for backend in ('OPENGL', 'VULKAN'):
             with self.subTest(backend=backend), self.device(backend) as (_, dev):
@@ -203,9 +261,23 @@ class BackendContract(unittest.TestCase):
                 engine = runtime.Engine(None, SimpleNamespace(id='test'))
                 engine.pad = False
                 dev.batch.draw.side_effect = RuntimeError('publication failed')
+                result = dev.texture(8)
                 with self.assertRaisesRegex(RuntimeError, 'publication failed'), dev.state():
-                    engine._publish(image, 'BASE_COLOR', dev.texture(8), 8)
-                self.assertEqual(len(dev.pool[(8, runtime.HALF)]), 1)
+                    engine._publish(image, 'BASE_COLOR', result, 8)
+                kept = {id(texture) for texture in dev._mip_scratch.values()}
+                if dev.pixel_publish:
+                    self.assertEqual(len(dev.pool[(8, runtime.HALF)]), 1)   # its readback target, returned
+                else:
+                    # Framebuffer publication keeps its mip scratch for the next one: nothing else stays.
+                    self.assertEqual(len(kept), 1)
+                self.assertEqual(set(dev._leases), {id(result)} | kept)
+                self.assertFalse(engine._pending_mips)
+                # Past the kept side a failed publication returns its leased scratch to the pool.
+                dev.drop_mip_scratch()
+                with patch.object(runtime, 'MIP_SCRATCH_SIDE', 4), \
+                        self.assertRaisesRegex(RuntimeError, 'publication failed'), dev.state():
+                    engine._publish(image, 'BASE_COLOR', result, 8)
+                self.assertEqual(set(dev._leases), {id(result)})
 
     def test_partial_failure_preserves_save_sync(self):
         for backend in ('OPENGL', 'VULKAN'):

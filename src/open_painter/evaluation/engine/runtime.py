@@ -51,6 +51,7 @@ RETAIN_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)   # SRC/MASK results k
 DEVICE_BYTES = memory_share(1 / 4, 1536 * MIB, 4 * GIB)     # all managed textures across texture sets
 INTERFACE_ENTRIES = 256              # metadata cannot retain evicted shaders forever
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
+MIP_SCRATCH_BYTES = memory_share(1 / 48, 64 * MIB, 384 * MIB)   # publication's kept mip scratch (2K fits)
 # Global cap on free textures; on 16 GB+ it fits a 4K float publication scratch plus compact stages.
 POOL_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
@@ -76,6 +77,13 @@ CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one te
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
 NATIVE_REVISIONS = True        # all-or-nothing framebuffer commits with GPU rollback snapshots
+# Native revisions keep each channel's accepted mip chain and its next one. Vulkan and OpenGL
+# publish in place instead: as fast on warm edits, faster after an undo, and about 0.45 GiB less
+# at 1K (40-layer A/B on a GTX 1050, 2026-10-02). Metal, where they were qualified, keeps them.
+REVISION_BACKENDS = frozenset({'METAL'})
+BINDING_DRAWS = True           # passes through the binding's C draw wherever the library loads
+MIP_LANES = 3                  # channels published in place whose mips share a draw (1 to 3)
+MIP_SCRATCH_SIDE = 2048        # publication keeps its mip scratch up to this side; larger leases it each time
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
 VERIFY_REBIND = os.environ.get('OP_VERIFY_INCREMENTAL') == '1'   # every rebound program against its translation
@@ -207,6 +215,9 @@ class Device:
         self.compile_seconds = 0.0
         self.passes = 0
         self.settled = 0     # ``passes`` when the GPU was last waited for (``settle``)
+        self._mip_scratch = {}       # (lane, side, format) -> texture a publication reduces mips through
+        self._mip_scratch_bytes = 0
+        self._mip_scratch_owner = None   # the engine whose queued mips use it, until they are drawn
         self.wait_cost = 0.0 # ms of submitting a pass that does nothing and waiting for it (``calibrate``)
         self._readbacks = {}  # side -> float buffer a pixel publication reads into (no allocation each time)
         self._compact_readback = None  # (side, components, buffer), at most one compact transfer buffer
@@ -351,6 +362,8 @@ class Device:
             return
         # Recompute idle results if another set needs room. Active evaluations,
         # paint history and accepted display revisions are never discarded here.
+        if self._mip_scratch and self.drop_mip_scratch() and native.admit(width, height, fmt):
+            return   # the mip scratch publication kept is idle storage: it goes first
         if not self._reclaiming:
             self._reclaiming = True
             try:
@@ -479,7 +492,10 @@ class Device:
         return texture
 
     def trim(self, spares=0):
-        """Free pooled textures beyond ``spares`` per size and format (0: all of them)."""
+        """Free pooled textures beyond ``spares`` per size and format (0: all of them, and the
+        mip scratch publication keeps)."""
+        if spares <= 0:
+            self.drop_mip_scratch()
         native = self._resource_pool()
         if native is not None:
             native.trim(spares)
@@ -526,8 +542,10 @@ class Device:
         import gpu
         slots = [({'texture': texture, 'mip': mip} if mip and not isinstance(texture, dict) else texture)
                  for texture in targets]
-        from ...native_bridge.lifecycle import active_library
-        lib = active_library()
+        # The binding's draw makes the calls below, in their order, from C: wherever the library
+        # loads, whichever scheduler runs (OpenGL's default one included).
+        from ...native_bridge.lifecycle import active_library, cpu_library
+        lib = cpu_library() if BINDING_DRAWS else active_library()
         native = getattr(lib, '_op_binding', None) if lib is not None else None
         if native is not None:
             uniforms, block = self._interface(shader, samplers, ubo, ints)
@@ -643,6 +661,43 @@ class Device:
             self.settled = self.passes
         finally:
             self.release(texture, 1, SCALAR)
+
+    def mip_scratch(self, owner, lane, n, fmt):
+        """A texture publication reduces a mip level through, kept between publications: one per
+        lane (the channels whose mips share a draw), level and format. Leasing one from the pool
+        and returning it costs two calls into the native registry and their callbacks: about
+        1 ms per published channel at 1K. These stay leased, so the device budget counts them.
+
+        ``owner`` (an engine) holds them from its first queued channel until its mips are drawn
+        (``end_mip_scratch``); None while another engine's mips are queued, and the caller leases
+        its own. Nothing is dropped while they are held: ``end_mip_scratch`` drops them once
+        they outgrew their budget, ``trim(0)`` and device pressure when idle."""
+        if self._mip_scratch_owner is not None and self._mip_scratch_owner is not owner:
+            return None
+        self._mip_scratch_owner = owner
+        key = (lane, n, fmt)
+        texture = self._mip_scratch.get(key)
+        if texture is None:
+            texture = self._mip_scratch[key] = self.texture(n, fmt)
+            self._mip_scratch_bytes += texture_bytes(n, n, fmt)
+        return texture
+
+    def end_mip_scratch(self, owner):
+        """``owner``'s queued mips are drawn: the kept scratch is free for the next publication."""
+        if self._mip_scratch_owner is owner:
+            self._mip_scratch_owner = None
+            if self._mip_scratch_bytes > MIP_SCRATCH_BYTES:
+                self.drop_mip_scratch()   # (two sides of every lane, at most, stay)
+
+    def drop_mip_scratch(self):
+        """Release the kept scratch unless queued mips use it; True when it was released."""
+        if self._mip_scratch_owner is not None:
+            return False
+        for (_, n, fmt), texture in self._mip_scratch.items():
+            self.release(texture, n, fmt)
+        self._mip_scratch.clear()
+        self._mip_scratch_bytes = 0
+        return True
 
     def settle(self):
         """Wait for the passes submitted since the last wait. Blender's Vulkan backend destroys
@@ -798,11 +853,11 @@ class UnitState:
 
 
 def revisions_fit(n):
-    """Whether native revisions are worth their memory at n x n. A revision commit keeps every
-    channel's previous mip chain and the next one, and pins each final source until the batch
-    commits; that is what the retained-result budget is sized to hold. Where it is not (2K on
-    a machine under 16 GB, 4K anywhere), each channel publishes straight into its image, as the
-    legacy scheduler does: the same pixels, without the all-or-nothing rollback."""
+    """Whether native revisions are worth their memory at n x n (on REVISION_BACKENDS). A revision
+    commit keeps every channel's previous mip chain and the next one, and pins each final source
+    until the batch commits; that is what the retained-result budget is sized to hold. Where it
+    is not (2K on a machine under 16 GB, 4K anywhere), each channel publishes straight into its
+    image, as on Vulkan and OpenGL: the same pixels, without the all-or-nothing rollback."""
     return n * n * 16 * 8 <= RETAIN_BYTES
 
 
@@ -973,6 +1028,8 @@ class Engine:
         self._native_channels = None
         self._native_cache = None
         self._presentation = None       # eviction recovery of channels published in place
+        self._pending_mips = []         # (image texture, level-0 source, n, format, kept) awaiting their mips
+        self._kept_finals = False       # finals were kept this evaluation: trim the cache once it ends
         self._evaluation_depth = 0
         self.replaced = None            # units a patch replaced, until the native graph takes them
         self._chains = None             # the graph chains ``positions`` were derived from
@@ -1597,12 +1654,23 @@ class Engine:
             device().release(texture, n, RGBA)
             metrics.count('engine_filter_evictions')
 
-    def _retain(self, key, state, n):
+    def _keep_final(self, key, n):
+        """A channel's final result published in place stays in the bounded result cache, as a
+        revision's sources do when it commits: the next edit composes over it (a layer added on
+        top, an undo) instead of rendering the stack below again. As there, the cache's budget
+        is enforced once the evaluation has published (``evaluate``)."""
+        state = self.states.get(key)
+        if state is not None and state.textures:
+            self._retain(key, state, n, trim=False)
+            self._kept_finals = True
+
+    def _retain(self, key, state, n, trim=True):
         self.retained[key] = sum(texture_bytes(n, n, fmt) for fmt in state.formats)
         self.retained.move_to_end(key)
         if self._native_cache is not None and self._native_cache.handle:
             self._native_cache.put(key, self.retained[key])
-        self._trim_retained(n, (key,))
+        if trim:
+            self._trim_retained(n, (key,))
 
     def _trim_retained(self, n, protected=()):
         total = sum(self.retained.values())
@@ -1803,7 +1871,7 @@ class Engine:
             if not native_channels and self._native_channels is not None:
                 self._native_channels.close()
                 self._native_channels = None
-            with self._revision_transaction(dev, external_commit=native_channels):
+            with self._revision_transaction(dev, external_commit=native_channels), self._mip_batches():
                 if native_channels:
                     written = self._evaluate_native_channels(order, ts, images, n, memo, epochs)
                 else:
@@ -1888,11 +1956,16 @@ class Engine:
                         self.stages['published'].append(channel)
                         self.waiting.pop(channel, None)
                         if uniform is None and final[0] == 'unit':
+                            if not pixels:
+                                self._keep_final(final[1], n)
                             self._settle(final[1], n)
                         self.published[channel] = stamp
                         self.images[channel] = pointer
                         written.add(channel)
         self.deferred = deferred
+        if self._kept_finals:
+            self._kept_finals = False
+            self._trim_retained(n)
         self._trim_filters(RETAIN_BYTES - sum(self.retained.values()))
         from ...painting.gpu_sources import trim as trim_strokes
         trim_strokes(self.set_id, max(0, RETAIN_BYTES - sum(self.retained.values()) -
@@ -1981,11 +2054,13 @@ class Engine:
         written = set()
         def submit(action, index):
             if action == 1:
+                started = perf_counter()
                 if self._native_revisions is not None and self._native_revisions.submitting:
-                    started = perf_counter()
                     self._native_revisions.commit()
-                    self.stages['publish_ms'] += (perf_counter() - started) * 1000
-                return   # without a revision each channel was published in place (_publish)
+                else:
+                    self._flush_mips()   # each channel was published in place: C accepts complete images
+                self.stages['publish_ms'] += (perf_counter() - started) * 1000
+                return
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
@@ -2001,6 +2076,8 @@ class Engine:
             self.stages['publish_ms'] += max(0.0, (perf_counter() - started) * 1000
                 - (self.stages['inputs_ms'] - inputs) - (dev.wait_cost if self.profiling else 0.0))
             if final[0] == 'unit':
+                if not (self._native_revisions is not None and self._native_revisions.submitting):
+                    self._keep_final(final[1], n)   # a revision keeps its sources when it commits
                 self._settle(final[1], n)
             # Allocate/update host mirrors while publication is still staged.
             # A Python allocation failure must occur before C accepts the batch.
@@ -2016,7 +2093,8 @@ class Engine:
     def _revision_transaction(self, dev, *, external_commit=False):
         from ...native_bridge import lifecycle
         lib = lifecycle.execution_library(dev.backend)
-        if lib is None or dev.pixel_publish or not NATIVE_REVISIONS or not revisions_fit(self.graph.n):
+        if (lib is None or dev.pixel_publish or not NATIVE_REVISIONS or dev.backend not in REVISION_BACKENDS
+                or not revisions_fit(self.graph.n)):
             if self._native_revisions is not None and not self._native_revisions.submitting:
                 # Its immutable chains (the previous revision of every channel) are only worth
                 # their memory while commits go through it.
@@ -2191,39 +2269,96 @@ class Engine:
         donor = self._donor(n) if self.pad else None
         scalar = getattr(result, 'format', '') in {'RG16F', 'RG32F'}
         fmt = _publication_format(channel, self.precise, scalar and dev.pixel_publish)
-        chain = dev.texture(n, fmt)
         ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0,
                 'op_scalar': int(scalar)}
         samplers = [('op_source', result), ('op_donor', donor if donor is not None else result)]
-        scratch = [(chain, n)]
-        try:
-            if dev.pixel_publish:
-                # Vulkan: image textures cannot be render targets. Reuse a readback
-                # buffer; Blender rebuilds the image texture and mips on its next draw.
+        if dev.pixel_publish:
+            # Through pixels (a background Vulkan session, or forced): reuse a readback
+            # buffer; Blender rebuilds the image texture and mips on its next draw.
+            chain = dev.texture(n, fmt)
+            try:
                 dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
                 image.pixels.foreach_set(dev.readback(chain, n, gray=True))
-                metrics.count('engine_image_pixel_writes')
-                metrics.count('engine_image_pixel_write_bytes', n * n * 16)
-                return
-            target = gpu.texture.from_image(image)
-            # Finish, pad and write level 0 in one pass; each mip level in one more.
+            finally:
+                dev.release(chain, n, fmt)
+            metrics.count('engine_image_pixel_writes')
+            metrics.count('engine_image_pixel_write_bytes', n * n * 16)
+            return
+        target = gpu.texture.from_image(image)
+        if self._pending_mips and self._pending_mips[0][2] != n:
+            self._flush_mips()
+        chain = dev.mip_scratch(self, len(self._pending_mips), n, fmt) if n <= MIP_SCRATCH_SIDE else None
+        kept = chain is not None
+        if not kept:
+            chain = dev.texture(n, fmt)
+        try:
+            # Finish, pad and write level 0 in one pass, and its copy the mips reduce; the mips
+            # follow three channels to a draw (_flush_mips).
             dev.draw(dev.fixed('publish'), [target, chain], n, samplers, ints=ints)
-            source, size, level = chain, n, 0
-            while size > 1:
-                size = max(1, size // 2)
-                level += 1
-                smaller = dev.texture(size, fmt)
-                scratch.append((smaller, size))
-                dev.draw(dev.fixed('mip'), [{'texture': target, 'mip': level}, smaller], size, [('op_source', source)])
-                source = smaller
-            if self._presentation is None:
-                from ...native_bridge import lifecycle
-                self._presentation = InPlacePresentation(dev, self.scene_uid)
-                lifecycle.track(self._presentation)
-            self._presentation.published(channel, image, target)
+        except BaseException:
+            if not kept:
+                dev.release(chain, n, fmt)
+            elif not self._pending_mips:
+                dev.end_mip_scratch(self)   # nothing of this engine's is queued on it
+            raise
+        if self._presentation is None:
+            from ...native_bridge import lifecycle
+            self._presentation = InPlacePresentation(dev, self.scene_uid)
+            lifecycle.track(self._presentation)
+        self._presentation.published(channel, image, target)
+        self._pending_mips.append((target, chain, n, fmt, kept))   # the queue releases a leased chain
+        if len(self._pending_mips) >= MIP_LANES or self.profiling:   # a profile times each channel's own
+            self._flush_mips()
+
+    @contextmanager
+    def _mip_batches(self):
+        """An evaluation's channels published in place get their mips before it returns, or fails."""
+        try:
+            yield
         finally:
-            for texture, size in scratch:
+            if self._pending_mips:
+                started = perf_counter()
+                self._flush_mips()
+                self.stages['publish_ms'] += (perf_counter() - started) * 1000
+            device().end_mip_scratch(self)
+
+    def _flush_mips(self):
+        """The mip chains of the channels ``_publish`` queued, three channels to a draw as a revision
+        commit renders them: each level of each lane is the same exact box reduction of the level
+        above it, written to the image's level and to the texture the next level reads."""
+        pending, self._pending_mips = self._pending_mips, []
+        if not pending:
+            return
+        dev = device()
+        for width in range(1, MIP_LANES + 1):   # every batch width with the first: no compile in a later edit
+            dev.fixed('mip' if width == 1 else f'mip_{width}')
+        scratch = []
+        try:
+            for start in range(0, len(pending), MIP_LANES):
+                batch = pending[start:start + MIP_LANES]
+                count = len(batch)
+                shader = dev.fixed('mip' if count == 1 else f'mip_{count}')
+                sources, size, level = [entry[1] for entry in batch], batch[0][2], 0
+                while size > 1:
+                    size, level = max(1, size // 2), level + 1
+                    slots, samplers, smaller = [], [], []
+                    for lane, (target, _, _, fmt, kept) in enumerate(batch):
+                        texture = dev.mip_scratch(self, lane, size, fmt) if kept else None
+                        if texture is None:
+                            texture = dev.texture(size, fmt)
+                            scratch.append((texture, size, fmt))
+                        slots.extend(({'texture': target, 'mip': level}, texture))
+                        samplers.append(('op_source' if count == 1 else f'op_source_{lane}', sources[lane]))
+                        smaller.append(texture)
+                    dev.draw(shader, slots, size, samplers)
+                    sources = smaller
+        finally:
+            for _, chain, n, fmt, kept in pending:
+                if not kept:
+                    dev.release(chain, n, fmt)
+            for texture, size, fmt in scratch:
                 dev.release(texture, size, fmt)
+            dev.end_mip_scratch(self)
 
     # ---- CPU pixels ----------------------------------------------------------------------------
 

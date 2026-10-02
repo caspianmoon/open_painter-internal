@@ -69,12 +69,14 @@ try:
     engine = ready()
     assert engine.report['execution_backend'] == EXPECTED, engine.report
     from open_painter.evaluation.engine import runtime
-    # Framebuffer publication (Metal, OpenGL) accepts channel batches as native revisions:
-    # atomic, rolled back as a whole, restored after eviction. Pixel publication (Vulkan)
-    # writes each channel's pixels within a per-tick budget; there is no revision stream,
-    # Blender owns the textures it builds from those pixels, and a fault can leave the
-    # channels published before it. Those checks run where revisions exist.
-    REVISIONS = not runtime.device().pixel_publish
+    # Framebuffer publication on Metal accepts channel batches as native revisions: atomic,
+    # rolled back as a whole, restored after eviction. Vulkan and OpenGL publish each channel
+    # in place (runtime.REVISION_BACKENDS), restored after eviction by InPlacePresentation;
+    # pixel publication (a background Vulkan session) writes each channel's pixels within a
+    # per-tick budget. Without revisions a fault can leave the channels published before it,
+    # so the rollback checks run where revisions exist.
+    FRAMEBUFFER = not runtime.device().pixel_publish
+    REVISIONS = FRAMEBUFFER and runtime.device().backend in runtime.REVISION_BACKENDS
     assert (engine._native_revisions is not None) == REVISIONS
     first = pixels()
     assert np.ptp(first['BASE_COLOR']) > .1
@@ -157,7 +159,7 @@ try:
         np.testing.assert_array_equal(first[channel], actual, err_msg='budget retry ' + channel)
 
     # Native channel state owns no-op selection, subset acceptance and host target changes.
-    assert engine.report['native_channel_selection'] == REVISIONS
+    assert engine.report['native_channel_selection'] == FRAMEBUFFER
     # Direct calls use their own source-epoch snapshot; warm that snapshot once.
     engine.evaluate(CHANNELS, budget=False)
     revision = engine._native_revisions.revision if REVISIONS else 0
@@ -223,7 +225,7 @@ try:
         bpy.data.images.remove(replacement)
 
     # The next two blocks inject faults inside the revision stream (its host bookkeeping
-    # and its retirement), which pixel publication does not have.
+    # and its retirement), which publication without revisions does not have.
     if REVISIONS:
         # Host metadata allocations occur while GPU output is still staged. An
         # exception must leave native acceptance and visible images at the old state.
@@ -336,7 +338,7 @@ try:
             raise AssertionError('unit failure was not injected')
     assert failed_unit and engine.states[failed_unit[0]].stamp is None
     assert not any(engine._in_use.values()), engine._in_use
-    if REVISIONS:   # pixel publication keeps the channels published before the fault
+    if REVISIONS:   # without revisions the channels published before the fault stay
         for channel, actual in pixels().items():
             np.testing.assert_array_equal(before_draw_failure[channel], actual, err_msg=channel)
     coat.opacity = .6
@@ -384,19 +386,25 @@ try:
         engine = ready()
 
     else:
-        # Pixel publication: a fault while publishing keeps the channels published before
-        # it; the next evaluation must finish exactly what a fresh evaluation renders, with
-        # no stale stamp or hold left by the failed one.
+        # Without revisions (through pixels, or in place on Vulkan and OpenGL): a fault while
+        # publishing keeps the channels published before it; the next evaluation must finish
+        # exactly what a fresh evaluation renders, with no stale stamp or hold left by the
+        # failed one. The second channel's readback fails, or its publication draw in place.
         from unittest.mock import patch
         coat.opacity = .25
         engine.graph.update(check_structure=False)
-        original_readback, reads = runtime.device().readback, [0]
-        def fail_second(texture, n, **layout):
-            reads[0] += 1
-            if reads[0] == 2:
-                raise RuntimeError('injected publication failure')
-            return original_readback(texture, n, **layout)
-        with patch.object(runtime.device(), 'readback', side_effect=fail_second):
+        dev = runtime.device()
+        if dev.pixel_publish:
+            hooked, original, publish, calls = 'readback', dev.readback, None, [0]
+        else:
+            hooked, original, publish, calls = 'draw', dev.draw, dev.fixed('publish'), [0]
+        def fail_second(*args, **kwargs):
+            if publish is None or args[0] is publish:
+                calls[0] += 1
+                if calls[0] == 2:
+                    raise RuntimeError('injected publication failure')
+            return original(*args, **kwargs)
+        with patch.object(dev, hooked, side_effect=fail_second):
             try:
                 engine.evaluate(CHANNELS, budget=False)
             except RuntimeError as error:

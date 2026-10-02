@@ -103,6 +103,14 @@ def raster(ts, n, owner, cache):
                     origin = np.asarray(owner.material_origin)
                 tri_points = (tri_points - origin) @ axes.T
                 tri_normals = tri_normals @ axes.T
+            from ..native_bridge.lifecycle import cpu_library
+            lib = cpu_library()
+            if lib is not None and hasattr(lib, 'op_uv_raster_interpolate'):
+                # One native pass, with no per-texel arrays: the maps the code below writes.
+                from ..native_bridge.geometry import raster_interpolate
+                raster_interpolate(lib, entry["uv"][entry["tri_loops"]], n,
+                                   [(tri_points, positions), (tri_normals, normals)])
+                continue
             rows, cols, tri, weights = rasterize(entry["uv"][entry["tri_loops"]], n)
             positions[rows, cols] = interpolate(weights, tri_points[tri])
             normals[rows, cols] = interpolate(weights, tri_normals[tri])

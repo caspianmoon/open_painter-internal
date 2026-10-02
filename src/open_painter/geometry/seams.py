@@ -151,7 +151,6 @@ def build(ts, n, halo=DEFAULT_HALO):
         for target in meshes:
             mesh, uv = target['mesh'], target['uv']
             tri_loops, tri_vertices = target['tri_loops'], target['tri_vertices']
-            rows, cols, tri, _ = rasterize(uv[tri_loops], n)
             from ..native_bridge.lifecycle import cpu_library
             native_topology = None
             target_island_base = island_base
@@ -168,10 +167,19 @@ def build(ts, n, halo=DEFAULT_HALO):
                 unassigned = int(len(roots) > 0 and roots[0] < 0)
                 island_of_face = np.where(labels >= 0, island_of_face.astype(np.int64) - unassigned + island_base, -1)
                 island_base += len(roots) - unassigned
-            if len(rows):
-                seam.covered[rows, cols] = True
-                seam.triangle[rows, cols] = tri + triangle_base
-                seam.island_of[rows, cols] = island_of_face[target['tri_polygons'][tri]]
+            if (lib := cpu_library()) is not None and hasattr(lib, 'op_uv_raster_assign'):
+                # One native pass, with no per-texel arrays: the ids the scatter below writes.
+                from ..native_bridge.geometry import raster_assign
+                raster_assign(lib, uv[tri_loops], n,
+                              [(np.arange(len(tri_loops), dtype=np.int64) + triangle_base, seam.triangle),
+                               (np.asarray(island_of_face[target['tri_polygons']], np.int64), seam.island_of)],
+                              seam.covered)
+            else:
+                rows, cols, tri, _ = rasterize(uv[tri_loops], n)
+                if len(rows):
+                    seam.covered[rows, cols] = True
+                    seam.triangle[rows, cols] = tri + triangle_base
+                    seam.island_of[rows, cols] = island_of_face[target['tri_polygons'][tri]]
             # Tangent Jacobian per triangle: dUV(px)/dWorld on the triangle's plane.
             p = target['positions'][tri_vertices].astype(np.float64)
             t = uv[tri_loops].astype(np.float64) * n

@@ -62,6 +62,19 @@ def _attribute(ts, field, n):
                     values = colors[:,:3] @ np.array((.2126,.7152,.0722),np.float32)
                 else:
                     raise ValueError(f'{obj.name}: attribute must be float or color')
+            from ..native_bridge.lifecycle import cpu_library
+            lib = cpu_library()
+            if lib is not None and hasattr(lib, 'op_uv_raster_interpolate') and values.dtype == np.float32:
+                # One native pass: each triangle's three corner values interpolated into the map,
+                # as the samples below are (a face's value repeated on its corners).
+                from ..native_bridge.geometry import raster_interpolate
+                if domain == 'FACE':
+                    corners = np.repeat(values[target['tri_polygons']][:, None], 3, axis=1)
+                else:
+                    corners = values[target['tri_vertices'] if domain == 'POINT' else target['tri_loops']]
+                raster_interpolate(lib, target['uv'][target['tri_loops']], n,
+                                   [(corners[..., None], result.reshape(n, n, 1))])
+                continue
             rows, cols, tri, weights = rasterize(target['uv'][target['tri_loops']], n)
             if not len(rows):
                 continue

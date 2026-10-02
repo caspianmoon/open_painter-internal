@@ -32,6 +32,8 @@ PATCH = os.environ.get('OP_NO_PATCH') != '1'
 # After an undo, re-point the retired graph's units instead of compiling them (0: compile all).
 UNDO_ADOPTION = os.environ.get('OP_UNDO_ADOPTION', '1') != '0'
 VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'   # compare them with a fresh compile
+# A publication tags the set's material, not its images (True: the images, for comparisons).
+TAG_IMAGES = os.environ.get('OP_TAG_IMAGES') == '1'
 _retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
 _carried = {}    # session key -> the engine an undo dropped: its rebuild starts from its results
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
@@ -719,9 +721,19 @@ def _published(scene, ts, channels):
         engine = session_engine(scene, ts)
         if engine is not None:
             engine.sync_pixels(channels)
-    for output in ts.outputs:
-        if output.channel in channels and output.image is not None:
-            output.image.update_tag()
+    # EEVEE keeps its temporal history when only a GPU texture changed: a material update
+    # restarts it (as live_display's does). An update of the images would too, but Blender's
+    # undo then counts every published image as changed since its last step: each undo read
+    # them again and rebuilt their textures from CPU pixels that lag behind the GPU result
+    # (7-10 ms per 1K channel), before publishing every channel over them anyway.
+    if TAG_IMAGES:
+        for output in ts.outputs:
+            if output.channel in channels and output.image is not None:
+                output.image.update_tag()
+    else:
+        material = getattr(ts, 'material', None)
+        if material is not None:
+            material.update_tag()
     _redraw(scene)
 
 

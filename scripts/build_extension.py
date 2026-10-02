@@ -39,9 +39,10 @@ if args.native_library:
     binding = native.parent / ('_native.pyd' if os.name == 'nt' else '_native.abi3.so')
     if not binding.is_file():
         raise RuntimeError('A native release requires the compiled CPython binding beside the library')
-    # What the bundle runs by default (lifecycle.host_backends()): the host scheduler on Metal
-    # and on Vulkan, the CPU kernels on other backends.
-    execution = {'Darwin': 'c17-host-metal', 'Windows': 'c17-host-vulkan'}.get(platform.system(), 'c17-cpu-kernels')
+    # What the bundle runs by default (lifecycle.host_backends()): the host scheduler on Metal,
+    # and on Windows' Vulkan and OpenGL; elsewhere the CPU kernels on OpenGL (Vulkan schedules).
+    execution = {'Darwin': 'c17-host-metal', 'Windows': 'c17-host-vulkan-opengl'}.get(platform.system(),
+                                                                                  'c17-cpu-kernels')
     native_manifest = dict(binding_sha256=hashlib.sha256(binding.read_bytes()).hexdigest(), python_abi='cp311-abi3', abi_version=OP_ABI_VERSION, sha256=hashlib.sha256(native.read_bytes()).hexdigest(),
                            platform=package_platform, execution=execution)
 

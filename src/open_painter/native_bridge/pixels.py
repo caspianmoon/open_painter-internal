@@ -1,5 +1,5 @@
-"""Export pixel kernels: quantization and normal encoding in one native pass each, with the
-float32 arithmetic of the NumPy code they replace (see op_pixels.h)."""
+"""Pixel kernels: quantization, normal encoding, PNG filtering and compact readback expansion in
+one native pass each, with the float32 arithmetic of the NumPy code they replace (see op_pixels.h)."""
 import ctypes as C
 
 import numpy as np
@@ -65,6 +65,18 @@ def normal_relief(lib, normal, height, metric, charts, distance):
                                charts.ctypes.data_as(I32), n, normal.shape[-1], float(distance),
                                out.ctypes.data_as(F32)))
     return out
+
+
+def expand_compact(lib, source, target, components, gray=False):
+    """``compact_readback.expand_compact`` of C-contiguous float32 (pixels, components) ``source``
+    into C-contiguous float32 (pixels, 4) ``target``; the caller has checked their sizes."""
+    if not (source.flags.c_contiguous and target.flags.c_contiguous and source.dtype == target.dtype == np.float32):
+        raise ValueError('Expected contiguous float32 compact and RGBA pixels')
+    lib.op_expand_compact.argtypes = [F32, C.c_uint64, C.c_uint32, C.c_uint32, F32]
+    lib.op_expand_compact.restype = C.c_int
+    check(lib.op_expand_compact(source.ctypes.data_as(F32), len(target), components, int(bool(gray)),
+                                target.ctypes.data_as(F32)))
+    return target
 
 
 def png_filter(lib, data, bits, start, stop):

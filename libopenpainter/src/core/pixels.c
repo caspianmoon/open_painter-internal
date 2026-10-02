@@ -10,6 +10,7 @@
 #define OP_SSE_PIXELS 1
 #endif
 #define MAX_PIXELS (UINT64_C(1) << 32)
+#define STREAM_PIXELS (UINT64_C(1) << 16)   /* op_expand_compact: 1 MiB of RGBA */
 
 /* NumPy's image_writer.quantize: np.clip(values, 0, 1), the sRGB curve on rgb, then
  * np.rint(values * maximum).astype(...). A NaN clips to 0 here; NumPy carries it to the
@@ -435,6 +436,95 @@ op_status_t op_normal_encode(const float *values, float *out, uint64_t count, ui
 #endif
     for (; i < count; i++)
         encode(values + i * channels, out + i * channels, channels, decode);
+    return OP_OK;
+}
+
+/* compact_readback.expand_compact: R or RG pixels to RGBA with (0, 0, 1) filled in, or R to
+ * (r, r, r, 1) when gray. Only loads, shuffles and stores, never arithmetic, so each float's bits
+ * pass through unchanged. */
+op_status_t op_expand_compact(const float *values, uint64_t count, uint32_t components, uint32_t gray, float *out) {
+    if ((count && (!values || !out)) || count > MAX_PIXELS || (components != 1 && components != 2) || gray > 1 ||
+        (gray && components != 1))
+        return OP_INVALID_ARGUMENT;
+    if (count) {
+        uintptr_t source = (uintptr_t)values, target = (uintptr_t)out;
+        if (source < target + count * 16 && target < source + count * components * 4)
+            return OP_INVALID_ARGUMENT;
+    }
+    uint64_t i = 0;
+#ifdef OP_NEON_PIXELS
+    /* vst4 interleaves four registers, one per channel, into four RGBA pixels. */
+    const float32x4_t zero = vdupq_n_f32(0.0f), one = vdupq_n_f32(1.0f);
+    if (gray)
+        for (; i + 4 <= count; i += 4) {
+            float32x4_t r = vld1q_f32(values + i);
+            float32x4x4_t p = {{r, r, r, one}};
+            vst4q_f32(out + i * 4, p);
+        }
+    else if (components == 1)
+        for (; i + 4 <= count; i += 4) {
+            float32x4x4_t p = {{vld1q_f32(values + i), zero, zero, one}};
+            vst4q_f32(out + i * 4, p);
+        }
+    else
+        for (; i + 4 <= count; i += 4) {
+            float32x4x2_t rg = vld2q_f32(values + i * 2);
+            float32x4x4_t p = {{rg.val[0], rg.val[1], zero, one}};
+            vst4q_f32(out + i * 4, p);
+        }
+#elif defined(OP_SSE_PIXELS)
+    /* ba holds (0, 1) twice: movelh/movehl pair each pixel's R or RG with it. Gray broadcasts a
+     * lane and blends alpha in from one. */
+    const __m128 zero = _mm_setzero_ps(), ba = _mm_set_ps(1.0f, 0.0f, 1.0f, 0.0f), one = _mm_set1_ps(1.0f);
+#define EXPAND(STORE)                                                                                           \
+    do {                                                                                                        \
+        if (gray)                                                                                               \
+            for (; i + 4 <= count; i += 4) {                                                                    \
+                __m128 r = _mm_loadu_ps(values + i);                                                            \
+                float *o = out + i * 4;                                                                         \
+                STORE(o, _mm_blend_ps(_mm_shuffle_ps(r, r, 0x00), one, 8)); /* r0 r0 r0 1 */                    \
+                STORE(o + 4, _mm_blend_ps(_mm_shuffle_ps(r, r, 0x55), one, 8));                                 \
+                STORE(o + 8, _mm_blend_ps(_mm_shuffle_ps(r, r, 0xaa), one, 8));                                 \
+                STORE(o + 12, _mm_blend_ps(_mm_shuffle_ps(r, r, 0xff), one, 8));                                \
+            }                                                                                                   \
+        else if (components == 1)                                                                               \
+            for (; i + 4 <= count; i += 4) {                                                                    \
+                __m128 r = _mm_loadu_ps(values + i);                                                            \
+                __m128 lo = _mm_unpacklo_ps(r, zero), hi = _mm_unpackhi_ps(r, zero); /* r0 0 r1 0, r2 0 r3 0 */ \
+                float *o = out + i * 4;                                                                         \
+                STORE(o, _mm_movelh_ps(lo, ba));     /* r0 0 0 1 */                                             \
+                STORE(o + 4, _mm_movehl_ps(ba, lo)); /* r1 0 0 1 */                                             \
+                STORE(o + 8, _mm_movelh_ps(hi, ba));                                                            \
+                STORE(o + 12, _mm_movehl_ps(ba, hi));                                                           \
+            }                                                                                                   \
+        else                                                                                                    \
+            for (; i + 2 <= count; i += 2) {                                                                    \
+                __m128 rg = _mm_loadu_ps(values + i * 2); /* r0 g0 r1 g1 */                                     \
+                float *o = out + i * 4;                                                                         \
+                STORE(o, _mm_movelh_ps(rg, ba));     /* r0 g0 0 1 */                                            \
+                STORE(o + 4, _mm_movehl_ps(ba, rg)); /* r1 g1 0 1 */                                            \
+            }                                                                                                   \
+    } while (0)
+    /* A result of a megabyte or more outgrows the caches its reader would find it in. Non-temporal
+     * stores skip reading each destination line before writing it: half the time at 1K, and the
+     * reader that follows (Image.pixels.foreach_set) is no slower. */
+    if (count >= STREAM_PIXELS && ((uintptr_t)out & 15) == 0) {
+        EXPAND(_mm_stream_ps);
+        _mm_sfence();
+    } else
+        EXPAND(_mm_storeu_ps);
+#undef EXPAND
+#endif
+    static const float fill[3] = {0.0f, 0.0f, 1.0f};
+    for (; i < count; i++) {   /* memcpy: a byte copy on any target, whatever the float */
+        memcpy(out + i * 4, values + i * components, components * sizeof(float));
+        if (gray) {
+            memcpy(out + i * 4 + 1, values + i, sizeof(float));
+            memcpy(out + i * 4 + 2, values + i, sizeof(float));
+            memcpy(out + i * 4 + 3, fill + 2, sizeof(float));
+        } else
+            memcpy(out + i * 4 + components, fill + components - 1, (4 - components) * sizeof(float));
+    }
     return OP_OK;
 }
 

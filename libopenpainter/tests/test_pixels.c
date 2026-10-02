@@ -1,6 +1,7 @@
 /* op_quantize against the scalar arithmetic it replaced: identical codes for every float
  * from below the sRGB knee up to 1 at both bit depths (the vector curve decides most of them
- * without powf), and for random layouts of 1 to 5 channels with tails, NaN and infinities. */
+ * without powf), and for random layouts of 1 to 5 channels with tails, NaN and infinities.
+ * op_expand_compact against expansion written out by hand, bits included. */
 #include "openpainter/op_pixels.h"
 #include <math.h>
 #include <stdint.h>
@@ -49,6 +50,57 @@ static int compare(const void *mine, const void *theirs, uint64_t n, uint32_t bi
     return 0;
 }
 
+/* Compact R / RG pixels to RGBA: the source floats bit for bit (a quiet NaN with a payload, a
+ * signalling NaN, -0, infinity, a subnormal), then 0 for missing green and blue and 1 for alpha,
+ * or gray: the value in red, green and blue, then 1; each count up to 9 covers the vector steps
+ * and their tails. */
+static int expansion(void) {
+    static const uint32_t patterns[] = {0x7fc12345u, 0x7f800001u, 0x80000000u, 0x7f800000u, 0x00000001u,
+                                        0x3f800000u, 0xbf000000u, 0xffffffffu, 0x3eaaaaabu};
+    enum { PATTERNS = sizeof(patterns) / sizeof(*patterns) };
+    float source[2 * PATTERNS], out[4 * PATTERNS + 4];
+    memcpy(source, patterns, sizeof patterns);
+    memcpy(source + PATTERNS, patterns, sizeof patterns);
+    for (uint32_t layout = 0; layout < 3; layout++)   /* R, RG, gray R */
+        for (uint64_t count = 0; count <= PATTERNS; count++) {
+            uint32_t components = layout == 1 ? 2 : 1, gray = layout == 2;
+            memset(out, 0xa5, sizeof out);
+            if (op_expand_compact(source, count, components, gray, out) != OP_OK)
+                return 1;
+            for (uint64_t i = 0; i < count; i++) {
+                uint32_t expected[4] = {patterns[(i * components) % PATTERNS], 0, 0, 0x3f800000u}, got[4];
+                if (components == 2)
+                    expected[1] = patterns[(i * 2 + 1) % PATTERNS];
+                if (gray)
+                    expected[1] = expected[2] = expected[0];
+                memcpy(got, out + i * 4, sizeof got);
+                if (memcmp(got, expected, sizeof got)) {
+                    fprintf(stderr, "expand layout %u of %llu, pixel %llu: %08x %08x %08x %08x\n", layout,
+                            (unsigned long long)count, (unsigned long long)i, got[0], got[1], got[2], got[3]);
+                    return 1;
+                }
+            }
+            uint32_t after;   /* nothing written past the last pixel */
+            memcpy(&after, out + count * 4, sizeof after);
+            if (after != 0xa5a5a5a5u)
+                return 1;
+        }
+    /* No components 0 or 3, no gray RG, no null pointers with pixels, no overlap; nothing to do
+     * is fine. */
+    if (op_expand_compact(source, 1, 0, 0, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(source, 1, 3, 0, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(source, 1, 2, 1, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(source, 1, 1, 2, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(NULL, 1, 1, 0, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(source, 1, 1, 0, NULL) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(out + 4, 2, 2, 0, out) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(out, 4, 1, 1, out + 3) != OP_INVALID_ARGUMENT ||
+        op_expand_compact(NULL, 0, 1, 0, NULL) != OP_OK)
+        return 1;
+    printf("compact expansion keeps every bit and fills (0, 0, 1), or gray (v, v, v, 1)\n");
+    return 0;
+}
+
 int main(void) {
     enum { CHUNK = 1 << 20 };
     float *values = malloc(CHUNK * 5 * sizeof(float));
@@ -93,6 +145,8 @@ int main(void) {
     }
     if (op_quantize(values, 1, 0, 8, 0, mine) != OP_INVALID_ARGUMENT ||
         op_quantize(values, 1, 4, 12, 0, mine) != OP_INVALID_ARGUMENT)
+        return 1;
+    if (expansion())
         return 1;
     printf("quantize matches its reference over %llu floats in [2^-9, 1] and %llu layout values\n",
            (unsigned long long)exhaustive, (unsigned long long)compared);

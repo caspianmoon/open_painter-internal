@@ -110,6 +110,23 @@ class NativePixelsTest(unittest.TestCase):
         finally:
             surface_normal._uv_metric = saved
 
+    def test_compact_expansion_is_numpys(self):
+        from open_painter.evaluation.engine.compact_readback import _expand
+        rng = np.random.default_rng(11)
+        for components, gray in ((1, False), (2, False), (1, True)):
+            for count in (0, 1, 2, 3, 5, 8191, 8192, 8193, 1 << 20):
+                with self.subTest(components=components, gray=gray, count=count):
+                    # Any 32-bit pattern: NaN payloads, infinities, subnormals and signed zeros.
+                    source = rng.integers(0, 1 << 32, (count, components), dtype=np.uint64).astype(np.uint32)
+                    expected = np.full((count, 4), 0xa5a5a5a5, np.uint32)
+                    _expand(source.view(np.float32), expected.view(np.float32), components, gray)
+                    found = np.full((count, 4), 0x5a5a5a5a, np.uint32)
+                    self.assertIs(pixels.expand_compact(self.lib, source.view(np.float32), found.view(np.float32),
+                                                        components, gray).base, found)
+                    np.testing.assert_array_equal(found, expected)
+        with self.assertRaises(ValueError):
+            pixels.expand_compact(self.lib, np.ones((4, 2), np.float32)[:, :1], np.empty((4, 4), np.float32), 1)
+
     def test_png_filter_is_numpys(self):
         from open_painter.export.image_writer import _filter_numpy
         rng = np.random.default_rng(8)

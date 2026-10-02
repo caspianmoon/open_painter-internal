@@ -41,6 +41,19 @@ class CompactTransferTests(unittest.TestCase):
         expand_compact(source, actual, 2)
         np.testing.assert_array_equal(actual, np.array([[.3, .4, 0., 1.], [.5, .6, 0., 1.]], np.float32))
 
+    def test_gray_repeats_red_in_green_and_blue(self):
+        bits = np.array([0, 0x80000000, 1, 0x7f800000, 0x7fc01234, 0x7fa00123, 0x3f000001], np.uint32)
+        for count in (0, 1, 7, 8191, 8192, 8193, 17003):
+            with self.subTest(count=count):
+                source = np.resize(bits, count).view(np.float32).reshape(-1, 1)
+                actual = np.full((count, 4), -99., np.float32)
+                self.assertIs(expand_compact(source, actual, 1, gray=True), actual)
+                expected = np.repeat(source.view(np.uint32), 4, axis=1)
+                expected[:, 3] = 0x3f800000
+                np.testing.assert_array_equal(actual.view(np.uint32), expected)
+        with self.assertRaises(ValueError):
+            expand_compact(np.ones(8, np.float32), np.empty(16, np.float32), 2, gray=True)
+
     def test_invalid_layout_or_alias_is_rejected(self):
         source = np.ones(4, np.float32)
         target = np.empty(16, np.float32)

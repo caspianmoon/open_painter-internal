@@ -391,11 +391,11 @@ try:
         coat.opacity = .25
         engine.graph.update(check_structure=False)
         original_readback, reads = runtime.device().readback, [0]
-        def fail_second(texture, n):
+        def fail_second(texture, n, **layout):
             reads[0] += 1
             if reads[0] == 2:
                 raise RuntimeError('injected publication failure')
-            return original_readback(texture, n)
+            return original_readback(texture, n, **layout)
         with patch.object(runtime.device(), 'readback', side_effect=fail_second):
             try:
                 engine.evaluate(CHANNELS, budget=False)

@@ -1,7 +1,8 @@
 /* Every vector path of pixels.c (NEON or SSE) against its scalar path, bit for bit: the file is
- * compiled again here with OP_SCALAR_PIXELS under other names. Normal encoding, relief and PNG
- * filtering over random sizes and channel counts (tails included), with values outside [0, 1],
- * zero-length normals, chart borders, flipped row strides and 16-bit samples. */
+ * compiled again here with OP_SCALAR_PIXELS under other names. Normal encoding, relief, PNG
+ * filtering and compact expansion over random sizes and channel counts (tails included), with
+ * values outside [0, 1], zero-length normals, chart borders, flipped row strides, 16-bit samples
+ * and random float bit patterns (NaN payloads, infinities, subnormals, signed zeros). */
 #include "openpainter/op_pixels.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,12 +12,14 @@
 #define op_normal_encode scalar_normal_encode
 #define op_normal_relief scalar_normal_relief
 #define op_png_filter scalar_png_filter
+#define op_expand_compact scalar_expand_compact
 #define OP_SCALAR_PIXELS 1
 #include "../src/core/pixels.c"
 #undef op_quantize
 #undef op_normal_encode
 #undef op_normal_relief
 #undef op_png_filter
+#undef op_expand_compact
 
 static uint64_t state = 0x6c8e9cf570932bd5u;
 static uint64_t next(void) {
@@ -83,7 +86,45 @@ int main(void) {
             scalar_png_filter(first, stride, filtered, row_bytes, bpp, bits == 16, previous, lines_b) ||
             differs(lines_a, lines_b, (size_t)filtered * (row_bytes + 1), "png filter", trial))
             return 1;
+        /* Compact R / RG / gray R transfers: any 32-bit pattern, each pixel count's tail. */
+        uint32_t components = trial % 3 == 1 ? 2 : 1, gray = trial % 3 == 2;
+        uint64_t compact = (uint64_t)(next() % ((uint64_t)N * N + 1));
+        for (uint64_t i = 0; i < compact * components; i++) {
+            uint32_t bits32 = (uint32_t)next();
+            memcpy(values + i, &bits32, sizeof bits32);
+        }
+        memset(mine, 0xa5, sizeof mine);
+        memset(theirs, 0x5a, sizeof theirs);
+        if (op_expand_compact(values, compact, components, gray, mine) ||
+            scalar_expand_compact(values, compact, components, gray, theirs) ||
+            differs(mine, theirs, compact * 16, "compact expansion", trial))
+            return 1;
     }
+    /* Large enough for non-temporal stores (1 MiB of RGBA), into aligned and unaligned outputs,
+     * with tails. */
+    float *wide = malloc(70001 * 2 * sizeof(float)), *expanded = malloc((70001 * 4 + 4) * sizeof(float)),
+          *reference = malloc((70001 * 4 + 4) * sizeof(float));
+    if (!wide || !expanded || !reference)
+        return 1;
+    for (uint64_t i = 0; i < 70001 * 2; i++) {
+        uint32_t bits32 = (uint32_t)next();
+        memcpy(wide + i, &bits32, sizeof bits32);
+    }
+    const uint64_t counts[] = {65535, 65536, 65537, 65539, 70001};
+    for (uint32_t layout = 0; layout < 3; layout++)   /* R, RG, gray R */
+        for (int c = 0; c < 5; c++)
+            for (uint32_t offset = 0; offset < 2; offset++) {   /* malloc aligns to 16 bytes; +1 float does not */
+                uint32_t components = layout == 1 ? 2 : 1, gray = layout == 2;
+                memset(expanded, 0xa5, (70001 * 4 + 4) * sizeof(float));
+                memset(reference, 0x5a, (70001 * 4 + 4) * sizeof(float));
+                if (op_expand_compact(wide, counts[c], components, gray, expanded + offset) ||
+                    scalar_expand_compact(wide, counts[c], components, gray, reference + offset) ||
+                    differs(expanded + offset, reference + offset, counts[c] * 16, "wide compact expansion", c))
+                    return 1;
+            }
+    free(wide);
+    free(expanded);
+    free(reference);
     printf("pixel kernels' vector paths match their scalar paths\n");
     return 0;
 }

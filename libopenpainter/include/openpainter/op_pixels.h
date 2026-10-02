@@ -25,6 +25,12 @@ op_status_t op_normal_encode(const float *values, float *out, uint64_t count, ui
  * normalized (the base where too short), encoded (x 0.5 + 0.5). A fourth channel is copied. */
 op_status_t op_normal_relief(const float *normal, const float *height, const float *metric, const int32_t *charts,
                              uint32_t n, uint32_t channels, float distance, float *out);
+/* engine.compact_readback.expand_compact: count pixels of components (1 or 2) float32 values
+ * into count x 4 floats, the missing channels 0 (green when components is 1, and blue) and 1
+ * (alpha); gray 1 (one component only) repeats the value in green and blue instead, the
+ * (v, v, v, 1) a scalar channel's image holds. Pure copies: every source float keeps its bits
+ * (signed zeros, NaN payloads). values and out must not overlap. */
+op_status_t op_expand_compact(const float *values, uint64_t count, uint32_t components, uint32_t gray, float *out);
 /* PNG scanlines with adaptive filtering. rows: count rows of row_bytes bytes, stride bytes
  * apart (negative for a flipped view); 16-bit samples (swap16 1) are native-endian and written
  * big-endian. previous 1: the row before the first (at rows - stride) is the filters' upper

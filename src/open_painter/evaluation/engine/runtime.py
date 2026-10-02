@@ -61,6 +61,7 @@ PIXEL_PUBLISH = True if os.environ.get('OP_ENGINE_PIXEL_PUBLISH') == '1' else No
 PIXEL_BUDGET_MS = 20.0   # per evaluation through pixels: the channels waiting longest publish first
 FUSE_PIXEL_PUBLISH = True   # test/diagnostic opt-out; the normal publication path remains available
 FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured faster compact path
+COMPACT_PIXEL_PUBLISH = True   # scalar channels publish one component through pixels (_publication_format)
 CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one texel on Vulkan
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
@@ -551,13 +552,13 @@ class Device:
         """Results reach the images through their pixel buffers (Vulkan), not a framebuffer pass."""
         return PIXEL_PUBLISH if PIXEL_PUBLISH is not None else self.backend == 'VULKAN'
 
-    def readback(self, texture, n):
+    def readback(self, texture, n, gray=False):
         """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K
         channel is 64 MB, allocated once rather than on every stroke tick.
 
         Read compact textures with their actual component count: Vulkan does not expand
         R/RG framebuffer reads to RGBA. Missing components use (0, 0, 0, 1), as OpenGL
-        does.
+        does; ``gray`` reads an R texture as (r, r, r, 1), a scalar publication's layout.
         The returned buffer is borrowed and is overwritten by the next readback.
         """
         import gpu
@@ -575,7 +576,7 @@ class Device:
             framebuffer.read_color(0, 0, n, n, components, 0, 'FLOAT', data=transfer)
         if components != 4:
             from .compact_readback import expand_compact
-            expand_compact(transfer, buffer, components)
+            expand_compact(transfer, buffer, components, gray and components == 1)
         return buffer
 
     def _readback_buffer(self, n):
@@ -757,6 +758,18 @@ class UnitState:
             self.ubo.update(gpu.types.Buffer('FLOAT', len(data), data))
         self.ubo_data = data
         return self.ubo
+
+
+def _publication_format(channel, precise, gray=False):
+    """The texture a channel is published from. Through pixels (Vulkan) a gray publication (a
+    scalar channel: (v, v, v, 1) by construction) renders only its one component, which cuts the
+    read-back bytes and Blender's half-to-float conversion to a quarter; the readback expands it
+    to RGBA on the CPU (op_expand_compact). Every component of the RGBA layout held that same
+    half or float, so the published pixels are the same."""
+    high = precise or channel == 'HEIGHT'
+    if gray and COMPACT_PIXEL_PUBLISH:
+        return 'R32F' if high else 'R16F'
+    return RGBA if high else HALF
 
 
 def _publication_program(program, scalar=False, donor=False):
@@ -1315,7 +1328,8 @@ class Engine:
 
         Imported/retained CHANNEL outputs keep the ordinary representation, as
         do normals, other backends and profiles of individual unit passes. The
-        caller owns and releases the returned RGBA publication scratch.
+        caller owns and releases the returned publication scratch: RGBA, or R
+        for a scalar channel (``_publication_format``).
         """
         dev = device()
         final = self.finals[channel]
@@ -1357,7 +1371,7 @@ class Engine:
         inputs |= {ref[1] for ref in (position or ()) if ref is not None and ref[0] == 'unit'}
         self._in_use.update(inputs)
         result = None
-        fmt = RGBA if self.precise or channel == 'HEIGHT' else HALF
+        fmt = _publication_format(channel, self.precise, scalar_unit(key))
         try:
             backdrop = self._texture_of(position[0], n, memo, epochs, scalar_unit(key)) if position else None
             grouped = self._texture_of(position[1], n, memo, epochs, scalar_unit(key)) if position and position[1] else None
@@ -1740,11 +1754,12 @@ class Engine:
                                     self._uniform_cpu.pop(channel, None)
                                     if tuple(image.size) != (n, n):
                                         raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
-                                    image.pixels.foreach_set(dev.readback(result, n))
+                                    # A scalar channel's fused final is R: read as (v, v, v, 1).
+                                    image.pixels.foreach_set(dev.readback(result, n, gray=True))
                                     metrics.count('engine_image_pixel_writes')
                                     metrics.count('engine_image_pixel_write_bytes', n * n * 16)
                                 finally:
-                                    dev.release(result, n, RGBA if self.precise or channel == 'HEIGHT' else HALF)
+                                    dev.release(result, n, result.format)
                             else:
                                 self._publish(image, channel, result, n)
                         # A later channel may fail. Already published GPU pixels must still
@@ -2049,10 +2064,11 @@ class Engine:
         if tuple(image.size) != (n, n):
             raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
         donor = self._donor(n) if self.pad else None
-        fmt = RGBA if (self.precise or channel == 'HEIGHT') else HALF
+        scalar = getattr(result, 'format', '') in {'RG16F', 'RG32F'}
+        fmt = _publication_format(channel, self.precise, scalar and dev.pixel_publish)
         chain = dev.texture(n, fmt)
         ints = {'op_mode': 1 if channel == 'NORMAL' else 0, 'op_pad': 1 if donor is not None else 0,
-                'op_scalar': int(getattr(result, 'format', '') in {'RG16F', 'RG32F'})}
+                'op_scalar': int(scalar)}
         samplers = [('op_source', result), ('op_donor', donor if donor is not None else result)]
         scratch = [(chain, n)]
         try:
@@ -2060,7 +2076,7 @@ class Engine:
                 # Vulkan: image textures cannot be render targets. Reuse a readback
                 # buffer; Blender rebuilds the image texture and mips on its next draw.
                 dev.draw(dev.fixed('publish_pixels'), [chain], n, samplers, ints=ints)
-                image.pixels.foreach_set(dev.readback(chain, n))
+                image.pixels.foreach_set(dev.readback(chain, n, gray=True))
                 metrics.count('engine_image_pixel_writes')
                 metrics.count('engine_image_pixel_write_bytes', n * n * 16)
                 return

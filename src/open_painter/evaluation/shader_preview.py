@@ -828,7 +828,8 @@ def _prearm(ts, entry):
     """Idle: arm the suffix transforms an edit of the selected layer would use."""
     from .engine.suffix import PREARM_DELAY
     engine = entry.get('engine')
-    if engine is None or perf_counter() - entry.get('evaluated_at', 0.0) < PREARM_DELAY:
+    if (getattr(engine, 'prearm', None) is None
+            or perf_counter() - entry.get('evaluated_at', 0.0) < PREARM_DELAY):
         return
     if not 0 <= ts.active_layer < len(ts.layers):
         return

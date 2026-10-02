@@ -54,10 +54,15 @@ POOL_SPARES = 3                      # free textures of one size and format kept
 # Global cap on free textures; on 16 GB+ it fits a 4K float publication scratch plus compact stages.
 POOL_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)
 PRECISE = False   # full-float intermediates for every channel by default (parity tests)
-# Publication through the images' pixel buffers: None follows the backend (Vulkan), True/False
-# force it (tests run the Vulkan path on Metal). On Vulkan Blender's image textures are storage,
-# not render targets, and every pixel write makes Blender rebuild the image's texture and mips.
-PIXEL_PUBLISH = True if os.environ.get('OP_ENGINE_PIXEL_PUBLISH') == '1' else None   # the env: whole suites
+# Publication through the images' pixel buffers (read back, written to Image.pixels, re-uploaded
+# by Blender) instead of rendering into the images' GPU textures. None: the backend's default,
+# which is the framebuffer pass everywhere; Blender 5.2's Vulkan image textures are render
+# targets, mip levels included, as on Metal and OpenGL. OP_ENGINE_PIXEL_PUBLISH=1/0 forces it
+# for whole suites; tests set this to True/False.
+PIXEL_PUBLISH = {'1': True, '0': False}.get(os.environ.get('OP_ENGINE_PIXEL_PUBLISH'))
+# The Vulkan default before 0.14.2: pixel publication with its Vulkan shortcuts (uniform clears,
+# one-texel constants, fused finals). Kept as a fallback; its suites turn it on.
+VULKAN_PIXEL_ROUTE = False
 PIXEL_BUDGET_MS = 20.0   # per evaluation through pixels: the channels waiting longest publish first
 FUSE_PIXEL_PUBLISH = True   # test/diagnostic opt-out; the normal publication path remains available
 FUSE_PIXEL_PUBLISH_MAX_SIZE = 1024  # larger Vulkan targets retain the measured faster compact path
@@ -549,8 +554,12 @@ class Device:
 
     @property
     def pixel_publish(self):
-        """Results reach the images through their pixel buffers (Vulkan), not a framebuffer pass."""
-        return PIXEL_PUBLISH if PIXEL_PUBLISH is not None else self.backend == 'VULKAN'
+        """Results reach the images through their pixel buffers, not a framebuffer pass: only
+        when forced (PIXEL_PUBLISH) or on the Vulkan fallback route (VULKAN_PIXEL_ROUTE). Every
+        backend renders into the images' GPU textures by default."""
+        if PIXEL_PUBLISH is not None:
+            return PIXEL_PUBLISH
+        return VULKAN_PIXEL_ROUTE and self.backend == 'VULKAN'
 
     def readback(self, texture, n, gray=False):
         """The n × n ``texture`` as RGBA floats in a buffer reused between publications: a 2K

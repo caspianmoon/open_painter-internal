@@ -14,6 +14,7 @@ from open_painter.constants import CHANNELS
 from open_painter.core import layer_stack as stack, material_manager, texture_set_manager as sets
 from open_painter.evaluation import anchors, cache, metrics, shader_preview
 from open_painter.evaluation.engine import runtime
+runtime.VULKAN_PIXEL_ROUTE = True   # this suite covers the Vulkan pixel route (the fallback to framebuffer publication)
 from open_painter.utils.ids import new_id
 
 runtime.ensure_gpu()

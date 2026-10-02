@@ -572,8 +572,14 @@ def on_depsgraph(scene, depsgraph):
         elif isinstance(item, bpy.types.Image) and not item.get('op_engine_output'):
             # A painted or reloaded image the engine may sample: its stamp moves (the
             # engine's own published images report updates too, and are not inputs).
-            _image_counter[0] += 1
-            _image_epochs[item.as_pointer()] = _image_counter[0]
+            # Only an update of its content does: a paint stroke, an image undo and
+            # update_tag() tag the whole image. A memfile undo re-syncs the images it
+            # restores (the tags pending when its step was pushed) with no geometry,
+            # shading or transform flag, and Blender keeps their pixels: moving the stamp
+            # then rendered every unit sampling them again for nothing.
+            if update.is_updated_geometry or update.is_updated_shading or update.is_updated_transform:
+                _image_counter[0] += 1
+                _image_epochs[item.as_pointer()] = _image_counter[0]
     if relevant:
         _epoch += 1
         _candidates.add(scene.as_pointer())

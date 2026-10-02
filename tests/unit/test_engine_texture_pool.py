@@ -15,6 +15,7 @@ def device():
     dev = runtime.Device.__new__(runtime.Device)
     dev.pool, dev._leases = OrderedDict(), {}
     dev._pooled_bytes, dev._pooled_ids = 0, set()
+    dev._mip_scratch, dev._mip_scratch_bytes, dev._mip_scratch_owner = {}, 0, None   # trim(0) drops it
     return dev
 
 

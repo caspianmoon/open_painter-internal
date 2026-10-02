@@ -786,9 +786,10 @@ def tick(scene, ts, *, force_repair=False, ignore_gate=False):
             _publish_status(scene, ts, entry)
             return False
     engine = entry.get('engine')
-    if engine is not None:
+    restore = getattr(engine, 'restore_evicted', None)   # what a session holds as its engine may not publish
+    if restore is not None:
         try:
-            engine.restore_evicted()
+            restore()
         except Exception as exc:
             entry.update(error='GPU presentation recovery failed: ' + str(exc), serial=ts.edit_serial)
             _publish_status(scene, ts, entry)

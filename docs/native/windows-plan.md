@@ -56,7 +56,7 @@ evidence.
 | 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
 | 8. Native engine | Done for Vulkan | Vulkan is a default host backend, with collapse, idle arming and fused finals ported. OpenGL is opt-in (below). |
 | 9. Windows on Arm | Not applicable | This laptop is x64. |
-| 10. Full gate | See below | |
+| 10. Full gate | Done, two suites over the cap | Background (178 suites, the 0.12.2 contract, 536 unit tests) and GPU pass on OpenGL and Vulkan; GUI passes except the two 2K production-prop suites, killed at the approved 6 GB cap (below). |
 
 ### Findings that change how to work here
 
@@ -488,6 +488,29 @@ compile under `_M_ARM64`.
 
 `run_tests.py --keep-going`, then `--gui-only` and `--gpu-only`, one after another, never
 overlapping. Background takes about 35 minutes on the Mac. **Done when:** zero failures.
+
+**Result on the laptop (2026-10-02, `e2cea49` plus the GUI test fixes of `e7702ca`)**, with
+the release library and the package built at that commit:
+
+- **Background:** 178 suites, `compatibility_contract.py` against a file built and recorded
+  from `v0.12.2`, and 536 unit tests in Blender. Everything passes on OpenGL and on Vulkan.
+  - `export_padding.py` (4K export) now fits the 4 GB cap: 3.93 GiB.
+  - Four artist-file checks skip: the artist's own `open painter test.blend` is not on
+    this laptop.
+- **GPU:** all six real-window suites pass on both backends, scalar and mask parity at the
+  full 2048 included.
+- **GUI:** every suite passes on both backends except two. `material_painting_ui.py` and
+  `quality_baseline_paint_ui.py` build the production prop at 2048 (three sets of 25
+  layers), and pass the approved 6 GB cap within 13 s on both backends (6.0 and 6.8 GiB,
+  the GPU driver's commit included). As agreed, they are reported, not retried higher.
+  `material_painting_ui.py` passes at 1K (`OP_MATERIAL_UI_RESOLUTION=1024`); the baseline
+  recorder has no size switch, since its baseline is defined at 2048.
+- **Four GUI suites needed Windows fixes** (`e7702ca`):
+  - `edge_map_refresh_ui.py` used a rounded fixture that the Cycles Bevel method reads as
+    faint, and its stall limit assumed a fast bake device;
+  - `shader_preview_ui.py` and `shader_snapshot_ui.py` assumed framebuffer publication;
+  - `launch_audit_ui.py` ran into Blender's `introspect()` failing on Windows paths.
+- `authoring_ui.py`'s exit crash (findings above) did not recur.
 
 ## Reference
 

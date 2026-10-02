@@ -150,25 +150,53 @@ def _interface(tree):
         tree.interface.new_socket(name=name, in_out='OUTPUT', socket_type=kind)
 
 
-def _node(tree, role, kind, location):
-    node = next((n for n in tree.nodes if n.get('role') == role and n.bl_idname == kind), None)
+class _Index:
+    """One pass over a tree's nodes and links, for a sync that looks nodes up by role and links
+    sockets many times: ``socket.links`` walks every link of the tree on each call, so checking
+    each connection that way made a sync quadratic, and every evaluation syncs."""
+
+    def __init__(self, tree):
+        self.tree = tree
+        self._read()
+
+    def _read(self):
+        self.nodes = {}   # (role, bl_idname) -> the first such node, as the scan finds it
+        for node in self.tree.nodes:
+            self.nodes.setdefault((node.get('role'), node.bl_idname), node)
+        self.into = {}    # input socket address -> addresses of the sockets linked into it
+        for link in self.tree.links:
+            self.into.setdefault(link.to_socket.as_pointer(), set()).add(link.from_socket.as_pointer())
+
+
+def _node(index, role, kind, location):
+    node = index.nodes.get((role, kind))
     if node is None:
-        node = tree.nodes.new(kind)
+        node = index.tree.nodes.new(kind)
         node['role'] = role
         node.label = role
+        index.nodes[(role, kind)] = node
     if tuple(node.location) != location:
         node.location = location
     return node
 
 
-def _connect(tree, source, target):
-    if not any(link.from_socket == source for link in target.links):
-        tree.links.new(source, target)
+def _connect(index, source, target):
+    pointer, origin = target.as_pointer(), source.as_pointer()
+    linked = index.into.get(pointer)
+    if linked is None or origin not in linked:
+        index.tree.links.new(source, target)
+        if target.is_multi_input:
+            index.into.setdefault(pointer, set()).add(origin)
+        else:
+            index.into[pointer] = {origin}   # the new link replaced the one the socket had
 
 
-def _drop(tree, predicate):
-    for node in [n for n in tree.nodes if predicate(n)]:
-        tree.nodes.remove(node)
+def _drop(index, predicate):
+    doomed = [n for n in index.tree.nodes if predicate(n)]
+    for node in doomed:
+        index.tree.nodes.remove(node)
+    if doomed:
+        index._read()   # their links went with them
 
 
 def tree_name(ts):
@@ -267,7 +295,8 @@ def ao_factor(ts):
 def sync_tree(tree, ts, overrides=None, images=True):
     from ..constants import DEFAULTS
     _interface(tree)
-    output = _node(tree, 'Output', 'NodeGroupOutput', (1400, 0))
+    found = _Index(tree)
+    output = _node(found, 'Output', 'NodeGroupOutput', (1400, 0))
     if not output.is_active_output:
         output.is_active_output = True
     if ts is None:
@@ -284,20 +313,20 @@ def sync_tree(tree, ts, overrides=None, images=True):
     if getattr(ts, 'udim_tile', 0):
         from ..geometry.udim import tile_origin
         uv_name = ts.udim_source_uv
-        uv = _node(tree, 'UDIM Source UV', 'ShaderNodeUVMap', (-900, 0))
+        uv = _node(found, 'UDIM Source UV', 'ShaderNodeUVMap', (-900, 0))
         if uv.uv_map != uv_name:
             uv.uv_map = uv_name
-        local = _node(tree, 'UDIM Local UV', 'ShaderNodeVectorMath', (-700, 0))
+        local = _node(found, 'UDIM Local UV', 'ShaderNodeVectorMath', (-700, 0))
         if local.operation != 'SUBTRACT':
             local.operation = 'SUBTRACT'
         origin = (*tile_origin(ts.udim_tile), 0.0)
         if tuple(local.inputs[1].default_value) != origin:
             local.inputs[1].default_value = origin
-        _connect(tree, uv.outputs['UV'], local.inputs[0])
+        _connect(found, uv.outputs['UV'], local.inputs[0])
         vector = local.outputs['Vector']
     samples = {}
     for index, channel in enumerate(CHANNELS):
-        texture = _node(tree, channel, 'ShaderNodeTexImage', (-400, 450 - index * 280))
+        texture = _node(found, channel, 'ShaderNodeTexImage', (-400, 450 - index * 280))
         if images:
             image = (overrides[channel] if overrides is not None and channel in overrides
                      else next((o.image for o in ts.outputs if o.channel == channel), None))
@@ -306,34 +335,34 @@ def sync_tree(tree, ts, overrides=None, images=True):
         if texture.interpolation != 'Linear':
             texture.interpolation = 'Linear'
         if vector is not None:
-            _connect(tree, vector, texture.inputs['Vector'])
+            _connect(found, vector, texture.inputs['Vector'])
         if channel in SCALARS:
-            split = _node(tree, channel + ' Value', 'ShaderNodeSeparateColor', (-150, 450 - index * 280))
-            _connect(tree, texture.outputs['Color'], split.inputs['Color'])
+            split = _node(found, channel + ' Value', 'ShaderNodeSeparateColor', (-150, 450 - index * 280))
+            _connect(found, texture.outputs['Color'], split.inputs['Color'])
             samples[channel] = split.outputs['Red']
         else:
             samples[channel] = texture.outputs['Color']
-    display = _display(tree, ts, samples)
-    ao = _node(tree, 'AO Preview', 'ShaderNodeMixRGB', (700, 450))
+    display = _display(found, ts, samples)
+    ao = _node(found, 'AO Preview', 'ShaderNodeMixRGB', (700, 450))
     if ao.blend_type != 'MULTIPLY':
         ao.blend_type = 'MULTIPLY'
     factor = ao_factor(ts)
     if ao.inputs[0].default_value != factor:
         ao.inputs[0].default_value = factor
-    _connect(tree, display['BASE_COLOR'], ao.inputs[1])
-    _connect(tree, samples['AO'], ao.inputs[2])
-    normal_map = _node(tree, 'Normal Map', 'ShaderNodeNormalMap', (450, -250))
+    _connect(found, display['BASE_COLOR'], ao.inputs[1])
+    _connect(found, samples['AO'], ao.inputs[2])
+    normal_map = _node(found, 'Normal Map', 'ShaderNodeNormalMap', (450, -250))
     if normal_map.space != 'TANGENT':
         normal_map.space = 'TANGENT'
     if normal_map.uv_map != uv_name:
         normal_map.uv_map = uv_name
-    bump = _node(tree, 'Height', 'ShaderNodeBump', (700, -250))
+    bump = _node(found, 'Height', 'ShaderNodeBump', (700, -250))
     if bump.inputs['Distance'].default_value != ts.height_distance:
         bump.inputs['Distance'].default_value = ts.height_distance
-    _connect(tree, display['NORMAL'], normal_map.inputs['Color'])
-    _connect(tree, normal_map.outputs['Normal'], bump.inputs['Normal'])
-    _connect(tree, samples['HEIGHT'], bump.inputs['Height'])
-    tangent = _node(tree, 'Tangent', 'ShaderNodeTangent', (700, -600))
+    _connect(found, display['NORMAL'], normal_map.inputs['Color'])
+    _connect(found, normal_map.outputs['Normal'], bump.inputs['Normal'])
+    _connect(found, samples['HEIGHT'], bump.inputs['Height'])
+    tangent = _node(found, 'Tangent', 'ShaderNodeTangent', (700, -600))
     if tangent.direction_type != 'UV_MAP':
         tangent.direction_type = 'UV_MAP'
     if tangent.uv_map != uv_name:
@@ -342,42 +371,42 @@ def sync_tree(tree, ts, overrides=None, images=True):
               'Normal': bump.outputs['Normal'], 'Height': samples['HEIGHT'], 'Emission': samples['EMISSION'],
               'AO': samples['AO'], 'Alpha': samples['OPACITY'], 'Normal Map': samples['NORMAL'],
               'Tangent': tangent.outputs['Tangent']}
-    routes.update(_mask_view(tree, ts, vector))
+    routes.update(_mask_view(found, ts, vector))
     for name, source in routes.items():
-        _connect(tree, source, output.inputs[name])
+        _connect(found, source, output.inputs[name])
 
 
-def _display(tree, ts, samples):
+def _display(found, ts, samples):
     """The channels as the surface shows them: Engine Preview's target adapters, or as sampled."""
     from ..targets import preview
     project = getattr(ts.id_data, 'open_painter', None)
     if project is None or not project.engine_preview:
-        _drop(tree, lambda node: str(node.get('role', '')).startswith(preview.PREFIX))
+        _drop(found, lambda node: str(node.get('role', '')).startswith(preview.PREFIX))
         return samples
-    return preview.adapt(ts, project, samples, lambda role, kind, location: _node(tree, role, kind, location),
-                         lambda source, target: _connect(tree, source, target))
+    return preview.adapt(ts, project, samples, lambda role, kind, location: _node(found, role, kind, location),
+                         lambda source, target: _connect(found, source, target))
 
 
-def _mask_view(tree, ts, vector):
+def _mask_view(found, ts, vector):
     """While View Mask shows a snapshot of ``ts``: the snapshot as the colour of a flat,
     rough, non-metallic surface (the outputs it replaces)."""
     from ..ui import mask_view
     image = mask_view.shown_image(ts)
     if image is None:
-        _drop(tree, lambda node: node.get('role') in MASK_VIEW_ROLES)
+        _drop(found, lambda node: node.get('role') in MASK_VIEW_ROLES)
         return {}
-    texture = _node(tree, MASK_VIEW, 'ShaderNodeTexImage', (700, 900))
+    texture = _node(found, MASK_VIEW, 'ShaderNodeTexImage', (700, 900))
     if texture.image != image:
         texture.image = image
     if vector is not None:
-        _connect(tree, vector, texture.inputs['Vector'])
+        _connect(found, vector, texture.inputs['Vector'])
     values = {}
     for role, value, location in ((MASK_VIEW_ROLES[1], 1.0, (1000, 900)), (MASK_VIEW_ROLES[2], 0.0, (1000, 780))):
-        node = _node(tree, role, 'ShaderNodeValue', location)
+        node = _node(found, role, 'ShaderNodeValue', location)
         if node.outputs[0].default_value != value:
             node.outputs[0].default_value = value
         values[role] = node.outputs[0]
-    geometry = _node(tree, MASK_VIEW_ROLES[3], 'ShaderNodeNewGeometry', (1000, 660))
+    geometry = _node(found, MASK_VIEW_ROLES[3], 'ShaderNodeNewGeometry', (1000, 660))
     return {'Base Color': texture.outputs['Color'], 'Roughness': values[MASK_VIEW_ROLES[1]],
             'Metallic': values[MASK_VIEW_ROLES[2]], 'Normal': geometry.outputs['Normal']}
 

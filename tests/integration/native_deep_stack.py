@@ -17,6 +17,7 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_SECTIONS 1: with OP_DEEP_PHASES, also the sections of patching and native planning
     OP_DEEP_REPEATS  samples per structural edit (default 3)
     OP_DEEP_PAINT_STEPS brush inputs on a paint layer mid-stack (default 24; OP_DEEP_ONLY=paint_middle)
+    OP_DEEP_PAINT_UPLOAD 1: brush inputs as CPU pixel writes (a whole-canvas upload each)
 """
 import cProfile
 import io
@@ -56,6 +57,10 @@ FIRST = os.environ.get('OP_DEEP_FIRST') == '1'   # time the first ticks of each 
 FRAMES = os.environ.get('OP_DEEP_FRAMES', '0' if sys.platform == 'win32' else '1') == '1'
 TRACEMALLOC = os.environ.get('OP_DEEP_TRACEMALLOC') == '1'
 ONLY = set(filter(None, os.environ.get('OP_DEEP_ONLY', '').split(',')))   # case names to run; empty: all
+# Brush inputs as CPU pixel writes, which make every next texture fetch upload the whole canvas
+# (7-11 ms at 1K): what this case measured before 2026-10-03. By default a dab is drawn into the
+# canvas texture, as Blender's brush updates only the region it paints.
+PAINT_UPLOAD = os.environ.get('OP_DEEP_PAINT_UPLOAD') == '1'
 PHASES = os.environ.get('OP_DEEP_PHASES') == '1'   # real-time totals of the main phases of each edit
 phase_totals = {}
 
@@ -483,13 +488,24 @@ def run_paint(scene, ts, steps=int(os.environ.get('OP_DEEP_PAINT_STEPS', '24')))
     data, n = images.pixels(image), image.size[0]
     durations, ticks = [], []
     profiler = cProfile.Profile() if PROFILE else None
+    canvas = None if PAINT_UPLOAD else gpu.types.GPUFrameBuffer(color_slots=gpu.texture.from_image(image))
     try:
         with patch.object(cache, '_modal_painting', lambda s: True):
             for step in range(steps):
                 y, x = (step * 37) % (n - 64), (step * 53) % (n - 64)
-                data[y:y + 64, x:x + 64, :3] = (step % 5) / 5 + .1
-                image.pixels.foreach_set(data.ravel())
-                image.update()
+                value = (step % 5) / 5 + .1
+                if canvas is None:
+                    # Every CPU write makes the next texture fetch upload the whole canvas.
+                    data[y:y + 64, x:x + 64, :3] = value
+                    image.pixels.foreach_set(data.ravel())
+                    image.update()
+                else:
+                    # Blender's brush updates the canvas texture where it paints: a dab on the GPU.
+                    with canvas.bind():
+                        gpu.state.scissor_test_set(True)
+                        gpu.state.scissor_set(x, y, 64, 64)
+                        canvas.clear(color=(value, value, value, 1.0))
+                        gpu.state.scissor_test_set(False)
                 phase_totals.clear()
                 started = perf_counter()
                 if profiler:

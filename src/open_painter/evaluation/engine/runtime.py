@@ -693,7 +693,11 @@ def _has_uniform(shader, name, *, block=False):
 
 
 def _background():
-    import bpy
+    """No window shows the images: a background Blender, or none at all (the bpy-free unit tests)."""
+    try:
+        import bpy
+    except ImportError:
+        return True
     return bpy.app.background
 
 

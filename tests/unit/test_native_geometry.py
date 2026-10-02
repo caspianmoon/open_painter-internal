@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 from open_painter.native_bridge import load_library
-from open_painter.native_bridge.geometry import (Bounds, rasterize, adjacency, frames, interpolate, padding_donors,
+from open_painter.native_bridge.geometry import (Bounds, rasterize, adjacency, frames, interpolate, padding_donors, padding_extend,
                                                  raster_assign, raster_interpolate, raster_ownership)
 from open_painter.geometry import uv_rasterizer
 from open_painter.painting import surface_reach
@@ -71,6 +71,34 @@ class GeometryTests(unittest.TestCase):
                 if n < 50:
                     for a, b in zip(actual, padding.reference_donors(covered, islands, limit)):
                         np.testing.assert_array_equal(a, b)
+
+    def test_padding_extend_is_the_numpy_gather(self):
+        from open_painter.export import padding
+        from open_painter.native_bridge.core import NativeError
+        rng = np.random.default_rng(6141)
+        for n, limit, channels in ((1, 3, 4), (37, 4, 1), (96, 16, 3), (128, 'FILL', 4), (257, 64, 2)):
+            covered = rng.random((n, n)) < .03
+            islands = np.where(covered, rng.integers(0, 6, (n, n)), -1).astype(np.int32)
+            donor, _ = padding.nearest_donors(covered, islands, limit)
+            values = rng.normal(size=(n, n, channels)).astype(np.float32)
+            with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=None):
+                expected = padding.extend(values, donor)
+            np.testing.assert_array_equal(padding_extend(self.lib, values, donor, np.empty_like(values)), expected)
+            in_place = values.copy()
+            padding_extend(self.lib, in_place, donor, in_place)
+            np.testing.assert_array_equal(in_place, expected)
+            # The exporter's entry point: in place when asked, into a copy otherwise.
+            with patch('open_painter.native_bridge.lifecycle.cpu_library', return_value=self.lib):
+                copied = padding.extend(values, donor)
+                self.assertIsNot(copied, values)
+                np.testing.assert_array_equal(copied, expected)
+                self.assertIs(padding.extend(values, donor, in_place=True), values)
+                np.testing.assert_array_equal(values, expected)
+        # A donor with a donor of its own would read a texel already overwritten in place.
+        chained = np.array([[-1, 0], [1, -1]], np.int32)
+        values = np.zeros((2, 2, 4), np.float32)
+        with self.assertRaises(NativeError):
+            padding_extend(self.lib, values, chained, values)
 
     def test_bounds_exact_queries_and_owned_snapshot(self):
         rng = np.random.default_rng(481)

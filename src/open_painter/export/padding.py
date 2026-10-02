@@ -322,9 +322,17 @@ def reference_donors(covered, island, limit):
     return donor, d2
 
 
-def extend(values, donor):
-    """``values`` (n, n, C) with every texel that has a donor replaced by its donor's value."""
+def extend(values, donor, in_place=False):
+    """``values`` (n, n, C) with every texel that has a donor replaced by its donor's value.
+    ``in_place``: ``values`` may be overwritten (a donor never has a donor of its own), which
+    saves the copy and, natively, every temporary: at 4K a map is 256 MiB."""
     values = np.asarray(values, np.float32)
+    from ..native_bridge.lifecycle import cpu_library
+    lib = cpu_library()
+    if (lib is not None and hasattr(lib, 'op_padding_extend') and values.ndim == 3
+            and values.flags.c_contiguous and donor.dtype == np.int32 and donor.flags.c_contiguous):
+        from ..native_bridge.geometry import padding_extend
+        return padding_extend(lib, values, donor, values if in_place else np.empty_like(values))
     flat = values.reshape(-1, values.shape[-1])
     targets = np.flatnonzero(donor.ravel() >= 0)
     if not len(targets):

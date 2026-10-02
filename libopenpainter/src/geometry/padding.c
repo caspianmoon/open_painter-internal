@@ -1,5 +1,7 @@
 #include "openpainter/op_geometry.h"
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define INF (UINT64_C(1) << 62)
 static uint64_t donor_key(const int32_t *islands, uint32_t size, uint32_t row, uint32_t column,
@@ -110,5 +112,31 @@ op_status_t op_padding_donors(const uint8_t *covered, const int32_t *islands, ui
     free(keys);
     free(nearest);
     free(sources);
+    return OP_OK;
+}
+
+op_status_t op_padding_extend(const float *src, const int32_t *donors, uint64_t count,
+                              uint32_t components, float *dst) {
+    if (!src || !donors || !dst || !count || !components || components > 4 || count > INT32_MAX)
+        return OP_INVALID_ARGUMENT;
+    uintptr_t a = (uintptr_t)src, b = (uintptr_t)dst, bytes = (uintptr_t)(count * components * sizeof(float));
+    if (src != dst && a < b + bytes && b < a + bytes)
+        return OP_INVALID_ARGUMENT;
+    for (uint64_t i = 0; i < count; i++) {
+        int32_t donor = donors[i];
+        if (donor >= 0 && ((uint64_t)donor >= count || donors[donor] >= 0))
+            return OP_VALIDATION_FAILED;
+    }
+    size_t texel = (size_t)components * sizeof(float);
+    if (src == dst) {
+        for (uint64_t i = 0; i < count; i++)
+            if (donors[i] >= 0)
+                memcpy(dst + i * components, src + (uint64_t)donors[i] * components, texel);
+        return OP_OK;
+    }
+    for (uint64_t i = 0; i < count; i++) {
+        uint64_t from = donors[i] >= 0 ? (uint64_t)donors[i] : i;
+        memcpy(dst + i * components, src + from * components, texel);
+    }
     return OP_OK;
 }

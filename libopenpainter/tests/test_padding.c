@@ -13,12 +13,46 @@ static uint32_t below(uint32_t n) {
     return (uint32_t)(state % n);
 }
 
+/* op_padding_extend over these donors, out of place and in place, against the plain gather. */
+static int extension(const int32_t *donors, uint64_t count, uint32_t components) {
+    enum { MAX = 512 };
+    static float src[MAX * MAX * 4], out[MAX * MAX * 4], same[MAX * MAX * 4], expected[MAX * MAX * 4];
+    for (uint64_t i = 0; i < count * components; i++)
+        src[i] = (float)below(1u << 20) / 1024.0f - 512.0f;
+    for (uint64_t i = 0; i < count; i++) {
+        uint64_t from = donors[i] >= 0 ? (uint64_t)donors[i] : i;
+        memcpy(expected + i * components, src + from * components, components * sizeof(float));
+    }
+    memcpy(same, src, count * components * sizeof(float));
+    if (op_padding_extend(src, donors, count, components, out) != OP_OK ||
+        op_padding_extend(same, donors, count, components, same) != OP_OK)
+        return 1;
+    return memcmp(out, expected, count * components * sizeof(float)) ||
+           memcmp(same, expected, count * components * sizeof(float));
+}
+
+static void extension_rejects(void) {
+    float values[16] = {0}, out[16] = {0};
+    int32_t chained[4] = {-1, 0, 1, -1}, outside[4] = {-1, 4, -1, -1}, fine[4] = {-1, 0, -1, 2};
+    assert(op_padding_extend(values, chained, 4, 4, out) == OP_VALIDATION_FAILED);   /* a donor's donor */
+    assert(op_padding_extend(values, outside, 4, 4, out) == OP_VALIDATION_FAILED);
+    assert(op_padding_extend(values, fine, 4, 4, values + 2) == OP_INVALID_ARGUMENT);   /* partial overlap */
+    assert(op_padding_extend(values, fine, 4, 5, out) == OP_INVALID_ARGUMENT);
+    assert(op_padding_extend(NULL, fine, 4, 4, out) == OP_INVALID_ARGUMENT);
+    for (int i = 0; i < 16; i++)
+        values[i] = (float)i;
+    assert(op_padding_extend(values, fine, 4, 4, out) == OP_OK);
+    /* Texel 1 takes texel 0, texel 3 takes texel 2; 0 and 2 keep their own. */
+    assert(out[4] == 0.0f && out[7] == 3.0f && out[12] == 8.0f && out[15] == 11.0f && out[9] == 9.0f);
+}
+
 int main(void) {
     enum { MAX = 512 };
     static uint8_t covered[MAX * MAX];
     static int32_t islands[MAX * MAX], mine[MAX * MAX], theirs[MAX * MAX];
     static int16_t near[MAX * MAX], far[MAX * MAX];
     long long texels = 0;
+    extension_rejects();
     for (int trial = 0; trial < 120; trial++) {
         uint32_t size = 8 + below(MAX - 8), limit = below(65), discs = 1 + below(12);
         memset(covered, 0, (size_t)size * size);
@@ -48,8 +82,12 @@ int main(void) {
             fprintf(stderr, "trial %d (size %u, limit %u): status %d/%d differs\n", trial, size, limit, a, b);
             return 1;
         }
+        if (a == OP_OK && extension(mine, count, 1 + (uint32_t)trial % 4)) {
+            fprintf(stderr, "trial %d (size %u, limit %u): extension differs\n", trial, size, limit);
+            return 1;
+        }
         texels += (long long)count;
     }
-    printf("padding donors match their reference over %lld texels\n", texels);
+    printf("padding donors and extension match their references over %lld texels\n", texels);
     return 0;
 }

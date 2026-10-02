@@ -51,6 +51,20 @@ def interpolate(lib, weights, corners):
     return result
 
 
+def padding_extend(lib, values, donors, out):
+    """``op_padding_extend``: ``out`` takes ``values`` with every texel that has a donor replaced
+    by its donor's components. ``out`` may be ``values`` (in place)."""
+    if (values.dtype != np.float32 or out.dtype != np.float32 or donors.dtype != np.int32
+            or not (values.flags.c_contiguous and out.flags.c_contiguous and donors.flags.c_contiguous)
+            or values.shape != out.shape or values.ndim != 3 or donors.shape != values.shape[:2]):
+        raise ValueError('Expected contiguous float32 (n, n, C) values and int32 (n, n) donors')
+    lib.op_padding_extend.argtypes = [F32, C.POINTER(C.c_int32), C.c_uint64, C.c_uint32, F32]
+    lib.op_padding_extend.restype = C.c_int
+    check(lib.op_padding_extend(values.ctypes.data_as(F32), donors.ctypes.data_as(C.POINTER(C.c_int32)),
+                                donors.size, values.shape[2], out.ctypes.data_as(F32)))
+    return out
+
+
 def padding_donors(lib, covered, islands, limit):
     covered, islands = np.ascontiguousarray(covered, np.uint8), np.ascontiguousarray(islands, np.int32)
     if covered.ndim != 2 or covered.shape[0] != covered.shape[1] or islands.shape != covered.shape:

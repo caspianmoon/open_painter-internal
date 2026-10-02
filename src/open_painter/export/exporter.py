@@ -167,7 +167,9 @@ class _Channels:
         if key not in self.cache:
             value = self.resampled(key)
             if self.donor is not None:
-                value = padding.extend(value, self.donor)
+                # Its unpadded field is not read again, except Height's, which the normal's relief
+                # samples: extend it in place, the others into a copy.
+                value = padding.extend(value, self.donor, in_place=key != "HEIGHT")
             self.cache[key] = value
         return self.cache[key]
 

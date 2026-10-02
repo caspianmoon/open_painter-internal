@@ -61,6 +61,13 @@ void op_geometry_free(void *memory);
  * Scratch storage is bounded to a 16 MiB row band. */
 op_status_t op_padding_donors(const uint8_t *covered, const int32_t *islands, uint32_t size,
                               uint32_t limit, int32_t *donors, int16_t *distance2);
+/* Gutter extension: each texel with a donor (>= 0) takes its donor's `components` floats, every
+ * other texel keeps its own. `dst` may be `src` (in place): a donor is a texel without a donor of
+ * its own, as op_padding_donors gives, so no copied value was overwritten first. Buffers that
+ * overlap otherwise, a donor out of range or one with a donor of its own fail before anything
+ * is written. Copies only: the result is exact. */
+op_status_t op_padding_extend(const float *src, const int32_t *donors, uint64_t count,
+                              uint32_t components, float *dst);
 /* Sorted CSR edge adjacency. Non-manifold edges connect all distinct triangles.
  * Outputs are owned until op_geometry_free; the input snapshot is not retained. */
 op_status_t op_mesh_adjacency(const int64_t *vertices, uint32_t triangles, int64_t **offsets,

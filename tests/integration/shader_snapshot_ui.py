@@ -97,8 +97,16 @@ def edit_native():
         no_bake(observed)
     assert shader_preview.current(bpy.context.scene, ts)
     assert composite_snapshot.stale(ts, snapshot)
-    assert pixels_hash(snapshot) == previous and next(out.revision for out in ts.outputs
-                                                        if out.channel == 'BASE_COLOR') == revision
+    assert next(out.revision for out in ts.outputs if out.channel == 'BASE_COLOR') == revision
+    from open_painter.evaluation.engine import runtime
+    if runtime.device().pixel_publish and snapshot == next(out.image for out in ts.outputs
+                                                           if out.channel == 'BASE_COLOR'):
+        # Through pixels (Vulkan) the one-channel snapshot is the output image, and publishing
+        # the edit writes its pixels: it shows the edit (at half precision), with no CPU
+        # evaluation (the revision above) and still marked stale for an explicit refresh.
+        np.testing.assert_allclose(image_manager.pixels(snapshot)[0, 0, :3], (.7, .15, .08), atol=5e-4)
+    else:
+        assert pixels_hash(snapshot) == previous
     assert area.spaces.active.image == snapshot
     checks.append('shader-edit-leaves-visible-snapshot-explicitly-stale')
     later(refresh_snapshot)

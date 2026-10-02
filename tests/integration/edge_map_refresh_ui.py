@@ -45,6 +45,24 @@ def observed_modal(self, context, event):
 
 jobs.OP_OT_edge_map_refresh.modal = observed_modal
 
+# Each modal step runs one blocking Cycles bake of one reach (curvature_steps); how long
+# that takes is the bake device's speed. Time the bakes so the stall check below can tell
+# a step's own overhead from the bake it runs.
+from open_painter.baking.maps import curvature as curvature_maps
+original_reach = curvature_maps.bake_curvature_reach
+state['reach_bake_ms'] = []
+
+
+def timed_reach(*args, **kwargs):
+    started = time.perf_counter()
+    try:
+        return original_reach(*args, **kwargs)
+    finally:
+        state['reach_bake_ms'].append(round((time.perf_counter() - started) * 1000, 1))
+
+
+curvature_maps.bake_curvature_reach = timed_reach
+
 
 def finish(status):
     report = dict(status=status, blender=bpy.app.version_string, elapsed_s=round(time.monotonic() - state['started'], 2),
@@ -62,11 +80,11 @@ def setup():
     bpy.context.preferences.view.show_splash = False
     scene = bpy.context.scene
     cube = scene.objects['Cube']
-    # Rounded rims register as curvature; the subdivision makes the bake take
-    # long enough to need many cooperative steps.
-    bevel = cube.modifiers.new('rims', 'BEVEL')
-    bevel.width, bevel.segments = .15, 6
+    # Hard edges register as curvature in the Cycles Bevel bake (wide rounded rims read
+    # faint at every reach: edge_map_set.py). Simple subdivision keeps them hard while
+    # making the bake take long enough to need many cooperative steps.
     dense = cube.modifiers.new('dense', 'SUBSURF')
+    dense.subdivision_type = 'SIMPLE'
     dense.levels = dense.render_levels = 3
     ts = sets.create(scene, 'Edge map refresh regression', 1024)
     sets.assign(scene, ts, cube)
@@ -137,7 +155,11 @@ def poll():
             assert state['timer_events'] >= 3, state['timer_events']
             assert any('%' in text for text in state['statuses']), state['statuses']
             assert 'Edge maps rebaked' in state['statuses'][-1], state['statuses'][-1]
-            assert state['longest_modal_ms'] < 1500, state['longest_modal_ms']
+            # No step stalls the event loop beyond the one reach bake it runs: 1.5 s on top of
+            # the longest bake (a factory-settings Blender bakes on the CPU, seconds per reach
+            # on a laptop; a GPU bake keeps whole steps under a second).
+            assert len(state['reach_bake_ms']) == 4, state['reach_bake_ms']
+            assert state['longest_modal_ms'] < max(state['reach_bake_ms']) + 1500, state
             assert state['queue_ms'] < 3000, state['queue_ms']
             return finish('PASS')
     except Exception:

@@ -41,6 +41,25 @@ state = dict(area=None, ids=None, checks=[], drawn={"inspector": [], "layers": [
              tmp=tempfile.mkdtemp(prefix="op-audit-"))
 
 
+if os.name == "nt":
+    # UILayout.introspect() evaluates the drawn text unescaped, so a Windows path such as
+    # C:\Users\... ("\U") raises SyntaxError and the panel cannot be read. The test shows the
+    # export folder with forward slashes (Windows accepts them); the plan itself is unchanged.
+    class _ShownPosix(type(Path())):
+        def __str__(self):
+            return super().__str__().replace(chr(92), "/")
+
+    _current_plan = export_view.current_plan
+
+    def _plan_shown_posix(context):
+        plan = _current_plan(context)
+        if plan is not None and plan.directory is not None:
+            plan.directory = _ShownPosix(plan.directory)
+        return plan
+
+    export_view.current_plan = _plan_shown_posix
+
+
 def observe(cls, key):
     original = cls.draw
 
@@ -137,7 +156,8 @@ def setup():
         ts = body()
         ts.preview_backend = "LIVE"
         area.spaces.active.shading.type = "MATERIAL"
-        bpy.context.scene.open_painter.export_directory = str(Path(state["tmp"]) / "export")
+        # Forward slashes keep the drawn folder field introspectable on Windows (see _ShownPosix).
+        bpy.context.scene.open_painter.export_directory = (Path(state["tmp"]) / "export").as_posix()
     later(workflow_a, 2.0)
 
 

@@ -232,6 +232,20 @@ def calibration_move_again():
     later(calibration_check, .15)
 
 
+def render_edit():
+    """The engine renders an RNA edit. Through pixels (Vulkan) a tick publishes within a time
+    budget, so the edit may take a few ticks to land in every channel; framebuffer backends
+    must finish in one."""
+    from open_painter.evaluation.engine import runtime
+    shader_preview.tick(bpy.context.scene, ts)
+    if runtime.device().pixel_publish:
+        for _ in range(100):
+            if shader_preview.current(bpy.context.scene, ts):
+                break
+            shader_preview.tick(bpy.context.scene, ts)
+    assert shader_preview.current(bpy.context.scene, ts)
+
+
 def calibration_check():
     global attempt, drag_step, phase, baseline_history, baseline_start
     value = float(controlled().black)
@@ -245,8 +259,7 @@ def calibration_check():
     # Calibrate Blender's actual numeric drag sensitivity, not an assumed scale.
     drag_step = max(4, min(30, int(.075 * 40 / abs(value - calibration_before))))
     controlled().black = .3
-    shader_preview.tick(bpy.context.scene, ts)   # the engine renders the edit
-    assert shader_preview.current(bpy.context.scene, ts)
+    render_edit()
     phase = "BASELINE"
     baseline_history = []
     baseline_start = time.monotonic()
@@ -412,8 +425,7 @@ def await_frame():
     phase = "RESTORE"
     # Restoration is an RNA edit; the six measured updates above used only mouse events.
     controlled().black = .3
-    shader_preview.tick(bpy.context.scene, ts)   # the engine renders the edit
-    assert shader_preview.current(bpy.context.scene, ts)
+    render_edit()
     restoration_start = time.monotonic()
     later(await_restoration, .1)
 

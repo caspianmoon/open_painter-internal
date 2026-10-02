@@ -860,6 +860,14 @@ That left compiling every unit's tree again, about 0.45 s.
   moves its epoch. Restarting the epochs only made every unit sampling a detail
   image render again. An image outside the depsgraph never had an epoch to
   restart.
+  - A memfile undo still reported the images whose tags were pending when its
+    target step was pushed (the detail images a smart material loaded, say):
+    a re-sync with no geometry, shading or transform flag, which moved their
+    epochs all the same. Since `869a2ce` only a flagged update moves an epoch.
+    An image undo's `DEG_id_tag_update(&image->id, 0)` sets all three, as
+    `update_tag()` and a colour space change do. On the Windows laptop (40
+    layers at 1K) the first undo went from 284–316 to 218–222 ms and the second
+    from 131–154 to 90–92 ms (`windows-plan.md`).
 - **Collapse.** The undo now reaches the engine as the units it changed, 4 for
   a numeric undo of one leaf. Suffix collapse applies as it does to any edit.
   After the first undo, an undo renders 28 units.

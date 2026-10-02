@@ -56,7 +56,7 @@ evidence.
 | 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
 | 8. Native engine | Done | Vulkan, and on Windows OpenGL, are default host backends, with collapse, idle arming and fused finals ported (OpenGL since `6ae821b`: "Undo and publication in place"). |
 | 9. Windows on Arm | Not applicable | This laptop is x64. |
-| 10. Full gate | Done, one suite over the cap | At `6ae821b`: background (180 suites, the 0.12.2 contract, 539 unit tests), GPU and GUI pass on OpenGL and Vulkan, except `quality_baseline_paint_ui.py` at 2K, killed at the approved 6 GB cap (6.38 and 6.02 GiB; below). |
+| 10. Full gate | Done, one suite over the cap | At `869a2ce`: background (180 suites, the 0.12.2 contract, 542 unit tests), GPU and GUI pass on OpenGL and Vulkan, except `quality_baseline_paint_ui.py` at 2K, killed at the approved 6 GB cap (6.30 and 6.09 GiB; below). |
 
 ### Findings that change how to work here
 
@@ -222,7 +222,8 @@ after an undo and needs about 0.45 GiB less. Vulkan and OpenGL therefore publish
 | Peak commit | 3.17 GiB | 2.72 GiB |
 
 Undo on this route was 174–190 ms in the morning (`85cba57`) and is now 84–125 ms. The
-first undo after a build takes 280–320 ms: see "What remains".
+first undo after a build took 280–320 ms, and 218–222 ms since `869a2ce` (see "What
+remains").
 
 Also measured:
 - **The Python scheduler** (OpenGL's default before `6ae821b`) draws through the binding's C
@@ -241,17 +242,34 @@ What remains, by measured share:
   handler 2.3 ms, the rebuild 45–52 ms (compiling with adoption, the plan, value reads) and
   the evaluation 10–13 ms. Nothing is allocated: the earlier churn of about 120 textures
   per undo was the revisions' staged mip chains.
-- **The first undo after a build, 280–320 ms.** The memfile restore re-tags the images
-  whose tags were still pending when its target step was pushed (Blender's
-  `direct_link_id_restore_recalc`): here the detail images a smart material loaded, whose
-  colour space the loader sets. Their updates carry no geometry, shading or transform flag,
-  but `on_depsgraph` moves their epochs, so the 66 units that sample them render again
-  although no pixel changed. In a window the depsgraph evaluates an operator's tags before
-  the next tick, so this needs an undo back to a step pushed by such an operator. The same
-  tags made the benchmark's cold build render those units twice (146 ms): background
-  Blender evaluates them only when the engine reads geometry, mid-tick. Ignoring flagless
-  image updates would avoid both, but Blender's image (paint) undo also signals through the
-  epochs; until its flags are measured in a window, the epochs stay as they are.
+- **The first undo after a build, 280–320 ms, now 218–222 ms** (`869a2ce`). The memfile
+  restore re-tags the images whose tags were still pending when its target step was pushed
+  (Blender's `direct_link_id_restore_recalc`): here the detail images a smart material
+  loaded, whose colour space the loader sets. Those updates carry no geometry, shading or
+  transform flag, and Blender keeps the images' pixels, but `on_depsgraph` moved their
+  epochs: the 66 units sampling them rendered again, and the second undo rendered 92 units
+  with collapse unarmed.
+  - An image update now moves the epoch only with one of those flags. Blender's image
+    (paint) undo restores its tiles and then calls `DEG_id_tag_update(&image->id, 0)`, the
+    tag `update_tag()` also makes, which sets all three (measured); a colour space change
+    sets them too. `pixels.foreach_set`, `update()` and `reload()` report no depsgraph
+    update at all, and Open Painter's own strokes move `open_painter_pixel_revision`.
+  - The second undo now takes 90–92 ms (was 131–154). What remains of the first is
+    Blender rebuilding the GPU textures of the images it read again (about 60 ms): the
+    benchmark's setup tags are pending at its first step, which a window session's
+    operators rarely leave.
+  - The same tags made the benchmark's cold build render those units twice (146 ms):
+    background Blender evaluates them only when the engine reads geometry, mid-tick. In a
+    window the depsgraph evaluates an operator's tags before the next tick.
+- **Painting at 2K and above.** A brush input takes 12.8–13.6 ms at 1K (40 layers, both
+  backends), most of it GPU work over whole textures: the painted layer's channels, the
+  collapsed suffix above them and the publication. At 2K that work is four times larger.
+  Rendering only the stroke's bounds through the stack (region-limited evaluation) is the
+  main remaining lever. It changes how results are cached (a result updated inside a
+  rectangle rather than replaced), so it is a design change, not a tuning one.
+- **A mask edit mid-stack, 26–33 ms.** It renders 68 units against 16 for an opacity edit:
+  layers above it carry masks that read the composite height below them ("Dirt in folds",
+  "Cavity deposits"), so they really change and break the runs suffix collapse would merge.
 - **Cold build, 1.5–1.8 s.** About 0.45 s of it is decoding the thirteen bundled detail
   PNGs that the stack uses (1254 × 1254, about 37 ms each). They are noisy, so they hardly
   compress: an uncompressed lossless copy would load almost free at a similar size. That
@@ -740,6 +758,15 @@ release library and the package rebuilt at that commit and `material_painting_ui
   of the viewport's first Material Preview draw, while the engine's textures grow by 64 MiB.
   At 2K the 0.4 GiB OpenGL lacks would have to come out of the result budgets that make
   edits fast, so the suite stays reported, not tuned to the cap.
+
+**Again at `869a2ce`** (image epochs move for content updates only; the package rebuilt at
+that commit), with the same result on both backends: background (180 suites, the 0.12.2
+contract, 542 unit tests with `test_image_epochs.py`), GPU and the window checks after the
+GUI loop pass; GUI passes 37 of 38, `quality_baseline_paint_ui.py` again killed under the
+6 GB cap (OpenGL 6.30 GiB, Vulkan 6.09 GiB). A false alarm stopped the first OpenGL
+run after 154 suites, all passing (`master_controls.py` takes about 940 s on every backend:
+its CPU reference evaluations, forced, of fifty-four materials); the run resumed at the
+next suite (`--start-at`).
 
 ## Reference
 

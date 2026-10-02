@@ -36,9 +36,18 @@ uses the portable block function (about 250 MB/s, three times Blender's hashlib)
 The SSE kernels mirror their NEON counterparts operation for operation:
 
 - **Pixels:** quantize, including the sRGB curve with its tie guard, normal encoding,
-  relief and PNG filters.
+  relief, PNG filters and compact readback expansion (R, RG or gray R to RGBA).
 - **Brush coverage.**
-- **UV rasterize.**
+- **UV rasterize**, and the raster kernels built on its coverage loop: interpolated maps
+  (`op_uv_raster_interpolate`), assigned maps (`op_uv_raster_assign`) and padding ownership
+  (`op_uv_raster_ownership`).
+
+Compact expansion only moves bits (unpack, `movlhps`/`movhlps`, shuffle and blend; NEON
+`vst4`). On x86-64 an aligned result of 1 MiB or more is written with non-temporal stores
+(`movntps`), which skip reading each destination line first: half the time at 1K. MSVC
+compiles the loops to the instruction sequence hand-written assembly would use, with no
+further room in a store-bound loop. Hand-written assembly would add three versions to keep
+exact (MASM, GAS, ARM64) for no speed, so the kernels stay in intrinsics.
 
 Where SSE has no matching instruction, the replacement is exact:
 
@@ -62,6 +71,11 @@ the same guard band. Under Rosetta, 2K RGBA, SSE against scalar: sRGB quantize 2
   names. It then compares every vector path, NEON or SSE, with the scalar one bit for bit:
   normal encoding (zero-length pixels included), relief (chart borders, cliffs) and PNG
   filters (8 and 16 bits, flipped strides).
+- On the Windows laptop the NEON paths of `pixels.c` and `geometry.c` were also built with
+  SIMDe 0.8.2's emulated NEON intrinsics on x86-64 (`neon_pixels.c` includes `pixels.c`
+  with `OP_SIMD_NEON` and SIMDe's aliases): `test_pixels_paths`, `test_pixels` and
+  `test_rasterize` pass against them, and mutations of the new NEON loops fail them. That
+  checks the arithmetic of a NEON change before a Mac runs it natively.
 - Portability fixes for Windows:
   - **Atomics:** the global serials no longer use `<stdatomic.h>`, which MSVC compiles only
     behind `/experimental:c11atomics`. `src/core/serial.h` uses `_InterlockedExchangeAdd64`
@@ -138,5 +152,14 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
   - Warm edits are about 1.4–3.3 times faster than the legacy scheduler, structural edits up
     to 3.5 times, and the cold build about 1.8 times. Every workflow and engine suite passes
     except the 4K one.
+  - Scalar channels publish one component (R16F, or R32F for Height): a quarter of the
+    read-back bytes and of the half-to-float conversion, expanded to (v, v, v, 1) by
+    `op_expand_compact`. At 1K a scalar channel reads back in 0.98 ms instead of 3.45, and
+    edits that publish scalar channels got 10–24% faster.
+- **Native raster kernels.** projection.geometry() (world positions and normals for
+  triplanar fills, projections and the engine's geometry textures) takes 34 ms instead of
+  260 at 1K, bit-identical; the padding ownership raster 8 instead of 110 ms. Without their
+  per-texel sample arrays the 4K export fits the 4 GB cap (`export_padding.py`, 3.94 GiB on
+  Vulkan).
   - Pixel publication has no revision transactions: channels can land a tick apart.
 - **Defaults.** `host_backends()` is Metal and Vulkan; OpenGL is opt-in.

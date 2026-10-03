@@ -813,7 +813,10 @@ A memfile undo reallocates every struct of the restored layer store: layers,
 channels, effects, masks. The Palette and Scene IDs keep their addresses, but
 Blender invalidates the Python wrappers of every ID, images in headless nodes
 included. The undo handler therefore drops every session and the next tick builds
-the graph again. At 200 layers that took 2.9–3.3 s:
+the graph again. Other undo steps (a brush stroke's image step, sculpt, edit mode) restore
+pixels or a mesh in place and keep the Main, which a memfile step replaces: the handler
+keeps the sessions then (`cache._restored_datablocks`), and the restored pixels render like
+a stroke. At 200 layers the rebuild took 2.9–3.3 s:
 
 - **Collector.** The rebuild's ~600,000 new objects set off full collections over
   a growing heap (0.6–2 s). `gc_policy.paused()` disables automatic collection

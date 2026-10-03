@@ -696,17 +696,44 @@ def on_load(_):
     _relearn(forget_corrections=True)
 
 
+_undo_main = None   # the address of bpy.data before an undo or redo (on_undo_pre)
+
+
+@persistent
+def on_undo_pre(_):
+    global _undo_main
+    _undo_main = bpy.data.as_pointer()
+
+
+def _restored_datablocks():
+    """Whether the undo or redo that just ran restored datablocks. A memfile step reads the file
+    into a new Main (``bpy.data``, while the old one still exists); an image paint, sculpt or
+    edit-mode step restores pixels or a mesh in place and keeps it, with every struct and
+    Python wrapper the sessions hold."""
+    global _undo_main
+    before, _undo_main = _undo_main, None
+    return before != bpy.data.as_pointer()   # None: no pre handler ran
+
+
 @persistent
 def on_undo(_):
-    # Memfile undo restores properties without their update callbacks: every
-    # session, job and dirty flag starts over. Correction records stay (see
-    # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
     from .shader_resources import retire_unloaded_leaves, freeze_new_leaves
     retire_unloaded_leaves()   # a leaf re-read from the memfile lost its pixels: never ready
     # No new leaf datablock may be bound into the persisted material tree until the next authored
     # gesture: one created in this between-undo-steps window is freed by a later undo while the
     # tree still points at it (the open 0.13 crash; docs/quality-stability-0.13.md, S2).
     freeze_new_leaves(True)
+    from . import shader_preview
+    if not _restored_datablocks() and all(shader_preview.requested(ts) for scene in bpy.data.scenes
+                                          if hasattr(scene, "open_painter")
+                                          for ts in scene.open_painter.texture_sets):
+        # Nothing was restored but pixels or a mesh, which report their depsgraph updates like an
+        # edit: the sessions keep their graphs and render what reads them (an undone brush stroke
+        # cost a whole rebuild). A CPU-mode set starts over, as after any undo.
+        return
+    # Memfile undo restores properties without their update callbacks: every
+    # session, job and dirty flag starts over. Correction records stay (see
+    # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
     _relearn(forget_corrections=False)
 
 
@@ -848,6 +875,8 @@ def register():
     bpy.app.handlers.depsgraph_update_post.append(dependencies.on_depsgraph)
     bpy.app.handlers.frame_change_post.append(dependencies.on_frame)
     bpy.app.handlers.load_post.append(on_load)
+    bpy.app.handlers.undo_pre.append(on_undo_pre)
+    bpy.app.handlers.redo_pre.append(on_undo_pre)
     bpy.app.handlers.undo_post.append(on_undo)
     bpy.app.handlers.redo_post.append(on_undo)
     bpy.app.handlers.save_pre.append(on_save)
@@ -898,6 +927,8 @@ def unregister():
         (bpy.app.handlers.depsgraph_update_post, dependencies.on_depsgraph),
         (bpy.app.handlers.frame_change_post, dependencies.on_frame),
         (bpy.app.handlers.load_post, on_load),
+        (bpy.app.handlers.undo_pre, on_undo_pre),
+        (bpy.app.handlers.redo_pre, on_undo_pre),
         (bpy.app.handlers.undo_post, on_undo),
         (bpy.app.handlers.redo_post, on_undo),
         (bpy.app.handlers.save_pre, on_save),

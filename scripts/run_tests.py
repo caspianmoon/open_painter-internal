@@ -139,6 +139,7 @@ if args.gui or args.gui_only:
         ("multi_set_paint_ui.py", "multi-set-paint-ui.json"),
         ("udim_paint_ui.py", "udim-paint-ui.json"),
         ("paint_freeze_ui.py", "paint-freeze-ui.json"),
+        ("paint_undo_ui.py", "paint-undo-ui.json"),
         ("bake_correction_ui.py", "bake-correction-ui.json"),
         ("material_director_ui.py", "material-director-ui.json"),
         ("material_aging_ui.py", "material-aging-ui.json"),
@@ -182,6 +183,7 @@ if args.gui or args.gui_only:
                 "vector_brush_ui.py": {"OP_VECTOR_BRUSH_UI_REPORT": str(result_path)},
                 "multi_set_paint_ui.py": {"OP_MULTI_SET_PAINT_UI_REPORT": str(result_path)},
                 "paint_freeze_ui.py": {"OP_PAINT_FREEZE_UI_REPORT": str(result_path)},
+                "paint_undo_ui.py": {"OP_PAINT_UNDO_UI_REPORT": str(result_path)},
                 "bake_correction_ui.py": {"OP_BAKE_CORRECTION_UI_REPORT": str(result_path)},
                 "artist_file_ui.py": {"OP_ARTIST_FILE_UI_REPORT": str(result_path)},
                 "inspector_ui.py": {"OP_INSPECTOR_UI_REPORT": str(result_path)},
@@ -197,7 +199,7 @@ if args.gui or args.gui_only:
         )
         result = result_path.read_text(encoding="utf-8")
         report = json.loads(result)
-        if filename in {"authoring_ui.py", "bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "graph_templates_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "udim_paint_ui.py", "paint_freeze_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_target_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
+        if filename in {"authoring_ui.py", "bake_queue_ui.py", "edge_map_refresh_ui.py", "layer_drag_ui.py", "graph_view_ui.py", "graph_templates_ui.py", "module_ui.py", "live_fields_ui.py", "vector_brush_ui.py", "multi_set_paint_ui.py", "udim_paint_ui.py", "paint_freeze_ui.py", "paint_undo_ui.py", "bake_correction_ui.py", "artist_file_ui.py", "material_painting_ui.py", "material_target_ui.py", "material_session_ui.py", "quality_baseline_paint_ui.py"}:
             if report.get("status") != "PASS":
                 raise RuntimeError(result)
             continue

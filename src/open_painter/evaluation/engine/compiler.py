@@ -952,6 +952,7 @@ def _dependency_roles(unit):
     count = len(tree.nodes)
     cached = getattr(unit, '_roles', None)
     if cached is None or cached[0] is not tree or cached[1] != count:
-        roles = tuple(role for role in (node.get('op_dependency') for node in tree.nodes) if role)
+        # Each distinct role once: a unit's nodes mostly share a few, and every use is a set.
+        roles = tuple(dict.fromkeys(role for role in (node.get('op_dependency') for node in tree.nodes) if role))
         cached = unit._roles = (tree, count, roles)
     return cached[2]

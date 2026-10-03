@@ -10,6 +10,7 @@ delivery and scanout are excluded. Environment:
     OP_DEEP_RES      texture resolution (default 2048)
     OP_DEEP_SAMPLES  timed edits per case (default 24)
     OP_DEEP_PROFILE  1: add a cProfile summary of each case's Python time
+    OP_DEEP_PROFILE_STEADY 1: leave the first undo out of the undo profiles
     OP_DEEP_FRAMES   0: skip the window-manager frame emulation (see Frame; off on Windows)
     OP_DEEP_STRUCTURAL 0: skip structural edits (add, remove, blend mode, visibility,
                      smart material), each timed from the edit until the set is current
@@ -50,6 +51,7 @@ TARGET = int(os.environ.get('OP_DEEP_LAYERS', '200'))
 RES = int(os.environ.get('OP_DEEP_RES', '2048'))
 SAMPLES = int(os.environ.get('OP_DEEP_SAMPLES', '24'))
 PROFILE = os.environ.get('OP_DEEP_PROFILE') == '1'
+PROFILE_STEADY = os.environ.get('OP_DEEP_PROFILE_STEADY') == '1'   # undo profiles skip the first undo
 STRUCTURAL = os.environ.get('OP_DEEP_STRUCTURAL', '1') == '1'
 TRACE = os.environ.get('OP_DEEP_TRACE') == '1'
 FIRST = os.environ.get('OP_DEEP_FIRST') == '1'   # time the first ticks of each drag
@@ -433,13 +435,17 @@ def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
             if counted:
                 counted.__enter__()
             started = perf_counter()
-            if profiler:
+            # The session's first memfile step was written whole, so undoing to it re-reads every
+            # ID (Blender rebuilds every image's GPU texture): OP_DEEP_PROFILE_STEADY=1 profiles
+            # the later undos only.
+            profiled = profiler and (index or not PROFILE_STEADY)
+            if profiled:
                 profiler.enable()
             with Frame():
                 bpy.ops.ed.undo()
             resolve()
             elapsed, count = settle(current['scene'], current['ts'], started)
-            if profiler:
+            if profiled:
                 profiler.disable()
             durations.append(elapsed)
             if PHASES:

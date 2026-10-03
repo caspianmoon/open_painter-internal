@@ -353,6 +353,21 @@ and the next tick rendered every unit sampling them again.
 - `native_deep_stack.py` ticks as the scheduler does (`tick`), so its cold build no longer
   renders those units twice either.
 
+**An undone brush stroke keeps the session.** Blender's brush pushes an image undo step per
+stroke. Undoing one restores the canvas's pixels in place, but the undo handler started every
+session over as after a memfile undo, so each Ctrl Z while painting rebuilt the whole graph:
+33–42 ms of a 59–78 ms undo on 40 layers at 1K (a window probe, Vulkan).
+- `cache.on_undo` now starts the sessions over only when the step restored datablocks. A
+  memfile step reads the file into a new Main, so `bpy.data.as_pointer()` changes between
+  `undo_pre` and `undo_post`. An image, sculpt or edit-mode step keeps it, along with every
+  struct and Python wrapper the sessions hold. The pixels it restored report their depsgraph
+  update like a stroke, and the session renders what reads them. A set evaluated on the CPU
+  still starts over after any undo.
+- An undo or redo of a stroke now reaches current in 13–19 ms on Vulkan (its evaluation
+  1.3–1.5 ms) and 17–25 ms on OpenGL (4.3–5.6 ms; a first one took 93 ms), and publishes
+  exactly the result from before the stroke. `paint_undo_ui.py` checks both backends; the undo
+  that crosses back past the first stroke restores a memfile step and still starts over.
+
 **The paint benchmark paints as Blender's brush does** (`0f3d519`). Its brush inputs were CPU
 pixel writes (`Image.pixels.foreach_set` and `update()`), which make the next texture fetch
 upload the whole canvas: 7.5 ms on Vulkan and 11 ms on OpenGL at 1K, half of the 13 ms it

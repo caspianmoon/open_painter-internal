@@ -920,6 +920,8 @@ class NativeGraph:
                 engine._in_use[target] -= 1
                 if target != key and target[0] == 'CHANNEL':
                     engine._settle(target, size)
+                elif target != key and target[0] == 'FIELD':
+                    engine._drop_copy(target, size)
 
         self.dispatching = True
         try:

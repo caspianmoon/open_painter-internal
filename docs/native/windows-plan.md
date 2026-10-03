@@ -256,13 +256,17 @@ What remains, by measured share:
     update at all, and Open Painter's own strokes move `open_painter_pixel_revision`.
   - The second undo now takes 90–92 ms (was 131–154). What remains of the first is
     Blender rebuilding the GPU textures of the images it read again (about 60 ms): the
-    benchmark's setup tags are pending at its first step, which a window session's
-    operators rarely leave.
+    benchmark's setup tags are pending at its first step. A window session's operators
+    leave such tags too: an apply loads images and sets their colour space just before
+    Blender pushes its step (corrected below, "Pending depsgraph updates", 2026-10-03).
   - The same tags made the benchmark's cold build render those units twice (146 ms):
-    background Blender evaluates them only when the engine reads geometry, mid-tick. In a
-    window the depsgraph evaluates an operator's tags before the next tick.
-- **Painting at 2K and above.** A brush input takes 12.8–13.6 ms at 1K (40 layers, both
-  backends), most of it GPU work over whole textures: the painted layer's channels, the
+    background Blender evaluates them only when the engine reads geometry, mid-tick. A
+    window evaluates them only after the timers, so its tick sampled them first too (same
+    section).
+- **Painting at 2K and above.** A brush input took 12.8–13.6 ms at 1K (40 layers, both
+  backends). Half of that was the benchmark's whole-canvas upload, which Blender's brush
+  never pays: 4.0–4.3 ms since `0f3d519` (2026-10-03, below). The rest is mostly GPU work
+  over whole textures: the painted layer's channels, the
   collapsed suffix above them and the publication. At 2K that work is four times larger.
   Rendering only the stroke's bounds through the stack (region-limited evaluation) is the
   main remaining lever. It changes how results are cached (a result updated inside a
@@ -316,6 +320,86 @@ The evening's other changes also apply to the Python scheduler wherever it still
 - undo went from 311–377 ms to 120–127 ms;
 - adding a fill on top went from 68–69 ms to 28–30 ms;
 - removing a layer went from 64 ms to 23–25 ms.
+
+### Pending depsgraph updates, detail fields and the node sync (2026-10-03)
+
+**Pending depsgraph updates are reported before the engine samples.** An image the stack
+starts to reference (a smart material's detail, a picked texture) joins the depsgraph on its
+next evaluation. That evaluation reports it as updated (a new node, and the colour space the
+loader sets), which moves its epoch. Blender runs it at the end of the event loop's
+iteration, after the timers. So the tick that followed an apply sampled the new images first,
+and the next tick rendered every unit sampling them again.
+- The scheduler's tick now evaluates pending updates first (`dependencies.report_updates`).
+  With nothing pending it costs nothing, and it leaves a running render or bake job alone.
+- An add-on operator that pushes an undo step does the same before Blender pushes it
+  (`SafeOperator`). Otherwise the step stores the tags still pending, and an undo to it sets
+  them again.
+- A window probe on 45 layers at 1K. Simulated key presses run an apply, an opacity edit
+  and Ctrl Z, as a click would. Three applies each load one new detail image:
+
+| | Before | After |
+| --- | ---: | ---: |
+| Apply: evaluations, Vulkan | 2 each | 1 each |
+| Apply: last result, Vulkan | 143–145 ms | 91–136 ms |
+| Undo after it: until current, Vulkan | 187–240 ms | 119–152 ms |
+| Apply: evaluations, OpenGL | 2 each | 1 each |
+| Undo after it: until current, OpenGL | 256–286 ms | 154–244 ms |
+
+  The undo times are from Blender's `undo_post` (its memfile restore, 30–50 ms, comes
+  before). Before, the second evaluation after an undo rendered 224–296 channel units; with
+  the tick's report alone, the undo took 141–173 ms on Vulkan. Vulkan ran three probes
+  each way; two samples where the desktop stalled (a 138 ms restore, a 542 ms apply) are
+  left out.
+- `native_deep_stack.py` ticks as the scheduler does (`tick`), so its cold build no longer
+  renders those units twice either.
+
+**The paint benchmark paints as Blender's brush does** (`0f3d519`). Its brush inputs were CPU
+pixel writes (`Image.pixels.foreach_set` and `update()`), which make the next texture fetch
+upload the whole canvas: 7.5 ms on Vulkan and 11 ms on OpenGL at 1K, half of the 13 ms it
+reported per input. Blender's brush updates only the tiles it paints. A dab is now drawn into
+the canvas texture; `OP_DEEP_PAINT_UPLOAD=1` restores the CPU writes. With the node sync
+below, a brush input takes 4.0–4.2 ms on Vulkan (5.3 before) and 4.2–4.3 ms on OpenGL (6.7
+before), 40 layers at 1K.
+
+**The texture set node syncs in one pass over its tree** (`0f3d519`). Every evaluation syncs
+it. It looked each role's node up with a scan of the tree, and checked each connection
+through `socket.links`, which Blender computes by walking every link of the tree: about 1.5 ms
+of a 1K paint tick. An index of the tree's nodes and links is now read once per sync.
+
+**A fill channel's triplanar image detail is a unit of its own** (a FIELD,
+`shader_graph.DETAIL_FIELDS`). A full render of the deep stack spent about 39 of its 87 ms of GPU
+time (Vulkan, 40 layers at 1K) in the triplanar detail of channel units, about 1.2 ms each:
+three projected image samples per texel, repeated in every pass of the channel and in every
+channel of the layer. The detail is now rendered once into a full-float texture and kept
+while the channel's colour, opacity, blend or masks change.
+- A layer's channels sample the same detail with the same projection, so their fields hold
+  the same texels. The engine renders the first and fills the others by copying its texture
+  (`runtime.FIELD_COPIES`). A copy is released as soon as the channel reading it has drawn.
+  Fields are matched by shader, parameter bits and image identities, never by their
+  programs' uniform revisions, which differ between equal units.
+- Only triplanar details become fields: another projection is one sample, cheaper than a
+  pass of its own. Normal (a source boundary), Material Mapping v1 and procedural details are
+  compiled as before.
+- The published channels are bit-identical with fields on and off, and with copies on and
+  off: every channel of the deep stack on both backends, and `engine_detail_fields.py`.
+- The deep stack has 32 fields (40 layers at 1K; two alternating rounds each way, in ms;
+  the benchmark now ticks as the scheduler does, so its numbers include the depsgraph's
+  evaluation, unlike the tables above). Peak commit is unchanged, 2.5–2.7 GiB.
+
+| Edit | Vulkan, fields | Vulkan, none | OpenGL, fields | OpenGL, none |
+| --- | ---: | ---: | ---: | ---: |
+| Middle mask black | 22.9–25.5 | 29.4–31.6 | 25.9–26.3 | 27.2–33.0 |
+| Bottom leaf roughness | 6.2–6.6 | 7.4–7.5 | 6.6–7.0 | 7.8–8.0 |
+| Bottom folder opacity | 13.8 | 14.8–15.0 | 13.6–13.7 | 13.0–14.0 |
+| Add a fill mid-stack | 20.6–21.7 | 23.5–23.7 | 20.3–20.8 | 19.9–21.0 |
+| Apply smart material | 112 | 120–125 | 120–121 | 106–116 |
+| Undo (structural) | 109–110 | 104 | 114–124 | 105–114 |
+
+  A full render's GPU time went from 87 to 62 ms on Vulkan: 8 fields rendered and 24
+  copied (the profile does not time the copies). Edits that keep a layer's
+  detail gain most. A rebuild handles 32 more units, which costs a few milliseconds where
+  every unit is checked again (undo) and, on OpenGL, in an apply; other cases are within
+  noise.
 
 ### Speed: native kernels where the time went (2026-10-02)
 

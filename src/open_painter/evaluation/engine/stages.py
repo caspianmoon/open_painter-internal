@@ -95,6 +95,8 @@ def label(ts, key):
         return f'{name} {key[2].replace("_", " ").lower()}'
     if kind == 'SRC':
         return f'{name} {key[2].replace("_", " ").lower()} content'
+    if kind == 'FIELD':
+        return f'{name} {key[2].replace("_", " ").lower()} detail'
     if kind == 'GRAPH':
         mask = next((item for item in layer.masks if item.id == key[2]), None) if layer is not None else None
         graph = mask.node_group.name if mask is not None and mask.node_group is not None else '?'

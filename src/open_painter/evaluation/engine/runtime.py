@@ -83,6 +83,10 @@ NATIVE_REVISIONS = True        # all-or-nothing framebuffer commits with GPU rol
 REVISION_BACKENDS = frozenset({'METAL'})
 BINDING_DRAWS = True           # passes through the binding's C draw wherever the library loads
 MIP_LANES = 3                  # channels published in place whose mips share a draw (1 to 3)
+# A FIELD (a channel's image detail, shader_graph.DETAIL_FIELDS) holding what another FIELD already
+# holds (the same shader, parameter values and images: a layer's channels share one detail) is
+# filled by copying that field's texels instead of sampling the detail again.
+FIELD_COPIES = True
 MIP_SCRATCH_SIDE = 2048        # publication keeps its mip scratch up to this side; larger leases it each time
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
@@ -1035,6 +1039,9 @@ class Engine:
         self._chains = None             # the graph chains ``positions`` were derived from
         from .suffix import SuffixCache
         self._suffix = SuffixCache()    # armed affine runs above an edited layer
+        self._field_twins = {}          # FIELD content -> the FIELD whose texture holds it (_copy_field)
+        self._field_contents = {}       # FIELD key -> the content its texture holds
+        self._field_copies = set()      # FIELDs filled by a copy: released once their consumers drew
         device().engines.add(self)
 
     # ---- graph -----------------------------------------------------------------------
@@ -1167,6 +1174,9 @@ class Engine:
                 del self._publication_programs[program_key]
         self._free(key, state, n)
         state.slot = None
+        if key[0] == 'FIELD':
+            self._forget_field(key)
+            self._field_copies.discard(key)
 
     def _free(self, key, state, n):
         if state.textures and n is not None:
@@ -1205,6 +1215,9 @@ class Engine:
             self._native_cache.close()
             self._native_cache = None
         self._suffix.clear()
+        self._field_twins.clear()
+        self._field_contents.clear()
+        self._field_copies.clear()
         self.retained.clear()
         self.keep.clear()
         self.replaced = None
@@ -1439,6 +1452,13 @@ class Engine:
         if (self._native_graph is not None and self._native_graph.dispatching
                 and self._native_graph.current_key != key):
             raise RuntimeError('A native batch dependency lost residency before its consumer')
+        if key[0] == 'FIELD' and FIELD_COPIES:
+            content = self._field_content(state, n, epochs)
+            if self._copy_field(key, state, n, content):
+                state.stamp = stamp
+                state.carried = None
+                self.rendered.append(key)
+                return state.textures   # not retained: _drop_copy releases it once its consumers drew
         program = state.program
         position = self.positions.get(key)
         # Inputs rendered for this draw stay resident until it has drawn: the retention
@@ -1479,6 +1499,12 @@ class Engine:
         state.stamp = stamp
         state.carried = None
         self.rendered.append(key)
+        if key[0] == 'FIELD' and FIELD_COPIES:
+            self._field_copies.discard(key)
+            self._field_holds(key, content)
+        for producer in inputs:
+            if producer[0] == 'FIELD':
+                self._drop_copy(producer, n)
         # What a chain step composed over is not needed once this step has drawn.
         if position:
             for ref in position:
@@ -1487,6 +1513,67 @@ class Engine:
         if key[0] != 'CHANNEL' or self.graph.consumers.get(key):
             self._retain(key, state, n)
         return state.textures
+
+    def _field_content(self, state, n, epochs):
+        """What a FIELD renders: its shader, its parameters' float32 bits and the identities of
+        the images and surface it samples. A native program's own stamp counts its uniform
+        revisions, which differ between units holding equal values; these do not."""
+        programs = tuple(glsl.programs(state.program))
+        samplers = [s for p in programs for s in p.samplers]
+        values = np.asarray([float(socket.default_value) for p in programs for socket in p.params], np.float32)
+        images = tuple((binding(s.node).stamp if binding(s.node) is not None else _image_identity(s.node.image, epochs))
+                       for s in samplers if s.kind == 'image')
+        surface = self._surface() if any(s.kind in GEOMETRY for s in samplers) else None
+        return n, state.shader, values.tobytes(), images, surface
+
+    def _field_holds(self, key, content):
+        """``key``'s texture now holds ``content``: a FIELD of the same content copies it."""
+        self._forget_field(key)
+        self._field_contents[key] = content
+        self._field_twins[content] = key
+
+    def _forget_field(self, key):
+        """``key`` no longer holds what it rendered: it was filled by a copy or retired."""
+        previous = self._field_contents.pop(key, None)
+        if previous is not None and self._field_twins.get(previous) == key:
+            del self._field_twins[previous]
+
+    def _copy_field(self, key, state, n, content):
+        """Fill a FIELD from another FIELD holding the same content: the same shader, parameter
+        values and images (a layer's channels share one detail). True if it was copied; the
+        texels are the other field's, bit for bit (``texelFetch``)."""
+        twin = self._field_twins.get(content)
+        if twin is None or twin == key or self._field_contents.get(twin) != content:
+            return False
+        other = self.states.get(twin)
+        if other is None or other.textures is None or other.stamp is None:
+            return False
+        dev = device()
+        if state.textures is None:
+            state.textures = [dev.texture(n, fmt) for fmt in state.formats]
+        state.stamp = None
+        self._in_use[twin] += 1
+        try:
+            dev.draw(dev.fixed('copy'), state.textures[:1], n, [('op_source', other.textures[0])])
+        finally:
+            self._in_use[twin] -= 1
+        self.stages['passes']['FIELD copy'] += 1
+        metrics.count('engine_field_copies')
+        # The twin stays the holder: a copy is released as soon as its consumers drew.
+        self._forget_field(key)
+        self._field_copies.add(key)
+        return True
+
+    def _drop_copy(self, key, n):
+        """Release a copied FIELD whose consumers drew: another FIELD keeps its texels."""
+        if key not in self._field_copies or self._in_use[key] > 0:
+            return
+        state = self.states.get(key)
+        if state is not None and state.textures:
+            for texture, fmt in zip(state.textures, state.formats):
+                device().release(texture, n, fmt)
+            state.textures = None
+        self._field_copies.discard(key)
 
     def _fused_final(self, channel, n, memo, epochs):
         """Render a disposable final result directly in its publication layout.

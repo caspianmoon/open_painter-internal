@@ -67,6 +67,8 @@ blend IR and C shader generation for all 28 modes; it does not use that CPU slic
 - `tests/integration/engine_pixel_publish.py` — Vulkan pixel path on any backend.
 - `tests/integration/engine_preview.py`, `engine_preview_readback.py` — preview currency.
 - `tests/integration/engine_stages.py`, `engine_state_cache.py` — invalidation/caching.
+- `tests/integration/engine_detail_fields.py` — triplanar detail fields and their copies,
+  bit-identical to the detail compiled into every channel.
 - `tests/integration/engine_uniform_publish.py`, `engine_constant_publish.py`,
   `engine_compact_readback.py`, `engine_fused_publish.py` — publication variants.
 - `tests/integration/stroke_parity.py`, `gpu_parity.py`,

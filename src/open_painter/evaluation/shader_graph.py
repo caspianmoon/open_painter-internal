@@ -434,6 +434,11 @@ class ResourceBinding:
 VERIFY_STRUCTURE = os.environ.get('OP_VERIFY_STRUCTURE') == '1'
 # Diagnostics: compare every unit adopted after an undo with a fresh compile (``verify_undo``).
 VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'
+# A fill channel's image detail (its projected luminance, ``Graph.detail``) is a unit of its own,
+# a FIELD: rendered once into a full-float texture and kept while the channel's colour, opacity,
+# blend or masks change, instead of sampled again in every pass of the channel. 0 compiles it into
+# the channel, as before.
+DETAIL_FIELDS = os.environ.get('OP_DETAIL_FIELDS', '1') == '1'
 
 
 def _plain(value):
@@ -1388,6 +1393,25 @@ class Graph(Math):
         value = self.smooth(.02, .04, self.math('MINIMUM', bx, by))
         return self.math('SUBTRACT', 1, value) if kind == 'GRID' else value
 
+    @staticmethod
+    def _field_key(layer, prop, channel):
+        """Unit key of a channel's triplanar image detail (``DETAIL_FIELDS``), or None where
+        ``_channel_base`` compiles the detail itself: another projection (one sample, cheaper
+        than a pass of its own), paint and folder layers, Normal (a source boundary), Material
+        Mapping v1 (a CPU boundary) and procedurals."""
+        if (not DETAIL_FIELDS or prop is None or layer.type != 'FILL' or not prop.detail_image
+                or prop.projection != 'TRIPLANAR' or channel == 'NORMAL'
+                or getattr(prop, 'material_mapping_version', 0) == 1):
+            return None
+        return ('FIELD', layer.id, channel)
+
+    def _detail_value(self, layer, prop, channel):
+        """The detail a field channel modulates: its FIELD unit's value, or compiled in place."""
+        key = self._field_key(layer, prop, channel)
+        if key is None or self.unit is None or self.unit.key == key:
+            return self.detail(prop)
+        return self._import(self.compile_unit(key), 'Value', 'NodeSocketFloat')
+
     def detail(self, prop):
         if prop.detail_image:
             result = self.projected(prop, lambda uv: self.image(prop.detail_image, uv,
@@ -1849,7 +1873,7 @@ class Graph(Math):
                 # strength/combine effects remain shader-native downstream.
                 value = self._channel_prefix(layer, prop, 0)
             elif field:
-                scalar = self.math('SUBTRACT', self.detail(prop), .5)
+                scalar = self.math('SUBTRACT', self._detail_value(layer, prop, channel), .5)
                 if channel == 'HEIGHT':
                     if getattr(prop, 'material_mapping_version', 0) == 1:
                         amplitude = self.math('DIVIDE', self.param(prop, 'material_height_m'),
@@ -2078,6 +2102,7 @@ class Graph(Math):
             prop = self._channel(layer, key[2])
             if layer.type == 'FILL' and prop is not None and prop.anchor:
                 refs.append(self._anchor_key(prop.anchor, prop.anchor_channel or key[2]))
+            refs.append(self._field_key(layer, prop, key[2]))
         elif key[0] == 'MASK':
             masks = list(layer.masks)
             stop = len(masks) if not key[2] else next(i + 1 for i, m in enumerate(masks) if m.id == key[2])
@@ -2463,6 +2488,14 @@ class Graph(Math):
                     decal = ('inline-frame-v1',)
             return (layer.type, getattr(layer, 'stroke_key', ''), _prop_signature(prop, key[3]), refs,
                     self._continuation(key), decal)
+        if key[0] == 'FIELD':
+            # What ``detail`` compiles from: its projection and sampler state; the image and the
+            # projection's numbers are bindings.
+            prop = self._channel(layer, key[2])
+            if prop is None:
+                return None
+            return ('field', layer.type, getattr(prop, 'material_mapping_version', 0), bool(prop.detail_image),
+                    prop.projection, prop.filtering, prop.tiling, refs)
         if key[0] == 'GRAPH':
             from ..procedural_graph.program import unit_signature
             mask = next((m for m in layer.masks if m.id == key[2]), None)
@@ -3254,6 +3287,8 @@ class Graph(Math):
             prop = self._channel(layer, key[2])
             owners.append(prop)
             owners.extend(list(prop.effects)[:key[3]])
+        elif key[0] == 'FIELD':
+            owners.append(self._channel(layer, key[2]))
         elif key[0] == 'GRAPH':
             from ..procedural_graph.program import GraphError, build
             mask = next(m for m in layer.masks if m.id == key[2])
@@ -3612,6 +3647,9 @@ class Graph(Math):
                     self._export('Alpha', signal.alpha, 'NodeSocketFloat')
                 elif key[0] == 'MASK':
                     self._export('Value', self.mask(layer, key[2], key[3]), 'NodeSocketFloat')
+                elif key[0] == 'FIELD':
+                    with self.role(f'LayerSource:{layer.id}:{key[2]}'):
+                        self._export('Value', self.detail(self._channel(layer, key[2])), 'NodeSocketFloat')
                 elif key[0] == 'GRAPH':
                     mask = next(m for m in layer.masks if m.id == key[2])
                     with self.native(mask):

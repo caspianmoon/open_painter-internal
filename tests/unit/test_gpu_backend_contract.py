@@ -355,6 +355,97 @@ class BackendContract(unittest.TestCase):
                 self.assertIsNotNone(engine.states[pinned].textures)
                 self.assertEqual(sum(engine.retained.values()), 1024)
 
+    def field_engine(self, dev):
+        engine = runtime.Engine(None, SimpleNamespace(id='test'))
+        draws = []
+        dev.draw = lambda shader, targets, n, samplers, *args, **kwargs: draws.append((shader, targets, samplers))
+        dev.fixed = lambda name: name
+
+        def state(textures=True):
+            unit = runtime.UnitState(None)
+            unit.formats = ('R32F',)
+            if textures:
+                unit.textures = [dev.texture(8, 'R32F')]
+                unit.stamp = 1
+            return unit
+        return engine, draws, state
+
+    def test_a_field_copies_its_twin_and_is_released_once_its_consumers_drew(self):
+        with self.device('VULKAN') as (_, dev):
+            engine, draws, state = self.field_engine(dev)
+            twin, copy, other = ('FIELD', 'a', 'BASE_COLOR'), ('FIELD', 'a', 'ROUGHNESS'), ('FIELD', 'a', 'HEIGHT')
+            content = (8, 'shader', b'bits', (), None)
+            engine.states[twin] = holder = state()
+            engine._field_holds(twin, content)
+            engine.states[copy] = copied = state(textures=False)
+            self.assertTrue(engine._copy_field(copy, copied, 8, content))
+            self.assertEqual(draws[-1][0], 'copy')
+            self.assertIs(draws[-1][2][0][1], holder.textures[0])
+            self.assertIn(copy, engine._field_copies)
+            self.assertNotIn(copy, engine.retained)   # its texels are the twin's: never kept
+            engine._in_use[copy] += 1
+            engine._drop_copy(copy, 8)
+            self.assertIsNotNone(copied.textures, 'a consumer still reads it')
+            engine._in_use[copy] -= 1
+            engine._drop_copy(copy, 8)
+            self.assertIsNone(copied.textures)
+            self.assertNotIn(copy, engine._field_copies)
+            engine._drop_copy(twin, 8)
+            self.assertIsNotNone(holder.textures, 'a rendered field is retained, not dropped')
+            # The twin stays the holder: the next field of the same content still copies it.
+            engine.states[other] = third = state(textures=False)
+            self.assertTrue(engine._copy_field(other, third, 8, content))
+            self.assertIs(draws[-1][2][0][1], holder.textures[0])
+            # A retired holder is forgotten, as is a retired copy.
+            engine._retire_state(twin, holder, 8, False)
+            engine._retire_state(other, third, 8, False)
+            self.assertFalse(engine._field_twins or engine._field_contents or engine._field_copies)
+
+    def test_a_field_is_not_copied_from_another_content_or_an_empty_twin(self):
+        with self.device('OPENGL') as (_, dev):
+            engine, draws, state = self.field_engine(dev)
+            twin, field = ('FIELD', 'a', 'BASE_COLOR'), ('FIELD', 'a', 'ROUGHNESS')
+            content = (8, 'shader', b'bits', (), None)
+            engine.states[twin] = holder = state()
+            engine._field_holds(twin, content)
+            engine.states[field] = target = state(textures=False)
+            self.assertFalse(engine._copy_field(field, target, 8, (8, 'shader', b'other', (), None)))
+            holder.stamp = None   # being rendered again: its texels are not the content any more
+            self.assertFalse(engine._copy_field(field, target, 8, content))
+            holder.stamp, holder.textures = 1, None   # evicted
+            self.assertFalse(engine._copy_field(field, target, 8, content))
+            self.assertFalse(draws)
+
+    def test_a_field_forgets_what_it_held_once_overwritten(self):
+        with self.device('VULKAN') as (_, dev):
+            engine, _, state = self.field_engine(dev)
+            first, second, third = (('FIELD', 'a', channel) for channel in ('BASE_COLOR', 'ROUGHNESS', 'HEIGHT'))
+            a, b = (8, 'shader', b'a', (), None), (8, 'shader', b'b', (), None)
+            engine.states[first] = one = state()
+            engine._field_holds(first, a)
+            engine._field_holds(first, b)   # rendered again, with other parameters
+            self.assertNotIn(a, engine._field_twins)
+            engine.states[second] = state()
+            engine._field_holds(second, a)
+            # Edited back to a: filled by a copy of second, first holds b no longer.
+            self.assertTrue(engine._copy_field(first, one, 8, a))
+            one.stamp = 2   # as _render stamps it
+            engine.states[third] = three = state(textures=False)
+            self.assertFalse(engine._copy_field(third, three, 8, b))
+
+    def test_field_content_compares_parameter_bits(self):
+        with self.device('VULKAN') as (_, dev):
+            engine, _, state = self.field_engine(dev)
+            field = state(textures=False)
+            field.shader = 'shader'
+            parameter = SimpleNamespace(default_value=0.0)
+            field.program = SimpleNamespace(samplers=[], params=[parameter])
+            positive = engine._field_content(field, 8, {})
+            parameter.default_value = -0.0
+            self.assertNotEqual(engine._field_content(field, 8, {}), positive)   # equal floats, other bits
+            parameter.default_value = 0.0
+            self.assertEqual(engine._field_content(field, 8, {}), positive)
+
     def test_scalar_layout_preserves_height_precision_and_halves_storage(self):
         from open_painter.evaluation.engine.formats import layout, texture_bytes
         self.assertEqual(layout(('CHANNEL', 'x', 'ROUGHNESS'), 'Out'), 'RG16F')

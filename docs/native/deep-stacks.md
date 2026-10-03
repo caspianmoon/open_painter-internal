@@ -112,6 +112,34 @@ memory, 128–512 MiB). At display precision they are stored in half floats;
 Height and precise sets keep full float. Arming holds up to six full-float
 scratch textures of the channel's layout while it runs.
 
+## Detail fields
+
+A fill channel modulated by a triplanar detail image samples that image three times
+per texel (one projection per axis). Compiled into the channel, those samples ran in
+every pass of the channel (each edit of its colour, opacity, blend or masks) and in
+every channel of the layer. `shader_graph.DETAIL_FIELDS` compiles the detail as a unit
+of its own, `('FIELD', layer id, channel)`, exporting one full-float value. The
+channel's content imports it. A FIELD's signature is what `detail` compiles from: the
+projection and the sampler state. The image and the projection's numbers are bindings.
+
+- **Which details.** Triplanar ones. Another projection is one sample, cheaper than a
+  pass of its own. Normal's detail is a source boundary, and Material Mapping v1 and
+  procedural details are compiled in place, as before.
+- **Copies.** A layer's channels usually share the detail and its projection, so their
+  fields hold the same texels. `Engine._copy_field` fills a field from another field
+  that holds the same content: the same shader, the same parameter bits (float32, so
+  0.0 and -0.0 differ) and the same image and surface identities. It copies texel for
+  texel. Program stamps cannot decide this: a native program's stamp counts its own
+  uniform revisions, which differ between units holding equal values.
+  - A copied field is not retained. It is released once the units that read it have
+    drawn (`_drop_copy`, also at the native batch's release of it), and it is copied
+    again when one of them renders again.
+  - The field it copied stays the holder. A holder rendered with other content, filled
+    by a copy or retired is forgotten (`_forget_field`).
+- **Exactness.** Published channels are bit-identical with fields off and with copies
+  off (`engine_detail_fields.py`, and every channel of the 40-layer deep stack on both
+  Windows backends).
+
 ## Incremental host evaluation
 
 - **Touched units.** `EngineGraph.update()` records the units whose uniforms it

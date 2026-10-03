@@ -333,6 +333,18 @@ def _layer_structs(layer):
         yield f'.cache[{r}]', row
 
 
+def _addresses(moves):
+    """``moves`` (old address -> the struct now at its path) as old -> new address. A struct gone
+    since is left out: following it then fails (KeyError), and its unit is compiled again."""
+    moved = {}
+    for pointer, struct in moves.items():
+        try:
+            moved[pointer] = struct.as_pointer()
+        except ReferenceError:
+            pass
+    return moved
+
+
 def _repoint_many(value, moves, seen):
     """``_repoint`` for many structs at once: ``moves`` maps old addresses to new structs."""
     import types
@@ -738,6 +750,7 @@ class Graph(Math):
         self.touched = set()
         self._paths = None   # struct address -> RNA path, valid for one build (_path)
         self._undo_moves = self._undo_images = self._undo_fresh = None   # during a build after an undo (_follow_undo)
+        self._undo_moved = None   # _undo_moves' new structs' addresses
         self._global = None   # global_signature of the last build, read after an undo
         self.resource_bindings = []
         self.image_bindings = []
@@ -3461,12 +3474,12 @@ class Graph(Math):
         recompiling the unit, when it holds anything else from before the undo: a resource or
         cache binding, a Mask Graph, a decal object or custom node group (IDs ``rna_nodes`` holds,
         which no path maps) or a GPU resource. A node's own RNA (a filter's effect) is re-pointed."""
-        moves, before = self._undo_moves, unit.owner_pointers
+        moves, moved, before = self._undo_moves, self._undo_moved, unit.owner_pointers
         if (len(before) != len(current) or unit.resource_bindings or unit.cache_bindings
                 or any(binding.native for binding in unit.bindings.values())):
             return False
         try:
-            if tuple(moves[pointer].as_pointer() for pointer in before) != current:
+            if tuple(map(moved.__getitem__, before)) != current:
                 return False
             images, attributes = [], []
             for node in unit.tree.nodes.image_nodes:
@@ -3485,12 +3498,12 @@ class Graph(Math):
             rebound = []
             for identifier, binding in unit.bindings.items():
                 owner = moves[binding.owner.as_pointer()]
-                aliases = tuple(moves[pointer].as_pointer() for pointer in binding.aliases)
+                aliases = tuple(map(moved.__getitem__, binding.aliases))
                 if isinstance(identifier, tuple) and len(identifier) > 1 and isinstance(identifier[1], int):
-                    identifier = (identifier[0], moves[identifier[1]].as_pointer(), *identifier[2:])
+                    identifier = (identifier[0], moved[identifier[1]], *identifier[2:])
                 rebound.append((identifier, binding, owner, aliases))
-            effects = {moves[pointer].as_pointer(): moves[pointer] for pointer in unit.compiled_effects}
-            entries = [(moves[entry[0]].as_pointer(), *entry[1:]) for entry in unit.image_bindings]
+            effects = {moved[pointer]: moves[pointer] for pointer in unit.compiled_effects}
+            entries = [(moved[entry[0]], *entry[1:]) for entry in unit.image_bindings]
         except (KeyError, ReferenceError):
             return False
         seen, fresh = set(), self._undo_fresh
@@ -3837,6 +3850,7 @@ class Graph(Math):
                                        and getattr(reuse, '_global', None) == global_signature(self.ts)) else None
             if self._previous is not None:
                 self._undo_moves = self._undo_structs(undo)
+                self._undo_moved = _addresses(self._undo_moves)
                 self._undo_fresh = {id(struct) for struct in self._undo_moves.values()}
                 self._undo_images = {image.session_uid: image for image in bpy.data.images}
         else:
@@ -3857,7 +3871,7 @@ class Graph(Math):
             self._rollback_adoption()
             raise
         finally:
-            self._previous = self._undo_moves = self._undo_images = self._undo_fresh = None
+            self._previous = self._undo_moves = self._undo_moved = self._undo_images = self._undo_fresh = None
         self._global = global_signature(self.ts)
         if self._paths is None:
             # Adopted units ask for no path: index the set now, for the next undo (``undo_index``).

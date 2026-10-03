@@ -10,14 +10,21 @@ from ..constants import RESOLUTIONS
 class SafeOperator:
     def execute(self, context):
         try:
-            result = self.run(context)
-            return result or {"FINISHED"}
+            result = self.run(context) or {"FINISHED"}
         except Exception as exc:
             logger.debug("Operator failed", exc_info=True)
             if hasattr(context.scene, "open_painter"):
                 context.scene.open_painter.status = str(exc)
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
+        if "FINISHED" in result and "UNDO" in self.bl_options:
+            # Blender pushes this operator's undo step next, before the depsgraph evaluates: tags
+            # still pending then (an image loaded, its colour space set) are stored in the step, and
+            # an undo to it tags those images again, which rebuilds their GPU textures. Reported
+            # now, they reach the step settled (dependencies.report_updates).
+            from ..evaluation.dependencies import report_updates
+            report_updates()
+        return result
 
 
 class OP_OT_texture_set(SafeOperator, bpy.types.Operator):

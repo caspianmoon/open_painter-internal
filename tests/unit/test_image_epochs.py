@@ -61,5 +61,73 @@ class ImageEpochTests(unittest.TestCase):
         self.assertEqual(self.dependencies.image_epoch(), counter)
 
 
+@unittest.skipIf(bpy is None, 'needs Blender')
+class ReportUpdatesTests(unittest.TestCase):
+    """The scheduler tick evaluates pending depsgraph updates first (``report_updates``), so an
+    image an operator just referenced is reported before the tick samples it."""
+
+    def fake(self, running=()):
+        from unittest.mock import Mock
+        evaluate = Mock()
+        fake = SimpleNamespace(app=SimpleNamespace(is_job_running=lambda kind: kind in running),
+                               context=SimpleNamespace(evaluated_depsgraph_get=evaluate))
+        return fake, evaluate
+
+    def test_it_evaluates_the_depsgraph(self):
+        from unittest.mock import patch
+        from open_painter.evaluation import dependencies
+        fake, evaluate = self.fake()
+        with patch.object(dependencies, 'bpy', fake):
+            dependencies.report_updates()
+        evaluate.assert_called_once_with()
+
+    def test_a_render_or_bake_job_owns_the_scene(self):
+        from unittest.mock import patch
+        from open_painter.evaluation import dependencies
+        for job in ('RENDER', 'OBJECT_BAKE'):
+            fake, evaluate = self.fake(running={job})
+            with patch.object(dependencies, 'bpy', fake):
+                dependencies.report_updates()
+            evaluate.assert_not_called()
+
+    def test_the_jobs_it_checks_exist(self):
+        for job in ('RENDER', 'OBJECT_BAKE'):
+            self.assertFalse(bpy.app.is_job_running(job))   # a TypeError would disable the flush
+
+
+@unittest.skipIf(bpy is None, 'needs Blender')
+class OperatorStepTests(unittest.TestCase):
+    """An UNDO operator reports pending depsgraph updates before Blender pushes its step: tags
+    still pending then would be stored in the step and set again by an undo to it."""
+
+    def execute(self, options, outcome):
+        from unittest.mock import patch
+        from open_painter.evaluation import dependencies
+        from open_painter.ui.operators import SafeOperator
+
+        class Probe(SafeOperator):
+            bl_options = options
+
+            def run(self, context):
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            def report(self, *args):
+                pass
+        with patch.object(dependencies, 'report_updates') as reported:
+            result = Probe().execute(SimpleNamespace(scene=SimpleNamespace()))
+        return result, reported.call_count
+
+    def test_a_finished_undo_operator_reports_its_updates(self):
+        self.assertEqual(self.execute({'REGISTER', 'UNDO'}, None), ({'FINISHED'}, 1))
+        self.assertEqual(self.execute({'REGISTER', 'UNDO'}, {'FINISHED'}), ({'FINISHED'}, 1))
+
+    def test_no_step_reports_nothing(self):
+        self.assertEqual(self.execute({'REGISTER'}, None), ({'FINISHED'}, 0))
+        self.assertEqual(self.execute({'REGISTER', 'UNDO'}, {'CANCELLED'}), ({'CANCELLED'}, 0))
+        self.assertEqual(self.execute({'REGISTER', 'UNDO'}, ValueError('failed')), ({'CANCELLED'}, 0))
+
+
 if __name__ == '__main__':
     unittest.main()

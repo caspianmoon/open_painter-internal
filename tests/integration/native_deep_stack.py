@@ -39,7 +39,7 @@ import open_painter
 from open_painter.constants import CHANNELS, VERSION
 from open_painter.core import image_manager as images, layer_stack as stack
 from open_painter.core import texture_set_manager as sets
-from open_painter.evaluation import gc_policy, shader_preview
+from open_painter.evaluation import dependencies, gc_policy, shader_preview
 from open_painter.evaluation.engine import runtime
 from open_painter.evaluation.metrics import Metrics
 from open_painter.smart_materials import composer
@@ -234,11 +234,18 @@ def footprint_mib():
     return int.from_bytes(bytes(buffer[72:80]), 'little') // (1024 * 1024)
 
 
+def tick(scene, ts):
+    """One tick of the set as the scheduler runs it (``cache._tick``): pending depsgraph updates
+    are reported first."""
+    dependencies.report_updates()
+    shader_preview.tick(scene, ts)
+
+
 def settle(scene, ts, started):
     """Tick until the set is current; milliseconds from ``started`` and the ticks it took."""
     for ticks in range(1, 2001):
         with Frame():
-            shader_preview.tick(scene, ts)
+            tick(scene, ts)
         if TRACE and TRACEMALLOC and ticks % 2 == 0:
             import tracemalloc
             snapshot = tracemalloc.take_snapshot()
@@ -627,13 +634,13 @@ def main():
                 with Frame():
                     begin = perf_counter()
                     setattr(target(), attribute, value)
-                    shader_preview.tick(scene, ts)
+                    tick(scene, ts)
                     # Pixel publication (Vulkan) spends a time budget per tick, so an edit can take
                     # several ticks to publish every channel; on Metal one tick must do it.
                     for _ in range(100):
                         if shader_preview.current(scene, ts) or not runtime.device().pixel_publish:
                             break
-                        shader_preview.tick(scene, ts)
+                        tick(scene, ts)
                     assert shader_preview.current(scene, ts), shader_preview.diagnostics(scene, ts)
                     fence()
                     return (perf_counter() - begin) * 1000
@@ -682,7 +689,7 @@ def main():
                 row['profile_self'] = text.getvalue()
             results[name] = row
             setattr(target(), attribute, base)
-            shader_preview.tick(scene, ts)
+            tick(scene, ts)
             print('DEEP_STACK_CASE', name, f"median {row['median_ms']:.1f} ms p95 {row['p95_ms']:.1f} ms",
                   'passes', row['passes'], 'units', row['units_rendered'], 'footprint', row['footprint_mib'], 'MiB',
                   'engine', row['engine_memory_mib'], flush=True)

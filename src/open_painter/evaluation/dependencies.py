@@ -585,6 +585,21 @@ def on_depsgraph(scene, depsgraph):
         _candidates.add(scene.as_pointer())
 
 
+def report_updates():
+    """Evaluate the pending depsgraph updates now, so ``on_depsgraph`` reports them before the
+    scheduler samples any image. An image an operator just referenced (a smart material's detail,
+    a picked texture) joins the depsgraph on its next evaluation, which reports it as updated:
+    Blender runs that evaluation after the timers, so the tick sampled the image first and the
+    next tick rendered every unit sampling it again. Nothing pending costs nothing. A render or
+    bake job may own the scene (a locked interface): Blender's loop alone evaluates then."""
+    try:
+        if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('OBJECT_BAKE'):
+            return
+        bpy.context.evaluated_depsgraph_get()
+    except (AttributeError, RuntimeError, ReferenceError, TypeError):
+        pass   # no view layer to evaluate
+
+
 @persistent
 def on_frame(scene, *args):
     _candidates.add(scene.as_pointer())

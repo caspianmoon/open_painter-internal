@@ -340,6 +340,7 @@ def _tick():
 
     from . import live_preview, shader_preview
     from ..core import layer_store
+    dependencies.report_updates()
     layer_store.maintain()   # a copied or appended scene, a directly added set: each gets its own store
     _tick_scene = None
     live = frozenset(key_for(scene, ts) for scene in bpy.data.scenes

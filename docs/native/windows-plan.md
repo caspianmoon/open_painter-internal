@@ -233,15 +233,19 @@ Also measured:
   for the NumPy gather, and 310 MiB less transient memory. `export_padding.py` still peaks
   at 3.91–3.92 GiB, so its peak lies elsewhere.
 
-What remains, by measured share:
+What remains, by measured share (as of 2026-10-02; later sections update the first items):
 - **Smart-material apply, about 110 ms.** Compiling the new units' node trees takes
   2.7 ms per unit (Python node, link and parameter construction). The IR walk takes
-  12 ms, and the composer's module snapshot 8–10 ms.
+  12 ms, and the composer's module snapshot 8–10 ms. On 2026-10-06 (profiled, per apply)
+  it was still compiling about 35 new units (including the first decode of a new bundled
+  PNG), the IR walk and the composer: Python work in proportion to the units added.
 - **Undo, 84–92 ms in steady state** (a probe of every texture lease and of each stamp
   that changes, Vulkan, window route). Blender's memfile restore takes 14 ms, our undo
   handler 2.3 ms, the rebuild 45–52 ms (compiling with adoption, the plan, value reads) and
   the evaluation 10–13 ms. Nothing is allocated: the earlier churn of about 120 textures
-  per undo was the revisions' staged mip chains.
+  per undo was the revisions' staged mip chains. Since `ee80d04` an undo that kept the
+  stack's shape follows the graph instead of a rebuild: 58–61 ms on the benchmark against
+  80–84 (2026-10-06, "Undo that keeps the graph").
 - **The first undo after a build, 280–320 ms, now 218–222 ms** (`869a2ce`). The memfile
   restore re-tags the images whose tags were still pending when its target step was pushed
   (Blender's `direct_link_id_restore_recalc`): here the detail images a smart material

@@ -4,6 +4,7 @@ Hash base authoring data only after Blender reports a geometry update, never
 on each tile/timer tick. Projection acquires evaluated geometry in an owned
 scope; no evaluated mesh is retained. Modifier RNA also contributes to keys.
 """
+import ctypes
 import secrets
 import bpy
 import numpy as np
@@ -229,6 +230,30 @@ def _same_parts(a, b):
         and np.array_equal(x[1].view(np.uint8), y[1].view(np.uint8)) for x, y in zip(a, b))
 
 
+def _direct(collection, count, dtype, width, read):
+    """``count`` elements of an RNA collection of numbers, copied from the array Blender keeps
+    them in, or None. RNA reads many of these element by element (``foreach_get`` takes 46 ns
+    an element for an integer attribute). Only when the elements' addresses are those of one
+    back-to-back array (the first and the last say so) and the first, middle and last element
+    read through RNA (``read``) hold the same values."""
+    if not count:
+        return None
+    try:
+        size = np.dtype(dtype).itemsize * width
+        first, last = collection[0].as_pointer(), collection[count - 1].as_pointer()
+        if not first or last - first != size * (count - 1):
+            return None
+        values = np.frombuffer(ctypes.string_at(first, size * count), dtype).copy()
+        for index in (0, count // 2, count - 1):
+            expected = read(collection[index])
+            if tuple(np.atleast_1d(values[index * width:(index + 1) * width]).tolist()) != (
+                    tuple(expected) if width > 1 else (expected,)):
+                return None
+        return values
+    except (AttributeError, TypeError, ValueError, IndexError, ReferenceError):
+        return None
+
+
 def _attribute(mesh, name, data_type, domain):
     stored = mesh.attributes.get(name)
     return stored if stored is not None and stored.data_type == data_type and stored.domain == domain else None
@@ -251,21 +276,27 @@ def _mesh_arrays(mesh):
     normals = np.empty(vertices * 3, np.float32)
     mesh.vertex_normals.foreach_get('vector', normals)
     yield 'normal', vertices, normals
-    corners = np.empty(loops, np.int32)
     stored = _attribute(mesh, '.corner_vert', 'INT', 'CORNER')
-    if stored is not None:
-        stored.data.foreach_get('value', corners)
-    else:
-        mesh.loops.foreach_get('vertex_index', corners)
+    corners = _direct(stored.data, loops, np.int32, 1, lambda item: item.value) if stored is not None else None
+    if corners is None:
+        corners = np.empty(loops, np.int32)
+        if stored is not None:
+            stored.data.foreach_get('value', corners)
+        else:
+            mesh.loops.foreach_get('vertex_index', corners)
     yield 'vertex_index', loops, corners
-    starts = np.empty(faces, np.int32)
-    mesh.polygons.foreach_get('loop_start', starts)
+    starts = _direct(mesh.polygons, faces, np.int32, 1, lambda item: item.loop_start)
+    if starts is None:
+        starts = np.empty(faces, np.int32)
+        mesh.polygons.foreach_get('loop_start', starts)
     yield 'loop_start', faces, starts
     yield 'loop_total', faces, np.diff(np.append(starts, np.int32(loops))).astype(np.int32)
-    materials = np.zeros(faces, np.int32)   # no attribute: every face uses the first slot
     stored = _attribute(mesh, 'material_index', 'INT', 'FACE')
-    if stored is not None:
-        stored.data.foreach_get('value', materials)
+    materials = _direct(stored.data, faces, np.int32, 1, lambda item: item.value) if stored is not None else None
+    if materials is None:
+        materials = np.zeros(faces, np.int32)   # no attribute: every face uses the first slot
+        if stored is not None:
+            stored.data.foreach_get('value', materials)
     yield 'material_index', faces, materials
     smooth = np.ones(faces, np.bool_)       # no attribute: every face is smooth
     stored = _attribute(mesh, 'sharp_face', 'BOOLEAN', 'FACE')

@@ -166,6 +166,28 @@ class MeshSignatureTests(unittest.TestCase):
         dependencies.clear(undo=True)
         self.assertEqual(dependencies.mesh_signature(mesh), reference(mesh))
 
+    def test_integer_arrays_are_copied_from_blender_memory(self):
+        from open_painter.evaluation import dependencies
+        mesh = self.grid()
+        for index, polygon in enumerate(mesh.polygons):
+            polygon.material_index = index % 4
+        for collection, count, read, rna in (
+                (mesh.attributes['.corner_vert'].data, len(mesh.loops), lambda item: item.value,
+                 lambda values: mesh.loops.foreach_get('vertex_index', values)),
+                (mesh.polygons, len(mesh.polygons), lambda item: item.loop_start,
+                 lambda values: mesh.polygons.foreach_get('loop_start', values)),
+                (mesh.attributes['material_index'].data, len(mesh.polygons), lambda item: item.value,
+                 lambda values: mesh.polygons.foreach_get('material_index', values))):
+            direct = dependencies._direct(collection, count, np.int32, 1, read)
+            self.assertIsNotNone(direct)
+            expected = np.empty(count, np.int32)
+            rna(expected)
+            np.testing.assert_array_equal(direct, expected)
+        # Elements that are not one array, or whose values RNA reads otherwise, are refused.
+        self.assertIsNone(dependencies._direct(mesh.polygons, len(mesh.polygons), np.int32, 1,
+                                               lambda item: item.loop_start + 1))
+        self.assertIsNone(dependencies._direct(mesh.vertices, 0, np.float32, 3, lambda item: tuple(item.co)))
+
     def test_a_freed_mesh_address_does_not_answer_for_a_new_mesh(self):
         from open_painter.evaluation import dependencies
         mesh = self.grid()

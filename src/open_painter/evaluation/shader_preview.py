@@ -1081,11 +1081,11 @@ def _follow_undo(scene, ts, key, graph, undo):
             if not follow(scene, ts, undo, changed):
                 metrics.count('shader_undo_follow_refusals')
                 return None
-            if VERIFY_UNDO:
-                graph.verify_undo()
     except Exception:
         logger.exception('Open Painter: the set is built again after an undo')
         return None
+    if VERIFY_UNDO:
+        graph.verify_undo()   # a mismatch raises, as the rebuild's check does
     _carried.pop(key)
     engine.scene = scene   # an undo restored the Scene: its old reference is stale
     engine.adopt(graph)

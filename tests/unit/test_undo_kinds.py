@@ -29,7 +29,8 @@ class UndoKindTests(unittest.TestCase):
         sets = [SimpleNamespace(preview_backend=backend) for backend in backends]
         scene = SimpleNamespace(open_painter=SimpleNamespace(texture_sets=sets))
         main = SimpleNamespace(pointer=before)
-        fake = SimpleNamespace(data=SimpleNamespace(as_pointer=lambda: main.pointer, scenes=[scene]))
+        fake = SimpleNamespace(data=SimpleNamespace(as_pointer=lambda: main.pointer, scenes=[scene]),
+                               context=SimpleNamespace(mode='OBJECT'))
         with patch.object(cache, 'bpy', fake), patch.object(cache, '_relearn') as relearn, \
                 patch.object(shader_resources, 'retire_unloaded_leaves') as retire, \
                 patch.object(shader_resources, 'freeze_new_leaves') as freeze:

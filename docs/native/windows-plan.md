@@ -56,7 +56,7 @@ evidence.
 | 7. Package | Done | `open_painter-windows-x64.zip`: validates, installs into a non-ASCII path on both backends with no environment variables, passes the two-phase clean install (6 GB cap), and the step 5 suites pass against its binaries. |
 | 8. Native engine | Done | Vulkan, and on Windows OpenGL, are default host backends, with collapse, idle arming and fused finals ported (OpenGL since `6ae821b`: "Undo and publication in place"). |
 | 9. Windows on Arm | Not applicable | This laptop is x64. |
-| 10. Full gate | Done, one suite over the cap | At `869a2ce`: background (180 suites, the 0.12.2 contract, 542 unit tests), GPU and GUI pass on OpenGL and Vulkan, except `quality_baseline_paint_ui.py` at 2K, killed at the approved 6 GB cap (6.30 and 6.09 GiB; below). |
+| 10. Full gate | Done, one suite over the cap | At `ee80d04` (2026-10-06): background (182 suites and the 0.12.2 contract), GPU and GUI pass on OpenGL and Vulkan, except `quality_baseline_paint_ui.py` at 2K, killed at the approved 6 GB cap (6.05 and 6.6 GiB). Four Blender unit tests failed on a test's fake (fixed in `a5f8b16`; all 569 then pass). At `869a2ce`: 180 suites, 542 unit tests, the same cap (6.30 and 6.09 GiB; below). |
 
 ### Findings that change how to work here
 

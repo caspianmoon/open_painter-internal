@@ -1395,8 +1395,10 @@ class Engine:
         """Whether a unit's result cannot depend on its parameters: a folder step whose children
         leave it nothing in this channel (its group input is the constant transparent composite)
         blends with zero alpha over its backdrop, whatever its opacity and masks. Each such
-        program is checked once on the GPU (``_check_param_free``). Its content stamp then leaves
-        its parameters out, so dragging them renders and publishes nothing in that channel."""
+        program is checked once on the GPU (``_check_param_free``) the first time a stamp asks,
+        so every stamp of it agrees, an incremental restamp and a full one alike. Its content
+        stamp then leaves its parameters out, so dragging them renders and publishes nothing in
+        that channel."""
         if not PARAM_FREE or state.unit is None or state.program is None:
             return False
         key = state.unit.key
@@ -1405,22 +1407,38 @@ class Engine:
         position = self.positions.get(key)
         if not position or position[1] != EMPTY_GROUP:
             return False
-        return getattr(device(), 'param_free', {}).get(state.program.source) is True
+        checked = device().__dict__.setdefault('param_free', {})
+        source = state.program.source
+        found = checked.get(source)
+        if found is None:
+            found = checked[source] = self._check_param_free(state)
+        return found
 
-    def _check_param_free(self, state, samplers, n):
+    def _check_param_free(self, state):
         """Render a corner of the unit with its parameters, with all zeros, all ones and random
-        values in [0, 1); True when all four agree bit for bit."""
+        values in [0, 1); True when all four agree bit for bit. The inputs are synthetic: noise
+        for every texture it reads, the transparent composite for its group (independence from
+        the parameters holds for any of them)."""
         import gpu
         program = state.program
         native = getattr(program, 'native_program', None)
-        if native is None or len(state.formats) != 1 or program.objects:
+        if (native is None or len(state.formats) != 1 or program.objects or self.graph is None
+                or any(s.source is not None or s.kind == 'filter' for s in program.samplers)):
             return False
         native.update(program)
         values = np.frombuffer(bytes(native.data()), np.float32)
         if not len(values):
             return False
         random = np.random.default_rng(1).random(len(values), dtype=np.float32)
-        dev, fmt, size = device(), state.formats[0], min(n, 64)
+        dev, fmt, n = device(), state.formats[0], self.graph.n
+        size = min(n, 64)
+        noise = dev.__dict__.get('_param_free_noise')
+        if noise is None or noise.width != size:
+            data = np.random.default_rng(2).random(size * size * 4, dtype=np.float32)
+            noise = dev._param_free_noise = gpu.types.GPUTexture(
+                (size, size), format=RGBA, data=gpu.types.Buffer('FLOAT', len(data), data))
+        transparent = self._constant(n, (0.0, 0.0, 0.0, 0.0))
+        samplers = [(s.name, transparent if s.kind == 'grouped' else noise) for s in program.samplers]
         components = 2 if fmt in ('RG16F', 'RG32F') else 4
         results = []
         for variant in (values, np.zeros_like(values), np.ones_like(values), random):
@@ -1552,11 +1570,6 @@ class Engine:
             # Its old revision must not become a cache hit after undo/retry.
             state.stamp = None
             dev.draw(state.shader, state.textures, n, samplers, uniforms)
-            if (PARAM_FREE and key[0] == 'CHANNEL' and position and position[1] == EMPTY_GROUP
-                    and uniforms is not None):
-                checked = dev.__dict__.setdefault('param_free', {})
-                if program.source not in checked:
-                    checked[program.source] = self._check_param_free(state, samplers, n)
             elapsed = (perf_counter() - drawn) * 1000
             if self.profiling:
                 elapsed = self._gpu_time(state, n, samplers, uniforms)

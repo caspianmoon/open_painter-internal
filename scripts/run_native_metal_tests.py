@@ -19,7 +19,7 @@ from collect_gate0_baseline import artifact_digests
 ROOT = Path(__file__).resolve().parents[1]
 # Suites that legitimately need more than the default cap (4K publication targets).
 MEMORY_CAPS_GB = {'native_publication_4k.py': 7.0, 'resolution_switch.py': 6.0}
-TESTS = ('native_host_metal.py', 'native_publication_4k.py', 'native_publication_precision.py', 'native_blend.py', 'native_effects.py', 'native_masks.py', 'native_geometry_projection.py', 'native_suffix.py', 'graph_path_index.py', 'engine_parity.py', 'engine_procedurals.py',
+TESTS = ('native_host_metal.py', 'native_publication_4k.py', 'native_publication_precision.py', 'native_blend.py', 'native_effects.py', 'native_masks.py', 'native_geometry_projection.py', 'native_suffix.py', 'native_fusion.py', 'engine_kept_reads.py', 'graph_path_index.py', 'engine_parity.py', 'engine_procedurals.py',
          'gpu_strokes.py', 'engine_filters.py', 'engine_state_cache.py', 'shader_undo.py',
          'shader_lifecycle_edges.py', 'shader_adoption.py', 'engine_memory_soak.py',
          'save_during_evaluation.py', 'resolution_switch.py', 'stroke_parity.py',

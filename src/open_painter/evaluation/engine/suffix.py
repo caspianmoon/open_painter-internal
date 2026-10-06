@@ -267,12 +267,13 @@ class SuffixCache:
                 raise
             state.textures = allocated
         # A failed submission may have overwritten the target: never a cache hit then.
-        state.stamp = None
+        previous, state.stamp = state.stamp, None
         dev.draw(dev.fixed('suffix.apply'), [state.textures[0]], n,
                  [('op_source', x), ('op_a', entry.a), ('op_b', entry.b)],
                  ints={'op_swizzle': pack(entry.source)})
         state.stamp = engine._native_graph.stamps[top]
         engine.rendered.append(top)
+        engine._note_reads(top, previous != state.stamp, (source,) if source is not None else ())
         engine.stages['passes']['SUFFIX'] += 1
         metrics.count('engine_suffix_applications')
         if source is not None:

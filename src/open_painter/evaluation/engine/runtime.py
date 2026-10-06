@@ -25,7 +25,7 @@ import numpy as np
 from ...constants import CHANNELS, DEFAULTS
 from .. import metrics
 from ..resource_keys import colorspace_name
-from . import glsl, stages
+from . import fusion, glsl, stages
 from .formats import layout, scalar_unit, texture_bytes
 from .resources import binding
 
@@ -49,6 +49,8 @@ def memory_share(fraction, low, high):
 
 
 RETAIN_BYTES = memory_share(1 / 32, 128 * MIB, 512 * MIB)   # SRC/MASK results kept between evaluations, per set
+# Keep the unchanged results an edit's changed units read, for its next tick (_update_frontier).
+KEEP_READS = os.environ.get('OP_KEEP_READS', '1') != '0'
 DEVICE_BYTES = memory_share(1 / 4, 1536 * MIB, 4 * GIB)     # all managed textures across texture sets
 INTERFACE_ENTRIES = 256              # metadata cannot retain evicted shaders forever
 POOL_SPARES = 3                      # free textures of one size and format kept for reuse
@@ -1005,6 +1007,10 @@ class Engine:
         self.finals = {}                # channel -> ref of the chain's result
         self.orders = {}                # channel -> CHANNEL keys in render order
         self.keep = set()               # CHANNEL results kept between evaluations (checkpoints)
+        # Unchanged CHANNEL results that changed units read in the last evaluation that changed
+        # anything: the next tick of the same drag reads them again (_update_frontier).
+        self._frontier = set()
+        self._reads = self._changed = None   # being recorded during an evaluation (_note_reads)
         self.retained = OrderedDict()   # SRC/MASK (and imported CHANNEL) results kept, LRU order
         self.published = {}             # channel -> stamp of the published result
         self.images = {}                # channel -> image pointer it was published into
@@ -1141,6 +1147,7 @@ class Engine:
         if inline != self.inline:
             self.inline = frozenset(inline)
         self.keep.intersection_update(self.states)
+        self._frontier.intersection_update(self.states)
         if patched:
             self.replaced = replaced if self.replaced is None else self.replaced | replaced
         else:
@@ -1221,6 +1228,7 @@ class Engine:
         self._field_copies.clear()
         self.retained.clear()
         self.keep.clear()
+        self._frontier.clear()
         self.replaced = None
         self.published = {}
         self.images = {}
@@ -1444,7 +1452,8 @@ class Engine:
         """Render a unit and whatever it reads; returns its target textures."""
         state = self._state(key)
         stamp = self._stamp(key, memo, epochs)
-        if state.textures is not None and state.stamp == stamp:
+        previous = state.stamp
+        if state.textures is not None and previous == stamp:
             if key in self.retained:
                 self.retained.move_to_end(key)
                 if self._native_cache is not None:
@@ -1500,6 +1509,7 @@ class Engine:
         state.stamp = stamp
         state.carried = None
         self.rendered.append(key)
+        self._note_reads(key, previous != stamp, inputs)
         if key[0] == 'FIELD' and FIELD_COPIES:
             self._field_copies.discard(key)
             self._field_holds(key, content)
@@ -1623,6 +1633,7 @@ class Engine:
                   for s in p.samplers if s.kind == 'import'}
         inputs |= {ref[1] for ref in (position or ()) if ref is not None and ref[0] == 'unit'}
         self._in_use.update(inputs)
+        previous = state.stamp
         result = None
         fmt = _publication_format(channel, self.precise, scalar_unit(key))
         try:
@@ -1649,6 +1660,7 @@ class Engine:
         state.stamp = stamp
         state.carried = None
         self.rendered.append(key)
+        self._note_reads(key, previous != stamp, inputs)
         for ref in position or ():
             if ref is not None and ref[0] == 'unit':
                 self._settle(ref[1], n)
@@ -1679,11 +1691,50 @@ class Engine:
         """Release a CHANNEL result its consumer has drawn with, unless it is kept."""
         if key in self.keep or key in self.retained or self.graph.consumers.get(key) or self._in_use[key] > 0:
             return
+        if key in self._frontier or (self._reads is not None and key in self._reads and key not in self._changed):
+            return
         state = self.states.get(key)
         if state is not None and state.textures:
             for texture, fmt in zip(state.textures, state.formats):
                 device().release(texture, n, fmt)
             state.textures = None
+
+    def _note_reads(self, key, changed, inputs):
+        """Record that ``key`` was rendered with new content from ``inputs`` (unit keys)."""
+        if self._reads is None or not changed or not KEEP_READS:
+            return
+        self._changed.add(key)
+        self._reads.update((item, None) for item in inputs if item[0] == 'CHANNEL')
+
+    def _update_frontier(self, n):
+        """Keep the unchanged CHANNEL results that changed units read in this evaluation.
+
+        During a drag the same units change on every tick and read the same unchanged
+        results: the inside of a smart material above the edited layer, which its folder
+        step composes over again, or the layers below. Released after their use, these were
+        rendered again on every tick, with everything they read. They are kept until an
+        evaluation changes something without reading them, in what the retention budget
+        has left, earliest read first. An evaluation that changed nothing keeps them as
+        they are."""
+        reads, changed = self._reads, self._changed
+        self._reads = self._changed = None
+        if not changed:
+            return
+        budget, frontier = RETAIN_BYTES - sum(self.retained.values()), set()
+        for key in reads:
+            if key in changed:
+                continue
+            state = self.states.get(key)
+            if state is None or not state.textures or key in self.keep:
+                continue
+            size = sum(texture_bytes(n, n, fmt) for fmt in state.formats)
+            if size <= budget:
+                budget -= size
+                frontier.add(key)
+        stale = (self._frontier | (reads.keys() - changed)) - frontier
+        self._frontier = frontier
+        for key in stale:
+            self._settle(key, n)
 
     def _bind(self, sampler, n, memo, epochs, backdrop, grouped, owner=None):
         kind = sampler.kind
@@ -1942,6 +1993,7 @@ class Engine:
         self.stages = stages.evaluation()
         self.stages['profiled'] = self.profiling
         self.rendered = []
+        self._reads, self._changed = {}, set()
         self._in_use = Counter()
         self._surface_key = None
         pixels = dev.pixel_publish
@@ -1998,9 +2050,10 @@ class Engine:
                             for key in released:
                                 self._settle(key, n)
                             if final[0] == 'unit' and self._native_stamps is not None:
-                                # The runs under the final unit, one pass each (suffix.py), as on
-                                # the native channel path. A collapsed final is then current, so
-                                # it is published as it is rather than fused.
+                                # Fused chains, then the runs under the final unit, one pass each
+                                # (fusion.py, suffix.py), as on the native channel path. A collapsed
+                                # final is then current, so it is published as it is rather than fused.
+                                fusion.materialize(self, final[1], n, memo, epochs)
                                 self._suffix.collapse(self, final[1], n, memo, epochs)
                             result = self._fused_final(channel, n, memo, epochs)
                             fused = result is not None
@@ -2051,6 +2104,7 @@ class Engine:
                         self.images[channel] = pointer
                         written.add(channel)
         self.deferred = deferred
+        self._update_frontier(n)
         if self._kept_finals:
             self._kept_finals = False
             self._trim_retained(n)
@@ -2116,7 +2170,7 @@ class Engine:
                 for key in spine:
                     self.keep.add(key)
                     self._texture_of(('unit', key), n, memo, epochs or {})
-            return self._suffix.prearm(self, layer_id, n, memo, epochs or {})
+            return self._suffix.prearm(self, layer_id, n, memo, epochs or {}) or fusion.prearm(self, layer_id)
 
     def _evaluate_native_channels(self, order, ts, images, n, memo, epochs):
         from ...native_bridge import lifecycle
@@ -2153,6 +2207,7 @@ class Engine:
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
             if final[0] == 'unit':
+                fusion.materialize(self, final[1], n, memo, epochs)
                 self._suffix.collapse(self, final[1], n, memo, epochs)
             result = self._texture_of(final, n, memo, epochs)
             if self.profiling:

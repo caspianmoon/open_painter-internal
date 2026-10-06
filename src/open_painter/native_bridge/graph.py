@@ -325,6 +325,8 @@ class NativeGraph:
             self.own[keys[index]] = value
         self.last_patch_count = len(changes)
         self.last_dirty_count = len(dirty)
+        # The units whose own content changed: with the composition, what fusion plans from.
+        self.last_changed = frozenset(keys[index] for index, _ in changes)
         self.values = stamps
         found = dict(zip(keys, stamps))
         found.pop(None, None)   # free slots

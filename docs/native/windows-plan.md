@@ -275,9 +275,11 @@ What remains, by measured share (as of 2026-10-02; later sections update the fir
   Rendering only the stroke's bounds through the stack (region-limited evaluation) is the
   main remaining lever. It changes how results are cached (a result updated inside a
   rectangle rather than replaced), so it is a design change, not a tuning one.
-- **A mask edit mid-stack, 26–33 ms.** It renders 68 units against 16 for an opacity edit:
-  layers above it carry masks that read the composite height below them ("Dirt in folds",
-  "Cavity deposits"), so they really change and break the runs suffix collapse would merge.
+- **A mask edit mid-stack, 26–33 ms, now 12–13 ms** (`bfdeb2b`). It rendered 58 units per
+  tick, 41 of them unchanged: results released after each tick and rendered again (see
+  "Drags render only what changes", 2026-10-06). It now renders the 17 that change: the
+  layers above it whose masks read the composite height below them ("Dirt in folds",
+  "Cavity deposits") and the folder steps over them.
 - **Cold build, 1.5–1.8 s.** About 0.45 s of it is decoding the thirteen bundled detail
   PNGs that the stack uses (1254 × 1254, about 37 ms each). They are noisy, so they hardly
   compress: an uncompressed lossless copy would load almost free at a similar size. That
@@ -495,6 +497,69 @@ part and a part per texel (2K and 4K extrapolated; measuring them needs the user
 | Bottom folder opacity drag | 9.3 | 14.4 | about 35 | about 116 |
 | Mask edit mid-stack | 15.8 | 25.7 | about 65 | about 225 |
 | Memfile undo, smart-material apply | 93–101 | 97–122 | fixed CPU | fixed CPU |
+
+### Drags render only what changes; fused chains (2026-10-06)
+
+**Kept reads** (`bfdeb2b`). On every tick of a drag the same units change, and they read
+the same unchanged results. Examples are the inside of a smart material above the edited
+layer, which its folder step composes over again, the layers below, and the fields those
+read. The scheduler released such a result once its consumer had drawn, so the next tick
+rendered it again with everything it reads. A mask edit mid-stack rendered 58 units per
+tick, 41 of them unchanged.
+- Each render records what a changed unit read (`Engine._note_reads`). `_settle` keeps
+  those results, and `_update_frontier` holds them until an evaluation changes something
+  without reading them. They fit in what the retention budget (`RETAIN_BYTES`) has left.
+- The same drag renders the 17 units that change. `engine_kept_reads.py` requires that
+  from the third tick on nothing unchanged renders, and that results equal a from-scratch
+  render bit for bit. `OP_KEEP_READS=0` turns the rule off.
+
+**Chain fusion** (`bfdeb2b`, `engine/fusion.py`). Inside a smart material, layers
+composite with straight alpha over a transparent start, which is not affine, so suffix
+collapse cannot fold them. An edit there re-rendered the siblings above it one pass each.
+A fused pass runs the members' own programs in registers instead.
+- **Exactness.** Between members the value is rounded as the member's half-float store
+  would round it. NVIDIA's stores truncate (toward zero) on both backends, and
+  `unpackHalf2x16(packHalf2x16(x))` is folded away by the driver, so the rounding is
+  emulated with integer operations. `store_rounding` picks the emulation (toward zero or
+  to nearest even) that matches this device's stores bit for bit in every value class:
+  ties, half denormals, overflow, infinities, float denormals. Without a match, fusion is
+  off. Each fused shader is also checked once against sequential rendering.
+- **Scheduling.** A chain's top takes its desired stamp before C plans the channel, as a
+  collapsed run's does. The members keep no texture, and their stamps say they hold their
+  content, as an evicted result's would. (A stale stamp made one of them the lowest
+  changed unit, and the checkpoints kept the wrong results.)
+- **Compilation.** A chain is planned once per drag. Its shader is compiled when the
+  same edit renders it again, or while idle for the selected layer; never for an apply,
+  an undo or a cold build. A first compile takes 200–330 ms on Vulkan and 85–105 ms on
+  OpenGL. Blender's SPIR-V cache and NVIDIA's GL cache keep it across sessions
+  (1.2–1.8 ms after).
+- **Effect.** A four-unit chain takes 0.65 ms of GPU time instead of 1.2 ms at 1K, and
+  0.33 instead of 0.55 at 512, so the saving grows with resolution. At 1K a drag is
+  mostly CPU, which hides most of it.
+- **Tests.** `native_fusion.py` drags seven places, at display and full precision, with
+  and without collapse. Results equal the same drag rendered sequentially and a
+  from-scratch render, bit for bit. Both emulations are checked on the GPU against
+  independent numpy models. Mutations caught: unrounded members, the same without
+  verification (913 texels differ), parameter offsets dropped.
+
+**Prepared first ticks** (`03a0174`). While idle, `Engine.prearm` now also:
+- keeps what an edit of the selected layer will read (`_prearm_reads`);
+- verifies the layer's fused chains;
+- warms the suffix apply pipeline per target format.
+After it, a drag's first tick renders only what changes; `engine_kept_reads.py` requires
+it.
+
+| Deep stack, Vulkan, 40 layers at 1K, ms | Before | After |
+| --- | ---: | ---: |
+| Mask edit mid-stack | 22.5–23.6 | 12.2–12.5 |
+| Bottom leaf roughness | 5.9–6.0 | 5.1–5.2 |
+| Middle leaf opacity | 11.3–11.6 | 10.5–10.8 |
+| First tick of a middle-leaf drag (after idle arming) | 15–16 | 11–14 |
+| First tick of a mask drag (after idle arming) | 25–52 | 16–23 |
+| Folder drags, apply, undo, paint, cold build | unchanged | unchanged |
+
+The bottom folder's first tick renders the same 16 units as later ticks but takes about
+27 ms against 13. The difference is GPU time, as after any idle period.
 
 ### Speed: native kernels where the time went (2026-10-02)
 

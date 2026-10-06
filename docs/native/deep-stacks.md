@@ -103,7 +103,21 @@ These units render normally and split runs:
 - the non-opaque chains inside isolated folders.
 
 Editing inside a smart-material folder therefore re-renders the rest of that
-folder's own chain, then collapses everything above the folder.
+folder's own chain, then collapses everything above the folder. Since `bfdeb2b`
+that rest of the chain renders as one fused pass (`evaluation/engine/fusion.py`):
+the members' own programs run in registers, rounded between them as their
+half-float stores would round, so the result is bit-identical. See the Windows
+plan, "Drags render only what changes; fused chains".
+
+### Unchanged inputs stay resident
+
+A result that a changed unit reads but that does not change itself is read again
+on the next tick of the same drag: a smart material's inside under its folder
+step, the layers below an edit, the fields they read. Since `bfdeb2b` such
+results are kept (`Engine._update_frontier`) instead of being released after use
+and rendered again on every tick; idle arming keeps the ones an edit of the
+selected layer will read (`_prearm_reads`, `03a0174`). A mask edit mid-stack of
+the 40-layer stack went from 58 units per tick to the 17 that change.
 
 ### Memory
 
@@ -1059,8 +1073,9 @@ Machines with 16 GB or more keep the previous limits.
 - **Isolated folders.** Chains inside isolated folders are not collapsed: they
   composite with straight alpha over a transparent start, which is not affine in the
   backdrop. Editing a layer inside a smart material re-renders the siblings above it
-  (4 of a middle leaf's 7 units per channel). Premultiplied compositing inside
-  isolated folders would make them collapsible.
+  (4 of a middle leaf's 7 units per channel), since `bfdeb2b` as one fused pass per
+  channel. Premultiplied compositing inside isolated folders would make them
+  collapsible: one pass for a run of any length.
 - **Opening a deep file.** The first build of the 200-layer stack takes about 3.3 s
   at 1K: compiling 1,728 units, decoding the detail-source images (about 0.9 s),
   translating programs and the first render.

@@ -260,7 +260,9 @@ def run():
     graph = rebuilt
     builds = info['graph_builds']
 
-    # Undo/redo rebuild a graph that imports composite exports.
+    # Undo/redo keep a graph that imports composite exports: the undo restores a numeric value,
+    # so the graph follows the restored structs (undo_follow), or is rebuilt with
+    # OP_FOLLOW_NUMERIC_UNDO=0.
     bpy.ops.ed.undo_push(message='before edit')
     stack.channel_for(layer_by_id(ts, masked_id), 'ROUGHNESS').value = .2
     ready(scene, ts)
@@ -269,7 +271,7 @@ def run():
     scene = bpy.context.scene
     ts = next(item for item in scene.open_painter.texture_sets if item.name == 'Shader output anchors')
     info = ready(scene, ts)
-    assert info['graph_builds'] == 1, info
+    assert info['graph_builds'] + info['undo_follows'] == 1, info
     rebuilt = shader_preview.ensure(scene, ts)
     assert any(producer[0] == 'CHANNEL' and export in {'Out', 'Group'}
                for unit in rebuilt.units.values() for producer, export, _ in unit.imports), \

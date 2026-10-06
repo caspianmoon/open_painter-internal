@@ -697,12 +697,29 @@ def on_load(_):
 
 
 _undo_main = None   # the address of bpy.data before an undo or redo (on_undo_pre)
+_undo_snapshots = {}   # (scene session id, set id) -> the set's stored properties before it (undo_follow)
 
 
 @persistent
 def on_undo_pre(_):
     global _undo_main
     _undo_main = bpy.data.as_pointer()
+    _undo_snapshots.clear()
+    if getattr(bpy.context, 'mode', '') == 'PAINT_TEXTURE':
+        return   # a stroke's undo restores pixels: no set is rebuilt to follow (and no snapshot is due)
+    from . import shader_preview, undo_follow
+    try:
+        for scene in bpy.data.scenes:
+            if not hasattr(scene, "open_painter"):
+                continue
+            for ts in scene.open_painter.texture_sets:
+                if shader_preview.followable(scene, ts):
+                    snapshot = undo_follow.snapshot(scene, ts)
+                    if snapshot is not None:
+                        _undo_snapshots[(scene.session_uid, ts.id)] = snapshot
+    except Exception:
+        _undo_snapshots.clear()   # the undo then rebuilds every set, as it would without them
+        logger.debug('Undo snapshots', exc_info=True)
 
 
 def _restored_datablocks():
@@ -724,9 +741,12 @@ def on_undo(_):
     # tree still points at it (the open 0.13 crash; docs/quality-stability-0.13.md, S2).
     freeze_new_leaves(True)
     from . import shader_preview
-    if not _restored_datablocks() and all(shader_preview.requested(ts) for scene in bpy.data.scenes
-                                          if hasattr(scene, "open_painter")
-                                          for ts in scene.open_painter.texture_sets):
+    restored = _restored_datablocks()
+    before = dict(_undo_snapshots)
+    _undo_snapshots.clear()
+    if not restored and all(shader_preview.requested(ts) for scene in bpy.data.scenes
+                            if hasattr(scene, "open_painter")
+                            for ts in scene.open_painter.texture_sets):
         # Nothing was restored but pixels or a mesh, which report their depsgraph updates like an
         # edit: the sessions keep their graphs and render what reads them (an undone brush stroke
         # cost a whole rebuild). A CPU-mode set starts over, as after any undo.
@@ -735,6 +755,24 @@ def on_undo(_):
     # session, job and dirty flag starts over. Correction records stay (see
     # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
     _relearn(forget_corrections=False)
+    if restored and before:
+        # A set whose stored properties changed only in numeric values keeps its compiled
+        # structure: its graph follows the restored structs (``undo_follow``). Compared after
+        # ``_relearn``, whose writes (derived physical values) count too.
+        from . import undo_follow
+        followed = []
+        try:
+            for scene in bpy.data.scenes:
+                if not hasattr(scene, "open_painter"):
+                    continue
+                for ts in scene.open_painter.texture_sets:
+                    snapshot = before.get((scene.session_uid, ts.id))
+                    if snapshot is not None and undo_follow.numeric_only(snapshot, undo_follow.snapshot(scene, ts)):
+                        followed.append(key_for(scene, ts))
+        except Exception:
+            followed = []
+            logger.debug('Undo comparison', exc_info=True)
+        shader_preview.follow_undos(followed)
 
 
 def _pack_images(source_images):

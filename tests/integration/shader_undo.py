@@ -105,7 +105,9 @@ second = published(scene, ts)
 assert not same(first, second), 'the second edit changed no channel'
 bpy.ops.ed.undo_push(message='second edit')
 
-# Undo: the handler drops the session; the next tick compiles the restored stack and adopts
+# Undo: the handler drops the session. The undo restored only a numeric value (the mask's
+# amount), so the next tick has the retired graph follow the restored structs, keeping its
+# engine (undo_follow); with OP_FOLLOW_NUMERIC_UNDO=0 it compiles the restored stack and adopts
 # the CPU inputs it binds (no source is generated again).
 started = perf_counter()
 bpy.ops.ed.undo()
@@ -115,7 +117,8 @@ assert not shader_preview.current(scene, ts), 'undo did not clear the runtime se
 with Metrics() as observed:
     info = ready(scene, ts)
 undo_ms = (perf_counter() - started) * 1000
-assert info['graph_builds'] == 1, info
+followed = shader_preview.FOLLOW_NUMERIC_UNDO and shader_preview.UNDO_ADOPTION
+assert (info['undo_follows'], info['graph_builds']) == ((1, 0) if followed else (0, 1)), info
 assert observed.counts['shader_resource_requests'] == 0, observed.report()
 mask = next(item for item in ts.layers if item.id == layer_id).masks[0]
 assert abs(mask.amount - (original * .5 + .1)) < 1e-6
@@ -130,7 +133,10 @@ report['undo_ms'] = round(undo_ms, 1)
 report['undo_adopted'] = observed.counts.get('shader_undo_adopted_units', 0)
 report['undo_carried'] = observed.counts.get('engine_carried_results', 0)
 report['undo_rebound'] = observed.counts.get('engine_rebound_programs', 0)
-if shader_preview.UNDO_ADOPTION:
+report['undo_followed'] = observed.counts.get('shader_undo_followed_graphs', 0)
+if followed:
+    assert report['undo_followed'] == 1 and not report['undo_adopted'], report
+elif shader_preview.UNDO_ADOPTION:
     assert report['undo_adopted'] > 0, 'the rebuild adopted no unit of the graph the undo retired'
 else:
     assert report['undo_carried'] > 0, "the rebuilt session started without the dropped engine's results"

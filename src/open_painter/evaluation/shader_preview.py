@@ -36,6 +36,10 @@ VERIFY_UNDO = os.environ.get('OP_VERIFY_UNDO') == '1'   # compare them with a fr
 TAG_IMAGES = os.environ.get('OP_TAG_IMAGES') == '1'
 _retiring = {}   # session key -> graphs an undo dropped, still counting their leaves until a rebuild adopts them
 _carried = {}    # session key -> the engine an undo dropped: its rebuild starts from its results
+# A memfile undo that restored only numeric values of a set (``undo_follow``): its retired graph
+# follows the restored structs and keeps its engine instead of a rebuild (0: rebuild, for comparisons).
+FOLLOW_NUMERIC_UNDO = os.environ.get('OP_FOLLOW_NUMERIC_UNDO', '1') != '0'
+_followable = set()   # session keys the last undo restored only numeric values of
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
 
@@ -309,6 +313,7 @@ def diagnostics(scene, ts, *, details=True):
             'rebuild_scope': entry.get('rebuild_scope'),
             'graph_builds': entry.get('graph_builds', 0),
             'graph_patches': entry.get('graph_patches', 0),   # structural edits applied in place
+            'undo_follows': entry.get('undo_follows', 0),   # memfile undos the graph followed (undo_follow)
             'graph_rehydrations': 0,
             'binding_updates': entry.get('binding_updates', 0),
             'update_calls': entry.get('update_calls', 0),
@@ -465,6 +470,10 @@ def ensure(scene, ts):
         # (``Graph._follow_undo``) instead of compiled again.
         retired = _retiring.get(key, [None])[-1] if previous is None and UNDO_ADOPTION else None
         undo = retired.undo_index() if retired is not None and hasattr(retired, 'undo_index') else None
+        if undo is not None and key in _followable:
+            followed = _follow_undo(scene, ts, key, retired, undo)
+            if followed is not None:
+                return followed
         candidate = EngineGraph(scene, ts)
         from . import gc_policy
         try:
@@ -1034,6 +1043,68 @@ def prune(live):
             entry['engine'].close()
 
 
+def followable(scene, ts):
+    """Whether the set's session is current in structure, so that an undo restoring only numeric
+    values can be followed (``cache.on_undo_pre`` takes the set's snapshot then)."""
+    if not FOLLOW_NUMERIC_UNDO or not UNDO_ADOPTION or not requested(ts):
+        return False
+    key = key_for(scene, ts)
+    entry = _sessions.get(key)
+    graph = entry.get('graph') if entry else None
+    if (graph is None or entry.get('engine') is None or entry.get('rebuild') or entry.get('recheck')
+            or entry.get('error') or entry.get('known') != ts.edit_serial   # an edit no callback reported
+            or key in _holds or key in _batches or not hasattr(graph, 'follow_restored')):
+        return False
+    return not graph._stubs and graph._dirty_layers is not None and not graph._dirty_layers
+
+
+def follow_undos(keys):
+    """The sessions the undo that just ran restored only numeric values of (``undo_follow``)."""
+    _followable.update(keys)
+
+
+def _follow_undo(scene, ts, key, graph, undo):
+    """A memfile undo restored only numeric values of the set: its graph follows the restored
+    structs and keeps its engine (``EngineGraph.follow_restored``), as a numeric edit is applied.
+    None when it cannot: the set is built as after any undo."""
+    _followable.discard(key)
+    engine = _carried.get(key)
+    follow = getattr(graph, 'follow_restored', None)
+    if (follow is None or engine is None or engine.graph is not graph or engine.set_id != ts.id
+            or engine.scene_uid != getattr(scene, 'session_uid', None)):
+        return None
+    from . import gc_policy, profile
+    try:
+        with gc_policy.paused():
+            if not follow(scene, ts, undo):
+                metrics.count('shader_undo_follow_refusals')
+                return None
+            if VERIFY_UNDO:
+                graph.verify_undo()
+    except Exception:
+        logger.exception('Open Painter: the set is built again after an undo')
+        return None
+    _carried.pop(key)
+    engine.scene = scene   # an undo restored the Scene: its old reference is stale
+    engine.adopt(graph)
+    entry = _sessions.setdefault(key, {})
+    entry.pop('dropped', None)   # every binding was read again
+    entry.update(graph=graph, engine=engine, dirty=True, store=_store(ts), rebuild_scope=None,
+                 undo_follows=entry.get('undo_follows', 0) + 1)
+    built = dict(getattr(graph, '_last', {}))
+    stage = entry.setdefault('stage', stages.begin())
+    stage['build_ms'] += float(built.get('build_ms', 0.0))
+    stage['reused'] += int(built.get('reused_units', 0))
+    _record(entry, ts, built)
+    for retired in _retiring.pop(key, ()):
+        if retired is not graph:
+            retired.unbind()
+    metrics.count('shader_undo_followed_graphs')
+    profile.record_graph(scene, ts, graph)
+    gc_policy.allocated()
+    return graph
+
+
 def clear(undo=False):
     """Forget runtime sessions; the set images keep their last result.
 
@@ -1042,6 +1113,7 @@ def clear(undo=False):
     publication included — removes a leaf the rebuild is about to reuse. A file load
     or unregistration forgets them.
     """
+    _followable.clear()   # what an earlier undo marked: its graphs answer for another state now
     for key, entry in _sessions.items():
         graph = entry.get('graph')
         if graph is not None:

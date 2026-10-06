@@ -416,6 +416,80 @@ while the channel's colour, opacity, blend or masks change.
   every unit is checked again (undo) and, on OpenGL, in an apply; other cases are within
   noise.
 
+### Numeric undos, per-pass costs and resolution scaling (2026-10-06)
+
+**A memfile undo that restored only numeric values keeps the graph.** A memfile undo
+reallocates every struct of the layer store, so each session was built again, adopting its
+units one by one. On the deep stack that build was about half of an undo: the plan, every
+unit's structural signature and owners, the reach map and the native description. Most
+undos restore a value the add-on edits as a uniform: an opacity, a colour, a mask's level, a
+visibility.
+- `cache.on_undo_pre` snapshots each settled engine set's stored properties: its layer store
+  and its own. `cache.on_undo` snapshots them again after the restore.
+  `evaluation/undo_follow.py` compares the two. A field counts as numeric by its declaration
+  (a `numeric` update callback, in nested groups and collections too); bookkeeping the
+  compiler never reads may differ too. Anything else, an unknown field, a collection of
+  another length or a datablock that went with the undo rebuilds as before.
+- For such a set, `EngineGraph.follow_restored` re-points the retired graph's units to the
+  restored structs (`_follow_undo`), rebuilds the tables keyed by struct address and reads
+  every binding again, as after a numeric edit. The graph keeps its engine. It refuses (and
+  the set rebuilds) when a unit holds a CPU boundary, a cache, a Mask Graph or a datablock
+  no path maps, when the graph has stubs, or when structural edits are pending.
+- A snapshot costs about 2.5 ms on 44 layers: `to_dict`, then a walk over the fields that can
+  hold a datablock. It is skipped in texture paint mode, where undos are a stroke's image
+  steps (`1a43b39`).
+- `undo_follow.py` checks it on both backends. Every numeric undo and redo is followed, keeps
+  the graph, equals a fresh compile (`verify_undo`) and publishes bit for bit the state it
+  returned to. Structural and mixed undos rebuild, and so does the second of two undos with
+  no tick between them. `OP_FOLLOW_NUMERIC_UNDO=0` rebuilds every time. A first version
+  kept `_live_effects`'s cache of effect structs and crashed in `validate_parameters`: the
+  follow drops every cache that holds structs.
+
+| Deep stack, Vulkan, 40 layers at 1K, ms | Follow | Rebuild |
+| --- | ---: | ---: |
+| Numeric undo (background) | 57–66 | 82–83 |
+| Structural undo (background) | 90–96 | 81–84 |
+| Numeric undo in a window, from the restore to current | 73–84 | 104–133 |
+
+  A structural undo pays the two snapshots (about 5 ms). The same comparison names the
+  layers it changed, so following the rest and patching those (as a structural edit does)
+  is the next step.
+
+**Descriptors and colour spaces** (`8a1dcfe`). The engine's graph wrote the JSON descriptors a
+material's persisted trees carry for rehydration, which the engine never reads. Every
+evaluation read each sampled image's colour space through RNA (8–22 µs each); it is now read
+from the Image struct's bytes, checked against RNA once per image. Paint 5.4–5.9 → 4.7–5.2 ms,
+adding a fill about 1.5 ms less, structural undo 105 → 97 ms.
+
+**Where a drag's GPU time goes.** Each pass timed between two GPU waits (an upper bound),
+Vulkan, 40 layers at 1K, per evaluation:
+
+| Case | Units | Publication | Mips |
+| --- | ---: | ---: | ---: |
+| Top folder opacity (8 channels) | 8 units, 4–7 ms | 8 passes, 2.7–3.6 ms | 30 draws, 1.3–4.1 ms |
+| Mask edit mid-stack (4 channels) | 57 units, 18–20 ms | 4 passes, 2.9 ms | 20 draws, 2.4 ms |
+| Paint input | 1 pass, 0.3–0.4 ms | 1 pass, 0.3–0.4 ms | 10 draws, 0.1–1.0 ms |
+
+- **Publication.** It writes the image (a 32-bit float texture, 16 bytes a texel) and the copy
+  its mips reduce, so it is bandwidth-bound: about 0.34 ms a channel at 1K, twice a unit
+  pass. A half-float image would round normals and mip levels, so it stays.
+- **Mips.** A mip draw costs about 35 µs of submission; small levels are all overhead. Four
+  channels to a draw would halve a four-channel drag's draws, but Blender's framebuffer takes
+  six attachments, which three lanes already use (`MIP_LANES`).
+- **Units.** Every unit a drag renders is a real change. A mask edit mid-stack renders 57,
+  because the masks above it read the composite height below them.
+
+**How each case scales with resolution.** The deep stack at 512 and at 1K, split into a fixed
+part and a part per texel (2K and 4K extrapolated; measuring them needs the user's approval):
+
+| Case, ms | 512 | 1K | 2K | 4K |
+| --- | ---: | ---: | ---: | ---: |
+| Paint input | 4.1 | 4.9 | about 8 | about 20 |
+| Leaf opacity drag | 8.0 | 11.6 | about 26 | about 83 |
+| Bottom folder opacity drag | 9.3 | 14.4 | about 35 | about 116 |
+| Mask edit mid-stack | 15.8 | 25.7 | about 65 | about 225 |
+| Memfile undo, smart-material apply | 93–101 | 97–122 | fixed CPU | fixed CPU |
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time

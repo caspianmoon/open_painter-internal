@@ -145,6 +145,73 @@ class EngineGraph(Graph):
         changes, self.unit_changes = self.unit_changes, set()
         return changes
 
+    def follow_restored(self, scene, ts, index):
+        """Follow a memfile undo that restored only numeric values of the set (``undo_follow``):
+        the structure this graph compiled still holds, so each unit is re-pointed to the structs
+        now at its owners' paths (``_follow_undo``) and every binding is read again, as after a
+        numeric edit, instead of building a graph that adopts the units one by one. ``index`` is
+        this graph's ``undo_index``, taken before the undo.
+
+        False when the graph cannot follow (a unit holds a CPU boundary, a cache, a Mask Graph or
+        a datablock no path maps; a stub; structural edits pending): the caller then builds as
+        after any undo, which recompiles whatever a partial follow already re-pointed."""
+        import bpy
+        from ..shader_graph import _addresses, global_signature
+        started = perf_counter()
+        previous = self._structure_plan
+        if (not self.units or self._structure is None or previous is None or self._stubs
+                or self._dirty_layers is None or self._dirty_layers or self.resource_bindings
+                or self.cache_bindings or self._global != global_signature(ts)
+                or len(self.bindings) != sum(len(unit.bindings) for unit in self.units.values())):
+            return False
+        self.scene, self.ts = scene, ts
+        # Caches holding structs from before the undo: the live effects and the plan a structure
+        # check made for the next patch.
+        self._live_cache = self._live_seeds = self._scope_plan = None
+        # No layer was edited structurally: every layer's answers carry over, read from the
+        # restored structs.
+        plan = self.plan(previous, set())
+        if plan.affected or set(plan.keys) != set(self.units) or plan.wiring != previous.wiring:
+            return False
+        moves = self._undo_structs(index)
+        moved = self._undo_moved = _addresses(moves)
+        self._undo_moves, self._undo_fresh = moves, {id(struct) for struct in moves.values()}
+        self._undo_images = {image.session_uid: image for image in bpy.data.images}
+        try:
+            for key, unit in self.units.items():
+                current = tuple(moved.get(pointer) for pointer in unit.owner_pointers)
+                if None in current or not self._follow_undo(unit, key, current):
+                    return False
+        finally:
+            self._undo_moves = self._undo_moved = self._undo_images = self._undo_fresh = None
+        # The tables keyed by struct address, from the units (as adopting them builds them).
+        self.bindings, self.owner_bindings, self.image_bindings = {}, defaultdict(list), []
+        self._compiled_effects = {}
+        for unit in self.units.values():
+            self.bindings.update(unit.bindings)
+            for binding in unit.bindings.values():
+                for pointer in binding.pointers():
+                    self.owner_bindings[pointer].append(binding)
+            self.image_bindings.extend(unit.image_bindings)
+            self._compiled_effects.update(unit.compiled_effects)
+        if _removed_graph_units(self.bindings.values()):
+            return False
+        self._paths = None
+        self._path(ts)   # indexed now, for the next undo (``undo_index``)
+        self._settled(plan)
+        self._layout = self._stack_layout()
+        self._global = global_signature(ts)
+        self._reused = list(self.units)   # every unit followed (``verify_undo``)
+        self.unit_changes = set()   # the engine keeps every unit's state
+        self.validate_parameters()
+        corrections = self.update(check_structure=False)
+        nodes, unit_nodes, unit_build_ms = getattr(self, '_tally', (None, {}, {}))
+        self._last = self._report(started, corrections, 0, unit_nodes, unit_build_ms, nodes=nodes)
+        metrics.count('engine_graph_undo_follows')
+        from ..dependencies import remember, geometry_key
+        remember(scene, ts, geometry_key(scene, ts))
+        return True
+
     # ---- trees -------------------------------------------------------------------
 
     def _new_unit_tree(self, key):

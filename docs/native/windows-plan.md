@@ -561,6 +561,51 @@ it.
 The bottom folder's first tick renders the same 16 units as later ticks but takes about
 27 ms against 13. The difference is GPU time, as after any idle period.
 
+### Folder steps with empty channels; mesh signatures after an undo (2026-10-06)
+
+**A folder's parameters skip its empty channels** (`66aee06`). A smart material's children
+often paint only some channels; in the deep stack: base colour, roughness, metallic and
+height. In the other channels the folder step's group input is the constant transparent
+composite, so it blends with zero alpha over its backdrop. Its result is the backdrop's,
+whatever its opacity and masks, but its content stamp counted those parameters. Dragging
+a folder's opacity therefore rendered and published those channels again on every tick.
+- `Engine._param_free` leaves the parameters out of such a unit's content stamp.
+- Each program is checked once on the GPU first (`_check_param_free`): a corner is
+  rendered with the unit's own parameters, all zeros, all ones and random values, and
+  the four must agree bit for bit.
+- Measured: top folder opacity 10.95 → 8.1 ms (8 → 4 units), bottom folder 13.35 → 9.55
+  (16 → 8).
+- `engine_param_free.py` compares every channel's published image with a from-scratch
+  render, the channels not published again included.
+
+**Mesh signatures** (`b21b104`, `53cf6d3`). Every memfile undo, redo and load clears the
+mesh fingerprints (`dependencies.clear`). The next geometry key then hashed each assigned
+mesh again: about 0.7 ms per 1,000 vertices (hashlib's SHA-256 at 82 MB/s here, over RNA
+reads that go element by element). On the benchmark's 1.1K-vertex sphere that was 4 ms,
+but a 130K-vertex mesh took about 350 ms on every undo.
+
+The same bytes are now:
+- read from Blender's attributes, derived exactly where nothing stores them, or copied
+  directly from Blender's memory (`_direct`). A direct copy happens only when the
+  elements' addresses form one array and three values match RNA, as for an Image's
+  colour space;
+- hashed with `utils.digest`'s SHA-256 (the native one, 260 MB/s here);
+- kept per mesh session id after hashing, so an unchanged mesh keeps its digest after an
+  undo, compared byte for byte.
+
+Digests are unchanged. A cached digest also has to match the mesh's session id: a mesh
+created where a freed one lived could get its digest.
+
+| Mesh signature, ms | 32K vertices | 130K | 523K |
+| --- | ---: | ---: | ---: |
+| Before, after any undo | 85–115 | 342–371 | 1,432–1,441 |
+| First hash now | 24 | 80 | 329 |
+| After an undo of an unchanged mesh now | 4–5 | 12–15 | 47–56 |
+
+The deep stack's numeric undo with a 130K-vertex mesh takes 62–67 ms; before, it spent
+about 350 ms more in the signature alone. Drags and applies cost the same with 1.1K and
+130K vertices.
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time

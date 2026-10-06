@@ -542,6 +542,18 @@ A fused pass runs the members' own programs in registers instead.
   independent numpy models. Mutations caught: unrounded members, the same without
   verification (913 texels differ), parameter offsets dropped.
 
+**Folder steps and short affine runs** (`29e5226`). Fusion first took only non-affine units
+without a group input.
+- A folder step's group input is one more texture read at its texel, so folder steps are
+  fusable now.
+- Affine units are fusable unless they belong to a run that suffix collapse folds under the
+  same root.
+- A run member must have been rendered with its current local stamp, and C recorded that
+  only for the units `op_graph_execute` renders. Units rendered in a fused pass therefore
+  fell out of the runs armed for them: on OpenGL, 24 runs were armed and 6 applied.
+  `op_graph_mark_rendered` (ABI 14) records them as executing them would.
+- A mask edit mid-stack: 17 → 9 passes, 12.45 → 11.55 ms at 1K.
+
 **Prepared first ticks** (`03a0174`). While idle, `Engine.prearm` now also:
 - keeps what an edit of the selected layer will read (`_prearm_reads`);
 - verifies the layer's fused chains;
@@ -938,7 +950,7 @@ engine.
   why.
 - **Build:** `& $py scripts/build_native.py --python-include <CPython 3.13>\include`.
 
-**Done when:** in Blender, `load_library` loads the binding (`module.abi()` returns 13),
+**Done when:** in Blender, `load_library` loads the binding (`module.abi()` returns the current ABI, 14 since `29e5226`),
 `_op_binding` is set, and the native diagnostics (`lifecycle.diagnostics()`) say
 `compiled_binding: True`.
 

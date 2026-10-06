@@ -1,4 +1,4 @@
-# Deep stacks: suffix collapse and incremental evaluation (ABI 13)
+# Deep stacks: suffix collapse and incremental evaluation (ABI 14)
 
 The native Metal path made each GPU pass cheaper, but two costs still grew with
 the stack.
@@ -106,8 +106,11 @@ Editing inside a smart-material folder therefore re-renders the rest of that
 folder's own chain, then collapses everything above the folder. Since `bfdeb2b`
 that rest of the chain renders as one fused pass (`evaluation/engine/fusion.py`):
 the members' own programs run in registers, rounded between them as their
-half-float stores would round, so the result is bit-identical. See the Windows
-plan, "Drags render only what changes; fused chains".
+half-float stores would round, so the result is bit-identical. Since `29e5226`
+fusion also takes folder steps and the affine units no run folds; a fused pass
+records its units as rendered with their local stamps (`op_graph_mark_rendered`,
+ABI 14), as executing them would, so they stay run members. See the Windows plan,
+"Drags render only what changes; fused chains".
 
 ### Unchanged inputs stay resident
 

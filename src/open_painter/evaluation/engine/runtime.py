@@ -254,7 +254,10 @@ class Device:
                 metrics.count('engine_shader_evictions')
         return shader
 
-    def _create(self, source, samplers, parameter_slots=0, objects=0, targets=1, preamble=False, ints=()):
+    def _create(self, source, samplers, parameter_slots=0, objects=0, targets=1, preamble=False, ints=(),
+                counted=True):
+        """``counted``: a program of the units' or a fixed pass (``compiles``); fusion's derived
+        shaders count their own (``engine_chain_compiles``)."""
         import gpu
         if len(samplers) > self.max_samplers:
             raise ValueError(f'GPU pass needs {len(samplers)} samplers; device limit is {self.max_samplers}')
@@ -292,11 +295,12 @@ class Device:
                               if self.backend != 'OPENGL' or _has_uniform(shader, name))
         block = bool(parameter_slots or objects) and _has_uniform(shader, 'op_params', block=True)
         self._remember_interface(shader, (uniforms, block))
-        self.compiles += 1
         elapsed = perf_counter() - started
         self.compile_seconds += elapsed
-        metrics.count('engine_program_compiles')
-        metrics.sample('engine_program_compile_ms', elapsed * 1000)
+        if counted:
+            self.compiles += 1
+            metrics.count('engine_program_compiles')
+            metrics.sample('engine_program_compile_ms', elapsed * 1000)
         return shader
 
     def _remember_interface(self, shader, interface):
@@ -320,7 +324,9 @@ class Device:
         return self._remember_interface(shader, (uniforms, ubo is not None and
                                                  _has_uniform(shader, 'op_params', block=True)))
 
-    def fixed(self, name):
+    def fixed(self, name, counted=True):
+        """A fixed pass's shader, compiled once. ``counted=False``: a first compile for a self-test
+        (fusion's store check) is not one of the units' or passes' (``compiles``)."""
         shader = self._fixed.get(name)
         if shader is None:
             if name.startswith('suffix.'):
@@ -351,7 +357,8 @@ class Device:
                 'copy_mip': (COPY_MIP, ['op_source'], ('op_level',), 1)}[name]
             from ...native_bridge.compiler import fixed_source
             source = fixed_source('runtime.' + name, source)
-            shader = self._fixed[name] = self._create(source, samplers, targets=targets, ints=ints)
+            shader = self._fixed[name] = self._create(source, samplers, targets=targets, ints=ints,
+                                                      counted=counted)
         return shader
 
     # ---- textures -----------------------------------------------------------------
@@ -1658,6 +1665,19 @@ class Engine:
             state.textures = None
         self._field_copies.discard(key)
 
+    def _fuses_final(self, channel, n):
+        """Whether ``channel``'s final unit may render in its pixel publication's layout
+        (``_fused_final``): Vulkan through pixels, a non-normal CHANNEL final nothing else reads
+        or keeps."""
+        dev = device()
+        final = self.finals[channel]
+        if (not FUSE_PIXEL_PUBLISH or n > FUSE_PIXEL_PUBLISH_MAX_SIZE
+                or dev.backend != 'VULKAN' or not dev.pixel_publish
+                or self.profiling or channel == 'NORMAL' or final[0] != 'unit'):
+            return False
+        key = final[1]
+        return key[0] == 'CHANNEL' and key not in self.keep and not self.graph.consumers.get(key)
+
     def _fused_final(self, channel, n, memo, epochs):
         """Render a disposable final result directly in its publication layout.
 
@@ -1667,14 +1687,9 @@ class Engine:
         for a scalar channel (``_publication_format``).
         """
         dev = device()
-        final = self.finals[channel]
-        if (not FUSE_PIXEL_PUBLISH or n > FUSE_PIXEL_PUBLISH_MAX_SIZE
-                or dev.backend != 'VULKAN' or not dev.pixel_publish
-                or self.profiling or channel == 'NORMAL' or final[0] != 'unit'):
+        if not self._fuses_final(channel, n):
             return None
-        key = final[1]
-        if key[0] != 'CHANNEL' or key in self.keep or self.graph.consumers.get(key):
-            return None
+        key = self.finals[channel][1]
         state = self._state(key)
         stamp = self._stamp(key, memo, epochs)
         if state.textures is not None and state.stamp == stamp:
@@ -2125,7 +2140,14 @@ class Engine:
                                 # Fused chains, then the runs under the final unit, one pass each
                                 # (fusion.py, suffix.py), as on the native channel path. A collapsed
                                 # final is then current, so it is published as it is rather than fused.
-                                fusion.materialize(self, final[1], n, memo, epochs)
+                                if self._fuses_final(channel, n):
+                                    # The final renders with its publication (_fused_final): a chain
+                                    # ending at it fuses the units below it.
+                                    ending = fusion.materialize(self, final[1], n, memo, epochs, defer=True)
+                                    if ending is not None:
+                                        fusion.render_deferred(self, (ending[0][:-1], ending[1]), n, memo, epochs)
+                                else:
+                                    fusion.materialize(self, final[1], n, memo, epochs)
                                 self._suffix.collapse(self, final[1], n, memo, epochs)
                             result = self._fused_final(channel, n, memo, epochs)
                             fused = result is not None
@@ -2367,14 +2389,21 @@ class Engine:
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
+            deferred = None
             if final[0] == 'unit':
-                fusion.materialize(self, final[1], n, memo, epochs)
+                # A fused chain ending at the final renders in its publication pass (fusion.publish).
+                deferred = fusion.materialize(self, final[1], n, memo, epochs, defer=True)
                 self._suffix.collapse(self, final[1], n, memo, epochs)
-            result = self._texture_of(final, n, memo, epochs)
-            if self.profiling:
-                dev.finish()
             started, inputs = perf_counter(), self.stages['inputs_ms']
-            self._publish(image, channel, result, n)
+            if deferred is None or not fusion.publish(self, deferred[0], image, channel, n, memo, epochs,
+                                                      build=deferred[1]):
+                if deferred is not None:
+                    fusion.render_deferred(self, deferred, n, memo, epochs)   # one fused pass at least
+                result = self._texture_of(final, n, memo, epochs)
+                if self.profiling:
+                    dev.finish()
+                started, inputs = perf_counter(), self.stages['inputs_ms']
+                self._publish(image, channel, result, n)
             if self.profiling:
                 dev.finish()
             self.stages['publish_ms'] += max(0.0, (perf_counter() - started) * 1000
@@ -2565,11 +2594,8 @@ class Engine:
             self._presentation.forget(channel)   # a revision or the CPU pixels restore it now
         if self._native_revisions is not None and self._native_revisions.submitting:
             return self._native_revisions.stage(self, image, channel, result, n)
-        import gpu
         dev = device()
-        self._uniform_cpu.pop(channel, None)
-        if tuple(image.size) != (n, n):
-            raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
+        self._begin_publication(image, channel, n)
         donor = self._donor(n) if self.pad else None
         scalar = getattr(result, 'format', '') in {'RG16F', 'RG32F'}
         fmt = _publication_format(channel, self.precise, scalar and dev.pixel_publish)
@@ -2588,6 +2614,21 @@ class Engine:
             metrics.count('engine_image_pixel_writes')
             metrics.count('engine_image_pixel_write_bytes', n * n * 16)
             return
+        # Finish, pad and write level 0 in one pass, and its copy the mips reduce.
+        self._publish_in_place(image, channel, n, fmt,
+                               lambda slots: dev.draw(dev.fixed('publish'), slots, n, samplers, ints=ints))
+
+    def _begin_publication(self, image, channel, n):
+        self._uniform_cpu.pop(channel, None)
+        if tuple(image.size) != (n, n):
+            raise ValueError(f'{image.name} is {tuple(image.size)}, not the set resolution {n}')
+
+    def _publish_in_place(self, image, channel, n, fmt, draw):
+        """``draw([image, copy])`` writes level 0 of ``image`` and the copy its mips reduce; the mips
+        follow three channels to a draw (``_flush_mips``). The publication pass draws them, or a
+        fused chain that publishes its result (``fusion.publish``)."""
+        import gpu
+        dev = device()
         target = gpu.texture.from_image(image)
         if self._pending_mips and self._pending_mips[0][2] != n:
             self._flush_mips()
@@ -2596,9 +2637,7 @@ class Engine:
         if not kept:
             chain = dev.texture(n, fmt)
         try:
-            # Finish, pad and write level 0 in one pass, and its copy the mips reduce; the mips
-            # follow three channels to a draw (_flush_mips).
-            dev.draw(dev.fixed('publish'), [target, chain], n, samplers, ints=ints)
+            draw([target, chain])
         except BaseException:
             if not kept:
                 dev.release(chain, n, fmt)

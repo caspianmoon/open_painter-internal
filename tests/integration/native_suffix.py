@@ -24,7 +24,7 @@ from open_painter.constants import CHANNELS
 from open_painter.core import image_manager as images, layer_stack as stack
 from open_painter.core import texture_set_manager as sets
 from open_painter.evaluation import shader_preview
-from open_painter.evaluation.engine import runtime, suffix
+from open_painter.evaluation.engine import fusion, runtime, suffix
 from open_painter.evaluation.metrics import Metrics
 from open_painter.smart_materials import composer
 from open_painter.utils.ids import new_id
@@ -178,8 +178,10 @@ def main():
     # all channels, as framebuffer publication does (where the budget does not apply).
     runtime.PIXEL_BUDGET_MS = math.inf
     # Capture reads the final units handed to publication; a fused final (Vulkan) never is.
-    # Fusion over collapsed runs is checked on its own at the end.
+    # Fusion over collapsed runs is checked on its own at the end. No fused chain renders in a
+    # publication pass either (fusion.publish).
     runtime.FUSE_PIXEL_PUBLISH = False
+    fusion.PUBLISH = False
     scene = bpy.context.scene
     report = dict(status='RUNNING', cases=[])
     try:

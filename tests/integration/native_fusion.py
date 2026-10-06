@@ -200,6 +200,7 @@ def main():
     open_painter.register()
     runtime.PIXEL_BUDGET_MS = math.inf     # every tick publishes every changed channel
     runtime.FUSE_PIXEL_PUBLISH = False     # Capture reads the final units handed to publication
+    fusion.PUBLISH = False                 # (a chain publishing its result is checked at the end)
     scene = bpy.context.scene
     report = dict(status='RUNNING', cases=[])
     try:
@@ -266,6 +267,42 @@ def main():
         print('FUSION_COLLAPSE', json.dumps(report['with_collapse']), flush=True)
         assert all(report['with_collapse']['applications']) and report['with_collapse']['chain_passes'], report
         identical(published[True], published[False], 'fused under collapse')
+
+        # A chain ending at a channel's final renders in the publication pass (images written in
+        # place, as in a window): every channel's image, those not published again included,
+        # equals the same drag published from the final units, and a from-scratch render.
+        def images_now():
+            engine.sync_pixels(set(CHANNELS))
+            return {out.channel: np.array(images.pixels(out.image), np.float32).copy()
+                    for out in ts.outputs if out.image}
+
+        pixel_publish = runtime.PIXEL_PUBLISH
+        runtime.PIXEL_PUBLISH = False
+        suffix.ENABLED = False
+        try:
+            outcomes = {}
+            for name, owner, attribute in (('barrier', layer('barrier'), 'opacity'),
+                                           ('material_middle', layer('material_middle'), 'opacity')):
+                pictures, counts = {}, {}
+                for fused in (False, True):
+                    fusion.PUBLISH = fused
+                    shader_preview.flush(scene, ts, pixels=False)
+                    counts[fused], _ = drag(scene, ts, owner, attribute, samples=6)
+                    pictures[fused] = images_now()
+                sequential(scene, ts)
+                truth = images_now()
+                outcomes[name] = dict(publications=counts[True].get('engine_chain_publications', 0),
+                                      unfused=counts[False].get('engine_chain_publications', 0),
+                                      mismatches=counts[True].get('engine_chain_mismatches', 0))
+                print('FUSION_PUBLISH', name, json.dumps(outcomes[name]), flush=True)
+                assert not outcomes[name]['unfused'] and not outcomes[name]['mismatches'], outcomes
+                identical(pictures[True], pictures[False], f'{name} published fused vs from the finals')
+                identical(pictures[True], truth, f'{name} published fused vs from scratch')
+            assert all(row['publications'] for row in outcomes.values()), outcomes
+            report['publish'] = outcomes
+        finally:
+            runtime.PIXEL_PUBLISH = pixel_publish
+            fusion.PUBLISH = False
         report['status'] = 'PASS'
         print('NATIVE_FUSION_PASS', flush=True)
     finally:

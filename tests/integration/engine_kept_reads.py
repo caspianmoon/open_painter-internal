@@ -129,6 +129,7 @@ def main():
     open_painter.register()
     runtime.PIXEL_BUDGET_MS = math.inf
     runtime.FUSE_PIXEL_PUBLISH = False
+    fusion.PUBLISH = False   # Capture reads the final units handed to publication
     scene = bpy.context.scene
     report = dict(status='RUNNING', cases=[])
     try:

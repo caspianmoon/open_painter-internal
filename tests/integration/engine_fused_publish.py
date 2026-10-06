@@ -13,7 +13,7 @@ import open_painter
 from open_painter.constants import CHANNELS
 from open_painter.core import layer_stack as stack, material_manager, texture_set_manager as sets
 from open_painter.evaluation import anchors, cache, metrics, shader_preview
-from open_painter.evaluation.engine import runtime
+from open_painter.evaluation.engine import fusion, runtime
 runtime.VULKAN_PIXEL_ROUTE = True   # this suite covers the Vulkan pixel route (the fallback to framebuffer publication)
 from open_painter.utils.ids import new_id
 
@@ -63,14 +63,17 @@ outputs = {output.channel: output.image for output in ts.outputs}
 dev = runtime.device()
 assert engine._donor(512) is not None, 'Fixture must exercise real padding donors'
 
-def publish(fused, selected=None):
+def publish(fused, selected=None, chains=False):
     engine.published.clear()
     for state in engine.states.values():
         state.stamp = None
-    with patch.object(runtime, 'FUSE_PIXEL_PUBLISH', fused), metrics.Metrics() as observed:
+    with (patch.object(runtime, 'FUSE_PIXEL_PUBLISH', fused), patch.object(fusion, 'ENABLED', chains),
+          metrics.Metrics() as observed):
         engine.evaluate(selected, budget=False)
     return {kind: pixels(outputs[kind]) for kind in selected or CHANNELS}, dev.passes, dict(observed.counts)
 
+# Pass removal is measured with chains rendered unit by unit: chain fusion's one-time compile
+# and verification (on the second evaluation of the same edited set) would add passes.
 for precise in (False, True):
     engine.precise = precise
     for pad in (False, True):
@@ -91,6 +94,19 @@ for precise in (False, True):
         # HEIGHT must retain the sub-half-float detail in every precision mode.
         assert np.any((actual['HEIGHT'][..., 0] > .5) & (actual['HEIGHT'][..., 0] < .5001))
         print('FUSED_PUBLISH exact pixels/pass counts:', precise, pad, legacy_passes, fused_passes, flush=True)
+
+# Chain fusion composes with the pixel route: a chain that ends at a channel's final renders up
+# to the unit below it, and the final still publishes fused with its pixel read.
+for attempt in range(3):   # the second evaluation compiles and verifies the chain; the third reuses it
+    start = dev.passes
+    actual, end, counts = publish(True, chains=True)
+    for kind in CHANNELS:
+        np.testing.assert_array_equal(actual[kind], reference[kind], err_msg=f'{kind}, chain fusion {attempt}')
+    if dev.backend == 'VULKAN':
+        assert counts.get('engine_fused_publications', 0) == 4, (attempt, counts)
+    assert not counts.get('engine_chain_mismatches'), counts
+print('FUSED_PUBLISH with chain fusion:', end - start, 'passes', dict(
+    (name, value) for name, value in counts.items() if name.startswith('engine_chain')), flush=True)
 
 # Removing donor remapping would preserve unpadded pixels but fail the padded
 # equality above. Verify that this fixture actually distinguishes those paths.

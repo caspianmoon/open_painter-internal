@@ -4,7 +4,6 @@ Hash base authoring data only after Blender reports a geometry update, never
 on each tile/timer tick. Projection acquires evaluated geometry in an owned
 scope; no evaluated mesh is retained. Modifier RNA also contributes to keys.
 """
-import hashlib
 import secrets
 import bpy
 import numpy as np
@@ -18,6 +17,10 @@ _mesh_epochs = {}
 _object_epochs = {}   # object pointer -> the counter value of its last evaluated-geometry update
 _epoch = 0
 _mesh_fingerprints = {}
+# Mesh session id -> (what mesh_signature hashed, its digest). It outlives ``clear``: an undo
+# drops the pointer cache above, and an unchanged mesh is then recognised by its content.
+_mesh_contents = {}
+CONTENT_BYTES = 128 << 20   # kept per mesh (about 950K vertices); a larger one is hashed again after every undo
 _known = {}
 _candidates = set()
 _image_epochs = {}   # image pointer -> counter value of its last reported update
@@ -173,33 +176,107 @@ def _geometry_walk(ts):
 
 @measured('geometry_signature')
 def mesh_signature(mesh):
+    """SHA-256 of the mesh's geometry: positions and normals, topology, materials, smooth
+    shading, corner normals and authoring UVs.
+
+    The fastest SHA-256 at hand (``utils.digest``) hashes the bytes the RNA collections give,
+    read where Blender keeps them (attributes) and derived exactly where they are not stored
+    (a face's corner count, smooth shading from ``sharp_face``): the same digest as hashing
+    the collections' own reads with hashlib, about three times sooner. Every memfile undo
+    drops the cache (``clear``); a mesh whose content is the one last hashed, byte for byte,
+    keeps its digest without hashing again."""
     pointer = mesh.as_pointer()
     epoch = _mesh_epochs.get(pointer, 0)
     cached = _mesh_fingerprints.get(pointer)
-    if cached and cached[0] == epoch:
+    # A mesh created where a freed one lived reuses its address, never its session id.
+    if cached and cached[0] == epoch and cached[2] == mesh.session_uid:
         return cached[1]
-    h = hashlib.sha256()
-    for collection, prop, width, dtype in (
-        (mesh.vertices, 'co', 3, np.float32), (mesh.vertices, 'normal', 3, np.float32),
-        (mesh.loops, 'vertex_index', 1, np.int32),
-        (mesh.polygons, 'loop_start', 1, np.int32), (mesh.polygons, 'loop_total', 1, np.int32),
-        (mesh.polygons, 'material_index', 1, np.int32), (mesh.polygons, 'use_smooth', 1, np.bool_),
-        (mesh.corner_normals, 'vector', 3, np.float32),
-    ):
-        values = np.empty(len(collection)*width, dtype=dtype)
-        collection.foreach_get(prop, values)
-        h.update(str((prop, len(collection))).encode()); h.update(values.tobytes())
+    parts = [(str((prop, count)).encode(), values) for prop, count, values in _mesh_arrays(mesh)]
+    attributes = mesh.attributes
     for uv in mesh.uv_layers:
         if uv.name == mesh.get('open_painter_udim_paint_uv', ''):
             continue   # derived native-paint coordinates, never authoring geometry
         original_uv = mesh.get('open_painter_udim_original_uv')
         active = uv.name == original_uv if original_uv is not None else uv == mesh.uv_layers.active
-        h.update(str((uv.name, uv.active_render, active)).encode())
         values = np.empty(len(uv.data)*2, np.float32)
-        uv.data.foreach_get('uv', values); h.update(values.tobytes())
-    signature = h.hexdigest()
-    _mesh_fingerprints[pointer] = epoch, signature
+        stored = attributes.get(uv.name)
+        if stored is not None and stored.data_type == 'FLOAT2' and stored.domain == 'CORNER':
+            stored.data.foreach_get('vector', values)
+        else:
+            uv.data.foreach_get('uv', values)
+        parts.append((str((uv.name, uv.active_render, active)).encode(), values))
+    kept = _mesh_contents.get(mesh.session_uid)
+    if kept is not None and _same_parts(kept[0], parts):
+        signature = kept[1]
+    else:
+        from ..utils.digest import sha256
+        h = sha256()
+        for header, values in parts:
+            h.update(header); h.update(values)
+        signature = h.hexdigest()
+        if sum(values.nbytes for _, values in parts) <= CONTENT_BYTES:
+            _mesh_contents[mesh.session_uid] = parts, signature
+        else:
+            _mesh_contents.pop(mesh.session_uid, None)
+    _mesh_fingerprints[pointer] = epoch, signature, mesh.session_uid
     return signature
+
+
+def _same_parts(a, b):
+    """Whether two ``mesh_signature`` inputs are the same bytes."""
+    return len(a) == len(b) and all(
+        x[0] == y[0] and x[1].dtype == y[1].dtype and x[1].shape == y[1].shape
+        and np.array_equal(x[1].view(np.uint8), y[1].view(np.uint8)) for x, y in zip(a, b))
+
+
+def _attribute(mesh, name, data_type, domain):
+    stored = mesh.attributes.get(name)
+    return stored if stored is not None and stored.data_type == data_type and stored.domain == domain else None
+
+
+def _mesh_arrays(mesh):
+    """(name, element count, array) in ``mesh_signature``'s order, each the bytes the RNA
+    collection's ``foreach_get`` gives: vertices' ``co`` and ``normal``, loops' ``vertex_index``,
+    polygons' ``loop_start``, ``loop_total``, ``material_index`` and ``use_smooth``, and the
+    corner normals. Most RNA reads go element by element; the attributes they read are copied
+    whole, and what no attribute stores is derived."""
+    vertices, loops, faces = len(mesh.vertices), len(mesh.loops), len(mesh.polygons)
+    positions = np.empty(vertices * 3, np.float32)
+    stored = _attribute(mesh, 'position', 'FLOAT_VECTOR', 'POINT')
+    if stored is not None:
+        stored.data.foreach_get('vector', positions)
+    else:
+        mesh.vertices.foreach_get('co', positions)
+    yield 'co', vertices, positions
+    normals = np.empty(vertices * 3, np.float32)
+    mesh.vertex_normals.foreach_get('vector', normals)
+    yield 'normal', vertices, normals
+    corners = np.empty(loops, np.int32)
+    stored = _attribute(mesh, '.corner_vert', 'INT', 'CORNER')
+    if stored is not None:
+        stored.data.foreach_get('value', corners)
+    else:
+        mesh.loops.foreach_get('vertex_index', corners)
+    yield 'vertex_index', loops, corners
+    starts = np.empty(faces, np.int32)
+    mesh.polygons.foreach_get('loop_start', starts)
+    yield 'loop_start', faces, starts
+    yield 'loop_total', faces, np.diff(np.append(starts, np.int32(loops))).astype(np.int32)
+    materials = np.zeros(faces, np.int32)   # no attribute: every face uses the first slot
+    stored = _attribute(mesh, 'material_index', 'INT', 'FACE')
+    if stored is not None:
+        stored.data.foreach_get('value', materials)
+    yield 'material_index', faces, materials
+    smooth = np.ones(faces, np.bool_)       # no attribute: every face is smooth
+    stored = _attribute(mesh, 'sharp_face', 'BOOLEAN', 'FACE')
+    if stored is not None:
+        stored.data.foreach_get('value', smooth)
+        np.logical_not(smooth, out=smooth)
+    yield 'use_smooth', faces, smooth
+    corner_normals = mesh.corner_normals
+    values = np.empty(len(corner_normals) * 3, np.float32)
+    corner_normals.foreach_get('vector', values)
+    yield 'vector', len(corner_normals), values
 
 
 def mesh_epoch(mesh):
@@ -274,20 +351,21 @@ def _layer_digest(obj, name, weights):
     key = (mesh.as_pointer(), name)
     epoch = _mesh_epochs.get(mesh.as_pointer(), 0)
     cached = _layer_digests.get(key)
-    if cached is not None and cached[0] == epoch:
+    if cached is not None and cached[0] == epoch and cached[2] == mesh.session_uid:
         return cached[1]
+    from ..utils.digest import sha256
     digest = None
     if weights:
         if name in obj.vertex_groups:
             digest = epoch_token(mesh) if not weights_hashed(mesh) \
-                else hashlib.sha256(group_weights(obj, mesh, name).tobytes()).hexdigest()[:16]
+                else sha256(group_weights(obj, mesh, name).tobytes()).hexdigest()[:16]
     else:
         attribute = mesh.attributes.get(name)
         if attribute is not None and attribute.data_type == 'FLOAT':
             values = np.empty(len(attribute.data), np.float32)
             attribute.data.foreach_get('value', values)
-            digest = hashlib.sha256(values.tobytes()).hexdigest()[:16]
-    _layer_digests[key] = (epoch, digest)
+            digest = sha256(values.tobytes()).hexdigest()[:16]
+    _layer_digests[key] = (epoch, digest, mesh.session_uid)
     return digest
 
 
@@ -774,6 +852,7 @@ def clear(undo=False):
     _mesh_epochs.clear(); _object_epochs.clear(); _mesh_fingerprints.clear(); _layer_digests.clear(); _known.clear(); _keys.clear(); _candidates.clear()
     if not undo:
         _image_epochs.clear()
+        _mesh_contents.clear()   # another file: its meshes are new
     structure_memo.clear()
     _SESSION = secrets.token_hex(4)   # the restarted epochs must not answer for the tokens issued before
     mesh_masks.clear()   # its digests are tagged with the epochs
@@ -791,6 +870,9 @@ def prune(live):
     for values in (_mesh_epochs, _mesh_fingerprints):
         for key in set(values)-meshes:
             values.pop(key, None)
+    uids = {m.session_uid for m in bpy.data.meshes}
+    for key in set(_mesh_contents)-uids:
+        _mesh_contents.pop(key, None)
     for key in [k for k in _layer_digests if k[0] not in meshes]:
         _layer_digests.pop(key, None)
     mesh_masks.prune(meshes)

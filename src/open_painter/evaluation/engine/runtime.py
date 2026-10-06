@@ -90,6 +90,10 @@ MIP_LANES = 3                  # channels published in place whose mips share a 
 # holds (the same shader, parameter values and images: a layer's channels share one detail) is
 # filled by copying that field's texels instead of sampling the detail again.
 FIELD_COPIES = True
+# A folder step whose children leave it nothing in a channel blends a transparent group over
+# its backdrop: its result does not depend on its parameters (Engine._param_free).
+PARAM_FREE = os.environ.get('OP_PARAM_FREE', '1') != '0'
+EMPTY_GROUP = ('const', (0.0, 0.0, 0.0, 0.0))
 MIP_SCRATCH_SIDE = 2048        # publication keeps its mip scratch up to this side; larger leases it each time
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
@@ -1385,16 +1389,65 @@ class Engine:
     # ---- stamps --------------------------------------------------------------------------
 
     def _own_stamp(self, state, epochs):
-        return id(state.shader), self._program_stamp(state.program, epochs)
+        return id(state.shader), self._program_stamp(state.program, epochs, self._param_free(state))
 
-    def _program_stamp(self, program, epochs):
+    def _param_free(self, state):
+        """Whether a unit's result cannot depend on its parameters: a folder step whose children
+        leave it nothing in this channel (its group input is the constant transparent composite)
+        blends with zero alpha over its backdrop, whatever its opacity and masks. Each such
+        program is checked once on the GPU (``_check_param_free``). Its content stamp then leaves
+        its parameters out, so dragging them renders and publishes nothing in that channel."""
+        if not PARAM_FREE or state.unit is None or state.program is None:
+            return False
+        key = state.unit.key
+        if key[0] != 'CHANNEL':
+            return False
+        position = self.positions.get(key)
+        if not position or position[1] != EMPTY_GROUP:
+            return False
+        return getattr(device(), 'param_free', {}).get(state.program.source) is True
+
+    def _check_param_free(self, state, samplers, n):
+        """Render a corner of the unit with its parameters, with all zeros, all ones and random
+        values in [0, 1); True when all four agree bit for bit."""
+        import gpu
+        program = state.program
+        native = getattr(program, 'native_program', None)
+        if native is None or len(state.formats) != 1 or program.objects:
+            return False
+        native.update(program)
+        values = np.frombuffer(bytes(native.data()), np.float32)
+        if not len(values):
+            return False
+        random = np.random.default_rng(1).random(len(values), dtype=np.float32)
+        dev, fmt, size = device(), state.formats[0], min(n, 64)
+        components = 2 if fmt in ('RG16F', 'RG32F') else 4
+        results = []
+        for variant in (values, np.zeros_like(values), np.ones_like(values), random):
+            ubo = gpu.types.GPUUniformBuf(gpu.types.Buffer('FLOAT', len(variant), variant))
+            target = dev.texture(size, fmt)
+            try:
+                dev.draw(state.shader, [target], n, samplers, ubo, region=(0, 0, size, size))
+                framebuffer = gpu.types.GPUFrameBuffer(color_slots=(target,))
+                with framebuffer.bind():
+                    buffer = framebuffer.read_color(0, 0, size, size, components, 0, 'FLOAT')
+                buffer.dimensions = size * size * components
+                results.append(np.array(buffer, np.float32).view(np.uint32))
+            finally:
+                dev.release(target, size, fmt)
+        dev.settled = dev.passes
+        metrics.count('engine_param_free_checks')
+        return all(np.array_equal(results[0], other) for other in results[1:])
+
+    def _program_stamp(self, program, epochs, param_free=False):
         from .filters import signature
         programs = tuple(glsl.programs(program))
         samplers = [s for p in programs for s in p.samplers]
         surface = (self._surface() if any(s.kind in GEOMETRY or
                    (s.kind == 'filter' and getattr(s.node.effect, 'space', 'UV') == 'SURFACE') for s in samplers) else None)
-        numeric = tuple((p.native_program.update(p) if getattr(p, 'native_program', None) is not None
-                         else tuple(float(socket.default_value) for socket in p.params)) for p in programs)
+        numeric = () if param_free else tuple(
+            (p.native_program.update(p) if getattr(p, 'native_program', None) is not None
+             else tuple(float(socket.default_value) for socket in p.params)) for p in programs)
         return (numeric,
                 tuple((binding(s.node).stamp if binding(s.node) is not None else _image_identity(s.node.image, epochs))
                       for s in samplers if s.kind == 'image'),
@@ -1499,6 +1552,11 @@ class Engine:
             # Its old revision must not become a cache hit after undo/retry.
             state.stamp = None
             dev.draw(state.shader, state.textures, n, samplers, uniforms)
+            if (PARAM_FREE and key[0] == 'CHANNEL' and position and position[1] == EMPTY_GROUP
+                    and uniforms is not None):
+                checked = dev.__dict__.setdefault('param_free', {})
+                if program.source not in checked:
+                    checked[program.source] = self._check_param_free(state, samplers, n)
             elapsed = (perf_counter() - drawn) * 1000
             if self.profiling:
                 elapsed = self._gpu_time(state, n, samplers, uniforms)

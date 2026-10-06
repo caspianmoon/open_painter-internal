@@ -735,6 +735,11 @@ class Unit:
 
 
 class Graph(Math):
+    # Nodes and unit trees carry JSON descriptors (owners by stable ids) that ``rehydrate``
+    # reads to rebuild a session from the trees a material persisted; the engine's headless
+    # trees are never rehydrated, so it writes none.
+    DESCRIPTORS = True
+
     def __init__(self, scene, ts, material):
         self.scene, self._ts, self.material = scene, ts, material
         self.n = int(ts.resolution)
@@ -1033,7 +1038,8 @@ class Graph(Math):
                 identifier += f'[{index}]'
             with self.role(identifier):
                 node = self.node('ShaderNodeValue')
-            node['op_binding'] = json.dumps([self._owner_key(owner), field, index])
+            if self.DESCRIPTORS:
+                node['op_binding'] = json.dumps([self._owner_key(owner), field, index])
             raw = getattr(owner, field)
             value = float(raw if index is None else raw[index])
             node.outputs[0].default_value = value
@@ -1181,7 +1187,8 @@ class Graph(Math):
         coord = coordinate if coordinate is not None else self.coord_uv()
         self.link(coord, node.inputs['Vector'])
         if getter:
-            node['op_image'] = json.dumps([self._owner_key(owner), attribute])
+            if self.DESCRIPTORS:
+                node['op_image'] = json.dumps([self._owner_key(owner), attribute])
             entry = (owner.as_pointer(), self._role, getter, node, image_key(image))
             self.image_bindings.append(entry)
             if self.unit is not None:
@@ -3610,10 +3617,11 @@ class Graph(Math):
                 isinstance(value, bpy.types.bpy_struct) for name, value in node.__dict__.items()
                 if name not in _NODE_REFERENCES))
         unit.build_ms = (perf_counter() - started) * 1000
-        unit.tree['op_flags'] = json.dumps(unit.flags)
-        unit.tree['op_exports'] = json.dumps(unit.exports)
-        unit.tree['op_const_imports'] = json.dumps([[list(k), name, value] for k, name, value in unit.const_imports])
-        unit.tree['op_effects'] = json.dumps([self._owner_key(e) for e in unit.compiled_effects.values()])
+        if self.DESCRIPTORS:
+            unit.tree['op_flags'] = json.dumps(unit.flags)
+            unit.tree['op_exports'] = json.dumps(unit.exports)
+            unit.tree['op_const_imports'] = json.dumps([[list(k), name, value] for k, name, value in unit.const_imports])
+            unit.tree['op_effects'] = json.dumps([self._owner_key(e) for e in unit.compiled_effects.values()])
         self._building_units.discard(key)
         self._plan.keys.add(key)
         self.units[key] = unit

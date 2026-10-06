@@ -24,6 +24,7 @@ import numpy as np
 
 from ...constants import CHANNELS, DEFAULTS
 from .. import metrics
+from ..resource_keys import colorspace_name
 from . import glsl, stages
 from .formats import layout, scalar_unit, texture_bytes
 from .resources import binding
@@ -976,7 +977,7 @@ def _image_identity(image, epochs):
         return (image.as_pointer(), image.name, tuple(image.size), image.get('open_painter_shader_resource'),
                 bool(image.get('op_shader_resource_ready')), image.get('op_resource_serial', 0),
                 image.get('open_painter_pixel_revision', 0), epochs.get(image.as_pointer(), 0),
-                image.alpha_mode, image.colorspace_settings.name, image.is_float)
+                image.alpha_mode, colorspace_name(image), image.is_float)
     except ReferenceError:
         return None
 

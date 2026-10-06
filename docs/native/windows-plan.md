@@ -321,7 +321,7 @@ The evening's other changes also apply to the Python scheduler wherever it still
 - adding a fill on top went from 68–69 ms to 28–30 ms;
 - removing a layer went from 64 ms to 23–25 ms.
 
-### Pending depsgraph updates, detail fields and the node sync (2026-10-03)
+### Pending depsgraph updates, paint undo, detail fields and the node sync (2026-10-03)
 
 **Pending depsgraph updates are reported before the engine samples.** An image the stack
 starts to reference (a smart material's detail, a picked texture) joins the depsgraph on its

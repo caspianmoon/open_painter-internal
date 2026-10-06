@@ -35,6 +35,8 @@ class BitsBinding(Binding):
 
 
 class EngineGraph(Graph):
+    DESCRIPTORS = False   # headless trees: never rehydrated (``rehydrate``)
+
     def blend(self, backdrop, source, coverage, mode, channel):
         # Keep semantic operations compact. Native translation owns the math;
         # the diagnostic legacy translator expands the independent reference.

@@ -5,7 +5,8 @@ the detail in a FIELD unit per channel: one samples the image and the others cop
 (``runtime.FIELD_COPIES``). The first evaluation samples it once (the scheduler reports the
 new image to the depsgraph first). A colour edit samples no detail again; an edit of one channel's
 projection samples that channel's detail alone. The published channels are bit-identical with
-copies off and with the detail compiled into every channel, as before fields.
+copies off and with the detail compiled into every channel, as before fields. The engine's units
+carry no rehydration descriptors.
 """
 import sys
 from collections import Counter
@@ -136,6 +137,12 @@ def main():
 
     keys = fields(scene, ts)
     assert keys == sorted(('FIELD', layer.id, channel) for channel in DETAILED), keys
+    # Headless trees are never rehydrated: the engine writes none of the descriptors that a
+    # material's persisted trees carry for it (Graph.DESCRIPTORS).
+    graph = session(scene, ts)['graph']
+    described = [unit.key for unit in graph.units.values() if any(unit.tree.get(name) for name in ('op_flags', 'op_exports'))
+                 or any(node.get('op_binding') or node.get('op_image') for node in unit.tree.nodes)]
+    assert not described, described
     first = published(ts)
     evaluated = counted(scene, ts)
     assert evaluated['FIELD'] == 1 and evaluated['FIELD copy'] == len(DETAILED) - 1, evaluated

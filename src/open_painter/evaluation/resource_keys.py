@@ -1,4 +1,5 @@
 """Transient scene-scoped identities; persistent texture-set UUIDs stay unchanged."""
+import ctypes
 from contextlib import contextmanager
 
 from ..utils.ids import new_id
@@ -91,4 +92,31 @@ def image_key(image):
         return None
     key = datablock_key(image) if _stable else image_uid(image)
     return (key, tuple(image.size), image.get('open_painter_pixel_revision', 0),
-            image.colorspace_settings.name, image.alpha_mode)
+            colorspace_name(image), image.alpha_mode)
+
+
+_colorspace_offset = None    # bytes from an Image to its colour space name; False: through RNA only
+_colorspace_checked = set()  # addresses of images whose stored name read as the RNA getter's
+
+
+def colorspace_name(image):
+    """``image.colorspace_settings.name``. The RNA getter lists every colour space of the
+    configuration on each read (8-22 µs, and every evaluation reads each sampled image's).
+    The setting is a ``char name[64]`` embedded in the Image struct: read here from its bytes.
+    Each image is read through RNA first and its bytes compared, and an offset no embedded
+    struct could have turns the bytes off for the session."""
+    global _colorspace_offset
+    pointer = image.as_pointer()
+    if pointer in _colorspace_checked:
+        return _stored_colorspace(pointer)
+    name = image.colorspace_settings.name
+    if _colorspace_offset is None:
+        offset = image.colorspace_settings.as_pointer() - pointer
+        _colorspace_offset = offset if 0 < offset < 8192 else False
+    if _colorspace_offset is not False and _stored_colorspace(pointer) == name:
+        _colorspace_checked.add(pointer)
+    return name
+
+
+def _stored_colorspace(pointer):
+    return ctypes.string_at(pointer + _colorspace_offset, 64).split(b'\0', 1)[0].decode('utf-8', 'replace')

@@ -1011,6 +1011,7 @@ class Engine:
         # anything: the next tick of the same drag reads them again (_update_frontier).
         self._frontier = set()
         self._reads = self._changed = None   # being recorded during an evaluation (_note_reads)
+        self._reads_prearmed = None          # (layer, root stamps) whose reads idle arming kept
         self.retained = OrderedDict()   # SRC/MASK (and imported CHANNEL) results kept, LRU order
         self.published = {}             # channel -> stamp of the published result
         self.images = {}                # channel -> image pointer it was published into
@@ -2170,7 +2171,96 @@ class Engine:
                 for key in spine:
                     self.keep.add(key)
                     self._texture_of(('unit', key), n, memo, epochs or {})
-            return self._suffix.prearm(self, layer_id, n, memo, epochs or {}) or fusion.prearm(self, layer_id)
+            if self._suffix.prearm(self, layer_id, n, memo, epochs or {}):
+                return True
+            if fusion.prearm(self, layer_id, n, memo, epochs or {}):
+                return True
+            self._prearm_reads(layer_id, n, memo, epochs or {})
+            return False
+
+    def _prearm_reads(self, layer_id, n, memo, epochs):
+        """While idle, once the spine and the transforms are ready: make resident and keep the
+        unchanged results an edit of ``layer_id`` would read (``_predicted_reads``), so its
+        first tick renders only what changes, as the next ones do. Results kept for an
+        edit of another layer are released. Once per state of the stack."""
+        if not KEEP_READS:
+            return
+        stamps = self._native_graph.stamps
+        state = (layer_id, tuple(stamps.get(final[1]) for final in self.finals.values()
+                                 if final and final[0] == 'unit'))
+        if self._reads_prearmed == state:
+            return
+        self._reads_prearmed = state
+        budget, frontier = RETAIN_BYTES - sum(self.retained.values()), set()
+        for key in self._predicted_reads(layer_id):
+            unit = self.states.get(key)
+            if unit is None or key in self.keep:
+                continue
+            size = sum(texture_bytes(n, n, fmt) for fmt in unit.formats)
+            if size > budget:
+                continue
+            self._texture_of(('unit', key), n, memo, epochs)
+            frontier.add(key)
+            self._frontier.add(key)   # kept while the next one renders
+            budget -= size
+        stale, self._frontier = self._frontier - frontier, frontier
+        for key in stale:
+            self._settle(key, n)
+        metrics.count('engine_prearmed_reads', len(frontier))
+
+    def _predicted_reads(self, layer_id):
+        """The unchanged CHANNEL results an edit of ``layer_id`` would read, in render order:
+        the inputs of every unit it changes (its own units and all that read them), except
+        the members of the affine runs suffix collapse renders from their input."""
+        readers = self._composition_readers()
+        importers = self.graph.consumers
+        start = [key for key in self.states if len(key) > 1 and key[1] == layer_id]
+        changed, stack = set(start), list(start)
+        while stack:
+            key = stack.pop()
+            for reader in (*readers.get(key, ()), *importers.get(key, ())):
+                if reader not in changed:
+                    changed.add(reader)
+                    stack.append(reader)
+        from . import suffix
+        collapsed, inputs = set(), []
+        if suffix.ENABLED:
+            for channel, final in self.finals.items():
+                node = ('CHANNEL', layer_id, channel)
+                if not final or final[0] != 'unit' or node not in self.states:
+                    continue
+                for _, source, _, members in self._native_graph.edit_runs(final[1], node):
+                    if len(members) >= suffix.MIN_LENGTH:
+                        collapsed.update(members)
+                        if source is not None:
+                            inputs.append(source)
+        for key in self._render_order():
+            if key not in changed or key in collapsed:
+                continue
+            state = self.states.get(key)
+            if state is None or state.program is None:
+                continue
+            inputs.extend(ref[1] for ref in self.positions.get(key) or () if ref is not None and ref[0] == 'unit')
+            inputs.extend(s.producer[0] for p in glsl.programs(state.program) for s in p.samplers if s.kind == 'import')
+        return [key for key in dict.fromkeys(inputs) if key[0] == 'CHANNEL' and key not in changed]
+
+    def _render_order(self):
+        """Every unit, CHANNEL units in each channel's render order first."""
+        seen = dict.fromkeys(key for order in self.orders.values() for key in order)
+        seen.update(dict.fromkeys(self.states))
+        return seen
+
+    def _composition_readers(self):
+        """Each unit's composition readers: the units whose backdrop or grouped input it is."""
+        cached = self.__dict__.get('_readers')
+        if cached is None or cached[0] is not self.positions:
+            readers = {}
+            for key, position in self.positions.items():
+                for ref in position or ():
+                    if ref is not None and ref[0] == 'unit':
+                        readers.setdefault(ref[1], []).append(key)
+            cached = self._readers = (self.positions, readers)
+        return cached[1]
 
     def _evaluate_native_channels(self, order, ts, images, n, memo, epochs):
         from ...native_bridge import lifecycle

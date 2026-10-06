@@ -8,8 +8,9 @@ keeps them.
 
 A stack of smart materials is dragged at a mask, a leaf and a folder. From the third tick
 on, every unit rendered must have changed content, and the result must equal the stack
-rendered sequentially from scratch, bit for bit. With the rule off, the mask drag must
-render unchanged units again, so the check has teeth.
+rendered sequentially from scratch, bit for bit. After idle arming for the selected layer
+(``Engine._prearm_reads``), the first tick of each drag must render only what changes too.
+With the rule off, the mask drag must render unchanged units again, so the check has teeth.
 """
 import json
 import math
@@ -160,6 +161,33 @@ def main():
             for channel, values in results.items():
                 np.testing.assert_array_equal(values.view(np.uint32), truth[channel].view(np.uint32),
                                               err_msg=f'{name}: {channel}')
+        # Idle arming keeps what an edit of the selected layer will read: its first tick
+        # renders (almost) only what changes.
+        from open_painter.evaluation import dependencies
+        prearm = suffix.PREARM
+        suffix.PREARM = True
+        try:
+            for name, owner, attribute in cases:
+                identifier = {'mask_black': masked, 'middle_leaf': middle, 'top_folder': top}[name]
+                shader_preview.flush(scene, ts, pixels=False)
+                setattr(owner(), attribute, .2)
+                shader_preview.flush(scene, ts, pixels=False)   # another value: the kept reads are stale
+                for unit in [key for key in engine._frontier]:
+                    engine._frontier.discard(unit)
+                    engine._settle(unit, engine.graph.n)
+                ts.active_layer = next(i for i, item in enumerate(ts.layers) if item.id == identifier)
+                rounds = 0
+                while rounds < 64 and engine.prearm(identifier, dependencies.image_epochs()):
+                    rounds += 1
+                engine.prearm(identifier, dependencies.image_epochs())
+                wasted, rendered, _ = drag(scene, ts, owner, attribute, ticks=1)
+                row = dict(case=name, prearm_rounds=rounds, kept=len(engine._frontier), first_rendered=rendered[0],
+                           first_wasted=len(wasted[0]), wasted_units=wasted[0][:6])
+                report.setdefault('prearmed', []).append(row)
+                print('KEPT_READS_PREARMED', json.dumps(row), flush=True)
+                assert row['first_rendered'] and not row['first_wasted'], row
+        finally:
+            suffix.PREARM = prearm
         # Without the rule, the mask drag renders unchanged units again on every tick.
         runtime.KEEP_READS = False
         try:

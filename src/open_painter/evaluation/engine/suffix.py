@@ -162,6 +162,7 @@ class SuffixCache:
                     return False
                 self.entries[key] = entry
                 self._trim(protected=key)
+                _warm(engine, engine._state(top).formats[0], n)
                 metrics.count('engine_suffix_prearms')
                 return True
         self.idle = state
@@ -280,6 +281,25 @@ class SuffixCache:
             engine._settle(source, n)
         if engine.graph.consumers.get(top):
             engine._retain(top, state, n)
+
+
+def _warm(engine, fmt, n):
+    """Compile the apply pass and create its pipeline for targets of ``fmt`` while idle (one
+    texel of a scratch texture): the first application would otherwise pay for both."""
+    from .runtime import device
+    dev = device()
+    warmed = dev.__dict__.setdefault('_suffix_warmed', set())
+    if fmt in warmed:
+        return
+    warmed.add(fmt)
+    constant = engine._constant(n, (0.0, 0.0, 0.0, 0.0))
+    target = dev.texture(n, fmt)
+    try:
+        dev.draw(dev.fixed('suffix.apply'), [target], n,
+                 [('op_source', constant), ('op_a', constant), ('op_b', constant)],
+                 ints={'op_swizzle': 0}, region=(0, 0, 1, 1))
+    finally:
+        dev.release(target, n, fmt)
 
 
 def _release_key(cache, key):

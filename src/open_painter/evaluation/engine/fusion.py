@@ -520,9 +520,9 @@ def _above(engine):
     return cached[1]
 
 
-def prearm(engine, layer_id):
-    """While idle: compile one fused shader an edit of ``layer_id`` would use, so the first
-    ticks of its drag need no compilation. True when it compiled one (call again later)."""
+def prearm(engine, layer_id, n, memo, epochs):
+    """While idle: compile and verify one fused shader an edit of ``layer_id`` would use, so
+    the first tick of its drag needs neither. True when it did (call again later)."""
     from ...constants import CHANNELS
     from .runtime import device
     if not ENABLED or engine._native_graph is None:
@@ -551,15 +551,18 @@ def prearm(engine, layer_id):
         chain = tuple(chain)
         for member in chain:
             engine._state(member)
-        if _signature(engine, chain) in cache:
+        entry = cache.get(_signature(engine, chain))
+        if entry is not None and (entry.verified or entry.failed):
             continue
-        if _fused(dev, engine, chain, True) is not None:
+        if _render(engine, chain, n, memo, epochs, build=True, draw=False):
             metrics.count('engine_chain_prearms')
             return True
     return False
 
 
-def _render(engine, chain, n, memo, epochs, build=True):
+def _render(engine, chain, n, memo, epochs, build=True, draw=True):
+    """Render ``chain`` as one pass (``draw``), or only compile and verify its shader; True
+    when that succeeded."""
     from .runtime import device
     dev = device()
     # Planning read the states as they were; each member's program is now brought up to
@@ -613,6 +616,8 @@ def _render(engine, chain, n, memo, epochs, build=True):
                 metrics.count('engine_chain_mismatches')
                 return False
             entry.verified = True
+        if not draw:
+            return True
         state = engine.states[top]
         if state.textures is None:
             allocated = []

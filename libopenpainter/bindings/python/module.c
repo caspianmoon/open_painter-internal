@@ -550,6 +550,8 @@ static PyMethodDef methods[] = {
      "Keep the spine of a channel's lowest changed node."},
     {"graph_edit_runs", graph_edit_runs, METH_VARARGS,
      "Predict the affine runs an edit of one node would produce."},
+    {"graph_mark_rendered", graph_mark_rendered, METH_VARARGS,
+     "Record nodes the host rendered itself with their current local stamps."},
     {"ir_backdrop_affine", ir_backdrop_affine, METH_VARARGS,
      "Classify a program as affine in its backdrop."},
     {"graph_execute", graph_execute, METH_VARARGS,

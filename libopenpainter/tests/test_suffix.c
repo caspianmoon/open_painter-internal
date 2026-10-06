@@ -354,6 +354,68 @@ int main(void) {
         assert(p.runs[0].key == armed.runs[0].key);
         op_graph_destroy(g);
     }
+    {
+        /* A host that renders members itself (a fused pass) records it: without the record
+         * the members' rendered local stamps are stale and they split the run; with it the
+         * run is back, as after op_graph_execute rendered them. */
+        enum { S2 = 0, C2 = 6, COUNT2 = 12 };
+        uint32_t offsets2[COUNT2 + 1], edges2[32], e2 = 0;
+        uint32_t back2[COUNT2], group2[COUNT2];
+        unsigned char aff2[COUNT2];
+        for (uint32_t i = 0; i < COUNT2; i++) {
+            offsets2[i] = e2;
+            back2[i] = group2[i] = NONE;
+            aff2[i] = 0;
+            if (i >= C2) {
+                if (i > C2)
+                    edges2[e2++] = back2[i] = i - 1;
+                edges2[e2++] = S2 + (i - C2);
+                aff2[i] = 1;
+            }
+        }
+        offsets2[COUNT2] = e2;
+        op_graph_t *g2 = NULL;
+        assert(op_graph_create(&g2) == OP_OK);
+        assert(op_graph_replace(g2, COUNT2, offsets2, edges2, e2) == OP_OK);
+        uint32_t members4[4] = {8, 9, 10, 11}, bad[2] = {8, COUNT2};
+        /* No composition yet: nothing to record, any valid index accepted. */
+        assert(op_graph_mark_rendered(g2, members4, 4) == OP_OK);
+        for (uint32_t i = 0; i < COUNT2; i++)
+            set_own(g2, i, 100 + i);
+        assert(op_graph_set_composition(g2, back2, group2, aff2, COUNT2) == OP_OK);
+        host h2 = {{0}, NULL};
+        uint64_t stamps2[N];
+        plan p2;
+        evaluate(g2, COUNT2, &h2, stamps2);
+        render(g2, 11, &h2);
+        /* Sources of members 9 and 10 change; the host renders 7..11 in one pass. */
+        set_own(g2, 3, 900);
+        set_own(g2, 4, 901);
+        set_own(g2, 7, 500);
+        evaluate(g2, COUNT2, &h2, stamps2);
+        for (uint32_t i = 7; i <= 11; i++)
+            h2.resident[i] = stamps2[i];
+        assert(op_graph_mark_rendered(g2, bad, 2) == OP_INVALID_ARGUMENT);
+        assert(op_graph_mark_rendered(NULL, members4, 4) == OP_INVALID_ARGUMENT);
+        assert(op_graph_mark_rendered(g2, NULL, 1) == OP_INVALID_ARGUMENT);
+        /* The next edit of layer 7: 9 and 10 still carry the local stamps from before. */
+        set_own(g2, 7, 501);
+        evaluate(g2, COUNT2, &h2, stamps2);
+        runs_of(g2, 11, &h2, &p2);
+        assert(p2.run_count == 0);   /* 9 and 10 split it; 8 and 11 alone are too short */
+        /* Recorded (as the host does after its pass), the run of four is back. */
+        set_own(g2, 7, 500);
+        evaluate(g2, COUNT2, &h2, stamps2);
+        for (uint32_t i = 7; i <= 11; i++)
+            h2.resident[i] = stamps2[i];
+        uint32_t fused[5] = {7, 8, 9, 10, 11};
+        assert(op_graph_mark_rendered(g2, fused, 5) == OP_OK);
+        set_own(g2, 7, 502);
+        evaluate(g2, COUNT2, &h2, stamps2);
+        runs_of(g2, 11, &h2, &p2);
+        assert(p2.run_count == 1 && p2.runs[0].length == 4 && p2.runs[0].input == 7);
+        op_graph_destroy(g2);
+    }
     puts("PASS test_suffix");
     return 0;
 }

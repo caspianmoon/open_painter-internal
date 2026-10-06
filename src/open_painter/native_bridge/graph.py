@@ -892,6 +892,16 @@ class NativeGraph:
         return [(keys[top], None if source == NONE else keys[source], key, tuple(keys[m] for m in members))
                 for top, source, key, members in reversed(rows)]
 
+    def mark_rendered(self, keys):
+        """Units the host rendered itself in one pass (a fused chain): they were rendered with
+        their current local stamps, as op_graph_execute records for the units it renders, so
+        they stay members of the affine runs suffix collapse plans (op_graph_mark_rendered).
+        Runs are planned through the binding only; without it there is nothing to record."""
+        if self.binding is None or self.composition is None:
+            return
+        indices = array('I', (self.indices[key] for key in keys))
+        self.binding.graph_mark_rendered(self.handle, indices.tobytes())
+
     def edit_runs(self, root, node):
         """The runs an edit of ``node``'s own content would produce under ``root``, bottom-up."""
         if (self.binding is None or self.composition is None or root not in self.indices

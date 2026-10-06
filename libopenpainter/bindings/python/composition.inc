@@ -129,6 +129,26 @@ static PyObject *graph_runs(PyObject *self, PyObject *args) {
     free(members);
     return list;
 }
+/* Nodes the host rendered itself (a fused pass): recorded as rendered with their
+ * current local stamps (op_graph_mark_rendered). */
+static PyObject *graph_mark_rendered(PyObject *self, PyObject *args) {
+    (void)self;
+    PyObject *capsule, *nodes;
+    uint32_t n;
+    if (!PyArg_ParseTuple(args, "OO", &capsule, &nodes))
+        return NULL;
+    graph_owner *g = graph_get(capsule);
+    if (!g)
+        return NULL;
+    uint32_t *indices = copy_buffer(nodes, 4, 65536, &n);
+    if (!indices)
+        return NULL;
+    op_status_t status = op_graph_mark_rendered(g->graph, indices, n);
+    free(indices);
+    if (fail(status))
+        return NULL;
+    Py_RETURN_NONE;
+}
 /* The runs an edit of node's own content would produce under root, given the
  * resident stamps and those of the last graph_evaluate. */
 static PyObject *graph_edit_runs(PyObject *self, PyObject *args) {

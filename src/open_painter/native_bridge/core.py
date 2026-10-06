@@ -7,7 +7,7 @@ no retained pointers: buffers are copied by the core on snapshot write.
 
 import ctypes
 
-OP_ABI_VERSION = 13
+OP_ABI_VERSION = 14
 
 
 class Status:

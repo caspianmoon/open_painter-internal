@@ -543,6 +543,20 @@ op_status_t op_graph_suffix_runs(op_graph_t *g, uint32_t root, const uint64_t *c
                      member_count);
 }
 
+op_status_t op_graph_mark_rendered(op_graph_t *g, const uint32_t *nodes, uint32_t count) {
+    if (!g || (count && !nodes))
+        return OP_INVALID_ARGUMENT;
+    if (g->executing)
+        return OP_PENDING;
+    for (uint32_t i = 0; i < count; i++)
+        if (nodes[i] >= g->count)
+            return OP_INVALID_ARGUMENT;
+    if (g->rendered)
+        for (uint32_t i = 0; i < count; i++)
+            g->rendered[nodes[i]] = g->local[nodes[i]];
+    return OP_OK;
+}
+
 op_status_t op_graph_edit_runs(op_graph_t *g, uint32_t root, uint32_t node, const uint64_t *current,
                                const uint64_t *stamps, op_graph_run_t *runs, uint32_t run_capacity,
                                uint32_t *run_count, uint32_t *members, uint32_t member_capacity,

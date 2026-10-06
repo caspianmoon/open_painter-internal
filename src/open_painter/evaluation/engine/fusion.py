@@ -108,8 +108,10 @@ def _parse(program):
     if not program.native or program.objects or len(program.targets) != 1:
         return None
     backdrops = [s.name for s in program.samplers if s.kind == 'backdrop']
-    if len(backdrops) != 1 or any(s.kind in ('grouped', 'filter') or s.source is not None
-                                  for s in program.samplers):
+    # A folder step's group input is one more texture read at its texel; a spatial filter
+    # reads its input elsewhere.
+    if (len(backdrops) != 1 or sum(1 for s in program.samplers if s.kind == 'grouped') > 1
+            or any(s.kind == 'filter' or s.source is not None for s in program.samplers)):
         return None
     if not all(re.fullmatch(r'op_s\d+', s.name) for s in program.samplers):
         return None
@@ -154,10 +156,8 @@ def fusable(engine, key, state=None):
     cached = flags.get(key)
     if cached is not None and cached[0] is program and cached[1] is formats and cached[2] is position:
         return cached[3]
-    # Affine units are suffix collapse's: one armed pass for a run of any length.
     result = (program is not None and len(formats) == 1 and formats[0] in ROUND and bool(position)
-              and position[0] is not None and position[1] is None and program.affine is None
-              and parse(program) is not None)
+              and position[0] is not None and parse(program) is not None)
     if len(flags) > 2 * len(engine.states) + 64:
         for stale in [k for k in flags if k not in engine.states]:
             del flags[stale]
@@ -384,6 +384,16 @@ def _uniforms(engine, chain):
 
 # ---- planning and execution -------------------------------------------------------------
 
+def _collapsed(engine, root):
+    """The members of the affine runs suffix collapse renders under ``root`` from their input
+    (one armed pass for a run of any length): not fused."""
+    from . import suffix
+    if not suffix.ENABLED:
+        return frozenset()
+    return frozenset(member for _, _, _, members in engine._native_graph.runs(engine, root)
+                     if len(members) >= suffix.MIN_LENGTH for member in members)
+
+
 def chains(engine, root):
     """Fusable chains in the stale composition tree under ``root``, bottom-up, in an order
     that renders every chain before the chains above it."""
@@ -391,6 +401,7 @@ def chains(engine, root):
     graph = engine._native_graph
     stamps, states, positions = graph.stamps, engine.states, engine.positions
     consumers, keep = engine.graph.consumers, engine.keep
+    collapsed = _collapsed(engine, root)
     max_samplers = None
     found, stack, seen = [], [root], set()
     while stack:
@@ -405,7 +416,7 @@ def chains(engine, root):
         if state.textures is not None and isinstance(stamp, int) and stamp & MASK == desired:
             continue   # resident with its content: nothing under it is needed
         chain = [key]
-        if fusable(engine, key, state):
+        if key not in collapsed and fusable(engine, key, state):
             if max_samplers is None:
                 from .runtime import device
                 max_samplers = device().max_samplers
@@ -416,7 +427,8 @@ def chains(engine, root):
                     break
                 below = ref[1]
                 member = states.get(below)
-                if member is None or below in seen or below in keep or consumers.get(below):
+                if (member is None or below in seen or below in keep or below in collapsed
+                        or consumers.get(below)):
                     break
                 # A member below the top is only read by the next one, and its content
                 # changes: an unchanged result is rendered once and kept (a checkpoint).
@@ -540,7 +552,8 @@ def prearm(engine, layer_id, n, memo, epochs):
         chain, count = [key], len(engine.states[key].program.samplers)
         while len(chain) < MAX_LENGTH:
             up = above.get(chain[-1])
-            if up is None or chain[-1] in keep or consumers.get(chain[-1]) or not fusable(engine, up):
+            if (up is None or chain[-1] in keep or consumers.get(chain[-1]) or not fusable(engine, up)
+                    or engine.states[up].program.affine is not None):
                 break
             count += len(engine.states[up].program.samplers) - 1
             if count > dev.max_samplers:
@@ -594,6 +607,14 @@ def _render(engine, chain, n, memo, epochs, build=True, draw=True):
             for sampler in engine.states[key].program.samplers:
                 if sampler.kind == 'backdrop':
                     texture = backdrop if index == 0 else None
+                elif sampler.kind == 'grouped':
+                    group = engine.positions[key][1]
+                    if group is not None and group[0] == 'unit':
+                        texture = _produce(engine, group[1], n, memo, epochs)[0]
+                        hold(group[1])
+                    else:
+                        texture = engine._texture_of(group or ('const', (0.0, 0.0, 0.0, 0.0)), n, memo, epochs,
+                                                     scalar_unit(key))
                 elif sampler.kind == 'import':
                     producer, target = sampler.producer
                     texture = _produce(engine, producer, n, memo, epochs)[target]
@@ -634,6 +655,7 @@ def _render(engine, chain, n, memo, epochs, build=True, draw=True):
         dev.draw(entry.shader, state.textures, n, samplers, ubo)
         stamps = engine._native_graph.stamps
         state.stamp = stamps[top]
+        engine._native_graph.mark_rendered(chain)
         # The members below the top now have their desired content, held by no texture: as C
         # sees an evicted result. A stale current stamp would make one of them the lowest
         # changed unit, and the checkpoints would keep the wrong results.

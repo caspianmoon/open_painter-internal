@@ -100,6 +100,12 @@ op_status_t op_graph_suffix_runs(op_graph_t *graph, uint32_t root, const uint64_
                                  const uint64_t *stamps, op_graph_run_t *runs,
                                  uint32_t run_capacity, uint32_t *run_count, uint32_t *members,
                                  uint32_t member_capacity, uint32_t *member_count);
+/* The host rendered nodes itself, outside op_graph_execute (several units in one
+ * pass): record that each was rendered with its current local stamp, as
+ * op_graph_execute records for the nodes it renders, so they stay run members.
+ * All indices are checked before any is recorded. OP_PENDING during execution;
+ * nothing to record without a composition (ABI 14). */
+op_status_t op_graph_mark_rendered(op_graph_t *g, const uint32_t *nodes, uint32_t count);
 /* The runs under root that an edit of node's own content would produce, before
  * it happens: the same chains, members and keys op_graph_suffix_runs reports
  * once the edit is evaluated, provided nothing else changed. current/stamps

@@ -416,44 +416,46 @@ while the channel's colour, opacity, blend or masks change.
   every unit is checked again (undo) and, on OpenGL, in an apply; other cases are within
   noise.
 
-### Numeric undos, per-pass costs and resolution scaling (2026-10-06)
+### Undo that keeps the graph, per-pass costs and resolution scaling (2026-10-06)
 
-**A memfile undo that restored only numeric values keeps the graph.** A memfile undo
-reallocates every struct of the layer store, so each session was built again, adopting its
-units one by one. On the deep stack that build was about half of an undo: the plan, every
-unit's structural signature and owners, the reach map and the native description. Most
-undos restore a value the add-on edits as a uniform: an opacity, a colour, a mask's level, a
-visibility.
+**A memfile undo keeps the graph when the stack kept its shape.** A memfile undo reallocates
+every struct of the layer store, so each session was built again, adopting its units one by
+one. On the deep stack that build was about half of an undo: the plan, every unit's
+structural signature and owners, the reach map and the native description. Most undos keep
+the stack's shape: they restore an opacity, a colour, a mask's level or a visibility, or a
+blend mode, an effect's kind, a channel switched on.
 - `cache.on_undo_pre` snapshots each settled engine set's stored properties: its layer store
-  and its own. `cache.on_undo` snapshots them again after the restore.
-  `evaluation/undo_follow.py` compares the two. A field counts as numeric by its declaration
-  (a `numeric` update callback, in nested groups and collections too); bookkeeping the
-  compiler never reads may differ too. Anything else, an unknown field, a collection of
-  another length or a datablock that went with the undo rebuilds as before.
-- For such a set, `EngineGraph.follow_restored` re-points the retired graph's units to the
-  restored structs (`_follow_undo`), rebuilds the tables keyed by struct address and reads
-  every binding again, as after a numeric edit. The graph keeps its engine. It refuses (and
-  the set rebuilds) when a unit holds a CPU boundary, a cache, a Mask Graph or a datablock
-  no path maps, when the graph has stubs, or when structural edits are pending.
+  and its own. `cache.on_undo` snapshots them again after the restore, and
+  `evaluation/undo_follow.py` compares the two.
+  - A field counts as numeric by its declaration (a `numeric` update callback, in nested
+    groups and collections too). Bookkeeping the compiler never reads may differ.
+  - Other differences are allowed in layers whose collections still hold the same items in
+    place. Items named by id (masks, anchors) or by channel must keep their place; a channel's
+    effects are compiled by position.
+  - Anything else rebuilds as before: a layer, mask or effect added, removed or moved, the
+    set's own structure, or a datablock that went with the undo.
+- `EngineGraph.follow_restored` re-points the retired graph's units to the restored structs
+  (`_follow_undo`) and rebuilds the tables keyed by struct address. The layers that changed
+  structurally are then patched as after a structural edit (`patch`), and every binding is
+  read again. The graph keeps its engine. It refuses (and the set rebuilds) when a unit holds a
+  CPU boundary, a cache, a Mask Graph or a datablock no path maps, when the graph has stubs,
+  or when structural edits are pending.
 - A snapshot costs about 2.5 ms on 44 layers: `to_dict`, then a walk over the fields that can
   hold a datablock. It is skipped in texture paint mode, where undos are a stroke's image
   steps (`1a43b39`).
-- `undo_follow.py` checks it on both backends. Every numeric undo and redo is followed, keeps
-  the graph, equals a fresh compile (`verify_undo`) and publishes bit for bit the state it
-  returned to. Structural and mixed undos rebuild, and so does the second of two undos with
-  no tick between them. `OP_FOLLOW_NUMERIC_UNDO=0` rebuilds every time. A first version
-  kept `_live_effects`'s cache of effect structs and crashed in `validate_parameters`: the
-  follow drops every cache that holds structs.
+- `undo_follow.py` checks it on both backends. Undos and redos of numeric values, a blend mode,
+  an effect's kind and a channel switch are followed, keep the graph, equal a fresh compile
+  (`verify_undo`) and publish bit for bit the state they returned to. Adding a mask or a layer
+  rebuilds, and so does the second of two undos with no tick between them.
+  `OP_FOLLOW_NUMERIC_UNDO=0` rebuilds every time.
+- A first version kept `_live_effects`'s cache of effect structs and crashed in
+  `validate_parameters`. The follow now drops every cache that holds structs.
 
 | Deep stack, Vulkan, 40 layers at 1K, ms | Follow | Rebuild |
 | --- | ---: | ---: |
-| Numeric undo (background) | 57–66 | 82–83 |
-| Structural undo (background) | 90–96 | 81–84 |
+| Numeric undo (background) | 58–59 | 80–82 |
+| Structural undo (blend mode, background) | 60–62 | 83–84 |
 | Numeric undo in a window, from the restore to current | 73–84 | 104–133 |
-
-  A structural undo pays the two snapshots (about 5 ms). The same comparison names the
-  layers it changed, so following the rest and patching those (as a structural edit does)
-  is the next step.
 
 **Descriptors and colour spaces** (`8a1dcfe`). The engine's graph wrote the JSON descriptors a
 material's persisted trees carry for rehydration, which the engine never reads. Every

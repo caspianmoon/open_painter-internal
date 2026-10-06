@@ -141,16 +141,71 @@ def _same(cls, before, after, numeric):
 
 def numeric_only(before, after):
     """Whether two snapshots of a set (``snapshot``) differ only in numeric values."""
-    if before is None or after is None:
+    return changed_layers(before, after) == frozenset()
+
+
+def _identity(item):
+    """What names a collection item wherever it sits: its id, or the channel it is for."""
+    if not isinstance(item, dict):
+        return None
+    return item.get('id') or (('channel', item['channel']) if 'channel' in item else None)
+
+
+def _aligned(cls, before, after, numeric):
+    """Whether every collection of ``before`` and ``after`` (a ``cls`` group) holds the same items
+    at the same places, nested ones too: a graph that follows the structs by path then binds what
+    it bound (``EngineGraph.follow_restored``). Items that units and references name by id (masks,
+    anchors) or by channel must keep their names in place; unnamed items (a channel's effects)
+    are compiled by position, so whatever sits there now is what a unit of that structure binds,
+    and a different kind there changes the unit's signature, which the patch compiles again."""
+    if before == after:
+        return True
+    if not isinstance(before, dict) or not isinstance(after, dict):
         return False
+    _, nested = _shape(cls)
+    for name, target, many in nested:
+        a, b = before.get(name), after.get(name)
+        if a == b:
+            continue
+        if not many:
+            if not _aligned(target, a or {}, b or {}, numeric):
+                return False
+            continue
+        a, b = a or [], b or []
+        if not isinstance(a, list) or not isinstance(b, list) or len(a) != len(b):
+            return False
+        for x, y in zip(a, b):
+            if x == y:
+                continue
+            if _identity(x) != _identity(y) or not _aligned(target, x, y, numeric):
+                return False
+    return True
+
+
+def changed_layers(before, after):
+    """How two snapshots of a set (``snapshot``) differ: an empty set when only in numeric
+    values; the ids of the layers whose other values differ, when the layers are the same ones in
+    the same order and their collections hold the same items at the same places (a blend mode,
+    an effect's kind, a channel switched on); None otherwise (a layer, mask or effect added,
+    removed or moved, the set's own structure, a datablock that went with the undo)."""
+    if before is None or after is None:
+        return None
     from ..properties.layer import OP_Layer
     from ..properties.texture_set import OP_LayerStore, OP_TextureSet
     if len(before[0]) != len(after[0]):
-        return False   # a layer added or removed
+        return None   # a layer added or removed
     numeric = _numeric_callbacks()
-    pairs = [(OP_Layer, a, b) for a, b in zip(before[0], after[0])]
-    pairs += [(OP_LayerStore, before[1], after[1]), (OP_TextureSet, before[2], after[2])]
     try:
-        return all(a == b or _same(cls, a, b, numeric) for cls, a, b in pairs)
+        if not (_same(OP_LayerStore, before[1], after[1], numeric) and _same(OP_TextureSet, before[2], after[2], numeric)):
+            return None
+        changed = set()
+        for a, b in zip(before[0], after[0]):
+            if a == b or _same(OP_Layer, a, b, numeric):
+                continue
+            identifier = a.get('id')
+            if not identifier or identifier != b.get('id') or not _aligned(OP_Layer, a, b, numeric):
+                return None
+            changed.add(identifier)
+        return frozenset(changed)
     except ReferenceError:
-        return False   # a datablock reference no declared field holds: it went with the undo
+        return None   # a datablock reference no declared field holds: it went with the undo

@@ -82,6 +82,46 @@ class NumericOnlyTests(unittest.TestCase):
         self.assertFalse(numeric_only(before, (before[0][:1],) + before[1:]), 'a layer removed')
         self.assertFalse(numeric_only(before, None))
 
+    def changed(self, edit):
+        before = self.snapshot()
+        after = copy.deepcopy(before)
+        edit(after)
+        from open_painter.evaluation.undo_follow import changed_layers
+        return changed_layers(before, after)
+
+    def test_structural_values_with_collections_in_place_name_their_layers(self):
+        cases = {
+            'blend mode': lambda s: s[0][0].update(blend_mode=3),
+            'a channel switched off': lambda s: s[0][1]['channels'][0].update(enabled=0),
+            # A channel's effects are compiled by position: a kind changed in place is patched.
+            'an effect kind': lambda s: s[0][0]['channels'][0]['effects'][0].update(kind='BLUR'),
+            'a mask effect kind': lambda s: s[0][0]['masks'][0]['effect'].update(kind='LEVELS'),
+            'blend mode and opacity': lambda s: s[0][0].update(blend_mode=3, opacity=.1),
+        }
+        for name, edit in cases.items():
+            expected = frozenset({'b'}) if name == 'a channel switched off' else frozenset({'a'})
+            self.assertEqual(self.changed(edit), expected, name)
+        self.assertEqual(self.changed(lambda s: s[0][0].update(opacity=.1)), frozenset(), 'numeric only')
+        both = self.changed(lambda s: (s[0][0].update(blend_mode=3), s[0][1].update(blend_mode=4)))
+        self.assertEqual(both, frozenset({'a', 'b'}))
+
+    def test_collections_out_of_place_rebuild(self):
+        def swap_masks(s):
+            masks = s[0][0]['masks']
+            masks.append(dict(masks[0], id='n'))
+            masks[0], masks[1] = masks[1], masks[0]
+        cases = {
+            'a mask added': lambda s: s[0][0]['masks'].append({'id': 'n'}),
+            'masks moved': swap_masks,
+            'an effect added': lambda s: s[0][0]['channels'][0]['effects'].append({'kind': 'BLUR'}),
+            # Effects with ids (anchors) are named by them: another one in place is not the same.
+            'a named effect replaced': lambda s: (s[0][0]['channels'][0]['effects'][0].update(id='x'),),
+            'a layer replaced': lambda s: s[0][0].update(id='z'),
+            'the set': lambda s: s[2].update(resolution=2),
+        }
+        for name, edit in cases.items():
+            self.assertIsNone(self.changed(edit), name)
+
     def test_a_reference_the_undo_invalidated_rebuilds(self):
         before = self.snapshot()
         before[0][0]['channels'][0]['image'] = Removed()

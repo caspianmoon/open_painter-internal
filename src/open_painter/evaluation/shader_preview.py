@@ -39,7 +39,7 @@ _carried = {}    # session key -> the engine an undo dropped: its rebuild starts
 # A memfile undo that restored only numeric values of a set (``undo_follow``): its retired graph
 # follows the restored structs and keeps its engine instead of a rebuild (0: rebuild, for comparisons).
 FOLLOW_NUMERIC_UNDO = os.environ.get('OP_FOLLOW_NUMERIC_UNDO', '1') != '0'
-_followable = set()   # session keys the last undo restored only numeric values of
+_followable = {}   # session key -> the layers the last undo changed other than numerically (undo_follow)
 HOLD_SECONDS = 5.0   # a hold no gesture renewed for this long was lost with its modal: release it (0.9.8)
 
 
@@ -1058,16 +1058,18 @@ def followable(scene, ts):
     return not graph._stubs and graph._dirty_layers is not None and not graph._dirty_layers
 
 
-def follow_undos(keys):
-    """The sessions the undo that just ran restored only numeric values of (``undo_follow``)."""
-    _followable.update(keys)
+def follow_undos(changes):
+    """The sessions the undo that just ran can follow (``undo_follow``): key -> the layers it
+    changed other than numerically, which the followed graph patches (empty: none)."""
+    _followable.update(changes)
 
 
 def _follow_undo(scene, ts, key, graph, undo):
-    """A memfile undo restored only numeric values of the set: its graph follows the restored
-    structs and keeps its engine (``EngineGraph.follow_restored``), as a numeric edit is applied.
-    None when it cannot: the set is built as after any undo."""
-    _followable.discard(key)
+    """A memfile undo restored only numeric values of the set, or other values of some layers with
+    their collections in place: its graph follows the restored structs and keeps its engine
+    (``EngineGraph.follow_restored``), patching those layers as a structural edit is applied. None
+    when it cannot: the set is built as after any undo."""
+    changed = _followable.pop(key, frozenset())
     engine = _carried.get(key)
     follow = getattr(graph, 'follow_restored', None)
     if (follow is None or engine is None or engine.graph is not graph or engine.set_id != ts.id
@@ -1076,7 +1078,7 @@ def _follow_undo(scene, ts, key, graph, undo):
     from . import gc_policy, profile
     try:
         with gc_policy.paused():
-            if not follow(scene, ts, undo):
+            if not follow(scene, ts, undo, changed):
                 metrics.count('shader_undo_follow_refusals')
                 return None
             if VERIFY_UNDO:
@@ -1090,7 +1092,8 @@ def _follow_undo(scene, ts, key, graph, undo):
     entry = _sessions.setdefault(key, {})
     entry.pop('dropped', None)   # every binding was read again
     entry.update(graph=graph, engine=engine, dirty=True, store=_store(ts), rebuild_scope=None,
-                 undo_follows=entry.get('undo_follows', 0) + 1)
+                 undo_follows=entry.get('undo_follows', 0) + 1,
+                 graph_patches=entry.get('graph_patches', 0) + bool(changed))
     built = dict(getattr(graph, '_last', {}))
     stage = entry.setdefault('stage', stages.begin())
     stage['build_ms'] += float(built.get('build_ms', 0.0))

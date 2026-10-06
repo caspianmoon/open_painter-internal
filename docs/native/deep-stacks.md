@@ -816,10 +816,11 @@ included. The undo handler therefore drops every session and the next tick build
 the graph again. Other undo steps (a brush stroke's image step, sculpt, edit mode) restore
 pixels or a mesh in place and keep the Main, which a memfile step replaces: the handler
 keeps the sessions then (`cache._restored_datablocks`), and the restored pixels render like
-a stroke. A memfile undo that restored only numeric values (`undo_follow`: the set's stored
-properties compared before and after it) keeps its graph too: the units follow the restored
-structs (`EngineGraph.follow_restored`) and every binding is read again. At 200 layers the
-rebuild took 2.9–3.3 s:
+a stroke. A memfile undo that kept the stack's shape (`undo_follow`: the set's stored
+properties compared before and after it; only numeric values, or other values of layers whose
+collections hold the same items in place) keeps its graph too: the units follow the restored
+structs (`EngineGraph.follow_restored`), the changed layers are patched and every binding is
+read again. At 200 layers the rebuild took 2.9–3.3 s:
 
 - **Collector.** The rebuild's ~600,000 new objects set off full collections over
   a growing heap (0.6–2 s). `gc_policy.paused()` disables automatic collection

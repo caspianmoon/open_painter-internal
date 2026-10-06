@@ -1,13 +1,14 @@
-"""Memfile undos that restored only numeric values: the graph follows, bit for bit.
+"""Memfile undos the graph follows, bit for bit.
 
-A memfile undo that restored only values the add-on edits as uniforms (``undo_follow``) has the
-retired graph follow the restored structs and keep its engine instead of a rebuild. Every such
+A memfile undo that restored only values the add-on edits as uniforms, or other values of some
+layers with every collection's items in place (``undo_follow``), has the retired graph follow
+the restored structs and keep its engine instead of a rebuild, patching those layers. Every such
 undo and redo here (a layer's opacity and visibility, a channel's colour, a mask's and an
-effect's values) must be followed, keep the graph object, verify against a fresh compile
-(``verify_undo``) and publish exactly the pixels of the state it returned to. An undo that
-restored a structural value (a blend mode), or one together with a numeric value, rebuilds;
-so does the second of two undos with no tick between them. After a follow, numeric and
-structural edits still apply.
+effect's values; a blend mode, an effect's kind, a channel switched on, alone or with a numeric
+value) must be followed, keep the graph object, verify against a fresh compile (``verify_undo``)
+and publish exactly the pixels of the state it returned to. An undo that added or removed a
+mask, an effect or a layer rebuilds, and so does the second of two undos with no tick between
+them. After a follow, numeric and structural edits still apply.
 """
 import sys
 from pathlib import Path
@@ -93,6 +94,9 @@ def step(label, edit, followed, undo='undo', settle_between=True):
         expected, state = after, 'redo'
     assert counts() == ((1, 0) if followed else (0, 1)), (label, state, counts())
     if followed:
+        print('UNDO_FOLLOW', label, state, 'patched units', len(shader_preview.ensure(scene, ts)._last.get('patched_units', ())),
+              flush=True)
+    if followed:
         assert shader_preview.ensure(scene, ts) is graph, f'{label}: the {state} replaced the graph'
         shader_preview.ensure(scene, ts).verify_undo()
     else:
@@ -144,13 +148,28 @@ def main():
     step('mask amount', lambda: setattr(layer(masked_id).masks[0], 'amount', .2), followed=True)
     step('layer visibility', lambda: setattr(layer(fill_id), 'visible', False), followed=True)
     step('layer opacity', lambda: setattr(layer(fill_id), 'opacity', .45), followed=True, undo='redo')
-    step('blend mode', lambda: setattr(layer(fill_id), 'blend_mode', 'MULTIPLY'), followed=False)
+    step('blend mode', lambda: setattr(layer(fill_id), 'blend_mode', 'MULTIPLY'), followed=True)
 
     def mixed():
         target = layer(fill_id)
         target.opacity = .2
         target.blend_mode = 'SCREEN'
-    step('opacity with a blend mode', mixed, followed=False)
+    step('opacity with a blend mode', mixed, followed=True)
+    step('blend mode', lambda: setattr(layer(fill_id), 'blend_mode', 'OVERLAY'), followed=True, undo='redo')
+    step('effect kind', lambda: setattr(stack.channel_for(layer(blurred_id), 'BASE_COLOR').effects[0], 'kind', 'SHARPEN'),
+         followed=True)
+    stack.channel_for(layer(fill_id), 'ROUGHNESS').value = .95   # under OVERLAY, .5 changes nothing
+
+    def toggle_channel():
+        prop = stack.channel_for(layer(fill_id), 'ROUGHNESS')
+        prop.enabled = not prop.enabled
+    step('channel switched', toggle_channel, followed=True)
+
+    def add_mask():
+        mask = layer(fill_id).masks.add()
+        mask.source = 'PROCEDURAL'
+    step('a mask added', add_mask, followed=False)
+    step('a layer added', lambda: stack.add(current()[1], 'FILL', 'Added'), followed=False)
 
     # Two undos with no tick between them: the second finds no session to follow.
     scene, ts = current()
@@ -181,7 +200,8 @@ def main():
     ready(scene, ts)
     after_numeric = published()
     assert any(np.any(before[c] != after_numeric[c]) for c in before), 'a followed graph ignored an edit'
-    layer(fill_id).blend_mode = 'OVERLAY'
+    target = layer(fill_id)
+    target.blend_mode = 'MULTIPLY' if target.blend_mode != 'MULTIPLY' else 'SCREEN'
     ready(scene, ts)
     assert any(np.any(after_numeric[c] != published()[c]) for c in before), 'a followed graph ignored a structure edit'
     print('UNDO_FOLLOW_PASS', flush=True)

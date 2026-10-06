@@ -756,21 +756,24 @@ def on_undo(_):
     # ``_reset_runtime``): an undone stroke is a region change, not a new bake.
     _relearn(forget_corrections=False)
     if restored and before:
-        # A set whose stored properties changed only in numeric values keeps its compiled
-        # structure: its graph follows the restored structs (``undo_follow``). Compared after
+        # A set whose stored properties changed only in numeric values, or in some layers' other
+        # values with their collections in place, keeps its compiled structure: its graph follows
+        # the restored structs and patches those layers (``undo_follow``). Compared after
         # ``_relearn``, whose writes (derived physical values) count too.
         from . import undo_follow
-        followed = []
+        followed = {}
         try:
             for scene in bpy.data.scenes:
                 if not hasattr(scene, "open_painter"):
                     continue
                 for ts in scene.open_painter.texture_sets:
                     snapshot = before.get((scene.session_uid, ts.id))
-                    if snapshot is not None and undo_follow.numeric_only(snapshot, undo_follow.snapshot(scene, ts)):
-                        followed.append(key_for(scene, ts))
+                    if snapshot is not None:
+                        changed = undo_follow.changed_layers(snapshot, undo_follow.snapshot(scene, ts))
+                        if changed is not None:
+                            followed[key_for(scene, ts)] = changed
         except Exception:
-            followed = []
+            followed = {}
             logger.debug('Undo comparison', exc_info=True)
         shader_preview.follow_undos(followed)
 

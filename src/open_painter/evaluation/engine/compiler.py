@@ -145,16 +145,18 @@ class EngineGraph(Graph):
         changes, self.unit_changes = self.unit_changes, set()
         return changes
 
-    def follow_restored(self, scene, ts, index):
-        """Follow a memfile undo that restored only numeric values of the set (``undo_follow``):
-        the structure this graph compiled still holds, so each unit is re-pointed to the structs
-        now at its owners' paths (``_follow_undo``) and every binding is read again, as after a
-        numeric edit, instead of building a graph that adopts the units one by one. ``index`` is
-        this graph's ``undo_index``, taken before the undo.
+    def follow_restored(self, scene, ts, index, changed=frozenset()):
+        """Follow a memfile undo (``undo_follow``) that restored only numeric values of the set, or
+        other values of the ``changed`` layers with every collection's items in place: the structs
+        at each path are the ones this graph bound, so each unit is re-pointed to them
+        (``_follow_undo``) instead of building a graph that adopts the units one by one. Every
+        binding is then read again, as after a numeric edit; the ``changed`` layers are patched
+        first, as after a structural edit (``patch``). ``index`` is this graph's ``undo_index``,
+        taken before the undo.
 
         False when the graph cannot follow (a unit holds a CPU boundary, a cache, a Mask Graph or
-        a datablock no path maps; a stub; structural edits pending): the caller then builds as
-        after any undo, which recompiles whatever a partial follow already re-pointed."""
+        a datablock no path maps; a stub; structural edits pending; the patch refuses): the caller
+        then builds as after any undo, which recompiles whatever a partial follow re-pointed."""
         import bpy
         from ..shader_graph import _addresses, global_signature
         started = perf_counter()
@@ -164,15 +166,25 @@ class EngineGraph(Graph):
                 or self.cache_bindings or self._global != global_signature(ts)
                 or len(self.bindings) != sum(len(unit.bindings) for unit in self.units.values())):
             return False
+        layers = {layer.id: layer for layer in ts.layers}
+        if tuple(layers) != getattr(previous, 'ids', None):
+            return False
         self.scene, self.ts = scene, ts
         # Caches holding structs from before the undo: the live effects and the plan a structure
         # check made for the next patch.
         self._live_cache = self._live_seeds = self._scope_plan = None
-        # No layer was edited structurally: every layer's answers carry over, read from the
-        # restored structs.
-        plan = self.plan(previous, set())
-        if plan.affected or set(plan.keys) != set(self.units) or plan.wiring != previous.wiring:
-            return False
+        if changed:
+            # The structure plan's structs are the restored ones: the patch below re-plans the
+            # changed layers from it, and finds no layer moved.
+            for held in {id(previous): previous, id(self._plan): self._plan}.values():
+                held.layers, held.channels = layers, {}
+            previous.pointers = {identifier: layer.as_pointer() for identifier, layer in layers.items()}
+        else:
+            # No layer was edited structurally: every layer's answers carry over, read from the
+            # restored structs.
+            plan = self.plan(previous, set())
+            if plan.affected or set(plan.keys) != set(self.units) or plan.wiring != previous.wiring:
+                return False
         moves = self._undo_structs(index)
         moved = self._undo_moved = _addresses(moves)
         self._undo_moves, self._undo_fresh = moves, {id(struct) for struct in moves.values()}
@@ -198,15 +210,25 @@ class EngineGraph(Graph):
             return False
         self._paths = None
         self._path(ts)   # indexed now, for the next undo (``undo_index``)
-        self._settled(plan)
         self._layout = self._stack_layout()
         self._global = global_signature(ts)
-        self._reused = list(self.units)   # every unit followed (``verify_undo``)
-        self.unit_changes = set()   # the engine keeps every unit's state
-        self.validate_parameters()
-        corrections = self.update(check_structure=False)
-        nodes, unit_nodes, unit_build_ms = getattr(self, '_tally', (None, {}, {}))
-        self._last = self._report(started, corrections, 0, unit_nodes, unit_build_ms, nodes=nodes)
+        self.unit_changes = set()   # the engine keeps every unit's state but those a patch replaces
+        if changed:
+            followed = dict(self.units)
+            self.touch_layers(changed)
+            report = self.patch(reconcile=True)   # reads every binding again
+            if report is None:
+                return False
+            self._reused = [key for key, unit in self.units.items() if followed.get(key) is unit]
+            self._last = report
+            metrics.count('engine_graph_undo_patches')
+        else:
+            self._settled(plan)
+            self._reused = list(self.units)   # every unit followed (``verify_undo``)
+            self.validate_parameters()
+            corrections = self.update(check_structure=False)
+            nodes, unit_nodes, unit_build_ms = getattr(self, '_tally', (None, {}, {}))
+            self._last = self._report(started, corrections, 0, unit_nodes, unit_build_ms, nodes=nodes)
         metrics.count('engine_graph_undo_follows')
         from ..dependencies import remember, geometry_key
         remember(scene, ts, geometry_key(scene, ts))

@@ -1103,7 +1103,8 @@ def _follow_undo(scene, ts, key, graph, undo):
         if retired is not graph:
             retired.unbind()
     metrics.count('shader_undo_followed_graphs')
-    profile.record_graph(scene, ts, graph)
+    # A numeric follow keeps every unit and tree: the set's record stands as it is.
+    profile.record_graph(scene, ts, graph, layers=frozenset() if not changed and profile.recorded(scene, ts) else None)
     gc_policy.allocated()
     return graph
 

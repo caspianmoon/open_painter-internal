@@ -45,6 +45,11 @@ def profiled(scene, ts):
     return bool(table(scene, ts)['cpu'])
 
 
+def recorded(scene, ts):
+    """Whether this set's per-layer compile table holds a record (``record_graph``)."""
+    return bool(_tables.get(key_for(scene, ts), {}).get('compile'))
+
+
 def record_graph(scene, ts, graph, layers=None):
     """Per-layer compile cost, node and sampler counts; ``layers``: only these changed (a patch)."""
     entry = _table(scene, ts)

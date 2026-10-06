@@ -228,7 +228,9 @@ class EngineGraph(Graph):
             self.validate_parameters()
             corrections = self.update(check_structure=False)
             nodes, unit_nodes, unit_build_ms = getattr(self, '_tally', (None, {}, {}))
-            self._last = self._report(started, corrections, 0, unit_nodes, unit_build_ms, nodes=nodes)
+            # Only numeric values changed: the reference warnings are the ones read last.
+            self._last = self._report(started, corrections, 0, unit_nodes, unit_build_ms, nodes=nodes,
+                                      references=getattr(self, '_reference_warnings', None))
         metrics.count('engine_graph_undo_follows')
         from ..dependencies import remember, geometry_key
         remember(scene, ts, geometry_key(scene, ts))

@@ -112,6 +112,12 @@ records its units as rendered with their local stamps (`op_graph_mark_rendered`,
 ABI 14), as executing them would, so they stay run members. See the Windows plan,
 "Drags render only what changes; fused chains".
 
+With images written in place, a channel's final renders inside its publication pass:
+the collapsed run it tops applies its transform at the texel publication reads, and a
+fused chain ending at it evaluates there. The final's own pass, its texture and the
+publication's read of it are saved, bit for bit (Windows plan, "The final renders in its
+publication pass").
+
 ### Unchanged inputs stay resident
 
 A result that a changed unit reads but that does not change itself is read again

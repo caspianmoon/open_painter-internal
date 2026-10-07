@@ -618,6 +618,88 @@ The deep stack's numeric undo with a 130K-vertex mesh takes 62–67 ms; before, 
 about 350 ms more in the signature alone. Drags and applies cost the same with 1.1K and
 130K vertices.
 
+### The final renders in its publication pass (2026-10-07)
+
+A drag publishes each changed channel from its final unit. The final was rendered into a
+texture of its own, and the publication pass read that texture back. That pass pads seams
+from a donor texel, finishes the value (a normal map's normalize, a scalar's broadcast, the
+clamp) and writes the image's level 0 together with the copy its mips reduce. With images
+written in place (a window session), the final now renders inside that pass. Its own pass,
+its texture write and the read of it are gone.
+- **A fused chain ending at the final** (`fusion.publish`, `6c99655`). The fused shader
+  evaluates the chain at the texel the publication reads (a padding texel's donor), rounds
+  the top as its texture would hold it, then applies the publication's own epilogue.
+- **A collapsed run topped by the final** (`fusion.publish_suffix`). The run's transform
+  is applied to its input at that texel (the library's `suffix.apply` source), rounded the
+  same way. One shader serves each top format and publication variant.
+- **Exactness.** Each shader is checked once, on a corner, against the final rendered over
+  the whole set (a donor may lie anywhere) and then published as before. The images and
+  their mip copies must agree bit for bit; otherwise that shader is never used.
+- **Where it applies.** Only on a drag's later ticks (the same edit on consecutive
+  evaluations, `fusion.repeated`), where images are written in place with no revision
+  staging them, nothing else reads or keeps the final, and idle ticks run (with a UI, or
+  `OP_PREARM=1`). On Vulkan's pixel route the final already renders in its pixel layout
+  (`_fused_final`), and a chain ending at it fuses only the units below it.
+
+**Finals are kept while idle.** A published final used to stay in the bounded result
+cache (`_keep_final`). Undos back to that state and edits that compose over the final
+(adding a layer on top) found it there. A final published fused holds no texture.
+Without it, the deep stack's first undo after the paint strokes rendered 243 units instead
+of 1 (237–250 ms against 152–156), and adding a fill on top rendered 7.9 ms instead of
+1.8. So:
+- A one-off edit, an undo, a structural edit and a drag's first tick publish as before
+  and keep their finals.
+- A fused publication holds what it read (a run's input, a chain's inputs) until the next
+  idle tick, `Engine._keep_fused_finals` in `prearm`. That tick rebuilds the final from
+  those reads and keeps it, then releases them: one texture per channel, as keeping the
+  final itself took.
+- A collapsed run is applied again with the same transform. Collapse rounds otherwise than
+  the run rendered layer by layer, and the kept final must hold what was published.
+- Finals rendered since, or no longer current, are dropped after each evaluation
+  (`_prune_fused_finals`).
+
+**Tests.**
+- `native_suffix.py` drags the stack's base at both precisions, padded and not. Images
+  equal the same drag applied then published, bit for bit, with fewer passes. After the
+  idle tick, publishing again renders nothing and gives the same images. Mutations caught:
+  the top unrounded (verification rejects it; without verification 25% of texels differ),
+  the donor redirect removed (3.4%), the held reads released early (1.4% of NORMAL).
+- `native_fusion.py` publishes two drags fused and not: bit-identical images, including
+  channels not published again.
+- `engine_fused_publish.py` covers Vulkan's pixel route: 16 → 12 passes, 11 with a chain
+  fused below the final; on OpenGL 45 → 36.
+
+| Deep stack, 40 layers at 1K, ms | Vulkan, off | Vulkan, on | OpenGL, off | OpenGL, on |
+| --- | ---: | ---: | ---: | ---: |
+| Top folder opacity | 8.1–8.5 | 7.1–7.4 | 7.8–8.0 | 7.0–8.2 |
+| Bottom folder opacity | 9.5–9.6 | 8.4–8.7 | 9.7–9.9 | 8.2–8.9 |
+| Middle leaf opacity | 10.9–11.2 | 9.9–10.0 | 10.7 | 9.9–10.4 |
+| Mask edit mid-stack | 11.0–11.4 | 10.0–10.4 | 10.4–10.8 | 9.5–9.8 |
+| Bottom leaf roughness | 5.4–5.8 | 5.0–5.6 | 5.7–6.1 | 5.5–6.0 |
+| Paint input | 4.9–5.1 | 4.7–5.0 | 5.1–5.9 | 5.1–5.2 |
+| Undo, structural edits, apply, cold build | | unchanged | | unchanged |
+
+Off is `OP_FUSE_PUBLISH=0`; two runs of each (window route). The saving is GPU bandwidth,
+16 bytes per texel and a pass per channel, so it grows with resolution. The benchmark's
+undo case now pauses before its first edit as its structural cases do, with idle ticks
+that arm the edited layer and keep the finals the paint strokes published fused. One
+OpenGL run had every undo at 206–320 ms; three repeats measured 58–70 ms (first undo
+210–214), as off.
+
+**Compiles wait for an idle tick.** A fused shader's first compile takes 100–330 ms. With
+a UI, a shader this machine has not compiled before is queued (`_fusion_pending`) and
+compiled by the next idle `prearm`, so no tick of a drag waits for it. Those ticks render
+as without fusion meanwhile. The compiled shaders are listed in `fused_shaders.json` in the
+extension's user directory, keyed by Blender's version, the backend, the renderer and the
+driver. Blender's SPIR-V cache and NVIDIA's GL cache bring a listed shader's compile down to
+1–4 ms, so those still compile on the drag's second tick. Background Blender always compiles
+on repeat.
+
+Fusion's shaders and its store self-test do not count as program compiles
+(`Device._create(counted=False)`, `Device.fixed(counted=False)`). `Device.compiles` counts
+only the units' programs and fixed passes, and `native_effects.py` requires none of them
+during a numeric edit.
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time
@@ -1086,6 +1168,10 @@ next suite (`--start-at`).
 | `OP_UNDO_ADOPTION=0` | Compile every unit after an undo (the old path) |
 | `OP_ENGINE_PIXEL_PUBLISH=1` / `=0` | Force publication through pixels / into the images' GPU textures, on any backend (background Vulkan defaults to pixels) |
 | `OP_PREARM=1` | Idle suffix arming in background Blender (benchmarks) |
+| `OP_FUSE_CHAINS=0` | No chain fusion, and no final rendered in its publication pass (`engine/fusion.py`) |
+| `OP_FUSE_PUBLISH=0` | No final rendered in its publication pass (fused chains and collapsed runs) |
+| `OP_KEEP_READS=0` | Release what a changed unit read once its consumer drew (no kept reads) |
+| `OP_PARAM_FREE=0` | Folder steps with empty channels keep their parameters in their stamps |
 | `OP_DEEP_*` | Deep-stack benchmark options (see `tests/integration/native_deep_stack.py`) |
 | CMake `-DOP_TEST_TIMEOUT=<s>` | Seconds per C test (default 20) |
 | CMake `-DOP_SCALAR_<kernel>` | Build a kernel's scalar path (`PIXELS`, `COVERAGE`, `RASTER`, `SHA256`) |

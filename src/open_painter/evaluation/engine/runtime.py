@@ -1053,6 +1053,8 @@ class Engine:
         self._presentation = None       # eviction recovery of channels published in place
         self._pending_mips = []         # (image texture, level-0 source, n, format, kept) awaiting their mips
         self._kept_finals = False       # finals were kept this evaluation: trim the cache once it ends
+        self._fused_finals = {}         # final published fused -> (its collapsed run or None, its reads)
+        self._fused_reads = Counter()   # what those read: held until an idle tick keeps the finals
         self._evaluation_depth = 0
         self.replaced = None            # units a patch replaced, until the native graph takes them
         self._chains = None             # the graph chains ``positions`` were derived from
@@ -1776,7 +1778,8 @@ class Engine:
 
     def _settle(self, key, n):
         """Release a CHANNEL result its consumer has drawn with, unless it is kept."""
-        if key in self.keep or key in self.retained or self.graph.consumers.get(key) or self._in_use[key] > 0:
+        if (key in self.keep or key in self.retained or self.graph.consumers.get(key) or self._in_use[key] > 0
+                or key in self._fused_reads):
             return
         if key in self._frontier or (self._reads is not None and key in self._reads and key not in self._changed):
             return
@@ -2199,6 +2202,7 @@ class Engine:
                         written.add(channel)
         self.deferred = deferred
         self._update_frontier(n)
+        self._prune_fused_finals(n)
         if self._kept_finals:
             self._kept_finals = False
             self._trim_retained(n)
@@ -2255,6 +2259,8 @@ class Engine:
             if self._native_stamps is None or graph is None or graph.last_patch_count:
                 return False
             memo = {}
+            if self._keep_fused_finals(n, memo, epochs or {}):
+                return True
             # An edit of the layer will compose over its spine: make it resident and
             # keep it, as the edit's own checkpoints will, so its first tick renders
             # nothing below the layer.
@@ -2389,16 +2395,14 @@ class Engine:
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
-            deferred = None
+            deferred = run = None
             if final[0] == 'unit':
-                # A fused chain ending at the final renders in its publication pass (fusion.publish).
+                # A fused chain ending at the final, or the collapsed run it tops, renders in the
+                # publication pass (_publish_fused).
                 deferred = fusion.materialize(self, final[1], n, memo, epochs, defer=True)
-                self._suffix.collapse(self, final[1], n, memo, epochs)
+                run = self._suffix.collapse(self, final[1], n, memo, epochs, defer=True)
             started, inputs = perf_counter(), self.stages['inputs_ms']
-            if deferred is None or not fusion.publish(self, deferred[0], image, channel, n, memo, epochs,
-                                                      build=deferred[1]):
-                if deferred is not None:
-                    fusion.render_deferred(self, deferred, n, memo, epochs)   # one fused pass at least
+            if not self._publish_fused(image, channel, deferred, run, n, memo, epochs):
                 result = self._texture_of(final, n, memo, epochs)
                 if self.profiling:
                     dev.finish()
@@ -2617,6 +2621,86 @@ class Engine:
         # Finish, pad and write level 0 in one pass, and its copy the mips reduce.
         self._publish_in_place(image, channel, n, fmt,
                                lambda slots: dev.draw(dev.fixed('publish'), slots, n, samplers, ints=ints))
+
+    def _publish_fused(self, image, channel, deferred, run, n, memo, epochs):
+        """Publish ``channel`` with its final rendered in the publication pass: the collapsed run
+        it tops (``fusion.publish_suffix``) or a fused chain ending at it (``fusion.publish``).
+        False, with what was left for that pass rendered now, when it cannot.
+
+        Such a final keeps no texture, so only a drag's later ticks publish it so (the same edit
+        on consecutive evaluations, ``fusion.repeated``). A one-off edit, an undo or a drag's
+        first tick keeps its finals in the result cache (``_keep_final``) for the edits that
+        compose over them and the undos back to them; a drag's last finals are kept by the next
+        idle tick (``_keep_fused_finals``)."""
+        if run is not None:
+            if fusion.repeated(self, ('publish', run[0])) and fusion.publish_suffix(
+                    self, run, image, channel, n, memo, epochs):
+                return True
+            self._suffix.apply_deferred(self, run, n, memo, epochs)
+        elif deferred is not None:
+            if deferred[1] and fusion.publish(self, deferred[0], image, channel, n, memo, epochs):
+                return True
+            fusion.render_deferred(self, deferred, n, memo, epochs)   # one fused pass at least
+        return False
+
+    def _note_fused_final(self, key, run, reads, n):
+        """``key`` was published fused (``fusion.publish``, ``publish_suffix``) from ``reads``
+        (CHANNEL results), which stay resident until an idle tick keeps it from them."""
+        previous = self._fused_finals.pop(key, None)
+        self._fused_finals[key] = (run, tuple(reads))
+        self._fused_reads.update(reads)
+        if previous is not None:
+            self._release_fused_reads(previous[1], n)
+
+    def _release_fused_reads(self, reads, n):
+        self._fused_reads.subtract(reads)
+        for item in reads:
+            if self._fused_reads[item] <= 0:
+                del self._fused_reads[item]
+                self._settle(item, n)
+
+    def _fused_final_current(self, key, finals):
+        """Whether ``key`` still holds what it published fused, in no texture."""
+        graph, state = self._native_graph, self.states.get(key)
+        return (key in finals and state is not None and state.textures is None and graph is not None
+                and graph.stamps is not None and state.stamp == graph.stamps.get(key))
+
+    def _prune_fused_finals(self, n):
+        """After an evaluation: forget the finals published fused that were rendered since or no
+        longer hold that content, and release what they read."""
+        if not self._fused_finals:
+            return
+        finals = {final[1] for final in self.finals.values() if final[0] == 'unit'}
+        for key in [key for key in self._fused_finals if not self._fused_final_current(key, finals)]:
+            self._release_fused_reads(self._fused_finals.pop(key)[1], n)
+
+    def _keep_fused_finals(self, n, memo, epochs):
+        """While idle: render one final a drag's last tick published fused (it holds no texture)
+        from what that tick read, held since, and keep it as an unfused publication would have
+        (``_keep_final``): the edits composing over it and the undos back to it find it. A
+        collapsed run's top is applied again with the same transform (collapse rounds otherwise
+        than the run rendered layer by layer); a fused chain equals its members rendered one by
+        one. True when it kept one."""
+        finals = {final[1] for final in self.finals.values() if final[0] == 'unit'}
+        while self._fused_finals:
+            key, (run, reads) = self._fused_finals.popitem()
+            try:
+                if not self._fused_final_current(key, finals):
+                    continue
+                if run is None:
+                    self._texture_of(('unit', key), n, memo, epochs)
+                elif run[3].n == n and any(entry is run[3] for entry in self._suffix.entries.values()):
+                    self._suffix.apply_deferred(self, run, n, memo, epochs)
+                else:
+                    continue   # its transform was reclaimed: rendered when an edit needs it
+                self._keep_final(key, n)
+                self._kept_finals = False
+                self._trim_retained(n)
+                metrics.count('engine_fused_finals_kept')
+                return True
+            finally:
+                self._release_fused_reads(reads, n)
+        return False
 
     def _begin_publication(self, image, channel, n):
         self._uniform_cpu.pop(channel, None)

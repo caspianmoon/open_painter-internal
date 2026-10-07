@@ -99,14 +99,17 @@ class SuffixCache:
             _release(device(), self.entries.pop(key))
             metrics.count('engine_suffix_reclaims')
 
-    def collapse(self, engine, root, n, memo, epochs):
-        """Materialize every armed (or now armable) run under ``root``; returns runs applied."""
+    def collapse(self, engine, root, n, memo, epochs, defer=False):
+        """Materialize every armed (or now armable) run under ``root``. ``defer``: the run topped
+        by ``root`` is returned instead of applied, for the channel's publication pass to apply
+        (``fusion.publish_suffix``, else ``apply_deferred``): (top, input key or None, bottom,
+        transform), or None."""
         graph = engine._native_graph
         # Only content edits collapse. A forced re-render (host stamps reset without
         # any change) renders sequentially, so it reproduces canonical output.
         if not ENABLED or graph is None or engine.profiling or not getattr(graph, 'last_patch_count', 0):
-            return 0
-        applied = 0
+            return None
+        deferred = None
         for top, source, key, members in graph.runs(engine, root):
             if len(members) < MIN_LENGTH:
                 continue
@@ -127,13 +130,20 @@ class SuffixCache:
                 self._trim(protected=key)
             self.seen[key] = self.serial
             self.entries.move_to_end(key)
-            self.active = entry
-            try:
-                self._apply(engine, top, source, members[0], entry, n, memo, epochs)
-            finally:
-                self.active = None
-            applied += 1
-        return applied
+            if defer and top == root:
+                deferred = (top, source, members[0], entry)
+                continue
+            self.apply_deferred(engine, (top, source, members[0], entry), n, memo, epochs)
+        return deferred
+
+    def apply_deferred(self, engine, run, n, memo, epochs):
+        """Apply a run (``collapse``) as one pass."""
+        top, source, bottom, entry = run
+        self.active = entry
+        try:
+            self._apply(engine, top, source, bottom, entry, n, memo, epochs)
+        finally:
+            self.active = None
 
     def prearm(self, engine, layer_id, n, memo, epochs):
         """Arm one predicted run of an edit of ``layer_id``; False once there is nothing left."""

@@ -299,6 +299,69 @@ def main():
                 np.testing.assert_array_equal(values, published[False][channel], err_msg='fused ' + channel)
             report['fused_over_collapse'] = dict(fused_publications=fused_count, identical=True)
             print('SUFFIX_FUSED', json.dumps(report['fused_over_collapse']), flush=True)
+
+        # Images written in place (a window): a collapsed run topped by a channel's final applies
+        # in the publication pass (fusion.publish_suffix). Every channel's image, at display and
+        # full precision, padded or not, equals the same drag applied and then published.
+        def images_now():
+            engine.sync_pixels(set(CHANNELS))
+            return {out.channel: np.array(images.pixels(out.image), np.float32).copy()
+                    for out in ts.outputs if out.image}
+
+        # A final published so keeps no texture until an idle tick keeps it: where idle arming runs.
+        pixel_publish, pad, prearm = runtime.PIXEL_PUBLISH, engine.pad, suffix.PREARM
+        runtime.PIXEL_PUBLISH, suffix.PREARM = False, True
+        try:
+            outcomes = []
+            for precise in (False, True):
+                for padded in (True, False):
+                    engine.precise, engine.pad = precise, padded
+                    pictures, counts, passes = {}, {}, {}
+                    for fused in (False, True):
+                        fusion.PUBLISH = fused
+                        shader_preview.flush(scene, ts, pixels=False)
+                        start = runtime.device().passes
+                        counts[fused], _ = drag(scene, ts, layer('base'), 'opacity')
+                        passes[fused] = runtime.device().passes - start
+                        pictures[fused] = images_now()
+                    row = dict(precise=precise, padded=padded,
+                               publications=counts[True].get('engine_suffix_publications', 0),
+                               unfused=counts[False].get('engine_suffix_publications', 0),
+                               mismatches=counts[True].get('engine_chain_mismatches', 0),
+                               drag_passes=(passes[False], passes[True]))
+                    outcomes.append(row)
+                    print('SUFFIX_PUBLISH', json.dumps(row), flush=True)
+                    assert row['publications'] and not row['unfused'] and not row['mismatches'], row
+                    # One pass fewer for each channel a run published (a first check of each
+                    # shader renders three).
+                    assert passes[True] < passes[False], row
+                    for channel, values in pictures[False].items():
+                        np.testing.assert_array_equal(pictures[True][channel], values,
+                                                      err_msg=f'{channel} {row}')
+            report['suffix_publish'] = outcomes
+
+            # A drag's last finals hold no texture. The next idle tick renders and keeps them, as an
+            # unfused publication would have: publishing again from them renders nothing, and gives
+            # the same images.
+            fusion.PUBLISH = True
+            engine.precise, engine.pad = False, True
+            shader_preview.flush(scene, ts, pixels=False)
+            drag(scene, ts, layer('base'), 'opacity')
+            dragged = images_now()
+            with Metrics() as metrics:
+                while engine.prearm(ids['base'], dependencies.image_epochs()):
+                    pass
+            kept = metrics.counts.get('engine_fused_finals_kept', 0)
+            engine.published.clear()
+            engine.evaluate(epochs=dependencies.image_epochs(), budget=False)
+            report['idle_keep'] = dict(kept=kept, rendered=len(engine.rendered))
+            print('SUFFIX_IDLE_KEEP', json.dumps(report['idle_keep']), flush=True)
+            assert kept and not engine.rendered, (kept, engine.rendered)
+            for channel, values in dragged.items():
+                np.testing.assert_array_equal(images_now()[channel], values, err_msg='kept ' + channel)
+        finally:
+            runtime.PIXEL_PUBLISH, engine.pad, suffix.PREARM = pixel_publish, pad, prearm
+            fusion.PUBLISH = False
         report['status'] = 'PASS'
         print('NATIVE_SUFFIX_PASS', flush=True)
     finally:

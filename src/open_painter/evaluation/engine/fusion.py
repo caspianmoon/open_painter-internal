@@ -24,6 +24,12 @@ or while idle for the selected layer (``prearm``), never for one-off renders. Wi
 shader this machine has not compiled before waits for an idle tick (``compile_when_idle``):
 a first compile takes 100-330 ms on Vulkan, and Blender's and the driver's disk caches make
 the next ones 1-4 ms.
+
+A channel's final can also render inside its publication pass, with images written in place
+(``publish``, ``publish_suffix``): a fused chain ending at it, or the collapsed run it tops.
+The shader evaluates the final at the texel publication reads, rounds it as the final's
+texture would hold it and finishes it as the publication pass does. The final's pass, its
+texture and the read of it are saved.
 """
 import hashlib
 import os
@@ -640,8 +646,8 @@ def _planned(engine, root):
 def materialize(engine, root, n, memo, epochs, defer=False):
     """Render each fusable chain under ``root`` as one pass. ``defer``: the chain whose top is
     ``root`` (or ``root`` alone, when fusable), which the channel's publication pass renders
-    (``publish``), is returned instead of rendered, with whether its shader may be compiled
-    now: (chain, build) or None."""
+    (``publish``), is returned instead of rendered, with whether the same edit planned it on
+    the previous evaluation too (``repeated``): (chain, repeated) or None."""
     graph = engine._native_graph
     if not ENABLED or graph is None or engine.profiling or graph.stamps is None:
         return None
@@ -656,34 +662,37 @@ def materialize(engine, root, n, memo, epochs, defer=False):
     if not all(changes(key) for chain in planned for key in chain[:-1]):
         engine._fusion_plans.pop(root, None)   # a member keeps its content now: plan again
         planned, collapsed = _planned(engine, root)
-    seen = engine.__dict__.setdefault('_fusion_seen', {})
-    serial, edited = engine._suffix.serial, getattr(graph, 'last_changed', None)
-
-    def repeated(item):
-        # A chain's shader is compiled once the same edit renders the chain again (a drag's
-        # second tick), never for a one-off render: applying a material, opening a file, an
-        # undo, or the evaluations that settle them.
-        last = seen.get(item)
-        seen[item] = (serial, edited)
-        return last is not None and last[0] == serial - 1 and last[1] == edited
-
     deferred = None
     if defer and root not in collapsed and resident_stamp(states[root]) != stamps.get(root):
         top = next((chain for chain in planned if chain[-1] == root), None)
         if top is None and fusable(engine, root, states[root]):
             top = (root,)
         if top is not None:
-            deferred = (top, repeated(('publish', top)))
+            deferred = (top, repeated(engine, ('publish', top)))
     for chain in planned:
         if deferred is not None and chain is deferred[0]:
             continue
         if resident_stamp(states[chain[-1]]) == stamps.get(chain[-1]):
             continue   # already rendered (by another channel's batch, say)
-        _render(engine, chain, n, memo, epochs, build=repeated(chain))
+        # A chain's shader is compiled once the same edit renders the chain again (a drag's
+        # second tick), never for a one-off render: applying a material, opening a file, an
+        # undo, or the evaluations that settle them.
+        _render(engine, chain, n, memo, epochs, build=repeated(engine, chain))
+    seen, serial = engine.__dict__.get('_fusion_seen', {}), engine._suffix.serial
     if len(seen) > 4096:
         for item in [item for item, last in seen.items() if last[0] < serial - 1]:
             del seen[item]
     return deferred
+
+
+def repeated(engine, item):
+    """Whether the same edit planned ``item`` on the previous evaluation too (a drag's later
+    ticks), recording it for the next one. Asked once per evaluation and item."""
+    seen = engine.__dict__.setdefault('_fusion_seen', {})
+    serial, edited = engine._suffix.serial, getattr(engine._native_graph, 'last_changed', None)
+    last = seen.get(item)
+    seen[item] = (serial, edited)
+    return last is not None and last[0] == serial - 1 and last[1] == edited
 
 
 def _above(engine):
@@ -889,9 +898,11 @@ def render_deferred(engine, deferred, n, memo, epochs):
 def publishable(engine, chain, dev):
     """Whether ``chain``'s top, a channel's final, can be rendered in its publication pass: the
     images are written in place (no pixel route, no revision staging them), and nothing else
-    reads the final or keeps it."""
+    reads the final or keeps it. Such a final holds no texture until an idle tick keeps it
+    (``Engine._keep_fused_finals``), which runs where idle arming does."""
+    from .suffix import prearm_enabled
     top = chain[-1]
-    return (ENABLED and PUBLISH and not dev.pixel_publish and not engine.profiling
+    return (ENABLED and PUBLISH and prearm_enabled() and not dev.pixel_publish and not engine.profiling
             and not (engine._native_revisions is not None and engine._native_revisions.submitting)
             and not engine.graph.consumers.get(top) and top not in engine.keep)
 
@@ -940,12 +951,120 @@ def publish(engine, chain, image, channel, n, memo, epochs, build=True):
         engine._publish_in_place(image, channel, n, _publication_format(channel, engine.precise, False),
                                  lambda slots: dev.draw(entry.shader, slots, n, samplers, ubo))
         _settled(engine, chain, held, n, keep_top=False)
+        engine._note_fused_final(chain[-1], None, [key for key in held if key[0] == 'CHANNEL'], n)
         engine.stages['passes']['CHAIN publish'] += 1
         metrics.count('engine_chain_publications')
         metrics.count('engine_chain_units', len(chain))
         return True
     finally:
         _release(engine, held, n)
+
+
+def _suffix_source(rounding, fmt, publish):
+    """The publication of a collapsed run's top (``suffix.apply``, the library's own source,
+    evaluated at the published texel and rounded as the top's ``fmt`` texture holds it), or None
+    when that source cannot be read so: (source, samplers)."""
+    from ...native_bridge.compiler import fixed_source
+    apply = fixed_source('suffix.apply', None)
+    texel = '  ivec2 p = ivec2(gl_FragCoord.xy);\n'
+    if (not apply or apply.count(MAIN) != 1 or apply.count(texel) != 1 or apply.count('gl_FragCoord') != 1
+            or apply.count('op_out0 = ') != 1):
+        return None
+    head, body = apply.split(MAIN)
+    function = 'vec4 op_suffix_value(ivec2 p) {' + body.replace(texel, '').replace('op_out0 = ', 'return ')
+    samplers = ['op_source', 'op_a', 'op_b']
+    source = ('ivec2 op_publish_texel;\n' + head + STORES[rounding]
+              + f'vec4 op_suffix_round(vec4 v) {{ return {ROUND[fmt].format(rounding)}; }}\n' + function
+              + _publication_main(publish, samplers, [], 'op_suffix_round(op_suffix_value(op_publish_texel))'))
+    return source, samplers
+
+
+def _suffix_fused(dev, engine, fmt, publish, build, interactive=True):
+    """The shader a collapsed run's top publishes with (``_shader``): one per top format and
+    publication variant."""
+    def make():
+        built = _suffix_source(store_rounding(dev), fmt, publish)
+        return None if built is None else (built[0], [], built[1], 0, 2, ('op_swizzle',))
+
+    def again():
+        return _suffix_fused(dev, engine, fmt, publish, True, interactive=False) is not None
+
+    return _shader(dev, engine, ('suffix', fmt, publish), build, make, interactive, again)
+
+
+def publish_suffix(engine, run, image, channel, n, memo, epochs):
+    """Apply ``run`` ((top, its input key or None, its bottom, its transform), collapsed and
+    topped by ``channel``'s final) in the channel's publication pass: the top's own pass, its
+    texture and the publication's read of it are saved. True when it published; False, and
+    the caller applies and publishes as usual, otherwise."""
+    from .runtime import device
+    dev = device()
+    top, source, bottom, entry = run
+    if not publishable(engine, (top,), dev):
+        return False
+    state = engine.states[top]
+    fmt = state.formats[0]
+    donor = engine._donor(n) if engine.pad else None
+    key = (channel == 'NORMAL', donor is not None, fmt in ('RG16F', 'RG32F'))
+    fused = _suffix_fused(dev, engine, fmt, key, True)
+    if fused is None:
+        return False
+    source = run[1]
+    engine._suffix.active = entry   # never reclaimed while its input renders
+    if source is not None:
+        engine._in_use[source] += 1
+    try:
+        published = _publish_run(engine, dev, run, fused, image, channel, n, memo, epochs, key, donor)
+        if published:
+            engine._note_fused_final(run[0], run, (source,) if source is not None else (), n)
+    finally:
+        engine._suffix.active = None
+        if source is not None:
+            engine._in_use[source] -= 1
+    if published and source is not None:
+        engine._settle(source, n)
+    return published
+
+
+def _publish_run(engine, dev, run, fused, image, channel, n, memo, epochs, key, donor):
+    from .runtime import _publication_format
+    from .suffix import pack
+    top, source, bottom, entry = run
+    state = engine.states[top]
+    fmt = state.formats[0]
+    ref = ('unit', source) if source is not None else engine.positions[bottom][0]
+    x = engine._texture_of(ref, n, memo, epochs, scalar_unit(bottom))
+    samplers = [('op_source', x), ('op_a', entry.a), ('op_b', entry.b)]
+    if donor is not None:
+        samplers.append(('op_publish_donor', donor))
+    ints = {'op_swizzle': pack(entry.source)}
+    if not fused.verified:
+        def sequential(target):
+            dev.draw(dev.fixed('suffix.apply'), [target], n, samplers[:3], ints=ints)
+
+        def draw(slots, region):
+            dev.draw(fused.shader, slots, n, samplers, ints=ints, region=region)
+
+        if not _verify_publication(dev, engine, fmt, sequential, draw, n, key, donor, channel):
+            fused.failed = True
+            metrics.count('engine_chain_mismatches')
+            return False
+        fused.verified = True
+    if engine._presentation is not None:
+        engine._presentation.forget(channel)
+    engine._begin_publication(image, channel, n)
+    engine._publish_in_place(image, channel, n, _publication_format(channel, engine.precise, False),
+                             lambda slots: dev.draw(fused.shader, slots, n, samplers, ints=ints))
+    # The top holds its desired content in no texture, as C sees an evicted result.
+    previous = state.stamp
+    engine._free(top, state, n)
+    state.stamp = engine._native_graph.stamps[top]
+    engine.rendered.append(top)
+    engine._note_reads(top, previous != state.stamp, (source,) if source is not None else ())
+    engine.stages['passes']['SUFFIX publish'] += 1
+    metrics.count('engine_suffix_applications')
+    metrics.count('engine_suffix_publications')
+    return True
 
 
 def _read(texture, size, components):

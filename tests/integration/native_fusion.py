@@ -276,8 +276,9 @@ def main():
             return {out.channel: np.array(images.pixels(out.image), np.float32).copy()
                     for out in ts.outputs if out.image}
 
-        pixel_publish = runtime.PIXEL_PUBLISH
-        runtime.PIXEL_PUBLISH = False
+        # A final published so keeps no texture until an idle tick keeps it: where idle arming runs.
+        pixel_publish, prearm = runtime.PIXEL_PUBLISH, suffix.PREARM
+        runtime.PIXEL_PUBLISH, suffix.PREARM = False, True
         suffix.ENABLED = False
         try:
             outcomes = {}
@@ -301,7 +302,7 @@ def main():
             assert all(row['publications'] for row in outcomes.values()), outcomes
             report['publish'] = outcomes
         finally:
-            runtime.PIXEL_PUBLISH = pixel_publish
+            runtime.PIXEL_PUBLISH, suffix.PREARM = pixel_publish, prearm
             fusion.PUBLISH = False
         report['status'] = 'PASS'
         print('NATIVE_FUSION_PASS', flush=True)

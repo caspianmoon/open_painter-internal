@@ -416,6 +416,17 @@ def run_undo(scene, ts, repeats=int(os.environ.get('OP_DEEP_REPEATS', '3'))):
 
     def layer():
         return next(item for item in current['ts'].layers if item.id == middle)
+
+    # The pause before the first edit, as before a structural edit (run_structural): the idle
+    # ticks arm the edited layer and keep the finals the paint strokes published fused, the
+    # state the first undo returns to.
+    from open_painter.evaluation import dependencies
+    current['ts'].active_layer = next(i for i, item in enumerate(current['ts'].layers) if item.id == middle)
+    engine = shader_preview.session_engine(current['scene'], current['ts'])
+    with Frame():
+        while engine.prearm(middle, dependencies.image_epochs()):
+            pass
+        fence()
     edits = {'undo_numeric': lambda i: setattr(layer(), 'opacity', .3 + .1 * (i % 5)),
              'undo_structural': lambda i: setattr(layer(), 'blend_mode', 'MULTIPLY' if i % 2 else 'SCREEN')}
     rows = {}

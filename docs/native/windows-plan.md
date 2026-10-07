@@ -700,6 +700,60 @@ Fusion's shaders and its store self-test do not count as program compiles
 only the units' programs and fixed passes, and `native_effects.py` requires none of them
 during a numeric edit.
 
+### Where a Vulkan tick goes; half-float donors; node syncs skipped (2026-10-07)
+
+**Vulkan runs a tick's CPU and GPU work one after the other.** Blender's Vulkan backend
+records passes into its render graph and submits them only at a wait, a readback or a frame
+end. A sleep of 8 ms before the end-of-tick wait left that wait at 4–6.5 ms on Vulkan; on
+OpenGL it fell to the readback's own 1.3–2.2 ms, because the driver had run the passes
+meanwhile. No call of Blender's `gpu` module submits without waiting
+(`scratchpad flush_probe.py`): binding a framebuffer, an offscreen, an upload, a clear and a
+compute dispatch all leave the work queued, and only reads submit, waiting for it. On Vulkan
+every millisecond of CPU or GPU therefore counts in full. Per tick at 1K (40 layers):
+
+| Middle leaf drag, Vulkan | ms |
+| --- | ---: |
+| `Engine.evaluate` (CPU, no waits inside) | 6.0 |
+| of it fused publication of collapsed runs, fused chains, draws | 1.3, 1.3, 1.2 |
+| the node sync (before) | 0.87 |
+| GPU, waited for at the end | 4–6 |
+
+A publication pass costs about 0.6 ms of GPU at 1K, the most of any pass; the small mip
+levels about 0.5 ms a tick in all, mostly per-pass cost. A pipeline's first use costs 1–2 ms,
+almost all in the cold build. A draw with a framebuffer created for it records in 10.9 µs on
+Vulkan, with a reused one 3.2 µs; reusing framebuffers would keep textures the pool released
+alive, so it is not done.
+
+**Padding donors in half floats.** Publication reads each texel's donor coordinate, 8 bytes
+of a 40-byte texel. Up to a side of 2048 (`DONOR_HALF_SIDE`) the donor map is RG16F: every
+integer up to 2048 is exact in a half, so the coordinates, and the images, are the same.
+`engine_fused_publish.py` compares the padded images published from both; a donor shifted by
+one texel changes 1.15% of them.
+
+**The node sync skips unchanged ticks.** Every evaluation synced the set's internal tree
+(a replaced output image must reach its sampler): 0.87 ms of RNA reads a drag tick and 0.46 ms
+a paint input, which found nothing to change. `texture_set_node.sync` now skips a sync whose
+inputs match the last full one: the set's struct, outputs, UV and UDIM, height distance, AO in
+the preview, View Mask's snapshot, the tree's node and link counts, and the images its channel
+samplers show (a display binds its proxies between syncs). Engine Preview always syncs in full
+(its adapters read the target's settings), and every tree is synced in full at least once a
+second (`SYNC_RECHECK`), which repairs an edit the key cannot see. 0.87 → 0.12 ms a drag tick,
+0.46 → 0.055 a paint input. `node_sync_skip.py` changes each input and checks the tree; leaving
+the samplers' images out of the key fails it.
+
+| Deep stack, 40 layers at 1K, ms | Vulkan, before | Vulkan, after | OpenGL, before | OpenGL, after |
+| --- | ---: | ---: | ---: | ---: |
+| Top folder opacity | 7.4 | 6.9–7.1 | 7.2 | 6.5–6.8 |
+| Bottom folder opacity | 8.6–8.7 | 8.1–8.2 | 8.0–8.3 | 7.9–8.6 |
+| Middle leaf opacity | 9.9–10.0 | 9.5–9.6 | 10.0–10.2 | 9.4–9.5 |
+| Bottom leaf roughness | 5.0–5.2 | 4.8 | 5.7–6.1 | 5.1–5.8 |
+| Mask edit mid-stack | 10.4–10.6 | 9.8–10.0 | 9.7–10.2 | 9.4–9.7 |
+| Paint input | 4.6–5.0 | 4.5–4.6 | 5.2–6.0 | 4.8–4.9 |
+| Apply, undo, structural edits, cold build | | unchanged | | unchanged |
+
+Two runs of each. One Vulkan run of the same pair put apply at 122–129 ms against 110; three
+more rounds of apply alone measured 109.8–110.4 against 109.8–111.2.
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time

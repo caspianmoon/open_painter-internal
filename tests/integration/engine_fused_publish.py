@@ -116,6 +116,18 @@ engine.pad = True
 padded, _, _ = publish(False, ['BASE_COLOR'])
 assert not np.array_equal(unpadded['BASE_COLOR'], padded['BASE_COLOR'])
 
+# Donors held as half floats (sides up to DONOR_HALF_SIDE) are the same texel coordinates: the
+# padded images equal those published from full-float donors, bit for bit.
+pictures = {}
+for side in (0, runtime.DONOR_HALF_SIDE):
+    with patch.object(runtime, 'DONOR_HALF_SIDE', side):
+        engine.padding = (None, engine.padding[1] if engine.padding else None)   # built again
+        pictures[side] = publish(False)[0]
+        assert engine._donor(512).format == ('RG16F' if side else 'RG32F'), engine._donor(512).format
+for kind in CHANNELS:
+    np.testing.assert_array_equal(pictures[runtime.DONOR_HALF_SIDE][kind], pictures[0][kind], err_msg='donor ' + kind)
+print('FUSED_PUBLISH half-float donors: PASS', flush=True)
+
 # An OUTPUT anchor must retain the producer's ordinary CHANNEL texture. The
 # consumer still qualifies, and must agree exactly with the unfused path.
 coat = next(layer for layer in ts.layers if layer.id == coat_id)

@@ -95,6 +95,9 @@ FIELD_COPIES = True
 PARAM_FREE = os.environ.get('OP_PARAM_FREE', '1') != '0'
 EMPTY_GROUP = ('const', (0.0, 0.0, 0.0, 0.0))
 MIP_SCRATCH_SIDE = 2048        # publication keeps its mip scratch up to this side; larger leases it each time
+# A padding donor map up to this side holds its texel coordinates in half floats: every integer
+# up to 2048 is exact in a half, so publication reads 4 bytes a texel instead of 8, the same donors.
+DONOR_HALF_SIDE = 2048
 VERIFY_ADOPTION = os.environ.get('OP_VERIFY_STRUCTURE') == '1'   # incremental adoption against a full one
 CARRY_RESULTS = os.environ.get('OP_CARRY_RESULTS', '1') != '0'   # a rebuilt unit starts from its predecessor's result
 VERIFY_REBIND = os.environ.get('OP_VERIFY_INCREMENTAL') == '1'   # every rebound program against its translation
@@ -2047,7 +2050,7 @@ class Engine:
                 valid = donor >= 0
                 xy[..., 0] = np.where(valid, donor % n, -1)
                 xy[..., 1] = np.where(valid, donor // n, -1)
-                texture = device().upload(xy, 'RG32F')
+                texture = device().upload(xy, 'RG16F' if n <= DONOR_HALF_SIDE else 'RG32F')
         except Exception:
             texture = None   # no assigned geometry: nothing to pad
         self.padding = (key, texture)

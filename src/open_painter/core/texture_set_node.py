@@ -18,6 +18,7 @@ the image samplers. Add it from Add ▸ Input ▸ Open Painter Texture Set.
 """
 import zlib
 from contextlib import contextmanager
+from time import perf_counter
 
 import bpy
 
@@ -247,13 +248,53 @@ def release(ts, material):
             node.image = None
 
 
+# Every evaluation syncs (a replaced output image must reach the node), so a drag or a stroke
+# synced on each tick: 0.5-0.9 ms of RNA reads that found nothing to change. A sync whose inputs
+# and tree match the last full one is skipped, for at most SYNC_RECHECK seconds.
+SYNC_RECHECK = 1.0
+_synced = {}   # tree session uid -> (inputs key, time of the full sync, {channel: its Image Texture node})
+
+
 def sync(ts, images=True):
     """Bring the set's internal tree up to date (UV map, height distance, AO in the preview,
     Engine Preview, View Mask); ``images=False`` keeps the images a display bound."""
     tree = bpy.data.node_groups.get(tree_name(ts))
-    if tree is not None:
-        sync_tree(tree, ts, images=images)
+    if tree is None:
+        return tree
+    last = _synced.get(tree.session_uid)
+    if last is not None and perf_counter() - last[1] < SYNC_RECHECK:
+        try:
+            if _sync_key(tree, ts, images, last[2]) == last[0]:
+                return tree
+        except ReferenceError:
+            pass   # a node it remembered was removed
+    sync_tree(tree, ts, images=images)
+    nodes = {node['role']: node for node in tree.nodes
+             if node.bl_idname == 'ShaderNodeTexImage' and node.get('role') in CHANNELS}
+    key = _sync_key(tree, ts, images, nodes)
+    if key is None:
+        _synced.pop(tree.session_uid, None)
+    else:
+        _synced[tree.session_uid] = (key, perf_counter(), nodes)
     return tree
+
+
+def _sync_key(tree, ts, images, nodes):
+    """Everything ``sync_tree`` reads besides the tree's own settings: the set's struct, outputs,
+    UV/UDIM, height distance, AO in the preview, View Mask's snapshot; the tree's node and link
+    counts and the images its channel samplers show (a display binds its own between syncs).
+    None while Engine Preview adapts the channels (its adapters read the target's settings)."""
+    project = getattr(ts.id_data, 'open_painter', None)
+    if project is not None and project.engine_preview:
+        return None
+    from ..ui import mask_view
+    shown = mask_view.shown_image(ts)
+    return (ts.as_pointer(), images, len(tree.nodes), len(tree.links), getattr(ts, 'udim_tile', 0),
+            getattr(ts, 'udim_source_uv', ''), ts.height_distance, ts.preview_ao,
+            shown.session_uid if shown is not None else 0,
+            tuple((o.channel, o.image.session_uid if o.image is not None else 0) for o in ts.outputs),
+            tuple((channel, node.image.session_uid if node.image is not None else 0)
+                  for channel, node in nodes.items()))
 
 
 def channel_nodes(ts):

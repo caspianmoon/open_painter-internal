@@ -782,8 +782,11 @@ step reads the chain inside its folder through its group input.
   sources, `scratchpad cold_compile_probe.py`); Blender's SPIR-V cache and the driver's make
   later ones 1–5 ms. With a UI, first compiles wait for idle, as before.
 
-A middle-leaf drag is now one pass a channel, plus its mips (`SUFFIX publish: 4`); a mask edit
-mid-stack one pass a channel and the mask (`CHAIN publish: 4`).
+A single changed unit under the run (a folder step whose opacity is dragged) is handed over
+the same way, as a chain of one. Every drag case of the deep stack is now one pass a channel,
+plus its mips: the middle leaf and the bottom folder `SUFFIX publish: 4`, the top folder
+`CHAIN publish: 4`, a mask edit mid-stack `CHAIN publish: 4` and the mask. The bottom folder
+drag went from 7.9–8.0 to 7.0–7.2 ms on Vulkan and from 7.5–7.6 to 7.1–7.2 on OpenGL.
 
 | Deep stack, 40 layers at 1K, ms | Vulkan, off | Vulkan, on | OpenGL, off | OpenGL, on |
 | --- | ---: | ---: | ---: | ---: |

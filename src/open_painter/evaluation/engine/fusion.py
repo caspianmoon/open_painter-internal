@@ -738,6 +738,9 @@ def materialize(engine, root, n, memo, epochs, defer=False, inputs=None):
     if RUN_INPUTS and defer and inputs is not None and root in collapsed and root in run_inputs:
         source = run_inputs[root]
         handed = next((chain for chain in planned if chain[-1] == source), None)
+        if (handed is None and source in states and source not in collapsed and source not in engine.keep
+                and not engine.graph.consumers.get(source) and fusable(engine, source, states[source])):
+            handed = (source,)   # a single changed unit (a folder step whose opacity is dragged)
         if handed is not None and resident_stamp(states[source]) != stamps.get(source):
             inputs[root] = (handed, repeated(engine, handed))
         else:

@@ -331,6 +331,24 @@ def main():
             print('FUSION_RUN_INPUT', json.dumps(outcome), flush=True)
             assert outcome['run_publications'] and not outcome['mismatches'] and not outcome['unfused'], outcome
             identical(pictures[True], pictures[False], 'run input fused vs one pass each')
+
+            # A single changed unit as the run's input (the barrier under the run, dragged alone).
+            top_barrier = next(item.id for item in ts.layers if item.name == 'Barrier 3')
+            pictures, counts = {}, {}
+            for fused in (False, True):
+                fusion.ENABLED = fusion.PUBLISH = fused
+                engine._suffix.clear()
+                shader_preview.flush(scene, ts, pixels=False)
+                counts[fused], _ = drag(scene, ts, lambda: next(item for item in ts.layers if item.id == top_barrier),
+                                        'opacity', samples=6)
+                pictures[fused] = images_now()
+            fusion.ENABLED = True
+            single = dict(run_publications=counts[True].get('engine_chain_run_publications', 0),
+                          mismatches=counts[True].get('engine_chain_mismatches', 0))
+            report['run_input_unit'] = single
+            print('FUSION_RUN_INPUT_UNIT', json.dumps(single), flush=True)
+            assert single['run_publications'] and not single['mismatches'], single
+            identical(pictures[True], pictures[False], 'single run input fused vs one pass each')
         finally:
             runtime.PIXEL_PUBLISH, suffix.PREARM = pixel_publish, prearm
             fusion.ENABLED, fusion.PUBLISH = True, False

@@ -86,6 +86,14 @@ tree = bpy.data.node_groups.get(node_sync.tree_name(ts))
 tree.nodes.remove(role('Normal Map'))
 assert sync() == 1 and role('Normal Map') is not None and role('Normal Map').outputs['Normal'].links
 
+# A channel sampler removed: the next sync is full and creates it again, without reading the
+# removed node (a Python reference to a removed node reads freed memory). Repeated, as an
+# operator that rebuilds the tree would.
+for _ in range(8):
+    tree.nodes.remove(node_sync.channel_nodes(ts)['ROUGHNESS'])
+    assert sync() == 1 and node_sync.channel_nodes(ts)['ROUGHNESS'].image == output('ROUGHNESS').image
+    assert sync() == 0
+
 # An edit the key cannot see waits for the recheck, then is repaired.
 node_sync.channel_nodes(ts)['METALLIC'].interpolation = 'Closest'
 assert sync() == 0

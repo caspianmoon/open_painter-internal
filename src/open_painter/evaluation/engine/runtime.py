@@ -2398,14 +2398,16 @@ class Engine:
             channel, image, final, stamp = targets[index]
             for key in self._checkpoints(channel, memo, epochs):
                 self._settle(key, n)
-            deferred = run = None
+            deferred = run = handed = None
             if final[0] == 'unit':
-                # A fused chain ending at the final, or the collapsed run it tops, renders in the
-                # publication pass (_publish_fused).
-                deferred = fusion.materialize(self, final[1], n, memo, epochs, defer=True)
+                # A fused chain ending at the final, or the collapsed run it tops (and the chain
+                # that is that run's input), renders in the publication pass (_publish_fused).
+                run_inputs = {}
+                deferred = fusion.materialize(self, final[1], n, memo, epochs, defer=True, inputs=run_inputs)
                 run = self._suffix.collapse(self, final[1], n, memo, epochs, defer=True)
+                handed = run_inputs.get(final[1])
             started, inputs = perf_counter(), self.stages['inputs_ms']
-            if not self._publish_fused(image, channel, deferred, run, n, memo, epochs):
+            if not self._publish_fused(image, channel, deferred, run, n, memo, epochs, handed):
                 result = self._texture_of(final, n, memo, epochs)
                 if self.profiling:
                     dev.finish()
@@ -2625,7 +2627,7 @@ class Engine:
         self._publish_in_place(image, channel, n, fmt,
                                lambda slots: dev.draw(dev.fixed('publish'), slots, n, samplers, ints=ints))
 
-    def _publish_fused(self, image, channel, deferred, run, n, memo, epochs):
+    def _publish_fused(self, image, channel, deferred, run, n, memo, epochs, handed=None):
         """Publish ``channel`` with its final rendered in the publication pass: the collapsed run
         it tops (``fusion.publish_suffix``) or a fused chain ending at it (``fusion.publish``).
         False, with what was left for that pass rendered now, when it cannot.
@@ -2634,13 +2636,21 @@ class Engine:
         on consecutive evaluations, ``fusion.repeated``). A one-off edit, an undo or a drag's
         first tick keeps its finals in the result cache (``_keep_final``) for the edits that
         compose over them and the undos back to them; a drag's last finals are kept by the next
-        idle tick (``_keep_fused_finals``)."""
+        idle tick (``_keep_fused_finals``). ``handed``: the fused chain that is the run's input,
+        (chain, repeated), evaluated in the same pass when it can be, rendered first otherwise."""
         if run is not None:
-            if fusion.repeated(self, ('publish', run[0])) and fusion.publish_suffix(
-                    self, run, image, channel, n, memo, epochs):
+            again = fusion.repeated(self, ('publish', run[0]))
+            if handed is not None:
+                if again and fusion.publish_suffix(self, run, image, channel, n, memo, epochs, chain=handed[0]):
+                    return True
+                fusion.render_deferred(self, handed, n, memo, epochs)
+            if again and fusion.publish_suffix(self, run, image, channel, n, memo, epochs):
                 return True
             self._suffix.apply_deferred(self, run, n, memo, epochs)
-        elif deferred is not None:
+            return False
+        if handed is not None:
+            fusion.render_deferred(self, handed, n, memo, epochs)
+        if deferred is not None:
             if deferred[1] and fusion.publish(self, deferred[0], image, channel, n, memo, epochs):
                 return True
             fusion.render_deferred(self, deferred, n, memo, epochs)   # one fused pass at least

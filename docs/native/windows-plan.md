@@ -754,6 +754,53 @@ the samplers' images out of the key fails it.
 Two runs of each. One Vulkan run of the same pair put apply at 122–129 ms against 110; three
 more rounds of apply alone measured 109.8–110.4 against 109.8–111.2.
 
+### Folder steps fuse with their chains; a run's input in its publication (2026-10-10)
+
+A steady middle-leaf drag rendered three passes a channel: the material's changed siblings
+(one fused chain), the material's folder step, and the publication of the collapsed run above,
+reading the folder step's texture. Chain fusion followed backdrop links only, and a folder
+step reads the chain inside its folder through its group input.
+- **Group links** (`fusion._link`, `OP_FUSE_GROUPS`). A folder step reads its children's
+  composite at its own texel, like its backdrop, so the chain inside the folder hands its
+  result over in a register, rounded as its top's texture would hold it. The planner links
+  through the group input where the backdrop link ends, and plans under every member's other
+  inputs. Idle arming predicts the same chains: through folder steps, stopping only at the
+  run collapse would fold for that edit (`graph.edit_runs`), no longer at every affine unit.
+- **A run's input in its publication** (`OP_FUSE_RUN_INPUTS`). When the fused chain is the
+  input of the collapsed run topped by a channel's final, `materialize` leaves it to that
+  run's publication pass (`publish_suffix(chain=...)`): the chain evaluates at the published
+  texel, the run's transform applies to it (the library's `suffix.apply`, its input handed
+  over), and the publication finishes it. Each such shader is checked once against the chain
+  rendered one unit at a time, applied and published as before. The chain's inputs are held
+  until the idle tick keeps the final.
+- **Compiles.** Publication shaders are compiled and verified only on parameter-only ticks
+  (`fusion._fresh`: the native graph's path is `valid`); after a structural edit only shaders
+  already verified publish. Without that, toggling a blend mode back and forth compiled and
+  fully verified a new publication shader per channel each time (42 ms against 21). A cold
+  compile of a fused shader takes 0.24–0.8 s on Vulkan and 60–210 ms on OpenGL (unique
+  sources, `scratchpad cold_compile_probe.py`); Blender's SPIR-V cache and the driver's make
+  later ones 1–5 ms. With a UI, first compiles wait for idle, as before.
+
+A middle-leaf drag is now one pass a channel, plus its mips (`SUFFIX publish: 4`); a mask edit
+mid-stack one pass a channel and the mask (`CHAIN publish: 4`).
+
+| Deep stack, 40 layers at 1K, ms | Vulkan, off | Vulkan, on | OpenGL, off | OpenGL, on |
+| --- | ---: | ---: | ---: | ---: |
+| Middle leaf opacity | 9.5–9.7 | 7.9–8.2 | 9.2–9.4 | 7.2–7.4 |
+| Mask edit mid-stack | 9.7–10.8 | 8.9–9.0 | 9.0–9.2 | 8.2 |
+| Visibility toggle mid-stack | 10.4–11.7 | 8.6–8.8 | 10.8–10.9 | 8.6–8.7 |
+| Move layer mid-stack | 16.7–17.9 | 17.1–20.8 | 17.9–18.6 | 15.3–16.8 |
+| Blend mode mid-stack (repeated) | 20.0–24.3 | 27.9–31.7 | 18.9–20.0 | 20.1–21.7 |
+| Folder drags, paint, apply, undo, cold build | | unchanged | | unchanged |
+
+Off is `OP_FUSE_GROUPS=0 OP_FUSE_RUN_INPUTS=0`; two runs of each. The blend mode case
+toggles the same layer on consecutive edits, which counts as a repeat: the longer chains it
+fuses compile from the disk cache and are verified once (a cost probe measured 30 against
+28 ms). `native_fusion.py` requires group links in every material drag and a fused run input
+with the passthrough folder removed, all bit-identical; mutations caught: the register handed
+to the step's backdrop instead of its group input (0.22% of texels differ), the chain's
+result unrounded before the run's transform (1.9%).
+
 ### Speed: native kernels where the time went (2026-10-02)
 
 Profiles of the deep stack (40 layers, 1K, Vulkan) and of single calls located the CPU time
@@ -1224,6 +1271,8 @@ next suite (`--start-at`).
 | `OP_PREARM=1` | Idle suffix arming in background Blender (benchmarks) |
 | `OP_FUSE_CHAINS=0` | No chain fusion, and no final rendered in its publication pass (`engine/fusion.py`) |
 | `OP_FUSE_PUBLISH=0` | No final rendered in its publication pass (fused chains and collapsed runs) |
+| `OP_FUSE_GROUPS=0` | Folder steps do not fuse with the chain inside their folder |
+| `OP_FUSE_RUN_INPUTS=0` | A collapsed run's input chain renders in its own pass, not in the run's publication |
 | `OP_KEEP_READS=0` | Release what a changed unit read once its consumer drew (no kept reads) |
 | `OP_PARAM_FREE=0` | Folder steps with empty channels keep their parameters in their stamps |
 | `OP_DEEP_*` | Deep-stack benchmark options (see `tests/integration/native_deep_stack.py`) |

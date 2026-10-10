@@ -241,6 +241,7 @@ def main():
                 passes = counts[True].get('engine_chain_passes', 0)
                 row = dict(case=name, precise=precise, chain_passes=passes,
                            chain_units=counts[True].get('engine_chain_units', 0),
+                           group_links=counts[True].get('engine_chain_group_links', 0),
                            unfused_passes=counts[False].get('engine_chain_passes', 0),
                            mismatches=counts[True].get('engine_chain_mismatches', 0),
                            channels=sorted(results[True]))
@@ -249,6 +250,9 @@ def main():
                 assert not row['unfused_passes'] and not row['mismatches'], row
                 if fuses:
                     assert passes and row['chain_units'] > passes, row
+                if name.startswith('material'):
+                    # The material's folder step takes the chain inside the folder in a register.
+                    assert row['group_links'], row
                 identical(results[True], results[False], f'{name} fused vs sequential drag')
                 identical({c: truth[c] for c in results[True]}, results[True], f'{name} fused vs from scratch')
 
@@ -301,9 +305,35 @@ def main():
                 identical(pictures[True], truth, f'{name} published fused vs from scratch')
             assert all(row['publications'] for row in outcomes.values()), outcomes
             report['publish'] = outcomes
+
+            # With collapse: the run topped by each final takes the fused chain below it (the
+            # material's chain and folder step, its input) in its publication pass. The images
+            # equal the same drag rendered and applied one pass each (collapse rounds otherwise
+            # than layers rendered one by one, so both sides collapse).
+            suffix.ENABLED = True
+            # The passthrough folder under the top run does not fuse: without it, the barriers'
+            # fused chain is the run's input.
+            stack.remove_tree(ts, next(layer.id for layer in ts.layers if layer.name == 'Passthrough'))
+            stack.invalidate(ts)
+            pictures, counts = {}, {}
+            for fused in (False, True):
+                fusion.ENABLED = fusion.PUBLISH = fused
+                engine._suffix.clear()
+                shader_preview.flush(scene, ts, pixels=False)
+                counts[fused], _ = drag(scene, ts, layer('material_middle'), 'opacity', samples=6)
+                pictures[fused] = images_now()
+            fusion.ENABLED = True
+            outcome = dict(run_publications=counts[True].get('engine_chain_run_publications', 0),
+                           group_links=counts[True].get('engine_chain_group_links', 0),
+                           mismatches=counts[True].get('engine_chain_mismatches', 0),
+                           unfused=counts[False].get('engine_suffix_publications', 0))
+            report['run_inputs'] = outcome
+            print('FUSION_RUN_INPUT', json.dumps(outcome), flush=True)
+            assert outcome['run_publications'] and not outcome['mismatches'] and not outcome['unfused'], outcome
+            identical(pictures[True], pictures[False], 'run input fused vs one pass each')
         finally:
             runtime.PIXEL_PUBLISH, suffix.PREARM = pixel_publish, prearm
-            fusion.PUBLISH = False
+            fusion.ENABLED, fusion.PUBLISH = True, False
         report['status'] = 'PASS'
         print('NATIVE_FUSION_PASS', flush=True)
     finally:

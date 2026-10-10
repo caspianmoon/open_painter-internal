@@ -112,9 +112,14 @@ records its units as rendered with their local stamps (`op_graph_mark_rendered`,
 ABI 14), as executing them would, so they stay run members. See the Windows plan,
 "Drags render only what changes; fused chains".
 
+Since 2026-10-10 a folder step fuses with the chain inside its folder: its group input
+comes from a register like a backdrop (`fusion._link`), so an edit inside a smart material
+renders the material's changed siblings and its folder step as one pass.
+
 With images written in place, a channel's final renders inside its publication pass:
-the collapsed run it tops applies its transform at the texel publication reads, and a
-fused chain ending at it evaluates there. The final's own pass, its texture and the
+the collapsed run it tops applies its transform at the texel publication reads (the fused
+chain that is the run's input evaluating there too), and a fused chain ending at it
+evaluates there. The final's own pass, its texture and the
 publication's read of it are saved, bit for bit (Windows plan, "The final renders in its
 publication pass").
 

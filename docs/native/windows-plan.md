@@ -773,10 +773,11 @@ step reads the chain inside its folder through its group input.
   over), and the publication finishes it. Each such shader is checked once against the chain
   rendered one unit at a time, applied and published as before. The chain's inputs are held
   until the idle tick keeps the final.
-- **Compiles.** Publication shaders are compiled and verified only on parameter-only ticks
-  (`fusion._fresh`: the native graph's path is `valid`); after a structural edit only shaders
-  already verified publish. Without that, toggling a blend mode back and forth compiled and
-  fully verified a new publication shader per channel each time (42 ms against 21). A cold
+- **Compiles.** Fused shaders (chains, publications, deferred chains) are compiled and
+  verified only on parameter-only ticks (`fusion._fresh`: the native graph's path is `valid`);
+  after a structural edit only shaders already compiled render fused. Without that, toggling
+  a blend mode back and forth compiled and fully verified new shaders per channel each time
+  (42 ms against 21). A cold
   compile of a fused shader takes 0.24–0.8 s on Vulkan and 60–210 ms on OpenGL (unique
   sources, `scratchpad cold_compile_probe.py`); Blender's SPIR-V cache and the driver's make
   later ones 1–5 ms. With a UI, first compiles wait for idle, as before.
@@ -790,13 +791,11 @@ mid-stack one pass a channel and the mask (`CHAIN publish: 4`).
 | Mask edit mid-stack | 9.7–10.8 | 8.9–9.0 | 9.0–9.2 | 8.2 |
 | Visibility toggle mid-stack | 10.4–11.7 | 8.6–8.8 | 10.8–10.9 | 8.6–8.7 |
 | Move layer mid-stack | 16.7–17.9 | 17.1–20.8 | 17.9–18.6 | 15.3–16.8 |
-| Blend mode mid-stack (repeated) | 20.0–24.3 | 27.9–31.7 | 18.9–20.0 | 20.1–21.7 |
+| Blend mode mid-stack (repeated) | 20.9–24.3 | 22.9–30.0 | 18.9–20.0 | 20.1–21.7 |
 | Folder drags, paint, apply, undo, cold build | | unchanged | | unchanged |
 
-Off is `OP_FUSE_GROUPS=0 OP_FUSE_RUN_INPUTS=0`; two runs of each. The blend mode case
-toggles the same layer on consecutive edits, which counts as a repeat: the longer chains it
-fuses compile from the disk cache and are verified once (a cost probe measured 30 against
-28 ms). `native_fusion.py` requires group links in every material drag and a fused run input
+Off is `OP_FUSE_GROUPS=0 OP_FUSE_RUN_INPUTS=0`; two runs of each (three for the blend mode
+case, whose Vulkan runs vary; a cost probe measured 23 against 22 ms). `native_fusion.py` requires group links in every material drag and a fused run input
 with the passthrough folder removed, all bit-identical; mutations caught: the register handed
 to the step's backdrop instead of its group input (0.22% of texels differ), the chain's
 result unrounded before the run's transform (1.9%).

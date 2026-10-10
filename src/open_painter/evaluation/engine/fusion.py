@@ -748,10 +748,11 @@ def materialize(engine, root, n, memo, epochs, defer=False, inputs=None):
         if resident_stamp(states[chain[-1]]) == stamps.get(chain[-1]):
             continue   # already rendered (by another channel's batch, say)
         # A chain's shader is compiled once the same edit renders the chain again (a drag's
-        # second tick), never for a one-off render: applying a material, opening a file, an
-        # undo, or the evaluations that settle them. While it waits for an idle compile, the
-        # longest part of it below whose shader is compiled renders fused.
-        if not _render(engine, chain, n, memo, epochs, build=repeated(engine, chain)):
+        # second tick), never for a one-off render (applying a material, opening a file, an
+        # undo, or the evaluations that settle them) nor after a structural edit (``_fresh``):
+        # a blend mode toggled back and forth repeats too. While it waits for an idle compile,
+        # the longest part of it below whose shader is compiled renders fused.
+        if not _render(engine, chain, n, memo, epochs, build=repeated(engine, chain) and _fresh(engine)):
             for length in range(len(chain) - 1, MIN_LENGTH - 1, -1):
                 if _render(engine, chain[:length], n, memo, epochs, build=False):
                     break
@@ -979,7 +980,7 @@ def render_deferred(engine, deferred, n, memo, epochs):
     it as one pass as ``materialize`` would have (a chain of one renders as it is)."""
     chain, build = deferred
     if len(chain) >= MIN_LENGTH:
-        _render(engine, chain, n, memo, epochs, build=build)
+        _render(engine, chain, n, memo, epochs, build=build and _fresh(engine))
 
 
 def publishable(engine, chain, dev):

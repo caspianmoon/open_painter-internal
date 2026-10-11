@@ -1060,16 +1060,25 @@ texture it ever used.
 - **Frame emulation.** `native_deep_stack.py` emulates the frame boundary around
   each edit. This is test instrumentation only; the add-on never calls those
   functions.
-- **Heavy suites.** `native_publication_4k.py` needs more than 7 GiB and
-  `resolution_switch.py` more than 4 GiB. `mask_groups.py` and
-  `artist_file_edits.py` also exceed 5 GiB; the latter only with the local
-  artist file present. `auto_edge_rebake.py` passes 4.5 GiB within seconds of
-  its first Cycles bake; `bake_back.py`, `bake_corrections.py` and
-  `geometric_curvature.py` pass 6 GiB as Cycles compiles its kernels.
-  `artist_file_workflow.py` and `artist_file_multiset.py` pass 6 GiB while opening
-  the local artist file. All of these exceed these limits
-  at the pre-change commit too, so this is not a regression. They were not run for this change on the
-  18 GB machine while other work was using its memory.
+- **Cycles bakes.** On Apple GPUs newer than M1, Cycles doubles its path states
+  twice when the GPU's working set has room. On the 18 GB Mac a cube's bake then
+  took more than 6 GiB, and nine bake suites passed the 4 GiB cap. The test
+  environment (`blender_test_profile.py`) sets `CYCLES_METAL_GROW_PERCENT=0`, the
+  count M1 Macs always use. `phase05.py`, `geometric_curvature.py`,
+  `damaged_bevel.py`, `auto_edge_rebake.py`, `bake_back.py`, `bake_corrections.py`
+  and `mask_groups.py` now peak at 2.1–2.8 GiB.
+- **Heavy suites** (18 GB Mac, 2026-10-11):
+  - In background: `export_padding.py` peaks at 4.7 GiB, `resolution_switch.py` at
+    4.0–4.2 GiB, and `native_publication_4k.py` needs more than 7 GiB.
+  - In a window: `director_candidates.py` 4.7 GiB, `shader_preview_ui.py` 4.5 and
+    `edge_map_refresh_ui.py` 4.0.
+  - `material_painting_ui.py` and `quality_baseline_paint_ui.py` build three sets
+    at 2K with 25 layers, and they pass 8 GiB once all three sets compile. That is
+    about 2,500 bytes a pixel: engine textures and retained results, Blender's image
+    buffers and their GPU copies. At 1K the first peaks at 4.5 GiB and passes. The
+    pre-merge commit measures the same.
+  - `artist_file_edits.py`, `artist_file_workflow.py` and
+    `artist_file_multiset.py` pass 5–6 GiB with the local artist file present.
 
 Engine budgets now scale with physical memory. Managed textures get a quarter of
 it (1.5–4 GiB). Retained results and the free pool each get 1/32 (128–512 MiB).

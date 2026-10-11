@@ -80,10 +80,13 @@ CONSTANT_OUTPUTS = True     # evaluate proven spatially constant fills at one te
 CACHE_EVALUATION_STATES = True  # recheck live bindings once per synchronous evaluation
 NATIVE_HOST_GRAPH = True       # diagnostic paired comparison; library/Metal still required
 NATIVE_REVISIONS = True        # all-or-nothing framebuffer commits with GPU rollback snapshots
-# Native revisions keep each channel's accepted mip chain and its next one. Vulkan and OpenGL
-# publish in place instead: as fast on warm edits, faster after an undo, and about 0.45 GiB less
-# at 1K (40-layer A/B on a GTX 1050, 2026-10-02). Metal, where they were qualified, keeps them.
-REVISION_BACKENDS = frozenset({'METAL'})
+# Native revisions keep each channel's accepted mip chain and its next one. Every backend
+# publishes in place instead: as fast on warm edits, faster after an undo, and less memory.
+# Vulkan, 40 layers at 1K on a GTX 1050 (2026-10-02): undo 162-197 -> 120 ms, 0.45 GiB less.
+# Metal, the same stack on an M-series Mac (2026-10-11): undo 37-38 -> 32-33 ms, 85-105 MiB
+# less; three 1K sets in a window 4.51 -> 4.23 GiB. OP_REVISION_BACKENDS=METAL brings them back
+# for comparison.
+REVISION_BACKENDS = frozenset(filter(None, os.environ.get('OP_REVISION_BACKENDS', '').split(',')))
 BINDING_DRAWS = True           # passes through the binding's C draw wherever the library loads
 MIP_LANES = 3                  # channels published in place whose mips share a draw (1 to 3)
 # A FIELD (a channel's image detail, shader_graph.DETAIL_FIELDS) holding what another FIELD already

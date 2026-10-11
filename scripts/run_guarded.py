@@ -59,6 +59,8 @@ else:
     _libproc = ctypes.CDLL('/usr/lib/libproc.dylib')
     _libproc.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
     _libproc.proc_pid_rusage.restype = ctypes.c_int
+    _libproc.proc_listchildpids.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+    _libproc.proc_listchildpids.restype = ctypes.c_int
 RUSAGE_INFO_V2 = 2
 FOOTPRINT_OFFSET = 16 + 7 * 8   # ri_uuid, then ri_phys_footprint is the eighth uint64
 
@@ -71,22 +73,26 @@ def footprint(pid):
     return int.from_bytes(bytes(buffer[FOOTPRINT_OFFSET:FOOTPRINT_OFFSET + 8]), 'little')
 
 
+def children(pid):
+    """A process's direct children, from the kernel (libproc). macOS."""
+    size = 64
+    while True:
+        buffer = (ctypes.c_int * size)()
+        count = _libproc.proc_listchildpids(pid, buffer, ctypes.sizeof(buffer))
+        if count < 0:
+            return []
+        if count < size:
+            return [buffer[i] for i in range(count) if buffer[i] > 0]
+        size *= 4   # a full buffer may have cut the list short
+
+
 def tree(pid):
-    """The process and its descendants. macOS."""
-    try:
-        rows = subprocess.run(['ps', '-A', '-o', 'pid=,ppid='], capture_output=True, text=True, check=True).stdout
-    except subprocess.CalledProcessError:
-        return [pid]
-    children = {}
-    for line in rows.split('\n'):
-        parts = line.split()
-        if len(parts) == 2:
-            children.setdefault(int(parts[1]), []).append(int(parts[0]))
+    """The process and its descendants. macOS: under a millisecond, so every poll walks it."""
     found, work = [], [pid]
     while work:
         current = work.pop()
         found.append(current)
-        work.extend(children.get(current, ()))
+        work.extend(children(current))
     return found
 
 
@@ -131,12 +137,11 @@ class _Tree:
 
     def __init__(self, command):
         self.process = subprocess.Popen(command, start_new_session=True)
-        self.members, self.polls = [self.process.pid], 0
+        self.members = [self.process.pid]
 
     def used(self):
-        if self.polls % 10 == 0:
-            self.members = tree(self.process.pid)   # children are rare; refresh every two seconds
-        self.polls += 1
+        # Every poll: a descendant missing from the sum could allocate unseen until the next walk.
+        self.members = tree(self.process.pid)
         return sum(footprint(pid) for pid in self.members)
 
     def sample(self):

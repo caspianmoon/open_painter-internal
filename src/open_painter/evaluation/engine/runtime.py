@@ -1759,10 +1759,14 @@ class Engine:
         metrics.count('engine_fused_publications')
         return result
 
-    def _gpu_time(self, state, n, samplers, uniforms, repeats=5):
+    def _gpu_time(self, state, n, samplers, uniforms, repeats=5, floor_ms=0.05):
         """A pass's GPU milliseconds: (``repeats`` draws and a wait) less (one draw and a wait),
         over ``repeats`` − 1, so the wait's own cost cancels. Each draw is a render pass of its
-        own (a tiled GPU cannot merge them) and writes the same result again."""
+        own (a tiled GPU cannot merge them) and writes the same result again.
+
+        The clock is the CPU's, so a stall in the single draw can outweigh several draws of a
+        small pass, which then measured 0. When the draws stand less than ``floor_ms`` above
+        the single draw, the single draw keeps its fastest run and the draws double (up to 64)."""
         dev = device()
         passes = dev.passes
 
@@ -1776,6 +1780,10 @@ class Engine:
         run(1)   # the pipeline and the inputs' first use are not the pass's cost
         single = run(1)
         many = run(repeats)
+        while many - single <= floor_ms and repeats < 64:
+            single = min(single, run(1))
+            repeats *= 2
+            many = run(repeats)
         dev.passes = passes
         return max(0.0, (many - single) / (repeats - 1))
 

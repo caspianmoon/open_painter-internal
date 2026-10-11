@@ -23,12 +23,22 @@ parser.add_argument("--cap-gb", type=float, default=4.0,
 parser.add_argument("--timeout-minutes", type=float, default=30.0,
                     help="Kill a Blender process still running after this long; the slowest suite takes about 17")
 args = parser.parse_args()
-# Every Blender launch goes through the memory guard: one runaway phase must not
-# take the machine down. The guard waits for free memory and serializes runs.
-BLENDER = [sys.executable, str(root / 'scripts/run_guarded.py'), '--cap-gb', str(args.cap_gb),
-           '--start-gb', '3', '--wait-seconds', '120', '--timeout-seconds', str(args.timeout_minutes * 60),
-           '--', args.blender,
-           *(['--gpu-backend', args.gpu_backend] if args.gpu_backend else [])]
+# Suites measured above the default cap on an 18 GB Mac (docs/native/deep-stacks.md, "Heavy suites").
+MEMORY_CAPS_GB = {'export_padding.py': 6.0, 'resolution_switch.py': 6.0, 'director_candidates.py': 6.0,
+                  'shader_preview_ui.py': 6.0, 'edge_map_refresh_ui.py': 6.0}
+
+
+def blender(suite=None):
+    """Every Blender launch goes through the memory guard: one runaway phase must not
+    take the machine down. The guard waits for free memory and serializes runs."""
+    cap = max(args.cap_gb, MEMORY_CAPS_GB.get(suite, 0.0))
+    return [sys.executable, str(root / 'scripts/run_guarded.py'), '--cap-gb', str(cap),
+            '--start-gb', '3', '--wait-seconds', '120', '--timeout-seconds', str(args.timeout_minutes * 60),
+            '--', args.blender,
+            *(['--gpu-backend', args.gpu_backend] if args.gpu_backend else [])]
+
+
+BLENDER = blender()
 # Tests never install into or save the artist's preference directory.
 env = isolated_environment(args.user_resources or root / ".blender-test" / "user")
 profile_guard = (
@@ -65,7 +75,7 @@ if not args.gui_only and not args.gpu_only:
         print(f"Running {test.name}", flush=True)
         completed = subprocess.run(
             [
-                *BLENDER,
+                *blender(test.name),
                 "--background",
                 "--factory-startup",
                 "--python-exit-code",
@@ -116,7 +126,7 @@ if args.gui or args.gui_only:
             gui_started = filename == args.gui_start_at
         if not gui_started:
             continue
-        subprocess.run([*BLENDER, "--factory-startup", "--python",
+        subprocess.run([*blender(filename), "--factory-startup", "--python",
                         str(root / "tests/integration" / filename)], cwd=root, env=env, check=True)
         if filename == "director_correspondence.py":
             # Reopens the file the GUI run just saved.
@@ -161,7 +171,7 @@ if args.gui or args.gui_only:
         result_path.unlink(missing_ok=True)
         subprocess.run(
             [
-                *BLENDER,
+                *blender(filename),
                 "--factory-startup",
                 "--enable-event-simulate",
                 "--python",

@@ -25,6 +25,9 @@ class BlenderTestProfileTests(unittest.TestCase):
             environment = profile.isolated_environment(root, inherited)
             self.assertEqual(inherited, original)
             self.assertEqual(environment["KEEP_ME"], "unchanged")
+            self.assertEqual(environment["CYCLES_METAL_GROW_PERCENT"], "0")
+            chosen = profile.isolated_environment(root, dict(inherited, CYCLES_METAL_GROW_PERCENT="50"))
+            self.assertEqual(chosen["CYCLES_METAL_GROW_PERCENT"], "50")
             self.assertEqual(environment["BLENDER_USER_RESOURCES"], str(root))
             for variable, directory in profile.RESOURCE_DIRS.items():
                 self.assertEqual(Path(environment[variable]), root / directory)

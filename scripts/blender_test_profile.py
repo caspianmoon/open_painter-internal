@@ -30,6 +30,10 @@ def isolated_environment(profile, inherited=None):
         if not target.resolve().is_relative_to(root):
             raise RuntimeError(f"Test resource escapes its profile: {target}")
         environment[variable] = str(target)
+    # Cycles on Metal doubles its path states twice when the GPU's working set has room:
+    # 6 GiB and more for a cube's bake on an 18 GB Mac, past the memory guard's cap. Tests
+    # keep the base count, which M1 Macs always use; a caller can still set it.
+    environment.setdefault("CYCLES_METAL_GROW_PERCENT", "0")
     return environment
 
 

@@ -97,11 +97,24 @@ evidence.
 
   It did not recur in 27 later runs, including runs with the asset shelf hidden, with
   library refreshes or new images forced during loading, and after evicting the file
-  cache. Python cannot see the job, so a test cannot wait for it. The trigger is not
-  identified. The guard's `--timeout-seconds` makes such a hang fail its suite instead of
-  stalling the gate. To catch the next occurrence, fault a thread in the hung `blender.exe`
-  (CreateRemoteThread at an unmapped address): Blender's crash handler then writes every
-  thread's stack to `%TEMP%\blender.crash.txt`.
+  cache. Python cannot see the job, so a test cannot wait for it. The guard's
+  `--timeout-seconds` makes such a hang fail its suite instead of stalling the gate. To
+  catch the next occurrence, fault a thread in the hung `blender.exe` (CreateRemoteThread
+  at an unmapped address): Blender's crash handler then writes every thread's stack to
+  `%TEMP%\blender.crash.txt`.
+
+  **Likely trigger, removed (2026-10-11).** It recurred on the Mac in the Metal GUI gate:
+  `authoring_ui.py`, exit 11, 3.7 s in, the same stack. A trace of that run showed the add-on
+  calling `asset.library_refresh` 0.5 s after the editor mounted the shelf, while it was
+  still loading previews. `portable.refresh_installed` did that a second after every
+  registration and after every file load or scene switch: its stamp started empty and
+  included the scene. In Blender's source (`render_preview.cc`), a refresh during loading
+  destroys each external asset representation. When the shelf asks for the same preview
+  again, `PreviewLoadJob::push_load_request` ends and frees the old preview, which `run_fn`
+  may still be loading. Now only a change of the installed files refreshes the shelves.
+  Undo, redo and asset marks during loading still reset the list fully
+  (`AssetList::tag_main_data_dirty`), so Blender can still crash this way. The add-on no
+  longer starts it.
 
 ### Publication on Vulkan (2026-10-02)
 

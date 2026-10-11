@@ -147,7 +147,12 @@ _installed_stamp = None
 
 
 def refresh_installed():
-    """Pick up Connect installs/removals in an already open Painter workspace."""
+    """Pick up Connect installs/removals in an already open Painter workspace.
+
+    A new scene or file needs only its local handles. Only a change of the installed files
+    refreshes the shelves: Blender's library refresh rebuilds every listed asset, and one
+    while the shelf loads its first previews (just after startup or a file load) can crash
+    Blender, whose preview loader then writes into a preview it has freed."""
     import bpy
     from . import library
     global _installed_stamp
@@ -158,7 +163,8 @@ def refresh_installed():
         if stamp != _installed_stamp:
             from ..ui import native, shelf_library
             native.prepare_assets()
-            shelf_library.refresh_shelves()
+            if _installed_stamp is not None and stamp[1] != _installed_stamp[1]:
+                shelf_library.refresh_shelves()
             _installed_stamp = stamp
     except (OSError, ReferenceError, AttributeError):
         pass  # A concurrent installation or scene switch will be retried next tick.

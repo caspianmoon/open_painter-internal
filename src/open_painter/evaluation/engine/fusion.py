@@ -11,9 +11,13 @@ its result to the next through that one's backdrop or, at a folder step, through
 input: the step fuses with the chain inside its folder (``_link``). Between two members the
 value is rounded as the member's texture store would. ``store_rounding``
 finds the device's float-to-half conversion once, by comparing real stores with the
-emulations. The top's result is then the sequential result bit for bit. Each fused
-shader is also checked once against sequential rendering before it is used; a mismatch
-retires it.
+emulations. A value handed over at full float passes through an identity the compiler
+cannot see through (``op_opaque``): Blender compiles Metal shaders with fast math, which
+would otherwise fuse one member's arithmetic with the next one's. The top's result is then
+the sequential result bit for bit. Each fused shader is also checked once against
+sequential rendering before it is used; a mismatch retires it. On Metal that still happens
+to some chains at full float (``engine.precise``), where fast math can compile a member
+differently inside the fused shader; at display precision none was seen.
 
 C plans the passes (op_graph_execute). Like a collapsed suffix run, a fused chain
 materializes its top before C plans the channel: the top then holds its desired stamp
@@ -86,16 +90,31 @@ float op_store_rne(float x) {
     if (((r >> 23) & 0xffu) >= 143u) return uintBitsToFloat((u & 0x80000000u) | 0x7f800000u);
     return uintBitsToFloat(r);
   }
-  return roundEven(x * 16777216.0) * (1.0 / 16777216.0);
+  /* roundEven, which Blender's Metal shading language lacks: |y| < 2^10 here, so trunc, the
+     fraction and the parity are exact. */
+  float y = x * 16777216.0;
+  float t = trunc(y);
+  float f = abs(y - t);
+  if (f > 0.5 || (f == 0.5 && mod(t, 2.0) != 0.0)) t += sign(y);
+  return t * (1.0 / 16777216.0);
 }
 ''',
 }
+# An identity the shader compiler cannot see through, for values handed over at full float.
+# Blender compiles Metal shaders with fast math, which may contract one member's last multiply
+# with the next member's add, or reassociate across them: the register then differs from the
+# texture in its last bits. The bits pass through an XOR with a value known only at run time
+# (always 0). The half-float emulations above already work on the bits.
+OPAQUE = '''
+vec4 op_opaque(vec4 v) { return uintBitsToFloat(floatBitsToUint(v) ^ uvec4(gl_FragCoord.x < -1.0 ? 1u : 0u)); }
+'''
+STORES = {name: OPAQUE + source for name, source in STORES.items()}
 # What reading a member's texture back gives, per format: R/RG reads fill (0, 1).
 ROUND = {
     'RGBA16F': 'vec4({0}(v.x), {0}(v.y), {0}(v.z), {0}(v.w))',
     'RG16F': 'vec4({0}(v.x), {0}(v.y), 0.0, 1.0)',
-    'RGBA32F': 'v',
-    'RG32F': 'vec4(v.x, v.y, 0.0, 1.0)',
+    'RGBA32F': 'op_opaque(v)',
+    'RG32F': 'vec4(op_opaque(v).xy, 0.0, 1.0)',
 }
 
 

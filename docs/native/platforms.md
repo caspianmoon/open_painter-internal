@@ -146,9 +146,20 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
     peaks at 2.61 GiB against 1.99 with the Python scheduler (Vulkan's: 2.72). In a window
     OpenGL's commit charge runs higher than Vulkan's: `material_painting_ui.py` at 1K peaks
     at 4.78 GiB against 4.14 (4.54 with the Python scheduler).
-  - Vulkan and OpenGL publish in place, without native revisions (`REVISION_BACKENDS` is
-    Metal): as fast, faster after an undo, and about 0.45 GiB less at 1K
-    (`windows-plan.md`, "Undo and publication in place").
+  - Every backend publishes in place, without native revisions: as fast, faster after an
+    undo, and about 0.45 GiB less at 1K (`windows-plan.md`, "Undo and publication in
+    place"). Metal followed on 2026-10-11, with the same 40-layer stack at 1K: warm edits
+    within noise, undo 37–38 → 32–33 ms, and three 1K sets in a window 4.51 → 4.23 GiB.
+    `OP_REVISION_BACKENDS=METAL` restores revisions for comparison.
+  - **Chain fusion on Metal** (2026-10-11). Blender compiles Metal shaders with fast math.
+    A fused chain handing a full-float value to its next member then let the compiler fuse
+    their arithmetic, and its one-time check retired it: in `native_fusion.py`, two fused
+    shaders of one case retired at display precision. The handoff now passes through
+    `op_opaque`, an identity the compiler cannot see through. None retires, and that case
+    renders 48 fused passes instead of 36. At full
+    float (`engine.precise`, used by parity tests) a Metal shader can still differ in the
+    last bits and retire, so the result stays sequential. The round-to-nearest store
+    emulation no longer calls `roundEven`, which Blender's Metal shading language lacks.
 - **Engine on Vulkan.** Image textures are render targets on Vulkan in Blender 5.2.2 (an
   earlier belief otherwise came from a simulated GPU), so in a window the engine renders
   into them, as on Metal and OpenGL: edits at 1K are 3–10 times faster than through pixels
@@ -158,9 +169,8 @@ Windows 11, i7-8750H, GTX 1050 (4 GiB), Blender 5.2.2 LTS, MSVC 14.44. The
     nothing draws the GPU textures there, Vulkan image textures count toward the process
     commit charge on Windows, and released GPU resources are destroyed only after a wait
     or a frame end.
-  - Native revisions run where they fit the retained-result budget (1K; 2K from 16 GB of
-    RAM). Elsewhere channels publish in place, and `InPlacePresentation` restores an
-    evicted image texture from the one it replaced.
+  - Channels publish in place, and `InPlacePresentation` restores an evicted image texture
+    from the one it replaced.
   - The pixel route keeps suffix collapse, idle arming and fused finals. Through pixels,
     warm edits were about 1.4–3.3 times faster than the legacy scheduler, structural edits
     up to 3.5 times, and the cold build about 1.8 times. Every workflow and engine suite

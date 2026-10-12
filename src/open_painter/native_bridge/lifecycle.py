@@ -113,9 +113,9 @@ def active_library():
 
 def host_backends():
     """GPU backends the native host scheduler runs on: Metal and Vulkan, and OpenGL on Windows,
-    where the same suites pass with it (docs/native/windows-plan.md). Elsewhere OpenGL keeps
-    its Python scheduler until it is qualified there: OP_NATIVE_HOST_BACKENDS (comma separated:
-    OPENGL) adds a backend, for that (docs/native/platforms.md)."""
+    where the same suites pass with it. Elsewhere OpenGL keeps its Python scheduler until it is
+    qualified there: OP_NATIVE_HOST_BACKENDS (comma separated: OPENGL) adds a backend, for that
+    (docs/native/platforms.md)."""
     import platform
     extra = os.environ.get('OP_NATIVE_HOST_BACKENDS', '')
     defaults = {'METAL', 'VULKAN', 'OPENGL'} if platform.system() == 'Windows' else {'METAL', 'VULKAN'}

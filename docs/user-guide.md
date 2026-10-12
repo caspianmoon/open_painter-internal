@@ -49,7 +49,7 @@ using their native borders. No surrounding editor areas are rearranged.
 
 The mask menu offers white/black painted masks, projected fill masks, generators, baked maps and
 anchor points; anchors in mask or filter stacks feed Published Input masks, fill channel content and
-generator micro details ([anchor points](docs/anchor-points.md)).
+generator micro details ([anchor points](anchor-points.md)).
 Select **Assets → Smart Masks**, select the target layer, select a preset and click **Apply**. Application
 adds an editable effect on top of the existing masks; **Replace Masks with This** in the asset's right-click
 menu (and the Assets panel) is the separate, visible replacement. Required mesh maps are checked before
@@ -62,7 +62,7 @@ New smart-mask effects use Normal; saved effects keep their previous combination
 Edge Wear uses baked geometric crease coverage; noise only breaks up that coverage. After upgrading from an older bake, click **Rebake Edge Map** in Edge Wear properties. **Minimum Edge Angle** determines which convex target-mesh creases qualify; **Edge Width (px)** determines their texture width. Re-bake after changing either; generator intensity does not change edge classification. **Bake Mask Stack to Texture** converts the selected layer’s mask effects into one packed, editable grayscale UV texture. The material node graph only displays channel textures; it does not implement edge-wear or grunge effects. This is an editable
 mask-effect workflow, not complete Substance Painter generator parity.
 
-The Inspector shows the selected item's own controls first — a smart material's master controls (every built-in material has 4–8 authored ones, see [master controls](docs/master-controls.md)), a fill's channel content with native color/image and UV/triplanar transform controls, a paint layer's destination, a mask's settings — and publishing, module, cache and profiling controls after them. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. The selected layer's blend and
+The Inspector shows the selected item's own controls first — a smart material's master controls (every built-in material has 4–8 authored ones, see [master controls](master-controls.md)), a fill's channel content with native color/image and UV/triplanar transform controls, a paint layer's destination, a mask's settings — and publishing, module, cache and profiling controls after them. Layers has its own scrollable list; opacity is displayed as a percentage. The modeling toolbar starts hidden outside painting. The selected layer's blend and
 opacity for the display channel sit in the row above the list (every row shows them with the **Blend and Opacity in Layer Rows** preference), independently of the paint destination. **Use Layer Blend**
 keeps the layer-wide setting. Blender draws the controls, handles numeric editing and scrolling,
 and applies its current theme and interface scale.

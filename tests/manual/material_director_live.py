@@ -30,8 +30,8 @@ from open_painter.generators import scene_fields
 OUT = Path(os.environ["OP_DIRECTOR_LIVE_OUTPUT"])
 SCENE_SCOPE = os.environ.get("OP_DIRECTOR_LIVE_SCOPE") == "SCENE"
 CASES = {
-    "scene_starwars": ("CREATE", True, "Texture this like a Star Wars robot."),
-    "scene_starwars_explain": ("EXPLAIN", True, "Look at the full model. Does it look like a Star Wars robot? What would you improve?"),
+    "scene_robot": ("CREATE", True, "Texture this like a battle-worn sci-fi robot."),
+    "scene_robot_explain": ("EXPLAIN", True, "Look at the full model. Does it look like a battle-worn sci-fi robot? What would you improve?"),
     "scene_create": ("CREATE", True, "Texture this entire droid model from scratch, across ALL ten material regions in the scene. Inspect every part using its isolated view and newly baked maps. Use the supplied olive industrial paint reference as the art direction and use native image generation for actual reusable surface texture sources. Create a coherent aged olive industrial droid: predominantly painted steel shell and inset panels, matching head coating, restrained irregular exposed-metal chips, localized mild cavity rust and dirt; give optical parts and antennas appropriate distinct physical finishes. Keep most paint intact, avoid continuous bright edge outlines, uniform rust washes or confetti. Reuse generated sources coherently across parts and keep all layers, masks and physical channels editable. Build original stacks, without inserting a finished library material. Submit one coordinated proposal covering the full model, including every back panel and small part. Explain any limitation caused by the mesh segmentation."),
     "scene_explain": ("EXPLAIN", True, "Inspect the actual full-model result and all material regions. Does the scene read as a coherent aged olive industrial droid? Identify two concrete visual problems with named material controls, and note any physical-material approximation caused by the mesh segmentation. Confirm whether each part received its own fresh maps. Do not generate or modify anything."),
     "scene_plan": ("PLAN", True, "Prepare one coordinated scene refinement: halve existing rust layer opacity on all painted head, body and panel materials, and slightly increase their paint roughness to reduce the shiny highlights. Keep the optical parts and antenna finishes unchanged. Reuse existing layers and generated images. Preserve the chip pattern and geometry. Prepare a complete grouped draft for review."),
@@ -311,7 +311,7 @@ def completed_case():
             for item in scene_targets()]
         assert current["geometry_digest"] == session.binding_digest(authoring.bindings(bpy.context, ts,
             [ref.object for item in scene_targets() for ref in item.assignments if ref.object])), "Scene geometry changed"
-        if current["name"] in {"scene_create", "scene_starwars"}:
+        if current["name"] in {"scene_create", "scene_robot"}:
             inspected = [result["result"] for result in current.get("tool_results", []) if result.get("success") and "target" in result.get("result", {})]
             assert len(scene_targets()) == 10 and all(item["layer_count"] == 0 for item in current["scene_materials_sent"])
             assert {item["target"]["id"] for item in inspected} == {item.id for item in scene_targets()}

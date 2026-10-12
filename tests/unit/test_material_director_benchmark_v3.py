@@ -72,7 +72,10 @@ def example(root, execution='APPLIED'):
 
 class V3ProtocolTests(unittest.TestCase):
     def test_exact_v3_prompts_and_balanced_sixty_sessions(self):
-        spec=manifest.load_cases(); doc=(ROOT/'Open_Painter_Material_Director_Capability_Remedy.md').read_text(encoding="utf-8")
+        source=ROOT/'Open_Painter_Material_Director_Capability_Remedy.md'
+        if not source.is_file():
+            self.skipTest('the benchmark brief is not part of this checkout')
+        spec=manifest.load_cases(); doc=source.read_text(encoding="utf-8")
         for case in spec['cases']:
             for prompt in [case['create'],*case['refinements']]:self.assertIn(prompt,doc)
         schedule=manifest.build_schedule(); self.assertEqual(len(schedule),60)

@@ -85,6 +85,12 @@ the same guard band. Under Rosetta, 2K RGBA, SSE against scalar: sRGB quantize 2
   - **Floating point:** MSVC builds with an explicit `/fp:precise`, which does not contract
     a multiply and an add.
 
+- **Sanitizers.** On macOS 26, Apple clang's AddressSanitizer runtime deadlocks while it
+  initialises (its shadow-memory setup allocates through dyld before the allocator is
+  ready), so every ASan binary hangs before `main`. Run `-DOP_SANITIZERS=ON` on Linux:
+  the 33 C tests pass under ASan and UBSan on arm64 and x86-64 (GCC 12, Debian 12), as
+  the CI sanitizer job does.
+
 ## Linux and Windows builds in containers
 
 `scripts/cross_test_native.py` builds the library and runs its C tests with the

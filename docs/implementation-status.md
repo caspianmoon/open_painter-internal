@@ -494,18 +494,11 @@ the preceding implementation, not the new production live compositor.
 
 ## Bake integration follow-up — 2026-09-13
 
-Compared the supplied bake add-on (2.1) source with Open Painter and integrated the
-useful workflow improvements on `task/bake-addon-integration`: explicit/name
-source matching, isolated render-configured staging, assembly/part AO scopes,
-editable cages, evaluated topology validation and independent extrusion/device
-controls. Original materials, nodes, images, scene settings and transforms are
-preserved on success and failure.
-
-The [comparison and validation report](bake-addon-comparison.md) contains source
-evidence, real pixel regressions, commands, usage and limits. No claim of a new
-bake engine or bake speedup is made. The bake add-on source/icons are not included in the
-extension package; the user's later `00ccf77` commit added the supplied comparison
-source to the repository separately.
+Bake workflow improvements: explicit/name source matching, isolated render-configured
+staging, assembly/part AO scopes, editable cages, evaluated topology validation and
+independent extrusion/device controls. Original materials, nodes, images, scene settings
+and transforms are preserved on success and failure. No claim of a new bake engine or
+bake speedup is made.
 
 The roadmap implementation and Worn Painted Metal timings below describe the
 preceding `0f44580` continuation. They were not remeasured for this bake change.

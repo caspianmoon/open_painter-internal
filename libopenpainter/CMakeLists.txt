@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
-project(libopenpainter VERSION 0.1.0 LANGUAGES C)
+# Load wherever Blender 5.2 runs (its macOS minimum is 11.2), not only on the build machine's
+# macOS. Set before project() so the first configure uses it.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.2" CACHE STRING "Minimum macOS version")
+endif()
+project(libopenpainter VERSION 0.15.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)

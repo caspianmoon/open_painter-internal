@@ -1,6 +1,6 @@
 """Data-only smart material profiles supplied by installed library modules.
 
-The add-on ships the workflow, never the subscriber recipes or textures. Profiles
+The add-on ships the workflow; installed modules bring their own recipes and textures. Profiles
 carry the same master-control vocabulary as catalog recipes and destination mesh
 inputs, without executing code from a material archive.
 """

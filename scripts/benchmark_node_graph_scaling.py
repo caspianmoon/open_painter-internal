@@ -7,8 +7,8 @@ Run headless (node trees need no GPU)::
 
 Three layouts build the same number of ShaderNodeMath nodes with chained links:
 ``flat`` (one tree), ``grouped`` (K separate group trees instanced from a top
-tree, like the node-stack add-on's per-layer groups) and ``shared`` (one library group tree
-built once and instanced K times, like the node-stack add-on's ``lib.blend`` groups). Wall
+tree, like Ucupaint's per-layer groups) and ``shared`` (one library group tree
+built once and instanced K times, like Ucupaint's ``lib.blend`` groups). Wall
 time covers ``nodes.new`` + renaming + ``links.new`` only. It is a construction
 benchmark: GPU shader compilation of the resulting material is not measured.
 """

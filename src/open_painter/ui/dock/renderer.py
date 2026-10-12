@@ -1,4 +1,4 @@
-"""Substance-style Assets / Viewport / Texture Sets / Layers / Properties docks."""
+"""Assets / Viewport / Texture Sets / Layers / Properties docks."""
 
 from time import monotonic
 

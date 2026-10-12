@@ -12,6 +12,14 @@ from urllib.parse import urlsplit, urlunsplit
 from zipfile import ZipFile, ZIP_DEFLATED
 
 root = Path(__file__).resolve().parents[1]
+# The guides a release package carries (docs/): what an artist reads, not development records.
+GUIDES = ("user-guide.md", "texture-workflow-v1.md", "anchor-points.md", "asset-categories.md",
+          "bake-doctor.md", "bake-diagnostics.md", "damaged-bevel.md", "decal-objects.md",
+          "geometry-effects.md", "gpu-authoring-tools.md", "layer-performance.md", "mask-architecture.md",
+          "mask-graphs.md", "master-controls.md", "material-aging.md", "material-catalog.md",
+          "material-director.md", "material-modules.md", "mesh-masks.md", "open-graph.md",
+          "open-painter-engine.md", "physical-scale.md", "scene-fields.md", "surface-filters.md",
+          "target-renderer.md", "udim-workflow.md", "vector-strokes.md")
 version = tomllib.loads((root / "blender_manifest.toml").read_text(encoding="utf-8"))["version"]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, help="Build a candidate without replacing a published archive")
@@ -78,8 +86,8 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
     for path in sorted((root / "src" / "open_painter").rglob("*")):
         if path.is_file() and "__pycache__" not in path.parts:
             write_file(archive, path, path.relative_to(root / "src" / "open_painter"))
-    for name in ("blender_manifest.toml", "LICENSE", "README.md", "ARCHITECTURE.md", "SMART_MATERIAL_FORMAT.md",
-                 "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md", "PARITY.md", "docs/substance_parity.json"):
+    for name in ("blender_manifest.toml", "LICENSE", "NOTICE.md", "README.md", "ARCHITECTURE.md",
+                 "SMART_MATERIAL_FORMAT.md", "TESTING.md", "CONTRIBUTING.md", "CHANGELOG.md"):
         if name == 'blender_manifest.toml' and native:
             content = (root / name).read_text(encoding='utf-8')
             content = content.replace('[permissions]', f'platforms = ["{package_platform}"]\n\n[permissions]')
@@ -92,10 +100,9 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         archive.writestr((bundle_dir / (native.name + '.json')).as_posix(),
                          json.dumps(native_manifest, indent=2) + '\n')
     # The user-facing guides and their images; validation reports, performance records and
-    # research notes stay in the repository (0.12.2: a release package carries no development
-    # artefacts).
-    for path in sorted(p for p in (root / "docs").iterdir() if p.is_file() and p.suffix == ".md"):
-        write_file(archive, path, path.relative_to(root))
-    for name in ("docs/native-painter.png", "docs/open_graph.png", "docs/mask_controls.png", "docs/vector_strokes.png"):
+    # research notes stay in the repository (a release package carries no development artefacts).
+    for name in GUIDES:
+        write_file(archive, root / "docs" / name, Path("docs") / name)
+    for name in ("docs/native-painter.png", "docs/open_graph.png", "docs/vector_strokes.png"):
         write_file(archive, root / name, Path(name))
 print(output)

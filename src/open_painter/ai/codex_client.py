@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from ..constants import VERSION
 
 try:
     from .protocol import encode
@@ -116,7 +117,7 @@ class CodexClient:
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
-        self.request("initialize", dict(clientInfo=dict(name="open_painter", title="Open Painter", version="0.8.0"),
+        self.request("initialize", dict(clientInfo=dict(name="open_painter", title="Open Painter", version=VERSION),
                      capabilities=dict(experimentalApi=True)), self._initialized)
 
     def _read(self):

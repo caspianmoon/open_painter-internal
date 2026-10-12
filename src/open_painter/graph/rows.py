@@ -3,7 +3,7 @@
 The Open Graph is a projection of the layer stack (``graph/mirror.py``): today
 sibling layers are chained with ``below`` links, which always draw sideways
 (right output into left input) even when the nodes sit in a vertical column.
-For a Substance-style workflow the vertical position itself should carry the
+In a layer-stack workflow the vertical position itself should carry the
 order: a layer on a higher row is above (on top of) the layers below it.
 
 This module adds that in two additive pieces (no existing behavior removed

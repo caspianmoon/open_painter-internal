@@ -41,7 +41,7 @@ class BakeStage:
         self.scene.cycles.seed = 0
         # A scene created here has no World, so Cycles used its implicit AO
         # distance. An owned World makes that distance an explicit bake setting
-        # (the node-stack add-on sets world.light_settings.distance the same way).
+        # (Ucupaint sets world.light_settings.distance the same way).
         self.world = bpy.data.worlds.new('Open Painter Bake World')
         self.world[OWNER] = True
         self.world.light_settings.distance = self.ts.bake.ao_distance

@@ -7,22 +7,26 @@ parity and forced Vulkan-style publication on the available backend. See
 [GPU backend compatibility](docs/gpu-backend-compatibility.md) for commands,
 the 16-sampler constraint, recorded evidence and hardware-validation limits.
 
-Current project acceptance uses the artist-supplied `open painter test.blend`,
-retaining its 2048 resolution and complete model. `tests/performance/shader_user_project.py`
-measures the existing controls; `tests/integration/shader_project_ui.py` drives
-actual native mask sliders and captures the model's viewport; and
-`scripts/validate_project_persistence.py` checks source/mesh preservation and
-explicit export. `tests/integration/install_user_project.py` validates the
-installed extension namespace using that same asset. These scripts use copies.
-The authoring trace, save/reopen/export, and actual-project held Cavity Dirt
-strength check have passed. Eight reversals through an isolated native RNA
-sidebar changed the captured material before release, with zero raster work or
-texture writes. This checks the real property callback and viewport, not product
-panel navigation. See the [actual-project report](docs/shader-preview-architecture.md#validation-on-the-supplied-project)
-for its capture overhead, sparse Chips diagnosis, and scope. Archive installation
-is validated separately; viewport results do not cover installation.
-The small numerical fixtures below are development regressions; they do not
-establish responsiveness on the user's asset and are not the remaining acceptance path.
+## Running the tests
+
+- **Without Blender:** `python3 scripts/run_pure_tests.py`, with a Python 3.11+ that has
+  NumPy (Blender's bundled interpreter works). Set `OP_TEST_NATIVE_LIBRARY` to a built
+  `libopenpainter` to include the native-kernel comparisons.
+- **In Blender:** `python3 scripts/run_tests.py --blender /path/to/blender` runs every
+  background suite in an isolated, factory-startup profile under `.blender-test/user`.
+  `--gui-only` runs the real-window probes and `--gpu-only` the live GPU checks; both need a
+  display. `--gpu-backend metal|vulkan|opengl` picks Blender's backend, and
+  `--keep-going` collects failures instead of stopping at the first.
+- **Memory:** every Blender launch goes through `scripts/run_guarded.py`, which waits for
+  free memory, runs one Blender at a time and stops a run that passes its cap (4 GiB by
+  default; a few heavy suites get more).
+- **Native library:** `python3 scripts/build_native.py` builds `libopenpainter` and runs its
+  C tests; set `OP_LIBOPENPAINTER_PATH` to the built library to run the Blender suites with
+  it.
+
+A few performance and acceptance scripts measure a large artist project, which is not part
+of the repository; they need a project file you supply. The small numerical fixtures below
+are development regressions; they don't establish responsiveness on a real project.
 
 The 0.2.7 native shader tests are `shader_nodes.py` (blend/filter GPU math),
 `shader_sources.py` (source/projection parity and 50 catalog compilations),
@@ -194,10 +198,6 @@ in `test_compositing.py` use independent expected values, zero/one endpoints and
 `compositing_ui.py` clicks the channel-blending button in a real Blender window and verifies native
 channel and folder popup drawing. It captures `docs/channel_blending.png` for visual inspection.
 
-`python3 scripts/check_parity.py` validates the PDF inventory and documentation synchronization.
-`python3 scripts/check_parity.py --require-parity` must currently exit 1: full feature parity has
-not been achieved. This is a requirements gate, not a substitute for running tests or comparing
-renders against Substance Painter.
 
 
 ## Workspace repair regressions (0.1.3)
@@ -389,38 +389,6 @@ The test records native image events, verified artifact IDs, packed image sizes/
 proposals, applied changes, rendered views and save files. The fake-provider probe alone does not
 verify image generation; it is account/provider gated.
 
-### Supplied full-model acceptance
-
-Prepare a disposable copy of `open painter test.blend`, replacing all previous material stacks and
-bakes. The preparation script is specific to this ten-part droid's geometry; it verifies the source
-file hash remains unchanged. `--full-scene` bakes every part at 1024 pixels.
-
-```sh
-blender --background --factory-startup --disable-autoexec --python-exit-code 1 \
-  --python tests/manual/prepare_director_user_model.py -- \
-  'open painter test.blend' .blender-test/director-user-model --full-scene
-
-python3 scripts/test_director_live.py --use-codex-login \
-  --blend .blender-test/director-user-model/fresh-full-scene.blend \
-  --texture-set 'Director Fresh Body' --frame-model --scope SCENE \
-  --reference /absolute/path/to/reference.png \
-  --output .blender-test/director-full-scene \
-  --cases scene_create,scene_explain,scene_plan
-```
-
-This is one real model instruction for all ten regions, followed by full-scene Explain and a grouped
-Plan → Apply → Undo. Assertions require ten empty initial stacks, ten inspected and authored parts,
-six current map previews per part, reference and isolated views, native packed generated textures,
-unchanged geometry, all shader previews ready, no pink shader failure, and exact grouped AI undo.
-Front/rear/side PNGs and saved `.blend` files support visual review. Inspect the result itself;
-successful validation does not establish production material quality.
-
-The primary art-direction check uses the artist's short instruction without a supplied appearance
-reference: omit `--reference` and use `--cases scene_starwars,scene_starwars_explain`. The Create
-instruction is exactly **“Texture this like a Star Wars robot.”** It still receives the full-model
-view, per-part isolated views and all six current map previews. This checks whether the integration
-can choose a coherent design from the artist's intent and model, without a hand-written layer recipe.
-
 After the temporary account cache has been deleted, run `tests/manual/verify_director_images.py`
 in background Blender with `-- result.blend output.json`. It verifies packed pixel availability,
 image hashes, channel assignments and grouped undo after reopening without Codex.
@@ -429,13 +397,12 @@ The checked-in `tests/manual/analyze_director_live.py` measures actual generated
 regions in the saved scenes without further inference. Run it in background Blender with the output
 folder after `--`. The default 256-square UV grid is a sample, not a world-area coverage estimate.
 
-See [real-account acceptance](docs/material-director-live-validation.md) for prompts, timings,
-actual images, failures found, fixes, reruns, and remaining artistic limitations.
 
 ## Artist sessions on a real asset file (0.9.7)
 
 `tests/integration/artist_file_workflow.py` and `tests/integration/artist_file_baking.py`
-(background, in `scripts/run_tests.py`) open `open painter test.blend` at the repository root —
+(background, in `scripts/run_tests.py`) open a local artist file (`open painter test.blend` at the
+repository root, or `OP_ARTIST_FILE`; it is not part of the repository and the suites skip without it) —
 a ten-object imported prop with a 2048 Worn Painted Metal set, baked maps and saved outputs — the
 way an artist does (add-on registered first, `load_post` running) and work on it: the saved
 outputs are the oracle for the evaluation pipeline; then painting, mesh-driven and decal layers,

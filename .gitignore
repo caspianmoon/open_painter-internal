@@ -11,3 +11,5 @@ backups/blender-profile-before-update-*/
 dist/*.zip
 
 /open painter test.blend
+# Native packages are assembled by scripts/build_native.py, never committed.
+src/open_painter/native_bridge/bin/

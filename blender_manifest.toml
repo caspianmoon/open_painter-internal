@@ -8,6 +8,8 @@ type = "add-on"
 tags = ["Material", "Paint"]
 blender_version_min = "5.2.0"
 license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 Open Painter contributors"]
+website = "https://openpainter.dev"
 [permissions]
 files = "Save smart materials and export textures to a chosen folder"
 network = "Connect Codex to direct editable materials with your account"

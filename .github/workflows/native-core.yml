@@ -17,7 +17,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: cmake -S libopenpainter -B build/native
+      # Hosted runners are slower than a workstation: the exhaustive sRGB test needs more than
+      # the default 20 s per test there, and several times that under the sanitizers.
+      - run: cmake -S libopenpainter -B build/native -DOP_TEST_TIMEOUT=300
       - run: cmake --build build/native --config Release
       - run: ctest --test-dir build/native -C Release --output-on-failure
       - run: python scripts/native_ctypes_spike.py --lib "${{ matrix.library }}"
@@ -28,6 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S libopenpainter -B build/native-asan -DOP_SANITIZERS=ON
+      - run: cmake -S libopenpainter -B build/native-asan -DOP_SANITIZERS=ON -DOP_TEST_TIMEOUT=900
       - run: cmake --build build/native-asan
       - run: ctest --test-dir build/native-asan --output-on-failure

@@ -25,7 +25,8 @@ parser.add_argument("--package", type=Path, default=root / "dist" / f"open_paint
 parser.add_argument("--keep", action="store_true", help="Keep the profile and work folders")
 parser.add_argument("--gpu-backend", choices=("metal", "opengl", "vulkan"),
                     help="Blender's --gpu-backend in both phases (default: the factory setting)")
-parser.add_argument("--cap-gb", type=float, default=4.0,
+# A window, EEVEE and a Cycles bake: 4.6 GiB on an 18 GB Mac (docs/native/deep-stacks.md).
+parser.add_argument("--cap-gb", type=float, default=6.0,
                     help="Kill a Blender process whose memory footprint passes this (scripts/run_guarded.py)")
 args = parser.parse_args()
 if not args.package.is_file():
@@ -35,6 +36,9 @@ work = Path(tempfile.mkdtemp(prefix="op-clean-install-"))
 env = dict(os.environ, BLENDER_USER_RESOURCES=str(profile), OP_CLEAN_INSTALL_ZIP=str(args.package.resolve()),
            OP_CLEAN_INSTALL_DIR=str(work))
 env.pop("PYTHONPATH", None)
+# As in blender_test_profile: Cycles on Metal keeps its base path-state count, or a cube's bake
+# passes the memory cap on a large Mac.
+env.setdefault("CYCLES_METAL_GROW_PERCENT", "0")
 # The upgrade session (phase 2, step 18) opens a file saved by the 0.12.2 build when the
 # compatibility fixture exists; the report says SKIPPED otherwise.
 legacy = root / ".blender-test/quality/compat-0.12.2.blend"

@@ -1,0 +1,39 @@
+name: Windows package
+# Builds open_painter-<version>-windows-x64.zip for a release tag on a hosted Windows runner (MSVC):
+# the C library and its CPython binding, the C tests and the native bridge tests, then the package.
+# Download the artifact, check it, and attach it to the release with `gh release upload`.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to package, for example v0.15.0
+        required: true
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: '1'
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      # The binding uses the limited API (cp311-abi3): headers and python3.lib from this CPython,
+      # loaded by Blender's Python 3.13 through python3.dll.
+      - name: Build, test and package
+        shell: bash
+        run: python scripts/build_native.py --build-dir build/native --test-timeout 300 --package "dist/open_painter-${TAG#v}-windows-x64.zip"
+      - name: Native bridge tests against the built library
+        run: python -m unittest discover -s tests/unit -p test_native_bridge.py -v
+        env:
+          OP_TEST_NATIVE_LIBRARY: build/native/Release/openpainter.dll
+      - uses: actions/upload-artifact@v4
+        with:
+          name: open_painter-windows-x64
+          path: dist/*.zip
+          if-no-files-found: error

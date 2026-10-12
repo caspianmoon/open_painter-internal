@@ -1,10 +1,28 @@
-## 0.12.5
-
-- Add native fabric sheen weight and roughness to Surface Response, saved smart materials, master controls, texture-set copies and both preview backends.
-- Reset omitted sheen values when applying legacy materials so old packs keep their previous appearance.
-- Subscriber glass and fabric materials remain separate library downloads.
-
 # Changes
+
+## 0.15.0 — Open source release
+
+Open Painter is free software under the GNU GPL, version 3 or later, developed in the open.
+
+- **Every platform runs the native engine.** The C17 library has exact SSE4.2 twins of its
+  NEON kernels, so x86-64 macOS, Windows and Linux share the arm64 results bit for bit.
+  Its CPU kernels (export pixels, PNG, SHA-256, rasterization, brush coverage, padding)
+  run on every GPU backend. The native scheduler drives Metal, Vulkan and, on Windows,
+  OpenGL. Library ABI 14.
+- **Smart-material surface optics.** Texture sets gain index of refraction, transmission,
+  subsurface weight and scattering distance, and sheen weight and roughness, on the
+  material's Principled BSDF. They are saved in smart materials and editable from master
+  controls. Materials without them get the opaque defaults (from 0.12.4 and 0.12.5).
+- **Deep stacks stay interactive.** Structural edits patch the session's graph instead of
+  rebuilding it. A drag renders only what changes. Runs of siblings render as one fused
+  pass. Undo keeps the graph and re-renders only what it restored. Every backend
+  publishes straight into the channel images.
+- **Faster export.** Quantization, the sRGB curve, normal encoding, relief, PNG row
+  filters and padding run natively. PNGs are deflated in parallel. Hashes use the
+  hardware SHA-256 where it exists. Every output byte is the same as before.
+- **Fixes.** The asset shelf no longer refreshes its library at startup or after a file
+  load, which could crash Blender's preview loader. Profile Engine no longer reports a
+  pass as 0 ms after a stall.
 
 ## 0.14.1 — Metal editing performance
 
@@ -60,7 +78,7 @@
 - Subscriber recipes and textures remain in separately downloaded packs; this release
   adds the generic workflow without including premium assets in the free add-on.
 
-## Unreleased — Open Painter engine
+### Also in 0.14.0: Open Painter engine
 
 - The layer stack is evaluated by Open Painter's own GPU engine instead of being compiled
   into the Blender material. Each layer channel, content prefix and mask prefix is one
@@ -138,7 +156,7 @@
   example) left a single-channel layer showing the previous result. The layer's program
   compiled the old mask in and was reused unchanged.
 
-## Unreleased — UDIM authoring
+### Also in 0.14.0: UDIM authoring
 
 - Create one texture set per occupied UDIM tile (1001–2000), with per-tile
   resolution, layers, masks and bake maps. Source UVs and original materials survive.
@@ -149,7 +167,7 @@
 - Validate face boundaries before creation and roll back failed assignment. Existing
   painted sets are not automatically split. See [UDIM workflow](docs/udim-workflow.md).
 
-## Unreleased — graph authoring and templates
+### Also in 0.14.0: graph authoring and templates
 
 - Search nodes and templates from the graph header or Add menu; choose filter
   channels in the header and edit fill channel content directly on layer nodes.
@@ -167,7 +185,7 @@
   stable filter IDs and select newly created nodes. New groups avoid existing
   node positions; mask filters now use kind-specific defaults and radius controls.
 
-## Unreleased — aging procedurals
+### Also in 0.14.0: aging procedurals
 
 - Shared, growing coating-damage masks keep primer and conversion inside paint
   failure and confine corrosion to exposed substrate.

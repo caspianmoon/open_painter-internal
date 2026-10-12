@@ -10,7 +10,14 @@ assets/0001.exr
 
 `material.json` has `format_version: 5`, `name`, an ordered `layers` array, and optional
 `surface` scalar parameters (`anisotropy`, `coat_weight`, `coat_roughness`,
-`height_distance`). Missing `height_distance` preserves the target texture set's
+`height_distance`, `ior`, `transmission_weight`, `subsurface_weight`,
+`subsurface_scale`, `sheen_weight`, `sheen_roughness`). IOR is finite in [1, 4],
+subsurface scale in [0, 10] metres, height distance non-negative and every other value in
+[0, 1]. The optical settings drive the material's Principled BSDF and stay editable
+texture-set properties; opacity is independent of transmission. Applying a material
+without them restores IOR 1.5, no transmission, subsurface or sheen, a 0.001 m
+subsurface scale and sheen roughness 0.5. Texture exports do not encode them: set them
+in the target renderer. Missing `height_distance` preserves the target texture set's
 existing setting. Versions 1–4 remain readable. Each layer has
 `id`, `name`, `type` (`FILL`, `PAINT`, `FOLDER`), optional `parent_id`, `visible`, `opacity`,
 `blend_mode`, `channels`, and `masks`. Layers run bottom to top. Defaults are Blender property defaults;

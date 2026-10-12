@@ -72,8 +72,8 @@ team sharing from [openpainter.dev](https://openpainter.dev). It is a separate d
 
 Open Painter Studio, a free standalone app built on the same material model, is available
 for Mac with Apple silicon (macOS 13 or later) from
-[openpainter.dev/download](https://openpainter.dev/download). It is a separate product from
-this extension.
+[openpainter.dev/download](https://openpainter.dev/download); a Windows version is coming
+soon. It is a separate product from this extension.
 
 ## Build from source
 

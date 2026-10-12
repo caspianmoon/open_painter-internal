@@ -19,7 +19,9 @@ the 16-sampler constraint, recorded evidence and hardware-validation limits.
   `--keep-going` collects failures instead of stopping at the first.
 - **Memory:** every Blender launch goes through `scripts/run_guarded.py`, which waits for
   free memory, runs one Blender at a time and stops a run that passes its cap (4 GiB by
-  default; a few heavy suites get more).
+  default; a few heavy suites get more). The two production-prop painting suites run at 1K
+  in the gate; set `OP_MATERIAL_UI_RESOLUTION=2048` and `OP_QUALITY_PAINT_RESOLUTION=2048`
+  to paint at 2K (about 9 GiB).
 - **Native library:** `python3 scripts/build_native.py` builds `libopenpainter` and runs its
   C tests; set `OP_LIBOPENPAINTER_PATH` to the built library to run the Blender suites with
   it.

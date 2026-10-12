@@ -1075,8 +1075,9 @@ texture it ever used.
   - `material_painting_ui.py` and `quality_baseline_paint_ui.py` build three sets
     at 2K with 25 layers, and they pass 8 GiB once all three sets compile. That is
     about 2,500 bytes a pixel: engine textures and retained results, Blender's image
-    buffers and their GPU copies. At 1K the first peaks at 4.5 GiB and passes. The
-    pre-merge commit measures the same.
+    buffers and their GPU copies. The gate (`run_tests.py`) therefore paints them at 1K,
+    where they peak at 3.9–4.5 GiB; `OP_MATERIAL_UI_RESOLUTION=2048` and
+    `OP_QUALITY_PAINT_RESOLUTION=2048` restore 2K on a machine with the memory.
   - `artist_file_edits.py`, `artist_file_workflow.py` and
     `artist_file_multiset.py` pass 5–6 GiB with the local artist file present.
 

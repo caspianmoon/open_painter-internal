@@ -1,6 +1,7 @@
 """Phase 0 baseline of painting (real window): the vector brush and the native brush as they are.
 
-Measures on the production prop at 2K (25+ layers, live shader session):
+Measures on the production prop (25+ layers, live shader session), at 2K unless
+OP_QUALITY_PAINT_RESOLUTION says otherwise:
 - a held vector-brush drag: samples kept versus pointer events, whether anything of the
   material changes on screen before release (the bound layer images), and the time from
   release to the shader session reporting current;
@@ -33,6 +34,7 @@ from open_painter.ui.vector_brush import OP_OT_vector_brush
 OUT = ROOT / ".blender-test/quality"
 OUT.mkdir(parents=True, exist_ok=True)
 REPORT = Path(os.environ.get("OP_QUALITY_BASELINE_PAINT_REPORT", OUT / "baseline-painting.json"))
+RESOLUTION = int(os.environ.get("OP_QUALITY_PAINT_RESOLUTION", "2048"))
 report = {"blender": bpy.app.version_string, "steps": [], "errors": [], "measurements": {}}
 env = {}
 
@@ -60,7 +62,7 @@ def steps():
     scene = bpy.context.scene
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
-    body, barrel, plate = fixtures.production_prop(scene, resolution=2048, layers=25)
+    body, barrel, plate = fixtures.production_prop(scene, resolution=RESOLUTION, layers=25)
     body.preview_backend = "LIVE"
     area = max((a for a in window.screen.areas if a.type == "VIEW_3D"), key=lambda a: a.width * a.height)
     region = next(r for r in area.regions if r.type == "WINDOW")

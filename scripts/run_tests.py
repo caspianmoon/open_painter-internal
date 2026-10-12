@@ -25,7 +25,12 @@ parser.add_argument("--timeout-minutes", type=float, default=30.0,
 args = parser.parse_args()
 # Suites measured above the default cap on an 18 GB Mac (docs/native/deep-stacks.md, "Heavy suites").
 MEMORY_CAPS_GB = {'export_padding.py': 6.0, 'resolution_switch.py': 6.0, 'director_candidates.py': 6.0,
-                  'shader_preview_ui.py': 6.0, 'edge_map_refresh_ui.py': 6.0}
+                  'shader_preview_ui.py': 6.0, 'edge_map_refresh_ui.py': 6.0,
+                  'material_painting_ui.py': 6.0, 'quality_baseline_paint_ui.py': 6.0}
+# Three texture sets at 2K need about 9 GiB in a window, more than a 16-18 GB machine has free
+# beside other work: the gate paints them at 1K (the same checks). Set these to 2048 for 2K.
+PAINT_RESOLUTION = {'material_painting_ui.py': ('OP_MATERIAL_UI_RESOLUTION', '1024'),
+                    'quality_baseline_paint_ui.py': ('OP_QUALITY_PAINT_RESOLUTION', '1024')}
 
 
 def blender(suite=None):
@@ -204,7 +209,9 @@ if args.gui or args.gui_only:
                 "material_target_ui.py": {"OP_MATERIAL_TARGET_REPORT": str(result_path)},
                 "material_session_ui.py": {"OP_SESSION_REPORT": str(result_path)},
                 "quality_baseline_paint_ui.py": {"OP_QUALITY_BASELINE_PAINT_REPORT": str(result_path)},
-            }.get(filename, {}))),
+            }.get(filename, {})),
+                     **({PAINT_RESOLUTION[filename][0]: os.environ.get(*PAINT_RESOLUTION[filename])}
+                        if filename in PAINT_RESOLUTION else {})),
             check=True,
         )
         result = result_path.read_text(encoding="utf-8")

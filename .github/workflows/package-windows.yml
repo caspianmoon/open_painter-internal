@@ -17,6 +17,9 @@ jobs:
       PYTHONUTF8: '1'
       TAG: ${{ inputs.tag }}
     steps:
+      # Git for Windows checks text out with CRLF line endings. The package must carry the repository's
+      # bytes, like the other platforms' packages (smart materials are JSON text).
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}

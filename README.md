@@ -75,6 +75,12 @@ for Mac with Apple silicon (macOS 13 or later) from
 [openpainter.dev/download](https://openpainter.dev/download); a Windows version is coming
 soon. It is a separate product from this extension.
 
+## Support the project
+
+Open Painter is free. If it helps your work, you can support its development with a
+[Materials+](https://openpainter.dev/pricing) subscription or a donation: see
+[openpainter.dev/support](https://openpainter.dev/support).
+
 ## Build from source
 
 You need CMake 3.16+, a C17 compiler and Python 3.11 or later. The compiled binding also
